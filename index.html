@@ -3980,7 +3980,7 @@ import {
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
-import { COMPOSITION_SCHEMA, compositionRestoreUrl, captureComposedCanvases } from './scene-authoring.mjs';
+import { COMPOSITION_SCHEMA, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
 import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
@@ -30192,6 +30192,7 @@ async function saveToServer(sceneData, filename, { result: detailed = false, sav
       delete document._overwrite;
       const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
       currentSceneFile = result.saved;
+      history.replaceState(history.state,'',savedSceneLocation(location.href,result.saved));
       setInfo(`Scene saved: ${result.saved}`);
       grBrowseScenes();
       return detailed ? { ok: true, filename: result.saved, url, document } : true;
@@ -30728,9 +30729,11 @@ sceneInitialization.then(() => {
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
     const hash = new URLSearchParams(location.hash.slice(1));
-    if (hash.get('authoring') !== '1') return;
-    document.body.classList.add('composition-authoring');
-    setActiveTab('assets', { reveal: false });
+    if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
+    if(hash.get('authoring')==='1'){
+      document.body.classList.add('composition-authoring');
+      setActiveTab('assets', { reveal: false });
+    }
     const sceneFile = hash.get('scene');
     if (!sceneFile) return;
     sceneSaveBlockedByFailedRestore = true;
@@ -30740,13 +30743,18 @@ sceneInitialization.then(() => {
     const plan = planSceneRestore(data);
     if (plan.composition) {
       const preset = new URLSearchParams(location.search).get('settings_preset');
-      if (preset !== plan.composition.flame.presetId) throw new Error('Mounted basin does not match the saved scene');
+      if(preset!==plan.composition.flame.presetId){
+        setInfo('Opening the saved flame recipe…');
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin));
+        return;
+      }
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
   }).catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
-    if (new URLSearchParams(location.hash.slice(1)).get('authoring') !== '1') {
+    const failedRoute=new URLSearchParams(location.hash.slice(1));
+    if (failedRoute.get('authoring') !== '1' && !failedRoute.has('scene')) {
       console.error('Scene route load failed:', error);
       return;
     }

@@ -81,3 +81,10 @@ export function captureComposedCanvases({ host, volume, document, label, simulat
     image: output.toDataURL('image/png'), simulation: simulation || null,
     layers: volume ? ['mesh', 'ordinary-emissive-volume'] : ['mesh'] });
 }
+
+// The live address keeps its renderer route; only the accepted document changes.
+export function savedSceneLocation(href,sceneFile){
+ if(typeof sceneFile!=='string'||!sceneFile.endsWith('.kaminos.json')||/[/\\]/.test(sceneFile))throw Error('Saved scene filename is required');
+ const target=new URL(href),hash=new URLSearchParams(target.hash.slice(1));
+ hash.set('scene',sceneFile);target.hash=hash.toString();return target.href;
+}

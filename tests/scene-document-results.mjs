@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { compositionRestoreUrl } from '../scene-authoring.mjs';
+import * as authoring from '../scene-authoring.mjs';
+const {compositionRestoreUrl}=authoring;
 import {checkedCameraView,cameraViewsMatch} from '../scene-camera-views.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -13,7 +14,7 @@ function mounted() {
     window: {}, authoringBusy: false, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
-    grBrowseScenes() {}, compositionRestoreUrl, location: { origin: 'http://localhost:9000' },
+    grBrowseScenes() {}, compositionRestoreUrl,savedSceneLocation:authoring.savedSceneLocation,URL,URLSearchParams,location: { origin: 'http://localhost:9000',href:'http://localhost:9000/?mesh_root=generated-meshes#authoring=1&scene=input.kaminos.json' },history:{replaceState(_state,_title,url){context.location.href=url;}},
     sceneSaveIsBlocked: () => false, sceneIsEmpty: () => false,
     collectSceneComposition: async () => () => {},
     buildSceneData: capture => ({ label: 'Comparison', composition: null,
@@ -104,4 +105,8 @@ test('result retains the submitted scene while later edits continue independentl
   const result = await run('window.saveSceneAs({result:true})');
   scene.objects[0].transform.position[0] = 9;
   assert.equal(result.document.objects[0].transform.position[0], 1);
+});
+
+test('a successful Save As binds the current address to the new document; failed Save keeps it',async()=>{
+ const {context,run}=mounted();const before=new URL(context.location.href);const result=await run('window.saveSceneAs({result:true})');const after=new URL(context.location.href);assert.equal(new URLSearchParams(after.hash.slice(1)).get('scene'),result.filename,'reload must address the current saved document');assert.equal(after.search,before.search,'saving does not replace the live renderer route');const accepted=context.location.href;context.fetch=async()=>({ok:false,status:503,json:async()=>({error:'Unavailable'})});await run('window.saveScene({result:true})');assert.equal(context.location.href,accepted,'failed Save cannot claim another address');
 });
