@@ -174,7 +174,9 @@ let skeletons = null, skeletonKey = null;
 const skeletonBase = key => (key === '__local' ? '/demo/' : `${hub}/skeletons/${key}/`);
 const source = { weightsBase: '/weights/', t5Base: '/t5/', bundleBase: '/demo/' };
 if (useHub) {
-  Object.assign(source, { weightsBase: `${hub}/unimate/`, t5Base: `${hub}/t5/` });
+  // Float16 storage (half the download; widened to float32 at load). ?precision=fp32 loads the float32 copies.
+  const fp32 = params.get('precision') === 'fp32';
+  Object.assign(source, { weightsBase: `${hub}/${fp32 ? 'unimate' : 'unimate-fp16'}/`, t5Base: `${hub}/${fp32 ? 't5' : 't5-fp16'}/` });
   try {
     skeletons = (await (await fetch(`${hub}/skeletons/index.json`)).json()).skeletons;
     skeletonKey = skeletons.some(k => k.key === params.get('skeleton')) ? params.get('skeleton') : (skeletons.find(k => k.key === 'dog') ?? skeletons[0]).key;

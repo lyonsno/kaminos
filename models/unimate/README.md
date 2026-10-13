@@ -13,7 +13,7 @@ Generate skeletal animation from a text prompt with [UniMate](https://github.com
 - **A complete animation.** Output includes world joint positions, local joint rotations in the skeleton's own hierarchy, the root trajectory and facing, plus the model's raw motion features.
 - **Your own rig.** Choose "Your own rig (.glb)…" or drop a rigged .glb on the page. The page prepares the skeleton the way UniMate's own preprocessing does and generates for it. You can review the joint labels and the facing pair and apply changes.
 - **Eight bodies to animate.** The published page offers the Go2 robot dog and seven Truebones animals: cat, dog, horse, T-rex, spider, eagle and parrot. Switching body takes a moment; the model stays loaded.
-- **Something to watch while it downloads.** The model is about 740 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
+- **Something to watch while it downloads.** The model is about 370 MB (UniMate plus the text encoder), downloaded once and then kept in the browser's cache. While it downloads, the page plays a gallery of clips that this port generated in the browser: a dog, a cat, the Go2 robot dog, a parrot, a horse, an eagle, a spider and a T-rex. Drag to orbit, scroll or pinch to zoom, and scrub through any clip.
 
 ## Accuracy
 
@@ -25,6 +25,19 @@ The port is checked against the reference PyTorch implementation:
 - **End to end.** A complete browser generation from the same starting noise reproduces the reference animation. The largest joint deviation is about 0.03% of body height when run as the reference's batch of two prompts, and 0.3–0.7% of body height for a single prompt.
 
 The browser's step-size controller measures error over the skeleton's real joints only. The reference implementation pads every skeleton to 71 joints and includes the padding in its error estimate. The browser therefore reaches the same motion with about a quarter fewer network evaluations.
+
+## Download size
+
+The published page loads both models with float16 storage, which halves the download to about 370 MB. `pack-half.py` writes these copies. Biases, norms and other small tensors stay float32. At load, [`unimate-weights.js`](unimate-weights.js) widens every weight back to float32, so the kernels and their arithmetic are unchanged; only the stored values are rounded.
+
+The effect on the motion is negligible:
+
+- **One network evaluation:** about 2–4 × 10⁻⁴ relative error against PyTorch, against 1.5 × 10⁻⁶ with float32 weights.
+- **Text encoder:** caption embeddings within about 3.5 × 10⁻⁴.
+- **Go2 reference clips:** a whole generation takes the same adaptive steps and lands as close to the accepted CPU clips as the float32 run: 2.9 × 10⁻³ against 3.0 × 10⁻³, and 4.5 × 10⁻⁴ against 4.2 × 10⁻⁴.
+- **Gallery clips:** the dog and cat clips regenerate within 0.07% of body size.
+
+`?precision=fp32` loads the float32 copies.
 
 ## Speed
 
