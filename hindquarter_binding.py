@@ -89,7 +89,8 @@ def field(points,specs,matrix,partition=False,contributors=None):
 def regional_domain(positions,control):
     j={name:np.asarray(point,dtype=float) for name,point in control['joints'].items()}
     h,k,a=(j['hindlimb-left-'+name] for name in ['hip','stifle','hock'])
-    distances=np.minimum.reduce([capsule(positions,h,k,0)[0],capsule(positions,k,a,0)[0],capsule(positions,a,a+[0,-.4,.1],0)[0]])
+    distal_end=a+np.array([0,float(control['bounds']['min'][1])-a[1]-.15,.10])
+    distances=np.minimum.reduce([capsule(positions,h,k,0)[0],capsule(positions,k,a,0)[0],capsule(positions,a,distal_end,0)[0]])
     smooth=lambda t:np.clip(t,0,1)**2*(3-2*np.clip(t,0,1))
     radial=1-smooth((distances-.30)/.32)
     right=j['hindlimb-right-hip'];mid=(h+right)/2;direction=unit(h-right)
@@ -205,6 +206,7 @@ def build(args):
             'candidatePaintedWeights':False,'referenceRoute':control['referenceRoute'],
             'candidateRoute':'frozen rest support partition + smooth rig-defined regional domain + rotation + iso-value projection + tangential edge relaxation',
             'domainRule':{'innerRadiusFemurs':.30,'outerRadiusFemurs':.62,'bilateralHalfTransitionFemurs':.12,
+                          'distalCoverage':'domain chord extends to original cast minimum Y with .15 femur margin; support primitive unchanged',
                           'outside':'fixed rest positions','maskAuthority':'assay-local geometric domain, not painted or inferred anatomy'},
             'stateRule':'each pose solved from independently generated cast rest state; no temporal sliding memory',
             'bounds':control['bounds'],'metrics':report['metrics'],'sourceGeometrySha256':control['geometry']['sha256'],
