@@ -9,7 +9,7 @@ export function mountAuthoredWaterControls({document,root,controls,api}) {
  <div data-flow hidden><label>Particles / second<input class="transform-input" type="number" min="0" step="100" data-rate></label><label>Aperture radius<input class="transform-input" type="number" min="0.035" max="0.18" step=".001" data-radius></label><label>Flow strength<input class="transform-input" type="number" min=".25" max="2.6" step=".01" data-strength></label><button class="btn" data-stop>Stop emission</button></div></div><p role="alert"></p>`;
  node.querySelectorAll('label').forEach(label=>label.classList.add('field'));root.prepend(node);const $=q=>node.querySelector(q);let selected=null,dirty=false,revision=0,scrubs=[];
  const error=$('[role=alert]');
- const call=async action=>{const id=selected?.id,version=revision;try{error.textContent='';await action();if(selected?.id===id&&revision===version)dirty=false;refresh();}catch(e){error.textContent=e.message;}};
+ const call=async(action,{clearDraft=false}={})=>{const id=selected?.id,version=revision;try{error.textContent='';await action();if(clearDraft&&selected?.id===id&&revision===version)dirty=false;refresh();}catch(e){error.textContent=e.message;}};
  $('[data-add]').onclick=()=>call(()=>api.add());
  for(const name of ['min','max']){const row=document.createElement('label');row.textContent=name==='min'?'Min XYZ':'Max XYZ';for(let k=0;k<3;k++){const input=document.createElement('input');input.type='number';input.className='transform-input';input.step='.1';input.dataset.bound=name;input.dataset.axis=k;input.setAttribute('aria-label',`${name} ${'XYZ'[k]}`);row.append(input);} $('[data-bounds]').append(row);}
  const proposal=()=>({mode:$('[data-mode]').value,...($('[data-mode]').value==='continuous'?{rate:Number($('[data-rate]').value),baseRadius:Number($('[data-radius]').value),strength:Number($('[data-strength]').value)}:{}),drop:{width:Number($('[data-width]').value),samplesPerUnit:Number($('[data-samples]').value)/Number($('[data-width]').value),container:$('[data-container]').checked?bounds():null,...(!$('[data-container]').checked?{worldBounds:bounds()}:{})}});
@@ -17,8 +17,8 @@ export function mountAuthoredWaterControls({document,root,controls,api}) {
  const preview=()=>{revision++;dirty=true;const n=Number($('[data-samples]').value),w=Number($('[data-width]').value);$('[data-proposed]').textContent=Number.isSafeInteger(n)&&n>0&&w>0?`${(n**3).toLocaleString()} particles · volume ${(w**3).toPrecision(4)} · spacing ${(w/n).toPrecision(4)} before source scale`:'Enter a positive width and whole number of samples.';$('[data-drop]').hidden=$('[data-mode]').value!=='finite_drop';$('[data-flow]').hidden=$('[data-mode]').value!=='continuous';};
  for(const input of node.querySelectorAll('input[type=number]')){input.addEventListener('input',preview);const drag=controls.installNumberDrag({input,step:Number(input.step),onStart:()=>{},onEnd:()=>{}});scrubs.push(drag);input.addEventListener('pointercancel',()=>{dirty=false;refresh();});}
  $('[data-mode]').onchange=preview;$('[data-container]').onchange=preview;
- $('[data-stop]').onclick=()=>call(()=>api.edit(selected.id,{mode:'continuous',rate:0}));
- $('[data-apply]').onclick=()=>call(()=>api.edit(selected.id,proposal()));
+ $('[data-stop]').onclick=()=>call(()=>api.edit(selected.id,{mode:'continuous',rate:0}),{clearDraft:true});
+ $('[data-apply]').onclick=()=>call(()=>api.edit(selected.id,proposal()),{clearDraft:true});
  $('[data-release]').onclick=()=>call(()=>api.release(selected.id));
  $('[data-pause]').onclick=()=>call(()=>api.pause());
  function refresh(){const s=api.read();if(s.selected?.id!==selected?.id){dirty=false;revision++;}selected=s.selected;$('[data-selected]').hidden=!selected;if(!selected)return;$('[data-label]').textContent=selected.label;const finite=selected.settings.mode==='finite_drop';$('[data-drop]').hidden=!finite;$('[data-flow]').hidden=finite;

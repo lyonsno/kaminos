@@ -27,6 +27,7 @@ export async function createAuthoredWaterHost(options) {
  const finite=await createFiniteFluidHost({setup:initial,device:options.device,isCurrent:options.isCurrent,redraw:options.redraw,
   createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
  return {...finite,
+  get paused(){return finite.paused;},
   setEmitters(next){records=structuredClone(next);return false;},
   setSetup(){},
   state:()=>({...finite.state(),mode:'finite_drop',registered:true,mounted:true,sourceIds:initial.sourceIds,sourceGeneration:finite.capability.read().clock.generation}),
