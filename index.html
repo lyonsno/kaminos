@@ -26944,7 +26944,7 @@ function setupAuthoringAssets(){
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
         receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
-      return await persistGeneratedMesh(result.glb,generation,label,'TRELLIS');
+      return {...await persistGeneratedMesh(result.glb,generation,label,'TRELLIS'),timing:result.timing};
     }finally{meshRunning.trellis=false;redraw();}
   };
   const trellis=()=>{

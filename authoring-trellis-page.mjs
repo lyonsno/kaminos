@@ -28,12 +28,21 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   const session=await appGpu.session();
   const host=await d.createTrellisSharedHost({appGpu:{device:appGpu.device,queue:appGpu.queue,session,
     beginRun:(runId,options)=>appGpu.beginRun(runId,options)}});
-  let run,generation,asset,released=false,result;
+  let run,generation,asset,released=false,result,timing=null;
+  // Per phase: wall time, and GPU time from the kit's timestamp-query timer (the change in
+  // its running total; timings resolve lazily, so the totals are settled before release).
+  const phases=[],clock=()=>globalThis.performance.now();
+  const gpuTotal=()=>run?.route?.runtime?.profile?.gpuTiming?.totalGpuMs??null;
+  const closePhase=()=>{const last=phases.at(-1);if(!last||last.endMs!==undefined)return;last.endMs=clock();last.gpuEnd=gpuTotal();};
+  const timed=async event=>{
+    if(event?.phase&&event.phase!==phases.at(-1)?.phase){closePhase();phases.push({phase:event.phase,modelRole:event.modelRole??null,startMs:clock(),gpuStart:gpuTotal()});}
+    return onPhase(event);
+  };
   try{
     run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop});
-    await onPhase({phase:'checkpoint-loading'});
+    await timed({phase:'checkpoint-loading'});
     const inputs=await d.loadGenerationInputs(manifest,fetchTensor,{pixelValues});
-    generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase});
+    generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed});
     const job=run.route.enqueue({jobId:run.runId+':image-to-fields',execute:invocation=>generation.run(invocation)});
     const completed=await job.completion;
     if(completed.status!=='succeeded'){
@@ -44,13 +53,17 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
       postprocessMesh:finishing.postprocessMesh,unwrapMesh:finishing.unwrapMesh,
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
-      onPhase});
+      onPhase:timed});
     const finished=await asset.run();
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
     result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
   }finally{
     let failure=null;
     if(run){
+      const gpu=await run.route?.runtime?.settleGpuTiming?.().catch(()=>null);
+      closePhase();
+      timing={gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
+        wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';
       if(!released)failure=Error(`TRELLIS GPU route was not released: ${report?.status}${report?.error?` (${report.error.message})`:''}`);
@@ -60,7 +73,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(failure)throw failure;
   }
   // Checked here: the run's GPU route was released and the asset is a GLB.
-  return {...result,receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
+  return {...result,timing,receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
 }
 
 const sha256=async bytes=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');

@@ -115,3 +115,20 @@ test('the finished asset must be a GLB, and the run returns the receipt checks i
   const g=fixture();g.deps.createTrellisAssetAdapter=()=>({async run(){return {glb:new ArrayBuffer(12)};},dispose(){}});
   await assert.rejects(call(g),/not a GLB/);
 });
+
+test('each phase records its wall time and the kit GPU time spent in it, settled before the route is released',async()=>{
+  const f=fixture();const timing={status:'active',resolvedKernels:0,pendingKernels:0,totalGpuMs:0};let settled=0;
+  const runtime={profile:{gpuTiming:timing},async settleGpuTiming(){settled++;timing.totalGpuMs=30;timing.resolvedKernels=3;return timing;},readTensor(){}};
+  const base=f.deps.createTrellisSharedHost;
+  f.deps.createTrellisSharedHost=async o=>{const h=await base(o);return {...h,async beginRun(x){const r=await h.beginRun(x);r.route.runtime=runtime;return r;}};};
+  f.deps.createTrellisImageGenerationAdapter=options=>({async run(){await options.onPhase({phase:'sparse-structure-sampling'});timing.totalGpuMs=10;
+    await options.onPhase({phase:'texture'});timing.totalGpuMs=25;return {geometry:{},material:{}};},dispose(){}});
+  const result=await call(f);
+  assert.equal(settled,1,'GPU timings are settled once, before release');
+  const names=result.timing.phases.map(p=>p.phase);
+  assert.deepEqual(names,['checkpoint-loading','sparse-structure-sampling','texture']);
+  assert.equal(result.timing.phases[1].gpuMs,10,'GPU time inside a phase is the change in the kit total');
+  assert.equal(result.timing.phases[2].gpuMs,20,'the last phase ends at the settled total');
+  assert.equal(result.timing.gpu.totalGpuMs,30);assert.equal(result.timing.gpu.status,'active');
+  assert.ok(result.timing.phases.every(p=>Number.isFinite(p.wallMs)));
+});
