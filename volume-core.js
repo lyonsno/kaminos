@@ -8187,6 +8187,7 @@ fn writeOpticalTraceMiss(ray: u32) {
     nonRidgeOpticalCaptureRows[base+3u] = 1.0;
     atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
   }
+}
 
 fn outerInsideNear(p:vec3<f32>)->bool {
   return all(p>=vec3<f32>(-1.0)) && all(p<=vec3<f32>(1.0,2.0*f32(GRID_Y)/f32(GRID)-1.0,1.0));
