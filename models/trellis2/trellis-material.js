@@ -326,8 +326,9 @@ export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,tex
 }
 
 export function createTrellisAssetAdapter({runtime,geometry,material,textureSize=1024,WorkerClass,
-  postprocessMesh,provenance={},onPhase=()=>{}}){
+  postprocessMesh,unwrapMesh,provenance={},onPhase=()=>{}}){
   if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
+  if(unwrapMesh!==undefined&&typeof unwrapMesh!=='function')throw TypeError('explicit UV provider must be a function');
   const a=material?.features,b=material?.coordinates,n=a?.shape?.[0];
   if(!runtime?.readTensor||!a?.buffer||!b?.buffer||a.dtype!=='f32'||b.dtype!=='i32'||!(a.usage&U.storage)||!(b.usage&U.storage)||
     !Number.isSafeInteger(n)||n<1||JSON.stringify(a.shape)!==JSON.stringify([n,6])||JSON.stringify(b.shape)!==JSON.stringify([n,3])||
@@ -343,7 +344,7 @@ export function createTrellisAssetAdapter({runtime,geometry,material,textureSize
         if(mesh.status!=='surface')throw Error('learned geometry has no surface; no asset');
         await enter('post-model-material-readback');const raw=await runtime.readTensor(a),coords=await runtime.readTensor(b);
         if(!(raw instanceof ArrayBuffer)||!(coords instanceof ArrayBuffer)||raw.byteLength!==a.byteLength||coords.byteLength!==b.byteLength)throw Error('complete material readback required');
-        const finished=await finishTrellisMesh(mesh,{postprocessMesh,WorkerClass,textureSize,provenance,
+        const finished=await finishTrellisMesh(mesh,{postprocessMesh,unwrapMesh,WorkerClass,textureSize,provenance,
           materialFields:{features:new Float32Array(raw),coordinates:new Int32Array(coords),resolution:material.resolution},
           onPhase:e=>enter(e.phase)});
         output={...finished,handoff:{phase:'post-model-asset-consumer',input:'exact borrowed learned decoder tensors; no NPZ or fixture replacement',
