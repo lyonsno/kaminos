@@ -41,7 +41,7 @@ try{
     const kit=await import('/repo/webgpu-inference-kit/src/index.js');
     const service=kit.createWebGpuForegroundService({routeId:'u2net-witness',device,queue:device.queue});
     const queue=[];let inPage=false;const submit=device.queue.submit;
-    device.queue.submit=function(list){queue.push(inPage?'page':'model');return submit.call(this,list);};
+    device.queue.submit=function(list){const kind=inPage?'page':'model';const r=submit.call(this,list);queue.push(kind);return r;}; // recorded only once the submit returned
     const loop=label=>{const st={label,requested:0,maxGapMs:0,live:true,last:performance.now()};
       const tick=now=>{if(!st.live)return;st.maxGapMs=Math.max(st.maxGapMs,now-st.last);st.last=now;
         service.request({requestId:label+'-'+(st.requested++),run:ctx=>{inPage=true;try{ctx.submit([device.createCommandEncoder().finish()]);}finally{inPage=false;}}});
