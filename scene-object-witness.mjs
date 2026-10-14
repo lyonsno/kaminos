@@ -9,6 +9,7 @@ import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-e
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
+import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -6013,7 +6014,8 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  assertExpectedServerRoot(effectiveServerRoots);
+  if(scenario==='authored-water-drop'&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
+  else assertExpectedServerRoot(effectiveServerRoots);
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
