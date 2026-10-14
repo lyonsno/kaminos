@@ -22,6 +22,33 @@ extension; report a missing capability as the concrete operation your feature
 needs. Domain modules can remain independently useful while the experiment
 supplies their visible working context.
 
+## Design For Interaction
+
+Start with what the person wants to do to an object or scene. Reuse selection,
+placement, the relevant inspector, camera navigation and shared playback where
+they fit. Present domain-specific controls in the context of their target, using
+the same meaningful operations available to agents. Keep authored scene objects
+on the ordinary editing and save path; an experiment's disposable setup has its
+own explicit lifetime.
+
+Prefer a selected emitter with editable rate and direction over separate
+buttons for several hardcoded emissions. Prefer choosing a target and framing
+it through camera controls over a row of named camera-pose buttons. A useful
+preset can seed an editable setup; its initial values need not bound the
+operator's exploration. Use familiar sliders, numeric fields, toggles and
+selection tools for their corresponding values, with clear commands for actions.
+Group controls by the work they support and expose details in context.
+
+A controlled fixture is appropriate when fixed geometry, timing or inputs are
+part of the question being tested. Make that role legible and preserve a
+repeatable baseline. Most one-off machinery that reaches a human benefits from
+a small amount of interaction design on the first pass: let them select the
+relevant target, vary the meaningful settings, inspect the result and repeat
+without asking for a code change. Retain edits through the applicable scene,
+domain-state or recording service, and state the continuation actually supported.
+Choose flexibility that serves the next useful interaction; a generic framework
+is a separate investment.
+
 ## Run The Small Example
 
 From the checkout, use an available port:

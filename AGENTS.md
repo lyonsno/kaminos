@@ -15,6 +15,22 @@ capture/recording tools. Feature modules own domain behavior and meaningful
 operations; the experiment connects them to both human controls and agent calls.
 The guide's executable material study supplies a small starting point.
 
+Build friendly human-facing interactions around Kaminos objects, scene editing
+and contextual tools by default. Put object properties in the relevant inspector,
+use ordinary selection/placement and shared camera/playback controls, and expose
+meaningful feature operations through the same agent-callable path. Keep the
+visible UI focused on what the person is manipulating; avoid a panel of bespoke
+buttons for every script step, fixed value or named test case.
+
+Fixtures are useful when a controlled setup is part of the experiment. Keep that
+setup explicit and give its controls a clear purpose. When one-off machinery
+reaches the operator, usually make the small extra investment that lets them
+choose a target, adjust a meaningful parameter, navigate and repeat the action
+without another code edit. Preserve those choices through the applicable shared
+state/recording flow. Generalize the useful interaction, proportionately to the
+work, rather than building a new framework or leaving fixture rails as the
+human's only interface. See the guide's interaction guidance.
+
 For straightforward asset inspection, use the existing asset viewer. For
 authored scene changes, use the scene-authoring flow. Computational changes use
 focused tests and their existing visual consumer where relevant. When task fit
