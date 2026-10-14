@@ -1,7 +1,7 @@
 // Generate tab as three steps across the drawer: 1 Image (text -> image), 2 Mesh (the
 // image that will be used, model choice, Generate mesh), 3 Results (meshes to Add).
 // Existing controls are moved, not rebuilt, so their ids and handlers stay as they are.
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>''}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null}){
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -18,6 +18,8 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   // Action first: the model and its button stay in view; the preview takes what is left.
   const actions=document.createElement('div');actions.className='asset-step-actions';
   actions.append(...[byId('asset-prepare'),byId('asset-run'),byId('asset-recover')].filter(Boolean));
+  const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
+  masks.onclick=()=>{const image=selected();if(image?.kind==='image')openMasks?.(image);};actions.append(masks);
   mesh.append(...[byId('asset-mesh-model-row'),byId('asset-express-row'),settings,actions,queue,preview,sourceName,byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();
   const resultList=byId('asset-results');const empty=document.createElement('p');empty.className='asset-help';empty.id='asset-results-empty';empty.textContent='Generated meshes appear here. Add puts one in the scene.';
@@ -31,6 +33,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     sourceName.textContent=showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    masks.hidden=!openMasks||selected()?.kind!=='image';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;
   }

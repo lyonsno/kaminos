@@ -28,7 +28,7 @@ export function thumbnailDistance({size,fovDeg=35,aspect=1,margin=1.08}){
 
 const LABELS={'generated-meshes':'Saved meshes','image-inbox':'Source images',greenroom:'Generator outputs',pixal3d:'Pixal',trellis2mlx:'TRELLIS'};
 
-export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{}}){
+export function installBrowseLayout({document,controller,inScene=()=>new Set(),open=()=>{},openMasks=null}){
   const byId=id=>document.getElementById(id);
   const browse=byId('asset-browse');if(!browse)throw Error('Browse panel is missing');
   const header=document.createElement('div');header.id='asset-browse-header';
@@ -37,6 +37,10 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
   header.append(chips,byId('asset-filter'),byId('asset-path'),byId('asset-refresh'));
   browse.prepend(header);
   if(controls)controls.hidden=true;
+  // Masks on the selected image (SAM); a saved cutout comes back selected.
+  const masks=document.createElement('button');masks.type='button';masks.id='asset-open-masks';masks.textContent='Masks…';masks.hidden=true;
+  masks.onclick=()=>{const selected=controller.read().selected;if(selected?.kind==='image')openMasks?.(selected);};
+  byId('asset-use-image')?.before(masks);
   let chipKey=null;
   // Double-click: a mesh goes into the scene, an image goes to Generate.
   byId('asset-entries').addEventListener('dblclick',event=>{
@@ -56,6 +60,7 @@ export function installBrowseLayout({document,controller,inScene=()=>new Set(),o
         chip.onclick=()=>controller.browse(root.id).catch?.(()=>{});return chip;
       }));
     }
+    masks.hidden=!openMasks||state.selected?.kind!=='image';
     const present=inScene();
     for(const button of byId('asset-entries').querySelectorAll('.asset-entry')){
       const span=button.querySelector(':scope > span');if(!span)continue;
