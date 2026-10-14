@@ -11922,13 +11922,18 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
     if (localLiquidHost) {
-      try { localLiquidHost.render();authoredWaterControls?.refreshStatus();if(localLiquidHost.state().mode==='finite_drop'){const c=localLiquidHost.state().clock;sharedWorkbench?.update({source:'Authored finite water',status:c.paused?'Paused':'Playing',clock:`tick ${c.step} · ${(c.timeSeconds).toFixed(4)} s`});} }
+      try {
+        localLiquidHost.render();authoredWaterControls?.refreshStatus();
+        const state=localLiquidHost.state(),clock=state.clock??{paused:localLiquidHost.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
+        sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`});
+      }
       catch (error) {
         console.error('Local water frame failed', error);
         localLiquidFailure = String(error?.message || error);
         localLiquidHost.dispose();
         localLiquidHost = null;
         authoredWaterControls?.refreshStatus();
+        sharedWorkbench?.update({source:'Authored water',status:'Stopped',clock:localLiquidFailure});
         refreshLocalLiquidPerformance();
         renderPipeline.render();
         setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
