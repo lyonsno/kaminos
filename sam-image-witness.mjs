@@ -1,15 +1,26 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, realpathSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { validateSamConsumerInteraction, validateSamApplicationForeground } from './sam-image-witness-checks.js';
+import { validateSamConsumerInteraction, validateSamApplicationForeground, validateSamMaskControls } from './sam-image-witness-checks.js';
 import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport, validateSamApplicationForeground,
-  validateSamExportProvenance, validateSamNativeSourceHandoff } from './sam-image-witness-checks.js';
+  validateSamExportProvenance, validateSamNativeSourceHandoff, validateSamApplicationFrame,
+  validateSamMaskControls } from './sam-image-witness-checks.js';
+
+export function resolveSamWitnessBrowser(requestedPath) {
+  const requested = resolve(requestedPath), effective = realpathSync(requested);
+  const executable = basename(effective);
+  const independent = ['Google Chrome for Testing', 'Chromium', 'chrome-headless-shell', 'headless_shell'].includes(executable)
+    || (executable === 'chrome' && effective.includes('/ms-playwright/'));
+  assert.ok(!effective.split('/').includes('Google Chrome.app') && independent,
+    `headless work requires an independent browser executable; requested=${requested}, effective=${effective}`);
+  return { requested, effective };
+}
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
   assert.ok(output, 'missing live output');
@@ -61,8 +72,8 @@ async function main() {
     assert.equal(report.effectiveCommit, values['expected-commit'], 'source revision mismatch');
     assert.equal(execFileSync('git', ['diff', '--name-only', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), '', 'uncommitted source changes');
     for (const field of ['model-root', 'image', 'playwright', 'chrome']) assert.ok(values[field], `missing --${field}`);
-    assert.ok(!resolve(values.chrome).startsWith('/Applications/Google Chrome.app/'), 'headless work requires an independent browser executable');
-    report.browserExecutable = resolve(values.chrome);
+    report.browser = resolveSamWitnessBrowser(values.chrome);
+    report.browserExecutable = report.browser.effective;
     report.modelManifestSha256 = createHash('sha256').update(readFileSync(join(values['model-root'], 'tensor-manifest.json'))).digest('hex');
     report.inputs = {};
     for (const field of ['image', 'second-image']) if (values[field]) {
@@ -91,13 +102,19 @@ async function main() {
     assert.equal(report.runtimeConfig.sam3?.mounted, true, 'model is not mounted');
     report.failurePhase = 'browser-launch'; saveReport();
     const { chromium } = await import(pathToFileURL(resolve(values.playwright)).href);
-    browser = await checked(chromium.launch({ executablePath: values.chrome, headless: true, timeout: 0,
+    browser = await checked(chromium.launch({ executablePath: report.browser.effective, headless: true, timeout: 0,
       args: ['--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU,WebGPUDeveloperFeatures', '--disable-extensions'],
     }));
+    report.browser.version = browser.version(); report.browser.headless = true; saveReport();
     browser.once('disconnected', () => failRuntime(new Error('browser disconnected')));
     page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
     page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
     page.on('pageerror', error => { report.errors.push(error.message); failRuntime(error); });
+    page.on('console', message => {
+      if (message.type() === 'warning' && message.text().startsWith('Masks unavailable')) {
+        failRuntime(new Error(message.text()));
+      }
+    });
     report.failurePhase = 'host-load'; saveReport();
     await checked(page.goto(url, { waitUntil: 'load' }));
     if (values['app-host']) {
@@ -141,6 +158,26 @@ async function main() {
       lastTrustedEvidence = reference;
       await checked(page.evaluate(transferId => window.__samEvidenceTransfers.delete(transferId), descriptor.transferId));
       return reference;
+    }
+
+    async function assertMaskControls(label) {
+      const state = await checked(page.evaluate(() => ({ mode: window.kaminosWorkspace?.state().mode,
+        tab: document.querySelector('.tab.active')?.dataset.tab,
+        failed: document.getElementById('sam-image-status').dataset.failed === 'true',
+        status: document.getElementById('sam-image-status').textContent,
+        source: window.kaminosSamImageTools?.progress().source || null })));
+      state.promptVisible = await checked(page.locator('#sam-image-prompt').isVisible());
+      state.runVisible = await checked(page.locator('#sam-image-run').isVisible());
+      state.runDisabled = await checked(page.locator('#sam-image-run').isDisabled());
+      report.controlObservations ||= [];
+      const observation = { label, state, validation: 'pending' };
+      report.controlObservations.push(observation); saveReport();
+      try { validateSamMaskControls(state); observation.validation = 'passed'; saveReport(); }
+      catch (error) {
+        observation.screenshot = join(out, `${label}-unavailable-controls.png`);
+        await checked(page.screenshot({ path: observation.screenshot })); saveReport();
+        throw error;
+      }
     }
 
     async function capture(name) {
@@ -230,7 +267,8 @@ async function main() {
     let previousId = null;
     async function run(label, prompt, cache, empty = false, baseline = null, inputKey = 'image') {
       report.failurePhase = label; saveReport();
-      await page.locator('#sam-image-prompt').fill(prompt);
+      await assertMaskControls(label);
+      await checked(page.locator('#sam-image-prompt').fill(prompt));
       await page.evaluate(() => {
         window.samFrameTimes = [];
         const tick = time => { window.samFrameTimes.push(time); window.samFrameHandle = requestAnimationFrame(tick); };
@@ -398,8 +436,11 @@ async function main() {
         window.kaminosAssets.open('browse');
       }));
       await checked(page.locator('#asset-file').setInputFiles(sourceFile));
-      await checked(page.waitForFunction(sha256 => window.kaminosAssets.read().selected?.sha256 === sha256,
-        report.inputs.image.sha256));
+      await checked(page.waitForFunction(() => {
+        const state = window.kaminosAssets.read();
+        if (state.error) throw new Error(state.error);
+        return Boolean(state.selected);
+      }));
       report.nativeSourceSelection = await checked(page.evaluate(async () => {
         const selected = window.kaminosAssets.read().selected;
         const response = await fetch('/api/assets?kind=image');
@@ -414,8 +455,9 @@ async function main() {
       await checked(page.screenshot({ path: selectionPath }));
       report.captures.push({ name: 'selected-library-image', path: selectionPath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
       await checked(page.locator('#asset-open-masks').click());
-      await checked(page.waitForFunction(() => window.kaminosSamImageTools?.progress().source
+      await checked(page.waitForFunction(() => window.kaminosSamImageTools
         && !window.kaminosSamImageTools.progress().busy));
+      await assertMaskControls('selected-image-mask-entry');
       report.nativeSourceHandoff = await checked(page.evaluate(async sha256 => {
         const { validateSamNativeSourceHandoff } = await import('./sam-image-witness-checks.js');
         return validateSamNativeSourceHandoff({ selected: window.kaminosAssets.read().selected,
@@ -425,6 +467,7 @@ async function main() {
       saveReport();
     } else await checked(page.locator('#sam-image-file').setInputFiles(sourceFile));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+    await assertMaskControls('image-ingress');
     await capture('source-desktop');
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);
@@ -489,6 +532,7 @@ async function main() {
     assert.equal(await page.locator('#sam-image-run').isDisabled(), true);
     await page.locator('#sam-image-file').setInputFiles(values.image);
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+    await assertMaskControls('recovered-source');
     await capture('recovered-source');
     if (values['app-host']) {
       report.failurePhase = 'model-unload-application-handback'; saveReport();
@@ -496,6 +540,7 @@ async function main() {
       await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
       assert.equal(await page.locator('#sam-image-status').innerText(), 'Model unloaded');
       report.applicationAfterUnload = await checked(page.evaluate(async () => {
+        const { validateSamApplicationFrame } = await import('./sam-image-witness-checks.js');
         const app = await window.kaminosAppGpu(), session = await app.session();
         if (app !== window.__samWitnessApplicationHost || session !== window.__samWitnessApplicationSession) {
           throw new Error('SAM unload replaced the application host or session');
@@ -510,8 +555,8 @@ async function main() {
             return { status: 'submitted' };
           } }).completion;
         await app.queue.onSubmittedWorkDone();
-        if (receipt.status !== 'completed' || receipt.failure !== null) throw new Error('application frame failed after unload');
-        return { before, after: app.snapshot(), receipt, sameHost: true, sameSession: true,
+        const sceneRender = validateSamApplicationFrame(receipt);
+        return { before, after: app.snapshot(), receipt, sceneRender, sameHost: true, sameSession: true,
           authority: 'application-frame-callback-and-queue-settlement-not-presentation' };
       }));
       saveReport();

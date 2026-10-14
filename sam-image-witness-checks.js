@@ -81,9 +81,20 @@ export function validateSamApplicationForeground(evidence, invocationId) {
     'no completed application foreground callback');
   check(run.receipts.every(receipt => receipt.runId === invocationId && receipt.routeId === routeId
     && receipt.failure === null), 'application foreground receipt failed or belongs to another run');
+  for (const receipt of run.receipts.filter(row => row.status === 'completed' && row.metadata?.renderer === 'kaminos-app')) {
+    validateSamApplicationFrame(receipt);
+  }
   return { runId: invocationId, routeId, completedCallbacks: run.receipts.filter(row => row.status === 'completed'
     && row.metadata?.renderer === 'kaminos-app').length,
     authority: 'application-callback-and-queue-settlement-not-presented-frame-cadence' };
+}
+
+export function validateSamApplicationFrame(receipt) {
+  check(receipt?.status === 'completed' && receipt.failure === null, 'application frame callback failed');
+  check(receipt.result?.sceneAuthority === 'three-render-returned-inside-service-not-presentation'
+    && Number.isSafeInteger(receipt.result.sceneFrameCount) && receipt.result.sceneFrameCount > 0,
+  'application callback lacks the actual host scene-render result');
+  return { sceneFrameCount: receipt.result.sceneFrameCount, authority: receipt.result.sceneAuthority };
 }
 
 export function validateSamExportProvenance(provenance, { kind, source, output, indices, width, height }) {
@@ -114,4 +125,10 @@ export function validateSamNativeSourceHandoff({ selected, source, mode, maskPan
   check(mode === 'workbench' && maskPanelActive === true, 'selected-image Masks action did not open the mask tools');
   return { source: source.source, sha256: source.sha256, entry: 'asset-open-masks',
     authority: 'actual-Authoring-selected-image-action-and-loaded-source' };
+}
+
+export function validateSamMaskControls(state) {
+  check(state.mode === 'workbench' && state.tab === 'masks', 'Masks workspace or tab is not active');
+  check(state.promptVisible === true && state.runVisible === true && state.runDisabled === false
+    && state.failed === false, 'Masks prompt/run controls are unavailable');
 }

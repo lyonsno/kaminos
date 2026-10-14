@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, mkdirSync, writeFileSync, symlinkSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -76,7 +76,8 @@ const appEvidence = { sameDevice: true, sameRendererDevice: true, runtime: {
   applicationForegroundEvidence: { status: 'idle', error: null, routeId: ownerRoute,
     lastRun: { status: 'succeeded', runId: 'new', routeId: ownerRoute, pendingRequestCount: 0,
       receipts: [{ status: 'completed', runId: 'new', routeId: ownerRoute, failure: null,
-        metadata: { renderer: 'kaminos-app' } }] } } } };
+        metadata: { renderer: 'kaminos-app' }, result: { sceneFrameCount: 1,
+          sceneAuthority: 'three-render-returned-inside-service-not-presentation' } }] } } } };
 consumer.validateSamApplicationForeground(appEvidence, 'new');
 for (const mutate of [value => { value.runtime = null; }, value => { value.sameDevice = false; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.runId = 'old'; },
@@ -84,6 +85,8 @@ for (const mutate of [value => { value.runtime = null; }, value => { value.sameD
   value => { value.runtime.applicationForegroundEvidence.status = 'settlement-failed'; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts = []; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].metadata = {}; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].result = { status: 'submitted' }; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].result.sceneFrameCount = 0; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].failure = { message: 'failed' }; }]) {
   const value = structuredClone(appEvidence); mutate(value);
   assert.throws(() => consumer.validateSamApplicationForeground(value, 'new'));
@@ -117,6 +120,25 @@ for (const mutate of [value => { value.selected = null; }, value => { value.sour
   const value = structuredClone(nativeEntry); mutate(value);
   assert.throws(() => consumer.validateSamNativeSourceHandoff(value, 'sha256:source'));
 }
+assert.equal(typeof consumer.validateSamMaskControls, 'function', 'hidden Masks controls must fail explicitly before waiting on an action');
+const controls = { mode: 'workbench', tab: 'masks', promptVisible: true, runVisible: true, runDisabled: false, failed: false };
+consumer.validateSamMaskControls(controls);
+for (const change of [{ mode: 'authoring' }, { tab: 'assets' }, { promptVisible: false },
+  { runVisible: false }, { runDisabled: true }, { failed: true }]) {
+  assert.throws(() => consumer.validateSamMaskControls({ ...controls, ...change }));
+}
+assert.equal(typeof consumer.resolveSamWitnessBrowser, 'function', 'headless admission needs physical browser identity');
+const browserRoot = mkdtempSync(join(tmpdir(), 'sam-witness-browser-'));
+const gui = join(browserRoot, 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome');
+mkdirSync(join(browserRoot, 'Google Chrome.app', 'Contents', 'MacOS'), { recursive: true });
+writeFileSync(gui, 'local path-policy fixture; not a browser');
+const alias = join(browserRoot, 'chrome-alias'); symlinkSync(gui, alias);
+assert.throws(() => consumer.resolveSamWitnessBrowser(alias), /independent/);
+const independent = join(browserRoot, 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing');
+mkdirSync(join(browserRoot, 'Google Chrome for Testing.app', 'Contents', 'MacOS'), { recursive: true });
+writeFileSync(independent, 'local path-policy fixture; not a browser');
+const cftAlias = join(browserRoot, 'cft-alias'); symlinkSync(independent, cftAlias);
+assert.equal(consumer.resolveSamWitnessBrowser(cftAlias).effective, realpathSync(independent));
 const out = mkdtempSync(join(tmpdir(), 'kaminos-sam-consumer-'));
 const result = spawnSync(process.execPath, [witness.pathname, '--out-dir', out, '--expected-commit', 'not-the-source'], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);
