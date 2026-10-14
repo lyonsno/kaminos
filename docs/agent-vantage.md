@@ -33,9 +33,22 @@ The sub is an ordinary camera object, labeled Bebop for the default pilot. Selec
 
 ## What a picture is
 
-`snap` moves the page's own camera to the sub for a few frames (`--settle`, default 2). Every layer the page draws renders from there through its own loop: the scene, the fire volume and the water. The visible canvases are composited in stacking order and the person's view is restored. The record names the requested and effective view and their deviation, the composited canvases, the frame counters before and after, and the objects whose bounds fall inside the frame.
+`snap` moves the page's own camera to the sub for a few frames (`--settle`, default 2). Every layer the page draws renders from there through its own loop: the scene, the fire volume and the water. The visible canvases are composited in stacking order and the person's view is restored. The record names the requested and effective view and how far they differ, the composited canvases, the frame counters before and after, and the objects whose bounds fall inside the frame.
 
-A capture refuses instead of returning the wrong picture when someone is mid-gesture or editing (`busy`), the tab is hidden (`page-hidden`), the viewport is looking through a different scene camera (`camera-view`), the camera moved during the capture (`view-changed`), no new frame was drawn from the requested view (`stale-frame`), or the picture is one flat color (`blank-frame`).
+While a picture is taken the page holds the same document lock as Capture, so camera view, Save and Load wait until it finishes. Objects in frame are named from the matrices the page actually rendered with, including a camera frame's zoom and offset when someone is looking through the sub.
+
+A capture refuses instead of returning the wrong picture when:
+
+- someone is mid-gesture or editing (`busy`);
+- the tab is hidden (`page-hidden`);
+- the viewport is looking through a different scene camera (`camera-view`);
+- the camera moved, rolled or changed lens during the capture (`view-changed`);
+- any pictured canvas did not draw a new frame from the requested view (`stale-frame`);
+- the picture is one flat color (`blank-frame`).
+
+A pictured canvas without a frame counter is listed under `unverifiedLayers`.
+
+A command waits for the page for `--timeout` seconds. If the page never took it, it is withdrawn and will not run later. If the page took it but did not answer, the CLI says its outcome is unknown.
 
 ## Limits
 
@@ -43,9 +56,17 @@ A capture refuses instead of returning the wrong picture when someone is mid-ges
 - Pictures use the viewport's resolution and aspect, downscaled to `--max-size` (default 1280 pixels on the long side).
 - "In view" is decided from bounding boxes. Something nearer may hide an object, and helper glyphs such as emitters report their glyph bounds.
 - DOM overlays such as labels and panels are not pictured; canvases are.
+- Writing the borrowed view and restoring it resets the viewport's working navigation pivot, as the scene camera Capture does.
 
 ## Transport
 
 `serve.py` relays commands. A page holds one server-sent-events link at `/api/vantage/link` and posts replies to `/api/vantage/reply`; the terminal posts to `/api/vantage/command` and waits for that page's reply. The vantage endpoints answer only this machine at the server's own address, refuse requests from other sites, and accept only JSON. Arguments are validated by `agent-vantage-core.mjs` in both the CLI and the page.
 
-`agent-vantage-witness.mjs` exercises the whole route in an independent Chromium with the real CLI. It checks that the picture comes from the sub rather than the person's view, that the person's camera returns exactly, that an ordinary scene edit re-aims the sub, and that undo returns it.
+`agent-vantage-witness.mjs` exercises the whole route in an independent Chromium with the real CLI. It checks:
+
+- the picture comes from the sub rather than the person's view;
+- the person's camera returns exactly;
+- an ordinary scene edit re-aims the sub, and undo returns it;
+- pressing Numpad 0 during a burst cannot enter camera view or replace the person's saved view.
+
+It records the served checkout's commit.

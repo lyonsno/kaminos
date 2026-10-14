@@ -22,9 +22,9 @@ class LinkClosed(Exception):
 
 
 class VantageError(Exception):
-    def __init__(self, status, phase, message):
+    def __init__(self, status, phase, message, **details):
         super().__init__(message)
-        self.status, self.phase = status, phase
+        self.status, self.phase, self.details = status, phase, details
 
 
 class _Link:
@@ -52,9 +52,10 @@ class _Pending:
 
 
 class VantageBroker:
-    def __init__(self, heartbeat=5.0, clock=time.monotonic):
+    def __init__(self, heartbeat=5.0, clock=time.monotonic, wall=time.time):
         self.heartbeat = heartbeat
         self._clock = clock
+        self._wall = wall
         self._lock = threading.Condition()
         self._pages = {}
         self._pending = {}
@@ -82,8 +83,8 @@ class VantageBroker:
             page = self._pages.get(link.page_id)
             if page is None or page.link is not link:
                 return
-            page.link = None
-            page.queue.clear()
+            # A closed page has no routing value; a reconnect registers again.
+            del self._pages[link.page_id]
             for command_id, pending in list(self._pending.items()):
                 if pending.page_id == link.page_id:
                     pending.failure = VantageError(502, "disconnected", "The Kaminos page closed its link before answering")
@@ -98,9 +99,11 @@ class VantageBroker:
                 if link.closed:
                     raise LinkClosed()
                 page = self._pages.get(link.page_id)
-                if page is not None and page.link is link and page.queue:
-                    page.last_seen = self._clock()
-                    return page.queue.popleft()
+                while page is not None and page.link is link and page.queue:
+                    message = page.queue.popleft()
+                    if message["id"] in self._pending:
+                        page.last_seen = self._clock()
+                        return message
                 remaining = deadline - self._clock()
                 if remaining <= 0:
                     return None
@@ -147,13 +150,17 @@ class VantageBroker:
             target = self._select(page)
             pending = _Pending(target.id)
             self._pending[command_id] = pending
-            target.queue.append({"id": command_id, "command": command, "args": args})
+            target.queue.append({"id": command_id, "command": command, "args": args,
+                                 "expiresAt": int((self._wall() + timeout) * 1000)})
             self._lock.notify_all()
             described = self._describe(target, self._clock())
         started = self._clock()
         if not pending.done.wait(timeout):
-            self._fail(command_id, None)
-            raise VantageError(504, "timeout", f"The Kaminos page did not answer within {timeout:g}s. A hidden tab pauses rendering; bring it to the front.")
+            delivered = self._withdraw(command_id, target.id, pending)
+            if delivered is True:
+                raise VantageError(504, "timeout", f"The page received the command but did not answer within {timeout:g}s, so its outcome is unknown. A hidden tab pauses rendering; bring it to the front.", delivered=True)
+            if delivered is False:
+                raise VantageError(504, "timeout", f"The command expired before the page took it, so it was not run. A hidden tab pauses rendering; bring it to the front.", delivered=False)
         if pending.failure is not None:
             raise pending.failure
         reply = {key: pending.reply[key] for key in ("ok", "result", "error", "phase") if key in pending.reply}
@@ -162,6 +169,19 @@ class VantageBroker:
                 "elapsedMs": round((self._clock() - started) * 1000)}
 
     # --- internals -------------------------------------------------------
+    def _withdraw(self, command_id, page_id, pending):
+        """Forget a timed-out command: True if the page had already taken it,
+        False if it was still queued, None if its answer arrived meanwhile."""
+        with self._lock:
+            if pending.done.is_set():
+                return None
+            self._pending.pop(command_id, None)
+            page = self._pages.get(page_id)
+            queued = [message for message in (page.queue if page else []) if message["id"] == command_id]
+            for message in queued:
+                page.queue.remove(message)
+            return not queued
+
     def _fail(self, command_id, failure):
         with self._lock:
             pending = self._pending.pop(command_id, None)

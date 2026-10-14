@@ -118,24 +118,28 @@ function viewCamera(view, aspect) {
 const round = value => Math.round(value * 1e4) / 1e4;
 
 // Bounds-based: an object reported in view may still be hidden behind another.
-// Image coordinates are normalized with the origin at the top left.
-export function objectsInView(view, aspect, objects, {excludeIds = []} = {}) {
-  const camera = viewCamera(view, aspect), excluded = new Set(excludeIds);
-  const frustum = new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-  const inverse = camera.quaternion.clone().invert(), inView = [], outOfView = [];
+// Image coordinates are normalized with the origin at the top left. `optics`
+// is the camera actually used for the picture: its projection (including any
+// camera-frame zoom or offset) and world-to-view matrices, as arrays.
+export function objectsInProjection({projection, viewInverse, near}, objects, {excludeIds = []} = {}) {
+  if (!(near > 0)) throw new Error('Projection naming needs a positive near plane');
+  const project = new Matrix4().fromArray(projection), view = new Matrix4().fromArray(viewInverse);
+  const world = view.clone().invert(), eye = new Vector3().setFromMatrixPosition(world);
+  const inverse = new Quaternion().setFromRotationMatrix(world).invert(), excluded = new Set(excludeIds);
+  const frustum = new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(project, view));
+  const inView = [], outOfView = [];
   for (const object of objects) {
     if (excluded.has(object.id) || !object.bounds) continue;
     const box = boundsBox(object.bounds), center = box.getCenter(new Vector3());
-    const local = center.clone().sub(camera.position).applyQuaternion(inverse);
+    const local = center.clone().sub(eye).applyQuaternion(inverse);
     const bearing = {right: round(Math.atan2(local.x, -local.z) / DEG), up: round(Math.atan2(local.y, Math.hypot(local.x, local.z)) / DEG)};
-    const entry = {id: object.id, label: object.label, type: object.type, distance: camera.position.distanceTo(center), bearing};
+    const entry = {id: object.id, label: object.label, type: object.type, distance: eye.distanceTo(center), bearing};
     if (!frustum.intersectsBox(box)) { outOfView.push(entry); continue; }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, behind = false;
     for (let i = 0; i < 8; i++) {
-      const corner = new Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z);
-      const eye = corner.applyMatrix4(camera.matrixWorldInverse);
-      if (eye.z > -camera.near) { behind = true; continue; }
-      const ndc = eye.applyMatrix4(camera.projectionMatrix);
+      const corner = new Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).applyMatrix4(view);
+      if (corner.z > -near) { behind = true; continue; }
+      const ndc = corner.applyMatrix4(project);
       x0 = Math.min(x0, (ndc.x + 1) / 2); x1 = Math.max(x1, (ndc.x + 1) / 2);
       y0 = Math.min(y0, (1 - ndc.y) / 2); y1 = Math.max(y1, (1 - ndc.y) / 2);
     }
@@ -143,16 +147,46 @@ export function objectsInView(view, aspect, objects, {excludeIds = []} = {}) {
     if (behind) { x0 = 0; y0 = 0; x1 = 1; y1 = 1; }
     const rect = [x0, y0, x1, y1].map(value => Math.min(1, Math.max(0, value)));
     const partial = behind || rect.some((value, i) => value !== [x0, y0, x1, y1][i]);
-    const projected = center.clone().applyMatrix4(camera.matrixWorldInverse);
+    const middle = center.clone().applyMatrix4(view);
     let image = null;
-    if (projected.z < -camera.near) {
-      const ndc = projected.applyMatrix4(camera.projectionMatrix);
+    if (middle.z < -near) {
+      const ndc = middle.applyMatrix4(project);
       image = [(ndc.x + 1) / 2, (1 - ndc.y) / 2];
     }
     inView.push({...entry, rect: rect.map(round), center: image && image.map(round), coverage: round((rect[2] - rect[0]) * (rect[3] - rect[1])), partial});
   }
   const byDistance = (a, b) => a.distance - b.distance;
   return {inView: inView.sort(byDistance), outOfView: outOfView.sort(byDistance), occlusion: 'not-tested'};
+}
+
+// The same naming from a nominal view (position, target, up, fov, clipping)
+// and an aspect, for planning where the sub would look.
+export function objectsInView(view, aspect, objects, options = {}) {
+  const camera = viewCamera(view, aspect);
+  return objectsInProjection({projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near}, objects, options);
+}
+
+const unit = values => { const v = new Vector3(...values); return v.lengthSq() > 1e-18 ? v.normalize() : v; };
+const angleBetween = (a, b) => Math.acos(Math.min(1, Math.max(-1, a.dot(b)))) / DEG;
+
+// How far an effective view moved from the requested one, counting roll
+// and lens as well as position and heading. Sub-millimetre drift is noise.
+export function viewChange(requested, effective) {
+  const heading = view => unit(view.target.map((v, i) => v - view.position[i]));
+  const forward = heading(effective);
+  const level = up => { const v = unit(up); return v.addScaledVector(forward, -v.dot(forward)); };
+  const was = level(requested.up), now = level(effective.up);
+  const relative = (a, b) => Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b), 1e-12);
+  const change = {
+    position: new Vector3(...requested.position).distanceTo(new Vector3(...effective.position)),
+    angle: angleBetween(heading(requested), forward),
+    roll: was.lengthSq() > 1e-12 && now.lengthSq() > 1e-12 ? angleBetween(was.normalize(), now.normalize()) : 0,
+    fov: Math.abs(requested.fov - effective.fov),
+    near: relative(requested.near, effective.near),
+    far: relative(requested.far, effective.far),
+  };
+  change.changed = change.position > 0.01 || change.angle > 0.5 || change.roll > 0.5 || change.fov > 0.1 || change.near > 0.01 || change.far > 0.01;
+  return change;
 }
 
 function unionBounds(list) {
@@ -246,3 +280,4 @@ export function checkedCommand(raw) {
   if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Vantage command arguments must be an object');
   return {command, args: COMMANDS[command](args)};
 }
+

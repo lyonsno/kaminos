@@ -107,7 +107,45 @@ def connected_pages(port):
     return [page for page in body["pages"] if page["connected"]]
 
 
+def broker_contracts():
+    """Timeouts withdraw what the page never received and say so when it did."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("vantage_bridge_under_test", ROOT / "agent_vantage_bridge.py")
+    bridge = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bridge)
+    broker = bridge.VantageBroker()
+    link = broker.attach("page-aaaaaaaa", {})
+    try:
+        broker.submit("move", {"forward": 2}, timeout=0.01)
+        raise AssertionError("expected a timeout")
+    except bridge.VantageError as error:
+        assert error.status == 504 and error.phase == "timeout" and error.details == {"delivered": False}, (error.status, error.phase, error.details)
+    assert broker.next_message(link, 0.01) is None, "an expired queued command is never delivered"
+
+    outcome = {}
+
+    def submit():
+        try:
+            broker.submit("move", {"forward": 1}, timeout=0.3)
+        except bridge.VantageError as error:
+            outcome["error"] = error
+
+    worker = threading.Thread(target=submit)
+    worker.start()
+    message, deadline = None, time.monotonic() + 3
+    while message is None and time.monotonic() < deadline:
+        message = broker.next_message(link, 0.05)
+    assert message and message["command"] == "move", message
+    assert message["expiresAt"] > time.time() * 1000, "the page learns when the command stops being wanted"
+    worker.join(3)
+    assert outcome["error"].details == {"delivered": True}, "a delivered command that timed out has an unknown outcome"
+    assert broker.reply("page-aaaaaaaa", message["id"], {"ok": True}) is False, "a late reply is not attributed"
+    broker.detach(link)
+    assert broker.pages() == [], "a closed page leaves no routing record"
+
+
 def main():
+    broker_contracts()
     with tempfile.TemporaryDirectory(prefix="kaminos-vantage-http-") as temporary:
         port = free_port()
         process = subprocess.Popen(
@@ -192,6 +230,8 @@ def main():
             assert result.get("status") == 502 and result["body"]["phase"] == "disconnected", result
             assert time.monotonic() - started < 12, "a closed page fails its pending command without waiting for the timeout"
             wait_until(lambda: len(connected_pages(port)) == 2, "closed page still listed as connected")
+            status, body = call(port, "GET", "/api/vantage/pages")
+            assert len(body["pages"]) == 2, "closed pages are forgotten rather than accumulating"
         finally:
             for page in pages:
                 page.close()

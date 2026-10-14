@@ -71,6 +71,11 @@ const imageOf = (record, name) => record.result.images.find(image => image.name 
 
 let browser;
 try {
+  report.phase = 'server-identity'; save();
+  const runtime = await (await fetch(new URL('/api/runtime-config', options.origin))).json();
+  report.effective.server = runtime.source ?? null;
+  check('the served checkout identifies itself', !!runtime.source?.commit, {source: runtime.source ?? null});
+
   report.phase = 'launch-browser'; save();
   const {chromium} = await import(pathToFileURL(path.resolve(options.playwright)));
   browser = await chromium.launch({executablePath: options.browser, headless: options.headed !== true,
@@ -167,6 +172,28 @@ try {
   report.phase = 'burst'; save();
   const burst = await vantageOk('burst', '--count', '4', '--interval', '120', '--name', 'motion');
   check('burst returns a four-frame contact sheet', burst.result.frames.length === 4 && !!imageOf(burst, 'sheet'), {frames: burst.result.frames.length});
+
+  report.phase = 'camera-view-held'; save();
+  // With an ordinary active scene camera, Numpad 0 would enter camera view and
+  // save the current (borrowed) view as the operator's. The capture holds it off.
+  await page.evaluate(() => window.kaminosSceneCameras.createFromView('Witness hero'));
+  await page.evaluate(() => window.kaminosSetCameraDebugPose({position: [3, 1.6, 5], target: [4, 0.5, 0]}));
+  const beforeHold = await page.evaluate(() => window.kaminosCameraDebugState());
+  const held = vantage('burst', '--count', '6', '--interval', '200', '--name', 'held');
+  await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
+  const pressed = await page.evaluate(() => {
+    document.dispatchEvent(new KeyboardEvent('keydown', {code: 'Numpad0', key: '0', bubbles: true, cancelable: true}));
+    return window.kaminosSceneCameras.state().mode;
+  });
+  const heldResult = await held;
+  check('the held burst completes', heldResult.code === 0, {code: heldResult.code, stderr: heldResult.stderr});
+  const afterHold = await page.evaluate(() => ({mode: window.kaminosSceneCameras.state().mode, camera: window.kaminosCameraDebugState()}));
+  const sameView = (a, b) => a.position.every((v, i) => Math.abs(v - b.position[i]) < 1e-9) && a.target.every((v, i) => Math.abs(v - b.target[i]) < 1e-9);
+  check('Numpad 0 cannot enter camera view while the sub holds the viewport', pressed === 'user' && afterHold.mode === 'user', {pressed, after: afterHold.mode});
+  check('the operator view is restored after the held burst', sameView(beforeHold, afterHold.camera), {before: beforeHold.position, after: afterHold.camera.position});
+  await page.evaluate(() => { window.kaminosSceneCameras.enter(); window.kaminosSceneCameras.leave(); });
+  const afterLeave = await page.evaluate(() => window.kaminosCameraDebugState());
+  check('leaving camera view later returns to the operator view, not the sub view', sameView(beforeHold, afterLeave), {before: beforeHold.position, after: afterLeave.position});
 
   report.phase = 'remove'; save();
   await vantageOk('remove');

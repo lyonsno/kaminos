@@ -6,7 +6,7 @@
 // the operator's view is restored.
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
-  orbitPose, framePose, framingDistance, objectsInView, resolveTarget, checkedCommand,
+  orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -26,26 +26,15 @@ const pilotOf = record => record.id.slice(SUB_PREFIX.length);
 const defaultLabel = pilot => pilot === DEFAULT_PILOT ? 'Bebop' : `Vantage ${pilot}`;
 const formatNumber = value => String(Math.round(value * 1000) / 1000);
 
-// A picture is fresh only if the scene or the fire volume drew after the view
-// was requested; otherwise the canvas still holds an older or empty frame.
-const drewSince = (earlier, later) => later.sceneFrameCount > earlier.sceneFrameCount
-  || (!!later.volume?.active && Number.isFinite(later.volume.frameCount) && later.volume.frameCount > (earlier.volume?.frameCount ?? -Infinity));
-
-function viewDeviation(requested, effective) {
-  const forward = view => {
-    const d = view.target.map((v, i) => v - view.position[i]), length = Math.hypot(...d) || 1;
-    return d.map(v => v / length);
-  };
-  const a = forward(requested), b = forward(effective);
-  const cos = Math.min(1, Math.max(-1, a.reduce((sum, v, i) => sum + v * b[i], 0)));
-  return {position: Math.hypot(...requested.position.map((v, i) => v - effective.position[i])), angle: Math.acos(cos) * 180 / Math.PI};
-}
-
 /**
  * Pilot logic over injected application services. `host.objects()` returns
  * `{id,label,type,bounds}` rows; `compose`, `encode`, `annotate` and `sheet`
  * own pixels; `suspendHelpers({all, hide})` hides all editor drawing when
  * `all` is true plus the listed object ids, and returns a restore function.
+ * `hold()` takes the page's document lock for the whole capture so the
+ * operator's camera actions cannot save the borrowed view; it returns a
+ * release function. `frameState().layers` maps canvas ids to frame counters
+ * and `cameraMatrices()` returns the matrices the page is rendering with.
  */
 export function createVantagePilot(host) {
   let capturing = false;
@@ -93,15 +82,25 @@ export function createVantagePilot(host) {
     if (state.activeId === record.id) return {route: 'operator-camera-view', borrow: false};
     return fail('camera-view', `The viewport is looking through scene camera "${cameraLabel(state.activeId)}". Leave camera view (Numpad 0) first, or use peek to picture that view.`);
   };
-  const inViewOf = (view, hideHelpers) => objectsInView(view, aspect(),
-    targets().filter(object => !(hideHelpers && object.type === CAMERA_TYPE)), {excludeIds: subIds()});
+  // Name what a picture shows from the matrices it was rendered with, which
+  // include camera-frame zoom and offset, roll and lens.
+  const namesFor = (shot, hideHelpers) => {
+    const rows = targets().filter(object => !(hideHelpers && object.type === CAMERA_TYPE));
+    return shot.optics ? objectsInProjection(shot.optics, rows, {excludeIds: subIds()})
+      : objectsInView(shot.view, aspect(), rows, {excludeIds: subIds()});
+  };
 
-  async function capture({kind, record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0}) {
+  async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0}) {
+    if (capturing) fail('busy', 'Another vantage capture is in progress');
     capturing = true;
-    const original = host.readView(), requested = borrow ? viewOf(record) : original;
-    const before = host.frameState(), shots = [];
-    let restore = null, started = null;
+    let release = null, restore = null, original = null, requested = null, before = null, started = null;
+    const shots = [];
     try {
+      try { release = host.hold?.() ?? null; }
+      catch (error) { fail('busy', error.message); }
+      original = host.readView();
+      requested = borrow ? viewOf(record) : original;
+      before = host.frameState();
       if (hideHelpers || record) restore = host.suspendHelpers({all: hideHelpers, hide: record ? [record.id] : []});
       if (borrow) host.writeView(requested);
       host.redraw();
@@ -111,35 +110,46 @@ export function createVantagePilot(host) {
       for (let index = 0; index < frames; index++) {
         if (index) { await host.sleep(interval); host.redraw(); await host.frames(1); }
         if (!host.visible()) fail('page-hidden', HIDDEN);
-        const frame = host.frameState();
-        if (!drewSince(since, frame)) fail('stale-frame', 'Kaminos did not draw a new frame from the requested view, so nothing was kept. The page may still be loading or paused.');
-        since = frame;
-        const view = host.readView(), deviation = viewDeviation(requested, view);
-        if (check && (deviation.position > 0.01 || deviation.angle > 0.5)) {
-          fail('view-changed', `The viewport camera moved during the capture (${deviation.position.toFixed(3)} m, ${deviation.angle.toFixed(2)} deg); nothing was kept`);
+        const frame = host.frameState(), view = host.readView(), deviation = viewChange(requested, view);
+        if (check && deviation.changed) {
+          fail('view-changed', `The viewport camera changed during the capture (${deviation.position.toFixed(3)} m, ${deviation.angle.toFixed(2)}° heading, ${deviation.roll.toFixed(2)}° roll, ${deviation.fov.toFixed(2)}° lens); nothing was kept`);
         }
-        const shot = host.compose({maxSize});
+        const optics = host.cameraMatrices?.() ?? null, shot = host.compose({maxSize}), stale = [], unverified = [];
+        // Every pictured canvas must have drawn since the view was requested.
+        for (const layer of shot.layers) {
+          const now = frame.layers?.[layer], then = since.layers?.[layer];
+          if (!Number.isFinite(now)) unverified.push(layer);
+          else if (Number.isFinite(then) && !(now > then)) stale.push(layer);
+        }
+        if (stale.length) fail('stale-frame', `Kaminos did not draw a new frame from the requested view in ${stale.join(', ')}, so nothing was kept. The page may still be loading or paused.`);
         if (host.blank?.(shot.canvas)) fail('blank-frame', 'The picture came back as one flat color, which usually means the page has not drawn its scene yet. Try again in a moment; if the sub faces a blank surface, point it elsewhere.');
-        shots.push({index, atMs: host.now() - started, view, deviation, frame, shot});
+        since = frame;
+        shots.push({index, atMs: host.now() - started, view, deviation, optics, frame, shot, unverified});
       }
+      return {requested, shots, before, after: host.frameState()};
     } finally {
-      try { if (borrow) host.writeView(original); }
-      finally { restore?.(); host.redraw(); capturing = false; }
+      try { if (borrow && original) host.writeView(original); }
+      finally {
+        try { restore?.(); }
+        finally {
+          try { host.redraw(); }
+          finally { capturing = false; release?.(); }
+        }
+      }
     }
-    return {requested, shots, before, after: host.frameState()};
   }
 
-  function pictureResult({kind, routeName, record, taken, settle, hideHelpers, images, extra = {}}) {
+  function pictureResult({kind, routeName, record, taken, settle, hideHelpers, images, seen, extra = {}}) {
     const first = taken.shots[0];
-    const seen = inViewOf(first.view, hideHelpers);
     return {schema: VANTAGE_SCHEMA, kind, route: routeName, ...(record ? {pilot: pilotOf(record), sub: describe(record)} : {}),
       requestedView: taken.requested, view: first.view, viewDeviation: first.deviation, aspect: aspect(),
-      layers: first.shot.layers, settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
+      layers: first.shot.layers, unverifiedLayers: [...new Set(taken.shots.flatMap(item => item.unverified))],
+      naming: first.optics ? 'effective-camera' : 'nominal-view', settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
       image: {width: first.shot.width, height: first.shot.height}, images, objects: seen,
       frame: {before: taken.before, after: taken.after}, capturedAt: new Date(host.now()).toISOString(), ...extra};
   }
 
-  function picture(kind, record, shot, annotate, seen) {
+  function picture(kind, shot, annotate, seen) {
     const images = [{name: kind, ...host.encode(shot.canvas)}];
     if (annotate) images.push({name: 'annotated', ...host.encode(host.annotate(shot.canvas, seen.inView))});
     return images;
@@ -216,33 +226,33 @@ export function createVantagePilot(host) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record), hideHelpers = !helpers;
-      const taken = await capture({kind: 'snap', record, borrow, check: true, settle, maxSize, hideHelpers});
-      const seen = inViewOf(taken.shots[0].view, hideHelpers);
-      const images = picture('snap', record, taken.shots[0].shot, annotate, seen);
+      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers});
+      const seen = namesFor(taken.shots[0], hideHelpers);
+      const images = picture('snap', taken.shots[0].shot, annotate, seen);
       host.shutter?.({kind: 'snap', label: record.label, image: images[0]});
-      return pictureResult({kind: 'snap', routeName, record, taken, settle, hideHelpers, images});
+      return pictureResult({kind: 'snap', routeName, record, taken, settle, hideHelpers, images, seen});
     },
 
     async peek({maxSize, annotate, clean}) {
       admitCapture();
-      const taken = await capture({kind: 'peek', borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean});
-      const seen = inViewOf(taken.shots[0].view, clean);
-      const images = picture('peek', null, taken.shots[0].shot, annotate, seen);
-      return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images});
+      const taken = await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean});
+      const seen = namesFor(taken.shots[0], clean);
+      const images = picture('peek', taken.shots[0].shot, annotate, seen);
+      return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
     },
 
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames}) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record);
-      const taken = await capture({kind: 'burst', record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval});
-      const seen = inViewOf(taken.shots[0].view, true);
+      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval});
+      const seen = namesFor(taken.shots[0], true);
       const sheet = host.sheet(taken.shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
       if (annotate) images.push({name: 'annotated', ...host.encode(host.annotate(taken.shots[0].shot.canvas, seen.inView))});
       if (frames) taken.shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
-      return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images,
+      return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
         extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view, viewDeviation: item.deviation}))}});
     },
   };
@@ -448,26 +458,41 @@ export function installVantageHud({document, viewport}) {
 
 // --- link to the terminal --------------------------------------------------
 
-export function connectVantageLink({window, document, endpoint, pageId, run, onStatus = () => {}}) {
-  let source = null, closed = false, retry = null, pumping = false;
+// Runs commands one at a time in arrival order. A command whose deadline
+// passed while it waited is answered as expired instead of being run.
+export function createCommandPump({run, reply, now = () => Date.now()}) {
   const queue = [];
+  let pumping = null;
+  async function drain() {
+    while (queue.length) {
+      const message = queue.shift();
+      let answer;
+      if (Number.isFinite(message.expiresAt) && now() > message.expiresAt) {
+        answer = {id: message.id, ok: false, phase: 'expired', error: 'The command waited past its deadline and was not run'};
+      } else {
+        try { answer = {id: message.id, ok: true, result: await run(message.command, message.args)}; }
+        catch (error) { answer = {id: message.id, ok: false, error: error?.message || String(error), phase: error?.phase || 'execute'}; }
+      }
+      try { await reply(answer); }
+      catch (error) { console.warn('Agent vantage reply was not delivered', error); }
+    }
+  }
+  return {
+    push(message) {
+      queue.push(message);
+      if (!pumping) pumping = drain().finally(() => { pumping = null; });
+      return pumping;
+    },
+    idle: () => pumping ?? Promise.resolve(),
+  };
+}
+
+export function connectVantageLink({window, document, endpoint, pageId, run, onStatus = () => {}}) {
+  let source = null, closed = false, retry = null;
   const post = (path, body) => window.fetch(endpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const facts = () => ({page: pageId, visible: document.visibilityState === 'visible', focused: document.hasFocus(), href: window.location.href, title: document.title});
   const presence = () => { if (!closed) post('/presence', facts()).catch(() => {}); };
-  async function pump() {
-    if (pumping) return;
-    pumping = true;
-    try {
-      while (queue.length) {
-        const message = queue.shift();
-        let reply;
-        try { reply = {page: pageId, id: message.id, ok: true, result: await run(message.command, message.args)}; }
-        catch (error) { reply = {page: pageId, id: message.id, ok: false, error: error?.message || String(error), phase: error?.phase || 'execute'}; }
-        try { await post('/reply', reply); }
-        catch (error) { console.warn('Agent vantage reply was not delivered', error); }
-      }
-    } finally { pumping = false; }
-  }
+  const pump = createCommandPump({run, reply: answer => post('/reply', {page: pageId, ...answer})});
   function open() {
     if (closed) return;
     const url = new URL(`${endpoint}/link`, window.location.href), now = facts();
@@ -475,8 +500,10 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
     source = new window.EventSource(url);
     source.addEventListener('open', () => { onStatus({state: 'linked', pageId}); presence(); });
     source.addEventListener('command', event => {
-      try { queue.push(JSON.parse(event.data)); pump(); }
-      catch (error) { console.warn('Malformed agent vantage command', error); }
+      let message;
+      try { message = JSON.parse(event.data); }
+      catch (error) { console.warn('Malformed agent vantage command', error); return; }
+      pump.push(message);
     });
     source.addEventListener('error', () => {
       if (source.readyState !== window.EventSource.CLOSED) { onStatus({state: 'reconnecting', pageId}); return; }
@@ -519,7 +546,8 @@ const animationFrames = (window, count) => new Promise(resolve => {
  * hides editor-only drawing for a clean picture and returns a restore function.
  */
 export function installAgentVantage({THREE, document, window, edits, cameras, entries, selection, readView, writeView,
-  viewport, hostCanvas, busy, suspendEditorDrawing, redraw, frameState, extraTargets = () => [], endpoint = '/api/vantage', link = true}) {
+  viewport, hostCanvas, busy, hold, cameraMatrices, suspendEditorDrawing, redraw, frameState, extraTargets = () => [],
+  endpoint = '/api/vantage', link = true}) {
   const hud = installVantageHud({document, viewport});
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
@@ -535,7 +563,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     }
   };
   const pilot = createVantagePilot({
-    edits, cameras, selection, readView, writeView, busy, redraw, frameState, extraTargets, glyph,
+    edits, cameras, selection, readView, writeView, busy, hold, cameraMatrices, redraw, frameState, extraTargets, glyph,
     objects: () => entries().map(entry => ({id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type,
       bounds: entry.object ? boundsOf(entry.object) : null})),
     viewportSize: () => ({width: viewport.clientWidth, height: viewport.clientHeight}),
@@ -560,3 +588,4 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     dispose() { window.clearInterval(glyphTimer); connection?.close(); hud.dispose(); },
   };
 }
+

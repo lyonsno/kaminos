@@ -3,8 +3,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   VANTAGE_SCHEMA, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose, orbitPose,
-  framingDistance, framePose, objectsInView, resolveTarget, checkedCommand,
+  framingDistance, framePose, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
 } from '../agent-vantage-core.mjs';
+import {PerspectiveCamera, Matrix4, Vector3} from '../lib/three.core.js';
 
 const near = (actual, expected, epsilon = 1e-6, message = '') => {
   assert.equal(actual.length, expected.length, message);
@@ -88,6 +89,39 @@ test('objects in view report image rectangles, distance and bearing without clai
   assert.ok(Math.abs(Math.abs(byId.behind.bearing.right) - 180) < 1e-6, 'directly behind');
   assert.equal(result.occlusion, 'not-tested');
   assert.ok(!result.outOfView.some(o => o.id === 'self'));
+});
+
+// The scene camera frame zoom/offset transform from index.html's camera-view projection.
+function framedCamera({width, height, frame}) {
+  const camera = new PerspectiveCamera(50, 16 / 9, 0.1, 100);
+  camera.position.set(0, 1, 3); camera.lookAt(new Vector3(0, 1, 0)); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const clip = new Matrix4().set(frame.width / width, 0, 0, 2 * (frame.x + frame.width / 2) / width - 1,
+    0, frame.height / height, 0, 1 - 2 * (frame.y + frame.height / 2) / height, 0, 0, 1, 0, 0, 0, 0, 1);
+  camera.projectionMatrix.premultiply(clip);
+  return camera;
+}
+
+test('naming from the effective projection follows a zoomed and panned camera frame', () => {
+  const width = 1600, height = 900, frame = {x: 0.12 * width + 120, y: -0.08 * height + 107, width: 1156, height: 650};
+  const camera = framedCamera({width, height, frame});
+  const objects = [{id: 'probe', label: 'Probe', type: 'mesh', bounds: {min: [0.95, 0.95, -0.05], max: [1.05, 1.05, 0.05]}}];
+  const result = objectsInProjection({projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 0.1}, objects);
+  const ndc = new Vector3(1, 1, 0).applyMatrix4(camera.matrixWorldInverse).applyMatrix4(camera.projectionMatrix);
+  near(result.inView[0].center, [(ndc.x + 1) / 2, (1 - ndc.y) / 2], 1e-4, 'the reported centre is where the rendered picture puts the object');
+  assert.equal(result.occlusion, 'not-tested');
+});
+
+test('a view change counts roll and lens, not only position and heading', () => {
+  const view = {position: [0, 1, 3], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 100};
+  assert.equal(viewChange(view, structuredClone(view)).changed, false);
+  const rolled = viewChange(view, {...view, up: [1, 0, 0]});
+  assert.equal(rolled.changed, true);
+  assert.ok(rolled.roll > 80);
+  const zoomed = viewChange(view, {...view, fov: 110});
+  assert.equal(zoomed.changed, true);
+  assert.ok(Math.abs(zoomed.fov - 60) < 1e-9);
+  assert.equal(viewChange(view, {...view, near: 0.5}).changed, true, 'clipping changes what is pictured');
+  assert.equal(viewChange(view, {...view, position: [0, 1, 3.0005]}).changed, false, 'sub-millimetre drift is not a change');
 });
 
 test('targets resolve by id, label, unique substring, selection, or explicit point', () => {

@@ -146,6 +146,7 @@ function summarize(command, record) {
     lines.push(`${result.kind} · ${result.pilot ?? 'operator'} · ${result.route} · ${result.image?.width}×${result.image?.height} · layers: ${(result.layers || []).join(', ')}`);
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
     lines.push(`  record    ${record.recordPath}`);
+    if (result.unverifiedLayers?.length) lines.push(`  unverified ${result.unverifiedLayers.join(', ')}: pictured, but the page reports no frame counter, so these may be stale`);
     if (result.view) lines.push(`  from      ${point(result.view.position)} toward ${point(result.view.target)}, fov ${fmt(result.view.fov)}°`);
     const seen = result.objects?.inView ?? [], elsewhere = result.objects?.outOfView ?? [];
     lines.push(`  in view   ${seen.map(o => `${o.label} ${fmt(o.distance)} m${o.center ? ` at ${point(o.center)}` : ''}${o.partial ? ' (cut off)' : ''}`).join(' · ') || 'no scene objects'}`);
