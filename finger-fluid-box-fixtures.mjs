@@ -80,6 +80,9 @@ fn supportContactFrame(p:vec3<f32>)->vec4<f32> {return vec4<f32>(0,1,0,1.0-smoot
 // Product union is an overlap approximation at corners, not an exact integral.
 export function boxBoundaryDensitySource(box){
  const b=validateFingerFluidReferenceBox(box);
+ if(b.collisions===false)return `fn analytic_boundary_density_support(position:vec3<f32>,radiusScale:f32)->vec4<f32>{
+ _=position;_=radiusScale;return vec4<f32>(0);
+}`;
  return `fn analytic_boundary_density_support(position:vec3<f32>,radiusScale:f32)->vec4<f32>{
  let h=params.fluid.x*radiusScale;var fraction=0.0;var gradient=vec3<f32>(0);
  ${b.planes.map((p,i)=>`let n${i}=vec3<f32>(${p.normal.join(',')});let d${i}=max(0.0,dot(position,n${i})-(${p.offset})-${b.collisionRadius});let f${i}=boundary_missing_fraction(d${i},h);let g${i}=n${i}*boundary_missing_fraction_derivative(d${i},h);gradient=gradient*(1.0-f${i})+g${i}*(1.0-fraction);fraction=fraction+f${i}-fraction*f${i};`).join('\n')}

@@ -13,7 +13,7 @@ function fixture(){
  const nodes=new Map(['transform-inspector','transform-inspector-empty','transform-inspector-fields','transform-inspector-name','transform-inspector-id'].map(id=>[id,{dataset:{},hidden:false}]));
  const document={activeElement:null,getElementById:id=>nodes.get(id),querySelector:q=>fields.get(q.match(/data-transform-field="(.+)"/)?.[1])};
  let selected=rows[0],refreshes=0,redraws=0;
- const c={document,sceneObjects:rows,flameDomainGuide:null,activeSceneObjectId:'body',activeSceneGroupId:null,activeSceneFieldId:null,FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',flameEmitterInjectionSuspended:false,
+ const c={authoredWaterControls:null,document,sceneObjects:rows,flameDomainGuide:null,activeSceneObjectId:'body',activeSceneGroupId:null,activeSceneFieldId:null,FLAME_EMITTER_ID:'flame',FLAME_EMITTER_TYPE:'flame-emitter',flameEmitterInjectionSuspended:false,
   sceneSelection:{ids:['body']},selectionProxy:null,syncEditorHelperVisibility(){},syncSelectionInspector(){},syncLevelingButton(){},setTransformInspectorFieldsDisabled(){},updateSplatCorrectionPanel(){},selectedPlacementEntry:()=>selected,
   scenePlacementTools:{draw(){refreshes++;},edits:{state:()=>({undoCount:3,redoCount:1,active:null})}},window:{_kaminosDirty(){redraws++;}}};
  vm.createContext(c);vm.runInContext(['sceneObjectTransformState','degreesFromRadians','updateTransformInspector','refreshWorkbenchAssetPresentation'].map(actual).join('\n'),c);
