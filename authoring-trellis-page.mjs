@@ -125,3 +125,56 @@ export async function createTrellisPageCheckpoints({config,fetch=globalThis.fetc
   };
   return {manifest,manifestSha256,fetchTensor};
 }
+
+// The Generate drawer's service for TRELLIS in this page: same read/run/stop/retryPersistence
+// shape as the SF3D and queued TRELLIS services. The input is the prepared alpha cutout.
+const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[/^sparse-structure|^occupancy/,'Shape structure'],
+  [/^low-resolution-shape|^high-resolution-shape|learned-geometry/,'Shape detail'],[/texture-sampling|material-decoding/,'Texture'],
+  [/^post-model-(mesh-extraction|material-readback|mesh-postprocess)/,'Cleaning the mesh'],[/^post-model-uv/,'Unwrapping UVs'],[/^post-model-(texture-bake|pbr-glb)/,'Baking textures']];
+export function trellisPageStage(phase){return STAGES.find(([pattern])=>pattern.test(String(phase||'')))?.[1]??'Generating';}
+
+export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now()}){
+  let active=false,abort=null,started=0;
+  let state={status:'idle',progress:'TRELLIS 2 runs in this page on its GPU; it takes many minutes.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
+  const publish=()=>changed(structuredClone({...state,pending:state.pending?{label:state.pending.label}:null}));
+  const set=values=>{Object.assign(state,values);publish();};
+  const unavailable=()=>{const reason=blocked();if(reason)return reason;const value=availability();if(!value)return 'TRELLIS availability is loading.';
+    return value.status==='available'?null:(value.message||'TRELLIS cannot run in this page');};
+  const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
+  async function storePending(){
+    set({status:'saving',stage:'Saving mesh',progress:'Saving generated mesh…'});
+    const {glb,generation,label}=state.pending;const saved=await persist(glb,generation,label);
+    state.results.push(saved);state.pending=null;set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
+    return saved;
+  }
+  return {
+    read(){
+      const view={...structuredClone({...state,pending:null}),pending:state.pending?{label:state.pending.label}:null};
+      if(state.status==='idle'||state.status==='unavailable'){const reason=unavailable();return reason?{...view,status:'unavailable',error:reason}:{...view,status:'idle'};}
+      return view;
+    },
+    stop(){if(!active||!abort||abort.signal.aborted)return false;abort.abort(new DOMException('TRELLIS stopped','AbortError'));set({status:'stopping',canStop:false,progress:'Stopping at the next GPU step…'});return true;},
+    async retryPersistence(){
+      if(active)throw Error('Generation is already running');if(!state.pending)throw Error('No generated output needs saving');
+      active=true;try{return await storePending();}catch(error){set({status:'failed',error:`persistence: ${error.message}`});throw error;}finally{active=false;}
+    },
+    async run(input){
+      if(active)throw Error('Generation is already running');
+      if(state.pending)throw Error('Save the retained generated output before another run');
+      const cutout=input?.preparation?.prepared?.source;if(!cutout)throw Error('Prepare the image before generation');
+      const reason=unavailable();if(reason)throw Error(reason);
+      active=true;abort=new AbortController();started=now();let phase='inference';
+      set({status:'running',error:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
+      try{
+        const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onPhase:event=>{
+          const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
+        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source,original:input.preparation.original?.sha256??null}},label:out.label||label};
+        phase='persistence';return await storePending();
+      }catch(error){
+        if(abort.signal.aborted&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
+        set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
+      }finally{active=false;abort=null;state.canStop=false;publish();}
+    },
+  };
+}

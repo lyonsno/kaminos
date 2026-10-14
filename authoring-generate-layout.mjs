@@ -32,7 +32,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     preview.hidden=!showing;if(showing&&preview.getAttribute('src')!==source.getAttribute('src'))preview.src=source.getAttribute('src');
     sourceName.textContent=showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
-    settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
     masks.hidden=!openMasks||selected()?.kind!=='image';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;

@@ -132,7 +132,8 @@ export function createTrellisAuthoringGeneration({availability,runPipeline,meshU
 
 // Mesh model picker in the Generate tab. The choice holds while either model is running.
 export const MESH_MODELS={sf3d:{label:'Stable Fast 3D',detail:'Image → textured mesh · Stable Fast 3D (fast, beside the kiln)'},
-  trellis:{label:'TRELLIS 2',detail:'Image → textured mesh · TRELLIS 2 (better, minutes, GPU queue)'}};
+  trellis:{label:'TRELLIS 2',detail:'Image → textured mesh · TRELLIS 2 (better, minutes, GPU queue)'},
+  'trellis-page':{label:'TRELLIS 2 · this page',detail:'Image → textured mesh · TRELLIS 2 on this page’s GPU (no queue, no Python model; many minutes)'}};
 export function installMeshModelChoice({document,initial='sf3d',busy=()=>false,changed=()=>{},trellisState=()=>null,storage=globalThis.localStorage}){
   const run=document.getElementById('asset-run');if(!run)throw Error('Generate mesh button is missing');
   const label=document.createElement('label');label.id='asset-mesh-model-row';
