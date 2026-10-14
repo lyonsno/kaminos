@@ -68,7 +68,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, foregrou
     const result = await response.json();
     if (!response.ok || !result.entry) throw new Error(result.error || `Image save failed: ${response.status}`);
     const entry = maskProvenance ? { ...result.entry, maskProvenance } : result.entry;
-    onAsset?.(entry);
+    await onAsset?.(entry);
     return entry;
   }
   async function open(input, metadata = {}) {
