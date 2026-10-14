@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node serve.mjs --repo-root .",
     "test": "node tools/test-runner.mjs",
     "build:navigation-worker": "esbuild navigation-bvh.worker.mjs --bundle --minify --format=esm --platform=browser --alias:three=./lib/three.core.js --outfile=navigation-bvh.worker.bundle.mjs"
   },
