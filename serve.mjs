@@ -9,12 +9,16 @@ export function parseAppHostArgs(args) {
   const options={host:'127.0.0.1',port:8100,stateRoot:resolve(homedir(),'.local/state/kaminos/node-app'),
     sam3PacketRoot:process.env.KAMINOS_SAM3_PACKET_ROOT||null,
     kleinWeightsRoot:process.env.KAMINOS_KLEIN_WEIGHTS_ROOT||null,
-    trellisCheckpointRoot:process.env.KAMINOS_TRELLIS_CHECKPOINT_ROOT||null,roots:{}};
+    trellisCheckpointRoot:process.env.KAMINOS_TRELLIS_CHECKPOINT_ROOT||null,
+    volumeSettingsStore:process.env.KAMINOS_VOLUME_SETTINGS_STORE||null,
+    sharedBasinStore:process.env.KAMINOS_SHARED_BASIN_STORE||null,roots:{}};
   const names={'--repo-root':'repoRoot','--state-root':'stateRoot','--sam3-packet-root':'sam3PacketRoot',
     '--klein-weights-root':'kleinWeightsRoot','--trellis-checkpoint-root':'trellisCheckpointRoot',
+    '--volume-settings-store':'volumeSettingsStore','--shared-basin-store':'sharedBasinStore',
     '--host':'host','--port':'port','--startup-report':'startupReport'};
   for(let i=0;i<args.length;i++) {
     const flag=args[i];if(flag==='--help'){options.help=true;continue;}
+    if(flag==='--no-shared-basin-store'){options.sharedBasinStore=null;continue;}
     if(!names[flag]&&flag!=='--root')throw Error(`Unknown option: ${flag}`);
     const value=args[++i];if(!value||value.startsWith('--'))throw Error(`Value required for ${flag}`);
     if(flag==='--root') {
@@ -26,7 +30,7 @@ export function parseAppHostArgs(args) {
   if(options.help)return options;
   if(!options.repoRoot)throw Error('--repo-root is required; use the owning checkout');
   options.repoRoot=resolve(options.repoRoot);options.stateRoot=resolve(options.stateRoot);
-  for(const key of ['sam3PacketRoot','kleinWeightsRoot','trellisCheckpointRoot'])if(options[key])options[key]=resolve(options[key]);
+  for(const key of ['sam3PacketRoot','kleinWeightsRoot','trellisCheckpointRoot','volumeSettingsStore','sharedBasinStore'])if(options[key])options[key]=resolve(options[key]);
   options.port=Number(options.port);
   if(!Number.isInteger(options.port)||options.port<0||options.port>65535)throw Error('--port must be an integer from 0 to 65535');
   return options;
@@ -42,7 +46,7 @@ export async function runAppHost(args=process.argv.slice(2)) {
   };
   try {
     const options=parseAppHostArgs(args);
-    if(options.help){process.stdout.write('Usage: node serve.mjs --repo-root <checkout> [--state-root <directory>] [--sam3-packet-root <directory>] [--klein-weights-root <directory>] [--trellis-checkpoint-root <directory>] [--root id=directory] [--host 127.0.0.1] [--port 8100] [--startup-report <file>]\n');return null;}
+    if(options.help){process.stdout.write('Usage: node serve.mjs --repo-root <checkout> [--state-root <directory>] [--sam3-packet-root <directory>] [--klein-weights-root <directory>] [--trellis-checkpoint-root <directory>] [--volume-settings-store <directory>] [--shared-basin-store <directory> | --no-shared-basin-store] [--root id=directory] [--host 127.0.0.1] [--port 8100] [--startup-report <file>]\n');return null;}
     host=await createKaminosAppHost(options);phase='listen';
     await host.listen(options.port,options.host);
     report={schema:'kaminos.node-app-host.v0',status:'listening',pid:process.pid,

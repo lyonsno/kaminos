@@ -6,6 +6,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {isDeepStrictEqual} from 'node:util';
+import {createVolumePresetReader} from './node-volume-presets.mjs';
 
 const imageExtensions=new Set(['.png','.jpg','.jpeg','.webp']);
 const mediaTypes={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css',
@@ -106,7 +107,7 @@ async function filesUnder(root,path='') {
 }
 
 // First ordinary app serving slice. Other owner services return an explicit 501.
-export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=null,kleinWeightsRoot=null,trellisCheckpointRoot=null,roots:configuredRoots={}}) {
+export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=null,kleinWeightsRoot=null,trellisCheckpointRoot=null,volumeSettingsStore:configuredVolumeSettingsStore=null,sharedBasinStore=null,roots:configuredRoots={}}) {
   if(!repoRoot||!stateRoot)throw failure('repoRoot and stateRoot are required',400,'configuration');
   repoRoot=await realpath(resolve(repoRoot));stateRoot=resolve(stateRoot);
   // A worktree may share installed dependencies. Name the exact directory
@@ -114,6 +115,11 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
   const dependencyPath=join(repoRoot,'node_modules');
   const dependencyRoot=(await exists(dependencyPath))?.isDirectory()?await realpath(dependencyPath):null;
   await mkdir(stateRoot,{recursive:true});stateRoot=await realpath(stateRoot);
+  let volumeSettingsStore=resolve(configuredVolumeSettingsStore||join(stateRoot,'volume-settings'));
+  if(!configuredVolumeSettingsStore)await mkdir(volumeSettingsStore,{recursive:true});
+  if((await exists(volumeSettingsStore))?.isDirectory())volumeSettingsStore=await realpath(volumeSettingsStore);
+  if(sharedBasinStore){sharedBasinStore=resolve(sharedBasinStore);if((await exists(sharedBasinStore))?.isDirectory())sharedBasinStore=await realpath(sharedBasinStore);}
+  const presetReader=createVolumePresetReader({repoRoot,volumeSettingsStore,sharedBasinStore,mountedPath});
   const roots={
     'generated-meshes':join(stateRoot,'assets','generated-meshes'),
     'image-inbox':join(stateRoot,'assets','images','inbox'),
@@ -124,7 +130,7 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
   if(kleinWeightsRoot)kleinWeightsRoot=resolve(kleinWeightsRoot);
   if(trellisCheckpointRoot)trellisCheckpointRoot=resolve(trellisCheckpointRoot);
   const packages={'/sam3-packet/':sam3PacketRoot,'/klein-weights/':kleinWeightsRoot,'/trellis-checkpoints/':trellisCheckpointRoot};
-  const config={repoRoot,stateRoot,sam3PacketRoot,kleinWeightsRoot,trellisCheckpointRoot,dependencyRoot,roots};
+  const config={repoRoot,stateRoot,sam3PacketRoot,kleinWeightsRoot,trellisCheckpointRoot,volumeSettingsStore,sharedBasinStore,dependencyRoot,roots};
   const implementation=appSourceIdentity(dirname(fileURLToPath(import.meta.url)));
   async function packageManifest(root,part) {
     if(!root||!(await exists(root))?.isDirectory())return null;
@@ -311,11 +317,23 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
           const kleinManifests=await Promise.all(['te','dit','vae'].map(part=>packageManifest(kleinWeightsRoot,part+'/manifest.json')));
           const trellisManifest=await packageManifest(trellisCheckpointRoot,'manifest.json');
           jsonResponse(response,{schema:'kaminos.runtime-config.v0',hybridSplatOverlayModuleUrl:null,
+            volumeSettingsStore,sharedBasinStore,
             sam3:sam3PacketRoot?{manifestUrl:'/sam3-packet/tensor-manifest.json',modelRoot:sam3PacketRoot,mounted}:null,
             klein:kleinWeightsRoot?{weightsUrl:'/klein-weights',modelRoot:kleinWeightsRoot,mounted:kleinManifests.every(Boolean)}:null,
             trellisPage:trellisCheckpointRoot?{checkpointUrl:'/trellis-checkpoints',modelRoot:trellisCheckpointRoot,mounted:Boolean(trellisManifest),manifestSha256:trellisManifest?digest(await readFile(trellisManifest)):null}:null,
             source:{...appSourceIdentity(repoRoot),serverPort:server.address().port},
-            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,implemented:['static','sam3-packet','klein-weights','trellis-checkpoints','images','scene-persistence','mesh-generation-origin']}},200,head);return;
+            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,presetStoreLayers:presetReader.layers,implemented:['static','sam3-packet','klein-weights','trellis-checkpoints','images','scene-persistence','mesh-generation-origin','volume-settings-read']}},200,head);return;
+        }
+        if(url.pathname==='/api/volume-settings-presets') {
+          try{jsonResponse(response,await presetReader.list(),200,head);}
+          catch(error){jsonResponse(response,{error:error.message,storePath:volumeSettingsStore,stores:presetReader.layers,failurePhase:'shared-preset-index'},500,head);}
+          return;
+        }
+        if(url.pathname==='/api/volume-settings-preset') {
+          const requestedPresetRef=q.get('id')||q.get('preset')||'';
+          try{jsonResponse(response,await presetReader.read(requestedPresetRef),200,head);}
+          catch(error){jsonResponse(response,{error:error.message,requestedPresetRef,storePath:volumeSettingsStore,stores:presetReader.layers,failurePhase:'shared-preset-read'},error.code==='ENOENT'?404:400,head);}
+          return;
         }
         if(url.pathname==='/api/roots') {
           const value={};for(const [id,path] of Object.entries(roots))value[id]={path,exists:Boolean(await exists(path))};

@@ -41,3 +41,15 @@ test('model package CLI paths override owner environment defaults and remain exp
     }
   }
 });
+
+test('basin CLI preserves explicit local/shared roots and allows the caller to disable the shared layer',()=>{
+ const prior={local:process.env.KAMINOS_VOLUME_SETTINGS_STORE,shared:process.env.KAMINOS_SHARED_BASIN_STORE};
+ try{
+  process.env.KAMINOS_VOLUME_SETTINGS_STORE='/env/basins';process.env.KAMINOS_SHARED_BASIN_STORE='/env/library';
+  const inherited=parseAppHostArgs(['--repo-root','/chosen/app']);assert.equal(inherited.volumeSettingsStore,'/env/basins');assert.equal(inherited.sharedBasinStore,'/env/library');
+  const explicit=parseAppHostArgs(['--repo-root','/chosen/app','--volume-settings-store','/chosen/local','--shared-basin-store','/chosen/shared']);assert.equal(explicit.volumeSettingsStore,'/chosen/local');assert.equal(explicit.sharedBasinStore,'/chosen/shared');
+  const disabled=parseAppHostArgs(['--repo-root','/chosen/app','--no-shared-basin-store']);assert.equal(disabled.sharedBasinStore,null);
+ }finally{
+  for(const [key,v]of [['KAMINOS_VOLUME_SETTINGS_STORE',prior.local],['KAMINOS_SHARED_BASIN_STORE',prior.shared]])if(v===undefined)delete process.env[key];else process.env[key]=v;
+ }
+});
