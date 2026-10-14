@@ -4,6 +4,7 @@
 import http.server
 import copy
 import fcntl
+import importlib.util
 import glob
 import hashlib
 import json
@@ -24,11 +25,23 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
-from agent_vantage_bridge import VANTAGE_SCHEMA, LinkClosed, VantageBroker, VantageError
-
 PORT = 8090
-VANTAGE = VantageBroker()
 ROOT = Path(__file__).parent.resolve()
+_VANTAGE = None
+_VANTAGE_LOCK = threading.Lock()
+
+
+def vantage_bridge():
+    """The agent vantage relay module and its one broker, loaded on first use
+    from beside this file so importing serve.py by path needs no sys.path."""
+    global _VANTAGE
+    with _VANTAGE_LOCK:
+        if _VANTAGE is None:
+            spec = importlib.util.spec_from_file_location("kaminos_agent_vantage_bridge", ROOT / "agent_vantage_bridge.py")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            _VANTAGE = (module, module.VantageBroker())
+        return _VANTAGE
 
 
 def observe_sf3d_source_host():
@@ -3576,18 +3589,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_vantage_pages(self):
         if self._vantage_allowed():
-            self.send_json({"schema": VANTAGE_SCHEMA, "pages": VANTAGE.pages()})
+            bridge, broker = vantage_bridge()
+            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "pages": broker.pages()})
 
     def handle_vantage_link(self, query):
         if not self._vantage_allowed():
             return
+        bridge, broker = vantage_bridge()
         first = lambda key: query.get(key, [None])[0]
         try:
-            link = VANTAGE.attach(first("page"), {
+            link = broker.attach(first("page"), {
                 "href": first("href"), "title": first("title"),
                 "visible": first("visible") == "1", "focused": first("focused") == "1",
             })
-        except VantageError as error:
+        except bridge.VantageError as error:
             self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
             return
         self.close_connection = True
@@ -3600,33 +3615,33 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.flush()
             quiet_since = time.monotonic()
             while True:
-                message = VANTAGE.next_message(link, 1.0)
+                message = broker.next_message(link, 1.0)
                 if message is not None:
                     data = json.dumps(message, separators=(",", ":"))
                     self.wfile.write(f"id: {message['id']}\nevent: command\ndata: {data}\n\n".encode())
                 elif self._vantage_peer_closed():
                     break
-                elif time.monotonic() - quiet_since >= VANTAGE.heartbeat:
+                elif time.monotonic() - quiet_since >= broker.heartbeat:
                     self.wfile.write(b": keepalive\n\n")
                 else:
                     continue
                 self.wfile.flush()
                 message = None
                 quiet_since = time.monotonic()
-        except LinkClosed:
+        except bridge.LinkClosed:
             pass
         except OSError:
             if message is not None:
-                VANTAGE.undeliverable(message)
+                broker.undeliverable(message)
         finally:
-            VANTAGE.detach(link)
+            broker.detach(link)
 
     def handle_vantage_presence(self):
         if not self._vantage_allowed():
             return
         body = self._vantage_body()
         if body is not None:
-            known = VANTAGE.presence(str(body.get("page") or ""), body)
+            known = vantage_bridge()[1].presence(str(body.get("page") or ""), body)
             self.send_json({"ok": known}, 200 if known else 404)
 
     def handle_vantage_reply(self):
@@ -3634,7 +3649,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         body = self._vantage_body()
         if body is not None:
-            accepted = VANTAGE.reply(str(body.get("page") or ""), str(body.get("id") or ""), body)
+            accepted = vantage_bridge()[1].reply(str(body.get("page") or ""), str(body.get("id") or ""), body)
             self.send_json({"ok": accepted}, 200 if accepted else 410)
 
     def handle_vantage_command(self):
@@ -3647,9 +3662,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, (int, float)) or not 0 < timeout_ms <= 3_600_000:
             self.send_json({"ok": False, "phase": "request", "error": "timeoutMs must be between 1 and 3600000"}, 400)
             return
+        bridge, broker = vantage_bridge()
         try:
-            result = VANTAGE.submit(body.get("command"), body.get("args", {}), page=body.get("page") or None, timeout=timeout_ms / 1000)
-        except VantageError as error:
+            result = broker.submit(body.get("command"), body.get("args", {}), page=body.get("page") or None, timeout=timeout_ms / 1000)
+        except bridge.VantageError as error:
             message = str(error)
             if error.phase == "select" and not body.get("page"):
                 port = self.server.server_address[1]
