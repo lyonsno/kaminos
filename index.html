@@ -18309,7 +18309,8 @@ function wireJoinedProvisionalControls(prototype) {
     const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
     const res = prototype.setJoinedExterior({ enabled: true, extent, ratio: r, wall: side, budget: parseInt(budget.value, 10) });
     const receipt = res?.receipt;
-    if (!receipt?.admitted) text('volume-joined-exterior-extent-val', `refused: ${receipt?.reason ?? 'unknown'}`, true);
+    const joinOn = prototype.debugState?.()?.joinedBoundary?.admitted;
+    if (!receipt?.admitted) text('volume-joined-exterior-extent-val', joinOn ? `refused: ${receipt?.reason ?? 'unknown'}` : 'waiting: turn the joined boundary on (and admitted) first', true);
     text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
   };
   boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); if (size.value !== '0') applyExterior(); });
