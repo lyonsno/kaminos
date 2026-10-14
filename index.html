@@ -11714,7 +11714,7 @@ async function initScene() {
     return hit?{isGround:hit.object===groundPlane,uuid:hit.object.uuid,point:hit.point.toArray(),linearColor:hit.object.material?.color?.toArray()}:null;
   };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
-  getFluidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera && (sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
+  getFluidDisplayPolicy=()=>({rawOutput:rawSceneOutput,sceneLighting:{...sceneGISettings,aoEnabled:standaloneAOEnabled(),aoIntensity:aoIntensity.value},cameraState:sceneEmissiveCamera && (sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   let sceneCameraStatusText='';
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
@@ -14940,7 +14940,8 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
     if(new URLSearchParams(location.search).get('kaminos_performance')==='1'){
       const performanceRead=()=>{
         const budget=read(),size=renderer.getDrawingBufferSize(new THREE.Vector2());
-        return {clock:budget.clock,device:budget.sceneAO.device,aoWork:budget.sceneAO.work,
+        const gi=window.kaminosSceneGIDebugState();
+        return {clock:budget.clock,device:budget.sceneAO.device,aoWork:budget.sceneAO.work,giWork:{frames:gi.frames},gpuTiming:budget.viewport.timing,
           workload:{config:{...fingerFluidBenchConfig},runtime:Object.fromEntries([
             'solver_backend','render_backend','solverRoute','pressureSolver','pressureSolverRoute',
             'particleCount','densityIterationsPerStep','renderRoute','effectiveRendererMode','opticalDebugMode',
@@ -14949,15 +14950,20 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
             'effectiveInterfaceFrequencyMode','effectiveInterfaceFrequencyRoute','fallbackReason',
             'opticalLightingFallbackReason','opticalFootprintFallbackReason','transmissionFootprintFallbackReason',
             'bodyTransportFallbackReason','interfaceFrequencyFallbackReason'].map(key=>[key,fingerFluidBenchState.runtime?.[key]]))},
-          controls:{waterEnabled:performanceWaterEnabled,sceneAOEnabled:budget.sceneAO.dedicatedAOEnabled,
-            sceneGIMode:budget.sceneAO.mode,aoIntensity:budget.sceneAO.intensity,renderScale:budget.viewport.renderScale,
+          controls:{waterEnabled:performanceWaterEnabled,sceneAOEnabled:budget.sceneAO.requested&&budget.sceneAO.intensity>0,
+            dedicatedAOEnabled:budget.sceneAO.dedicatedAOEnabled,sceneGIMode:budget.sceneAO.mode,
+            sceneGI:Object.fromEntries(['mode','view','gain','radius','thickness','slices','steps','denoise'].map(key=>[key,gi[key]])),
+            captureMode:budget.viewport.captureMode,
+            aoIntensity:budget.sceneAO.intensity,renderScale:budget.viewport.renderScale,
             reflection:budget.reflection.effective,energy:budget.solver.energy.mode,timingEnabled:fluidBudgetPreferences.timingEnabled},
           extent:{width:size.x,height:size.y},camera:{world:camera.matrixWorld.toArray(),projection:camera.projectionMatrix.toArray()},
-          render:performanceLastRender,failure:budget.viewport.failure};
+          captureGraphChanges:budget.viewport.captureGraphChanges,render:performanceLastRender,failure:budget.viewport.failure};
       };
       performanceHarness=createPerformanceHarness({read:performanceRead,requestFrame:()=>window._kaminosDirty?.(),
         apply:patch=>{
-          const {waterEnabled,fresnelCutoff,...budget}=patch;
+          const {waterEnabled,fresnelCutoff,sceneGIMode,captureMode,...budget}=patch;
+          if(sceneGIMode!==undefined)setSceneGIControls({...sceneGISettings,mode:sceneGIMode,view:'scene'});
+          if(captureMode!==undefined)fingerFluidBenchViewport.setCaptureMode(captureMode);
           if(Object.keys(budget).length)apply(budget);
           if(fresnelCutoff!==undefined){window.kaminosFluidReflectionComparison.configureB({mode:'adaptive',fresnelCutoff});window.kaminosFluidReflectionComparison.select('B');}
           if(waterEnabled!==undefined)performanceWaterEnabled=waterEnabled;

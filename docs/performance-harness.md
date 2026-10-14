@@ -24,7 +24,9 @@ Use a fresh output directory: existing reports are never overwritten.
 
 The config controls the route, camera, viewport/DPR, held simulation step,
 warmup frames, measured frames, rounds and named cases. Rounds reverse case
-order. Per-case water/AO controls are required; resolution, reflection cutoff,
+order. Per-case water/AO controls are required; `sceneGIMode` selects `gtao` or
+`combined` (default `gtao`), and `captureMode` selects resident `stable` or
+former `switching` capture (default `stable`). Resolution, reflection cutoff,
 energy diagnostics and GPU-stage timing controls can override the shared
 controls. Unsupported inputs fail rather than being ignored. Keep common
 controls fixed when interpreting the water × AO interaction.
@@ -69,3 +71,32 @@ Reports begin before argument/source/browser setup; failures retain the phase,
 last readable runtime and partial frame samples. Cleanup targets only the owned
 browser/server. A module error rejects immediately rather than waiting for a
 runtime API that cannot appear.
+
+## Compare combined GI and remove repeated capture setup
+
+`tools/performance-water-gi.json` uses the same held particles, scene, camera,
+50% water resolution and 15% weak-reflection cutoff. Its nine cases exercise
+plain lighting, standalone GTAO and combined AO + GI, each without water and
+with water through both capture paths. Two rounds reverse the order. Combined
+GI retains the current scene settings (recorded in every effective state); its
+AO and bounce originate in the joint estimator. GTAO update counters must be
+zero in combined mode, and the combined estimator must actually execute.
+
+Stable capture uses a persistent linear HDR output quad over the current shared
+scene graph. It changes the graph only on actual lighting/graph changes. The
+ordinary display pipeline keeps its own output policy; one final transform
+follows water composition. Switching capture is an explicit comparison of the
+former per-frame policy mutation. Neither path advances held water.
+
+This config enables the existing GPU timestamp collector on both water-present
+and scene-only paths. Each case requests at least 192 actual redraws and three
+GPU timestamp samples. Sampling continues until both are satisfied; all raw
+frames and timestamped passes persist. Timestamps are sampled at the existing
+one-second cadence, after warmup; encode-time and lighting/capture/water identity
+reject previous-case readbacks. Missing timestamp support or collection failures
+fail visibly. Pass interval coverage separates scene lighting from remaining
+host/water work. GPU frame span includes gaps; overlapping pass spans must not
+be added. These sparse GPU samples are descriptive, not robust P95/P99 estimates
+or display presentation measurements. Callback and redraw quantiles still
+use every captured frame. `pairedComparisons` records single-control marginal
+differences; interpret them with the raw samples and repeated rounds.

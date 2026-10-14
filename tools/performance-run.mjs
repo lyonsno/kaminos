@@ -67,11 +67,11 @@ try {
   for(const [key,min] of [['frames',2],['rounds',1],['warmupFrames',0],['heldStep',1]])assert.ok(Number.isSafeInteger(config[key])&&config[key]>=min,`Invalid ${key}`);
   assert.ok(config.cases.length&&new Set(config.cases.map(c=>c.name)).size===config.cases.length,'Case names must be unique');
   for(const c of config.cases){assert.match(c.name,/^[a-zA-Z0-9_-]+$/);assert.equal(typeof c.waterEnabled,'boolean');assert.equal(typeof c.sceneAOEnabled,'boolean');
-    for(const key of Object.keys(c))assert.ok(['name','waterEnabled','sceneAOEnabled','renderScale','fresnelCutoff','energyDiagnosticsMode','timingEnabled'].includes(key),`Unknown case input ${key}`);}
+    for(const key of Object.keys(c))assert.ok(['name','waterEnabled','sceneAOEnabled','sceneGIMode','captureMode','renderScale','fresnelCutoff','energyDiagnosticsMode','timingEnabled'].includes(key),`Unknown case input ${key}`);}
   report.revision=execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim();
   if(a['expected-revision']){assert.equal(report.revision,a['expected-revision']);assert.equal(execFileSync('git',['status','--porcelain'],{cwd:repo,encoding:'utf8'}).trim(),'','Benchmark source must be clean');}
   report.runnerSha256=hash(await fs.readFile(new URL(import.meta.url)));
-  report.claim='Actual host callback duration and redraw cadence on one held particle state; solver does not advance; display presentation and isolated GPU duration are not measured';
+  report.claim='Actual host callback duration and redraw cadence on one held particle state; solver does not advance; optional sampled GPU pass timestamps are separate from callback time and display presentation is not measured';
   report.queue={directory:process.env.GPU_GREENROOM_DIR??null};
   let url;
   if(a.port){
@@ -93,7 +93,7 @@ try {
   for(const [key,value] of Object.entries(config.route))url.searchParams.set(key,String(value));
   url.searchParams.set('kaminos_performance','1');report.url=String(url);
   report.phase='source';await save();
-  const sourceFiles=['performance-harness.mjs','fluid-budget-cockpit.mjs','fluid-app-frame-timing.mjs'];
+  const sourceFiles=['performance-harness.mjs','fluid-budget-cockpit.mjs','fluid-app-frame-timing.mjs','fluid-frame-timing.mjs','scene-gi.mjs','scene-gi-settings.mjs'];
   report.source=await fluidSourceIdentity(String(url),repo,{additionalFiles:sourceFiles});
   const executable=fluidBrowserLaunch({executable:a.browser,debugPort:0,userDataDir:out,...config.viewport}).executable;
   const {chromium}=await import(pathToFileURL(path.resolve(a.playwright)));
@@ -131,10 +131,11 @@ try {
     await fs.writeFile(path.join(out,`${stem}-start.v8`),serialize(held));
     const particleHash=hash(Buffer.from(new Uint32Array(held.bench.runtime.diagnostics.particleSnapshot.words).buffer));
     baselineHash??=particleHash;assert.equal(particleHash,baselineHash,'Held particle state changed between cases');
-    const {name,...caseControls}=caseConfig,requested={...config.controls,...caseControls};
+    const {name,...caseControls}=caseConfig,requested={sceneGIMode:'gtao',captureMode:'stable',...config.controls,...caseControls};
     await page.evaluate(patch=>{window.kaminosFingerFluidBenchResumeAfterWitness();window.kaminosPerformance.apply(patch);},requested);
     const before=await page.evaluate(()=>window.kaminosPerformance.read());
     assert.equal(before.controls.waterEnabled,caseConfig.waterEnabled);assert.equal(before.controls.sceneAOEnabled,caseConfig.sceneAOEnabled);
+    assert.equal(before.controls.sceneGIMode,requested.sceneGIMode);assert.equal(before.controls.captureMode,requested.captureMode);
     assert.equal(before.controls.renderScale,requested.renderScale);assert.equal(before.controls.reflection.fresnelCutoff,Math.fround(requested.fresnelCutoff));
     assert.equal(before.controls.energy,requested.energyDiagnosticsMode);assert.equal(before.controls.timingEnabled,requested.timingEnabled);
     if(a['inspect-only']){
@@ -142,21 +143,27 @@ try {
       await page.screenshot({path:path.join(out,`${stem}.png`)});
       report.inspections??=[];report.inspections.push({name:caseConfig.name,image:`${stem}.png`,state:await page.evaluate(()=>window.kaminosPerformance.read()),scene:await page.evaluate(()=>window.kaminosPerformance.sceneSnapshot())});await save();continue;
     }
-    const measured=await guarded(page.evaluate(options=>window.kaminosPerformance.sample(options),{frames:config.frames,warmupFrames:config.warmupFrames}));
-    assert.equal(measured.frames.length,config.frames);assert.equal(new Set(measured.frames.map(f=>f.frameId)).size,config.frames,'Repeated or cached frame counted');
+    const measured=await guarded(page.evaluate(options=>window.kaminosPerformance.sample(options),{frames:config.frames,warmupFrames:config.warmupFrames,gpuSamples:config.gpuSamples??0}));
+    assert.ok(measured.frames.length>=config.frames);assert.equal(new Set(measured.frames.map(f=>f.frameId)).size,measured.frames.length,'Repeated or cached frame counted');
     const after=measured.state;
     const solidScene=await page.evaluate(()=>window.kaminosPerformance.sceneSnapshot());
     const solidHash=hash(JSON.stringify(solidScene));baselineSolids??=solidHash;assert.equal(solidHash,baselineSolids,'Solid geometry or visibility changed between cases');
     const scene=JSON.stringify({camera:after.camera,extent:after.extent});baselineScene??=scene;assert.equal(scene,baselineScene,'Comparison camera or extent changed');
     assert.equal(after.clock.step,config.heldStep);
     const workDelta=Object.fromEntries(Object.entries(after.aoWork).map(([k,v])=>[k,v-measured.workStart[k]]));
-    assert.ok(Object.values(workDelta).every(v=>caseConfig.sceneAOEnabled?v>0:v===0),'AO execution differs from requested case');
+    const dedicated=requested.sceneGIMode==='gtao'&&requested.sceneAOEnabled;
+    assert.ok(Object.values(workDelta).every(v=>dedicated?v>0:v===0),'Standalone GTAO execution differs from requested case');
+    const giWorkDelta=after.giWork.frames-measured.giWorkStart.frames;
+    assert.ok(requested.sceneGIMode==='combined'?giWorkDelta>0:giWorkDelta===0,'Combined GI execution differs from requested case');
+    const gpuSamples=measured.gpuSamples??[];assert.ok(gpuSamples.length>=(config.gpuSamples??0),'Missing requested GPU samples');
+    const gpu=gpuSamples.length?{samples:gpuSamples.length,frameSpanMs:stats(gpuSamples.map(s=>s.frameSpanMs)),passSumMs:stats(gpuSamples.map(s=>s.passSumMs)),sceneLightingMs:stats(gpuSamples.map(s=>s.stageCoverage['scene lighting']??0)),overlapMs:stats(gpuSamples.map(s=>s.overlapMs))}:null;
+    if(gpu)assert.ok(gpu.sceneLightingMs.mean>0,'GPU samples missed scene lighting');
     await page.screenshot({path:path.join(out,`${stem}.png`)});
     const endHeld=await fluid.hold();await fs.writeFile(path.join(out,`${stem}-end.v8`),serialize(endHeld));
     const endHash=hash(Buffer.from(new Uint32Array(endHeld.bench.runtime.diagnostics.particleSnapshot.words).buffer));assert.equal(endHash,baselineHash,'Water changed during measurement');
     const callbackMs=stats(measured.frames.map(f=>f.callbackMs)),intervalMs=stats(measured.frames.slice(1).map((f,i)=>f.startedAt-measured.frames[i].startedAt));
     const row={round,name:caseConfig.name,requested,effective:after,routeAdmission,particleHash,endHash,solidHash,solidScene,
-      callbackMs,intervalMs,fps:1000/intervalMs.mean,workDelta,image:`${stem}.png`,rawFrames:`${stem}.json`};
+      callbackMs,intervalMs,fps:1000/intervalMs.mean,workDelta,giWorkDelta,gpu,captureGraphChanges:after.captureGraphChanges-before.captureGraphChanges,image:`${stem}.png`,rawFrames:`${stem}.json`};
     await fs.writeFile(path.join(out,row.rawFrames),JSON.stringify(measured,null,2));report.cases.push(row);await save();
   }
   assert.deepEqual(await page.evaluate(()=>window.__performanceErrors),[]);
@@ -178,6 +185,16 @@ try {
       extraAOWithWater:{callbackMeanMs:pairs[1].callbackMeanDeltaMs-pairs[0].callbackMeanDeltaMs,drawIntervalMeanMs:pairs[1].drawIntervalMeanDeltaMs-pairs[0].drawIntervalMeanDeltaMs},
       interpretation:'Descriptive differences within this round; repeated-round variation must be considered before attributing a water interaction'});
   }
+  report.pairedComparisons=[];
+  for(let round=0;round<config.rounds;round++){
+    const rows=report.cases.filter(c=>c.round===round);
+    for(let i=0;i<rows.length;i++)for(let j=i+1;j<rows.length;j++){
+      const a=rows[i],b=rows[j];const keys=new Set([...Object.keys(a.requested),...Object.keys(b.requested)]);
+      const changes=[...keys].filter(k=>JSON.stringify(a.requested[k])!==JSON.stringify(b.requested[k]));
+      if(changes.length!==1)continue;
+      report.pairedComparisons.push({round,a:a.name,b:b.name,changed:changes[0],bMinusA:{callbackMeanMs:b.callbackMs.mean-a.callbackMs.mean,drawIntervalMeanMs:b.intervalMs.mean-a.intervalMs.mean,gpuFrameSpanMeanMs:a.gpu&&b.gpu?b.gpu.frameSpanMs.mean-a.gpu.frameSpanMs.mean:null,gpuSceneLightingMeanMs:a.gpu&&b.gpu?b.gpu.sceneLightingMs.mean-a.gpu.sceneLightingMs.mean:null},interpretation:'Descriptive held-state marginal; use repeated rounds and raw GPU passes to interpret'});
+    }
+  }
   report.sameHeldState=a['inspect-only']?null:true;report.status='observed';report.phase=a['inspect-only']?'inspection-complete':'complete';delete report.activeCase;
 }catch(error){report.status='failed';report.failure=String((signalFailure??error).stack||error);process.exitCode=1;
   if(page)try{report.lastTrustworthyRuntime=await page.evaluate(()=>({state:window.kaminosPerformance?.read(),progress:window.kaminosPerformance?.progress(),clock:window.kaminosFingerFluidBenchSessionState?.(),errors:window.__performanceErrors}));}catch(e){report.runtimeReadFailure=String(e);}
@@ -188,7 +205,7 @@ try {
   await serverLog?.close();report.finishedAt=new Date().toISOString();await save();
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const format=value=>Number(value).toFixed(2);
-  await fs.writeFile(path.join(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>Kaminos performance comparison</title><style>body{background:#182126;color:#d9e5e9;font:16px system-ui;margin:30px}table{border-collapse:collapse}td,th{padding:9px;border:1px solid #63747c;text-align:left}img{width:min(700px,100%)}a{color:#8ed5ff}small{display:block}</style><h1>Kaminos performance comparison</h1><p>${escape(report.status)} · ${escape(report.phase)} · ${escape(report.revision??'source unavailable')}</p><p>${escape(report.claim??report.failure)}</p><a href="report.json">Full report and effective configuration</a><table><tr><th>Round / case</th><th>Callback P50 / P95 / P99 (ms)</th><th>Draw interval P50 / P95 / P99 (ms)</th><th>Mean FPS</th></tr>${report.cases.map(c=>`<tr><td>${c.round+1} / ${escape(c.name)}</td><td>${[50,95,99].map(p=>format(c.callbackMs['p'+p])).join(' / ')}</td><td>${[50,95,99].map(p=>format(c.intervalMs['p'+p])).join(' / ')}</td><td>${format(c.fps)}</td></tr>`).join('')}</table>${report.cases.map(c=>`<h2>${escape(c.name)} · round ${c.round+1}</h2><a href="${c.image}"><img src="${c.image}"></a><small><a href="${c.rawFrames}">All frame samples</a></small>`).join('')}${report.failure?`<pre>${escape(report.failure)}</pre>`:''}`);
+  await fs.writeFile(path.join(out,'comparison.html'),`<!doctype html><meta charset="utf-8"><title>Kaminos performance comparison</title><style>body{background:#182126;color:#d9e5e9;font:16px system-ui;margin:30px}table{border-collapse:collapse}td,th{padding:9px;border:1px solid #63747c;text-align:left}img{width:min(700px,100%)}a{color:#8ed5ff}small{display:block}</style><h1>Kaminos performance comparison</h1><p>${escape(report.status)} · ${escape(report.phase)} · ${escape(report.revision??'source unavailable')}</p><p>${escape(report.claim??report.failure)}</p><a href="report.json">Full report and effective configuration</a><table><tr><th>Round / case</th><th>Callback P50 / P95 / P99 (ms)</th><th>Draw interval P50 / P95 / P99 (ms)</th><th>GPU span / scene lighting mean (ms; sample count)</th><th>Mean redraw FPS</th></tr>${report.cases.map(c=>`<tr><td>${c.round+1} / ${escape(c.name)}</td><td>${[50,95,99].map(p=>format(c.callbackMs['p'+p])).join(' / ')}</td><td>${[50,95,99].map(p=>format(c.intervalMs['p'+p])).join(' / ')}</td><td>${c.gpu?`${format(c.gpu.frameSpanMs.mean)} / ${format(c.gpu.sceneLightingMs.mean)} (${c.gpu.samples})`:'unmeasured'}</td><td>${format(c.fps)}</td></tr>`).join('')}</table>${report.cases.map(c=>`<h2>${escape(c.name)} · round ${c.round+1}</h2><a href="${c.image}"><img src="${c.image}"></a><small><a href="${c.rawFrames}">All frame samples</a></small>`).join('')}${report.failure?`<pre>${escape(report.failure)}</pre>`:''}`);
   if(report.inspections?.length)await fs.writeFile(path.join(out,'inspection.html'),`<!doctype html><meta charset="utf-8"><title>Performance control inspection</title><h1>Control inspection — no timing results</h1>${report.inspections.map(c=>`<h2>${escape(c.name)}</h2><img style="width:min(100%,900px)" src="${c.image}">`).join('')}`);
   await fs.writeFile(path.join(out,'terminal-signal.json'),JSON.stringify({status:report.status,phase:report.phase,report:reportPath,exitCode:process.exitCode??0}));
   console.log(JSON.stringify({out,status:report.status,phase:report.phase,cases:report.cases.map(c=>({name:c.name,round:c.round,callbackMs:c.callbackMs,intervalMs:c.intervalMs,workDelta:c.workDelta})),failure:report.failure}));

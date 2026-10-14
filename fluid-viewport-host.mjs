@@ -18,12 +18,16 @@ export function resolveFluidViewportRenderer(params=new URLSearchParams()) {
 
 export function applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput,composedOutput,matchedOutput,effective}) {
   const output=pipeline.outputNode,transform=pipeline.outputColorTransform;
-  pipeline.outputNode=rawOutput;pipeline.outputColorTransform=false;pipeline.needsUpdate=true;
+  if(pipeline.outputNode!==rawOutput||pipeline.outputColorTransform!==false){
+    pipeline.outputNode=rawOutput;pipeline.outputColorTransform=false;pipeline.needsUpdate=true;
+  }
   const finalOutput=effective?matchedOutput:composedOutput,finalTransform=!effective;
   if(presentation.outputNode!==finalOutput||presentation.outputColorTransform!==finalTransform){
     presentation.outputNode=finalOutput;presentation.outputColorTransform=finalTransform;presentation.needsUpdate=true;
   }
-  return ()=>{pipeline.outputNode=output;pipeline.outputColorTransform=transform;pipeline.needsUpdate=true;};
+  return ()=>{if(pipeline.outputNode!==output||pipeline.outputColorTransform!==transform){
+    pipeline.outputNode=output;pipeline.outputColorTransform=transform;pipeline.needsUpdate=true;
+  }};
 }
 
 export function fluidViewportCameraFrame(camera, width, height, generation) {
@@ -72,6 +76,16 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
   depthMaterial.blending=THREE.NoBlending; depthMaterial.toneMapped=false; depthMaterial.side=THREE.DoubleSide;
   const composedOutput=texture(outputTarget.texture);
   const presentation = new THREE.RenderPipeline(renderer,composedOutput);
+  // Same producer graph/device; a separate output quad keeps linear capture
+  // resident without invalidating the ordinary display pipeline each frame.
+  const capture = new THREE.RenderPipeline(renderer);
+  capture.outputColorTransform=false;
+  let captureMode='stable',captureGraphChanges=0;
+  const setCaptureMode=value=>{
+    if(disposed)throw Error('Fluid viewport disposed');
+    if(!['stable','switching'].includes(value))throw Error('Unknown scene capture mode');
+    captureMode=value;return captureMode;
+  };
   const finalCamera=createSceneEmissiveCamera(composedOutput,{TSL:{uniform,vec3,vec4,float},THREE});
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
@@ -117,14 +131,19 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       const policy=getDisplayPolicy?.()??{rawOutput:pipeline.outputNode,cameraState:{effective:false}};
       const cameraState=policy.cameraState??{effective:false};
       finalCamera.update(cameraState.effective,{...cameraState,effective:'emissive-transport-v2'});
-      restoreDisplay=applyFluidViewportDisplayPolicy({pipeline,presentation,rawOutput:policy.rawOutput,composedOutput,matchedOutput:finalCamera.outputNode,effective:cameraState.effective});
+      const capturePipeline=captureMode==='stable'?capture:pipeline;
+      if(captureMode==='stable'&&capture.outputNode!==policy.rawOutput)captureGraphChanges++;
+      restoreDisplay=applyFluidViewportDisplayPolicy({pipeline:capturePipeline,presentation,rawOutput:policy.rawOutput,composedOutput,matchedOutput:finalCamera.outputNode,effective:cameraState.effective});
+      // Stable capture keeps its raw graph between frames. Switching exists
+      // only as an explicit comparison control for the former route.
+      if(captureMode==='stable')restoreDisplay=null;
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
       timing.begin();
       if (advance && !paused) timing.scope('simulation',()=>solver.step(1/60));
       timing.scope('host',()=>renderEnvironment());
-      renderer.setRenderTarget(colorTarget); timing.scope('host',()=>pipeline.render());
+      renderer.setRenderTarget(colorTarget); timing.scope('scene lighting',()=>capturePipeline.render());
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       if(renderScale===1)renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
@@ -173,7 +192,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
         route:ROUTE,opticalDebugMode,submittedByHost:true,presentedByHost:true,captureColorSpace:'linear_hdr',displayTransform:cameraState.effective?cameraState.transform:'host-render-pipeline',exposure:renderer.toneMappingExposure,environmentIntensity:scene.environmentIntensity,
         simulationTimePolicy:advance?'one-fixed-1/60-step-per-rendered-frame':'caller-owned-step',simulationRewind:false,
         helperGroundPresentation:{policy:'retained-basin-suppresses-editor-helper',effectiveVisible:helperGround?.visible??null}};
-      timing.finish({hostFrameId:frameId,step:solver.getFrameBudgetState().step,paused:simulationPaused,simulationAdvanced,waterResolution:lastFrame.waterResolution,reflection:solver.getReflectionBudgetControls().effective,energy:solver.getFrameBudgetState().energy.mode,camera:cameraSnapshot,environmentSource:environmentSource.uuid,environmentGeneration});
+      timing.finish({hostFrameId:frameId,step:solver.getFrameBudgetState().step,paused:simulationPaused,simulationAdvanced,waterEnabled:true,captureMode,sceneLighting:policy.sceneLighting,waterResolution:lastFrame.waterResolution,reflection:solver.getReflectionBudgetControls().effective,energy:solver.getFrameBudgetState().energy.mode,camera:cameraSnapshot,environmentSource:environmentSource.uuid,environmentGeneration});
     } catch(error) { timing.abort(error);failure=error.message || String(error); throw error; }
     finally {
       restoreDisplay?.();
@@ -188,7 +207,12 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     // ordinary scene graph alone. No water depth/capture/resolve is submitted.
     renderSceneOnly(){
       if(disposed||failure)throw Error(failure||'Fluid viewport disposed');
-      return withLocalLiquidHelperGround(helperGround,()=>pipeline.render());
+      const policy=getDisplayPolicy?.();
+      timing.begin();
+      try {
+        return withLocalLiquidHelperGround(helperGround,()=>timing.scope('scene lighting',()=>pipeline.render()));
+      }catch(error){timing.abort(error);throw error;}
+      finally {timing.finish({scope:'ordinary_scene_without_water',waterEnabled:false,captureMode,sceneLighting:policy?.sceneLighting});}
     },
     sceneSnapshot(){return withLocalLiquidHelperGround(helperGround,()=>{
       const objects=[];scene.updateMatrixWorld();
@@ -205,8 +229,9 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     abortFrameTiming:timing.abort,
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
-    state:()=>({frameCount,paused,failure,lastFrame,renderScale,timing:timing.read()}),
+    state:()=>({frameCount,paused,failure,lastFrame,renderScale,captureMode,captureGraphChanges,timing:timing.read()}),
     setRenderScale,
+    setCaptureMode,
     setTimingEnabled:timing.setEnabled,
     setOpticalDebugForWitness(value){opticalDebugMode=resolveFingerFluidOpticalDebugMode(value);return opticalDebugMode;},
     async readBackgroundDepthForWitness(){
@@ -217,7 +242,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
       disposed=true;device.removeEventListener('uncapturederror',onGpuError);
       timing.destroy();for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget,lowColorTarget,lowDepthTarget,lowWaterTarget])target?.dispose();
       for(const q of [downColor,downDepth,startLowWater,resolveWater]){q.material.dispose();}
-      depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();
+      depthMaterial.dispose();environmentQuad?.material.dispose();presentation.dispose();capture.dispose();
 
     }
   };

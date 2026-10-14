@@ -70,14 +70,14 @@ export function createFluidFrameTiming(device) {
     if(!active)return;
     restore?.();restore=null;active=false;
     if(invalid||!entries.length){failure=invalid??'Frame supplied no timed GPU passes';return;}
-    const frameEntries=entries.map(e=>({...e}));const count=frameEntries.length*2;
+    const frameEntries=entries.map(e=>({...e}));const count=frameEntries.length*2,encodedAt=lastRequest;
     const encoder=device.createCommandEncoder({label:'fluid-budget-resolve'});encoder.resolveQuerySet(querySet,0,count,resolveBuffer,0);encoder.copyBufferToBuffer(resolveBuffer,0,readback,0,count*8);device.queue.submit([encoder.finish()]);pending=true;
     readback.mapAsync(GPUMapMode.READ).then(()=>{
       const values=new BigUint64Array(readback.getMappedRange(0,count*8).slice(0));
       const passes=frameEntries.map(e=>{const start=values[e.index],end=values[e.index+1];if(end<start || (start===0n&&end===0n))throw Error('Missing or unordered GPU pass timestamps');return {...e,startNs:String(start),endNs:String(end),ms:Number(end-start)/1e6};});
       const timeline=partitionGpuPassIntervals(passes);
       const first=values.reduce((a,v)=>v<a?v:a,values[0]),last=values.reduce((a,v)=>v>a?v:a,values[0]);
-      if(!disposed){sample={...source,stages:timeline.exclusive,stageCoverage:timeline.coverage,overlapMs:timeline.overlapMs,gapMs:timeline.gapMs,passes,passSumMs:passes.reduce((n,p)=>n+p.ms,0),frameSpanMs:Number(last-first)/1e6,measuredAt:performance.now(),unit:'gpu_timestamp_ms',scope:'owned_frame_timestamp_intervals_partitioned_without_overlap_double_count',copies:'inside_span_not_individually_attributed',rayCountInstrumentation:false};failure=null;}
+      if(!disposed){sample={...source,encodedAt,stages:timeline.exclusive,stageCoverage:timeline.coverage,overlapMs:timeline.overlapMs,gapMs:timeline.gapMs,passes,passSumMs:passes.reduce((n,p)=>n+p.ms,0),frameSpanMs:Number(last-first)/1e6,measuredAt:performance.now(),unit:'gpu_timestamp_ms',scope:'owned_frame_timestamp_intervals_partitioned_without_overlap_double_count',copies:'inside_span_not_individually_attributed',rayCountInstrumentation:false};failure=null;}
     }).catch(error=>{if(!disposed)failure=String(error);}).finally(()=>{if(readback.mapState==='mapped')readback.unmap();pending=false;});
   }
   function abort(error){restore?.();restore=null;active=false;failure=String(error);}

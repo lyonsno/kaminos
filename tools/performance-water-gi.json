@@ -1,0 +1,107 @@
+{
+  "schema": "kaminos.performance.v1",
+  "description": "Plain scene, GTAO and combined GI with water present/absent; stable versus former switching capture",
+  "mode": "held-render",
+  "route": {
+    "workspace": "workbench",
+    "kaminos_finger_fluid_bench": "1",
+    "finger_fluid_pressure_cockpit": "1",
+    "finger_fluid_pressure_solver": "ipbf",
+    "finger_fluid_particle_count": "12288",
+    "finger_fluid_density_iterations": "3",
+    "finger_fluid_renderer": "screen_space_refraction",
+    "finger_fluid_optical_debug": "shaded",
+    "finger_fluid_witness_target_step": "256"
+  },
+  "viewport": {
+    "width": 1440,
+    "height": 936,
+    "deviceScaleFactor": 2
+  },
+  "camera": {
+    "distance": 5,
+    "yaw": -0.7,
+    "pitch": 0.95,
+    "target": [
+      0,
+      -0.48,
+      0.2
+    ]
+  },
+  "heldStep": 64,
+  "warmupFrames": 16,
+  "frames": 192,
+  "rounds": 2,
+  "controls": {
+    "renderScale": 0.5,
+    "fresnelCutoff": 0.15,
+    "energyDiagnosticsMode": "disabled",
+    "timingEnabled": true
+  },
+  "cases": [
+    {
+      "name": "scene-plain",
+      "waterEnabled": false,
+      "sceneAOEnabled": false,
+      "sceneGIMode": "gtao",
+      "captureMode": "stable"
+    },
+    {
+      "name": "water-plain-switching",
+      "waterEnabled": true,
+      "sceneAOEnabled": false,
+      "sceneGIMode": "gtao",
+      "captureMode": "switching"
+    },
+    {
+      "name": "water-plain-stable",
+      "waterEnabled": true,
+      "sceneAOEnabled": false,
+      "sceneGIMode": "gtao",
+      "captureMode": "stable"
+    },
+    {
+      "name": "scene-gtao",
+      "waterEnabled": false,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "gtao",
+      "captureMode": "stable"
+    },
+    {
+      "name": "water-gtao-switching",
+      "waterEnabled": true,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "gtao",
+      "captureMode": "switching"
+    },
+    {
+      "name": "water-gtao-stable",
+      "waterEnabled": true,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "gtao",
+      "captureMode": "stable"
+    },
+    {
+      "name": "scene-gi",
+      "waterEnabled": false,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "combined",
+      "captureMode": "stable"
+    },
+    {
+      "name": "water-gi-switching",
+      "waterEnabled": true,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "combined",
+      "captureMode": "switching"
+    },
+    {
+      "name": "water-gi-stable",
+      "waterEnabled": true,
+      "sceneAOEnabled": true,
+      "sceneGIMode": "combined",
+      "captureMode": "stable"
+    }
+  ],
+  "gpuSamples": 3
+}
