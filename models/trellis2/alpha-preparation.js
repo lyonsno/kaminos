@@ -55,6 +55,21 @@ function resize(pixels,width,height,outWidth,outHeight,channels){
   }
   return current;
 }
+/** Pillow12.3 U8 Lanczos for independent interleaved 1/3/4-channel planes.
+ * This does not convert straight-alpha RGBA to/from premultiplied storage;
+ * callers needing Pillow RGBA image semantics must do that separately.
+ * Returns owned U8 storage, including when both dimensions are unchanged.
+ */
+export function resizePillowLanczosU8(pixels,width,height,outWidth,outHeight,channels){
+  if(![1,3,4].includes(channels))throw TypeError('1,3 or4 channels required');
+  if(![width,height,outWidth,outHeight].every(n=>Number.isSafeInteger(n)&&n>0)||
+    ![width*height*channels,outWidth*height*channels,outWidth*outHeight*channels].every(Number.isSafeInteger))
+    throw TypeError('positive complete U8 dimensions required');
+  if(!(pixels instanceof Uint8Array||pixels instanceof Uint8ClampedArray)||pixels.length!==width*height*channels)
+    throw TypeError('complete interleaved U8 pixels required');
+  const output=resize(pixels,width,height,outWidth,outHeight,channels);
+  return output===pixels?new Uint8Array(output):output;
+}
 function resizeRgba(pixels,width,height,outWidth,outHeight){
   const premultiplied=new Uint8Array(pixels.length);
   for(let i=0;i<pixels.length;i+=4){
