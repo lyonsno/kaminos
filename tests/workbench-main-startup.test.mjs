@@ -11,20 +11,21 @@ const source=fs.readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX||new URL('..
 const a=source.indexOf('sceneInitialization.then(() => {'),b=source.indexOf('</script>',a);assert.ok(a>=0&&b>a);
 const tail=source.slice(a,b);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture({saved=true,authoring=true,restoreFailure=false,silentFailure=false}={}){
+function fixture({saved=true,authoring=true,workspace=null,restoreFailure=false,silentFailure=false}={}){
  let releaseVolume,releaseRestore,resolveReady,rejectReady,ownerCount=0,session;
  const volume=new Promise(resolve=>releaseVolume=resolve),restore=new Promise(resolve=>releaseRestore=resolve),ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});ready.catch(()=>{});
  const scene=new THREE.Scene(),rows=[],frames=createWorkbenchFrameService(),events=[];
  const host=createWorkbenchSceneHost({scene,camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3()},loadAsset(){throw Error('fixture attaches a real Three root');},registerObject(root,metadata){const row={id:'owned',object:root,...metadata};rows.push(row);return row;},findObject:root=>rows.find(r=>r.object===root),removeObject:handle=>{scene.remove(handle.root);rows.splice(rows.findIndex(r=>r.id===handle.id),1);},redraw(){},onFrame:frames.onFrame});
- const c={URLSearchParams,Promise,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location:{search:'?experiment=fixture'}},location:{hash:saved?(authoring?'#authoring=1&scene=saved.json':'#workspace=workbench&scene=saved.json'):'',search:'?experiment=fixture'},console:{error(){}},File:class{},sceneSaveBlockedByFailedRestore:false,
+ let selectedTab=null;
+ const c={URLSearchParams,Promise,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location:{search:'?experiment=fixture'}},location:{hash:saved?(authoring?'#authoring=1&scene=saved.json':'#workspace=workbench&scene=saved.json'):'',search:'?experiment=fixture'+(workspace?'&workspace='+workspace:'')},console:{error(){}},File:class{},sceneSaveBlockedByFailedRestore:false,
   initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
-  fireAtBoot,initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
+  fireAtBoot,initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(tab){selectedTab=tab;},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
   async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');if(silentFailure){events.push('restore refused');return;}for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
   resolveWorkbenchViewerReady(){events.push('viewer ready');resolveReady();},rejectWorkbenchViewerReady(error){events.push('viewer failed');rejectReady(error);},
   async installOwnerWorkbenchEntry(){await ready;ownerCount++;session=host.open();const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());await session.attach(root,{owned:true});session.onFrame(()=>{});events.push('owner attached');},
  };
  vm.createContext(c);vm.runInContext(tail,c);
- return {c,events,scene,rows,ready,releaseVolume,releaseRestore,ownerCount:()=>ownerCount,frames,dispose:()=>session?.dispose()};
+ return {c,events,scene,rows,ready,releaseVolume,releaseRestore,ownerCount:()=>ownerCount,tab:()=>selectedTab,frames,dispose:()=>session?.dispose()};
 }
 test('saved-scene startup admits owner only after actual restoration completes',async t=>{
  const f=fixture();t.after(f.dispose);await flush();assert.equal(f.ownerCount(),0,'owner must wait for saved-scene startup');f.releaseVolume();await flush();assert.equal(f.ownerCount(),0,'owner must wait for delayed restoration');f.releaseRestore();await f.ready;await flush();assert.deepEqual(f.events,['restore started','restore completed','viewer ready','owner attached']);assert.equal(f.rows.length,1);assert.equal(f.rows[0].object.parent,f.scene);assert.equal(f.frames.state().activeSubscriptions,1);
@@ -38,3 +39,5 @@ test('ordinary route retains finite environment startup without waiting for volu
 
 test('Workbench saved-scene address also waits for the actual starting scene',async t=>{const f=fixture({authoring:false});t.after(f.dispose);await flush();assert.equal(f.ownerCount(),0,'Workbench saved scene must finish before owner entry');f.releaseVolume();await flush();assert.equal(f.ownerCount(),0);f.releaseRestore();await f.ready;await flush();assert.deepEqual(f.events,['restore started','restore completed','viewer ready','owner attached']);});
 test('handled scene-loader failure cannot masquerade as a completed starting scene',async t=>{const f=fixture({silentFailure:true});t.after(f.dispose);f.releaseVolume();await flush();f.releaseRestore();await assert.rejects(f.ready,/restoration did not complete/);await flush();assert.equal(f.ownerCount(),0);assert.equal(f.rows.length,0);});
+test('Workbench reopening an ordinary authored save selects the shared bench',async t=>{const f=fixture({workspace:'workbench'});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),'making-bench');});
+test('Authoring reopening keeps its existing asset context',async t=>{const f=fixture({workspace:'authoring'});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),'assets');});

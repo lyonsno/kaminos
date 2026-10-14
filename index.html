@@ -578,7 +578,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
   </label>
 
   <div class="tab-bar">
-    <div class="tab active" data-tab="assets">Assets</div>
+    <div class="tab active" data-tab="making-bench">Shared bench</div>
+    <div class="tab" data-tab="assets">Assets</div>
     <div class="tab" data-tab="masks">Masks</div>
     <div class="tab" data-tab="forge">Forge</div>
     <div class="tab" data-tab="motion">Motion</div>
@@ -615,7 +616,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div id="sam-image-result"></div>
     <div class="sam-image-actions"><button type="button" class="btn" id="sam-image-unload" disabled>Unload Model</button></div>
   </div>
-  <div class="tab-content active" id="tab-assets">
+  <div class="tab-content active" id="tab-making-bench">
+    <div id="making-bench-tree"></div>
+    <p class="making-bench-help">Add or import something, then select it here or in the scene. Name the parts you want to work on together.</p>
+    <div class="making-bench-actions"><button type="button" class="btn" id="making-bench-import">Import mesh…</button><button type="button" class="btn" id="making-bench-assets">Browse assets</button></div>
+    <p class="making-bench-help">Save keeps this as an ordinary scene. Switching workspaces keeps your objects, selection, and view.</p>
+    <input type="file" id="making-bench-file" accept=".glb" hidden>
+    <p id="making-bench-status" role="status"></p>
+  </div>
+  <div class="tab-content" id="tab-assets">
     <div id="drop-zone" onclick="document.getElementById('folder-input').click()">
       Drop a receipt directory here<br>or click to browse
       <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
@@ -6422,6 +6431,7 @@ window.restoreAuthoredSceneFromPreview = restoreAuthoredSceneFromPreview;
 
 function sceneObjectReloadabilityLabel(record) {
   if (record.id === RIM_LIGHT_ID) return 'scene recipe';
+  if(record.type===CAMERA_TYPE&&record.object){const {object,...data}=record;record={...data,transform:sceneObjectTransformState(object)};}
   if (isReloadableSceneObjectRecord(record)) return 'reloadable';
   if (!record.source) return 'unsourced';
   if (record.type === 'pbr') return 'procedural';
@@ -11883,10 +11893,12 @@ async function initScene() {
       if (next === 'authoring' && !['assets', 'volume'].includes(window.__kaminosActiveTab())) {
         setActiveTab('assets', { reveal: false });
       }
+      if(next==='authoring')sharedWorkbench?.setActive(false);
       return true;
     },
     afterSwitch: mode => sharedWorkbench?.setActive(mode==='workbench'),
     openWorkbenchTab: tab => setActiveTab(tab),
+    workbenchHome: 'making-bench',
   });
   window.kaminosWorkspace = authoringWorkspace;
   cameraViews=createCameraViews({
@@ -12768,16 +12780,26 @@ window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
 function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
+  byId('making-bench-import').onclick=()=>byId('making-bench-file').click();
+  byId('making-bench-assets').onclick=()=>window.kaminosAssets?.open('browse');
+  byId('making-bench-file').onchange=async event=>{
+    const file=event.target.files[0];if(!file)return;
+    const button=byId('making-bench-import'),status=byId('making-bench-status');button.disabled=true;status.textContent=`Importing ${file.name}…`;
+    try{await importSceneMesh(file);status.textContent=`Imported ${file.name}`;}catch(error){status.textContent=error.message;}
+    finally{button.disabled=false;event.target.value='';}
+  };
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
     inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
     sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
+    makingTools:['tb-gizmo-translate','tb-gizmo-rotate','tb-gizmo-scale','tb-gizmo-off','authoring-undo','authoring-redo'].map(byId),
   });
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
   sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
+  if(window.__kaminosActiveTab()==='making-bench'&&!sceneSelection.ids.length)authoringWorkspace.setContext('scene');
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
@@ -27185,7 +27207,8 @@ sceneInitialization.then(() => {
     if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
     if(hash.get('authoring')==='1'){
       document.body.classList.add('composition-authoring');
-      setActiveTab('assets', { reveal: false });
+      const workspace=new URLSearchParams(location.search).get('workspace')??hash.get('workspace');
+      setActiveTab(workspace==='workbench'?'making-bench':'assets', { reveal: false });
     }
     const sceneFile = hash.get('scene');
     if (!sceneFile) return;

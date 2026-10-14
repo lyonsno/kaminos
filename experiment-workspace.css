@@ -77,6 +77,17 @@ body.experiment-workspace #experiment-tool-slot #volume-authored-mix-panel:not([
 #experiment-tool-slot .slider-row { flex-wrap:wrap; }
 #experiment-tool-slot input:not([type=checkbox]):not([type=radio]), #experiment-tool-slot select { max-width:100%; box-sizing:border-box; }
 #experiment-tool-slot .panel { margin-bottom:18px; }
+#experiment-making-tools { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+#experiment-making-tools[hidden] { display:none; }
+#experiment-toolbar { flex-wrap:wrap; }
+#experiment-making-tools #authoring-gizmo-slot { display:flex; gap:3px; }
+#experiment-owner-browser { margin:12px 0; }
+#experiment-owner-browser > summary { cursor:pointer; color:#b8bcc5; font-size:11px; }
+#experiment-owner-browser[open] > summary { margin-bottom:12px; }
+#making-bench-tree .panel { border:0; padding:0; }
+.making-bench-help { color:#9ca2ad; font-size:12px; line-height:1.5; margin:14px 0; }
+.making-bench-actions { display:flex; flex-wrap:wrap; gap:8px; }
+#making-bench-status { color:#bbcbd6; font-size:12px; overflow-wrap:anywhere; }
 #experiment-browser button[aria-current=true] { background:#354047; color:#d4f1f3; }
 
 #experiment-instruments .ipbf-control:has(.authoring-number) input[type=range] { display:none; }
