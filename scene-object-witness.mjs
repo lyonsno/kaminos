@@ -1568,13 +1568,15 @@ async function runAuthoredWaterDropScenario(ws) {
   const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;
   lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
     await window.kaminosWaterSources.release(${JSON.stringify(id)});window.kaminosPauseLocalLiquid(true);
+    const initialParticles=await window.kaminosWaterSources.requestDiagnostics({captureParticleState:true});
     await window.kaminosWaterSources.advanceTo(12);
+    const releasedParticles=await window.kaminosWaterSources.requestDiagnostics({captureParticleState:true});
     await new Promise(r=>setTimeout(r,700));
     const water=window.kaminosLocalLiquidState();
     if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on the actual shared WebGPU route: '+JSON.stringify(water));
     const saved=await window.saveSceneAs({name:${JSON.stringify(fixtureName)},result:true});
     if(!saved)throw Error('Native scene save failed');
-    return {water,saved,scene:window.kaminosSceneObjectDebugState(),ui:document.querySelector('.authored-water-controls').textContent};
+    return {water,saved,initialParticles,releasedParticles,scene:window.kaminosSceneObjectDebugState(),ui:document.querySelector('.authored-water-controls').textContent};
   })()`,{timeoutMs:90000});
   const e=lastEvidence.authoredWater;
   assert.equal(e.released.water.solver.particleCount,4096);assert.equal(e.released.water.paused,true);
