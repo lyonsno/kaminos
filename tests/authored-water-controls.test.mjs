@@ -12,7 +12,7 @@ function fixture(){
  let selected=source('A',.5),runtime=null,hold=null;const edits=[];
  const api={read:()=>({selected,runtime}),edit:(id,settings)=>{edits.push({id,settings});return hold??Promise.resolve();},add(){},release(){},pause(){}};
  const controls=mountAuthoredWaterControls({document,root:{prepend(){}},controls:{installNumberDrag:()=>({stop(){}})},api});
- return {controls,input,edits,select(id,width){selected=source(id,width);controls.refresh();},draftWidth(width){input('[data-width]').value=width;input('[data-width]').listeners.input();},setRuntime(value){runtime=value;},hold(p){hold=p;}};
+ return {controls,input,edits,api,select(id,width){selected=source(id,width);controls.refresh();},draftWidth(width){input('[data-width]').value=width;input('[data-width]').listeners.input();},setRuntime(value){runtime=value;},hold(p){hold=p;}};
 }
 {
  const f=fixture();f.draftWidth(.75);f.select('B',1);assert.equal(Number(f.input('[data-width]').value),1,'Source B must not inherit source A pending amount');await f.input('[data-apply]').onclick();assert.equal(f.edits[0].id,'B');assert.equal(f.edits[0].settings.drop.width,1);
@@ -40,3 +40,41 @@ for(const mode of ['continuous','finite_drop','failure']){
  const a=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),b=application.indexOf('\n};',a),f=fixture();let paused=false;f.setRuntime({paused:false,step:12,particleCount:4096});
  const c={Boolean,window:{_kaminosDirty(){}},localLiquidPaused:false,localLiquidHost:{setPaused(v){paused=v;}},refreshLocalLiquidPerformance(){},authoredWaterControls:{refreshStatus(){f.setRuntime({paused,step:12,particleCount:4096});f.controls.refreshStatus();}}};vm.createContext(c);vm.runInContext(application.slice(a,b+3),c);c.window.kaminosPauseLocalLiquid(true);assert.match(f.input('[data-state]').textContent,/Paused · tick 12/);
 }
+
+// Cross the actual finite host/facade/application/control boundary: accessor
+// forwarding cannot be established with a substitute application host.
+{
+ const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
+ const finite=await createFiniteFluidHost({setup:{dt:1/240,support:{kind:'invisible_box'},solver:{rendererMode:'screen_space_refraction',particleCount:13824,diagnosticPopulation:{},diagnosticBox:{}}},device:{queue:{onSubmittedWorkDone:async()=>{}}},
+  createSolver:async()=>({available:true,step(){},getDebugState:()=>({particleCount:13824}),destroy(){}}),
+  createPresentation:()=>({state:()=>({}),render(){},dispose(){}})});
+ const source=readFileSync(new URL('../authored-water-host.mjs',import.meta.url),'utf8');
+ const facadeBody=source.slice(source.indexOf(' return {...finite,'),source.lastIndexOf('\n}'));
+ const facade=new Function('finite','initial','records',facadeBody)(finite,{sourceIds:['A']},[]);
+ const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
+ const c={structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
+  selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
+ vm.createContext(c);
+ const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
+ const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
+ const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
+ Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){}});
+ vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
+ f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
+ const check=(paused,step)=>{
+  f.controls.refreshStatus();assert.equal(facade.paused,paused,'Authored facade must forward effective playback state');
+  assert.equal(c.window.kaminosWaterSources.read().runtime.paused,paused);
+  assert.match(f.input('[data-state]').textContent,new RegExp(`${paused?'Paused':'Playing'} · tick ${step}`));
+  assert.equal(f.input('[data-pause]').textContent,paused?'Resume water':'Pause water');
+  const drawContext={...c,console,sharedWorkbench:{update(value){drawContext.footer=value;}},renderPipeline:{render(){}},setInfo(){}};
+  vm.createContext(drawContext);vm.runInContext(arm,drawContext);
+  assert.equal(drawContext.footer.status,paused?'Paused':'Playing','Footer and panel agree on playback');
+ };
+ facade.setPaused(false);check(false,0);f.draftWidth(.75);
+ await f.input('[data-pause]').onclick();check(true,0);assert.equal(Number(f.input('[data-width]').value),.75,'Playback toggle preserves pending amount');
+ await f.input('[data-pause]').onclick();check(false,0);assert.equal(Number(f.input('[data-width]').value),.75);
+ await c.window.kaminosWaterSources.advanceTo(12);check(true,12);assert.equal(Number(f.input('[data-width]').value),.75);
+ await facade.restart();check(true,0);assert.equal(Number(f.input('[data-width]').value),.75);
+ facade.dispose();
+}
+console.log('Real finite facade, public source state, controls and footer agree through play/pause/advance/reset');
