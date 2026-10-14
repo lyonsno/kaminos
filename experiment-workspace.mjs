@@ -4,15 +4,15 @@ import {createControlSlots} from './authoring-workspace.mjs';
 // existing owners. Release these slots before another workspace acquires them.
 export function installExperimentWorkspace({document, title, subtitle, instruments, instrumentTitle=title, instrumentHelp='',
   setup, inspector, investigation=null, detailNodes=[], runNodes=[],
-  sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[]}) {
+  sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[], makingTools=[]}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Tools</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a tool…"><div class="experiment-browser-list"></div></div></details>
-    <div id="experiment-owner-slot"></div><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
+    <details id="experiment-owner-browser"><summary>Experiments</summary><div id="experiment-owner-slot"></div></details><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
-    <button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
+    <div id="experiment-making-tools"></div><button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
   toolbar.setAttribute('aria-label','Experiment tools'); toolbar.querySelector('strong').textContent=title;
   const run=make('div','experiment-run-strip',`<span id="experiment-source">Synthetic fluid · loading</span><div id="experiment-run-controls"></div><span id="experiment-clock"></span>`);
   run.setAttribute('aria-label','Simulation run');
@@ -29,6 +29,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   const slots=createControlSlots(document,entries);
   const toolSlots=createControlSlots(document,toolPanels.map(node=>({node,destination:byId("experiment-tool-slot")})));
   const extras=createControlSlots(document,extraPanels);
+  const makingSlots=createControlSlots(document,makingTools.filter(Boolean).map(node=>({node,destination:byId('experiment-making-tools')})));
   let selectedTool="finger-fluid-bench";
   for(const {label,id} of tools){
     const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.workbench=id;
@@ -59,8 +60,13 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     hasControls:()=>controlsMounted,
     setTool(id){
       selectedTool=id;
+      const making=id==='making-bench';
+      byId('experiment-owner-browser').open=!making;
+      makingSlots.setActive(active&&making);
+      inspector.setWorkbenchTreeDestination?.(making?byId('making-bench-tree'):null);
+      byId('experiment-making-tools').hidden=!making;
       const fluid=id==='finger-fluid-bench', label=tools.find(tool=>tool.id===id)?.label||id;
-      left.querySelector('h2').textContent=label;left.querySelector('p').textContent=fluid?subtitle:'Workbench tools in the shared scene';
+      left.querySelector('h2').textContent=label;left.querySelector('p').textContent=making?'Arrange, point, and make things move.':fluid?subtitle:'Workbench tools in the shared scene';
       toolbar.querySelector('strong').textContent=label;
       byId('experiment-browser').querySelector('summary').textContent='Tools · '+label;
       for(const name of ['setup-slot','tuning-title','tuning-help','instrument-slot','details'])byId('experiment-'+name).hidden=!(fluid&&controlsMounted);

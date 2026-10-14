@@ -19,7 +19,7 @@ export function createControlSlots(document, entries) {
   return { setActive, showAuthoring: () => setActive(true), showWorkbench: () => setActive(false) };
 }
 
-export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, edits }) {
+export function installAuthoringWorkspace({ document, initialMode = 'workbench', beforeSwitch = () => true, afterSwitch = () => {}, openWorkbenchTab, workbenchHome = null, edits }) {
   const byId = id => document.getElementById(id);
   const header = document.createElement('header');
   header.id = 'authoring-header';
@@ -113,7 +113,13 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const workspaceSlots = createControlSlots(document, entries.filter(entry => !inspector.contains(entry.destination)));
   const inspectorSlots = createControlSlots(document, inspectorEntries);
   const sceneTreeSlots = createControlSlots(document, [{node: byId('scene-object-list').closest('.panel'), destination: byId('authoring-inspector-tree-slot')}]);
-  let mode = null, inspectorActive = false, inspectorContext='object';
+  let mode = null, inspectorActive = false, inspectorContext='object', workbenchTreeDestination=null;
+  const sceneTree=byId('scene-object-list').closest('.panel');
+  function setWorkbenchTreeDestination(destination) {
+    workbenchTreeDestination=destination;
+    if(mode==='workbench'&&inspectorActive)(destination||byId('authoring-inspector-tree-slot')).append(sceneTree);
+    byId('authoring-inspector-scene-tree').hidden=!!destination||mode!=='workbench';
+  }
   // One inspector and one set of live property controls serve both modes.
   function setInspectorActive(active) {
     if (inspectorActive === active) return;
@@ -129,8 +135,9 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     if (mode !== 'workbench') return;
     document.activeElement?.blur?.();
     setInspectorActive(active); sceneTreeSlots.setActive(active);
+    if(active)setWorkbenchTreeDestination(workbenchTreeDestination);
     if (active && byId('transform-inspector').hidden) setContext('scene');
-    byId('authoring-inspector-scene-tree').hidden=!active;
+    byId('authoring-inspector-scene-tree').hidden=!active||!!workbenchTreeDestination;
     document.body.classList.toggle('has-workbench-inspector',active);
   }
   function setContext(context) {
@@ -162,7 +169,10 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     afterSwitch(mode);
     return true;
   }
-  header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.workspaceMode)));
+  header.querySelectorAll('[data-workspace-mode]').forEach(button => button.addEventListener('click', () => {
+    const next=button.dataset.workspaceMode;
+    if(setMode(next)&&next==='workbench'&&workbenchHome)openWorkbenchTab(workbenchHome);
+  }));
   header.querySelectorAll('[data-workbench-tab]').forEach(button => button.addEventListener('click', () => { if(mode==='authoring'&&document.defaultView.kaminosAssets)document.defaultView.kaminosAssets.open(button.dataset.workbenchTab==='generate'?'generate':'browse');else if(setMode('workbench'))openWorkbenchTab(button.dataset.workbenchTab); }));
   inspector.querySelectorAll('[data-inspector-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.inspectorContext)));
   byId('authoring-frame').onclick = () => { document.defaultView.kaminosFrameSelected?.(); byId('authoring-frame').blur(); };
@@ -213,5 +223,5 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
-  return { setMode, setContext, setWorkbenchInspector, state: () => ({ mode, context: inspectorContext }) };
+  return { setMode, setContext, setWorkbenchInspector, setWorkbenchTreeDestination, state: () => ({ mode, context: inspectorContext }) };
 }
