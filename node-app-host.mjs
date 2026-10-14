@@ -106,7 +106,7 @@ async function filesUnder(root,path='') {
 }
 
 // First ordinary app serving slice. Other owner services return an explicit 501.
-export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=null,roots:configuredRoots={}}) {
+export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=null,kleinWeightsRoot=null,trellisCheckpointRoot=null,roots:configuredRoots={}}) {
   if(!repoRoot||!stateRoot)throw failure('repoRoot and stateRoot are required',400,'configuration');
   repoRoot=await realpath(resolve(repoRoot));stateRoot=resolve(stateRoot);
   // A worktree may share installed dependencies. Name the exact directory
@@ -121,8 +121,18 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
   for(const [id,path] of Object.entries(roots))roots[id]=resolve(path);
   for(const id of ['generated-meshes','image-inbox','scenes','scratch'])await mkdir(roots[id],{recursive:true});
   if(sam3PacketRoot)sam3PacketRoot=resolve(sam3PacketRoot);
-  const config={repoRoot,stateRoot,sam3PacketRoot,dependencyRoot,roots};
+  if(kleinWeightsRoot)kleinWeightsRoot=resolve(kleinWeightsRoot);
+  if(trellisCheckpointRoot)trellisCheckpointRoot=resolve(trellisCheckpointRoot);
+  const packages={'/sam3-packet/':sam3PacketRoot,'/klein-weights/':kleinWeightsRoot,'/trellis-checkpoints/':trellisCheckpointRoot};
+  const config={repoRoot,stateRoot,sam3PacketRoot,kleinWeightsRoot,trellisCheckpointRoot,dependencyRoot,roots};
   const implementation=appSourceIdentity(dirname(fileURLToPath(import.meta.url)));
+  async function packageManifest(root,part) {
+    if(!root||!(await exists(root))?.isDirectory())return null;
+    try {
+      const path=await mountedPath(root,part);
+      return (await exists(path))?.isFile()?path:null;
+    }catch(error){if(error.status===403||error.code==='ENOENT')return null;throw error;}
+  }
   async function rootFor(id) {
     if(!roots[id])throw failure(`Unknown root: ${id}`);
     if(!(await exists(roots[id]))?.isDirectory())throw failure('Asset collection is not mounted',404);
@@ -298,10 +308,14 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
       if(['GET','HEAD'].includes(request.method)) {
         if(url.pathname==='/api/runtime-config') {
           const mounted=Boolean(sam3PacketRoot&&(await exists(join(sam3PacketRoot,'tensor-manifest.json')))?.isFile());
+          const kleinManifests=await Promise.all(['te','dit','vae'].map(part=>packageManifest(kleinWeightsRoot,part+'/manifest.json')));
+          const trellisManifest=await packageManifest(trellisCheckpointRoot,'manifest.json');
           jsonResponse(response,{schema:'kaminos.runtime-config.v0',hybridSplatOverlayModuleUrl:null,
             sam3:sam3PacketRoot?{manifestUrl:'/sam3-packet/tensor-manifest.json',modelRoot:sam3PacketRoot,mounted}:null,
+            klein:kleinWeightsRoot?{weightsUrl:'/klein-weights',modelRoot:kleinWeightsRoot,mounted:kleinManifests.every(Boolean)}:null,
+            trellisPage:trellisCheckpointRoot?{checkpointUrl:'/trellis-checkpoints',modelRoot:trellisCheckpointRoot,mounted:Boolean(trellisManifest),manifestSha256:trellisManifest?digest(await readFile(trellisManifest)):null}:null,
             source:{...appSourceIdentity(repoRoot),serverPort:server.address().port},
-            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,implemented:['static','sam3-packet','images','scene-persistence','mesh-generation-origin']}},200,head);return;
+            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,implemented:['static','sam3-packet','klein-weights','trellis-checkpoints','images','scene-persistence','mesh-generation-origin']}},200,head);return;
         }
         if(url.pathname==='/api/roots') {
           const value={};for(const [id,path] of Object.entries(roots))value[id]={path,exists:Boolean(await exists(path))};
@@ -340,9 +354,11 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
           else jsonResponse(response,{content:await readFile(path,'utf8')},200,head);
           return;
         }
-        if(url.pathname.startsWith('/sam3-packet/')) {
-          if(!sam3PacketRoot||!(await exists(sam3PacketRoot))?.isDirectory())throw failure('SAM packet is not mounted',404);
-          await serveFile(request,response,await mountedPath(sam3PacketRoot,decodeURIComponent(url.pathname.slice('/sam3-packet/'.length))));return;
+        const packagePrefix=Object.keys(packages).find(prefix=>url.pathname.startsWith(prefix));
+        if(packagePrefix) {
+          const root=packages[packagePrefix];
+          if(!root||!(await exists(root))?.isDirectory())throw failure('Model package is not mounted',404);
+          await serveFile(request,response,await mountedPath(root,decodeURIComponent(url.pathname.slice(packagePrefix.length))));return;
         }
         if(!url.pathname.startsWith('/api/')) {
           if(url.pathname.startsWith('/node_modules/')) {

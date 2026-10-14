@@ -26,3 +26,18 @@ test('failure before listening retains its caller-selected report and cannot say
   assert.equal(result.status,'failed');assert.equal(result.failurePhase,'configuration');assert.match(result.error,/ENOENT/);
   assert.equal(result.requested.includes('--startup-report'),true);
 });
+
+test('model package CLI paths override owner environment defaults and remain explicit',()=>{
+  const previous={klein:process.env.KAMINOS_KLEIN_WEIGHTS_ROOT,trellis:process.env.KAMINOS_TRELLIS_CHECKPOINT_ROOT};
+  try {
+    process.env.KAMINOS_KLEIN_WEIGHTS_ROOT='/env/klein';process.env.KAMINOS_TRELLIS_CHECKPOINT_ROOT='/env/trellis';
+    const defaults=parseAppHostArgs(['--repo-root','/chosen/app']);
+    assert.equal(defaults.kleinWeightsRoot,'/env/klein');assert.equal(defaults.trellisCheckpointRoot,'/env/trellis');
+    const explicit=parseAppHostArgs(['--repo-root','/chosen/app','--klein-weights-root','/chosen/klein','--trellis-checkpoint-root','/chosen/trellis']);
+    assert.equal(explicit.kleinWeightsRoot,'/chosen/klein');assert.equal(explicit.trellisCheckpointRoot,'/chosen/trellis');
+  }finally {
+    for(const [name,value] of [['KAMINOS_KLEIN_WEIGHTS_ROOT',previous.klein],['KAMINOS_TRELLIS_CHECKPOINT_ROOT',previous.trellis]]){
+      if(value===undefined)delete process.env[name];else process.env[name]=value;
+    }
+  }
+});
