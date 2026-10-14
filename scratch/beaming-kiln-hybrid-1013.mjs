@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork,assertMountedScene} from '../visual-work.mjs';
-const [out,store,origin='http://127.0.0.1:18588']=process.argv.slice(2);
+const [out,store,origin='http://127.0.0.1:18588',softnessInput='0']=process.argv.slice(2);
+const shadowSoftness=Number(softnessInput);if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('finite nonnegative shadow softness required');
 if(!out||!store)throw Error('explicit output and copied store required');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'source-identity',repoRoot:process.cwd(),source:null,origin,store,errors:[],consoleErrors:[],claim:'kiln hybrid authoring preview; no performance or adjustable-domain acceptance'};
@@ -16,6 +17,7 @@ try{
  const bytes=await fs.readFile(store+'/scenes/dj-with-a-kiln-pretty.kaminos.json');
  const doc=JSON.parse(bytes);report.input={file:'dj-with-a-kiln-pretty.kaminos.json',sha256:createHash('sha256').update(bytes).digest('hex'),preset:doc.composition.flame.presetId};
  Object.assign(doc.composition.route,{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'1',volume_light_field_hybrid_smoke_refinement:'1'});
+ if(shadowSoftness>0)doc.composition.route.volume_light_field_hybrid_shadow_softness=String(shadowSoftness);
  await fs.writeFile(store+'/scenes/kiln-hybrid-preview.kaminos.json',JSON.stringify(doc,null,2));
  const executablePath='/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.browser=executablePath;
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
@@ -45,6 +47,32 @@ try{
    await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().frame?.directions===8);
    const state=await observe();assert.equal(state.lighting.surfaceReceivers,0);assert.equal(state.lighting.pointCount,1);assert.equal(state.lighting.frame.smokeReconstruction.refinement,1);assert.equal(state.volume.backend,'WebGPU:apple');
    assertMountedScene(document,state.objects);report.effective=state;
+   if(shadowSoftness>0){
+     report.phase='held-shadow-comparison';await write();
+     report.pause=await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
+     const before=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+     const raw=Buffer.from(new Float32Array(before.values).buffer);await fs.writeFile(out+'/held-source.f32',raw);
+     report.heldSource={...before,values:undefined,sha256:createHash('sha256').update(raw).digest('hex')};
+     report.heldCamera=await page.evaluate(()=>{
+       const {position:p,target:t}=window.kaminosCameraDebugState();
+       return window.kaminosSetCameraDebugPose({position:p.map((v,i)=>t[i]+(v-t[i])*.65),target:t});
+     });
+     const lights=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.filter(o=>o.type==='light'));
+     report.held=[];
+     for(const spotlight of [true,false]){
+       await page.evaluate(({lights,spotlight})=>{for(const light of lights)window.kaminosSceneAuthoring.setLight(light.id,{enabled:spotlight&&light.light.enabled});},{lights,spotlight});
+       for(const softness of [0,shadowSoftness]){
+         await page.evaluate(value=>window.__kaminosSceneRadiance.setShadowSoftness(value),softness);
+         await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+         const row=await observe();assert.equal(row.volume.simStepCount,report.pause.simStepCount);
+         report.held.push({spotlight,softness,lighting:row.lighting,simStepCount:row.volume.simStepCount,camera:await page.evaluate(()=>window.kaminosCameraDebugState())});
+         await page.screenshot({path:out+'/'+(spotlight?'authored':'fire-only')+'-'+(softness?'soft':'hard')+'.png'});await write();
+       }
+     }
+     const after=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+     assert.deepEqual(after.values,before.values,'shadow comparison must preserve actual source coefficients');
+     await page.evaluate(lights=>{for(const light of lights)window.kaminosSceneAuthoring.setLight(light.id,{enabled:light.light.enabled});window.__kaminosVolumePrototype.setSimulationPaused(false);},lights);
+   }
    report.phase='capture';await write();
    await page.screenshot({path:out+'/authoring.png'});
    const saved=await retain({name:'kiln-hybrid',observe});
@@ -62,6 +90,7 @@ try{
    assertMountedScene(saved.document,await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects));
    assert.equal(report.reopened.lighting.frame.directions,8);assert.equal(report.reopened.lighting.frame.angularPattern,'guided');
    assert.equal(report.reopened.lighting.pointCount,1);assert.equal(report.reopened.lighting.frame.smokeReconstruction.refinement,1);
+   assert.equal(report.reopened.lighting.shadowSoftness,shadowSoftness);
    await page.screenshot({path:out+'/reopened.png'});
    report.camera=await page.evaluate(()=>window.kaminosCameraDebugState());
    report.obliqueCamera=await page.evaluate(()=>{
