@@ -10759,8 +10759,9 @@ async function ensureSamImageTools() {
     await sceneInitialization;
     const { createSamImageTools } = await import('./sam-image-tools.js');
     // SAM borrows the app GPU host (app-gpu-host.mjs): its session, and the host itself as
-    // the foreground service, so SAM's detector runs on the page's one service.
-    const appGpu = await window.kaminosAppGpu?.().catch(() => null);
+    // the foreground service, so SAM's detector runs on the page's one service. A host that
+    // fails is reported as itself; the legacy session serves only a page with no app host.
+    const appGpu = window.kaminosAppGpu ? await window.kaminosAppGpu() : null;
     const inferenceSession = appGpu ? await appGpu.session() : (samHostContext?.inferenceSession || { device: renderer.backend.device });
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       ...(appGpu ? { foregroundService: appGpu } : {}),
