@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, mkdirSync, writeFileSync, symlin
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import vm from 'node:vm';
 import { persistSamCaptureObservation } from '../sam-image-witness-report.mjs';
 
 const witness = new URL('../sam-image-witness.mjs', import.meta.url);
@@ -77,6 +78,7 @@ const appEvidence = { sameDevice: true, sameRendererDevice: true, runtime: {
     lastRun: { status: 'succeeded', runId: 'new', routeId: ownerRoute, pendingRequestCount: 0,
       receipts: [{ status: 'completed', runId: 'new', routeId: ownerRoute, failure: null,
         metadata: { renderer: 'kaminos-app' }, result: { sceneFrameCount: 1,
+          sceneFrameCountBefore: 0, sceneFrameCountAfter: 1, sceneDrawn: true,
           sceneAuthority: 'three-render-returned-inside-service-not-presentation' } }] } } } };
 consumer.validateSamApplicationForeground(appEvidence, 'new');
 for (const mutate of [value => { value.runtime = null; }, value => { value.sameDevice = false; },
@@ -87,10 +89,42 @@ for (const mutate of [value => { value.runtime = null; }, value => { value.sameD
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].metadata = {}; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].result = { status: 'submitted' }; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].result.sceneFrameCount = 0; },
+  value => { const result = value.runtime.applicationForegroundEvidence.lastRun.receipts[0].result;
+    result.sceneFrameCountBefore = 1; result.sceneFrameCountAfter = 1; },
   value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].failure = { message: 'failed' }; }]) {
   const value = structuredClone(appEvidence); mutate(value);
   assert.throws(() => consumer.validateSamApplicationForeground(value, 'new'));
 }
+const staleFrame = structuredClone(appEvidence.runtime.applicationForegroundEvidence.lastRun.receipts[0]);
+staleFrame.result = { sceneFrameCount: 7, sceneFrameCountBefore: 7, sceneFrameCountAfter: 7,
+  sceneDrawn: true, sceneAuthority: 'three-render-returned-inside-service-not-presentation' };
+assert.throws(() => consumer.validateSamApplicationFrame(staleFrame), /draw|count/,
+  'an already-positive cumulative count without a new draw cannot close the unload gate');
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const frameStart = html.indexOf('    runForegroundFrame(run) {');
+const frameEnd = html.indexOf('    async presentGlb(', frameStart);
+const renderStart = html.indexOf('  function renderSceneFrame() {');
+const renderEnd = html.indexOf('\n  }\n', renderStart) + 6;
+assert.ok(frameStart >= 0 && frameEnd > frameStart && renderStart >= 0 && renderEnd > renderStart);
+const skippedHost = vm.runInNewContext(`${html.slice(renderStart, renderEnd)}\n({${html.slice(frameStart, frameEnd).trim().replace(/,$/, '')}})`, {
+  foregroundServiceActive: true, insideForegroundFrame: false, sceneRenderedForVolume: false, sceneFrameCount: 7,
+  exclusiveInspectionRender: false, manualInspectionRender: false, renderer: {},
+  document: { getElementById: () => ({ value: 'custom' }) }, THREE: { ACESFilmicToneMapping: 1, AgXToneMapping: 2 },
+  window: { __kaminosSceneRadiance: { canRender: () => false } },
+  syncViewportRendererSize() {}, camera: { updateMatrixWorld() {} }, fireLightFieldPass: null,
+});
+const skippedReceipt = { ...appEvidence.runtime.applicationForegroundEvidence.lastRun.receipts[0],
+  result: skippedHost.runForegroundFrame(() => ({ status: 'submitted' })) };
+assert.equal(skippedReceipt.result.sceneFrameCountBefore, 7);
+assert.equal(skippedReceipt.result.sceneFrameCountAfter, 7);
+assert.throws(() => consumer.validateSamApplicationFrame(skippedReceipt), /skipped/);
+const onlySkipped = structuredClone(appEvidence);
+onlySkipped.runtime.applicationForegroundEvidence.lastRun.receipts = [skippedReceipt];
+assert.throws(() => consumer.validateSamApplicationForeground(onlySkipped, 'new'), /no new/);
+const mixed = structuredClone(appEvidence);
+mixed.runtime.applicationForegroundEvidence.lastRun.receipts.push(skippedReceipt);
+assert.equal(consumer.validateSamApplicationForeground(mixed, 'new').renderedCallbacks, 1,
+  'truthful skipped frames remain recorded without substituting for actual renders');
 assert.equal(typeof consumer.validateSamExportProvenance, 'function',
   'native export must match persisted PNG provenance to the live source and selection');
 const source = { source: '/source.png', sha256: 'sha256:source', artifactId: 'source-1' };

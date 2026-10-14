@@ -81,20 +81,30 @@ export function validateSamApplicationForeground(evidence, invocationId) {
     'no completed application foreground callback');
   check(run.receipts.every(receipt => receipt.runId === invocationId && receipt.routeId === routeId
     && receipt.failure === null), 'application foreground receipt failed or belongs to another run');
-  for (const receipt of run.receipts.filter(row => row.status === 'completed' && row.metadata?.renderer === 'kaminos-app')) {
-    validateSamApplicationFrame(receipt);
-  }
-  return { runId: invocationId, routeId, completedCallbacks: run.receipts.filter(row => row.status === 'completed'
-    && row.metadata?.renderer === 'kaminos-app').length,
+  const frames = run.receipts.filter(row => row.status === 'completed' && row.metadata?.renderer === 'kaminos-app')
+    .map(samApplicationFrameObservation);
+  check(frames.some(frame => frame.drawn), 'no new application scene draw inside this run');
+  return { runId: invocationId, routeId, completedCallbacks: frames.length,
+    renderedCallbacks: frames.filter(frame => frame.drawn).length, skippedCallbacks: frames.filter(frame => !frame.drawn).length,
     authority: 'application-callback-and-queue-settlement-not-presented-frame-cadence' };
 }
 
 export function validateSamApplicationFrame(receipt) {
+  const frame = samApplicationFrameObservation(receipt);
+  check(frame.drawn, 'application scene draw was skipped for this callback');
+  return frame;
+}
+
+function samApplicationFrameObservation(receipt) {
   check(receipt?.status === 'completed' && receipt.failure === null, 'application frame callback failed');
-  check(receipt.result?.sceneAuthority === 'three-render-returned-inside-service-not-presentation'
-    && Number.isSafeInteger(receipt.result.sceneFrameCount) && receipt.result.sceneFrameCount > 0,
-  'application callback lacks the actual host scene-render result');
-  return { sceneFrameCount: receipt.result.sceneFrameCount, authority: receipt.result.sceneAuthority };
+  const result = receipt.result, before = result?.sceneFrameCountBefore, after = result?.sceneFrameCountAfter;
+  check(Number.isSafeInteger(before) && before >= 0 && Number.isSafeInteger(after) && after >= before
+    && result.sceneFrameCount === after, 'application callback lacks per-request scene draw counts');
+  const drawn = after > before;
+  check(result.sceneDrawn === drawn && result.sceneAuthority === (drawn
+    ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'),
+  'application scene draw identity contradicts its frame counts');
+  return { drawn, before, after, authority: result.sceneAuthority };
 }
 
 export function validateSamExportProvenance(provenance, { kind, source, output, indices, width, height }) {
