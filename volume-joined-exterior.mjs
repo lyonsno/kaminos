@@ -8,16 +8,16 @@ import {createCompositeStorageLayout} from './volume-composite-storage.mjs';
 import {createCompositeStorageGPU,createCompositeLowerFaceGPU} from './volume-composite-storage-gpu.mjs';
 import {createCompositePCGGPU} from './volume-composite-pcg-gpu.mjs';
 export const JOINED_EXTERIOR_ROUTE='joined-exterior-transport-pressure-v1';
-export function resolveJoinedExteriorGeometry({fineDims,pitch,coarseResolution=32,size=2}) {
+export function resolveJoinedExteriorGeometry({fineDims,pitch,coarseResolution=32,size=2,reactant=false}) {
   try {
     if(!fineDims || fineDims[0]!==fineDims[2] || ![1,2].includes(fineDims[1]/fineDims[0]) || Math.abs(pitch*fineDims[0]-2)>1e-6)
       throw Error('exterior currently supports unit fine cube or double-height box');
-    const config=outerSmokeConfig({grid:coarseResolution,extent:size,nearHeightRatio:fineDims[1]/fineDims[0],materialMode:'authored-raw',donorMode:'joined-full',pressureIterations:1});
+    const config=outerSmokeConfig({grid:coarseResolution,extent:size,nearHeightRatio:fineDims[1]/fineDims[0],materialMode:reactant?'reactant-raw':'authored-raw',donorMode:'joined-full',pressureIterations:1});
     validateOuterSmokeDevice(config,{maxTextureDimension3D:Infinity,maxBufferSize:Infinity,maxStorageBufferBindingSize:Infinity,maxComputeWorkgroupsPerDimension:Infinity});
     const ratio=config.cellWidth/pitch,origin=config.min.map(v=>(-1-v)/config.cellWidth);
     return {admitted:true,reason:null,config,shape:config.shape,origin,ratio,cellWidth:config.cellWidth,
       geometry:{shape:config.shape,min:config.min,cellWidth:config.cellWidth,fine:{min:[-1,-1,-1],max:[1,2*fineDims[1]/fineDims[0]-1,1],ratio}},
-      ghosts:{originFine:config.min.map(v=>(v+1)/pitch),cellWidthFine:ratio,dims:config.shape,finePitchLocal:pitch}};
+      ghosts:{originFine:config.min.map(v=>(v+1)/pitch),cellWidthFine:ratio,dims:config.shape,finePitchLocal:pitch,oxidizer:reactant?'passive-ambient-boundary':'unavailable'}};
   } catch(e) {return {admitted:false,reason:e.message};}
 }
 export function resolveJoinedExteriorWall(wall,g){
@@ -44,13 +44,14 @@ export function joinedExteriorSolids(shape,wall){
 export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=null,budget=32,tolerance=1e-3}={}){
   if(!Number.isInteger(budget)||budget<1)throw Error('positive integer budget required');
   let built=null,destroyed=false,paused=false,lastStep=null,generation=0;
-  const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.solidMask?.revision??'disabled']);
+  const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.solidMask?.revision??'disabled',p.reactant?.effective?.admitted===true,p.reactant?.allocation??0]);
   const clear=()=>{if(built)for(const r of built.owned)r.destroy?.();built=null;lastStep=null;};
   function prepare(p){
     if(destroyed)throw Error('joined exterior destroyed');
     const k=key(p);if(built?.key===k)return {rebuilt:false,...built.summary};
     clear();generation++;
-    const g=resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size});
+    const reactant=p.reactant?.effective?.admitted===true;
+    const g=resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size,reactant});
     if(!g.admitted){built={key:k,owned:[],summary:g};return g;}
     const owned=[];
     try{
@@ -59,7 +60,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       const fineSolids={shape:p.dims,cells:p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1)),revision:String(p.solidMask?.revision??'disabled')};
       const coarseSolids=joinedExteriorSolids(g.shape,slab);
       const layout=createCompositeProducerLayout({geometry:g.geometry,fineSolids,coarseSolids}),storage=createCompositeStorageLayout(layout.grid);
-      const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers);owned.push(outer);
+      const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers,{reactantTextures:p.reactant?.textures,reactantEffective:p.reactant?.effective});owned.push(outer);
       const row=Math.ceil(g.shape[0]/256)*256,packed=new Uint8Array(row*g.shape[1]*g.shape[2]);
       for(let z=0;z<g.shape[2];z++)for(let y=0;y<g.shape[1];y++){
         const i=g.shape[0]*(y+g.shape[1]*z);packed.set(coarseSolids.cells.subarray(i,i+g.shape[0]),row*(y+g.shape[1]*z));
@@ -71,7 +72,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       const lowerExport=createCompositeLowerFaceGPU(device,{dims:p.dims,lowerBuffer:lower,lowerFaceTexture:p.lowerFaceTexture});
       const summary={admitted:true,route:JOINED_EXTERIOR_ROUTE,shape:g.shape,origin:g.origin,ratio:g.ratio,cellWidth:g.cellWidth,
         bounds:{min:g.config.min,max:g.config.max},cells:layout.grid.cells.length,faces:layout.grid.faces.length,budget,tolerance,
-        solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},materialMode:'authored-raw',lighting:'boundary-incident-continuation',reaction:'fine-only'};
+        solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},materialMode:g.config.materialMode,lighting:'boundary-incident-continuation',reaction:'fine-only',forces:'exterior-linear-heat-lift-not-fine-force-parity'};
       built={key:k,owned,g,layout,storage,outer,solver,intake,lower,lowerExport,bridges:[],steps:0,summary};
       return {rebuilt:true,...summary};
     }catch(e){for(const r of owned)r.destroy?.();built={key:k,owned:[],summary:{admitted:false,reason:e.message}};return {rebuilt:true,...built.summary};}
@@ -85,6 +86,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     if(destroyed)throw Error('joined exterior destroyed');
     if(!built?.outer||built.key!==key(p))return lastStep={stepped:false,reason:'exterior-not-prepared-for-current-producer'};
     if(!p.ghosts?.textures)return lastStep={stepped:false,reason:'ghost-textures-missing'};
+    built.outer.setReactantEffective(p.reactant?.effective);
     built.outer.encodeExternalProjection(e,p.fluidReadIndex,p.timeStep,(encoder,coarse)=>{
       let entry=built.bridges.find(b=>b.fine===p.fluidBuffer&&b.coarse===coarse);
       if(!entry){const bridge=createCompositeStorageGPU(device,built.storage,{fine:p.fluidBuffer,coarse,lower:built.lower,flux:built.solver.fluxBuffer});built.owned.push(bridge);entry={fine:p.fluidBuffer,coarse,bridge};built.bridges.push(entry);}
@@ -103,7 +105,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       return {status:'sampled',converged:r.converged,iterations:r.receipt.iterations,budget,maxDivergenceError:r.receipt.maxDivergenceError,steps:b.steps};
     }finally{paused=false;}
   }
-  return {prepare,seedGhosts,step,probe,
+  return {prepare,seedGhosts,step,probe,matches:p=>Boolean(built?.outer&&built.key===key(p)),
     get paused(){return paused;},get ghosts(){return built?.g?.ghosts??null;},get optical(){return built?.outer?.optical??null;},
     receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,generation,...built?.summary,steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
     async stats(){if(!built?.outer)return {status:'unprepared'};const b=built;paused=true;try{await device.queue.onSubmittedWorkDone();const values=await b.outer.readState();return {status:b===built?'sampled':'generation-changed',steps:b.steps,values:Array.from(values),receipt:b.outer.receipt()};}finally{paused=false;}},

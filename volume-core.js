@@ -2183,7 +2183,7 @@ export function resolveJoinedGhosts({ geometry = null, reactantOn = false } = {}
   if (!(geometry.cellWidthFine > 0) || !(geometry.finePitchLocal > 0) || !geometry.dims?.every(n => Number.isInteger(n) && n > 0) || !geometry.originFine?.every(finite)) {
     throw new Error('joined ghost geometry needs positive cell width, pitch and dims and a finite origin');
   }
-  if (reactantOn) return { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' };
+  if (reactantOn && geometry.oxidizer !== 'passive-ambient-boundary') return { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' };
   return { bound: true, reason: null };
 }
 // Sexy's fine lower planes: plane a holds the lowest a-faces indexed
@@ -5976,7 +5976,11 @@ fn sampleReactantOxidizer(cellCenter: vec3<f32>) -> f32 {
       }
     }
   }
-  return select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+  let fine = select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
+  if (!joinedGhosts()) { return fine; }
+  let outside = ghostOutsideAmount(cellCenter);
+  if (outside <= 0.0) { return fine; }
+  return mix(fine, ghostScalarsAt(cellCenter).w, clamp(outside * 2.0, 0.0, 1.0));
 }
 
 // The fresh burn (sidecar .y) at a cell-centred point: plain trilinear over the
@@ -6070,7 +6074,7 @@ fn reactantOxidizerExtrema(cellCenter: vec3<f32>) -> vec2<f32> {
 // order outside the source extrema), first-order semi-Lagrangian otherwise.
 fn transportReactantOxidizer(cellI: vec3<i32>, backCell: vec3<f32>, forwardCell: vec3<f32>, macCormackScalars: bool) -> f32 {
   let predicted = sampleReactantOxidizer(backCell);
-  if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0) {
+  if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0 || (joinedGhosts() && ghostOutsideAmount(backCell) > 0.0)) {
     return predicted;
   }
   let reversed = sampleReactantPredicted(forwardCell);
@@ -12258,6 +12262,7 @@ export function createKaminosVolumePrototype({
   // otherwise, so the authored law allocates and touches nothing.
   let reactantTextures = [];
   let reactantSidecarFull = false;
+  let reactantAllocationGeneration = 0;
   function writeReactantAmbient(texture) {
     const texels = new Float32Array(gridCellCount(gridSize) * 2);
     for (let i = 0; i < texels.length; i += 2) texels[i] = REACTANT_MODEL.ambientOxidizer;
@@ -12281,6 +12286,7 @@ export function createKaminosVolumePrototype({
       return texture;
     });
     reactantSidecarFull = admitted;
+    reactantAllocationGeneration++;
     return true;
   }
   // The sidecar view for a bind group; a scene-solid rebuild can run before the
@@ -14052,6 +14058,7 @@ export function createKaminosVolumePrototype({
         fluidBuffers: fluidBuffers ? [...fluidBuffers] : null,
         allocation: fluidAllocationGeneration,
         fluidReadIndex: currentFluid,
+        reactant: { effective: state.reactantCombustion?.effective ?? null, allocation: reactantAllocationGeneration, textures: reactantSidecarFull ? [...reactantTextures] : null },
         frontBuffer: frontBuffers?.[currentFront] ?? null,
         burnRateTexture,
         solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
@@ -14069,7 +14076,7 @@ export function createKaminosVolumePrototype({
   // producer, so prepare runs until the key is stable.
   function applyJoinedGhostGeometry(geometry = null) {
       if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
-      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
+      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal, oxidizer: geometry.oxidizer ?? 'unavailable' } : null;
       const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
       joinedGhostGeometry = next;
       joinedGhostSynthetic = null;
@@ -14089,7 +14096,7 @@ export function createKaminosVolumePrototype({
         result = joinedExterior.prepare(snapshot);
         if (!result.admitted) break;
         const g = joinedExterior.ghosts;
-        const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal;
+        const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal && joinedGhostGeometry.oxidizer === g.oxidizer;
         if (!same) { applyJoinedGhostGeometry(g); continue; }
         if (joinedExterior.seedGhosts(joinedProducerSnapshot())) { joinedGhostSynthetic = null; state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount }; }
         break;
@@ -17310,6 +17317,12 @@ export function createKaminosVolumePrototype({
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
     if (joinedExterior?.paused) return false;
+    // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
+    // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
+    if (joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
+      if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+      return false;
+    }
     if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
       // A rebuild invalidated the stamp: the exterior re-prepares outside encoding.
