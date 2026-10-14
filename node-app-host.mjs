@@ -38,9 +38,12 @@ async function mountedPath(root,path='') {
   return target;
 }
 
-async function atomicJson(path,value) {
+async function atomicJson(path,value,{exclusive=false}={}) {
   const temporary=join(dirname(path),`.${basename(path)}.${randomUUID()}.tmp`);
-  try {await writeFile(temporary,JSON.stringify(value)+'\n',{flag:'wx'});await rename(temporary,path);}
+  try {
+    await writeFile(temporary,JSON.stringify(value)+'\n',{flag:'wx'});
+    if(exclusive)await link(temporary,path);else await rename(temporary,path);
+  }
   finally {await unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
 }
 
@@ -170,17 +173,20 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
       const timestamp=String(data.timestamp||'').slice(0,19).replace(/:/g,'-').replace('T','_');
       filename=`${model}_${timestamp}_${randomUUID().replaceAll('-','')}.kaminos.json`.replace(/[^\p{L}\p{N}._-]/gu,'');
     }
-    const path=await mountedPath(roots.scenes,filename);await atomicJson(path,data);return {saved:filename,path};
+    const path=await mountedPath(roots.scenes,filename);
+    try {await atomicJson(path,data,{exclusive:saveAs!==undefined&&!overwrite});}
+    catch(error) {if(error.code!=='EEXIST')throw error;throw Object.assign(failure(`${filename} already exists`,409),{exists:filename});}
+    return {saved:filename,path};
   }
   async function ingestMesh(request) {
     const bytes=await bodyBytes(request);
     if(bytes.length<20)throw failure('GLB header and first chunk required');
-    if(bytes.toString('ascii',0,4)!=='glTF'||bytes.readUInt32LE(4)!==2||bytes.readUInt32LE(8)!==bytes.length)throw failure('Invalid GLB version or length');
+    if(bytes.readUInt32LE(0)!==0x46546c67||bytes.readUInt32LE(4)!==2||bytes.readUInt32LE(8)!==bytes.length)throw failure('Invalid GLB version or length');
     for(let offset=12;offset<bytes.length;) {
       if(offset+8>bytes.length)throw failure('Incomplete GLB chunk header');
       const length=bytes.readUInt32LE(offset);
       if(length%4||offset+8+length>bytes.length)throw failure('Invalid GLB chunk length');
-      if(offset===12&&bytes.toString('ascii',offset+4,offset+8)!=='JSON')throw failure('First GLB chunk must be JSON');
+      if(offset===12&&bytes.readUInt32LE(offset+4)!==0x4e4f534a)throw failure('First GLB chunk must be JSON');
       offset+=8+length;
     }
     const hash=digest(bytes),root=roots['generated-meshes'],target=await mountedPath(root,hash+'.glb');

@@ -133,3 +133,30 @@ test('valid GLB containers persist by digest and malformed containers never ente
   const catalog=await f.request('/api/authoring-assets?collection=generated-meshes');
   assert.equal(catalog.entries.length,1);assert.equal(catalog.entries[0].kind,'mesh');assert.equal(catalog.entries[0].source,saved.source);
 });
+
+test('two hosts sharing a store cannot both accept an unconfirmed Save As',async t=>{
+  const a=await fixture(t),b=await fixture(t,{stateRoot:a.stateRoot});
+  const scenes=[{owner:'first',objects:[{id:'first'}]},{owner:'second',objects:[{id:'second'}]}];
+  const result=await Promise.all([a,b].map(async(f,i)=>{
+    const response=await fetch(f.url+'/api/save-scene',{method:'POST',body:JSON.stringify({...scenes[i],_saveAsName:'same new name'})});
+    return {status:response.status,body:await response.json(),scene:scenes[i]};
+  }));
+  assert.deepEqual(result.map(r=>r.status).sort(),[200,409],'exactly one caller may create the named scene');
+  const success=result.find(r=>r.status===200);
+  assert.deepEqual(await a.request('/api/read?'+new URLSearchParams({root:'scenes',path:success.body.saved})),success.scene);
+  const overwrite=await b.request('/api/save-scene',{method:'POST',body:JSON.stringify({...scenes[1],_saveAsName:'same new name',_overwrite:true})});
+  assert.equal(overwrite.saved,success.body.saved);
+  assert.deepEqual(await a.request('/api/read?'+new URLSearchParams({root:'scenes',path:success.body.saved})),scenes[1]);
+});
+
+test('GLB magic and first chunk type must match exact bytes including high bits',async t=>{
+  const f=await fixture(t),document=Buffer.from('{"asset":{"version":"2.0"}}'),json=Buffer.concat([document,Buffer.alloc((4-document.length%4)%4,32)]);
+  const valid=Buffer.alloc(20+json.length);valid.write('glTF');valid.writeUInt32LE(2,4);valid.writeUInt32LE(valid.length,8);valid.writeUInt32LE(json.length,12);valid.write('JSON',16);json.copy(valid,20);
+  const badMagic=Buffer.from(valid),badChunk=Buffer.from(valid);
+  for(let i=0;i<4;i++)badMagic[i]|=128;for(let i=16;i<20;i++)badChunk[i]|=128;
+  const statuses=await Promise.all([badMagic,badChunk].map(async body=>(await fetch(f.url+'/api/ingest-mesh',{method:'POST',body})).status));
+  assert.deepEqual(statuses,[400,400],'both corrupted identifiers must fail before storage');
+  assert.equal((await f.request('/api/authoring-assets?collection=generated-meshes')).entries.length,0);
+  await f.request('/api/ingest-mesh',{method:'POST',body:valid});
+  assert.equal((await f.request('/api/authoring-assets?collection=generated-meshes')).entries.length,1);
+});
