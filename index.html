@@ -14917,7 +14917,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
       effective:read};
   }
   if(!entryOnly && !fluidBudgetCockpit){
-    const read=()=>({clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls(),sceneAO:window.kaminosSceneAOPerformanceState?.(),appFrame:fluidAppFrameTiming.read({source:fluidAppFrameSource(),visible:document.visibilityState==='visible'})});
+    const read=()=>({waterEnabled:performanceWaterEnabled,clock:window.kaminosFingerFluidBenchSessionState(),solver:fingerFluidBenchSolver?.getFrameBudgetState(),viewport:fingerFluidBenchViewport?.state(),reflection:fingerFluidBenchSolver?.getReflectionBudgetControls(),sceneAO:window.kaminosSceneAOPerformanceState?.(),appFrame:fluidAppFrameTiming.read({source:fluidAppFrameSource(),visible:document.visibilityState==='visible'})});
     const apply=patch=>{
       const before=window.kaminosFingerFluidBenchSessionState();if(!before.available||!fingerFluidBenchViewport)throw Error('Shared fluid viewport unavailable');
       if(!patch||typeof patch!=='object'||Array.isArray(patch))throw Error('Budget edit must be an object');

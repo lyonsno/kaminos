@@ -33,9 +33,10 @@ export function mountFluidBudgetCockpit(root,{read,apply,requestFrame}) {
   }else appText.textContent=app?.queueFailure?`GPU queue completion failed: ${app.queueFailure.message}\nCollecting actual drawn frames for these settings…`:app?.status==='hidden'?'Frame timings suspended · tab hidden':app?.status==='unavailable'?'Whole frame timings require the running shared water presenter':'Collecting actual drawn frames for these settings…';
   const t=current.viewport?.timing,sample=t?.sample,reflection=current.reflection?.effective;
   const cameraKey=c=>c?JSON.stringify([c.identity,c.projectionType,c.viewport,Array.from(c.viewProjection,v=>Math.fround(v))]):null;
-  const matching=sample && sample.waterEnabled!==false && sample.captureMode===current.viewport.captureMode && JSON.stringify(sample.sceneLighting)===JSON.stringify(current.viewport.sceneLighting) && sample.paused===current.clock.paused && cameraKey(sample.camera)===cameraKey(current.viewport.lastFrame?.camera) && effective && sample.waterResolution.requestedScale===scale && sample.energy===current.solver.energy.mode && sample.reflection?.mode===reflection?.mode && sample.reflection?.fresnelCutoff===reflection?.fresnelCutoff;
+  const matching=sample && current.waterEnabled!==false && sample.waterEnabled!==false && sample.captureMode===current.viewport.captureMode && JSON.stringify(sample.sceneLighting)===JSON.stringify(current.viewport.sceneLighting) && sample.paused===current.clock.paused && cameraKey(sample.camera)===cameraKey(current.viewport.lastFrame?.camera) && effective && sample.waterResolution.requestedScale===scale && sample.energy===current.solver.energy.mode && sample.reflection?.mode===reflection?.mode && sample.reflection?.fresnelCutoff===reflection?.fresnelCutoff;
   if(!t?.enabled)gpuText.textContent='GPU timings off';
   else if(t.status==='failed')gpuText.textContent=`GPU timings unavailable: ${t.failure}`;
+  else if(current.waterEnabled===false)gpuText.textContent='Water rendering disabled for scene comparison · scene-only GPU timings are in the performance report';
   else if(sample && matching){
    const ms=key=>(sample.stageCoverage[key]??0).toFixed(2);
    const alone=key=>(sample.stages[key]??0).toFixed(2);
