@@ -11695,11 +11695,12 @@ async function initScene() {
     if (rebuild) rebuildSceneGIOutput();
     document.body.dataset.sceneGiDiagnostic = String(next.mode === 'combined' && next.view !== 'scene');
     refreshRenderingControls();
+    fluidBudgetCockpit?.update();
     window._kaminosDirty?.();
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
-  updateSceneAO=()=>{rebuildSceneGIOutput();window._kaminosDirty?.();};
+  updateSceneAO=()=>{rebuildSceneGIOutput();window._kaminosDirty?.();fluidBudgetCockpit?.update();};
   window.kaminosSceneAOPerformanceState=()=>({device:{backend:renderer.backend.isWebGPUBackend?'webgpu':'other',shared:renderer.backend.device===sharedGpu?.device,adapter:sharedGpu?.adapter?.info?{vendor:sharedGpu.adapter.info.vendor,architecture:sharedGpu.adapter.info.architecture,device:sharedGpu.adapter.info.device,description:sharedGpu.adapter.info.description}:null,fallback:sharedGpu?.adapter?.info?.isFallbackAdapter??sharedGpu?.adapter?.isFallbackAdapter??null},mode:sceneGISettings.mode,requested:document.getElementById('ao-toggle').checked,intensity:aoIntensity.value,dedicatedAOEnabled:sceneGISettings.mode==='gtao'&&standaloneAOEnabled(),sharedGIField:sceneGISettings.mode==='combined',work:{...sceneAOWork}});
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
@@ -14967,6 +14968,7 @@ function installFluidWorkbench({entryOnly=false,investigation=null}={}) {
           if(Object.keys(budget).length)apply(budget);
           if(fresnelCutoff!==undefined){window.kaminosFluidReflectionComparison.configureB({mode:'adaptive',fresnelCutoff});window.kaminosFluidReflectionComparison.select('B');}
           if(waterEnabled!==undefined)performanceWaterEnabled=waterEnabled;
+          fluidBudgetCockpit.update();
         }});
       window.kaminosPerformance=performanceHarness;
       performanceHarness.sceneSnapshot=()=>fingerFluidBenchViewport.sceneSnapshot();
