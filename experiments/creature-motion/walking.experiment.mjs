@@ -15,8 +15,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  let session,runtime,asset,floor,floorAsset,player,stop=null,clock=0,cycle=0,mode='source',disposed=false,disposal,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
- function read(){return {mode,cycle,source:structuredClone(source),host:{id:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),playback:player.read(),view:session.readView(),referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
+ function read(){const playback=player.read();return {mode,cycle,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
+  skin:runtime.read(),playback,view:session.readView(),referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function startClock(){
   if(stop)return;
   stop=session.onFrame(({deltaSeconds})=>{
@@ -25,8 +25,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    clock+=deltaSeconds*1000;
    try{
     player.tick(clock);
-    if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
-    else if(player.read().status!=='playing'){unsubscribe();host.scene.refreshPresentation?.(asset);}
+    const status=player.read().status;
+    if(status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
+    else if(status!=='playing'){unsubscribe();if(status!=='removed')host.scene.refreshPresentation?.(asset);}
     refresh();
    }catch(error){unsubscribe();try{player.pause();}catch{}record({kind:'walking.frame',phase:'failed',error:error.message});throw error;}
   });

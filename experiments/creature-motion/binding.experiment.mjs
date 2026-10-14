@@ -6,10 +6,14 @@ import {givenSourceSoleHeight} from './given-motion-source.mjs';
 export async function createCreatureBinding({host,inputs={},record=()=>{}},{loadSkin=loadFullBodySkin}={}) {
  if(!host?.scene?.open||!host.controls?.document)throw Error('Creature binding requires the shared Workbench');
  const data=await loadSkin(inputs),document=host.controls.document;
- let session,runtime,asset,stop,closed=false,preset='rest',expected='',refresh=()=>{},restoreGround=()=>{};
+ let session,runtime,asset,stop,closed=false,removed=false,preset='rest',expected='',refresh=()=>{},restoreGround=()=>{};
  const matrices=()=>[...runtime.bones.values()].map(b=>{b.updateMatrix();return b.matrix.elements.join(',');}).join(';');
- const read=()=>({source:structuredClone(data.source),host:{id:asset.id,route:'shared-owner-scene'},skin:runtime.read(),preset,
-  editedSincePreset:matrices()!==expected,view:session.readView(),scope:'automatic bind and editable poses; not generated motion'});
+ function observeRemoval(){
+  if(!closed&&!removed&&asset&&!runtime.group.parent){removed=true;record({kind:'creature.binding.removed',caseSha256:data.source.caseSha256});refresh();}
+  if(removed){const previous=stop;stop=null;previous?.();}return removed;
+ }
+ const read=()=>{observeRemoval();return {source:structuredClone(data.source),status:removed?'removed':'mounted',host:{id:removed?null:asset.id,route:'shared-owner-scene'},skin:runtime.read(),preset,
+  editedSincePreset:matrices()!==expected,view:session.readView(),scope:'automatic bind and editable poses; not generated motion'};};
  const dispose=async()=>{if(closed)return;closed=true;stop?.();restoreGround();if(session)await session.dispose();else runtime?.dispose();};
  try {
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data});
@@ -23,6 +27,7 @@ export async function createCreatureBinding({host,inputs={},record=()=>{}},{load
   }
   const pose=input=>{
    if(closed)throw Error('Creature binding is disposed');
+   if(observeRemoval())throw Error('Creature binding object was removed');
    const next=data.manifest.presets.find(p=>p.name===input?.name);if(!next)throw Error('Unknown binding preset');
    const world=new Map(data.manifest.bones.map(b=>[b.name,new THREE.Matrix4().set(...next.palette[data.manifest.channels.indexOf(b.name)].flat()).multiply(new THREE.Matrix4().set(...b.restMatrix.flat()))]));
    for(const b of data.manifest.bones) {
@@ -33,7 +38,7 @@ export async function createCreatureBinding({host,inputs={},record=()=>{}},{load
    record({kind:'creature.binding.pose',name:preset,caseSha256:data.source.caseSha256});return read();
   };
   expected=matrices();
-  stop=session.onFrame(()=>{if(closed)return;const before=runtime.read().updates;runtime.update();if(runtime.read().updates!==before){session.redraw();refresh();}});
+  stop=session.onFrame(()=>{if(closed||observeRemoval())return;const before=runtime.read().updates;runtime.update();if(runtime.read().updates!==before){session.redraw();refresh();}});
   if(inputs.view)session.setView(inputs.view);
   if(inputs.pose)pose({name:inputs.pose});
   globalThis.window?.selectSceneObject?.(asset.id);
@@ -43,7 +48,7 @@ export async function createCreatureBinding({host,inputs={},record=()=>{}},{load
    select.setAttribute('aria-label','Binding pose');
    for(const p of data.manifest.presets){const option=document.createElement('option');option.value=p.name;option.textContent=p.name;select.append(option);}
    select.onchange=async()=>{try{await invoke('pose',{name:select.value});}catch(e){status.textContent=e.message;}};
-   refresh=()=>{select.value=preset;status.textContent=`${preset}${matrices()!==expected?' · edited':''} · ${data.manifest.bones.length} joints · ${data.manifest.vertices} vertices`;};
+   refresh=()=>{select.value=preset;select.disabled=removed;status.textContent=removed?'Removed creature · no active pose target':`${preset}${matrices()!==expected?' · edited':''} · ${data.manifest.bones.length} joints · ${data.manifest.vertices} vertices`;};
    panel.append(title,note,select,status);root.append(panel);refresh();return {dispose(){refresh=()=>{};panel.remove();}};
   }};
  } catch(e) {await dispose();throw e;}
