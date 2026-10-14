@@ -86,6 +86,16 @@ test('an unreadable shared current label remains unavailable instead of being re
  assert.equal((await f.request('/api/volume-settings-preset?id='+local.presetId)).status,200);
 });
 
+test('an incompatible but structural shared alias keeps current-label authority',async t=>{
+ const f=await fixture(t),local=await f.put(f.volumeSettingsStore,{number:'1.25'}),shared=await f.put(f.sharedBasinStore,{number:'2.5'});
+ await writeFile(join(f.sharedBasinStore,'aliases','kiln-look.json'),JSON.stringify({...shared.pointer,schemaIdentity:'other-schema'}));
+ const index=await f.request('/api/volume-settings-presets');assert.equal(index.status,200);assert.equal(index.body.entries.length,0);
+ assert.equal(index.body.unavailableEntries[0].presetId,shared.presetId);assert.equal(index.body.unavailableEntries[0].storeRole,'shared');
+ assert.equal(index.body.earlierVersions[0].presetId,local.presetId);assert.equal(index.body.earlierVersions[0].reason,'other-store-label');
+ assert.deepEqual(index.body.invalidAliases,[]);assert.equal((await f.request('/api/volume-settings-preset?id=kiln-look')).status,400);
+ assert.equal((await f.request('/api/volume-settings-preset?id='+local.presetId)).status,200);
+});
+
 test('earlier label versions and invalid rows remain visible without breaking the complete index',async t=>{
  const f=await fixture(t),older=await f.put(f.sharedBasinStore,{number:'1.25'}),current=await f.put(f.sharedBasinStore,{number:'2.5',stamp:'2026-10-02T00:00:00Z'});
  await mkdir(join(f.sharedBasinStore,'alias-history'));

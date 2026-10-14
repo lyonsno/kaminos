@@ -127,10 +127,11 @@ export function createVolumePresetReader({repoRoot,volumeSettingsStore,sharedBas
  async function info(path){try{return await stat(path);}catch(e){if(e.code==='ENOENT')return null;throw e;}}
  async function object(root,part){const parsed=parseStored(await readFile(await mountedPath(root,part),'utf8'));if(!isObject(parsed.plain))throw error('settings preset JSON object required');return parsed;}
  async function schema(){const parsed=await object(repoRoot,'volume-settings-preset-schema-v2.json');validatePresetSchema(parsed.plain);return parsed;}
- async function alias(store,name,rawSchema){
+ async function alias(store,name,rawSchema,{compatible=true}={}){
   if(aliasSlug(name)!==name)throw error('volume settings preset alias is invalid');
   const d=(await object(store,'aliases/'+name+'.json')).plain;
-  if(d.identity!=='kaminos-volume-settings-preset-alias-v1'||d.alias!==name||d.schemaIdentity!==rawSchema.identity||typeof d.label!=='string'||!d.label.trim()||!isId(d.presetId))throw error('volume settings preset alias identity/schema mismatch');return d;
+  if(d.identity!=='kaminos-volume-settings-preset-alias-v1'||d.alias!==name||typeof d.label!=='string'||!d.label.trim()||!isId(d.presetId))throw error('volume settings preset alias identity mismatch');
+  if(compatible&&d.schemaIdentity!==rawSchema.identity)throw error('volume settings preset alias schema mismatch');return d;
  }
  async function artifact(store,id,requested,parsedSchema,pointer=null){
   if(!isId(id))throw error('volume settings preset content id is invalid');
@@ -167,7 +168,9 @@ export function createVolumePresetReader({repoRoot,volumeSettingsStore,sharedBas
   const unavailable=(p,e,extra={})=>({alias:p.alias,label:p.label,presetId:p.presetId,updatedAt:p.updatedAt??null,source:p.source||{},reason:e instanceof SchemaSkew?'schema-skew':'invalid-artifact',error:e.message,...extra});
   for(const name of await fileNames(store,'aliases','.json')){
    let p;const requested=name.slice(0,-5);
-   try{p=await alias(store,requested,parsed.plain);}catch(e){result.invalidAliases.push({alias:requested,path:join(store,'aliases',name),error:e.message});continue;}
+   // A structurally valid pointer owns the current label even when the
+   // following artifact/schema read fails. Do not promote a local substitute.
+   try{p=await alias(store,requested,parsed.plain,{compatible:false});}catch(e){result.invalidAliases.push({alias:requested,path:join(store,'aliases',name),error:e.message});continue;}
    current.set(p.alias,p.presetId);
    try{
     const d=await readInLayer(layer,p.alias,parsed),projection=d.schemaProjection;
