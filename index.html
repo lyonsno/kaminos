@@ -4368,6 +4368,8 @@ let sceneNavigation = null;
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
 const sceneMembershipDisposers = new WeakMap();
+let getLocalLiquidDisplayPolicy=null;
+let authoredWaterControls=null;
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
@@ -4379,10 +4381,11 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getHost: () => localLiquidHost,
   setHost: host => { localLiquidHost = host; },
   createHost: async ({ setup, emitters, isCurrent }) => {
-    const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
-    return createLocalLiquidHost({
+    const { createAuthoredWaterHost } = await import('./authored-water-host.mjs');
+    return createAuthoredWaterHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent,
+      setup, emitters, isCurrent, redraw:()=>window._kaminosDirty?.(),
+      getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output),
     });
   },
   onFailure: error => {
@@ -6712,6 +6715,7 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
+  authoredWaterControls?.refresh();
   if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
@@ -11565,6 +11569,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
+  getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
@@ -12659,6 +12664,36 @@ window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
   return showGLB(file, {...options, clear: false, register: true, returnAsset: true});
 };
 
+function selectedWaterSource(){const row=selectedSceneObjectEntry();return row?.type===LOCAL_LIQUID_EMITTER_TYPE?row:null;}
+function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter)}:null,runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount}:null};}
+const waterSettingTargets=new Set();
+function applyAuthoredWaterSettings(id,patch){
+ assertSceneConstructionAvailable();const row=sceneObjects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
+ const target='@authored-water:'+id;
+ if(!waterSettingTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>structuredClone(sceneObjects.find(r=>r.id===id).localLiquidEmitter),check:value=>normalizeLocalLiquidEmitter(value,sceneObjectTransformState(sceneObjects.find(r=>r.id===id).object)),write:value=>{
+  const entry=sceneObjects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
+  const replacement=createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked}).object;
+  const children=[...entry.object.children];for(const child of children){entry.object.remove(child);child.traverse(node=>{node.geometry?.dispose();for(const mat of(Array.isArray(node.material)?node.material:[node.material]).filter(Boolean))mat.dispose();});}
+  for(const child of [...replacement.children])entry.object.add(child);
+  entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();window._kaminosDirty?.();
+ }});waterSettingTargets.add(target);}
+ return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');
+}
+async function addAuthoredWaterDrop(){
+ assertSceneConstructionAvailable();localLiquidSetup||=defaultLocalLiquidSetup();const id=makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE);
+ const record=createLocalLiquidEmitterSceneRecord({id,label:'Water drop',transform:{position:controls.target.clone().add(new THREE.Vector3(0,1,0)).toArray(),rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.5,samplesPerUnit:48}}});
+ const {object}=createLocalLiquidEmitterObject(THREE,record);scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);setActiveSceneObject(id);authoredWaterControls?.refresh();window._kaminosDirty?.();return id;
+}
+async function releaseAuthoredWater(id){
+ assertSceneConstructionAvailable();const selected=sceneObjects.find(r=>r.id===id);if(selected?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
+ const {createAuthoredWaterHost}=await import('./authored-water-host.mjs');const generation=localLiquidGeneration;
+ const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup:localLiquidSetup,emitters:localLiquidEmitterRecords(),isCurrent:()=>generation===localLiquidGeneration,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
+ const previous=localLiquidHost;localLiquidHost=candidate;previous?.dispose();localLiquidPaused=false;candidate.setPaused(false);
+ for(const row of sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object.children)if(child.userData.kaminosWaterPreview)child.visible=false;
+ authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
+}
+window.kaminosWaterSources={read:authoredWaterState,add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused)};
+
 function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
@@ -12668,13 +12703,25 @@ function installSharedWorkbench() {
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
   });
+  import('./authored-water-controls.mjs').then(({mountAuthoredWaterControls})=>{authoredWaterControls=mountAuthoredWaterControls({document,root:byId('tab-finger-fluid-bench'),controls:{installNumberDrag:installRelativeNumberDrag},api:window.kaminosWaterSources});}).catch(error=>setInfo(error.message));
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
   sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},fluid:{
+    async open(setup){
+      await workbenchViewerReady;if(localLiquidSetup)throw Error('Close authored water before opening a numerical experiment');
+      const generation=localLiquidGeneration;
+      const [{createFiniteFluidHost},{createFluidViewportHost},{createWebGPUFingerFluidSolver}]=await Promise.all([import('./finite-fluid-host.mjs'),import('./fluid-viewport-host.mjs'),import('./finger-fluid-webgpu-core.js')]);
+      const candidate=await createFiniteFluidHost({setup,device:sharedGpu?.device,isCurrent:()=>generation===localLiquidGeneration,redraw:()=>window._kaminosDirty?.(),createSolver:createWebGPUFingerFluidSolver,
+        createPresentation:solver=>createFluidViewportHost({renderer,scene,camera,device:sharedGpu?.device,solver,getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)})});
+      const old=localLiquidHost;localLiquidHost=candidate;old?.dispose();
+      const dispose=candidate.dispose;candidate.dispose=()=>{dispose();if(localLiquidHost===candidate)localLiquidHost=null;window._kaminosDirty?.();};
+      setActiveTab('finger-fluid-bench');const capability=candidate.capability;return {...capability,async dispose(){await capability.dispose();if(localLiquidHost===candidate)localLiquidHost=null;window._kaminosDirty?.();}};
+    },
+  },scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
   }};

@@ -1,4 +1,5 @@
 import { Euler, Vector3 } from './lib/three.core.js';
+import { normalizeAuthoredWaterDrop } from './authored-water-drop.mjs';
 
 export const LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v1';
 export const LEGACY_LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v0';
@@ -36,6 +37,12 @@ export function normalizeLocalLiquidEmitterPose(value) {
 
 export function normalizeLocalLiquidEmitter(value, pose = null) {
   if (!value || value.schema !== LOCAL_LIQUID_EMITTER_SCHEMA) throw Error('Unsupported local liquid emitter settings');
+  const mode=value.mode??'continuous';
+  if(!['continuous','finite_drop'].includes(mode))throw Error('Unknown water source mode');
+  if(mode==='finite_drop'){
+    if(pose)normalizeLocalLiquidEmitterPose(pose);
+    return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,drop:normalizeAuthoredWaterDrop(value.drop)};
+  }
   for (const key of ['baseRadius','strength','rate']) {
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
   }
@@ -47,7 +54,7 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
     const radius=value.baseRadius*checked.scale[0];
     if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate};
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...(Object.hasOwn(value,'mode')?{mode}: {})};
 }
 
 function normalizeLegacySetup(value) {
@@ -98,7 +105,7 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
   if(sceneEmitters.length>LOCAL_LIQUID_EMITTER_CAPACITY) {
     throw Error(`Local liquid emitter count ${sceneEmitters.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
   }
-  const emitters=sceneEmitters.map((record,index)=>{
+  const emitters=sceneEmitters.filter(record=>record.localLiquidEmitter?.mode!=='finite_drop').map((record,index)=>{
     if(record?.type!==LOCAL_LIQUID_EMITTER_TYPE || typeof record.id!=='string' || !record.id) {
       throw Error(`Invalid local liquid emitter scene object at index ${index}`);
     }
