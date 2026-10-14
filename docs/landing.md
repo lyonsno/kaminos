@@ -1,8 +1,12 @@
 # Landing on main
 
+## Status
+
+Since 2026-10-14 the `tests` workflow is disabled and main has no required check; force pushes and deletions are still refused. In that state this tool cannot get a CI run and is not the landing route: land as `AGENTS.md` says. A CI gate comes back only after a pilot in which lanes land through it in their real work without added overhead. The rest of this page describes the tool for that pilot.
+
 Lanes land by fast-forwarding `main` to their branch tip; there are no pull requests. On 2026-10-13 main went red because a lane pushed a commit to `main` that had never had a green run of the `tests` workflow for that exact commit. `tools/land.mjs` makes that push conditional.
 
-Main is protected by a required status check, `suite`, the job of the `tests` workflow. Only a run triggered by a push satisfies it: a `workflow_dispatch` run for the same commit, green or not, does not, and a push to main of a commit whose only run was dispatched is refused with GH006 "Required status check suite is expected". The tool therefore gets the run by pushing, never by dispatching. A commit whose only run was dispatched needs the tool run again: it pushes the `land/<sha>` ref and gets a push run.
+From 2026-10-13 to 2026-10-14 main was protected by a required status check, `suite`, the job of the `tests` workflow. Only a run triggered by a push satisfied it: a `workflow_dispatch` run for the same commit did not, as GitHub documents, and a push to main of a commit whose only run was dispatched was refused with GH006 "Required status check suite is expected". The tool therefore gets the run by pushing a `land/<sha>` ref, never by dispatching.
 
 ## What it checks
 
