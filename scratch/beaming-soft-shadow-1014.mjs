@@ -9,7 +9,7 @@ const report={status:'running',phase:'source',repoRoot:process.cwd(),origin,erro
 const write=()=>fs.writeFile(out+'/shadow.json',JSON.stringify(report,null,2));await write();let browser;
 try{
  report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
- report.files={};for(const file of ['fire-light-field-shadow.mjs','fire-shadow-filter.mjs']){
+ report.files={};for(const file of ['fire-light-field-shadow.mjs','fire-shadow-filter.mjs','fire-shadow-sampling.mjs']){
   const response=await fetch(origin+'/'+file);assert.equal(response.status,200);
   const bytes=Buffer.from(await response.arrayBuffer()),local=await fs.readFile(file);assert.deepEqual(bytes,local,'wrong serving source');report.files[file]=createHash('sha256').update(bytes).digest('hex');
  }
@@ -36,17 +36,21 @@ try{
   return {backend:renderer.backend.constructor.name,adapter:renderer.backend.device.adapterInfo,shadow:pass.debugState()};
  });
  report.rows=[];
- for(const [name,z,softness] of [['near-hard',2.3,0],['near-soft',2.3,1],['far-hard',4.5,0],['far-soft',4.5,1],['far-restored',4.5,0]]){
+ for(const [name,z,softness,sampling='fixed'] of [['near-hard',2.3,0],['near-soft',2.3,1],['near-complementary',2.3,1,'complementary'],['far-hard',4.5,0],['far-soft',4.5,1],['far-complementary',4.5,1,'complementary'],['far-fixed-restored',4.5,1],['far-restored',4.5,0]]){
   assert.ok(z<report.setup.shadow.far,'fixture receiver must lie inside the rendered cube range');
-  const row=await page.evaluate(async({name,z,softness})=>{
-   const f=window.softShadowFixture;f.plane.position.z=z;f.pass.setSoftness(softness);
+  const row=await page.evaluate(async({name,z,softness,sampling})=>{
+   const f=window.softShadowFixture;f.plane.position.z=z;f.pass.setSoftness(softness);f.pass.setSampling(sampling);
    f.renderer.setRenderTarget(f.target);f.renderer.render(f.probe,f.camera);
    const pixels=await f.renderer.readRenderTargetPixelsAsync(f.target,0,0,256,256);
    if(!(pixels instanceof Float32Array)||pixels.length!==256*256*4||!pixels.every(Number.isFinite))throw Error('invalid native readback');
    f.renderer.setRenderTarget(null);f.renderer.render(f.probe,f.camera);
    const centerRow=Array.from({length:256},(_,i)=>pixels[(128*256+i)*4]);
-   return {name,z,softness,centerRow,partial:centerRow.filter(v=>v>0&&v<1).length,min:Math.min(...centerRow),max:Math.max(...centerRow),shadow:f.pass.debugState()};
-  },{name,z,softness});report.rows.push(row);await write();await page.screenshot({path:out+'/'+name+'.png'});
+   const visibility=Array.from({length:256*256},(_,i)=>pixels[i*4]);
+   return {name,z,softness,sampling,visibility,mean:visibility.reduce((a,b)=>a+b,0)/visibility.length,centerRow,partial:centerRow.filter(v=>v>0&&v<1).length,min:Math.min(...centerRow),max:Math.max(...centerRow),shadow:f.pass.debugState()};
+  },{name,z,softness,sampling});
+  const binary=Buffer.from(new Float32Array(row.visibility).buffer);await fs.writeFile(out+'/'+name+'.f32',binary);
+  row.visibilityHash=createHash('sha256').update(binary).digest('hex');delete row.visibility;
+  report.rows.push(row);await write();await page.screenshot({path:out+'/'+name+'.png'});
  }
  const rows=Object.fromEntries(report.rows.map(r=>[r.name,r]));
  assert.equal(rows['near-hard'].partial,0);assert.equal(rows['far-hard'].partial,0);
@@ -54,6 +58,9 @@ try{
  assert.ok(rows['far-soft'].partial>rows['near-soft'].partial*2,'larger blocker-to-receiver gap must widen penumbra');
  for(const row of report.rows){assert.equal(row.min,0,'preserve opaque umbra');assert.equal(row.max,1,'preserve clear receiver');assert.equal(row.shadow.renderCount,1,'filter must reuse the rendered cube');}
  assert.deepEqual(rows['far-hard'].centerRow,rows['far-restored'].centerRow,'zero softness restores exact hard output');
+ assert.equal(rows['far-soft'].visibilityHash,rows['far-fixed-restored'].visibilityHash,'fixed sampling restores exact full output');
+ assert.notEqual(rows['far-soft'].visibilityHash,rows['far-complementary'].visibilityHash,'actual native shader must change visibility samples');
+ assert.ok(Math.abs(rows['far-soft'].mean-rows['far-complementary'].mean)<.025,'same footprint should preserve integrated visibility within quadrature tolerance');
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.failure={phase:report.phase,message:e.message,stack:e.stack};process.exitCode=1;
  if(browser){const page=browser.contexts()[0]?.pages()[0];await page?.screenshot({path:out+'/failure.png'}).catch(()=>{});}
