@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
+import {radialSoftVisibility,BLOCKER_DISK,FILTER_DISK} from './fire-shadow-filter.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
@@ -26,8 +27,11 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,Ren
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11)}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0}) {
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
+  const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
+  const softness=uniform(validateSoftness(shadowSoftness));
+  if(shadowSoftness>0&&sourceSizeNode===null)throw Error('soft shadows require a source size node');
   const enabled=uniform(requested?1:0),effective=uniform(0);
   const target=new THREE.CubeRenderTarget(resolution,{
     type:THREE.HalfFloatType,format:THREE.RGBAFormat,
@@ -54,16 +58,20 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const direction=delta.div(distance.max(.00001));
   // Bias follows the radial texel footprint, not viewer depth or light gain.
   const bias=distance.mul(2/resolution).max(.001);
-  const shadowSample=cubeTexture(target.texture,direction);
+  const sampleDepth=ray=>{
+  const shadowSample=cubeTexture(target.texture,ray);
   // This cube stores world-space radial distances, not environment radiance.
   // Keep CubeCamera's backend convention but exclude CubeTextureNode's
   // materialEnvRotation (otherwise rotating the HDR rotates solid shadows).
   shadowSample.setupUV=(builder,uvNode)=>builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem
     ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
-  const shadowDistance=shadowSample.r;
-  const visibility=mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective));
+  return shadowSample.r;
+  };
+  const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility});
+  const visibility=mix(float(1),filtered,enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,blockerSamples:BLOCKER_DISK.length,filterSamples:FILTER_DISK.length};
   return {
     visibility,
     resource() {
@@ -108,6 +116,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
       } catch(error) {status.reason=String(error.message);throw error;}
     },
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
+    setSoftness(value) {validateSoftness(value);if(sourceSizeNode===null&&value>0)throw Error('soft shadows require a source size node');softness.value=value;status.shadowSoftness=value;status.filter=value===0?'hard':'radial-pcss';return {...status};},
     debugState:()=>({...status}),
     dispose() {target.dispose();material.dispose();},
   };
