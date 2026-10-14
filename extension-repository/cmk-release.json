@@ -1,0 +1,28 @@
+{
+  "blender_output": [
+    "building: constructional_modeling_kit-0.4.1.zip\ncomplete\ncreated: \"/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/cmk-extension-build-p3_tvxor/constructional_modeling_kit-0.4.1.zip\", 35291",
+    "Success parsing TOML in \"/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/cmk-extension-build-p3_tvxor/constructional_modeling_kit-0.4.1.zip\"",
+    "found 1 packages."
+  ],
+  "effective_blender": "/Applications/Blender.app/Contents/MacOS/Blender",
+  "effective_blender_version": "Blender 5.1.2",
+  "effective_index_url": "http://MacBook-Pro-2.local:8765/index.json",
+  "extension_id": "constructional_modeling_kit",
+  "extension_version": "0.4.1",
+  "failure_phase": null,
+  "index_sha256": "76971aba2e224e5b0e5dd120c4b523ca748263a68e76138eff5dda9bef8fe561",
+  "last_trustworthy_evidence": "receipt-written",
+  "package_admission": "created",
+  "package_filename": "constructional_modeling_kit-0.4.1.zip",
+  "package_payload_sha256": "234458316a7becc48159ee42df02106d165001ed1fedf21433aa9bdfd758bdfa",
+  "package_sha256": "53affd95a61feaad408a80bae6092fc73de77356ee619f78fd59ef6c5539d0fc",
+  "package_size": 35291,
+  "published_at": "2026-08-04T23:40:35.417088+00:00",
+  "repository_dir": "/Users/noahlyons/dev/kaminos/extension-repository",
+  "requested_blender": "/Applications/Blender.app/Contents/MacOS/Blender",
+  "requested_repository_url": "http://MacBook-Pro-2.local:8765/",
+  "schema_version": 1,
+  "source_commit": "087dbaf72ce17a60c7d6129c6c30469ddd307e2c",
+  "source_dir": "/private/tmp/blender-constructional-kit-cmk-painted-attachments-0803/constructional_modeling_kit",
+  "source_dirty": true
+}

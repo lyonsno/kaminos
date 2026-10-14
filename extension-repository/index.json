@@ -1,0 +1,22 @@
+{
+  "version": "v1",
+  "blocklist": [],
+  "data": [
+    {
+      "schema_version": "1.0.0",
+      "id": "constructional_modeling_kit",
+      "name": "Constructional Modeling Kit",
+      "tagline": "Relationship-first anatomy authoring helpers",
+      "version": "0.4.1",
+      "type": "add-on",
+      "maintainer": "Noah Lyons",
+      "license": [
+        "SPDX:GPL-3.0-or-later"
+      ],
+      "blender_version_min": "5.1.0",
+      "archive_url": "./constructional_modeling_kit-0.4.1.zip",
+      "archive_size": 35291,
+      "archive_hash": "sha256:53affd95a61feaad408a80bae6092fc73de77356ee619f78fd59ef6c5539d0fc"
+    }
+  ]
+}
