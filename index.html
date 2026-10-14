@@ -568,6 +568,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <option value="trackpad">Trackpad</option><option value="mouse">Mouse</option>
     </select>
   </label>
+  <div id="viewport-shading" class="viewport-shading" role="group" aria-label="Viewport shading" title="Toggle wireframe (Shift Z)"><button type="button" data-shading="solid" aria-pressed="true">Solid</button><button type="button" data-shading="wireframe" aria-pressed="false">Wire</button></div>
 
   <div class="tab-bar">
     <div class="tab active" data-tab="assets">Assets</div>
@@ -3854,6 +3855,7 @@ import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
+import {createViewportShading} from './viewport-shading.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
@@ -3921,6 +3923,29 @@ function attachViewportGizmo(target) {
 function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
+ for(const button of document.querySelectorAll('#viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
+}
+// Wireframe is a view preference over mesh content. Like Blender's default it
+// is see-through: dark translucent edges without depth writes, so edge density
+// reads as tone and back faces stay visible. Splats, image planes and
+// editor helpers keep their own presentation; fire and water renderers are not
+// mesh materials and are unaffected.
+const VIEWPORT_SHADING_SKIPPED_TYPES=new Set(['splat','image','light',CAMERA_TYPE,FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,'simulation-domain']);
+let viewportShading=null;
+function applyViewportShading() {
+ viewportShading??=createViewportShading({makeWireMaterial:source=>new THREE.MeshBasicMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
+ return viewportShading.apply(sceneObjects.filter(entry=>!VIEWPORT_SHADING_SKIPPED_TYPES.has(entry.type)).map(entry=>entry.object),viewportDisplay.shading);
+}
+for(const button of document.querySelectorAll('#viewport-shading [data-shading]'))button.addEventListener('click',()=>window.kaminosViewportSettings.set({shading:button.dataset.shading}));
+// Witness view: read mesh materials from the live scene, not the shading cache.
+window.kaminosViewportShadingDebugState=()=>{
+ const objects=sceneObjects.map(entry=>{let wire=0,solid=0;entry.object?.traverse?.(o=>{if(!o.isMesh||o.userData?.kaminosEditorOnly||!o.material)return;const m=Array.isArray(o.material)?o.material:[o.material];if(m.every(x=>x.wireframe))wire++;else solid++;});return {id:entry.id,type:entry.type,wireMeshes:wire,solidMeshes:solid};});
+ return {mode:viewportDisplay.shading,aoIntensity:aoIntensity?.value??null,aoToggle:document.getElementById('ao-toggle')?.checked??null,objects};
+};
+// Wire materials do not reach the solid AO depth override, so AO would shade
+// empty space where surfaces used to be.
+function effectiveAOIntensity() {
+ return viewportDisplay.shading==='wireframe'||!document.getElementById('ao-toggle').checked?0:parseFloat(document.getElementById('ao-intensity').value);
 }
 window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
@@ -3930,6 +3955,7 @@ window.kaminosViewportSettings={
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
   if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
   document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
+  applyViewportShading();if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
   syncEditorHelperVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
  },
 };
@@ -6994,7 +7020,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -11469,7 +11495,7 @@ async function initScene() {
     return setupScenePass.call(this, builder);
   };
 
-  aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
+  aoIntensity = uniform(effectiveAOIntensity());
   // Preserve the existing 0..1 look; stronger AO darkens smoothly without negative light.
   const aoVisibility = texture(denoiseResolved.value, screenUV).r.clamp(0, 1);
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
@@ -11902,6 +11928,7 @@ async function initScene() {
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
     const t0 = performance.now();
     updateSelectionFeedback();
+    if (viewportDisplay.shading === 'wireframe') applyViewportShading();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
@@ -12596,7 +12623,7 @@ function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
-    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),shading:byId('viewport-shading'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
@@ -22301,7 +22328,7 @@ for (const key of Object.keys(sceneGISettings)) {
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   if (aoIntensity) {
-    aoIntensity.value = e.target.checked ? parseFloat(document.getElementById('ao-intensity').value) : 0;
+    aoIntensity.value = effectiveAOIntensity();
   }
   window._kaminosDirty?.();
 });
@@ -22316,7 +22343,7 @@ document.getElementById('ao-radius').addEventListener('input', e => {
 document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoIntensity) aoIntensity.value = document.getElementById('ao-toggle').checked ? v : 0;
+  if (aoIntensity) aoIntensity.value = effectiveAOIntensity();
   window._kaminosDirty?.();
 });
 

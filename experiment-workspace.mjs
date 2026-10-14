@@ -4,7 +4,7 @@ import {createControlSlots} from './authoring-workspace.mjs';
 // existing owners. Release these slots before another workspace acquires them.
 export function installExperimentWorkspace({document, title, subtitle, instruments, instrumentTitle=title, instrumentHelp='',
   setup, inspector, investigation=null, detailNodes=[], runNodes=[],
-  sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[]}) {
+  sceneActions, navigation, shading=null, tools, openTool, frame, toolPanels=[], extraPanels=[]}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Tools</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a tool…"><div class="experiment-browser-list"></div></div></details>
@@ -12,7 +12,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
-    <button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
+    <div id="experiment-shading-slot"></div><button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
   toolbar.setAttribute('aria-label','Experiment tools'); toolbar.querySelector('strong').textContent=title;
   const run=make('div','experiment-run-strip',`<span id="experiment-source">Synthetic fluid · loading</span><div id="experiment-run-controls"></div><span id="experiment-clock"></span>`);
   run.setAttribute('aria-label','Simulation run');
@@ -25,7 +25,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   let instrumentSlots=createControlSlots(document,entries);
   let controlsMounted=!!instruments;
   entries.length=0;
-  mount([navigation],'experiment-navigation-slot');mount([sceneActions],'experiment-add-slot');
+  mount([navigation],'experiment-navigation-slot');mount([shading],'experiment-shading-slot');mount([sceneActions],'experiment-add-slot');
   const slots=createControlSlots(document,entries);
   const toolSlots=createControlSlots(document,toolPanels.map(node=>({node,destination:byId("experiment-tool-slot")})));
   const extras=createControlSlots(document,extraPanels);

@@ -230,6 +230,51 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+// Viewport shading: a loaded mesh switches to wire materials from the toolbar
+// toggle, AO is muted while wireframe, and Shift+Z inside the viewport restores
+// solid shading with the AO setting intact.
+async function runViewportWireframeToggleScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-viewport-wireframe-toggle';
+  const meshId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const read = () => evaluate(ws, 'window.kaminosViewportShadingDebugState?.() ?? null');
+  const meshState = state => state?.objects?.find(object => object.id === meshId);
+  const settle = () => evaluate(ws, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 600))))');
+  await settle();
+  const solid = await read();
+  assert.equal(solid?.mode, 'solid', 'viewport did not start in solid shading');
+  assert.ok(meshState(solid)?.solidMeshes > 0 && meshState(solid).wireMeshes === 0, `loaded mesh is not solid at start: ${JSON.stringify(solid)}`);
+  const selectionBefore = await evaluate(ws, 'JSON.stringify(window.kaminosSelection.read().ids)');
+  const solidShot = await capturePngScreenshot(ws, siblingPngPath('-solid'));
+  const wireButton = await evaluate(ws, `(() => { const r = document.querySelector('#viewport-shading [data-shading="wireframe"]')?.getBoundingClientRect(); return r && r.width > 0 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
+  assert.ok(wireButton, 'Wire toggle is missing or not visible in the viewport toolbar');
+  await dispatchMouseClick(ws, wireButton);
+  await settle();
+  const wire = await read();
+  assert.equal(wire.mode, 'wireframe', `Wire toggle did not switch shading: ${JSON.stringify(wire)}`);
+  assert.ok(meshState(wire)?.wireMeshes > 0 && meshState(wire).solidMeshes === 0, `loaded mesh kept solid materials in wireframe: ${JSON.stringify(wire)}`);
+  assert.equal(wire.aoIntensity, 0, 'AO stayed active in wireframe');
+  const pressed = await evaluate(ws, `document.querySelector('#viewport-shading [data-shading="wireframe"]').getAttribute('aria-pressed')`);
+  assert.equal(pressed, 'true', 'Wire toggle does not show pressed state');
+  assert.equal(await evaluate(ws, 'JSON.stringify(window.kaminosSelection.read().ids)'), selectionBefore, 'clicking the shading toggle changed the scene selection');
+  const wireShot = await capturePngScreenshot(ws, siblingPngPath('-wireframe'));
+  const a = decodeScreenshotPngRgb(readFileSync(solidShot.path)), b = decodeScreenshotPngRgb(readFileSync(wireShot.path));
+  let changed = 0;
+  for (let i = 0; i < a.pixels.length; i += a.channels) if (Math.abs(a.pixels[i] - b.pixels[i]) + Math.abs(a.pixels[i + 1] - b.pixels[i + 1]) + Math.abs(a.pixels[i + 2] - b.pixels[i + 2]) > 30) changed++;
+  assert.ok(changed > 2000, `wireframe frame barely differs from solid (${changed} changed pixels)`);
+  const viewport = await evaluate(ws, `(() => { const r = document.getElementById('viewport').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: viewport.x, y: viewport.y });
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyDown', key: 'Z', code: 'KeyZ', modifiers: 8, windowsVirtualKeyCode: 90, nativeVirtualKeyCode: 90 });
+  await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyUp', key: 'Z', code: 'KeyZ', modifiers: 8, windowsVirtualKeyCode: 90, nativeVirtualKeyCode: 90 });
+  await settle();
+  const restored = await read();
+  assert.equal(restored.mode, 'solid', `Shift+Z did not restore solid shading: ${JSON.stringify(restored)}`);
+  assert.ok(meshState(restored)?.solidMeshes > 0 && meshState(restored).wireMeshes === 0, `mesh materials were not restored: ${JSON.stringify(restored)}`);
+  assert.equal(restored.aoIntensity, solid.aoIntensity, 'AO intensity was not restored after wireframe');
+  const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored'));
+  lastEvidence.viewportWireframe = { meshId, solid: meshState(solid), wire: meshState(wire), restored: meshState(restored), aoIntensity: { solid: solid.aoIntensity, wire: wire.aoIntensity, restored: restored.aoIntensity }, changedPixels: changed, shots: [solidShot, wireShot, restoredShot] };
+}
+
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
 // plane and the camera frames all of it at a readable size.
 async function runMeshAssetArrivalScenario(ws) {
@@ -5971,6 +6016,8 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'viewport-wireframe-toggle') {
+    await runViewportWireframeToggleScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {
