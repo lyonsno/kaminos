@@ -30,3 +30,9 @@ export function resolveSceneGIEstimatorSettings(value = {}) {
   for (const key of ['screenSpaceSampling','linearThickness']) if (typeof settings[key] !== 'boolean') throw new Error(`Invalid scene GI ${key}`);
   return settings;
 }
+
+// Scene files, UI edits and agent calls share one complete settings shape.
+// Older scenes omit estimator and receive the established defaults.
+export function resolveSceneGIControlState(value = {}) {
+  return {...resolveSceneGISettings(value), estimator:resolveSceneGIEstimatorSettings(value.estimator)};
+}
