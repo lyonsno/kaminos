@@ -1,0 +1,564 @@
+// Notes in the page: say something on the thing you mean, address it to an
+// agent by name, and read the answers where you are looking. The session
+// (createNotesSession) is separate from the DOM (installNotes) so it can be
+// tested without a browser. See docs/notes.md.
+import {checkedPost, foldNotes, formatRef, notesFor, parseAddressees} from './notes-core.mjs';
+
+const MENTION = /(^|[\s(,;])@([a-z0-9][a-z0-9._-]{0,63})/gi;
+export const mentionsIn = text => [...new Set([...String(text ?? '').matchAll(MENTION)].map(match => match[2].toLowerCase()))];
+
+const walk = (note, visit) => { visit(note); for (const reply of note.replies) walk(reply, visit); };
+const latestSeq = note => { let seq = note.seq; walk(note, item => { seq = Math.max(seq, item.seq); }); return seq; };
+const involves = (note, name) => { let found = false; walk(note, item => { if (item.author === name || (item.recipients ?? []).includes(name)) found = true; }); return found; };
+
+export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
+  href = () => '', title = () => ''}) {
+  let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
+  const known = new Set(), subscribers = new Set();
+  const changed = () => { for (const subscriber of subscribers) subscriber(); };
+  const entryOf = id => entries().find(entry => entry.id === id) ?? null;
+  const selectedIds = () => {
+    const current = selection() ?? {};
+    return (current.memberIds?.length ? current.memberIds : current.ids ?? []).filter(id => !String(id).startsWith('@group:'));
+  };
+
+  function anchorFromSelection() {
+    const current = selection() ?? {};
+    const ids = selectedIds();
+    const id = current.activeId && entryOf(current.activeId) ? current.activeId : ids.find(entryOf);
+    const entry = id ? entryOf(id) : null;
+    return entry ? {kind: 'object', id: entry.id, label: entry.label || entry.fileName || entry.id} : {kind: 'scene'};
+  }
+
+  async function picture() {
+    try {
+      const shot = await capture();
+      if (shot?.blank) return {issue: 'The picture came back as one flat color, so none is attached'};
+      if (typeof shot?.image === 'string') return {picture: {dataUrl: shot.image}};
+      return {issue: 'No picture was available'};
+    } catch (error) {
+      return {issue: `No picture: ${error.message}`};
+    }
+  }
+
+  async function post({text = '', to = '', parent = null, kind = 'note', attachPicture = parent === null} = {}) {
+    const current = selection() ?? {};
+    const context = {view: readView(), selection: {ids: selectedIds(), activeId: current.activeId ?? null}, page: {href: href(), title: title()}};
+    const shot = attachPicture ? await picture() : {};
+    if (shot.issue) context.pictureIssue = shot.issue;
+    const content = checkedPost({kind, text, to: [...new Set([...parseAddressees(to), ...mentionsIn(text)])], parent,
+      anchor: parent ? undefined : anchorFromSelection(), subject: {scene: sceneFile() || null}, context, picture: shot.picture ?? null});
+    return transport.post(content);
+  }
+
+  return {
+    get author() { return author; },
+    get state() { return folded; },
+    get presence() { return presence; },
+    onChange(subscriber) { subscribers.add(subscriber); return () => subscribers.delete(subscriber); },
+    anchorFromSelection,
+    post,
+    async copyRef() {
+      const note = await post({kind: 'ref'});
+      return {note, text: formatRef(note)};
+    },
+    hello(payload) {
+      author = payload.author;
+      // Everything up to the stream's starting point is backlog, not news.
+      liveAfter = Math.max(Number(payload.lastSeq) || 0, maxKnown);
+      changed();
+    },
+    receive(batch) {
+      const fresh = batch.filter(event => !known.has(event.seq));
+      if (!fresh.length) return [];
+      for (const event of fresh) { known.add(event.seq); maxKnown = Math.max(maxKnown, event.seq); }
+      events = [...events, ...fresh].sort((a, b) => a.seq - b.seq);
+      folded = foldNotes(events);
+      const notices = !author ? [] : fresh
+        .filter(event => event.seq > liveAfter && event.type === 'note' && event.kind !== 'ref'
+          && event.author !== author && (event.recipients ?? []).includes(author))
+        .map(event => folded.notes.get(event.id)).filter(Boolean);
+      changed();
+      return notices;
+    },
+    setPresence(next) { presence = next; changed(); },
+    unread() { return author ? notesFor(folded, author, {unseen: true}) : []; },
+    threads() {
+      const scene = sceneFile() || null;
+      return folded.threads
+        .filter(note => note.kind !== 'ref' && ((note.subject?.scene ?? null) === scene || (author && involves(note, author))))
+        .sort((a, b) => Number(a.resolved) - Number(b.resolved) || latestSeq(b) - latestSeq(a));
+    },
+    async markSeen(threadId) {
+      const root = folded.notes.get(threadId);
+      if (!root || !author) return null;
+      const ids = [];
+      walk(root, note => { if ((note.recipients ?? []).includes(author) && !note.receipts.seen[author]) ids.push(note.id); });
+      return ids.length ? transport.receipt({type: 'seen', notes: ids}) : null;
+    },
+    setResolved(threadId, resolved) { return transport.receipt({type: resolved ? 'resolved' : 'reopened', notes: [threadId]}); },
+    goTo(noteId) {
+      const note = folded.notes.get(noteId);
+      if (!note) return {found: false};
+      const root = folded.notes.get(note.thread) ?? note;
+      const view = root.context?.view;
+      if (view) writeView(view);
+      const object = root.anchor?.kind === 'object' ? root.anchor.id : null;
+      const present = object ? !!entryOf(object) : false;
+      if (present) select(object);
+      return {found: true, viewRestored: !!view, object, present};
+    },
+  };
+}
+
+// --- DOM -------------------------------------------------------------------
+
+const STYLE = `
+.kn-root{position:absolute;inset:0;pointer-events:none;z-index:40;font:12px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#e0e0e0}
+.kn-root button{font:inherit}
+.kn-toggle{position:absolute;right:12px;bottom:30px;pointer-events:auto;padding:5px 10px;border:1px solid #3a4245;border-radius:6px;background:rgba(16,20,22,.94);color:#cfd8dc;cursor:pointer;box-shadow:0 4px 18px #0008}
+.kn-toggle[data-unread]:not([data-unread="0"]){border-color:#f0d28a;color:#f0d28a}
+.kn-drawer{position:absolute;top:52px;right:12px;bottom:58px;width:min(380px,calc(100% - 24px));display:flex;flex-direction:column;pointer-events:auto;border:1px solid #3a4245;border-radius:8px;background:rgba(16,20,22,.97);box-shadow:0 8px 28px #000a;overflow:hidden}
+.kn-drawer[hidden]{display:none}
+.kn-head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #2a3033}
+.kn-head strong{font-size:12px}
+.kn-listening{flex:1;min-width:0;color:#8fa3a8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kn-close{border:0;background:none;color:#8fa3a8;cursor:pointer;font-size:14px}
+.kn-compose{display:flex;flex-direction:column;gap:6px;padding:10px;border-bottom:1px solid #2a3033}
+.kn-anchor{font-size:11px;color:#9fe6bd}
+.kn-compose input,.kn-compose textarea,.kn-replybox textarea{box-sizing:border-box;width:100%;padding:6px 8px;border:1px solid #333;border-radius:5px;background:#151a1c;color:#e0e0e0;font:inherit}
+.kn-compose textarea{min-height:56px;resize:vertical}
+.kn-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kn-row label{display:flex;align-items:center;gap:4px;color:#9aa5a8;font-size:11px;margin-right:auto;white-space:nowrap;flex-shrink:0}
+.kn-btn{padding:4px 10px;border:1px solid #3a4245;border-radius:5px;background:#202628;color:#cfd8dc;cursor:pointer;font-size:11px}
+.kn-btn.primary{border-color:#3e7f73;background:#1d3a35;color:#bff3e4}
+.kn-btn:disabled{opacity:.5;cursor:default}
+.kn-status{min-height:14px;color:#8fa3a8;font-size:10px}
+.kn-status[data-tone="error"]{color:#f29b8b}
+.kn-threads{flex:1;overflow-y:auto;padding:6px 10px 12px}
+.kn-empty{color:#7c878a;padding:12px 0;font-size:11px}
+.kn-thread{border:1px solid #2a3033;border-radius:6px;margin:8px 0;padding:8px;background:#151a1c}
+.kn-thread[data-resolved="true"]{opacity:.6}
+.kn-thread[data-focus="true"]{border-color:#5fd3c8}
+.kn-on{font-size:10px;color:#9fe6bd;margin-bottom:4px}
+.kn-note{margin:4px 0}
+.kn-replies{margin-left:10px;padding-left:8px;border-left:2px solid #2f3a3d}
+.kn-meta{font-size:10px;color:#8fa3a8}
+.kn-meta b{color:#cfd8dc;font-weight:600}
+.kn-meta .kn-agent{color:#5fd3c8}
+.kn-text{white-space:pre-wrap;word-break:break-word;margin:2px 0;font-size:12px;line-height:1.35}
+.kn-pic{display:block;max-width:100%;max-height:150px;margin:4px 0;border:1px solid #2a3033;border-radius:4px;cursor:zoom-in}
+.kn-receipts{font-size:10px;color:#7c878a}
+.kn-unread{color:#f0d28a}
+.kn-actions{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.kn-replybox{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.kn-replybox[hidden]{display:none}
+.kn-pins{position:absolute;inset:0;overflow:hidden}
+.kn-pin{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;min-width:18px;height:18px;padding:0 5px;border:1px solid #5fd3c8;border-radius:9px 9px 9px 2px;background:rgba(16,20,22,.92);color:#bff3e4;font-size:10px;line-height:16px;cursor:pointer;box-shadow:0 2px 8px #000a}
+.kn-pin[data-unread="true"]{border-color:#f0d28a;color:#f0d28a}
+.kn-toasts{position:absolute;top:52px;left:12px;max-width:max(220px,calc(100% - 430px));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.kn-toast{pointer-events:auto;max-width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #f0d28a;border-radius:6px;background:rgba(16,20,22,.97);color:#f3e2b3;cursor:pointer;box-shadow:0 6px 22px #000b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+`;
+
+const randomPageId = window => `page-${(window.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`).replace(/[^A-Za-z0-9_-]/g, '')}`;
+
+function element(document, tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// A picture of what the person sees, flagged when it is one flat color.
+export async function capturePicture({capture, document}) {
+  const shot = await capture();
+  const image = new Image();
+  image.src = shot.image;
+  await image.decode();
+  const probe = document.createElement('canvas');
+  probe.width = probe.height = 24;
+  const context = probe.getContext('2d', {willReadFrequently: true});
+  context.drawImage(image, 0, 0, 24, 24);
+  const data = context.getImageData(0, 0, 24, 24).data;
+  let blank = true;
+  for (let index = 4; index < data.length && blank; index += 4) {
+    for (let channel = 0; channel < 3; channel++) if (Math.abs(data[index + channel] - data[channel]) > 3) { blank = false; break; }
+  }
+  return {...shot, blank};
+}
+
+/**
+ * Join notes to the running application. `entries()` returns live scene
+ * entries `{id,label,fileName,type,object}`; `selection()` returns
+ * `{ids,memberIds,activeId}`; `capture()` resolves to `{image,width,height}`
+ * of what the viewport shows.
+ */
+export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
+  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null}) {
+  if (!document.getElementById('kaminos-notes-style')) {
+    const style = element(document, 'style');
+    style.id = 'kaminos-notes-style';
+    style.textContent = STYLE;
+    document.head.append(style);
+  }
+  const pageId = randomPageId(window);
+  const transport = {token: null};
+  const send = async (path, body) => {
+    const response = await window.fetch(path, {method: 'POST', body: JSON.stringify(body),
+      headers: {'Content-Type': 'application/json', 'X-Kaminos-Notes-Page': pageId, 'X-Kaminos-Notes-Token': transport.token ?? ''}});
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error || `Notes request failed (${response.status})`);
+    return data;
+  };
+  transport.post = body => send(endpoint, body);
+  transport.receipt = body => send(`${endpoint}/receipt`, body);
+  const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
+    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title});
+
+  // --- structure ---
+  const root = element(document, 'div', 'kn-root');
+  root.dataset.vantageIgnore = '';
+  root.dataset.kaminosNotes = pageId;
+  const pins = element(document, 'div', 'kn-pins');
+  const toasts = element(document, 'div', 'kn-toasts');
+  const toggle = element(document, 'button', 'kn-toggle', 'Notes');
+  toggle.type = 'button';
+  toggle.title = 'Notes on this scene (Shift+N)';
+  toggle.setAttribute('aria-expanded', 'false');
+  const drawer = element(document, 'aside', 'kn-drawer');
+  drawer.hidden = true;
+  drawer.setAttribute('aria-label', 'Notes');
+  const head = element(document, 'div', 'kn-head');
+  const listening = element(document, 'span', 'kn-listening');
+  const close = element(document, 'button', 'kn-close', '×');
+  close.type = 'button';
+  close.setAttribute('aria-label', 'Close notes');
+  head.append(element(document, 'strong', '', 'Notes'), listening, close);
+  const compose = element(document, 'div', 'kn-compose');
+  const anchorLine = element(document, 'div', 'kn-anchor');
+  const to = element(document, 'input');
+  to.placeholder = 'To: @name (agents listening are named above)';
+  to.setAttribute('aria-label', 'Address to');
+  to.setAttribute('list', `kn-names-${pageId}`);
+  const names = element(document, 'datalist');
+  names.id = `kn-names-${pageId}`;
+  const text = element(document, 'textarea');
+  text.placeholder = 'Say what you see. @name reaches an agent.';
+  text.setAttribute('aria-label', 'Note');
+  const row = element(document, 'div', 'kn-row');
+  const attachLabel = element(document, 'label');
+  const attach = element(document, 'input');
+  attach.type = 'checkbox';
+  attach.checked = true;
+  attachLabel.append(attach, document.createTextNode('attach what I see'));
+  const postButton = element(document, 'button', 'kn-btn primary', 'Post');
+  postButton.type = 'button';
+  const refButton = element(document, 'button', 'kn-btn', 'Copy ref');
+  refButton.type = 'button';
+  refButton.title = 'Copy a reference to paste into a terminal conversation';
+  row.append(attachLabel, refButton, postButton);
+  const status = element(document, 'div', 'kn-status');
+  status.setAttribute('role', 'status');
+  compose.append(anchorLine, to, names, text, row, status);
+  const threads = element(document, 'div', 'kn-threads');
+  drawer.append(head, compose, threads);
+  root.append(pins, toasts, toggle, drawer);
+  viewport.append(root);
+  // The notes sit inside the viewport: a click, drag or scroll on them is not a
+  // click on empty scene (which would clear the selection) or a camera gesture,
+  // and typing in them is not an editor hotkey.
+  for (const surface of [pins, toasts, toggle, drawer]) {
+    for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'wheel']) {
+      surface.addEventListener(type, event => event.stopPropagation());
+    }
+  }
+  for (const type of ['keydown', 'keyup', 'keypress']) {
+    drawer.addEventListener(type, event => { if (event.target.closest?.('input,textarea')) event.stopPropagation(); });
+  }
+
+  let focusThread = null;
+  const openReplies = new Set();
+  const say = (message, tone = '') => { status.textContent = message; status.dataset.tone = tone; };
+  const anchorText = anchor => anchor?.kind === 'object' ? `"${anchor.label}"` : 'the scene';
+  const refreshAnchor = () => { anchorLine.textContent = `On ${anchorText(session.anchorFromSelection())}`; };
+
+  const listeningNames = () => (session.presence.listeners ?? []).filter(row => row.waiting).map(row => row.name);
+  const pageAuthors = () => (session.presence.pages ?? []).map(page => page.author);
+  // Agents listen through tools/notes.mjs wait; people read in an open page.
+  const deliveryText = note => (note.recipients ?? []).map(name => {
+    if (note.receipts.seen[name]) return `${name}: seen`;
+    if (note.receipts.delivered[name]) return `${name}: delivered`;
+    if (listeningNames().includes(name)) return `${name}: listening`;
+    if (pageAuthors().includes(name)) return `${name}: page open`;
+    return `${name}: not seen yet`;
+  }).join(' \u00b7 ');
+
+  function noteNode(note, depth) {
+    const node = element(document, 'div', 'kn-note');
+    const meta = element(document, 'div', 'kn-meta');
+    const who = element(document, 'b', note.via === 'page' ? '' : 'kn-agent', note.author);
+    meta.append(who, document.createTextNode(` · ${new Date(note.at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`));
+    if (session.author && (note.recipients ?? []).includes(session.author) && !note.receipts.seen[session.author]) {
+      meta.append(element(document, 'span', 'kn-unread', ' · new'));
+    }
+    node.append(meta);
+    if (note.text) node.append(element(document, 'div', 'kn-text', note.text));
+    if (note.picture) {
+      const picture = element(document, 'img', 'kn-pic');
+      picture.alt = `Picture with ${note.author}'s note`;
+      picture.src = `${endpoint}/picture?note=${encodeURIComponent(note.id)}`;
+      picture.addEventListener('click', () => window.open(picture.src, '_blank', 'noopener'));
+      node.append(picture);
+    }
+    if (note.context?.pictureIssue) node.append(element(document, 'div', 'kn-receipts', note.context.pictureIssue));
+    const receipts = deliveryText(note);
+    if (receipts) node.append(element(document, 'div', 'kn-receipts', `to ${receipts}`));
+    if (note.replies.length) {
+      const replies = element(document, 'div', 'kn-replies');
+      for (const reply of note.replies) replies.append(noteNode(reply, depth + 1));
+      node.append(replies);
+    }
+    return node;
+  }
+
+  function threadNode(note) {
+    const card = element(document, 'div', 'kn-thread');
+    card.dataset.thread = note.id;
+    card.dataset.resolved = String(note.resolved);
+    card.dataset.focus = String(note.id === focusThread);
+    const on = element(document, 'div', 'kn-on', `On ${anchorText(note.anchor)}${note.subject?.scene && note.subject.scene !== (sceneFile() || null) ? ` in ${note.subject.scene}` : ''}`);
+    card.append(on, noteNode(note, 0));
+    const actions = element(document, 'div', 'kn-actions');
+    const button = (label, handler, title) => {
+      const control = element(document, 'button', 'kn-btn', label);
+      control.type = 'button';
+      if (title) control.title = title;
+      control.addEventListener('click', () => Promise.resolve().then(handler).catch(error => say(error.message, 'error')));
+      actions.append(control);
+      return control;
+    };
+    button('Reply', () => { openReplies.add(note.id); render(); card.ownerDocument.querySelector(`[data-reply-for="${note.id}"] textarea`)?.focus(); });
+    button('Go to', () => {
+      const result = session.goTo(note.id);
+      redraw();
+      say(result.object && !result.present ? `"${note.anchor.label}" is no longer in this scene; restored the view only` : 'Restored the view this note was written from');
+    }, 'Restore the view and selection the note was written from');
+    button(note.resolved ? 'Reopen' : 'Resolve', () => session.setResolved(note.id, !note.resolved));
+    button('Copy ref', async () => {
+      await window.navigator.clipboard.writeText(formatRef(note));
+      say(`Copied a reference to ${note.id}`);
+    });
+    card.append(actions);
+    const box = element(document, 'div', 'kn-replybox');
+    box.dataset.replyFor = note.id;
+    box.hidden = !openReplies.has(note.id);
+    const reply = element(document, 'textarea');
+    reply.placeholder = 'Reply. @name brings someone else in.';
+    reply.setAttribute('aria-label', 'Reply');
+    const replyRow = element(document, 'div', 'kn-row');
+    const replyAttachLabel = element(document, 'label');
+    const replyAttach = element(document, 'input');
+    replyAttach.type = 'checkbox';
+    replyAttachLabel.append(replyAttach, document.createTextNode('attach what I see'));
+    const send = element(document, 'button', 'kn-btn primary', 'Send');
+    send.type = 'button';
+    const submit = async () => {
+      if (!reply.value.trim() && !replyAttach.checked) return;
+      send.disabled = true;
+      try {
+        const target = note.replies.length ? latestNoteIn(note) : note;
+        await session.post({text: reply.value, parent: target.id, attachPicture: replyAttach.checked});
+        reply.value = '';
+        openReplies.delete(note.id);
+        say('Reply sent');
+      } catch (error) {
+        say(error.message, 'error');
+      } finally {
+        send.disabled = false;
+      }
+    };
+    send.addEventListener('click', submit);
+    reply.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } });
+    replyRow.append(replyAttachLabel, send);
+    box.append(reply, replyRow);
+    card.append(box);
+    return card;
+  }
+
+  const latestNoteIn = note => { let latest = note; walk(note, item => { if (item.seq > latest.seq) latest = item; }); return latest; };
+
+  function render() {
+    const unread = session.unread().length;
+    toggle.textContent = unread ? `Notes · ${unread} new` : 'Notes';
+    toggle.dataset.unread = String(unread);
+    const waiting = listeningNames();
+    listening.textContent = waiting.length ? `listening: ${waiting.join(', ')}` : 'no agent is listening right now';
+    names.replaceChildren(...[...new Set([...waiting, ...[...session.state.notes.values()].flatMap(note => [note.author, ...(note.recipients ?? [])])])]
+      .filter(name => name !== session.author).map(name => { const option = element(document, 'option'); option.value = `@${name}`; return option; }));
+    refreshAnchor();
+    if (!drawer.hidden) {
+      const scroll = threads.scrollTop;
+      const drafts = new Map([...threads.querySelectorAll('[data-reply-for]')].map(box => [box.dataset.replyFor, box.querySelector('textarea').value]));
+      const list = session.threads();
+      threads.replaceChildren(...(list.length ? list.map(threadNode) : [element(document, 'div', 'kn-empty', 'No notes on this scene yet. Select something and say what you see.')]));
+      for (const [id, value] of drafts) { const box = threads.querySelector(`[data-reply-for="${id}"] textarea`); if (box) box.value = value; }
+      threads.scrollTop = scroll;
+    }
+  }
+
+  function openDrawer({thread = null, composeFocus = false} = {}) {
+    drawer.hidden = false;
+    toggle.setAttribute('aria-expanded', 'true');
+    if (thread) focusThread = thread;
+    render();
+    if (thread) {
+      threads.querySelector(`[data-thread="${thread}"]`)?.scrollIntoView({block: 'nearest'});
+      session.markSeen(thread).catch(error => say(error.message, 'error'));
+    }
+    if (composeFocus) text.focus();
+  }
+  const closeDrawer = () => { drawer.hidden = true; toggle.setAttribute('aria-expanded', 'false'); focusThread = null; };
+
+  toggle.addEventListener('click', () => (drawer.hidden ? openDrawer({composeFocus: true}) : closeDrawer()));
+  close.addEventListener('click', closeDrawer);
+  drawer.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); closeDrawer(); } });
+  const postNote = async () => {
+    postButton.disabled = true;
+    say('Posting…');
+    try {
+      const note = await session.post({text: text.value, to: to.value, attachPicture: attach.checked});
+      text.value = '';
+      focusThread = note.id;
+      const waiting = listeningNames();
+      const reach = note.recipients.length
+        ? note.recipients.map(name => `${name} ${waiting.includes(name) ? 'is listening' : 'will see it at its next check'}`).join('; ')
+        : 'not addressed: anyone reading this scene will see it';
+      say(`Posted ${note.id}. ${reach}.`);
+    } catch (error) {
+      say(error.message, 'error');
+    } finally {
+      postButton.disabled = false;
+    }
+  };
+  postButton.addEventListener('click', postNote);
+  text.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); postNote(); } });
+  refButton.addEventListener('click', async () => {
+    refButton.disabled = true;
+    try {
+      const {note, text: copied} = await session.copyRef();
+      await window.navigator.clipboard.writeText(copied);
+      say(`Copied ${note.id}: paste it into the conversation you're having.`);
+    } catch (error) {
+      say(error.message, 'error');
+    } finally {
+      refButton.disabled = false;
+    }
+  });
+  const onKey = event => {
+    if (event.defaultPrevented || event.repeat || event.target.closest?.('input,textarea,select,[contenteditable="true"]')) return;
+    if (event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey && event.code === 'KeyN') {
+      event.preventDefault();
+      openDrawer({composeFocus: true});
+    }
+  };
+  document.addEventListener('keydown', onKey);
+
+  function toast(note) {
+    const root = session.state.notes.get(note.thread) ?? note;
+    const item = element(document, 'div', 'kn-toast', `${note.author}${note.parent ? ' replied' : ''} on ${anchorText(root.anchor)}: ${note.text || '(picture)'}`);
+    item.setAttribute('role', 'status');
+    item.addEventListener('click', () => { item.remove(); openDrawer({thread: root.id}); });
+    toasts.append(item);
+    window.setTimeout(() => item.remove(), 9000);
+  }
+
+  // --- pins over noted objects ---
+  const box = new THREE.Box3(), point = new THREE.Vector3();
+  let frame = 0, placedAt = -Infinity;
+  // About fifteen times a second: pins follow the camera without costing a frame.
+  function placePins(now) {
+    frame = window.requestAnimationFrame(placePins);
+    if (now - placedAt < 66) return;
+    placedAt = now;
+    const width = viewport.clientWidth, height = viewport.clientHeight;
+    const byObject = new Map();
+    for (const note of session.threads()) {
+      if (note.resolved || note.anchor?.kind !== 'object') continue;
+      const list = byObject.get(note.anchor.id) ?? [];
+      list.push(note);
+      byObject.set(note.anchor.id, list);
+    }
+    const keep = new Set();
+    for (const [id, notes] of byObject) {
+      const entry = entries().find(item => item.id === id);
+      if (!entry?.object) continue;
+      box.setFromObject(entry.object);
+      if (box.isEmpty()) continue;
+      box.getCenter(point);
+      point.y = box.max.y;
+      point.project(camera);
+      if (point.z < -1 || point.z > 1 || Math.abs(point.x) > 1.05 || Math.abs(point.y) > 1.05) continue;
+      keep.add(id);
+      let pin = pins.querySelector(`[data-pin="${CSS.escape(id)}"]`);
+      if (!pin) {
+        pin = element(document, 'button', 'kn-pin');
+        pin.type = 'button';
+        pin.dataset.pin = id;
+        pin.addEventListener('click', () => {
+          const current = session.threads().filter(note => note.anchor?.id === id && !note.resolved);
+          if (current.length) openDrawer({thread: current[0].id});
+        });
+        pins.append(pin);
+      }
+      const unread = session.author ? notes.some(note => { let found = false; walk(note, item => { if ((item.recipients ?? []).includes(session.author) && !item.receipts.seen[session.author]) found = true; }); return found; }) : false;
+      pin.textContent = String(notes.length);
+      pin.title = `${notes.length} note${notes.length === 1 ? '' : 's'} on "${entry.label || id}"`;
+      pin.dataset.unread = String(unread);
+      pin.style.left = `${((point.x + 1) / 2) * width}px`;
+      pin.style.top = `${((1 - point.y) / 2) * height}px`;
+    }
+    for (const pin of [...pins.children]) if (!keep.has(pin.dataset.pin)) pin.remove();
+  }
+  frame = window.requestAnimationFrame(placePins);
+
+  // --- the live link ---
+  let linked = linkedNote;
+  const source = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=0`);
+  source.addEventListener('hello', event => {
+    const hello = JSON.parse(event.data);
+    transport.token = hello.token;
+    session.hello(hello);
+    if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
+  });
+  source.addEventListener('events', event => {
+    const notices = session.receive(JSON.parse(event.data).events);
+    for (const note of notices) toast(note);
+    if (linked && session.state.notes.has(linked)) {
+      const note = session.state.notes.get(linked);
+      linked = null;
+      openDrawer({thread: note.thread});
+      session.goTo(note.id);
+      redraw();
+    }
+  });
+  source.addEventListener('presence', event => session.setPresence(JSON.parse(event.data)));
+  source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
+  const unsubscribe = session.onChange(render);
+  const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) refreshAnchor(); }, 500);
+  render();
+
+  return {
+    pageId,
+    session,
+    open: thread => openDrawer({thread}),
+    compose: () => openDrawer({composeFocus: true}),
+    dispose() {
+      source.close();
+      unsubscribe();
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(refreshOnSelection);
+      document.removeEventListener('keydown', onKey);
+      root.remove();
+    },
+  };
+}

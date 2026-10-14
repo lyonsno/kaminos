@@ -3841,6 +3841,7 @@ import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-came
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
+import {installNotes} from './notes-panel.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
@@ -12005,6 +12006,21 @@ async function initScene() {
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
   };
+  // Notes: say something on the thing you mean and get answers where you look
+  // (notes-panel.mjs, tools/notes.mjs, docs/notes.md). ?notes=0 leaves them off.
+  const pageQuery=new URLSearchParams(location.search);
+  if(pageQuery.get('notes')!=='0'){
+    try{
+      // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
+      const captureForNotes=async()=>{window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition?volumePrototype?.canvasElement?.()??null:null,document,label:'note'});};
+      const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
+        selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
+        readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
+        sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),linkedNote:pageQuery.get('note')});
+      window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
+    }catch(error){console.error('Notes unavailable',error);}
+  }
   animate();
 }
 
