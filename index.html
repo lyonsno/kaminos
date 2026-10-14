@@ -3840,6 +3840,7 @@ import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
+import {installAgentVantage} from './agent-vantage.mjs';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
@@ -12005,6 +12006,29 @@ async function initScene() {
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
   };
+  // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
+  // ?vantage=0 leaves the terminal link closed.
+  const vantageBusy=()=>authoringBusy?'A scene document action is running':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
+  // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
+  const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
+    const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,controlsEnabled=controls.enabled,keep=object=>{if(object)hidden.push([object,object.visible]);};
+    if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);}
+    for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
+    if(all){if(helper)helper.visible=false;selectionCaptureSuspended=true;selectionFeedback?.suspend(true);for(const box of selectionBoxes.values())box.visible=false;}
+    for(const [object] of hidden)object.visible=false;
+    controls.enabled=false;
+    return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}controls.enabled=controlsEnabled;window._kaminosDirty?.();};
+  };
+  const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.();return {sceneFrameCount,volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
+  const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
+  try{
+    const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>sceneObjects,
+      selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
+      viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,suspendEditorDrawing:suspendEditorDrawingForVantage,
+      redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
+      link:new URLSearchParams(location.search).get('vantage')!=='0'});
+    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
+  }catch(error){console.error('Agent vantage unavailable',error);}
   animate();
 }
 

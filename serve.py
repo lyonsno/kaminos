@@ -11,6 +11,8 @@ import math
 import os
 import queue
 import re
+import select
+import socket
 import socketserver
 import subprocess
 import sys
@@ -22,7 +24,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
+from agent_vantage_bridge import VANTAGE_SCHEMA, LinkClosed, VantageBroker, VantageError
+
 PORT = 8090
+VANTAGE = VantageBroker()
 ROOT = Path(__file__).parent.resolve()
 
 
@@ -3471,6 +3476,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_job_output(parse_qs(parsed.query))
         elif parsed.path == "/api/delete-scene":
             self.handle_delete_scene(parse_qs(parsed.query))
+        elif parsed.path == "/api/vantage/link":
+            self.handle_vantage_link(parse_qs(parsed.query))
+        elif parsed.path == "/api/vantage/pages":
+            self.handle_vantage_pages()
         else:
             super().do_GET()
 
@@ -3506,11 +3515,148 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_volume_cockpit_layouts_post()
         elif parsed.path == "/api/volume-cockpit-layout-activation":
             self.handle_volume_cockpit_layout_activation_post()
+        elif parsed.path == "/api/vantage/command":
+            self.handle_vantage_command()
+        elif parsed.path == "/api/vantage/reply":
+            self.handle_vantage_reply()
+        elif parsed.path == "/api/vantage/presence":
+            self.handle_vantage_presence()
         else:
             self.send_json({"error": "Not found"}, 404)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
+
+    # The agent vantage drives a live page and returns its pictures, so it
+    # answers only this machine at its own address: local tools without an
+    # Origin, or this server's own pages. JSON bodies force a CORS preflight on
+    # any cross-site attempt.
+    def _vantage_allowed(self):
+        port = self.server.server_address[1]
+
+        def same_machine(value):
+            parsed = urlparse(value if "//" in value else f"//{value}")
+            try:
+                return parsed.hostname in ("127.0.0.1", "localhost", "::1") and parsed.port == port
+            except ValueError:
+                return False
+
+        client = (getattr(self, "client_address", None) or ("",))[0]
+        if client not in ("127.0.0.1", "::1", "::ffff:127.0.0.1"):
+            reason = "The agent vantage only answers this machine"
+        elif not same_machine(self.headers.get("Host") or ""):
+            reason = "The agent vantage only answers its own local address"
+        elif self.headers.get("Origin") and not same_machine(self.headers["Origin"]):
+            reason = "The agent vantage does not answer other sites"
+        else:
+            return True
+        self.send_json({"ok": False, "phase": "forbidden", "error": reason}, 403)
+        return False
+
+    def _vantage_body(self):
+        if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+            self.send_json({"ok": False, "phase": "request", "error": "Send vantage requests as application/json"}, 415)
+            return None
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(length)) if 0 < length <= 256 * 1024 * 1024 else None
+        except ValueError:
+            body = None
+        if not isinstance(body, dict):
+            self.send_json({"ok": False, "phase": "request", "error": "Vantage requests need a JSON object body"}, 400)
+            return None
+        return body
+
+    def _vantage_peer_closed(self):
+        try:
+            readable, _, _ = select.select([self.connection], [], [], 0)
+            return bool(readable) and self.connection.recv(1, socket.MSG_PEEK) == b""
+        except OSError:
+            return True
+
+    def handle_vantage_pages(self):
+        if self._vantage_allowed():
+            self.send_json({"schema": VANTAGE_SCHEMA, "pages": VANTAGE.pages()})
+
+    def handle_vantage_link(self, query):
+        if not self._vantage_allowed():
+            return
+        first = lambda key: query.get(key, [None])[0]
+        try:
+            link = VANTAGE.attach(first("page"), {
+                "href": first("href"), "title": first("title"),
+                "visible": first("visible") == "1", "focused": first("focused") == "1",
+            })
+        except VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        self.close_connection = True
+        message = None
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"retry: 2000\n\n")
+            self.wfile.flush()
+            quiet_since = time.monotonic()
+            while True:
+                message = VANTAGE.next_message(link, 1.0)
+                if message is not None:
+                    data = json.dumps(message, separators=(",", ":"))
+                    self.wfile.write(f"id: {message['id']}\nevent: command\ndata: {data}\n\n".encode())
+                elif self._vantage_peer_closed():
+                    break
+                elif time.monotonic() - quiet_since >= VANTAGE.heartbeat:
+                    self.wfile.write(b": keepalive\n\n")
+                else:
+                    continue
+                self.wfile.flush()
+                message = None
+                quiet_since = time.monotonic()
+        except LinkClosed:
+            pass
+        except OSError:
+            if message is not None:
+                VANTAGE.undeliverable(message)
+        finally:
+            VANTAGE.detach(link)
+
+    def handle_vantage_presence(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            known = VANTAGE.presence(str(body.get("page") or ""), body)
+            self.send_json({"ok": known}, 200 if known else 404)
+
+    def handle_vantage_reply(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            accepted = VANTAGE.reply(str(body.get("page") or ""), str(body.get("id") or ""), body)
+            self.send_json({"ok": accepted}, 200 if accepted else 410)
+
+    def handle_vantage_command(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is None:
+            return
+        timeout_ms = body.get("timeoutMs", 30000)
+        if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, (int, float)) or not 0 < timeout_ms <= 3_600_000:
+            self.send_json({"ok": False, "phase": "request", "error": "timeoutMs must be between 1 and 3600000"}, 400)
+            return
+        try:
+            result = VANTAGE.submit(body.get("command"), body.get("args", {}), page=body.get("page") or None, timeout=timeout_ms / 1000)
+        except VantageError as error:
+            message = str(error)
+            if error.phase == "select" and not body.get("page"):
+                port = self.server.server_address[1]
+                message += f". Open http://127.0.0.1:{port}/index.html in a WebGPU browser and keep the tab visible."
+            self.send_json({"ok": False, "phase": error.phase, "error": message}, error.status)
+            return
+        self.send_json(result)
 
     def handle_forge_host_registry(self):
         self.send_json(build_forge_host_registry_snapshot())
