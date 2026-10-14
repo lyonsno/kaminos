@@ -51,3 +51,25 @@ test('model phases map to a few plain stages',()=>{
   assert.equal(trellisPageStage('post-model-uv-unwrap'),'Unwrapping UVs');
   assert.equal(trellisPageStage('something-new'),'Generating');
 });
+
+test('a release failure while stopping is reported as a failure, not a clean stop',async()=>{
+  const {s}=service({runPage:({signal})=>new Promise((_,reject)=>signal.addEventListener('abort',()=>reject(Error('TRELLIS GPU route was not released: held (queue settlement failed)'))))});
+  const running=s.run(input);await new Promise(r=>setTimeout(r,0));s.stop();
+  await assert.rejects(running,/not released/);
+  assert.equal(s.read().status,'failed');assert.match(s.read().error,/not released/);
+});
+
+test('page TRELLIS is reserved from its first step to its end (index.html wrapper)',async()=>{
+  const fs=await import('node:fs'),vm=await import('node:vm');
+  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const a=html.indexOf('  const trellisPageRun=async options=>{'),b=html.indexOf('  // Witness hook',a);
+  assert.ok(a>0&&b>a,'the reserving wrapper exists');
+  let release,fail=false;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
+  const ctx={meshRunning,meshBusy:m=>meshRunning[m],redraw(){},authoringImageGenerator:{busy:()=>false},Error,
+    trellisPageRunInner:()=>new Promise((res,rej)=>{release=()=>fail?rej(Error('boom')):res('done');})};
+  vm.runInNewContext(html.slice(a,b)+'\nthis.run=trellisPageRun;',ctx);
+  const first=ctx.run({});assert.equal(meshRunning.trellisPage,true,'reserved before any await');
+  await assert.rejects(ctx.run({}),/Another model/);
+  release();assert.equal(await first,'done');assert.equal(meshRunning.trellisPage,false);
+  fail=true;const second=ctx.run({});release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
+});

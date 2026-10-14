@@ -26,8 +26,27 @@ test('an opaque photo is segmented by browser U2Net first, then prepared once',a
   assert.equal(calls[2][3],0,'the cutout alpha, not the opaque photo, reaches the alpha preparation');
   assert.equal(out.provenance.route,'browser-u2net');assert.equal(out.provenance.segmentation.route,'u2net');
   assert.equal(out.pixels.length,512*512*3);
+  assert.equal(out.cutout.rgba[3],0,'the segmented cutout is returned for keeping');assert.equal(out.cutout.width,4);
 });
 
 test('no decoder means no fallback',async()=>{
   await assert.rejects(prepareImageForTrellis({bytes:png,ImageDecoderClass:undefined,...deps([])}),/ImageDecoder/);
 });
+
+function frameDecoder({format,width=4,height=2}){
+  return class{constructor(){}async decode(){return {complete:true,image:{format,codedWidth:width,codedHeight:height,
+    async copyTo(dst,options={}){
+      if(['I420','NV12'].includes(format)&&options.format!=='RGBA')throw Error('planar copy needs a conversion format');
+      const conv=options.format==='RGBA';
+      for(let i=0;i<width*height;i++){const o=i*4;if(conv||format==='RGBX'){dst[o]=10;dst[o+1]=20;dst[o+2]=30;dst[o+3]=conv?255:7;}else{dst[o]=30;dst[o+1]=20;dst[o+2]=10;dst[o+3]=7;}}
+      return [{offset:0,stride:width*4}];},close(){}}};}close(){}};
+}
+for(const format of ['I420','NV12','BGRX','RGBX'])
+  test(`an opaque ${format} decode becomes RGBA for U2Net, with opaque alpha`,async()=>{
+    const calls=[];let seen;const d=deps(calls);
+    const out=await prepareImageForTrellis({bytes:png,type:'image/jpeg',ImageDecoderClass:frameDecoder({format}),...d,
+      removeForegroundU2Net:async o=>{seen=o;return d.removeForegroundU2Net(o);}});
+    assert.equal(out.provenance.route,'browser-u2net','an opaque photo is segmented');
+    assert.deepEqual([...seen.pixels.slice(0,4)],[10,20,30,255],'RGB order with alpha 255');
+    assert.equal(out.provenance.decoder.nativeFormat,format);
+  });

@@ -27021,20 +27021,25 @@ function setupAuthoringAssets(){
   };
   // One GPU host for the page (app-gpu-host.mjs): models borrow its session and run
   // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
-  let appGpu=null;
-  const appGpuHost=async()=>{
-    if(appGpu)return appGpu;
-    if(!sharedGpu?.device||!compositionHost)return null;
-    const kit=await import('./webgpu-inference-kit/src/core.js');
-    appGpu=createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
-      install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
-    return appGpu;
+  // Reserved before the first await, so concurrent first callers share the one host; a
+  // failed construction clears the reservation and the next call retries.
+  let appGpuPending=null;
+  const appGpuHost=()=>{
+    if(appGpuPending)return appGpuPending;
+    if(!sharedGpu?.device||!compositionHost)return Promise.resolve(null);
+    appGpuPending=(async()=>{
+      const kit=await import('./webgpu-inference-kit/src/core.js');
+      return createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
+        install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+    })();
+    appGpuPending.catch(()=>{appGpuPending=null;});
+    return appGpuPending;
   };
   window.kaminosAppGpu=appGpuHost;
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
   // Which mesh model is running, kept here: the services' own read() consults these
   // blocked() checks, so asking each other for status would recurse.
-  let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false};
+  let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
   const meshBusy=model=>meshRunning[model];
   const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
   // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
@@ -27053,8 +27058,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRun=async({pixels,image,label='TRELLIS page',signal,onPhase}={})=>{
-    if(meshBusy('sf3d')||meshBusy('trellis')||authoringImageGenerator?.busy())throw Error('Another model is generating');
+  const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -27080,10 +27084,19 @@ function setupAuthoringAssets(){
         runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
           return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
       pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
+      // Keep the cutout TRELLIS actually used in the image library, so it can be seen and reused.
+      if(prepared.cutout){
+        try{
+          const {rgba,width,height}=prepared.cutout,canvas=new OffscreenCanvas(width,height);
+          canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
+          const png=await canvas.convertToBlob({type:'image/png'}),name=`${label.replace(/[^\w.-]+/g,'-')}-cutout.png`;
+          const saved=await fetch('/api/ingest-image?'+new URLSearchParams({name}),{method:'POST',body:await png.arrayBuffer()}).then(r=>r.json());
+          if(saved?.entry?.source)preparation.cutoutSource=saved.entry.source;
+        }catch(error){preparation.cutoutSaveError=error.message;}
+      }
     }
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
-    meshRunning.trellis=true;redraw();
     try{
       const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
@@ -27100,7 +27113,14 @@ function setupAuthoringAssets(){
       if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
         input:{pixels:pixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
       throw error;
-    }finally{meshRunning.trellis=false;redraw();}
+    }
+  };
+  // Page TRELLIS is reserved from the first step (config, input, preparation, U2Net) to its
+  // end, so the picker, Stop routing, SF3D, Klein and the queued route all see it.
+  const trellisPageRun=async options=>{
+    if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
+    meshRunning.trellisPage=true;redraw();
+    try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
   };
   // Witness hook: run in the page and save the GLB.
   window.kaminosTrellisPage=async options=>{const out=await trellisPageRun(options);return {...await persistGeneratedMesh(out.glb,out.generation,out.label,'TRELLIS'),timing:out.timing};};
@@ -27113,7 +27133,7 @@ function setupAuthoringAssets(){
           :{status:'unavailable',message:'This server mounts no TRELLIS checkpoint package (KAMINOS_TRELLIS_CHECKPOINT_ROOT)'};redraw();
       }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
-        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':null,
+        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
         runPage:trellisPageRun,persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS')});
     }
     return authoringTrellisPageGenerator;
@@ -27127,7 +27147,7 @@ function setupAuthoringAssets(){
         express:()=>authoringMeshModel?.express()===true,
         cancelJob:async job=>{const response=await fetch('/api/gpu-queue-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job})});const value=await response.json();if(!response.ok)throw Error(value.error||'cancel failed');return value;},
         queuePosition:async job=>{const response=await fetch('/api/gpu-queue-position?'+new URLSearchParams({job}),{cache:'no-store'});const value=await response.json();if(!response.ok)throw Error(value.error||'queue position unavailable');return value;},
-        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':null,
+        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
         runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
         meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
         fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
@@ -27146,7 +27166,7 @@ function setupAuthoringAssets(){
       const sf3dBlocked=()=>{
         if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
         if(authoringImageGenerator?.busy())return 'An image is generating. Generate the mesh when it is saved.';
-        if(meshBusy('trellis'))return 'TRELLIS is generating.';
+        if(meshBusy('trellis')||meshBusy('trellisPage'))return 'TRELLIS is generating.';
         return null;
       };
       const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
@@ -27165,7 +27185,7 @@ function setupAuthoringAssets(){
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
   authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
-  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
+  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage'),changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
   authoringImageGenerator=createKleinAuthoringImageGeneration({
     context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
     appHost:appGpuHost,
@@ -27174,10 +27194,10 @@ function setupAuthoringAssets(){
     weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
     deliver:async file=>{const entry=await authoringAssets.upload(file);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
     changed:()=>redraw(),
-    blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':null,
+    blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
-  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')});
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(sceneObjects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
   authoringGenerateLayout=installGenerateLayout({document,openMasks,selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();

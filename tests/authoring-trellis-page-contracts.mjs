@@ -14,7 +14,7 @@ function fixture({jobStatus='succeeded',release='released'}={}){
   const deps={
     async createTrellisSharedHost({appGpu:facade}){events.push(['host',facade.session===session,typeof facade.beginRun]);
       return {async beginRun({runId,signal}){events.push(['beginRun',typeof runId,signal instanceof AbortSignal]);
-        return {runId,route,async finish(){events.push('finish');return {status:release};}};},
+        return {runId,route,withForeground:(phase,work)=>work(),async finish(){events.push('finish');return {status:release};}};},
         async dispose(){events.push('host.dispose');}};},
     async loadGenerationInputs(manifest,fetchTensor,input){events.push(['inputs',manifest.id,input.pixelValues.length]);return {seed:42};},
     createTrellisImageGenerationAdapter(options){events.push(['adapter',options.route===route,options.seed]);
@@ -157,4 +157,31 @@ test('a failed decode is captured before the route is released: tensor bytes, bo
   assert.equal(c.noise.sparse.values.length,8);
   assert.deepEqual(c.stages['decoder-linear'],{count:2,wallMs:8,gpuMs:3,yields:2});
   assert.ok(order.indexOf('finish')>order.lastIndexOf('read:logits'),'tensors are read before the route releases them');
+});
+
+test('scene frames are served while checkpoints load and while the mesh is cleaned and unwrapped',async()=>{
+  const {createAppGpuHost}=await import('../app-gpu-host.mjs');
+  const kit=await import('../webgpu-inference-kit/src/core.js');
+  const {createTrellisSharedHost}=await import('../models/trellis2/shared-host.js');
+  const device={features:new Set(),limits:{maxBufferSize:2**30,maxStorageBufferBindingSize:2**29},lost:new Promise(()=>{}),
+    queue:{submit(){},async onSubmittedWorkDone(){}},createCommandEncoder(){return {beginComputePass(){return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+  const installs=[],owner={setForegroundOpportunityRequester:r=>installs.push(r),foregroundGpuContext:()=>({renderer:'kaminos-app',device,queue:device.queue})};
+  const app=createAppGpuHost({sharedGpu:{adapter:{info:{description:'controlled'}},device,queue:device.queue},kit,frameOwner:()=>owner,
+    host:{device,setForegroundServiceActive(){},runForegroundFrame:run=>run()}});
+  let frames=0,seq=0;const frame=()=>installs[0]({requestId:'frame-'+(++seq),run:()=>{frames++;}}).completion;
+  const gate=()=>{let open;const p=new Promise(r=>open=r);return {p,open};};
+  const loading=gate(),cleaning=gate(),unwrapping=gate();const seen={};
+  const f=fixture();
+  const deps={...f.deps,createTrellisSharedHost,
+    loadGenerationInputs:async()=>{await loading.p;return {};},
+    createTrellisImageGenerationAdapter:()=>({async run(){return {geometry:{},material:{}};},dispose(){}}),
+    createTrellisAssetAdapter:options=>({async run(){await options.postprocessMesh({});await options.unwrapMesh({});return {glb};},dispose(){}})};
+  const running=runTrellisInPage({appGpu:app,manifest:{id:'pack'},fetchTensor:async()=>new ArrayBuffer(4),pixelValues:new Float32Array(512*512*3),deps,
+    finishing:{postprocessMesh:async m=>{await cleaning.p;return m;},unwrapMesh:async m=>{await unwrapping.p;return m;}}});
+  const settle=()=>new Promise(r=>setTimeout(r,20));
+  await settle();await Promise.race([frame(),settle()]);seen.loading=frames;loading.open();
+  await settle();await Promise.race([frame(),settle()]);seen.cleaning=frames;cleaning.open();
+  await settle();await Promise.race([frame(),settle()]);seen.unwrapping=frames;unwrapping.open();
+  await running;
+  assert.deepEqual(seen,{loading:1,cleaning:2,unwrapping:3},'a frame is served inside each CPU span, not only at route finish');
 });

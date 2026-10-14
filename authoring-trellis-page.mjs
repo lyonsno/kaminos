@@ -41,7 +41,9 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   try{
     run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop});
     await timed({phase:'checkpoint-loading'});
-    const inputs=await d.loadGenerationInputs(manifest,fetchTensor,{pixelValues});
+    // CPU/network spans open a foreground window so scene frames run while they wait;
+    // GPU work and readbacks keep the run's boundary admission.
+    const inputs=await run.withForeground('trellis-checkpoint-loading',()=>d.loadGenerationInputs(manifest,fetchTensor,{pixelValues}));
     generation=d.createTrellisImageGenerationAdapter({...inputs,route:run.route,onPhase:timed});
     const job=run.route.enqueue({jobId:run.runId+':image-to-fields',execute:invocation=>generation.run(invocation)});
     const completed=await job.completion;
@@ -51,7 +53,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     }
     const out=completed.output;
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
-      postprocessMesh:finishing.postprocessMesh,unwrapMesh:finishing.unwrapMesh,
+      postprocessMesh:mesh=>run.withForeground('trellis-mesh-cleanup',()=>finishing.postprocessMesh(mesh)),
+      unwrapMesh:mesh=>run.withForeground('trellis-uv-unwrap',()=>finishing.unwrapMesh(mesh)),
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
     const finished=await asset.run();
@@ -173,7 +176,10 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
         phase='persistence';return await storePending();
       }catch(error){
-        if(abort.signal.aborted&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
+        // A clean stop is the cancellation itself; a release or settlement failure met while
+        // stopping is still a failure (the run may hold resources).
+        const cancelled=error===abort.signal.reason||error?.name==='AbortError';
+        if(abort.signal.aborted&&cancelled&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
       }finally{active=false;abort=null;state.canStop=false;publish();}
     },
@@ -190,13 +196,23 @@ export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClas
   if(!type&&[137,80,78,71,13,10,26,10].every((v,i)=>data[i]===v))type='image/png';
   if(!type)throw Error('image MIME type is required');
   const decoder=new ImageDecoderClass({type,data,colorSpaceConversion:'none',preferAnimation:false});
-  let rgba,width,height;
+  let rgba,width,height,nativeFormat;
   try{
     const decoded=await decoder.decode({frameIndex:0,completeFramesOnly:true});const frame=decoded.image;
-    if(!decoded.complete||!frame||!['RGBA','BGRA'].includes(frame.format))throw Error('unsupported decoded image: '+frame?.format);
-    width=frame.codedWidth;height=frame.codedHeight;rgba=new Uint8Array(width*height*4);
-    await frame.copyTo(rgba,{layout:[{offset:0,stride:width*4}]});
-    if(frame.format==='BGRA')for(let i=0;i<rgba.length;i+=4){const b=rgba[i];rgba[i]=rgba[i+2];rgba[i+2]=b;}
+    if(!decoded.complete||!frame)throw Error('incomplete decoded image');
+    nativeFormat=frame.format;width=frame.codedWidth;height=frame.codedHeight;rgba=new Uint8Array(width*height*4);
+    const layout=[{offset:0,stride:width*4}];
+    if(['RGBA','BGRA','RGBX','BGRX'].includes(nativeFormat)){
+      // Packed: copy native bytes, reorder channels only; X formats carry no alpha.
+      await frame.copyTo(rgba,{layout});
+      if(nativeFormat[0]==='B')for(let i=0;i<rgba.length;i+=4){const b=rgba[i];rgba[i]=rgba[i+2];rgba[i+2]=b;}
+      if(nativeFormat.endsWith('X'))for(let i=3;i<rgba.length;i+=4)rgba[i]=255;
+    }else{
+      // Planar YUV (a JPEG decodes as I420): the decoder converts to sRGB RGBA; such
+      // images have no alpha, so alpha is opaque by definition.
+      await frame.copyTo(rgba,{layout,format:'RGBA',colorSpace:'srgb'});
+      for(let i=3;i<rgba.length;i+=4)rgba[i]=255;
+    }
     frame.close();
   }finally{decoder.close();}
   if(signal?.aborted)throw signal.reason;
@@ -207,5 +223,6 @@ export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClas
     segmentation=cut.provenance;rgba=cut.rgba;width=cut.width;height=cut.height;
   }
   const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});
-  return {...prepared,provenance:{route:hasAlpha?'input-alpha':'browser-u2net',segmentation,preparation:prepared.provenance}};
+  // The cutout itself is returned so the caller can keep and show the input it actually used.
+  return {...prepared,cutout:hasAlpha?null:{rgba,width,height},provenance:{route:hasAlpha?'input-alpha':'browser-u2net',decoder:{nativeFormat,converted:!['RGBA','BGRA','RGBX','BGRX'].includes(nativeFormat)},segmentation,preparation:prepared.provenance}};
 }
