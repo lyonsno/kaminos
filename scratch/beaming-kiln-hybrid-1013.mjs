@@ -36,7 +36,7 @@ try{
    });
    assert.deepEqual(report.errors,[]);
  };
- report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile:'kiln-hybrid-preview.kaminos.json',out,exercise:async({document,retain,open})=>{
+ report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile:'kiln-hybrid-preview.kaminos.json',workspace:'authoring',out,exercise:async({document,retain,open})=>{
    await settle();report.phase='settings';report.loaded=await observe();await write();
    await page.evaluate(()=>{
      for(const [id,value] of [['rendering-angular-samples','8'],['rendering-angular-pattern','guided']]){const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('change'));}
