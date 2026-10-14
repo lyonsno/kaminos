@@ -1,5 +1,29 @@
 # Kaminos Agent Guidance
 
+## Start Visual Work In The Shared Workbench
+
+For work understood by viewing, manipulating or comparing a scene over time,
+use a Workbench experiment as its development and operator-facing surface.
+Examples include simulation, materials, rendering, animation, interactive
+geometry and generated-asset comparisons. Read
+[`docs/workbench-common-main.md`](docs/workbench-common-main.md) first and inspect
+the closest existing contribution. Extend a suitable experiment or add an
+owner-authored `*.experiment.mjs` in `experiments/`.
+
+Compose with the existing scene, camera, inspector, controls and applicable
+capture/recording tools. Feature modules own domain behavior and meaningful
+operations; the experiment connects them to both human controls and agent calls.
+The guide's executable material study supplies a small starting point.
+
+For straightforward asset inspection, use the existing asset viewer. For
+authored scene changes, use the scene-authoring flow. Computational changes use
+focused tests and their existing visual consumer where relevant. When task fit
+is uncertain, ask the operator before choosing the development surface: describe
+what needs to be observed or manipulated, recommend a route, and name the
+uncertainty. Resolve ordinary API questions through source and current owners.
+An unavailable shared capability is an integration question: identify the
+concrete missing operation and coordinate a reusable extension with its owner.
+
 ## Feature Branch Ancestry
 
 Before editing on a feature branch, fetch `origin/main` and record the chosen

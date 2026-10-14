@@ -1,4 +1,112 @@
-# Common Workbench Application Join
+# Build A Workbench Experiment
+
+A Workbench experiment connects a feature's meaningful operations to a shared
+working scene. People manipulate it through controls; agents invoke the same
+operations and read their results. The feature keeps its own simulation,
+animation, material or inference logic. Kaminos provides the surrounding place
+to work: scene objects, camera, selection, lighting, inspector and frame loop.
+
+## Choose A Starting Point
+
+| Work | Start here |
+| --- | --- |
+| Tune, run or compare a visual/dynamic feature | Extend an existing experiment or contribute a discovered definition below |
+| Inspect one image, mesh or splat | Open it through the ordinary asset viewer |
+| Compose or edit an authored scene | [Scene operations](scene-authoring-operations.md) and [repeatable visual work](repeatable-visual-work.md) |
+| Develop a computational kernel or backend | Focused tests and the existing visual consumer for the behavior being changed |
+
+When the development surface is uncertain, describe the intended interaction to
+the operator, recommend a route and ask which fits. Implementation questions go
+to the relevant code and owner. Inspect the available host before planning an
+extension; report a missing capability as the concrete operation your feature
+needs. Domain modules can remain independently useful while the experiment
+supplies their visible working context.
+
+## Run The Small Example
+
+From the checkout, use an available port:
+
+```sh
+python3 serve.py 8095
+```
+
+Open `http://127.0.0.1:8095/?experiment=material-study&workspace=workbench`
+in a WebGPU-capable browser. The experiment mounts a reference and candidate
+sphere in the existing scene. Use **Frame comparison**, adjust **Candidate
+roughness**, then orbit and change lighting through the ordinary inspector.
+The reference stays at roughness 0.15. Source:
+[`experiments/material-study.experiment.mjs`](../experiments/material-study.experiment.mjs).
+
+The page exposes the same contribution to an attached agent browser:
+
+```js
+await page.waitForFunction(() => window.kaminosWorkbenchExperiments?.state().id === 'material-study');
+const result = await page.evaluate(async () => {
+  const experiments = window.kaminosWorkbenchExperiments;
+  await experiments.invoke('frame');
+  return experiments.invoke('setRoughness', 0.85);
+});
+```
+
+`page` is the caller's existing Playwright page. This is a browser-side API;
+terminal transport into an already-open operator tab composes separately.
+The example adds no private renderer, camera or timer. Its operations emit into
+the common recording channel when recording is mounted. Opening an experiment
+alone supplies an interactive setup; capture/file retention is installed through
+the existing investigation tools below.
+
+## Contribute Your Feature
+
+1. Copy the small definition to `experiments/<your-feature>.experiment.mjs` and
+   choose a unique `id` and `title`. Keep domain implementation in its own modules.
+2. In `create({host, inputs, record})`, validate setup and await
+   `host.scene.open()`. Attach owned Three objects with `session.attach(root,
+   {owned: true, metadata})`, or load a GLB with `session.loadAsset({url})`.
+   Register source identity and a useful label in metadata. Existing registered
+   roots can be borrowed explicitly with `owned: false`.
+3. Return `read`, `operations`, optional `mount`, and `dispose`. `read` describes
+   actual state. Operations perform meaningful domain actions and record their
+   effective values. `mount({root, document, invoke})` connects controls to those
+   same operations. Dispose the session and any feature-owned subscriptions.
+4. Refresh experiment discovery after adding files; reload after changing
+   imported code. Open with `?experiment=<id>&experiment_inputs=<URL-encoded JSON>`.
+   Reuse existing control grammar and ordinary scene/editor operations.
+5. Exercise an actual control and the corresponding agent invocation. Inspect
+   the resulting scene, then close/reopen to check your contribution's lifetime
+   and supported reconstruction. Hand the operator the exercised setup and a
+   short useful manipulation/question.
+
+The example retains starting roughness through `experiment_inputs`; its slider
+edits remain live state. To share an edited example setup, read its actual
+roughness and pass that as inputs on reopening. General authored scene save,
+domain reconstruction, and evolved simulation checkpoints each retain the state
+their implementations support. Choose and state the continuation your feature
+actually provides.
+
+## Shared Tools And Extensions
+
+- [Scene sessions](workbench-scene-session.md) scope registered objects and
+  frame subscriptions within the existing application. App consumers await
+  `host.scene.open()`. A frame's `deltaSeconds` is host presentation time;
+  domain owners supply simulation clocks, hold and exact advance.
+- [Investigation recording](investigation-recording.md) retains meaningful
+  interventions, views and observation context. Record effective domain changes
+  at the operation that performs them.
+- [Owner investigation mount](owner-investigation-mount.md) supplies the Node
+  capture/file writer and Capture/Finish lifetime. Reuse its installer and
+  caller-owned output directory for a recorded handoff. Source-specific
+  hold/present/reconstruction remains in the feature adapter.
+- [Repeatable visual work](repeatable-visual-work.md) supplies ordinary authored
+  scene edits, saved results and retained comparisons.
+
+Current main supplies the common scene/entry services described here. Specialized
+Fluid hosts, numerical transport and sequence destinations have their own
+consumer interfaces and integration revisions. Verify that the checkout you
+serve contains the capability you choose. Extend the shared host through its
+owner when a new feature needs an additional service; preserve the existing
+working scene and ordinary editing behavior.
+
+## Application API
 
 Owners use their own discovered `*.experiment.mjs` definition with the ordinary Kaminos scene, camera, selection and frame loop. `serve.py` discovers `experiments/` by default; `KAMINOS_EXPERIMENTS_DIR` selects a directory inside the served checkout. The common entry and retention modules remain the same modules used by the feature host. This main join supplies scene capabilities; numerical Fluid host capabilities remain separate.
 
