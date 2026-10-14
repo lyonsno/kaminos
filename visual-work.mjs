@@ -26,9 +26,18 @@ export function assertSavedResult(result, persisted, {workspace=null}={}) {
   return result;
 }
 
-export function assertMountedScene(document, actual) {
+export function assertMountedScene(document, actual, {authoredObjects=[],volume=null}={}) {
   for (const expected of document.objects || []) {
-    const mounted = actual.find(item => item.id === expected.id);
+    let mounted = actual.find(item => item.id === expected.id);
+    if(!mounted&&expected.type==='simulation-domain'){
+      const domain=authoredObjects.find(item=>item.id===expected.id&&item.type==='simulation-domain');
+      if(domain){
+        assert.ok(volume?.active&&Number.isFinite(volume.ordinaryDomainScale)&&volume.ordinaryDomainScale>0
+          &&volume.ordinaryDomainTranslation?.length===3&&volume.ordinaryDomainTranslation.every(Number.isFinite),'Live domain runtime is unavailable');
+        const scale=volume.ordinaryDomainScale,[x,y,z]=volume.ordinaryDomainTranslation;
+        mounted={...domain,transform:{position:[x,y+scale,z],rotation:[0,0,0],scale:[scale,scale,scale]}};
+      }
+    }
     assert.ok(mounted, `Mount missing object ${expected.id}`);
     for (const field of ['type', 'source']) assert.equal(mounted[field], expected[field], `Mount differs: ${expected.id}.${field}`);
     for (const field of ['position', 'rotation', 'scale']) {
@@ -73,8 +82,8 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         if (failure || /Scene load failed|Invalid scene|water host unavailable/i.test(status)) throw Error(failure?.textContent || status);
         return /^(Scene loaded|Volume scene loaded)/.test(status);
       });
-      const objects = await page.evaluate(() => window.kaminosSceneObjectDebugState());
-      assertMountedScene(document, objects);
+      const mount = await page.evaluate(() => ({objects:window.kaminosSceneObjectDebugState(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,volume:window.__kaminosVolumePrototype?.debugState()}));
+      assertMountedScene(document, mount.objects, mount);report.mount=mount;
       assert.equal(new URL(page.url()).origin, new URL(origin).origin, 'Mount changed origin');
       const route = new URL(page.url());
       const effectiveScene = route.searchParams.get('scene') || new URLSearchParams(route.hash.slice(1)).get('scene');

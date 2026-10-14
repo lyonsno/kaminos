@@ -29,7 +29,7 @@ try{
  report.environmentReplay={url:'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',sha256:createHash('sha256').update(hdr).digest('hex')};
  await page.route(report.environmentReplay.url,r=>r.fulfill({status:200,contentType:'application/octet-stream',body:hdr,headers:{'Access-Control-Allow-Origin':'*'}}));
  report.phase='open';await write();
- const observe=()=>page.evaluate(()=>({url:location.href,lighting:window.__kaminosSceneRadiance?.debugState(),volume:window.__kaminosVolumePrototype?.debugState(),objects:window.kaminosSceneObjectDebugState?.(),info:document.getElementById('info-bar')?.textContent}));
+ const observe=()=>page.evaluate(()=>({url:location.href,lighting:window.__kaminosSceneRadiance?.debugState(),volume:window.__kaminosVolumePrototype?.debugState(),objects:window.kaminosSceneObjectDebugState?.(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,info:document.getElementById('info-bar')?.textContent}));
  const settle=async()=>{
    await page.waitForFunction(()=>{
      const setup=window.__kaminosSceneRadianceSetup,l=window.__kaminosSceneRadiance?.debugState(),v=window.__kaminosVolumePrototype?.debugState();
@@ -46,7 +46,7 @@ try{
    });
    await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().frame?.directions===8);
    const state=await observe();assert.equal(state.lighting.surfaceReceivers,0);assert.equal(state.lighting.pointCount,1);assert.equal(state.lighting.frame.smokeReconstruction.refinement,1);assert.equal(state.volume.backend,'WebGPU:apple');
-   assertMountedScene(document,state.objects);report.effective=state;
+   assertMountedScene(document,state.objects,state);report.effective=state;
    if(shadowSoftness>0){
      report.phase='held-shadow-comparison';await write();
      report.requestedComparisonSimStep=400;
