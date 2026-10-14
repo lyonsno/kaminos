@@ -271,9 +271,17 @@ try {
         applied.push([cid, value, sample?.status ?? null]);
         continue;
       }
+      if (cid === '@click') {
+        // Clicks a button by id (cockpit buttons that are not controls).
+        const clicked = await evaluate(op(`(() => { const b = d.getElementById(${JSON.stringify(value)}); if (!b) return false; b.click(); return true; })()`));
+        applied.push([cid, value, clicked]);
+        if (!clicked) fail(report.failurePhase, `@click: no element ${value}`);
+        await sleep(1500);
+        continue;
+      }
       if (cid === '@joinedPanelText') {
         // Read-only: what the joined panel's readouts say.
-        const sample = await evaluate(op(`(() => Object.fromEntries(['volume-joined-boundary-val', 'volume-joined-exterior-extent-val', 'volume-joined-exterior-wall-val'].map(id => [id, d.getElementById(id)?.textContent ?? null])))()`));
+        const sample = await evaluate(op(`(() => Object.fromEntries(['volume-joined-boundary-val', 'volume-joined-exterior-extent-val', 'volume-joined-exterior-ratio-val', 'volume-joined-exterior-solve-val', 'volume-joined-exterior-wall-val'].map(id => [id, d.getElementById(id)?.textContent ?? null])))()`));
         (arm.joinedPanelText ||= []).push(sample);
         applied.push([cid, value, 'read']);
         continue;
