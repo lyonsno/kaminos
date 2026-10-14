@@ -20,4 +20,9 @@ const mesh=registered.children.find(x=>x.isMesh);assert.deepEqual(Array.from(mes
 entry.operations.pose({name:'rest'});assert.equal(entry.read().editedSincePreset,false);assert.equal(bone.position.x,0);
 assert.throws(()=>entry.operations.pose({name:'unknown'}),/preset/);
 await entry.dispose();assert.equal(frame,null);assert.equal(scene.children.length,0);assert.equal(disposed,1);
+const height={value:'0',dispatchEvent(){}};document.getElementById=id=>id==='composition-ground-height'?height:null;
+const low=structuredClone(skin);for(let i=1;i<low.rest.length;i+=3)low.rest[i]-=3;
+const grounded=await module.createCreatureBinding({host:{controls:{document},scene:{open:()=>session}},inputs:{ground:'source-start'}},{loadSkin:async()=>low});
+assert.equal(Number(height.value),-3,'reference ground must not hide the retained legs below zero');
+await grounded.dispose();assert.equal(height.value,'0','closing restores only the owned reference-ground change');
 console.log('Binding inspection uses the shared scene and preserves editable actual Bones, source identity and disposal');
