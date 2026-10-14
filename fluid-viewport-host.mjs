@@ -229,7 +229,7 @@ export function createFluidViewportHost({renderer,scene,camera,pipeline,device,s
     abortFrameTiming:timing.abort,
     setPaused(value){paused=Boolean(value);return paused;},
     get paused(){return paused;},
-    state:()=>({frameCount,paused,failure,lastFrame,renderScale,captureMode,captureGraphChanges,timing:timing.read()}),
+    state:()=>({frameCount,paused,failure,lastFrame,renderScale,captureMode,captureGraphChanges,sceneLighting:getDisplayPolicy?.()?.sceneLighting,timing:timing.read()}),
     setRenderScale,
     setCaptureMode,
     setTimingEnabled:timing.setEnabled,
