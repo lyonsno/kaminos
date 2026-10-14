@@ -108,3 +108,10 @@ test('the caller names where the pixels came from and the GLB provenance keeps i
   await call(f,{provenance:{input:'checkpoint package prepared pixels'}});
   assert.equal(seen.input,'checkpoint package prepared pixels');
 });
+
+test('the finished asset must be a GLB, and the run returns the receipt checks it passed',async()=>{
+  const f=fixture();const result=await call(f);
+  assert.equal(result.receiptValidation.ok,true);assert.deepEqual(result.receiptValidation.checks,['route-released','glb-magic']);
+  const g=fixture();g.deps.createTrellisAssetAdapter=()=>({async run(){return {glb:new ArrayBuffer(12)};},dispose(){}});
+  await assert.rejects(call(g),/not a GLB/);
+});

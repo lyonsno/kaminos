@@ -28,7 +28,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   const session=await appGpu.session();
   const host=await d.createTrellisSharedHost({appGpu:{device:appGpu.device,queue:appGpu.queue,session,
     beginRun:(runId,options)=>appGpu.beginRun(runId,options)}});
-  let run,generation,asset,released=false;
+  let run,generation,asset,released=false,result;
   try{
     run=await host.beginRun({runId:`authoring-trellis-page-${globalThis.crypto.randomUUID()}`,signal:stop});
     await onPhase({phase:'checkpoint-loading'});
@@ -46,7 +46,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase});
     const finished=await asset.run();
-    return {glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
+    if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
+    result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
   }finally{
     let failure=null;
     if(run){
@@ -58,6 +59,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     if(released){asset?.dispose();generation?.dispose();await host.dispose();}
     if(failure)throw failure;
   }
+  // Checked here: the run's GPU route was released and the asset is a GLB.
+  return {...result,receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
 }
 
 const sha256=async bytes=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');

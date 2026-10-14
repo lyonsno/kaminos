@@ -26921,14 +26921,17 @@ function setupAuthoringAssets(){
     const pack=await createTrellisPageCheckpoints({config:config.trellisPage});
     // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
     // Generate step's prepared image) prepared here by the model's own browser kernel.
-    let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null;
+    let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null,imageSha256=pixels==='package'?pack.manifest.image.pixelValuesSha256:null;
     if(image){
       const {prepareTrellisAlphaImage}=await import('./models/trellis2/alpha-preparation.js');
       const {normalizePreparedTrellisRgb}=await import('./models/trellis2/generation-inputs.js');
       const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`TRELLIS input image HTTP ${response.status}`);
-      const prepared=await prepareTrellisAlphaImage(await response.blob(),{signal});
+      const blob=await response.blob();imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
+      const prepared=await prepareTrellisAlphaImage(blob,{signal});
       pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
     }
+    // Caller pixels without an image are identified by their own bytes.
+    imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
     meshRunning.trellis=true;redraw();
     try{
@@ -26939,7 +26942,7 @@ function setupAuthoringAssets(){
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
-        input:{pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
+        receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
       return await persistGeneratedMesh(result.glb,generation,label,'TRELLIS');
     }finally{meshRunning.trellis=false;redraw();}
