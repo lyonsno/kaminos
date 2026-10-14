@@ -26,6 +26,8 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field-key { color: #666; }
 #scene-gi-controls .field { align-items:center; gap:12px; }
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
+#scene-gi-controls .authoring-number-wrap { width:148px; max-width:55%; flex-shrink:0; }
+#scene-gi-controls .authoring-number-wrap input { width:100%; max-width:none; }
 body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
@@ -3370,7 +3372,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
         <div class="field"><label for="scene-gi-slices">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" value="3"></div>
         <div class="field"><label for="scene-gi-steps">Steps</label><input id="scene-gi-steps" type="number" min="1" step="1" value="8"></div>
-        <div class="slider-row"><label class="slider-label" for="scene-gi-denoise">GI/AO filter</label><input id="scene-gi-denoise" type="range" min="0" max="10" step="0.5" value="3"><output id="scene-gi-denoise-value">3</output></div>
+        <div class="field"><label for="scene-gi-backfaceLighting" title="Contribution from surfaces whose normals face away from the receiving point. Zero ignores their bounce.">Back-face bounce</label><input id="scene-gi-backfaceLighting" type="number" min="0" step="0.01" value="0"></div>
+        <div class="field"><label for="scene-gi-denoise" title="Spatial filter radius for GI and AO. Zero displays the unfiltered estimates.">GI/AO filter radius</label><input id="scene-gi-denoise" type="number" min="0" step="0.5" value="3"></div>
+        <details><summary>Sampling and filter edges</summary>
+          <div class="field"><label for="scene-gi-expFactor" title="Larger values concentrate samples nearer the receiving surface; sample count stays the same.">Sample concentration</label><input id="scene-gi-expFactor" type="number" min="0.01" step="0.05" value="2"></div>
+          <div class="field"><label for="scene-gi-screenSpaceSampling" title="Use a radius measured in screen space rather than world space.">Screen-space radius</label><input id="scene-gi-screenSpaceSampling" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-depthPhi" title="Larger values allow filtering across larger depth differences.">Depth tolerance</label><input id="scene-gi-depthPhi" type="number" min="0.001" step="0.01" value="0.1"></div>
+          <div class="field"><label for="scene-gi-normalPhi" title="Larger values more strongly preserve boundaries between different surface directions.">Normal edge strength</label><input id="scene-gi-normalPhi" type="number" min="0.01" step="0.1" value="5"></div>
+          <div class="field"><label for="scene-gi-lumaPhi" title="Larger values allow filtering across larger brightness differences.">Brightness tolerance</label><input id="scene-gi-lumaPhi" type="number" min="0.01" step="0.1" value="5"></div>
+        </details>
       </div>
       <div id="scene-gi-status" role="status"></div>
       </div>
@@ -3479,7 +3490,7 @@ import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emi
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
-import { resolveSceneGISettings } from './scene-gi-settings.mjs';
+import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
@@ -3987,7 +3998,7 @@ const authoringParameterTargets = new Map();
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
-let sceneGISettings = resolveSceneGISettings();
+let sceneGISettings = resolveSceneGIControlState();
 let updateSceneGI = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -11591,9 +11602,10 @@ async function initScene() {
     renderPipeline.needsUpdate = true;
   }
   updateSceneGI = value => {
-    const next = resolveSceneGISettings(value);
+    const next = resolveSceneGIControlState(value);
     const rebuild = next.mode !== sceneGISettings.mode;
     sceneGI.setSettings(next);
+    sceneGI.setEstimatorSettings(next.estimator);
     sceneGISettings = next;
     if (rebuild) rebuildSceneGIOutput();
     document.body.dataset.sceneGiDiagnostic = String(next.mode === 'combined' && next.view !== 'scene');
@@ -11601,6 +11613,7 @@ async function initScene() {
     window._kaminosDirty?.();
   };
   sceneGI.setSettings(sceneGISettings);
+  sceneGI.setEstimatorSettings(sceneGISettings.estimator);
   rebuildSceneGIOutput();
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
@@ -22351,6 +22364,15 @@ function installAuthoringParameterEditing() {
     controls:document.querySelectorAll('#rim-enabled, #rim-color, #rim-controls input'),label:'Tune rim light',
     read:readRimLightSettings,write:setRimLight,check:checkedRimRecipe,
   });
+  const giControls=document.querySelectorAll('#scene-gi-mode, #scene-gi-controls input, #scene-gi-view');
+  bind('@scene-gi',{controls:giControls,label:'Tune surface illumination',
+    read:readSceneGIControls,write:setSceneGIControls,check:resolveSceneGIControlState});
+  scenePlacementTools.addHistoryScope(document.getElementById('scene-gi-panel'));
+  for(const input of giControls) if(input.type==='number') {
+    const scrub=installRelativeNumberDrag({input,grip:input.closest('.field')?.querySelector('label'),step:Number(input.step),
+      onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+    edits.subscribe(state=>{if(!state.active)scrub.stop();});
+  }
   for(const control of collectVolumeCockpitControlElements(document)) {
     if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue; // existing paired Burner adapter
     if(control.tagName!=='SELECT'&&!['range','number','checkbox','color'].includes(control.type))continue;
@@ -22509,26 +22531,39 @@ function updateBackground() {
 // --- AO Controls ---
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
-function setSceneGIControls(value) {
-  const settings = resolveSceneGISettings(value);
+function readSceneGIControls() { return structuredClone(sceneGISettings); }
+function setSceneGIControls(value, {preserveInput=null}={}) {
+  const settings = resolveSceneGIControlState(value);
   if (updateSceneGI) updateSceneGI(settings);
   else sceneGISettings = settings;
-  for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);
+  const {estimator,...basic} = settings;
+  for (const [key,value] of Object.entries({...basic,...estimator})) {
+    const control = document.getElementById(`scene-gi-${key}`);
+    if (control === preserveInput) continue;
+    if (control.type === 'checkbox') control.checked = value;
+    else control.value = String(value);
+  }
   document.getElementById('scene-gi-controls').hidden = settings.mode !== 'combined';
   document.getElementById('gtao-shape-controls').hidden = settings.mode === 'combined';
-  document.getElementById('scene-gi-denoise-value').textContent = String(settings.denoise);
 }
-for (const key of Object.keys(sceneGISettings)) {
-  document.getElementById(`scene-gi-${key}`).addEventListener(key === 'denoise' ? 'input' : 'change',event => {
+for (const key of [...Object.keys(sceneGISettings).filter(key=>key!=='estimator'),...Object.keys(sceneGISettings.estimator)]) {
+  const control = document.getElementById(`scene-gi-${key}`);
+  control.addEventListener(control.type === 'number' ? 'input' : 'change',event => {
     try {
-      const value = ['mode','view'].includes(key) ? event.target.value : Number(event.target.value);
-      setSceneGIControls({...sceneGISettings,[key]:value});
+      // An empty typed field is an unfinished edit, not the number zero.
+      if (control.type === 'number' && control.value === '') return;
+      const value = control.type === 'checkbox' ? control.checked : ['mode','view'].includes(key) ? control.value : Number(control.value);
+      const next = Object.hasOwn(sceneGISettings.estimator,key)
+        ? {...sceneGISettings,estimator:{...sceneGISettings.estimator,[key]:value}}
+        : {...sceneGISettings,[key]:value};
+      setSceneGIControls(next,{preserveInput:control});
       document.getElementById('scene-gi-status').textContent = '';
     } catch (error) {
-      event.target.value = String(sceneGISettings[key]);
       document.getElementById('scene-gi-status').textContent = error.message;
     }
   });
+  // Finish incomplete/invalid text on commit using the last accepted state.
+  control.addEventListener('change',()=>setSceneGIControls(sceneGISettings));
 }
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
