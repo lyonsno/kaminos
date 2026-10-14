@@ -19,7 +19,7 @@ export function frameObjects(objects,camera,controls) {
   if(box.isEmpty())return false;
   return frameBox(box,camera,controls);
 }
-function frameBox(box,camera,controls) {
+export function frameBox(box,camera,controls) {
   const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
   if(!Number.isFinite(radius)||radius<=0)return false;
   const vertical=camera.fov*Math.PI/360,horizontal=Math.atan(Math.tan(vertical)*camera.aspect);

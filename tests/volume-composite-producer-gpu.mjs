@@ -1,3 +1,4 @@
+// kaminos-test: manual — needs native WebGPU module and output arguments
 // Native binding-19 format/ordering conformance. Synthetic values, actual
 // r32float storage-texture descriptor and shared pressure consumer; no flame.
 import assert from 'node:assert/strict';

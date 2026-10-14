@@ -17,13 +17,18 @@ export function createCompositeGrid({shape,min=[0,0,0],cellWidth,fine,solid=()=>
   if(shape.some(x=>!Number.isInteger(x)||x<1)||cellWidth<=0)throw new Error('positive integer shape and cellWidth required');
   vector(fine?.min,3,'fine min');vector(fine?.max,3,'fine max');
   const ratio=fine.ratio;
-  if(!Number.isInteger(ratio)||ratio<1)throw new Error('integer refinement ratio >= 1 required');
+  if(!Number.isFinite(ratio)||ratio<1)throw new Error('finite refinement ratio >= 1 required');
   const h=cellWidth/ratio;
   const start=fine.min.map((v,a)=>(v-min[a])/cellWidth),end=fine.max.map((v,a)=>(v-min[a])/cellWidth);
   if([...start,...end].some(v=>Math.abs(v-Math.round(v))>1e-9))throw new Error('fine box must be coarse-cell aligned');
   start.forEach((v,a)=>{start[a]=Math.round(v);end[a]=Math.round(end[a]);});
   if(start.some((v,a)=>v<0||end[a]>shape[a]||end[a]<=v))throw new Error('fine box must be nonempty and inside outer domain');
+  const fineShape=end.map((v,a)=>(v-start[a])*ratio);
+  if(fineShape.some(v=>Math.abs(v-Math.round(v))>1e-9))throw new Error('fine box must contain whole fine cells');
   const cells=[],owners=new Map(),children=new Map(),faces=[];
+  if(!Number.isInteger(ratio)){
+    buildNonmatching({shape,min,cellWidth,fine,h,fineShape:fineShape.map(Math.round),solid,boundary,cells,faces});
+  }else{
   const refined=q=>q.every((v,a)=>v>=start[a]&&v<end[a]);
   function add(q,width,level,coarse){
     const center=q.map((v,a)=>min[a]+(v+.5)*width);
@@ -70,6 +75,7 @@ export function createCompositeGrid({shape,min=[0,0,0],cellWidth,fine,solid=()=>
       }
     }
   }
+  }
   // Connected components identify incompatible sealed pressure problems.
   const adjacency=Array.from({length:cells.length},()=>[]),diagonal=new Float64Array(cells.length);
   const open=new Uint8Array(cells.length);
@@ -85,6 +91,55 @@ export function createCompositeGrid({shape,min=[0,0,0],cellWidth,fine,solid=()=>
   return {identity:COMPOSITE_GRID_ID,cells,faces,diagonal,components,
     geometry:{shape:[...shape],min:[...min],cellWidth,fine:{min:[...fine.min],max:[...fine.max],ratio}},
     domainVolume:product(shape)*cellWidth**3};
+}
+
+// The fine box still aligns with coarse cell boundaries, but the tangential
+// lattices need not coincide. At the seam, intersect their face rectangles.
+// One patch owns one flux; storage later sums patches onto each full face.
+function buildNonmatching({shape,min,cellWidth:H,fine,h,fineShape,solid,boundary,cells,faces}){
+  const coarseOwners=new Map(),fineOwners=new Map();
+  const insideFine=p=>p.every((v,a)=>v>=fine.min[a]&&v<fine.max[a]);
+  const add=(q,width,origin,level,owners)=>{
+    const center=q.map((v,a)=>origin[a]+(v+.5)*width),id=solid(center,width)?-1:cells.length;
+    if(id>=0)cells.push({center,width,volume:width**3,level,
+      index:center.map((v,a)=>(v-min[a])/width-.5),coarse:center.map((v,a)=>Math.floor((v-min[a])/H))});
+    owners.set(key(q),id);
+  };
+  for(let z=0;z<shape[2];z++)for(let y=0;y<shape[1];y++)for(let x=0;x<shape[0];x++){
+    const q=[x,y,z];if(!insideFine(q.map((v,a)=>min[a]+(v+.5)*H)))add(q,H,min,0,coarseOwners);
+  }
+  for(let z=0;z<fineShape[2];z++)for(let y=0;y<fineShape[1];y++)for(let x=0;x<fineShape[0];x++)add([x,y,z],h,fine.min,1,fineOwners);
+  const lookup=p=>{
+    const q=p.map((v,a)=>Math.floor((v-min[a])/H));
+    if(q.some((v,a)=>v<0||v>=shape[a]))return -2;
+    return insideFine(p)?fineOwners.get(key(p.map((v,a)=>Math.floor((v-fine.min[a])/h)))):coarseOwners.get(key(q));
+  };
+  const cuts=(lo,hi,origin,pitch)=>{
+    const out=[lo],eps=1e-9*Math.min(H,h);
+    for(let k=Math.floor((lo-origin)/pitch)+1;origin+k*pitch<hi-eps;k++){
+      const v=origin+k*pitch;if(v>lo+eps)out.push(v);
+    }
+    out.push(hi);return out;
+  };
+  for(let id=0;id<cells.length;id++){
+    const c=cells[id];
+    for(let axis=0;axis<3;axis++)for(const side of [-1,1]){
+      const center=[...c.center];center[axis]+=side*c.width/2;
+      const probe=[...center];probe[axis]+=side*h*1e-5;
+      const crosses=c.level!==Number(insideFine(probe));
+      const b=(axis+1)%3,d=(axis+2)%3;
+      const intervals=a=>crosses?cuts(center[a]-c.width/2,center[a]+c.width/2,c.level?min[a]:fine.min[a],c.level?H:h):[center[a]-c.width/2,center[a]+c.width/2];
+      const bs=intervals(b),ds=intervals(d);
+      for(let j=0;j<ds.length-1;j++)for(let i=0;i<bs.length-1;i++){
+        const fc=[...center];fc[b]=(bs[i]+bs[i+1])/2;fc[d]=(ds[j]+ds[j+1])/2;
+        const fp=[...fc];fp[axis]+=side*h*1e-5;const n=lookup(fp);
+        if(n===undefined)throw new Error('missing nonmatching composite owner');
+        if(n===-1||(n>=0&&side<0))continue;
+        if(n===-2){const law=boundary(axis,side,fc);if(law==='wall')continue;if(law!=='open')throw new Error('boundary must be open or wall');}
+        faces.push({a:id,b:n<0?-1:n,axis,side:n<0?side:1,center:fc,area:(bs[i+1]-bs[i])*(ds[j+1]-ds[j]),distance:n<0?c.width/2:(c.width+cells[n].width)/2});
+      }
+    }
+  }
 }
 
 export function compositeDivergence(grid,flux){

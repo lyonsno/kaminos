@@ -1191,32 +1191,33 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
     </div>
     <div class="panel" id="volume-joined-panel" data-volume-cockpit-layout-ui="joined-provisional" aria-label="Joined exterior (provisional)">
-      <div class="panel-title">Joined exterior <span style="opacity:.6">(provisional smoke controls, not saved)</span></div>
+      <div class="panel-title">Joined flame + exterior <span style="opacity:.6">(experimental; grid settings in URL)</span></div>
       <div class="slider-row">
       <span class="slider-label">Joined boundary</span>
       <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
       <span class="slider-val" id="volume-joined-boundary-val">off</span>
     </div>
       <div class="slider-row"><button class="btn" id="volume-joined-make-admissible">Use immersed source + converged solver</button></div>
-      <span class="slider-help">Provisional smoke control, not saved with the basin. Joins the fine box to an exterior at the pressure level: the fine projection stops and the exterior's shared solve sets the boundary faces. Needs the immersed source and the converged solver; the field says why when refused.</span>
+      <span class="slider-help">Shared pressure, transported exterior smoke and heat, and one combined ray march. Requires immersed source + converged solver. Changes apply immediately; grid changes restart the simulation. Material and camera controls remain live. Grid settings are kept in this URL, not in basin presets.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior size (× fine width)</span>
       <select id="volume-joined-exterior-size"><option value="0">none</option><option value="1.5">1.5</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
       <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
     </div>
-      <span class="slider-help">How big the exterior is in world space, as a multiple of the fine box on every axis, snapped to whole exterior cells and never less than the fine box plus one exterior cell on each side. The fine box sits centred in x and z, one exterior cell above the floor, so extra height goes above it. Changing it rebuilds only the exterior.</span>
+      <span class="slider-help">Exterior width relative to the fine width. The exterior is twice as tall as it is wide, with extra space above the flame. Independent of exterior resolution; changing either restarts the simulation.</span>
       <div class="slider-row">
-      <span class="slider-label">Exterior cell (fine cells)</span>
-      <select id="volume-joined-exterior-ratio"><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option></select>
-      <span class="slider-val" id="volume-joined-exterior-ratio-val">4</span>
+      <span class="slider-label">Exterior resolution</span>
+      <select id="volume-joined-exterior-ratio"><option value="24">24×48×24</option><option value="28">28×56×28</option><option value="32" selected>32×64×32</option><option value="48">48×96×48</option><option value="64">64×128×64</option></select>
+      <span class="slider-val" id="volume-joined-exterior-ratio-val">—</span>
     </div>
-      <span class="slider-help">How many fine cells across one exterior cell is: the exterior's resolution. The fine width must divide by it. Smaller is finer and slower.</span>
+      <span class="slider-help">Cells across the exterior, independent of the fine resolution in Simulation. Higher resolutions cost more. The readout reports effective cell width; unsupported geometry is refused explicitly.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior solve budget</span>
       <select id="volume-joined-exterior-budget"><option value="16">16</option><option value="32" selected>32</option><option value="64">64</option><option value="128">128</option></select>
       <span class="slider-val" id="volume-joined-exterior-solve-val">—</span>
     </div>
-      <span class="slider-help">Iterations of the shared pressure solve per step. The readout shows the worst cell's remaining divergence after the solve against the 0.001 gate, and the standalone fine solver's figure when the join is off, for comparison.</span>
+      <span class="slider-help">Maximum shared-pressure iterations per step. Measurement briefly pauses simulation and reads the GPU; it never runs automatically.</span>
+      <button class="btn" id="volume-joined-measure">Measure pressure</button>
       <div class="slider-row">
       <span class="slider-label">Grid bounds</span>
       <input type="checkbox" id="volume-joined-grid-bounds">
@@ -1225,10 +1226,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-help">Thin outlines of the fine grid (orange) and the exterior grid (violet) in the viewport, drawn from the transform the volume renders with.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior wall</span>
-      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
+      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+y">roof (+y)</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
       <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
     </div>
-      <span class="slider-help">A synthetic solid slab in the exterior, two coarse cells thick, two cells off the named side of the fine box, spanning the exterior. For seeing whether the exterior redirects the plume; not a scene object.</span>
+      <span class="slider-help">A synthetic solid slab two coarse cells thick, two cells off the named fine-box side, spanning the exterior. Applies immediately and restarts simulation; not an authored scene object.</span>
     </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
@@ -3865,7 +3866,7 @@ import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUti
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
@@ -18442,18 +18443,23 @@ function wireJoinedProvisionalControls(prototype) {
   if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
   const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
   const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
+  const remember = () => {
+    const u = new URL(location.href);
+    for (const [key, value] of Object.entries({volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'})) u.searchParams.set(key,value);
+    history.replaceState(history.state,'',u);
+  };
   const applyExterior = () => {
+    remember();
     const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
-    if (!(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
-    const extent = dims.map(d => Math.max(Math.round(mult * d / r), d / r + 2));
+    if (boundary.value !== 'on' || !(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
     const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
-    const res = prototype.setJoinedExterior({ enabled: true, extent, ratio: r, wall: side, budget: parseInt(budget.value, 10) });
+    const res = prototype.setJoinedExterior({ enabled: true, size: mult, coarseResolution: r, wall: side, budget: parseInt(budget.value, 10) });
     const receipt = res?.receipt;
     const joinOn = prototype.debugState?.()?.joinedBoundary?.admitted;
     if (!receipt?.admitted) text('volume-joined-exterior-extent-val', joinOn ? `refused: ${receipt?.reason ?? 'unknown'}` : 'waiting: turn the joined boundary on (and admitted) first', true);
     text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
   };
-  boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); if (size.value !== '0') applyExterior(); });
+  boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); applyExterior(); });
   for (const el of [size, ratio, wall, budget]) el.addEventListener('change', applyExterior);
   $('volume-joined-make-admissible').addEventListener('click', () => {
     const set = (id, value) => { const el = $(id); if (!el) return; el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
@@ -18491,10 +18497,17 @@ function wireJoinedProvisionalControls(prototype) {
   };
   const boundsLoop = () => { if (bounds.checked) updateBoxes(); requestAnimationFrame(boundsLoop); };
   requestAnimationFrame(boundsLoop);
-  bounds.addEventListener('change', updateBoxes);
+  bounds.addEventListener('change', () => { remember(); updateBoxes(); });
   // Live readouts.
   let probing = false;
-  setInterval(async () => {
+  $('volume-joined-measure').addEventListener('click', async () => {
+    if(probing)return; probing=true;
+    text('volume-joined-exterior-solve-val','measuring (simulation paused)…');
+    try { const p=await prototype.probeJoinedExterior(); text('volume-joined-exterior-solve-val',p?.status==='sampled'?`${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`:`not measured: ${p?.status ?? 'no exterior'}`,p?.status!=='sampled'); }
+    catch(e){text('volume-joined-exterior-solve-val',`measurement failed: ${e.message}`,true);}
+    finally{probing=false;}
+  });
+  setInterval(() => {
     const s = prototype.debugState?.(); if (!s) return;
     if (boundary.value === 'on') {
       if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
@@ -18504,14 +18517,26 @@ function wireJoinedProvisionalControls(prototype) {
     if (x?.admitted && size.value !== '0') {
       const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted;
       text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${stepping ? `stepping (${x.steps})` : 'NOT STEPPING: the join is off or refused'}`, !stepping);
-      text('volume-joined-exterior-ratio-val', `${x.ratio} fine cells, ${x.cellWidth.toFixed(3)} local`);
-      if (stepping && !probing) { probing = true; try { const p = await prototype.probeJoinedExterior(); if (p?.status === 'sampled') text('volume-joined-exterior-solve-val', `${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`, false); } finally { probing = false; } }
+      text('volume-joined-exterior-ratio-val', `${x.ratio.toFixed(2)} fine cells, ${x.cellWidth.toFixed(3)} local · ${s.joinedRendering?.enabled ? 'rendered' : 'NOT RENDERED'}`, !s.joinedRendering?.enabled);
     } else {
       const after = s.pressureSolver?.residual?.compact?.after?.maxAbs;
       text('volume-joined-exterior-solve-val', Number.isFinite(after) ? `standalone fine solve: ${s.pressureSolver?.effective?.iterations ?? '?'} sweeps, worst cell ${after.toExponential(1)}` : '—');
     }
     updateBoxes();
   }, 2000);
+  const params=new URLSearchParams(location.search);
+  for(const [el,key,fallback] of [[size,'volume_joined_size','2'],[ratio,'volume_joined_resolution','32'],[budget,'volume_joined_budget','32'],[wall,'volume_joined_wall','none']]) {
+    const value=params.get(key)??fallback;
+    if([...el.options].some(o=>o.value===value))el.value=value;
+  }
+  bounds.checked=params.get('volume_joined_bounds')!=='0';
+  boundary.value=params.get('volume_joined')==='1'?'on':'off';
+  if(boundary.value==='on') {
+    const start=()=>{
+      if(!prototype.debugState?.()?.active){requestAnimationFrame(start);return;}
+      prototype.setJoinedBoundary({enabled:true});applyExterior();
+    };requestAnimationFrame(start);
+  }
 }
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
@@ -19453,6 +19478,11 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  const joined=volumePrototype?.joinedWorldBounds?.();
+  if(joined){
+    frameBox(new THREE.Box3(new THREE.Vector3(...joined.min),new THREE.Vector3(...joined.max)),camera,controls);
+    window._kaminosDirty?.();return;
+  }
   const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);

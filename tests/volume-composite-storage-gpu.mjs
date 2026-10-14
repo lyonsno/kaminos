@@ -1,3 +1,4 @@
+// kaminos-test: manual — needs native WebGPU module and output arguments
 // Native buffer-layout conformance, not live producer integration or timing.
 import assert from 'node:assert/strict';
 import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';

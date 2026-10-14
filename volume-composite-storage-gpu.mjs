@@ -42,8 +42,8 @@ export function createCompositeStorageGPU(device,layout,buffers){
   layout.faces.forEach((m,i)=>{
     mapping.set([m.fineOffset??-1,m.lowerOffset??-1,m.coarseOffset??-1,m.seam?1:0],i*4);
     weights.set([m.sign*m.area*layout.fineWidth,m.sign*m.area],i*2);
-    if(m.fineOffset!==null)rows[Math.floor(m.fineOffset/16)*3+m.fineOffset%16].push([i,m.sign/(m.area*layout.fineWidth)]);
-    if(m.lowerOffset!==null)rows[fineRows+m.lowerOffset].push([i,m.sign/(m.area*layout.fineWidth)]);
+    if(m.fineOffset!==null)rows[Math.floor(m.fineOffset/16)*3+m.fineOffset%16].push([i,m.sign/layout.fineWidth**3]);
+    if(m.lowerOffset!==null)rows[fineRows+m.lowerOffset].push([i,m.sign/layout.fineWidth**3]);
     if(m.coarseOffset!==null)rows[fineRows+layout.lowerLength+Math.floor(m.coarseOffset/8)*3+m.coarseOffset%8].push([i,m.sign/layout.coarseWidth**2]);
   });
   const rowData=new Float32Array(total*4),links=[];
