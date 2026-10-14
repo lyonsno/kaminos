@@ -149,7 +149,18 @@ legacySolverArtifact.preset.route = legacySolverRoute.href;
 legacySolverArtifact.controlCount = 211;
 legacySolverArtifact.preset.controlCount = 211;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
-assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
+assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds,
+  schema.controls.filter(control => control.additiveSinceControlCount >= 212).map(control => control.key));
+assert.equal(legacySolverReceipt.preset.domControls['volume-domain-shape'].value, 'tall',
+  'older basins retain their original physical domain');
+const cubeArtifact = currentPresetArtifact();
+cubeArtifact.preset.domControls['volume-domain-shape'].value = 'cube';
+const cubeRoute = new URL(cubeArtifact.preset.route);
+cubeRoute.searchParams.set('volume_domain_shape', 'cube');
+cubeArtifact.preset.route = cubeRoute.href;
+const cubeReceipt = validateVolumeSettingsPresetDocument(cubeArtifact, cubeArtifact.presetId, schema);
+assert.equal(cubeReceipt.preset.domControls['volume-domain-shape'].value, 'cube');
+assert.equal(cubeReceipt.presetRoute.searchParams.get('volume_domain_shape'), 'cube');
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver-iterations'].value, 60);
 assert.equal(legacySolverReceipt.preset.domControls['volume-advection-scheme'].value, 'legacy', 'a 211-control basin keeps legacy damped transport');
@@ -238,7 +249,10 @@ const layoutMigration = reconcileVolumeCockpitLayoutDocument({
   retiredControls: schema.retiredControls,
 });
 assert.deepEqual(layoutMigration.retiredControlIds, [retired.key]);
-assert.deepEqual(layoutMigration.document.groups[0].controlIds, activeControlIds);
+assert.deepEqual(new Set(layoutMigration.document.groups[0].controlIds), new Set(activeControlIds));
+const gridCompanions = new Set(['volume-domain-shape','volume-outer-resolution','volume-collision-voxels']);
+assert.deepEqual(layoutMigration.document.groups[0].controlIds.filter(id=>!gridCompanions.has(id)),
+  activeControlIds.filter(id=>!gridCompanions.has(id)), 'unrelated authored order survives grid companion placement');
 assert.equal(layoutMigration.document.groups[0].collapsed, true, 'surviving group state is preserved');
 
 const inventedLayout = structuredClone(historicalLayout);

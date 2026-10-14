@@ -14,6 +14,12 @@ const collisionTarget = new URL(forwardCompositionHash('http://localhost:8106/?s
   '#scene=test.kaminos.json&volume_collision=kiln'));
 assert.equal(new URLSearchParams(collisionTarget.hash.slice(1)).get('volume_collision'), 'kiln',
   'the saved-preset launcher must retain the opt-in authored-kiln collision route');
+const outerHash = new URLSearchParams(new URL(forwardCompositionHash(target.href,
+  '#volume_outer_smoke=1&volume_outer_grid=32&volume_outer_extent=4&volume_outer_pressure=24&volume_outer_typo=bad')).hash.slice(1));
+for (const [key,value] of Object.entries({volume_outer_smoke:'1',volume_outer_grid:'32',volume_outer_extent:'4',volume_outer_pressure:'24'})) {
+  assert.equal(outerHash.get(key),value,`preset redirect must preserve requested ${key}`);
+}
+assert.equal(outerHash.has('volume_outer_typo'),false);
 const lightingHash = new URL(forwardCompositionHash('http://localhost:8106/', '#scene=test.kaminos.json&rendering_source_xyz=0%2C0%2C0&rendering_source_gain=5'));
 const guidedHash=new URLSearchParams(new URL(forwardCompositionHash('http://localhost:8106/','#rendering_angular_pattern=guided&rendering_directions=12&rendering_match_camera=1')).hash.slice(1));
 assert.equal(guidedHash.get('rendering_angular_pattern'),'guided','basin restore must not silently replace requested sampling law');

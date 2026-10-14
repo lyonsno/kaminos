@@ -1,3 +1,4 @@
+// kaminos-test: manual — native Dawn WebGPU script; takes the webgpu module path and an output directory
 // Native buffer-layout conformance, not live producer integration or timing.
 import assert from 'node:assert/strict';
 import {existsSync,mkdirSync,readFileSync,writeFileSync} from 'node:fs';

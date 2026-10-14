@@ -620,8 +620,8 @@ assert.match(index, /id="volume-curl"[^>]+value="2\.65"/, 'smoke route defaults 
 assert.match(index, /id="volume-microdetail"/, 'Volume tab exposes transported microdetail control');
 assert.match(index, /id="volume-interface-shred"/, 'Volume tab exposes interface shredding control');
 assert.match(index, /id="volume-fire-licks"/, 'Volume tab exposes fire-lick breakup control');
-assert.match(index, /id="volume-interface-shred"[^>]+max="5"/, 'Shred exposes an exaggerated tuning ceiling for operator range finding');
-assert.match(index, /id="volume-fire-licks"[^>]+max="5"/, 'Fire Licks exposes an exaggerated tuning ceiling for operator range finding');
+assert.match(index, /id="volume-interface-shred"[^>]+max="10"/, 'Shred exposes the operator-requested doubled tuning ceiling');
+assert.match(index, /id="volume-fire-licks"[^>]+max="10"/, 'Fire Licks exposes the operator-requested doubled tuning ceiling');
 assert.match(index, /id="volume-radiance"/, 'Volume tab exposes fire radiance control');
 assert.match(index, /id="volume-absorption"/, 'Volume tab exposes smoke absorption control');
 assert.match(index, /id="volume-glow"/, 'Volume tab exposes emissive glow control');
@@ -881,8 +881,8 @@ assert.match(index, /volume_microdetail/, 'URL route can override transported mi
 assert.match(index, /volume_curl/, 'URL route can override curl strength for force-isolation witnesses');
 assert.match(index, /volume_interface_shred/, 'URL route can override interface shredding strength');
 assert.match(index, /volume_fire_licks/, 'URL route can override fire-lick breakup strength');
-assert.match(index, /Math\.min\(5, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
-assert.match(index, /Math\.min\(5, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
+assert.match(index, /Math\.min\(10, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
 assert.match(index, /volume_radiance/, 'URL route can override fire radiance strength');
 assert.match(index, /volume_absorption/, 'URL route can override smoke absorption strength');
 assert.match(index, /volume_glow/, 'URL route can override emissive glow strength');

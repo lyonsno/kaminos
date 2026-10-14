@@ -285,7 +285,7 @@ test('post-correction divergence follows the effective gain and the velocity bou
   // The bound is scheme-aware since the transport slice: legacy keeps the fixed
   // clamp inside boundVelocity; non-legacy schemes bound by backtrace cells.
   assert.match(project, /boundVelocity\(correctedVelocity\)/, 'projection output goes through the shared scheme-aware velocity bound');
-  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34\), vec3<f32>\(0\.52\)/, 'legacy velocity bound is retained inside boundVelocity');
+  assert.match(source, /fn boundVelocity\([^]*?vec3<f32>\(-0\.34\) \* joinedVelocityScale\(\), vec3<f32>\(0\.52\) \* joinedVelocityScale\(\)/, 'the original bound is retained at scale1, with joined cell-unit conversion');
   const bound = v => Math.max(-0.34, Math.min(0.52, v));
   // One closed 1-D column of two cells: the stored component of cell 0 is the
   // flux through the shared face; both outer faces are walls.
@@ -378,7 +378,7 @@ test('the receipt reports disabled dispatch and the dispatch gate uses the same 
   assert.equal(convergedOn.effective.projection, 'full');
   const encode = source.slice(source.indexOf('  function encodePressureProjection(encoder'), source.indexOf('  function boundarySplatExecutionPlan('));
   assert.ok(encode.length > 0, 'encodePressureProjection must exist');
-  assert.match(encode, /const solverConfig = resolvePressureSolverConfig\(controlsSnapshot\);[^]*?if \(solverConfig\.effective\.dispatch === 'disabled'\)/, 'the dispatch gate is the resolver decision');
+  assert.match(encode, /const solverConfig = resolvePressureSolverConfig\(controlsSnapshot(?:, \{surroundingSmoke:outerRequested\})?\);[^]*?if \(solverConfig\.effective\.dispatch === 'disabled'\)/, 'the dispatch gate is the resolver decision');
   assert.doesNotMatch(encode, /projection <= 0\.001 \|\| pressureIterationCount <= 0/, 'no second hand-rolled gate that can drift from the receipt');
   assert.match(index, /solverConfig\.effective\.dispatch === 'disabled'/, 'cockpit label renders the disabled regime');
 });

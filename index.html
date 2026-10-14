@@ -1187,6 +1187,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="panel" id="volume-joined-panel" data-volume-cockpit-layout-ui="joined-provisional" aria-label="Joined exterior (provisional)">
       <div class="panel-title">Joined exterior <span style="opacity:.6">(provisional smoke controls, not saved)</span></div>
       <div class="slider-row">
+      <span class="slider-label">Exterior smoke grid</span>
+      <select id="volume-outer-resolution" class="select-input" aria-label="Outer smoke grid resolution; changing resets both grids">
+        <option value="32" selected>32</option>
+        <option value="48">48</option>
+        <option value="64">64</option>
+      </select>
+      <span class="slider-val" id="volume-outer-resolution-val">off (open with volume_outer_smoke=1)</span>
+    </div>
+      <span class="slider-help">Sexy Fireman's exterior smoke grid (N×2N×N), around the fine box: it carries smoke and heat out of the box and the renderer draws it. Present only when the page is opened with volume_outer_smoke=1 (and volume_outer_extent, default 4); changing the resolution resets both grids. With the joined boundary on, the shared pressure solve projects this grid too.</span>
+      <div class="slider-row">
+      <span class="slider-label">Collision voxels (x-ray)</span>
+      <select id="volume-collision-voxels" class="select-input" aria-label="Collision mask inspection replaces volume rendering, shows through mesh">
+        <option value="off" selected>Off — flame and smoke</option>
+        <option value="fine">Fine solids — cyan</option>
+        <option value="outer">Outer solids — orange</option>
+      </select>
+    </div>
+      <div class="slider-row">
       <span class="slider-label">Joined boundary</span>
       <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
       <span class="slider-val" id="volume-joined-boundary-val">off</span>
@@ -18582,6 +18600,8 @@ function readVolumeControls() {
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     gridHeightRatio: parseFloat(volumeRebuildControlValue('volume-grid-height-ratio')) || 2,
+    outerResolution: Number(document.getElementById('volume-outer-resolution').value),
+    collisionVoxelView: document.getElementById('volume-collision-voxels').value,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -19506,6 +19526,23 @@ async function initKaminosVolumeRoute() {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
+  const outerParams = new URLSearchParams(`${params.toString()}&${location.hash.slice(1)}`);
+  const outerResolutionSelect = document.getElementById('volume-outer-resolution');
+  const outerResolution = Number(outerParams.get('volume_outer_grid') || 32);
+  if (!Number.isInteger(outerResolution) || outerResolution < 2) throw new Error('Invalid outer grid resolution');
+  if (![...outerResolutionSelect.options].some(o => Number(o.value) === outerResolution)) {
+    outerResolutionSelect.add(new Option(`${outerResolution} (custom)`, String(outerResolution)));
+  }
+  outerResolutionSelect.value = String(outerResolution);
+  outerResolutionSelect.disabled = outerParams.get('volume_outer_smoke') !== '1';
+  {
+    const extent = Number(outerParams.get('volume_outer_extent') || 4);
+    document.getElementById('volume-outer-resolution-val').textContent = outerParams.get('volume_outer_smoke') === '1'
+      ? `${outerResolution}×${2 * outerResolution}×${outerResolution}, extent ${extent} (${(outerResolution / extent).toFixed(1)} cells across the fine box)` : 'off (open with volume_outer_smoke=1)';
+  }
+  const voxelView = params.get('volume_collision_voxels') || 'off';
+  if (!['off','fine','outer'].includes(voxelView)) throw new Error('Invalid collision voxel view');
+  document.getElementById('volume-collision-voxels').value = voxelView;
   if ([32, 48, 64, 96, 128, 136, 140, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
   }
@@ -20518,6 +20555,8 @@ async function initKaminosVolumeRoute() {
     'volume-confinement',
     'volume-time-step',
     'volume-common-gas-transport',
+    'volume-outer-resolution',
+    'volume-collision-voxels',
   ]) {
     document.getElementById(id).addEventListener('input', syncControls);
     document.getElementById(id).addEventListener('change', syncControls);
