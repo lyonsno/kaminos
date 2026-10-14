@@ -230,49 +230,182 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
-// Viewport shading: a loaded mesh switches to wire materials from the toolbar
-// toggle, AO is muted while wireframe, and Shift+Z inside the viewport restores
-// solid shading with the AO setting intact.
-async function runViewportWireframeToggleScenario(ws) {
-  await runMeshAssetLinkScenario(ws);
-  phase = 'scenario-viewport-wireframe-toggle';
-  const meshId = lastEvidence.meshAssetLink.state.registeredObjectId;
-  const read = () => evaluate(ws, 'window.kaminosViewportShadingDebugState?.() ?? null');
-  const meshState = state => state?.objects?.find(object => object.id === meshId);
-  const settle = () => evaluate(ws, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 600))))');
-  await settle();
-  const solid = await read();
-  assert.equal(solid?.mode, 'solid', 'viewport did not start in solid shading');
-  assert.ok(meshState(solid)?.solidMeshes > 0 && meshState(solid).wireMeshes === 0, `loaded mesh is not solid at start: ${JSON.stringify(solid)}`);
-  const selectionBefore = await evaluate(ws, 'JSON.stringify(window.kaminosSelection.read().ids)');
-  const solidShot = await capturePngScreenshot(ws, siblingPngPath('-solid'));
-  const wireButton = await evaluate(ws, `(() => { const r = document.querySelector('#viewport-shading [data-shading="wireframe"]')?.getBoundingClientRect(); return r && r.width > 0 ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; })()`);
-  assert.ok(wireButton, 'Wire toggle is missing or not visible in the viewport toolbar');
-  await dispatchMouseClick(ws, wireButton);
-  await settle();
-  const wire = await read();
-  assert.equal(wire.mode, 'wireframe', `Wire toggle did not switch shading: ${JSON.stringify(wire)}`);
-  assert.ok(meshState(wire)?.wireMeshes > 0 && meshState(wire).solidMeshes === 0, `loaded mesh kept solid materials in wireframe: ${JSON.stringify(wire)}`);
-  assert.equal(wire.aoIntensity, 0, 'AO stayed active in wireframe');
-  const pressed = await evaluate(ws, `document.querySelector('#viewport-shading [data-shading="wireframe"]').getAttribute('aria-pressed')`);
-  assert.equal(pressed, 'true', 'Wire toggle does not show pressed state');
-  assert.equal(await evaluate(ws, 'JSON.stringify(window.kaminosSelection.read().ids)'), selectionBefore, 'clicking the shading toggle changed the scene selection');
-  const wireShot = await capturePngScreenshot(ws, siblingPngPath('-wireframe'));
-  const a = decodeScreenshotPngRgb(readFileSync(solidShot.path)), b = decodeScreenshotPngRgb(readFileSync(wireShot.path));
-  let changed = 0;
-  for (let i = 0; i < a.pixels.length; i += a.channels) if (Math.abs(a.pixels[i] - b.pixels[i]) + Math.abs(a.pixels[i + 1] - b.pixels[i + 1]) + Math.abs(a.pixels[i + 2] - b.pixels[i + 2]) > 30) changed++;
-  assert.ok(changed > 2000, `wireframe frame barely differs from solid (${changed} changed pixels)`);
+// Viewport shading is presentation only. While Wire is active the rendered
+// frame uses wire materials, but save, export, duplication and material edits
+// keep reading and writing the authored materials; the toggle stays reachable
+// in whichever workspace toolbar is visible; Shift+Z restores Solid with the AO
+// setting intact. Checks are collected so one run reports every defect.
+async function viewportShadingRead(ws) {
+  return evaluate(ws, 'window.kaminosViewportShadingDebugState?.() ?? null');
+}
+
+async function settleViewportFrames(ws, ms = 600) {
+  await evaluate(ws, `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, ${ms}))))`);
+}
+
+async function visibleShadingToggle(ws) {
+  return evaluate(ws, `(() => {
+    const visible = [...document.querySelectorAll('.viewport-shading')].filter(group => { const r = group.getBoundingClientRect(); return r.width > 0 && r.height > 0 && group.offsetParent !== null; });
+    return visible.map(group => Object.fromEntries([...group.querySelectorAll('[data-shading]')].map(button => { const r = button.getBoundingClientRect(); return [button.dataset.shading, { x: r.left + r.width / 2, y: r.top + r.height / 2, pressed: button.getAttribute('aria-pressed') }]; })));
+  })()`);
+}
+
+async function authoredSceneMaterials(ws, tag, { exportGlb = true } = {}) {
+  return evaluate(ws, `(async () => {
+    const posted = [], realFetch = window.fetch, realCreate = URL.createObjectURL, realClick = HTMLAnchorElement.prototype.click;
+    let blob = null;
+    // Capture the save request body and answer it here: the witness writes no scene file.
+    window.fetch = async (input, init) => {
+      if (String(input?.url ?? input).includes('/api/save-scene')) {
+        posted.push(JSON.parse(init.body));
+        return new Response(JSON.stringify({ error: 'viewport witness captured the save request' }), { status: 503, headers: { 'Content-Type': 'application/json' } });
+      }
+      return realFetch(input, init);
+    };
+    URL.createObjectURL = value => { blob = value; return realCreate.call(URL, value); };
+    HTMLAnchorElement.prototype.click = function() { if (!String(this.href).startsWith('blob:')) return realClick.call(this); };
+    try {
+      await window.saveSceneAs({ result: true, name: 'viewport-wireframe-witness-${tag}' });
+      const exported = ${exportGlb} ? await window.exportGLB({ name: 'viewport-wireframe-witness-${tag}' }) : null;
+      let exportMaterials = null;
+      if (blob) {
+        const bytes = await blob.arrayBuffer(), view = new DataView(bytes), length = view.getUint32(12, true);
+        exportMaterials = JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, length))).materials ?? [];
+      }
+      const doc = posted.at(-1);
+      return { saveRequestCaptured: posted.length > 0, exported, savedMaterials: doc ? doc.objects.map(object => ({ id: object.id, materials: object.materials })) : null, exportMaterials };
+    } finally { window.fetch = realFetch; URL.createObjectURL = realCreate; HTMLAnchorElement.prototype.click = realClick; }
+  })()`, { timeoutMs: 60000 });
+}
+
+async function pressShiftZInViewport(ws) {
   const viewport = await evaluate(ws, `(() => { const r = document.getElementById('viewport').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: viewport.x, y: viewport.y });
   await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyDown', key: 'Z', code: 'KeyZ', modifiers: 8, windowsVirtualKeyCode: 90, nativeVirtualKeyCode: 90 });
   await wsRequest(ws, 'Input.dispatchKeyEvent', { type: 'keyUp', key: 'Z', code: 'KeyZ', modifiers: 8, windowsVirtualKeyCode: 90, nativeVirtualKeyCode: 90 });
-  await settle();
-  const restored = await read();
-  assert.equal(restored.mode, 'solid', `Shift+Z did not restore solid shading: ${JSON.stringify(restored)}`);
-  assert.ok(meshState(restored)?.solidMeshes > 0 && meshState(restored).wireMeshes === 0, `mesh materials were not restored: ${JSON.stringify(restored)}`);
-  assert.equal(restored.aoIntensity, solid.aoIntensity, 'AO intensity was not restored after wireframe');
+}
+
+function changedPixelCount(pathA, pathB) {
+  const a = decodeScreenshotPngRgb(readFileSync(pathA)), b = decodeScreenshotPngRgb(readFileSync(pathB));
+  let changed = 0;
+  for (let i = 0; i < a.pixels.length; i += a.channels) if (Math.abs(a.pixels[i] - b.pixels[i]) + Math.abs(a.pixels[i + 1] - b.pixels[i + 1]) + Math.abs(a.pixels[i + 2] - b.pixels[i + 2]) > 30) changed++;
+  return changed;
+}
+
+async function runViewportWireframeToggleScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-viewport-wireframe-toggle';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const meshId = lastEvidence.meshAssetLink.state.registeredObjectId;
+  const authoredOf = (state, id = meshId) => state?.objects?.find(object => object.id === id);
+  const selection = () => evaluate(ws, 'JSON.stringify(window.kaminosSelection.read().ids)');
+  const evidence = lastEvidence.viewportWireframe = { meshId, failures };
+  await settleViewportFrames(ws);
+  const solid = evidence.solid = await viewportShadingRead(ws);
+  assert.equal(solid?.mode, 'solid', 'viewport did not start in solid shading');
+  assert.ok(authoredOf(solid)?.solidMeshes > 0, `loaded mesh has no solid materials at start: ${JSON.stringify(solid)}`);
+  const solidShot = await capturePngScreenshot(ws, siblingPngPath('-solid'));
+  const solidAuthored = evidence.solidAuthored = await authoredSceneMaterials(ws, 'solid');
+  check(solidAuthored.savedMaterials && solidAuthored.exportMaterials, `could not capture solid save/export materials: ${JSON.stringify(solidAuthored)}`);
+
+  const selectionBefore = await selection();
+  const [toolbarToggle] = await visibleShadingToggle(ws);
+  assert.ok(toolbarToggle?.wireframe, 'Wire toggle is missing or not visible in the viewport toolbar');
+  await dispatchMouseClick(ws, toolbarToggle.wireframe);
+  await settleViewportFrames(ws);
+  const wire = evidence.wire = await viewportShadingRead(ws);
+  check(wire.mode === 'wireframe', `Wire toggle did not switch shading: ${wire.mode}`);
+  check((await visibleShadingToggle(ws))[0]?.wireframe?.pressed === 'true', 'Wire toggle does not show pressed state');
+  check(await selection() === selectionBefore, 'clicking the shading toggle changed the scene selection');
+  check(wire.aoIntensity === 0, `AO stayed active in wireframe: ${wire.aoIntensity}`);
+  check(authoredOf(wire)?.wireMeshes === 0 && authoredOf(wire)?.solidMeshes > 0, `authored materials outside the frame became wire materials: ${JSON.stringify(authoredOf(wire))}`);
+  check(wire.lastRender?.mode === 'wireframe' && wire.lastRender.perObject?.[meshId] > 0, `no rendered wireframe frame drew the loaded mesh: ${JSON.stringify(wire.lastRender)}`);
+  const wireShot = await capturePngScreenshot(ws, siblingPngPath('-wireframe'));
+  evidence.changedPixels = changedPixelCount(solidShot.path, wireShot.path);
+  check(evidence.changedPixels > 2000, `wireframe frame barely differs from solid (${evidence.changedPixels} changed pixels)`);
+  const wireAuthored = evidence.wireAuthored = await authoredSceneMaterials(ws, 'wire');
+  check(JSON.stringify(wireAuthored.savedMaterials) === JSON.stringify(solidAuthored.savedMaterials), `saving in Wire changed saved materials: ${JSON.stringify({ solid: solidAuthored.savedMaterials, wire: wireAuthored.savedMaterials })}`);
+  check(JSON.stringify(wireAuthored.exportMaterials) === JSON.stringify(solidAuthored.exportMaterials), `exporting in Wire changed exported materials: ${JSON.stringify({ solid: solidAuthored.exportMaterials, wire: wireAuthored.exportMaterials })}`);
+
+  // A material edit and a duplicate made in Wire act on authored materials.
+  const sideBefore = solidAuthored.savedMaterials?.find(object => object.id === meshId)?.materials?.side;
+  await evaluate(ws, 'window.toggleDoubleSided()');
+  const idsBeforeDuplicate = new Set((await viewportShadingRead(ws)).objects.map(object => object.id));
+  await evaluate(ws, 'window.kaminosSelection.duplicate()');
+  await settleViewportFrames(ws);
+  await pressShiftZInViewport(ws);
+  await settleViewportFrames(ws);
+  const restored = evidence.restored = await viewportShadingRead(ws);
+  const duplicate = evidence.duplicate = restored.objects.find(object => !idsBeforeDuplicate.has(object.id) && object.type === 'glb');
+  check(restored.mode === 'solid', `Shift+Z did not restore solid shading: ${restored.mode}`);
+  check(duplicate && duplicate.wireMeshes === 0 && duplicate.solidMeshes > 0, `duplicate made in Wire is not solid after returning to Solid: ${JSON.stringify(duplicate)}`);
+  check(restored.objects.every(object => object.wireMeshes === 0), `wire materials remain after returning to Solid: ${JSON.stringify(restored.objects)}`);
+  check(restored.aoIntensity === solid.aoIntensity, `AO intensity was not restored after wireframe: ${restored.aoIntensity} vs ${solid.aoIntensity}`);
   const restoredShot = await capturePngScreenshot(ws, siblingPngPath('-restored'));
-  lastEvidence.viewportWireframe = { meshId, solid: meshState(solid), wire: meshState(wire), restored: meshState(restored), aoIntensity: { solid: solid.aoIntensity, wire: wire.aoIntensity, restored: restored.aoIntensity }, changedPixels: changed, shots: [solidShot, wireShot, restoredShot] };
+  const editedSave = evidence.editedSave = await authoredSceneMaterials(ws, 'edited', { exportGlb: false });
+  const sideAfter = editedSave.savedMaterials?.find(object => object.id === meshId)?.materials?.side;
+  check(sideBefore !== undefined && sideAfter !== undefined && sideAfter !== sideBefore, `double-sided edit made in Wire did not reach the authored material: ${JSON.stringify({ sideBefore, sideAfter })}`);
+  await evaluate(ws, 'window.toggleDoubleSided()');
+
+  // The toggle follows the visible workspace toolbar.
+  const workspace = async mode => { const point = await evaluate(ws, `(() => { const r = document.querySelector('[data-workspace-mode="${mode}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`); await dispatchMouseClick(ws, point); await settleViewportFrames(ws); };
+  await workspace('authoring');
+  const authoringToggles = evidence.authoringToggles = await visibleShadingToggle(ws);
+  check(authoringToggles.length === 1 && authoringToggles[0].solid?.pressed === 'true', `Authoring does not show exactly one shading toggle in Solid: ${JSON.stringify(authoringToggles)}`);
+  let authoringShot = null;
+  if (authoringToggles[0]?.wireframe) {
+    const selectionInAuthoring = await selection();
+    await dispatchMouseClick(ws, authoringToggles[0].wireframe);
+    await settleViewportFrames(ws);
+    check((await viewportShadingRead(ws)).mode === 'wireframe', 'Authoring Wire toggle did not switch shading');
+    check(await selection() === selectionInAuthoring, 'Authoring shading toggle changed the scene selection');
+    authoringShot = await capturePngScreenshot(ws, siblingPngPath('-authoring-wireframe'));
+  }
+  await workspace('workbench');
+  const workbenchToggles = evidence.workbenchToggles = await visibleShadingToggle(ws);
+  check(workbenchToggles.length === 1 && workbenchToggles[0].wireframe?.pressed === 'true', `Workbench does not show exactly one shading toggle in Wire after switching back: ${JSON.stringify(workbenchToggles)}`);
+  if (workbenchToggles[0]?.solid) { await dispatchMouseClick(ws, workbenchToggles[0].solid); await settleViewportFrames(ws); }
+  check((await viewportShadingRead(ws)).mode === 'solid', 'Workbench Solid toggle did not restore solid shading');
+  evidence.shots = [solidShot, wireShot, restoredShot, authoringShot].filter(Boolean);
+  assert.deepEqual(failures, [], `viewport wireframe checks failed:\n- ${failures.join('\n- ')}`);
+}
+
+// A scene flame requests fire shadows from opaque casters. Wire must not turn
+// the loaded mesh into an unsupported caster or stop the scene frame.
+async function runViewportWireframeFireShadowScenario(ws) {
+  await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-viewport-wireframe-fire-shadow';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const presetId = args.get('--flame-preset') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  const evidence = lastEvidence.viewportWireframeFire = { presetId, failures };
+  await evaluate(ws, `(() => { window.__wireframeWitnessErrors = []; addEventListener('error', event => window.__wireframeWitnessErrors.push(String(event.message || event.error))); const original = console.error; console.error = (...items) => { window.__wireframeWitnessErrors.push(items.map(String).join(' ')); return original.apply(console, items); }; })()`);
+  phase = 'scenario-viewport-wireframe-fire-shadow-add-flame';
+  evidence.added = await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(presetId)}).then(() => true)`, { timeoutMs: 120000 });
+  phase = 'scenario-viewport-wireframe-fire-shadow-wait-shadow';
+  let shadow = null;
+  for (let i = 0; i < 240; i++) { shadow = (await evaluate(ws, 'window.kaminosFireLightFieldDebugState?.()?.shadow ?? null')); if (shadow?.effective && shadow.renderCount > 0) break; await delay(250); }
+  evidence.solidShadow = shadow;
+  assert.ok(shadow?.requested && shadow.effective && shadow.renderCount > 0, `scene flame did not reach effective fire shadows in Solid: ${JSON.stringify(shadow)}`);
+  await settleViewportFrames(ws, 1500);
+  const solidShot = await capturePngScreenshot(ws, siblingPngPath('-fire-solid'));
+  phase = 'scenario-viewport-wireframe-fire-shadow-wire';
+  const framesBefore = (await viewportShadingRead(ws))?.lastRender?.sceneFrameCount ?? null;
+  await evaluate(ws, `window.kaminosViewportSettings.set({ shading: 'wireframe' })`);
+  await settleViewportFrames(ws, 3000);
+  const wire = evidence.wire = await viewportShadingRead(ws);
+  const wireShadow = evidence.wireShadow = await evaluate(ws, 'window.kaminosFireLightFieldDebugState?.()?.shadow ?? null');
+  const errors = evidence.errors = await evaluate(ws, 'window.__wireframeWitnessErrors');
+  check(!errors.some(message => /fire-shadow|unsupported-caster/.test(message)), `fire shadow errors while in Wire: ${JSON.stringify(errors.slice(0, 5))}`);
+  check(!/unsupported-caster/.test(wireShadow?.reason || ''), `fire shadow rejected a caster in Wire: ${JSON.stringify(wireShadow)}`);
+  check(wireShadow?.effective && wireShadow.renderCount > shadow.renderCount, `fire shadows stopped rendering in Wire: ${JSON.stringify({ solid: shadow, wire: wireShadow })}`);
+  check(wire?.lastRender?.mode === 'wireframe' && framesBefore !== null && wire.lastRender.sceneFrameCount > framesBefore, `scene frames did not continue in Wire with a flame present: ${JSON.stringify({ framesBefore, lastRender: wire?.lastRender })}`);
+  const wireShot = await capturePngScreenshot(ws, siblingPngPath('-fire-wireframe'));
+  await evaluate(ws, `window.kaminosViewportSettings.set({ shading: 'solid' })`);
+  await settleViewportFrames(ws, 1500);
+  evidence.restoredShadow = await evaluate(ws, 'window.kaminosFireLightFieldDebugState?.()?.shadow ?? null');
+  check(evidence.restoredShadow?.effective, `fire shadows not effective after returning to Solid: ${JSON.stringify(evidence.restoredShadow)}`);
+  evidence.shots = [solidShot, wireShot];
+  assert.deepEqual(failures, [], `viewport wireframe fire checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
@@ -6018,6 +6151,8 @@ try {
     await runMeshAssetLinkScenario(ws);
   } else if (scenario === 'viewport-wireframe-toggle') {
     await runViewportWireframeToggleScenario(ws);
+  } else if (scenario === 'viewport-wireframe-fire-shadow') {
+    await runViewportWireframeFireShadowScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {

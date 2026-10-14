@@ -1,5 +1,7 @@
 export const DEFAULT_VIEWPORT_DISPLAY=Object.freeze({overlays:true,gizmos:true,outlines:true,bounds:false,helpers:true,domains:true,emitters:true,hints:true,outlineWidth:1.5,outlineOpacity:1,domainWidth:1,domainOpacity:.82,emitterWidth:1,emitterOpacity:.55,shading:'solid'});
 export const VIEWPORT_SHADING_MODES=Object.freeze(['solid','wireframe']);
+// Each viewport toolbar renders its own instance; index.html syncs pressed state.
+export const VIEWPORT_SHADING_TOGGLE_HTML='<div class="viewport-shading" role="group" aria-label="Viewport shading" title="Toggle wireframe (Shift Z)"><button type="button" data-shading="solid" aria-pressed="true">Solid</button><button type="button" data-shading="wireframe" aria-pressed="false">Wire</button></div>';
 export function checkedViewportDisplay(value={}) {
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid viewport display');
  const result={...DEFAULT_VIEWPORT_DISPLAY,...value};
