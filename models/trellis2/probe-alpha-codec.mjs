@@ -21,6 +21,8 @@ try{
   report.executable=executable;
   report.moduleSha256=createHash('sha256').update(await readFile(path.join(root,'models/trellis2/alpha-preparation.js'))).digest('hex');
   const fixture=JSON.parse(await readFile(path.join(root,'models/trellis2/tests/fixtures/alpha-preparation-source.json'),'utf8'));
+  if(!Array.isArray(fixture.cases)||fixture.cases.length===0)
+    throw Error('a nonempty fixture case array is required for pixel evidence');
   const hosted=await startServer({'/repo/':root,'/inputs/':images});server=hosted.server;
   report.origin=hosted.origin;report.phase='browser-launch';await persist();
   browser=await launchChrome(executable,['--disable-gpu'],report,{profileDir:path.join(out,'browser-profile')});
