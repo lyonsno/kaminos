@@ -10,16 +10,27 @@ export function validateFingerFluidDiagnosticPopulation(p,count=p?.particleCount
 }
 /** Finite box: refinement changes spacing, sample volume, surface support and
  * collision size. PBF kernel support follows the volume-derived particle scale. */
-export function createFingerFluidBoxReference({scene='block_drop',resolution=24,pressureRadius}={}) {
+// Allocation-free proposed geometry; the same descriptor drives allocation.
+export function describeFingerFluidBoxReference({scene='block_drop',resolution=24,blockWidth=1,pressureRadius}={}) {
   if(!['block_drop','block_flop','dam_break'].includes(scene))throw new RangeError('Unknown box reference scene');
-  if(!Number.isSafeInteger(resolution)||resolution<16||resolution%8!==0)throw new RangeError('Box resolution must be an integer multiple of eight, at least sixteen');
+  if(!Number.isSafeInteger(resolution)||resolution<1)throw new RangeError('Samples per world unit must be a positive integer');
+  if(scene==='block_flop'&&resolution%8!==0)throw new RangeError('Puddle thickness 1/8 requires samples per unit divisible by eight');
+  if(!Number.isFinite(blockWidth)||blockWidth<=0||blockWidth>1.3)throw new RangeError('Block width must fit the 1.3-wide collision box');
+  const across=blockWidth*resolution,blockSamples=Math.round(across);
+  if(blockSamples<1||Math.abs(across-blockSamples)>1e-9)throw new RangeError('Block width × samples per unit must be a whole number; use width increments of 1/samples');
   if(pressureRadius!==undefined)throw new RangeError('Independent pressure radius unsupported in this PBF fixture');
   const spacing=1/resolution,volume=spacing**3,baseVolume=(64*Math.PI/315)*.185**3/24.3;
   const bounds={min:[-1.5,-1,-.65],max:[1.5,2,.65]};
-  const regions=[{size:[resolution,resolution,resolution],origin:scene==='dam_break'?[-1.5,-1,-.5]:[-.5,.4,-.5]}];
+  const regions=[{size:[blockSamples,blockSamples,blockSamples],origin:scene==='dam_break'?[-1.5,-1,-blockWidth/2]:[-blockWidth/2,.4,-blockWidth/2]}];
   if(scene==='block_flop')regions.push({size:[3*resolution,resolution/8,resolution],origin:[-1.5,-1,-.5]});
   const particleCount=regions.reduce((n,r)=>n+r.size.reduce((a,b)=>a*b,1),0);
   if(!Number.isSafeInteger(particleCount)||particleCount*16>0xffffffff)throw new RangeError('Box population exceeds typed-array capacity');
+  const particleVolumeScale=volume/baseVolume,supportRadius=.185*Math.cbrt(particleVolumeScale);
+  return {scene,resolution,blockWidth,blockSamples,spacing,particleCount,particleVolume:volume,particleVolumeScale,representedVolume:particleCount*volume,blockVolume:blockSamples**3*volume,puddleVolume:scene==='block_flop'?3/8:0,supportRadius,collisionRadius:.5*spacing,baseGlyphRadius:.046*Math.cbrt(particleVolumeScale),supportMode:'PBF_volume_scaled',bounds,regions};
+}
+export function createFingerFluidBoxReference(input={}) {
+  const descriptor=describeFingerFluidBoxReference(input);
+  const {scene,resolution,spacing,particleCount,particleVolume:volume,particleVolumeScale,bounds,regions}=descriptor;
   const data=new Float32Array(particleCount*16);let i=0;
   for(const r of regions)for(let y=0;y<r.size[1];y++)for(let z=0;z<r.size[2];z++)for(let x=0;x<r.size[0];x++){
     const p=[x,y,z].map((v,k)=>r.origin[k]+(v+.5)*spacing);
@@ -31,8 +42,8 @@ export function createFingerFluidBoxReference({scene='block_drop',resolution=24,
     planes.push({normal,offset:normal[k]*bounds[side][k]});
   }
   const box={schema:'kaminos.fluid-reference-box.v1',bounds,planes,collisionRadius:.5*spacing};
-  const population={schema:'kaminos.fluid-discriminator-population.v1',fixture:scene,refinement:resolution/24,particleCount,particleData:data,particleVolumeScale:volume/baseVolume,representedVolume:particleCount*volume/baseVolume,worldVolume:particleCount*volume,source:'regular_lattice_finite_water_at_rest_no_recycling'};
-  return {scene,resolution,spacing,particleCount,particleVolume:volume,representedVolume:particleCount*volume,volumeUnits:'world_units_cubed',supportMode:'PBF_volume_scaled',box,population};
+  const population={schema:'kaminos.fluid-discriminator-population.v1',fixture:scene,refinement:resolution/24,particleCount,particleData:data,particleVolumeScale,representedVolume:particleCount*particleVolumeScale,worldVolume:particleCount*volume,source:'regular_lattice_finite_water_at_rest_no_recycling'};
+  return {...descriptor,volumeUnits:'world_units_cubed',supportMode:'PBF_volume_scaled',box,population};
 }
 
 export function validateFingerFluidReferenceBox(box) {

@@ -14916,7 +14916,7 @@ async function installOwnerWorkbenchEntry() {
       applyFluidOwnerSetup({},setup);
       stopFingerFluidBench();fingerFluidBenchSolver?.destroy?.();
       fingerFluidBenchSolver=null;fingerFluidBenchSolverPromise=null;fingerFluidBenchConfig=null;
-      fingerFluidResetPolicy=null;fingerFluidOwnerSetup=setup;ownerFluidPlayback=setup.playbackRate===undefined?null:createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate});++fingerFluidOwnerIdentity;fingerFluidBenchSimulationPaused=true;
+      fingerFluidResetPolicy=null;fingerFluidOwnerSetup=setup;ownerFluidPlayback=setup.playbackRate===undefined?null:createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate,mode:setup.playbackMode??'wall_time'});++fingerFluidOwnerIdentity;fingerFluidBenchSimulationPaused=true;
       window.__kaminosInvestigationEntryOnly=true;
       setActiveTab('finger-fluid-bench');window.__kaminosInvestigationEntryOnly=false;
       const outcome=await startFingerFluidBench();
@@ -14928,6 +14928,7 @@ async function installOwnerWorkbenchEntry() {
       return createOwnerWaterCapability({state:window.kaminosFingerFluidBenchSessionState,identity:()=>fingerFluidOwnerIdentity,
         material:()=>fingerFluidBenchSolver.getMaterialControls(),applyMaterial:applyOwnerMaterialControls,
         playback:()=>ownerFluidPlayback?.state().rate??null,setPlaybackRate:rate=>{if(!ownerFluidPlayback)throw Error('Owner playback was not selected');ownerFluidPlayback.setRate(rate);fingerFluidOwnerSetup={...fingerFluidOwnerSetup,playbackRate:rate};return rate;},
+        setPlaybackMode:mode=>{if(!ownerFluidPlayback)throw Error('Owner playback was not selected');ownerFluidPlayback.setMode(mode);fingerFluidOwnerSetup={...fingerFluidOwnerSetup,playbackMode:mode};return mode;},
         debug:()=>fingerFluidBenchSolver.getDebugState(),pressure:()=>fingerFluidBenchSolver.getPressureControls(),
         apply:patch=>fingerFluidPressureCockpit.apply(patch),
         pause:value=>{ownerFluidPlayback?.reset();const r=window.kaminosFingerFluidBenchSetSimulationPausedForWitness(value);if(!value)resumeFingerFluidBenchAfterWitness();return r;},
@@ -15023,6 +15024,7 @@ function initKaminosFingerFluidBenchRoute() {
     fixedTimeStepSeconds:fluidClockStepSeconds(),
     frameTimeStepSeconds:fluidStepSeconds(),
     playbackRate:ownerFluidPlayback?.state().rate??null,
+    playbackMode:ownerFluidPlayback?.state().mode??null,
     timeSeconds:(fingerFluidBenchSolver?.getDebugState?.().stepCount??0)*fluidClockStepSeconds(),
     paused: fingerFluidBenchSimulationPaused,
     running: fingerFluidBenchRunning,

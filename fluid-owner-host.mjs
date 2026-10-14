@@ -19,7 +19,7 @@ export function applyFluidOwnerSetup(base,setup) {
 }
 
 /** Only the active generation can mutate water; restart explicitly renews it. */
-export function createOwnerWaterCapability({state,debug,pressure,apply,pause,advance,restart,dispose,identity=null,material=null,applyMaterial=null,playback=null,setPlaybackRate=null}) {
+export function createOwnerWaterCapability({state,debug,pressure,apply,pause,advance,restart,dispose,identity=null,material=null,applyMaterial=null,playback=null,setPlaybackRate=null,setPlaybackMode=null}) {
  const ownerIdentity=identity??(()=>state().generation);
  let generation=ownerIdentity(),closed=false;
  const current=()=>{if(closed)throw Error('Owner water is disposed');const value=state();if(!value.available||ownerIdentity()!==generation)throw Error('Owner water generation changed');return value;};
@@ -30,6 +30,7 @@ export function createOwnerWaterCapability({state,debug,pressure,apply,pause,adv
   getSolver(){current();return facade;},
   applyMaterial(patch){current();if(!applyMaterial)throw Error('Material capability unavailable');return applyMaterial(patch);},
   setPlaybackRate(value){current();if(!setPlaybackRate)throw Error('Playback capability unavailable');return setPlaybackRate(value);},
+  setPlaybackMode(value){current();if(!setPlaybackMode)throw Error('Playback mode capability unavailable');return setPlaybackMode(value);},
   applyPressure(patch){current();return apply(patch);},
   setPaused(value){current();return pause(value);},
   advanceTo(step){current();return advance(step);},

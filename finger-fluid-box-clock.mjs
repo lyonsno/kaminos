@@ -16,17 +16,19 @@ export function createBoxFramePump({submit,completed,schedule,onError}){
 }
 
 // Playback changes how many fixed steps are shown per wall second, never dt.
-export function createFixedStepPlayback({dt,rate=1}) {
+export function createFixedStepPlayback({dt,rate=1,mode='wall_time'}) {
  if(!Number.isFinite(dt)||dt<=0)throw new RangeError('Positive finite physics timestep required');
  let last=null,credit=0;
  const setRate=value=>{if(!Number.isFinite(value)||value<=0)throw new RangeError('Playback rate must be finite and positive');rate=value;};
- setRate(rate);
- return {setRate,reset(){last=null;credit=0;},state:()=>({dt,rate,credit}),
+ const setMode=value=>{if(!['wall_time','render_cadence'].includes(value))throw new RangeError('Unknown playback mode');mode=value;last=null;credit=0;};
+ setRate(rate);setMode(mode);
+ return {setRate,setMode,reset(){last=null;credit=0;},state:()=>({dt,rate,mode,credit}),
   advance(now,{paused=false}={}) {
    if(!Number.isFinite(now))throw new RangeError('Finite playback clock required');
-   const elapsed=last===null?0:Math.max(0,(now-last)/1000);last=now;
+   const first=last===null;
+   const elapsed=first?0:Math.max(0,(now-last)/1000);last=now;
    if(paused){credit=0;return {steps:0,dt};}
-   credit+=elapsed*rate;
+   credit+=(mode==='render_cadence'?(first?0:dt):elapsed)*rate;
    const steps=Math.floor((credit+1e-12)/dt);credit-=steps*dt;
    if(!Number.isSafeInteger(steps))throw new RangeError('Playback step count is not representable');
    return {steps,dt};
