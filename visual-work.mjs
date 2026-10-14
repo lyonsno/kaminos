@@ -18,10 +18,10 @@ export function assertCapturePixels({ width, height, channels, pixels }, capture
   assert.ok(varying, 'Capture is empty or uniform; inspect the rendered scene');
 }
 
-export function assertSavedResult(result, persisted) {
+export function assertSavedResult(result, persisted, {workspace=null}={}) {
   assert.ok(result?.ok === true && result.document && result.filename?.endsWith('.kaminos.json'),
     `Save failed: ${result?.error || 'missing document result'}`);
-  assert.equal(result.url, compositionRestoreUrl(result.document.composition, result.filename, new URL(result.url).origin), 'Save URL differs from saved document');
+  assert.equal(result.url, compositionRestoreUrl(result.document.composition, result.filename, new URL(result.url).origin, workspace), 'Save URL differs from saved document');
   assert.deepEqual(persisted, result.document, 'Persisted document differs from save result');
   return result;
 }
@@ -41,10 +41,10 @@ export function assertMountedScene(document, actual) {
 
 // The caller supplies a Playwright page and feature operations. All edits and
 // persistence still run through the mounted editor's normal public operations.
-export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, out, exercise }) {
+export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null, out, exercise }) {
   await fs.mkdir(out, { recursive: true });
   const report = { status: 'running', phase: 'identity', startedAt: new Date().toISOString(),
-    requested: { origin, repoRoot, sceneStore, basinStore, sceneFile }, observations: [], errors: [] };
+    requested: { origin, repoRoot, sceneStore, basinStore, sceneFile, workspace }, observations: [], errors: [] };
   const reportPath = path.join(out, 'report.json');
   const write = () => fs.writeFile(reportPath, JSON.stringify(report, null, 2));
   const pageError = error => report.errors.push(error.message);
@@ -62,7 +62,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
     const open = async filename => {
       report.phase = 'open'; await write();
       const document = await readScene(filename);
-      const url = compositionRestoreUrl(document.composition, filename, origin);
+      const url = compositionRestoreUrl(document.composition, filename, origin, workspace);
       // Leaving the document explicitly also exercises fresh restoration when
       // only the scene hash would otherwise change.
       await page.goto('about:blank');
@@ -93,7 +93,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture);
       if (!result?.ok) throw Error(`Save failed: ${result?.error || 'no result'}`);
       const persisted = await readScene(result.filename);
-      assertSavedResult(result, persisted);
+      assertSavedResult(result, persisted, {workspace});
       assert.deepEqual(report.errors, [], 'Uncaught browser error');
       await fs.writeFile(path.join(out, `${name}.kaminos.json`), JSON.stringify(persisted, null, 2));
       if (capture) {

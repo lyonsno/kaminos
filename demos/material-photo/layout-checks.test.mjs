@@ -22,3 +22,11 @@ test('browser source admission rejects missing and altered loaded modules',()=>{
   assert.throws(()=>checks.validateBrowserSources({...expected,'viewer.js':'old'},expected),/viewer/);
   assert.throws(()=>checks.validateBrowserSources({'main.js':'main'},expected),/viewer/);
 });
+test('mounted and browser agreement cannot admit a different source revision',()=>{
+  const expected={'main.js':'main','viewer.js':'viewer','style.css':'css'};
+  assert.doesNotThrow(()=>checks.validateBrowserSources({...expected,'extra.js':'extra'},{...expected,'extra.js':'extra'},expected));
+  const stale={...expected,'viewer.js':'old'};
+  assert.throws(()=>checks.validateBrowserSources(stale,stale,expected),/viewer/);
+  assert.throws(()=>checks.validateBrowserSources(expected,stale,expected),/viewer/);
+  assert.throws(()=>checks.validateBrowserSources(expected,{'main.js':'main'},expected),/viewer/);
+});

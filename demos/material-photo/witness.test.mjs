@@ -92,6 +92,23 @@ test('witness rejects false completion, stale source and wrong device', async()=
   ]){const bad=structuredClone(good);mutate(bad);assert.throws(()=>validateEpisode(bad,'Celebration'));}
 });
 
+test('hosted upload witness rejects another package, missing chunks, credentials and cached geometry',async()=>{
+  const {validateEpisode}=await import('./witness-checks.js');
+  const validateHostedUpload=(state,source,size,expected,requests)=>validateEpisode(state,source,size,{...expected,requests});
+  const expected={base:'https://huggingface.co/owner/model/resolve/'+ 'a'.repeat(40)+'/f16/',revision:'observed-package',files:['a.chunks/0.bin','b.chunks/0.bin']};
+  const state={status:'done',source:'my-chair.png',identity:{sharedDevice:true,backend:{kind:'webgpu-local'},supermat:{routeId:'supermat.image-to-pbr.webgpu-local.v0',revision:expected.revision}},
+    runs:[{status:'done',source:'my-chair.png',moge:{weights:'hosted'},supermat:{size:768,identity:{revision:expected.revision}},output:{triangles:18,surfaceVertices:16,materialSize:[768,768]}}]};
+  const requests=['package.json',...expected.files].map(file=>({url:new URL(file,expected.base).href,credentials:false}));
+  assert.doesNotThrow(()=>validateHostedUpload(state,'my-chair.png',768,expected,requests));
+  for(const mutate of [s=>{s.runs[0].moge.cached=true;},s=>{s.runs[0].moge.weights='local';},s=>{s.identity.supermat.revision='other';},
+    s=>{s.runs[0].supermat.identity.revision='other';},s=>{s.runs.push(structuredClone(s.runs[0]));}]){
+    const bad=structuredClone(state);mutate(bad);assert.throws(()=>validateHostedUpload(bad,'my-chair.png',768,expected,requests));
+  }
+  assert.throws(()=>validateHostedUpload(state,'my-chair.png',768,expected,requests.slice(0,2)));
+  const authenticated=structuredClone(requests);authenticated[0].credentials=true;
+  assert.throws(()=>validateHostedUpload(state,'my-chair.png',768,expected,authenticated));
+});
+
 test('comparison witness rejects changed camera, lighting and unfair baseline',async()=>{
   const checks=await import('./witness-checks.js');
   assert.equal(typeof checks.validateComparison,'function','four-view fair comparison admission is missing');
@@ -124,5 +141,14 @@ test('comparison witness rejects changed camera, lighting and unfair baseline',a
     v=>{v.relit.physicalbaseline.relit.emissiveMapUUID='emission';v.relit.physicalbaseline.activeMaterial.emissiveMapUUID='emission';},
   ]) {
     const bad=structuredClone(views);mutate(bad);assert.throws(()=>checks.validateComparison(bad));
+  }
+  const isolated=structuredClone(views),cutout={sample:'orb',source:'hand-authored-example-cutout',width:20,height:20};
+  for(const mode of ['original','photo']){isolated[mode].cutout=null;isolated[mode].physicalbaseline.geometryId='complete-photograph';}
+  for(const mode of ['relit','materials'])isolated[mode].cutout=structuredClone(cutout);
+  assert.doesNotThrow(()=>checks.validateComparison(isolated),'the unlit baselines must retain their background geometry');
+  for(const mutate of [v=>{v.original.cutout=structuredClone(cutout);},v=>{v.materials.cutout=null;},
+    v=>{v.materials.cutout.width=10;},v=>{v.original.physicalbaseline.geometryId='different-background';},
+    v=>{v.materials.physicalbaseline.geometryId='different-subject';}]){
+    const bad=structuredClone(isolated);mutate(bad);assert.throws(()=>checks.validateComparison(bad));
   }
 });

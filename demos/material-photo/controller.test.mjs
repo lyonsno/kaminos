@@ -3,12 +3,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-async function controller({examples=false,exampleFailure=false,search='?sample=celebration'}={}) {
+async function controller({examples=false,exampleFailure=false,generationAvailable=true,weightsUrl='/scratch/supermat-weights/f16/',search='?sample=celebration'}={}) {
   const behavior = { failDevice: false, failMaterials: false, deviceRequests: 0, geometryRuns:0, materialRuns:0, cache:new Map(), gates: new Map() };
   const node = dataset => ({ dataset, style: {}, value: '', disabled: false, hidden: false, checked: false, textContent: '', captures:new Set(),
     classList: { toggle() {},add(){},remove(){} }, removeAttribute() {}, setAttribute() {}, addEventListener() {},
     setPointerCapture(id) {this.captures.add(id);}, releasePointerCapture(id) {this.captures.delete(id);},hasPointerCapture(id){return this.captures.has(id);}, getBoundingClientRect: () => ({ left:0,top:0,width: 400, height: 400 }) });
-  const ids=['provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
+  const ids=['execution-kind','generation-controls','local-generation','provenance','job-status','view-result','workspace','controls','tuning-toggle','status','preview','scene','stage-label','run','file','map','light','height','exposure','gi','reset','name','resolution','progress','elapsed','timings','identity',
     'view-prev','view-next','sun','glow','advanced','tuning','preset-export','preset-import','preset-file','preset-error','material-size','compare','light-ring','environment','environment-status','environment-rotation','environment-intensity','direct-intensity',
     'gi-view','contrast-mode','roughness-strength','metallic-strength','roughness-strength-value','metallic-strength-value','contrast-readout','bloom',
     ...['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'].flatMap(key=>[key,`${key}-value`]),
@@ -56,7 +56,7 @@ async function controller({examples=false,exampleFailure=false,search='?sample=c
       if(value.schema!=='kaminos.material-photo-preset.v1'||!Number.isFinite(value.settings?.gain)||value.settings.gain<0)throw Error('Invalid preset gain');
       this.setTuning(value.settings);this.lightHandle=value.light;this.useGI=value.gi;this.glow=value.glow;
     }
-    setImage() { this.clear(); this.reset(); this.surface = { position: new Float32Array(12), indices: new Uint32Array(6) }; }
+    setImage(input,depth,cutout) { this.clear(); this.reset();this.cutout=cutout; this.surface = { position: new Float32Array(12), indices: new Uint32Array(6) }; }
     setMaterials() { this.maps = {}; }
     setMaterialStatus(value) { this.materialStatus=value; }
     async dispose() {}
@@ -80,6 +80,8 @@ async function controller({examples=false,exampleFailure=false,search='?sample=c
   });
   const source = new vm.SourceTextModule(await readFile(new URL('./main.js',import.meta.url),'utf8'), { context });
   await source.link(async specifier => {
+    if(specifier==='./sample-cutouts.js')return new vm.SyntheticModule(['createSampleCutout'],function(){this.setExport('createSampleCutout',(sample,width,height)=>['orb','bag'].includes(sample)?{sample,width,height,source:'hand-authored-example-cutout'}:null);},{context});
+    if(specifier==='./deployment.js')return new vm.SyntheticModule(['GENERATION_AVAILABLE','SUPERMAT_WEIGHTS_URL'],function(){this.setExport('GENERATION_AVAILABLE',generationAvailable);this.setExport('SUPERMAT_WEIGHTS_URL',weightsUrl);},{context});
     if(specifier==='./included-examples.js')return new vm.SyntheticModule(['loadIncludedExample'],function(){
       this.setExport('loadIncludedExample',async(key,inputKey,size)=>{
         if(!examples)return null;
@@ -116,6 +118,40 @@ test('arrival opens an included orb with no model loading or inference',async()=
   assert.equal(c.behavior.geometryRuns,0);assert.equal(c.behavior.materialRuns,0);
   assert.equal(c.behavior.profile,undefined);assert.ok(c.behavior.viewer.maps);
   assert.match(c.elements.provenance.textContent,/Included example/);
+});
+test('example cutouts follow image selection without entering model input or leaking to another sample',async()=>{
+  const c=await controller({examples:true,search:''});
+  assert.equal(c.behavior.viewer.cutout.sample,'orb');
+  await c.actions.sample('bag');assert.equal(c.behavior.viewer.cutout.sample,'bag');
+  await c.actions.infer();assert.equal(c.behavior.inputPixel,2);assert.equal(c.behavior.viewer.cutout.sample,'bag');
+  await c.actions.sample('celebration');assert.equal(c.behavior.viewer.cutout,null);
+});
+
+test('public explorer keeps saved results playable without offering unavailable inference',async()=>{
+  const c=await controller({examples:true,generationAvailable:false});
+  await c.actions.infer();
+  assert.equal(c.state.runs.length,0);
+  assert.equal(c.state.status,'included');assert.ok(c.behavior.viewer.maps);
+  assert.equal(c.elements['generation-controls'].hidden,true);
+  assert.equal(c.elements['local-generation'].hidden,false);
+  assert.equal(c.elements.run.disabled,true);assert.equal(c.elements.file.disabled,true);
+  await c.actions.sample('orb');assert.equal(c.state.status,'included');
+});
+
+test('hosted own-photo generation uses the configured package, never local scratch weights',async()=>{
+  const weightsUrl='https://huggingface.co/BasinShapers/supermat-webgpu-weights/resolve/'+ 'a'.repeat(40)+'/f16/';
+  const c=await controller({examples:true,weightsUrl});
+  c.elements.file.files=[{name:'my-photograph.png',pixel:9}];c.elements.file.onchange();
+  await new Promise(resolve=>setImmediate(resolve));await c.actions.infer();
+  assert.equal(c.behavior.profile.weightsUrl,weightsUrl);
+  assert.equal(c.behavior.profile.weightLoading,'chunks');
+  assert.equal(c.behavior.inputPixel,9);assert.equal(c.state.runs.at(-1).status,'done');
+  assert.equal(c.elements.file.disabled,false);assert.match(c.elements.provenance.textContent,/Newly generated/);
+});
+
+test('an explicit local weight override remains usable for owner smokes',async()=>{
+  const c=await controller({weightsUrl:'https://huggingface.co/owner/model/resolve/'+ 'a'.repeat(40)+'/',search:'?weights=/test-weights/'});
+  await c.actions.infer();assert.equal(c.behavior.profile.weightsUrl,'/test-weights/');
 });
 
 test('late included restoration cannot admit generation when a different job completes',async()=>{

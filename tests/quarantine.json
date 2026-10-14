@@ -142,14 +142,6 @@
       "signature": "AssertionError [ERR_ASSERTION]: row keyboard selection must ignore events from child remove controls",
       "testLastChanged": "2026-10-01 fd742f0e"
     },
-    "tests/scene-floor-receivers-contracts.mjs": {
-      "class": "regression",
-      "owner": "handy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-10-06 2f6b0751 Default bounce gain to ten and expose mid-gray floor appearance; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: | + actual - expected | + 8421504 | - 1118481",
-      "testLastChanged": "2026-10-01 ccc0808b"
-    },
     "tests/scene-navigation-contracts.mjs": {
       "class": "regression",
       "owner": "modal",
@@ -176,9 +168,9 @@
     },
     "tests/volume-bonfire-macro-force-periodicity-contracts.mjs": {
       "class": "regression",
-      "owner": "dark-side",
+      "owner": "flame-doctor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
       "signature": "AssertionError [ERR_ASSERTION]: transported vorticity confinement remains active",
       "testLastChanged": "2026-09-24 c85749c5"
     },
@@ -206,27 +198,19 @@
       "signature": "node:test failing: the residual probe also reduces enstrophy so confinement can be calibrated against a measurement :: AssertionError: enstrophy is reported per cell",
       "testLastChanged": "2026-10-06 0740886f"
     },
-    "tests/volume-dead-render-clock-retirement-contracts.mjs": {
-      "class": "regression",
-      "owner": "sexy",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-04 9af30876 Fix inlet velocity authority split; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
-      "signature": "AssertionError [ERR_ASSERTION]: explicit analytic-emitter temporal descriptors retain their isolated render-time input",
-      "testLastChanged": "2026-09-01 c88608ef"
-    },
     "tests/volume-device-layout-capacity.mjs": {
       "class": "regression",
-      "owner": "dark-side",
+      "owner": "flame-doctor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 3bbb1809 Add converged pressure solver and low-dissipation transport to the tall domain; the failure has changed since then; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
+      "reason": "passed at its last change and first fails at 2026-09-25 3bbb1809 Add converged pressure solver and low-dissipation transport to the tall domain; the failure has changed since then; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
       "signature": "ReferenceError: state is not defined",
       "testLastChanged": "2026-09-24 3c536cce"
     },
     "tests/volume-dynamic-texture-proof-retirement-contracts.mjs": {
       "class": "regression",
-      "owner": "dark-side",
+      "owner": "wake",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-26 6cadd704 Accelerate scene navigation depth on dense meshes; the failure has changed since then; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
+      "reason": "passed at its last change and first fails at 2026-09-26 6cadd704 Accelerate scene navigation depth on dense meshes; the failure has changed since then; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
       "signature": "AssertionError [ERR_ASSERTION]: live executable synthetic texture producer scene-volume-gather.mjs must not restore unclassified periodic authorship",
       "testLastChanged": "2026-09-24 299c20c9"
     },
@@ -240,9 +224,9 @@
     },
     "tests/volume-periodic-excitation-controls-contracts.mjs": {
       "class": "regression",
-      "owner": "dark-side",
+      "owner": "flame-doctor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
       "signature": "AssertionError [ERR_ASSERTION]: field-derived vorticity confinement remains independent",
       "testLastChanged": "2026-09-05 cd7484a4"
     },
@@ -280,9 +264,9 @@
     },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
       "class": "regression",
-      "owner": "dark-side",
+      "owner": "flame-doctor",
       "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
+      "reason": "passed at its last change and first fails at 2026-09-25 799886ed Add an opt-in confinement mode that retires Curl as the confinement driver; same failure then as now; the owner decides whether the source or the test is wrong; owner corrected by the lane first named: the first-bad commit is this owner's, and nearest-branch attribution had named a lane that only rebased over it",
       "signature": "AssertionError [ERR_ASSERTION]: missing source marker:   let confinement =",
       "testLastChanged": "2026-09-05 cd7484a4"
     }

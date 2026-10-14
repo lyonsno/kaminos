@@ -114,7 +114,7 @@ test('switching to cluster removes the analytic member from scene membership', (
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
+  const context={activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'cluster',sourceMode:'cluster'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,flameDomainGuide:null,
     scenePlacementTools:{finish:()=>{},edits:{discard:()=>{}}},
@@ -130,7 +130,7 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const end=html.indexOf('function acceptedFlameDomainPose()',start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   let removed=0,updated=0;
-  const context={refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
+  const context={activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
     sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
     flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportDisplay:{domains:true,domainOpacity:.82,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},viewportHelpersVisible:true,selectionCaptureSuspended:false,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,

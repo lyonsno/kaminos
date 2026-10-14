@@ -17,7 +17,7 @@ unintegrated.
 
 Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
 
-When landing is authorized, land with `node tools/land.mjs`: it refuses unless the branch is rebased on current main and the exact commit has a green push-triggered `tests` run, and gets one when none exists by pushing a `land/<sha>` ref, which the workflow runs on. Main's required check accepts only push runs; a `workflow_dispatch` run does not count, so never use `gh workflow run` to get one. Details: `docs/landing.md`.
+Landing does not go through `node tools/land.mjs` for now: the `tests` workflow is disabled and main has no required check (2026-10-14), so the tool cannot get a CI run. When landing is authorized, rebase on current `origin/main`, run the full `npm test` (no new failures), and fast-forward main as before. A CI gate returns only after a pilot shows lanes pass it without added overhead. Details: `docs/landing.md`.
 
 ## Retiring Surfaces
 

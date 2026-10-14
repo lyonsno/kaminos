@@ -20,6 +20,11 @@ function assertOccupancyRidgeContract(source) {
     'optical stepping composes the supported material before continuing');
   const opticalTraceArm = balancedWgslBlock(allRaymarch,
     'if (opticalTrace) {\n        let row =', { label: 'optical trace arm' });
+  const channels = balancedWgslBlock(opticalTraceArm, 'for (var channel=0u; channel<3u; channel++) {');
+  assert.match(channels, /nonRidgeOpticalCaptureRows\[base\+17u\+channel\]\s*=\s*select\(0\.0, medium\.emission\[channel\], supported\);/,
+    'trace must record every emission coefficient');
+  assert.match(channels, /nonRidgeOpticalCaptureRows\[base\+20u\+channel\]\s*=\s*select\(0\.0, scatteredSource\[channel\], supported\);/,
+    'trace must record every scattered-source coefficient');
   assert.match(opticalTraceArm,
     /nonRidgeOpticalCaptureRows\[base\+16u\] = select\(0.0, sigma, supported\);[\s\S]*atomicAdd\(&nonRidgeOpticalCaptureHeader.rowCount, 1u\);[\s\S]*continue;/,
     'the trace arm publishes its supported-material row before continuing');
@@ -76,6 +81,24 @@ function assertOccupancyRidgeContract(source) {
 }
 
 assertOccupancyRidgeContract(core);
+
+for (const write of [
+  'nonRidgeOpticalCaptureRows[base+16u] = select(0.0, sigma, supported);',
+  'nonRidgeOpticalCaptureRows[base+17u+channel] = select(0.0, medium.emission[channel], supported);',
+  'nonRidgeOpticalCaptureRows[base+20u+channel] = select(0.0, scatteredSource[channel], supported);',
+]) {
+  const missingCoefficient = core.replace(write, '/* dropped coefficient write */');
+  assert.notEqual(missingCoefficient, core, 'coefficient-loss mutation reaches the trace');
+  assert.throws(() => assertOccupancyRidgeContract(missingCoefficient),
+    /trace.*coefficient|trace arm/, 'trace continuation cannot omit a coefficient while retaining its completion counter');
+}
+
+assert.throws(() => assertOccupancyRidgeContract(core.replace(
+  'opticalStepObserve(&opticalStep, vec4<f32>(emission, sigma));', '/* dropped optical sample */')),
+  /optical transfer|optical stepping|missing/, 'numerical continuation cannot silently discard the sample');
+assert.throws(() => assertOccupancyRidgeContract(core.replace(
+  'atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);\n        continue;', 'continue;')),
+  /trace arm/, 'trace continuation cannot bypass its completion record');
 
 const reconstructionAdvance = '    expensiveSamples = expensiveSamples + 1u;';
 const renamedHelperMutation = core.replace(

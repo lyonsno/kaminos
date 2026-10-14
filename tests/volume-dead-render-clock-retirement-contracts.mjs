@@ -32,7 +32,7 @@ function assertDeadRenderClockRetired(source) {
   );
   assert.match(
     updateUniforms,
-    /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs \* 0\.001,[\s\S]*?controlsSnapshot\.speed,[\s\S]*?\);/,
+    /writeAnalyticEmitterInjectionUniform\([\s\S]*?renderPhaseTimeMs \* 0\.001,\s*\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},\s*\);/,
     'explicit analytic-emitter temporal descriptors retain their isolated render-time input',
   );
 }

@@ -3,10 +3,10 @@ import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {parseArgs} from 'node:util';
 import {createHash} from 'node:crypto';
-import {validateLayoutFrame} from './layout-checks.js';
+import {validateLayoutFrame,validateBrowserSources} from './layout-checks.js';
 import {validateEpisode} from './witness-checks.js';
 
-const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false}}});
+const {values}=parseArgs({options:{...Object.fromEntries(['repo-root','expected-commit','chrome','playwright-module','url','output','site-root','image','hosted-weights','manifest-sha256'].map(key=>[key,{type:'string'}])),generate:{type:'boolean',default:false}}});
 const out=path.resolve(values.output??'example-display-witness');
 const report={status:'failed',phase:'arguments',requested:values,route:'real included outputs; native WebGPU display; no inference',frames:[],requests:[],errors:[]};
 const save=async()=>{await fs.mkdir(out,{recursive:true});await fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));};
@@ -16,11 +16,16 @@ try{
   const root=await fs.realpath(values['repo-root']),git=args=>execFileSync('git',args,{cwd:root,encoding:'utf8'}).trim();
   report.source={root,commit:git(['rev-parse','HEAD'])};
   if(report.source.commit!==values['expected-commit']||git(['status','--porcelain','--','demos/material-photo']))throw Error('Exact clean source required');
+  if(values.image&&!values.generate)throw Error('Uploaded image requires --generate');
+  if(values['hosted-weights']&&new URL(values.url).searchParams.has('weights'))throw Error('Hosted witness refuses a weight override');
   const executable=await fs.realpath(values.chrome);if(executable.includes('/Applications/Google Chrome.app/'))throw Error('Independent Chrome required');
-  const {chromium}=await import(values['playwright-module']);browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu']});
-  report.browser={executable,version:browser.version()};
+  const {chromium}=await import(values['playwright-module']);browser=await chromium.launch({executablePath:executable,headless:true});
+  report.browser={executable,version:browser.version(),args:[]};
   const page=await browser.newPage({viewport:{width:1440,height:900}});page.setDefaultTimeout(0);page.setDefaultNavigationTimeout(0);
-  page.on('request',r=>report.requests.push(r.url()));page.on('pageerror',e=>report.errors.push(String(e)));
+  report.hostedRequests=[];
+  page.on('request',r=>{report.requests.push(r.url());if(values['hosted-weights']&&r.url().startsWith(values['hosted-weights'])){
+    const headers=r.headers();report.hostedRequests.push({url:r.url(),credentials:!!(headers.authorization||headers.cookie)});
+  }});page.on('pageerror',e=>report.errors.push(String(e)));
   const sourceReads=[],observed={};
   const names=['index.html','main.js','style.css','included-examples.js','comparison-viewer.js','viewer.js'];
   page.on('response',r=>{const u=new URL(r.url()),n=path.basename(u.pathname);if(names.includes(n)&&u.href===new URL(n,values.url).href)sourceReads.push(r.body().then(b=>{observed[n]=createHash('sha256').update(b).digest('hex');}));});
@@ -29,8 +34,15 @@ try{
   if(await page.evaluate(()=>window.__materialPhoto.status)!=='included')throw Error('No included result on arrival');
   report.arrivalMs=performance.now()-start;
   await Promise.all(sourceReads);
-  for(const n of names)if(observed[n]!==createHash('sha256').update(await fs.readFile(path.join(root,'demos/material-photo',n))).digest('hex'))throw Error(`Wrong served ${n}`);
+  report.phase='source-binding';
+  const servedDemo=values['site-root']?path.join(await fs.realpath(values['site-root']),'inference-kit','material-photo'):path.join(root,'demos','material-photo');
   report.browserSources=observed;
+  report.sourceBinding={mountedRoot:servedDemo,mounted:{},source:{}};
+  for(const n of names){
+    report.sourceBinding.mounted[n]=createHash('sha256').update(await fs.readFile(path.join(servedDemo,n))).digest('hex');
+    report.sourceBinding.source[n]=createHash('sha256').update(execFileSync('git',['show',`${report.source.commit}:demos/material-photo/${n}`],{cwd:root})).digest('hex');
+  }
+  validateBrowserSources(observed,report.sourceBinding.mounted,report.sourceBinding.source);
   const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   for(const key of ['orb','celebration','bag']){
     await page.locator(`[data-sample=${key}]`).click();
@@ -67,11 +79,35 @@ try{
   if(weights.length)throw Error(`Browsing loaded model weights: ${JSON.stringify(weights)}`);
   if(values.generate){
     report.route='real included outputs during fresh live WebGPU generation';report.phase='generation-loading';await save();
-    const materialBefore=await page.evaluate(()=>window.__materialPhotoActions.presentation().physicalbaseline.activeMaterial.mapUUID);
+    let hosted=null;
+    if(values['hosted-weights']){
+      const packageInfo=await page.evaluate(async base=>{
+        const deployment=await import('./deployment.js');
+        if(!deployment.GENERATION_AVAILABLE||deployment.SUPERMAT_WEIGHTS_URL!==base)throw Error('Wrong effective hosted deployment');
+        const response=await fetch(new URL('package.json',base));if(!response.ok)throw Error('Hosted manifest HTTP '+response.status);
+        const bytes=await response.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',bytes);
+        return{sha256:[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join(''),value:JSON.parse(new TextDecoder().decode(bytes))};
+      },values['hosted-weights']);
+      if(!values['manifest-sha256']||packageInfo.sha256!==values['manifest-sha256'])throw Error('Wrong hosted manifest bytes');
+      const pack=packageInfo.value;
+      if(pack.schema!=='supermat.browser-weight-package.v0'||pack.status!=='succeeded'||pack.resources.some(row=>!row.chunks))throw Error('Incompatible hosted chunk package');
+      hosted={base:values['hosted-weights'],revision:pack.revision,files:pack.resources.flatMap(row=>Object.values(row.chunks.files))};
+      report.hosted={...hosted,manifestSha256:packageInfo.sha256};
+    }
+    let source='Backpack';
+    if(values.image){
+      const file=await fs.realpath(values.image);source=path.basename(file);
+      report.input={file,source,sha256:createHash('sha256').update(await fs.readFile(file)).digest('hex')};
+      await page.locator('#file').setInputFiles(file);
+      await page.waitForFunction(source=>window.__materialPhoto.source===source&&['loaded','error','cached'].includes(window.__materialPhoto.status),source);
+      if(await page.evaluate(()=>window.__materialPhoto.status)!=='loaded')throw Error('Upload did not select a fresh image');
+    }
+    report.selectedSize=await page.locator('#material-size').inputValue();await save();
+    const materialBefore=await page.evaluate(()=>window.__materialPhotoActions.presentation().physicalbaseline.activeMaterial?.mapUUID);
     await page.locator('#run').click();
     await page.waitForFunction(()=>window.__materialPhoto.job?.message?.includes('loading')||window.__materialPhoto.job?.status==='error');
     report.loading=await page.evaluate(()=>({state:window.__materialPhoto,presentation:window.__materialPhotoActions.presentation()}));
-    if(report.loading.state.job.status!=='running'||report.loading.presentation.physicalbaseline.activeMaterial.mapUUID!==materialBefore)throw Error('Loading did not preserve the displayed material');
+    if(report.loading.state.job.status!=='running'||(!values.image&&report.loading.presentation.physicalbaseline.activeMaterial.mapUUID!==materialBefore))throw Error('Loading did not preserve the displayed material');
     await page.screenshot({path:path.join(out,'during-loading.png')});
     await page.locator('[data-sample=orb]').click();
     await page.waitForFunction(()=>window.__materialPhoto.status==='included'&&window.__materialPhoto.example?.sample==='orb');
@@ -80,14 +116,14 @@ try{
     await page.mouse.move(orbitBox.x+orbitBox.width/2,orbitBox.y+orbitBox.height/2);await page.mouse.down();
     await page.mouse.move(orbitBox.x+orbitBox.width/2+40,orbitBox.y+orbitBox.height/2+15);await page.mouse.up();await settle();
     report.during=await page.evaluate(()=>({state:window.__materialPhoto,presentation:window.__materialPhotoActions.presentation()}));
-    if(report.during.state.job?.status!=='running'||report.during.state.job.source!=='Backpack'||JSON.stringify(orbitBefore)===JSON.stringify(report.during.presentation.camera.orbit))throw Error('No live generation/browsing overlap');
+    if(report.during.state.job?.status!=='running'||report.during.state.job.source!==source||JSON.stringify(orbitBefore)===JSON.stringify(report.during.presentation.camera.orbit))throw Error('No live generation/browsing overlap');
     await page.screenshot({path:path.join(out,'during-browsing.png')});await save();
     report.phase='generation-completion';await save();
     await page.waitForFunction(()=>window.__materialPhoto.runs.length===1);
     report.completion=await page.evaluate(()=>window.__materialPhoto);await save();
     if(report.completion.job?.status!=='done'||report.completion.source!=='Metal & glow'||report.completion.status!=='included')throw Error('Generation failed or stole displayed example');
     await page.locator('#view-result').click();await page.waitForFunction(()=>window.__materialPhoto.status==='done');
-    report.generated=await page.evaluate(()=>window.__materialPhoto);validateEpisode(report.generated,'Backpack',512);
+    report.generated=await page.evaluate(()=>window.__materialPhoto);validateEpisode(report.generated,source,Number(report.selectedSize),hosted?{...hosted,requests:report.hostedRequests}:null);
     await page.screenshot({path:path.join(out,'generated-result.png')});
   }
   report.finalState=await page.evaluate(()=>window.__materialPhoto);
