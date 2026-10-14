@@ -11911,6 +11911,8 @@ async function initScene() {
       if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
       insideForegroundFrame = true;
       sceneRenderedForVolume = false;
+      // Per request: a draw that renderSceneFrame skipped leaves the count unchanged.
+      const sceneFrameCountBefore = sceneFrameCount;
       try {
         // The ordinary depth provider runs after the volume updates controls
         // and camera, preserving identical camera state for prepass/raymarch.
@@ -11921,7 +11923,9 @@ async function initScene() {
           fireLightFieldPass?.update();
           renderSceneFrame();
         }
-        return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
+        const sceneDrawn = sceneFrameCount > sceneFrameCountBefore;
+        return {...result, sceneFrameCount, sceneFrameCountBefore, sceneFrameCountAfter: sceneFrameCount, sceneDrawn,
+          sceneAuthority: sceneDrawn ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'};
       } finally { insideForegroundFrame = false; }
     },
     async presentGlb(glb, {runId, sha256}) {
