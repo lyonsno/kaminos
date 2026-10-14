@@ -34,7 +34,7 @@ export function resolveJoinedExteriorGeometry({ fineDims, pitch, ratio, extent }
   const fineCoarse = fineDims.map(d => d / ratio);
   if (ext[0] < fineCoarse[0] + 2 || ext[2] < fineCoarse[2] + 2) return { admitted: false, reason: `extent-${ext.join('x')}-too-small-for-fine-${fineCoarse.join('x')}-plus-margins` };
   const shape = [ext[0], Math.max(ext[1], fineCoarse[1] + 2), ext[2]];
-  const origin = [Math.floor((extent - fineCoarse[0]) / 2), 1, Math.floor((extent - fineCoarse[2]) / 2)];
+  const origin = [Math.floor((shape[0] - fineCoarse[0]) / 2), 1, Math.floor((shape[2] - fineCoarse[2]) / 2)];
   const cellWidth = pitch * ratio;
   return {
     admitted: true, reason: null, shape, origin, fineCoarse, cellWidth,
