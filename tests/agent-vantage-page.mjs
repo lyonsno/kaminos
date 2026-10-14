@@ -348,3 +348,17 @@ test('a queued command whose deadline passed is not run', async () => {
   assert.deepEqual(ran, ['status']);
   assert.deepEqual(replies.map(reply => [reply.id, reply.ok, reply.phase ?? null]), [['late', false, 'expired'], ['fresh', true, null]]);
 });
+
+test('burst names each frame from the scene as it was when that frame was taken', async () => {
+  const {state, pilot} = await launched();
+  await pilot.run('look', {target: 'centre'});
+  let calls = 0;
+  state.duringFrames = current => {
+    if (++calls === 2) current.objects = current.objects.map(object => object.id === 'centre'
+      ? {...object, bounds: {min: [100, 0.5, -0.5], max: [101, 1.5, 0.5]}} : object);
+  };
+  const burst = await pilot.run('burst', {count: 2, annotate: true});
+  assert.ok(burst.objects.inView.some(object => object.id === 'centre'), 'the first picture names what it showed');
+  assert.ok(burst.frames[0].objects.inView.some(object => object.id === 'centre'));
+  assert.ok(!burst.frames[1].objects.inView.some(object => object.id === 'centre'), 'each frame names its own moment');
+});

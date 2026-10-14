@@ -35,7 +35,7 @@ The sub is an ordinary camera object, labeled Bebop for the default pilot. Selec
 
 `snap` moves the page's own camera to the sub for a few frames (`--settle`, default 2). Every layer the page draws renders from there through its own loop: the scene, the fire volume and the water. The visible canvases are composited in stacking order and the person's view is restored. The record names the requested and effective view and how far they differ, the composited canvases, the frame counters before and after, and the objects whose bounds fall inside the frame.
 
-While a picture is taken the page holds the same document lock as Capture, so camera view, Save and Load wait until it finishes. Objects in frame are named from the matrices the page actually rendered with, including a camera frame's zoom and offset when someone is looking through the sub.
+While a picture is taken the page holds camera view, viewport navigation, the view pie, Save, Load and Capture until it finishes. Imports and ordinary editing continue. Objects in frame are named from the matrices and clip-space convention the page actually rendered with, including a camera frame's zoom and offset when someone is looking through the sub. They are named from the scene as it stood when each picture was taken, so every frame of a burst is named from its own moment.
 
 A capture refuses instead of returning the wrong picture when:
 

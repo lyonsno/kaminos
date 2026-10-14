@@ -69,6 +69,24 @@ function colors(file) {
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
 
+// A minimal binary glTF: one quad, positions and indices only.
+function minimalGlb() {
+  const positions = new Float32Array([-0.4, 0, 0, 0.4, 0, 0, 0.4, 0.8, 0, -0.4, 0.8, 0]), indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+  const bin = Buffer.concat([Buffer.from(positions.buffer), Buffer.from(indices.buffer)]);
+  const json = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0}],
+    meshes: [{primitives: [{attributes: {POSITION: 0}, indices: 1}]}],
+    accessors: [{bufferView: 0, componentType: 5126, count: 4, type: 'VEC3', min: [-0.4, 0, 0], max: [0.4, 0.8, 0]},
+      {bufferView: 1, componentType: 5123, count: 6, type: 'SCALAR'}],
+    bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 48, target: 34962}, {buffer: 0, byteOffset: 48, byteLength: 12, target: 34963}],
+    buffers: [{byteLength: bin.length}]};
+  const pad = (buffer, fill) => Buffer.concat([buffer, Buffer.alloc((4 - buffer.length % 4) % 4, fill)]);
+  const text = pad(Buffer.from(JSON.stringify(json)), 0x20), body = pad(bin, 0);
+  const chunk = (length, type) => { const head = Buffer.alloc(8); head.writeUInt32LE(length, 0); head.writeUInt32LE(type, 4); return head; };
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546c67, 0); header.writeUInt32LE(2, 4); header.writeUInt32LE(12 + 8 + text.length + 8 + body.length, 8);
+  return Buffer.concat([header, chunk(text.length, 0x4e4f534a), text, chunk(body.length, 0x004e4942), body]);
+}
+
 let browser;
 try {
   report.phase = 'server-identity'; save();
@@ -194,6 +212,23 @@ try {
   await page.evaluate(() => { window.kaminosSceneCameras.enter(); window.kaminosSceneCameras.leave(); });
   const afterLeave = await page.evaluate(() => window.kaminosCameraDebugState());
   check('leaving camera view later returns to the operator view, not the sub view', sameView(beforeHold, afterLeave), {before: beforeHold.position, after: afterLeave.position});
+
+  report.phase = 'import-during-capture'; save();
+  // An ordinary GLB import must survive a capture that is holding the viewport.
+  const importing = vantage('burst', '--count', '8', '--interval', '300', '--name', 'import');
+  await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
+  const imported = await page.evaluate(async base64 => {
+    const bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+    const file = new File([bytes], 'witness-import.glb', {type: 'model/gltf-binary'});
+    try {
+      const id = await window.kaminosSceneAuthoring.importMesh(file);
+      return {id, heldAtArrival: document.getElementById('composition-capture').disabled};
+    } catch (error) { return {error: error.message}; }
+  }, minimalGlb().toString('base64'));
+  const importBurst = await importing;
+  check('the burst around the import completes', importBurst.code === 0, {code: importBurst.code, stderr: importBurst.stderr});
+  const registered = await page.evaluate(() => window.kaminosSceneObjectDebugState().filter(object => object.label === 'witness-import').length);
+  check('an import that lands during a capture registers exactly once', !imported.error && imported.heldAtArrival === true && registered === 1, {imported, registered});
 
   report.phase = 'remove'; save();
   await vantageOk('remove');
