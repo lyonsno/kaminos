@@ -7153,7 +7153,7 @@ async function applyLocalLiquidPerformance(values) {
 function refreshLocalLiquidPerformance() {
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
-  panel.hidden = !localLiquidSetup || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
+  panel.hidden = !localLiquidSetup || localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop') || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
   if (!localLiquidSetup) { delete panel.dataset.setup; return; }
   const signature = JSON.stringify(localLiquidSetup);
   if (panel.dataset.setup !== signature) {
@@ -12878,8 +12878,9 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   }
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
-    fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench';
-    if (tabName === 'finger-fluid-bench') startFingerFluidBench();
+    const standaloneFluid=tabName==='finger-fluid-bench'&&new URLSearchParams(window.location.search).get('kaminos_finger_fluid_bench')==='1';
+    fingerFluidBenchPanel.hidden = !standaloneFluid;
+    if (standaloneFluid) startFingerFluidBench();
     else stopFingerFluidBench();
   }
   const fingerJuicePanel = document.getElementById('finger-juice-operator-panel');
