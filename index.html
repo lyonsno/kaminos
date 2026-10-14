@@ -10766,12 +10766,13 @@ async function ensureSamImageTools() {
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
       ...(appGpu ? { foregroundService: appGpu } : {}),
       // A saved mask or cutout becomes the selected image in Authoring, ready for Generate.
-      onAsset(entry) {
+      async onAsset(entry) {
         // Back to Authoring's Generate with the saved mask or cutout selected. SAM calls
         // this for an uploaded source too; that stays in Masks for its prompt.
         if (!window.kaminosAssets || !entry?.maskProvenance) return;
         if (window.kaminosWorkspace?.state?.().mode !== 'authoring') window.kaminosWorkspace?.setMode?.('authoring');
-        window.kaminosAssets.open('generate');
+        const refreshed = await window.kaminosAssets.open('generate');
+        if (refreshed === false) throw new Error(window.kaminosAssets.read().error || 'Authoring asset refresh did not complete');
         window.kaminosAssets.select({ ...entry, kind: 'image', root: entry.root_id || 'image-inbox', label: entry.name });
       },
       async onScene(entry, provenance) {

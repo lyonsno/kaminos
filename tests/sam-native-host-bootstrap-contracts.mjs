@@ -71,6 +71,17 @@ const openEnd = drawerSource.indexOf(',state:', openStart);
 assert.ok(openStart >= 0 && openEnd > openStart, 'actual asset drawer open method must exist');
 const actionSource = drawerSource.split('\n').find(line => line.trimStart().startsWith('const action=fn=>'));
 assert.ok(actionSource, 'actual drawer action helper must exist');
+const refreshFailure = fixture(async () => app);
+let selectedAfterFailure = false;
+refreshFailure.context.window.kaminosAssets = {
+  open: async () => false,
+  read: () => ({ error: 'image catalog unavailable' }),
+  select: () => { selectedAfterFailure = true; },
+};
+await refreshFailure.bootstrap();
+await assert.rejects(Promise.resolve(refreshFailure.options().onAsset(cutout)), /image catalog unavailable/,
+  'an unsuccessful refresh must not claim a completed PNG handoff');
+assert.equal(selectedAfterFailure, false);
 let releaseRoots, startedRoots;
 const rootsEntered = new Promise(resolve => { startedRoots = resolve; });
 const rootsPending = new Promise(resolve => { releaseRoots = resolve; });
