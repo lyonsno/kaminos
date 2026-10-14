@@ -56,6 +56,7 @@ export function createTrellisImageGenerationAdapter({route,pixelValues,prefixWei
     get state(){return state;},get phase(){return phase;},get outputs(){return result;},
     get conditioning(){return producer.outputs?.conditioning;},
     get noiseInputs(){return generation?.noiseInputs??Object.freeze({});},
+    get decoderFailureContext(){return disposed?undefined:generation?.decoderFailureContext;},
     async run(invocation){
       if(disposed)throw Error('image generation adapter disposed');if(state!=='new')throw Error('image generation adapter is '+state);
       state='running';
@@ -90,7 +91,8 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   if(onPhase!==undefined&&typeof onPhase!=='function')throw TypeError('phase observer must be a function');
   if(onNoiseInput!==undefined&&typeof onNoiseInput!=='function')throw TypeError('noise input observer must be a function');
   const gaussian=browserNoise(seed),owned=new Set(),noiseInputs={},phases=[];
-  let state='new',phase='new',result,disposed=false;
+  let state='new',phase='new',result,disposed=false,lastDecoder;
+  const decode=(decoder,invocation)=>{lastDecoder=decoder;return decoder.run(invocation);};
   const own=a=>{owned.add(a);return a;},retire=async(...adapters)=>{
     await runtime.device?.queue?.onSubmittedWorkDone?.();
     for(const a of adapters){a.dispose();owned.delete(a);}
@@ -137,6 +139,9 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
   return Object.freeze({runtime,routeId:route.routeId,inputs:Object.freeze({conditioning:conditioningTensor}),
     get state(){return state;},get phase(){return phase;},get noiseInputs(){return Object.freeze({...noiseInputs});},
     get outputs(){return result;},
+    // Final geometry/material decoder only; earlier cascade support and failures
+    // outside decoder.run do not pretend to provide this diagnostic boundary.
+    get decoderFailureContext(){return disposed||state!=='failed'?undefined:lastDecoder?.failureContext;},
     async run(invocation){
       if(disposed)throw Error('generation adapter disposed');
       if(state!=='new')throw Error(state==='running'?'generation adapter in use':'generation adapter is '+state);
@@ -176,7 +181,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           (model.loadWeight?createTrellisSLatDecoderAdapterAsync:createTrellisSLatDecoderAdapter)({route,
           config:{...model.config,tokenRows:rows,resolution:finalResolution,mode:'shape',structureOnly:false},
           weights:model.weights,loadWeight:model.loadWeight,siluTable:model.siluTable,
-          sampleTensor:shapeScale.outputs.sample,coordinateTensor:finalCoordinates}))),geometry=await geometryDecoder.run(invocation);
+          sampleTensor:shapeScale.outputs.sample,coordinateTensor:finalCoordinates}))),geometry=await decode(geometryDecoder,invocation);
         const shapeNormalize=own(createTrellisSLatScaleAdapter({route,tokenRows:rows,direction:'normalize',sampleTensor:shapeScale.outputs.sample}));
         const textureFlow=await shapeFlow('textureFlow',finalCoordinates,shapeNormalize.outputs.sample);
         await shapeNormalize.run(invocation);
@@ -189,7 +194,7 @@ export function createTrellisGenerationFromConditioningAdapter({route,conditioni
           config:{...model.config,tokenRows:rows,resolution:finalResolution,mode:'texture'},
           weights:model.weights,loadWeight:model.loadWeight,siluTable:model.siluTable,
           sampleTensor:textureScale.outputs.sample,coordinateTensor:finalCoordinates,guideSubdivisions:geometry.subdivisions}))),
-          material=await textureDecoder.run(invocation);
+          material=await decode(textureDecoder,invocation);
         await runtime.device?.queue?.onSubmittedWorkDone?.();
         result=Object.freeze({geometry,material,shapeCodes:shapeScale.outputs.sample,textureCodes:textureScale.outputs.sample,
           lowResolutionRows:lrCoordinates.shape[0],highResolutionRows:rows,meshResolution,pipelineType,
