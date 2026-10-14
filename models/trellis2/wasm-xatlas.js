@@ -5,6 +5,7 @@
 // law (trimesh vertex_normals on the export frame, mapped back to model frame).
 import xatlasFactory from './vendor/xatlas/xatlas-0.0.11.mjs';
 import {fma} from './mesh-simplify.js';
+import {admitSignal,abortError,runFinishingWorker} from './finishing-worker.js';
 
 export const WASM_XATLAS_ROUTE='xatlas 0.0.11 Wasm + explicit isolated charts for collapsed atlas faces';
 
@@ -58,9 +59,11 @@ export function trimeshVertexNormals(positions,faces){
   return out;
 }
 
-export function createWasmXatlasUnwrapper(){
-  return async mesh=>{
-    const started=performance.now(),{uvs:su,xref,faces:sf,charts,width,height}=await unwrapWithXatlas(mesh.vertices,mesh.triangles);
+// The whole UV step on plain arrays: shared by the calling thread and
+// wasm-xatlas-worker.js so both paths run the same code.
+export async function finishUVSurface(inputVertices,inputTriangles){
+  const mesh={vertices:inputVertices,triangles:inputTriangles};
+    const {uvs:su,xref,faces:sf,charts,width,height}=await unwrapWithXatlas(mesh.vertices,mesh.triangles);
     if(sf.length!==mesh.triangles.length)throw Error('xatlas changed the face count');
     const nv=xref.length,sv=new Float32Array(nv*3);
     for(let i=0;i<nv;i++)for(let a=0;a<3;a++)sv[i*3+a]=mesh.vertices[xref[i]*3+a];
@@ -91,12 +94,39 @@ export function createWasmXatlasUnwrapper(){
       const col=i%cols,row=Math.floor(i/cols),u0=.9+.1*(col+.1)/cols,u1=.9+.1*(col+.9)/cols,v0=(row+.1)/rows,v1=(row+.9)/rows;
       uvs.set([u0,v0,u1,v0,u0,v1],collapsed[i]*6);
     }
-    return {vertices,triangles,normals,uvs,metadata:mesh.metadata,
-      uvMetadata:{route:WASM_XATLAS_ROUTE,xatlasVersion:'0.0.11',build:'vendor/xatlas (Emscripten 6.0.12, single-threaded)',
+    return {vertices,triangles,normals,uvs,info:{charts,atlasSize:[width,height],indexedVertices:nv,
+      repairedFaces:collapsed.length,grid:[cols,rows],zeroNormals}};
+}
+
+// finishTrellisMesh unwrapMesh provider. With WorkerClass the step runs in
+// wasm-xatlas-worker.js; Stop (signal) terminates it with AbortError. On the
+// calling thread the Wasm call cannot be interrupted, so Stop is honoured
+// before and after it.
+export function createWasmXatlasUnwrapper({WorkerClass,signal}={}){
+  if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
+  admitSignal(signal);
+  return async mesh=>{
+    const started=performance.now();let r;
+    if(WorkerClass){
+      const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
+      const d=await runFinishingWorker({WorkerClass,url:new URL('./wasm-xatlas-worker.js',import.meta.url),signal,label:'UV',
+        message:{vertices:vertices.buffer,triangles:triangles.buffer},transfer:[vertices.buffer,triangles.buffer]});
+      r={vertices:new Float32Array(d.vertices),triangles:new Uint32Array(d.triangles),normals:new Float32Array(d.normals),uvs:new Float32Array(d.uvs),info:d.info};
+    }else{
+      if(signal?.aborted)throw abortError(signal);
+      r=await finishUVSurface(mesh.vertices,mesh.triangles);
+      if(signal?.aborted)throw abortError(signal);
+    }
+    for(let i=0;i<r.triangles.length;i++)for(let a=0;a<3;a++)
+      if(r.vertices[r.triangles[i]*3+a]!==mesh.vertices[mesh.triangles[i]*3+a])throw Error('xatlas changed ordered geometry');
+    const {info}=r;
+    return {vertices:r.vertices,triangles:r.triangles,normals:r.normals,uvs:r.uvs,metadata:mesh.metadata,
+      uvMetadata:{route:WASM_XATLAS_ROUTE,execution:WorkerClass?'module-worker':'caller-thread',xatlasVersion:'0.0.11',
+        build:'vendor/xatlas (Emscripten 6.0.12, single-threaded)',
         sourceComparison:'same algorithm and options as source xatlas; atlas not byte-identical to the native wheel',
-        normalBasis:{rule:'source-resume-export/Trimesh-post-UV (JS port)',frame:'model-local',zeroNormals},
-        fixWinding:false,maxIterations:0,charts,atlasSize:[width,height],indexedVertices:nv,reservedStripFraction:.1,
-        repairedFaces:collapsed.length,grid:[cols,rows],orderedTrianglePositionsUnchanged:true,deindexedForIndependentFaceUV:true,
+        normalBasis:{rule:'source-resume-export/Trimesh-post-UV (JS port)',frame:'model-local',zeroNormals:info.zeroNormals},
+        fixWinding:false,maxIterations:0,charts:info.charts,atlasSize:info.atlasSize,indexedVertices:info.indexedVertices,reservedStripFraction:.1,
+        repairedFaces:info.repairedFaces,grid:info.grid,orderedTrianglePositionsUnchanged:true,deindexedForIndependentFaceUV:true,
         elapsedSeconds:(performance.now()-started)/1000}};
   };
 }
