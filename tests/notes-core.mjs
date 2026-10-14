@@ -101,12 +101,13 @@ test('a ref resolves from an id, the copied text or a link, and its text says ho
   assert.equal(parseRef(`http://127.0.0.1:8325/index.html?note=${ROOT_ID}#scene=kiln.kaminos.json`), ROOT_ID);
   assert.throws(() => parseRef('nothing to see'), /note/i);
   const note = foldNotes(conversation()).notes.get(ROOT_ID);
-  assert.equal(noteLink(note), `http://127.0.0.1:8325/index.html?note=${ROOT_ID}#scene=kiln.kaminos.json`);
+  assert.equal(noteLink(note), `http://127.0.0.1:8325/index.html#scene=kiln.kaminos.json&note=${ROOT_ID}`);
+  assert.equal(noteLink({id: ROOT_ID, subject: {scene: null, source}}), `http://127.0.0.1:8325/index.html#note=${ROOT_ID}`);
   const text = formatRef(note);
   assert.match(text, new RegExp(ROOT_ID));
   assert.match(text, /Flame source/);
   assert.match(text, new RegExp(`node tools/notes\\.mjs show ${ROOT_ID}`));
-  assert.match(text, new RegExp(`index\\.html\\?note=${ROOT_ID}`));
+  assert.match(text, new RegExp(`index\\.html#scene=kiln\\.kaminos\\.json&note=${ROOT_ID}`));
 });
 
 test('the agent-facing description carries everything needed to act without asking', () => {
@@ -124,4 +125,24 @@ test('the agent-facing description carries everything needed to act without aski
   assert.match(text, /resolved/);
   assert.match(text, new RegExp(`reply: node tools/notes\\.mjs reply ${ROOT_ID} `));
   assert.throws(() => describeNote(state, 'kn-cccccccccccc', {root: '/tmp'}), /no note kn-cccccccccccc/i);
+});
+
+test("a reply is described with its own view; the thread's opening view is kept apart", () => {
+  const reply = {type: 'note', kind: 'note', id: 'kn-cccccccccccc', thread: ROOT_ID, parent: REPLY_ID, author: 'noah', via: 'page',
+    text: 'look from here instead', to: [], recipients: ['sub-pilot'], anchor: null,
+    subject: {scene: 'kiln.kaminos.json', source: {origin: 'http://127.0.0.1:8325', branch: 'cc/new', commit: 'b'.repeat(40), dirty: false}},
+    context: {view: {position: [9, 8, 7], target: [0, 0, 0], up: [0, 1, 0], fov: 30, near: 0.1, far: 100}, selection: {ids: ['new-object'], activeId: 'new-object'}},
+    picture: {file: 'pictures/kn-cccccccccccc.png', width: 640, height: 480, bytes: 10, sha256: 'e'.repeat(64)}};
+  const state = foldNotes([...conversation(), ev(6, reply)]);
+  const text = describeNote(state, 'kn-cccccccccccc', {root: '/tmp/n'});
+  const [own, opening] = text.split('thread opened');
+  assert.ok(opening, `the thread's opening view is labeled apart:\n${text}`);
+  assert.match(own, /served by cc\/new@bbbbbbb at/);
+  assert.match(own, /camera: position \[9, 8, 7\] target \[0, 0, 0\] fov 30/);
+  assert.match(own, /selection: new-object/);
+  assert.match(own, /picture: \/tmp\/n\/pictures\/kn-cccccccccccc\.png \(640x480\)/);
+  assert.doesNotMatch(own, /flame-source\b(?!\))/, "the opening note's selection is not presented as the reply's");
+  assert.match(opening, /camera: position \[0, 1, 3\]/);
+  const bare = describeNote(state, REPLY_ID, {root: '/tmp/n'});
+  assert.match(bare, /no view was recorded with this note/);
 });

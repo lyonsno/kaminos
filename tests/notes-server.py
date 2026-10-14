@@ -137,6 +137,23 @@ def log_contracts(notes):
         assert len(fresh.issues) == 1 and "line" in fresh.issues[0], fresh.issues
 
 
+def follow_up_contracts(notes):
+    """A follow-up to your own reply goes where that reply went (review F1)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        question = log.post({"kind": "note", "text": "why?", "to": ["agent"], "anchor": {"kind": "scene"}}, origin=PAGE)
+        answer = log.post({"kind": "note", "text": "the light", "parent": question["id"], "author": "agent"}, origin=CLI)
+        follow = log.post({"kind": "note", "text": "which light?", "parent": answer["id"]}, origin=PAGE)
+        clarify = log.post({"kind": "note", "text": "the rim one, I mean", "parent": follow["id"]}, origin=PAGE)
+        assert follow["recipients"] == ["agent"], follow
+        assert clarify["recipients"] == ["agent"], ("a follow-up to your own reply reaches whoever that reply reached", clarify["recipients"])
+        assert [note["text"] for note in log.claim("agent", timeout=0)] == ["why?", "which light?", "the rim one, I mean"]
+        more = log.post({"kind": "note", "text": "and the fill light", "parent": answer["id"], "author": "agent"}, origin=CLI)
+        assert more["recipients"] == ["noah"], ("an agent's second message reaches the person too", more["recipients"])
+        addressed = log.post({"kind": "note", "text": "@other look too", "parent": clarify["id"], "to": ["other"]}, origin=PAGE)
+        assert addressed["recipients"] == ["other", "agent"], addressed["recipients"]
+
+
 # --- HTTP, through a real serve.py ------------------------------------------
 
 def free_port():
@@ -306,8 +323,57 @@ def http_contracts():
                 process.kill()
 
 
+def presence_stream_contracts():
+    """A page is told when someone starts or stops listening, not on every
+    heartbeat of a listener that keeps waiting (review F3)."""
+    port = free_port()
+    with tempfile.TemporaryDirectory() as tmp:
+        process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   env={**os.environ, "KAMINOS_BIND_HOST": "127.0.0.1", "KAMINOS_NOTES_ROOT": str(Path(tmp) / "notes"),
+                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah"})
+        stream = None
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    call(port, "GET", "/api/notes")
+                    break
+                except OSError:
+                    if time.monotonic() > deadline:
+                        raise AssertionError("serve.py did not start")
+                    time.sleep(0.1)
+            stream = Stream(port, "page-cccccccc")
+            stream.next("hello")
+            stream.next("presence")
+            def wait_quietly():
+                try:
+                    call(port, "GET", "/api/notes/wait?as=steady-agent&timeout=9", timeout=20)
+                except OSError:
+                    pass  # the server stops at the end of this check
+
+            waiter = threading.Thread(target=wait_quietly, daemon=True)
+            waiter.start()
+            arrived = stream.next("presence", lambda payload: any(row["name"] == "steady-agent" for row in payload["listeners"]))
+            assert all("lastSeen" not in row for row in arrived["listeners"]), arrived
+            time.sleep(7.5)  # two listener heartbeats
+            with stream.lock:
+                churn = [payload for event, payload in stream.events if event == "presence"]
+            assert churn == [], ("presence repeated while nothing changed", len(churn))
+        finally:
+            if stream:
+                stream.close()
+            process.terminate()
+            try:
+                process.wait(10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
 if __name__ == "__main__":
     notes = load_notes()
     log_contracts(notes)
+    follow_up_contracts(notes)
     http_contracts()
+    presence_stream_contracts()
     print("notes server contracts passed")

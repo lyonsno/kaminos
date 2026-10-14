@@ -194,7 +194,7 @@ export async function capturePicture({capture, document}) {
  * of what the viewport shows.
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
-  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null}) {
+  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -277,7 +277,6 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   }
 
   let focusThread = null;
-  const openReplies = new Set();
   const say = (message, tone = '') => { status.textContent = message; status.dataset.tone = tone; };
   const anchorText = anchor => anchor?.kind === 'object' ? `"${anchor.label}"` : 'the scene';
   const refreshAnchor = () => { anchorLine.textContent = `On ${anchorText(session.anchorFromSelection())}`; };
@@ -321,37 +320,26 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     return node;
   }
 
-  function threadNode(note) {
+  const latestNoteIn = note => { let latest = note; walk(note, item => { if (item.seq > latest.seq) latest = item; }); return latest; };
+  const threadOf = id => session.state.notes.get(id) ?? null;
+
+  // Thread cards are kept and updated in place. A reply being written keeps
+  // its focus, caret, attach choice and Send state through presence changes,
+  // receipts and new notes; only a card's notes and actions are redrawn.
+  const cards = new Map();
+  const cardsHost = element(document, 'div');
+  const empty = element(document, 'div', 'kn-empty', 'No notes on this scene yet. Select something and say what you see.');
+  threads.append(empty, cardsHost);
+
+  function makeCard(threadId) {
     const card = element(document, 'div', 'kn-thread');
-    card.dataset.thread = note.id;
-    card.dataset.resolved = String(note.resolved);
-    card.dataset.focus = String(note.id === focusThread);
-    const on = element(document, 'div', 'kn-on', `On ${anchorText(note.anchor)}${note.subject?.scene && note.subject.scene !== (sceneFile() || null) ? ` in ${note.subject.scene}` : ''}`);
-    card.append(on, noteNode(note, 0));
+    card.dataset.thread = threadId;
+    const on = element(document, 'div', 'kn-on');
+    const body = element(document, 'div');
     const actions = element(document, 'div', 'kn-actions');
-    const button = (label, handler, title) => {
-      const control = element(document, 'button', 'kn-btn', label);
-      control.type = 'button';
-      if (title) control.title = title;
-      control.addEventListener('click', () => Promise.resolve().then(handler).catch(error => say(error.message, 'error')));
-      actions.append(control);
-      return control;
-    };
-    button('Reply', () => { openReplies.add(note.id); render(); card.ownerDocument.querySelector(`[data-reply-for="${note.id}"] textarea`)?.focus(); });
-    button('Go to', () => {
-      const result = session.goTo(note.id);
-      redraw();
-      say(result.object && !result.present ? `"${note.anchor.label}" is no longer in this scene; restored the view only` : 'Restored the view this note was written from');
-    }, 'Restore the view and selection the note was written from');
-    button(note.resolved ? 'Reopen' : 'Resolve', () => session.setResolved(note.id, !note.resolved));
-    button('Copy ref', async () => {
-      await window.navigator.clipboard.writeText(formatRef(note));
-      say(`Copied a reference to ${note.id}`);
-    });
-    card.append(actions);
     const box = element(document, 'div', 'kn-replybox');
-    box.dataset.replyFor = note.id;
-    box.hidden = !openReplies.has(note.id);
+    box.dataset.replyFor = threadId;
+    box.hidden = true;
     const reply = element(document, 'textarea');
     reply.placeholder = 'Reply. @name brings someone else in.';
     reply.setAttribute('aria-label', 'Reply');
@@ -363,13 +351,17 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     const send = element(document, 'button', 'kn-btn primary', 'Send');
     send.type = 'button';
     const submit = async () => {
-      if (!reply.value.trim() && !replyAttach.checked) return;
+      if (send.disabled || (!reply.value.trim() && !replyAttach.checked)) return;
+      const thread = threadOf(threadId);
+      if (!thread) return say('That thread is no longer in the log', 'error');
       send.disabled = true;
       try {
-        const target = note.replies.length ? latestNoteIn(note) : note;
-        await session.post({text: reply.value, parent: target.id, attachPicture: replyAttach.checked});
+        // The reply answers the latest note in the thread; the server keeps it
+        // addressed to whoever the conversation was with.
+        await session.post({text: reply.value, parent: latestNoteIn(thread).id, attachPicture: replyAttach.checked});
         reply.value = '';
-        openReplies.delete(note.id);
+        replyAttach.checked = false;
+        box.hidden = true;
         say('Reply sent');
       } catch (error) {
         say(error.message, 'error');
@@ -381,35 +373,95 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     reply.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } });
     replyRow.append(replyAttachLabel, send);
     box.append(reply, replyRow);
-    card.append(box);
-    return card;
+    card.append(on, body, actions, box);
+    const entry = {card, on, body, actions, box, reply, signature: null};
+    cards.set(threadId, entry);
+    return entry;
   }
 
-  const latestNoteIn = note => { let latest = note; walk(note, item => { if (item.seq > latest.seq) latest = item; }); return latest; };
+  function fillCard(entry, thread) {
+    entry.card.dataset.resolved = String(thread.resolved);
+    entry.card.dataset.focus = String(thread.id === focusThread);
+    entry.on.textContent = `On ${anchorText(thread.anchor)}${thread.subject?.scene && thread.subject.scene !== (sceneFile() || null) ? ` in ${thread.subject.scene}` : ''}`;
+    entry.body.replaceChildren(noteNode(thread, 0));
+    const threadId = thread.id;
+    const button = (label, handler, title) => {
+      const control = element(document, 'button', 'kn-btn', label);
+      control.type = 'button';
+      if (title) control.title = title;
+      control.addEventListener('click', () => Promise.resolve().then(handler).catch(error => say(error.message, 'error')));
+      return control;
+    };
+    entry.actions.replaceChildren(
+      button('Reply', () => { entry.box.hidden = false; entry.reply.focus(); }),
+      button('Go to', () => {
+        const current = threadOf(threadId);
+        const result = session.goTo(threadId);
+        redraw();
+        say(result.object && !result.present ? `"${current?.anchor?.label}" is no longer in this scene; restored the view only` : 'Restored the view this note was written from');
+      }, 'Restore the view and selection the note was written from'),
+      button(thread.resolved ? 'Reopen' : 'Resolve', () => session.setResolved(threadId, !threadOf(threadId)?.resolved)),
+      button('Copy ref', async () => {
+        await window.navigator.clipboard.writeText(formatRef(threadOf(threadId)));
+        say(`Copied a reference to ${threadId}`);
+      }),
+    );
+  }
 
+  const signatureOf = thread => {
+    const parts = [thread.resolved, thread.id === focusThread, session.author, listeningNames().join(','), pageAuthors().join(','), sceneFile() || ''];
+    walk(thread, note => parts.push(note.seq, Object.keys(note.receipts.seen).join(','), Object.keys(note.receipts.delivered).join(',')));
+    return parts.join('|');
+  };
+
+  function renderThreads() {
+    const list = session.threads();
+    const active = document.activeElement;
+    const writing = cardsHost.contains(active);
+    const wanted = new Set(list.map(thread => thread.id));
+    for (const [id, entry] of cards) {
+      if (!wanted.has(id) && !entry.card.contains(active)) { entry.card.remove(); cards.delete(id); }
+    }
+    const scroll = threads.scrollTop;
+    const ordered = list.map(thread => {
+      const entry = cards.get(thread.id) ?? makeCard(thread.id);
+      const signature = signatureOf(thread);
+      if (signature !== entry.signature) { fillCard(entry, thread); entry.signature = signature; }
+      return entry.card;
+    });
+    empty.hidden = list.length > 0;
+    // Moving a card would take focus from a reply being written: while one
+    // is, new cards are added at the end and the order catches up later.
+    if (writing) {
+      for (const card of ordered) if (!card.isConnected) cardsHost.append(card);
+    } else {
+      ordered.forEach((card, index) => { if (cardsHost.children[index] !== card) cardsHost.insertBefore(card, cardsHost.children[index] ?? null); });
+    }
+    threads.scrollTop = scroll;
+  }
+
+  let knownNames = '';
   function render() {
     const unread = session.unread().length;
-    toggle.textContent = unread ? `Notes · ${unread} new` : 'Notes';
+    toggle.textContent = unread ? `Notes \u00b7 ${unread} new` : 'Notes';
     toggle.dataset.unread = String(unread);
     const waiting = listeningNames();
     listening.textContent = waiting.length ? `listening: ${waiting.join(', ')}` : 'no agent is listening right now';
-    names.replaceChildren(...[...new Set([...waiting, ...[...session.state.notes.values()].flatMap(note => [note.author, ...(note.recipients ?? [])])])]
-      .filter(name => name !== session.author).map(name => { const option = element(document, 'option'); option.value = `@${name}`; return option; }));
-    refreshAnchor();
-    if (!drawer.hidden) {
-      const scroll = threads.scrollTop;
-      const drafts = new Map([...threads.querySelectorAll('[data-reply-for]')].map(box => [box.dataset.replyFor, box.querySelector('textarea').value]));
-      const list = session.threads();
-      threads.replaceChildren(...(list.length ? list.map(threadNode) : [element(document, 'div', 'kn-empty', 'No notes on this scene yet. Select something and say what you see.')]));
-      for (const [id, value] of drafts) { const box = threads.querySelector(`[data-reply-for="${id}"] textarea`); if (box) box.value = value; }
-      threads.scrollTop = scroll;
+    const suggestions = [...new Set([...waiting, ...[...session.state.notes.values()].flatMap(note => [note.author, ...(note.recipients ?? [])])])]
+      .filter(name => name !== session.author);
+    if (suggestions.join(',') !== knownNames) {
+      knownNames = suggestions.join(',');
+      names.replaceChildren(...suggestions.map(name => { const option = element(document, 'option'); option.value = `@${name}`; return option; }));
     }
+    refreshAnchor();
+    if (!drawer.hidden) renderThreads();
   }
 
   function openDrawer({thread = null, composeFocus = false} = {}) {
     drawer.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (thread) focusThread = thread;
+    for (const entry of cards.values()) entry.signature = null;
     render();
     if (thread) {
       threads.querySelector(`[data-thread="${thread}"]`)?.scrollIntoView({block: 'nearest'});
@@ -522,7 +574,19 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   frame = window.requestAnimationFrame(placePins);
 
   // --- the live link ---
-  let linked = linkedNote;
+  // A linked note opens once the page's starting scene is restored, so its
+  // object is there to select and the saved camera does not overwrite its view.
+  let linked = linkedNote, sceneReady = !ready;
+  const applyLink = () => {
+    const note = linked && sceneReady ? session.state.notes.get(linked) : null;
+    if (!note) return;
+    linked = null;
+    openDrawer({thread: note.thread});
+    const result = session.goTo(note.id);
+    redraw();
+    say(result.object && !result.present ? `Opened ${note.id}; its object is not in this scene, so only the view was restored` : `Opened ${note.id} and restored the view it was written from`);
+  };
+  if (ready) Promise.resolve().then(ready).then(() => { sceneReady = true; applyLink(); }, () => { /* the page is moving to the saved scene's route; the link travels with it */ });
   const source = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=0`);
   source.addEventListener('hello', event => {
     const hello = JSON.parse(event.data);
@@ -533,13 +597,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   source.addEventListener('events', event => {
     const notices = session.receive(JSON.parse(event.data).events);
     for (const note of notices) toast(note);
-    if (linked && session.state.notes.has(linked)) {
-      const note = session.state.notes.get(linked);
-      linked = null;
-      openDrawer({thread: note.thread});
-      session.goTo(note.id);
-      redraw();
-    }
+    applyLink();
   });
   source.addEventListener('presence', event => session.setPresence(JSON.parse(event.data)));
   source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });

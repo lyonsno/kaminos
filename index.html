@@ -12087,7 +12087,8 @@ async function initScene() {
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
-        sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),linkedNote:pageQuery.get('note')});
+        sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
+        linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady});
       window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
     }catch(error){console.error('Notes unavailable',error);}
   }
@@ -27028,7 +27029,8 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location)));
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location),
+          {note:new URLSearchParams(location.search).get('note') ?? hash.get('note')}));
         return startupSceneRedirect;
       }
     }
