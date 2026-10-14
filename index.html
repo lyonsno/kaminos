@@ -203,6 +203,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <div class="tab" data-tab="greenroom">Greenroom</div>
     <div class="tab" data-tab="search">Search</div>
     <div class="tab" data-tab="generate">Generate</div>
+    <div class="tab" data-tab="motion">Motion</div>
   </div>
 
   <!-- Assets Tab -->
@@ -622,6 +623,81 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12p
     <button class="btn" id="gen-download-btn" style="display:none" onclick="downloadGenerated()">Save to Pipeline</button>
     <img class="gen-preview" id="gen-preview">
     <div id="gen-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
+  </div>
+
+  <!-- Motion Tab -->
+  <div class="tab-content" id="tab-motion">
+    <h2>Text to Motion</h2>
+    <p style="font-size: 11px; color: #666; margin-bottom: 12px;">Generate 3D skeletal animation from text prompts.</p>
+
+    <div class="panel">
+      <div class="field"><span class="field-key">Model</span></div>
+      <select class="select-input" id="motion-model" style="width: 100%; margin-bottom: 8px;">
+        <option value="kimodo" selected>Kimodo SOMA-RP-v1.1</option>
+        <option value="dip">DiP (fast, lightweight)</option>
+      </select>
+
+      <div class="field"><span class="field-key">Server</span>
+        <span class="field-val" id="motion-server-status" style="color: #ef5350;">not connected</span>
+      </div>
+    </div>
+
+    <textarea class="gen-input" id="motion-prompt" rows="3" placeholder="A person walks forward and waves their hand." style="resize: vertical; font-family: inherit;"></textarea>
+
+    <div class="panel" style="margin-top: 6px;">
+      <div class="slider-row">
+        <span class="slider-label">Duration</span>
+        <input type="range" id="motion-duration" min="2" max="18" value="6" step="1">
+        <span class="slider-val" id="motion-duration-val">6s</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Guidance</span>
+        <input type="range" id="motion-guidance" min="1" max="10" value="2" step="0.5">
+        <span class="slider-val" id="motion-guidance-val">2.0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Steps</span>
+        <input type="range" id="motion-steps" min="10" max="200" value="100" step="10">
+        <span class="slider-val" id="motion-steps-val">100</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Seed</span>
+        <input type="number" class="gen-input" id="motion-seed" placeholder="random" style="width: 80px; padding: 4px 8px; margin: 0;">
+        <button class="btn" onclick="document.getElementById('motion-seed').value = Math.floor(Math.random()*1000)" style="padding: 4px 8px; font-size: 10px;">Dice</button>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 6px; margin-top: 8px;">
+      <button class="btn" id="motion-gen-btn" onclick="generateMotion()" style="flex: 1;">Generate Motion</button>
+      <button class="btn" id="motion-stop-btn" onclick="stopMotionPlayback()" style="display: none;">Stop</button>
+    </div>
+
+    <div id="motion-status" style="font-size: 10px; color: #555; margin-top: 6px;"></div>
+
+    <!-- Playback controls (shown after generation) -->
+    <div id="motion-playback" style="display: none; margin-top: 10px;">
+      <div class="panel">
+        <div class="field"><span class="field-key">Frames</span><span class="field-val" id="motion-info-frames">—</span></div>
+        <div class="field"><span class="field-key">Duration</span><span class="field-val" id="motion-info-duration">—</span></div>
+        <div class="field"><span class="field-key">Gen time</span><span class="field-val" id="motion-info-gentime">—</span></div>
+        <div class="field"><span class="field-key">Joints</span><span class="field-val" id="motion-info-joints">—</span></div>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Frame</span>
+        <input type="range" id="motion-frame-slider" min="0" max="100" value="0" step="1">
+        <span class="slider-val" id="motion-frame-val">0</span>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <button class="btn" id="motion-play-btn" onclick="toggleMotionPlayback()">Play</button>
+        <button class="btn" onclick="motionFrameStep(-1)">Prev</button>
+        <button class="btn" onclick="motionFrameStep(1)">Next</button>
+        <button class="btn" onclick="exportMotionData()">Export .npz</button>
+      </div>
+    </div>
+
+    <!-- History queue -->
+    <h2>History</h2>
+    <div id="motion-history" style="display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto;"></div>
   </div>
 </div>
 
@@ -3296,6 +3372,8 @@ async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
+  window.__kaminosScene = scene;
+  window.__THREE__ = THREE;
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
@@ -7043,5 +7121,6 @@ initScene().then(() => {
   restoreSettings();
 });
 </script>
+<script src="motion-panel.js"></script>
 </body>
 </html>
