@@ -153,14 +153,16 @@ export function createU2NetRunner({device,graph,weights}){
     // output (sigmoid d0), 320x320. `capture` names tensors to read back too
     // (only valid for tensors not reused before the end of the run).
     // With `foreground` (a kit foreground run: {foregroundOpportunities}) the
-    // dispatches are submitted in segments and the page gets a before-encode
-    // boundary ahead of each one; Stop (`signal`) is honoured between segments.
+    // dispatches are submitted in segments, one in flight at a time, and the
+    // page gets a before-encode boundary ahead of each one; Stop (`signal`) is
+    // honoured between segments.
     // Without it, one submission. Same dispatches and order either way.
     async run(input,{capture=[],foreground,signal,invocationId='u2net',segmentSize=SEGMENT}={}){
       if(disposed)throw Error('U2Net runner disposed');
       if(!(input instanceof Float32Array)||input.length!==elements(graph.input.shape))throw TypeError('1x3x320x320 F32 input required');
       const serviceAtBoundary=foreground?.foregroundOpportunities?.serviceAtBoundary;
       if(foreground!==undefined&&typeof serviceAtBoundary!=='function')throw TypeError('foreground run with foregroundOpportunities.serviceAtBoundary required');
+      if(!Number.isSafeInteger(segmentSize)||segmentSize<1)throw RangeError('segmentSize must be a positive integer, got '+String(segmentSize));
       const stop=()=>{if(signal?.aborted)throw signal.reason?.name==='AbortError'?signal.reason:new DOMException('U2Net stopped','AbortError');};
       stop();
       device.queue.writeBuffer(buffers.get(inputName),0,input);
@@ -175,7 +177,13 @@ export function createU2NetRunner({device,graph,weights}){
           stop();
         }
         enc=device.createCommandEncoder();encode(enc,segments[i]);
-        if(i<segments.length-1)device.queue.submit([enc.finish()]);
+        if(i<segments.length-1){
+          device.queue.submit([enc.finish()]);
+          // One segment in flight: let it finish before the next boundary, so a
+          // page frame (or Stop) arriving meanwhile is serviced between segments
+          // instead of queueing behind the whole network.
+          if(serviceAtBoundary)await device.queue.onSubmittedWorkDone();
+        }
       }
       const reads=[outputName,...capture].map(name=>{const bytes=elements(shapes.get(name))*4;
         const staging=device.createBuffer({size:bytes,usage:U.MAP_READ|U.COPY_DST});enc.copyBufferToBuffer(buffers.get(name),0,staging,0,bytes);return [name,staging];});

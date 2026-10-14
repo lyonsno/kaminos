@@ -21,7 +21,7 @@ function mockDevice(log){
     createComputePipeline:()=>({getBindGroupLayout:()=>({})}),
     createBindGroup:()=>({}),
     createCommandEncoder(){let n=0;return {beginComputePass:()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){n++;},end(){}}),copyBufferToBuffer(){},finish:()=>({dispatches:n})};},
-    queue:{writeBuffer(){},submit(list){for(const c of list)log.push(['submit',c.dispatches]);}},
+    queue:{writeBuffer(){},submit(list){for(const c of list)log.push(['submit',c.dispatches]);},onSubmittedWorkDone:async()=>{}},
   };
 }
 const input=new Float32Array(3*320*320);
@@ -58,3 +58,48 @@ const input=new Float32Array(3*320*320);
   await removeForegroundU2Net({pixels:px,width:40,height:30,runner,foreground});
   assert.equal(passed.foreground,foreground,'runner receives the foreground run');
   assert.ok(windows.length>=2,'CPU stages run inside foreground windows');}
+
+// Handback through the real kit foreground service: a page frame that arrives
+// on the next event-loop turn after the first segment must reach the GPU queue
+// before the last model segment, not wait behind the whole network.
+{
+  const kit=await import('../webgpu-inference-kit/src/index.js');
+  const queueLog=[];let frameRequested=false,service;
+  const device=mockDevice([]);
+  device.queue={writeBuffer(){},
+    submit(list){for(const c of list){queueLog.push(typeof c==='string'?c:'model');
+      if(typeof c!=='string'&&!frameRequested){frameRequested=true;
+        setImmediate(()=>service.request({requestId:'page-frame',run:ctx=>{ctx.submit(['page-frame']);return 'page-frame';}}));}}},
+    onSubmittedWorkDone:()=>new Promise(resolve=>setImmediate(resolve))};
+  service=kit.createWebGpuForegroundService({routeId:'u2net-test',device,queue:device.queue});
+  const run=await service.beginRun('u2net-run');
+  const runner=createU2NetRunner({device,graph,weights:new Float32Array(w+8)});
+  await runner.run(input,{foreground:run,invocationId:'u2net-run'});
+  await run.finish();
+  for(let i=0;i<5;i++)await new Promise(r=>setImmediate(r)); // let a late frame drain as an idle frame
+  const frameAt=queueLog.indexOf('page-frame'),lastModel=queueLog.lastIndexOf('model');
+  assert.ok(frameAt>=0,'page frame submitted');
+  assert.ok(frameAt<lastModel,`page frame must interleave between U2Net segments (queue: ${queueLog.join(',')})`);
+  await service.dispose();
+}
+
+// segmentSize must be a positive safe integer; a size beyond the dispatch count is one segment.
+{const fg={foregroundOpportunities:{serviceAtBoundary:async()=>{}}};
+  for(const bad of [0,-1,NaN,Infinity,1.5,'8',null]){const log=[];
+    const runner=createU2NetRunner({device:mockDevice(log),graph,weights:new Float32Array(w+8)});
+    await assert.rejects(runner.run(input,{foreground:fg,segmentSize:bad}),RangeError,String(bad));
+    assert.equal(log.length,0,'nothing submitted for '+String(bad));}
+  const log=[];const runner=createU2NetRunner({device:mockDevice(log),graph,weights:new Float32Array(w+8)});
+  await runner.run(input,{foreground:fg,segmentSize:1000});assert.deepEqual(log,[['submit',41]]);}
+
+// Stop from a separate browser task, through the real kit service: later segments are not submitted.
+{const kit=await import('../webgpu-inference-kit/src/index.js');
+  const log=[];const device=mockDevice(log);
+  device.queue.onSubmittedWorkDone=()=>new Promise(resolve=>setImmediate(resolve));
+  const service=kit.createWebGpuForegroundService({routeId:'u2net-stop',device,queue:device.queue});
+  const run=await service.beginRun('u2net-stop');const stop=new AbortController();
+  setImmediate(()=>stop.abort());
+  const runner=createU2NetRunner({device,graph,weights:new Float32Array(w+8)});
+  await assert.rejects(runner.run(input,{foreground:run,signal:stop.signal,segmentSize:8}),e=>e.name==='AbortError');
+  await run.finish();await service.dispose();
+  assert.ok(log.length<6,`Stop must land before the remaining segments (submits: ${log.length})`);}

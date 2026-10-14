@@ -34,14 +34,24 @@ try{
     const src=await bin(c.name,'source','source-rgb.u8',w*h*3),want=await bin(c.name,'cutout','cutout-rgba.u8',pw*ph*4,c.cutoutSha256);
     const t=performance.now(),r=await removeForegroundU2Net({pixels:src,width:w,height:h,runner}),seconds=(performance.now()-t)/1000;
     if(r.width!==pw||r.height!==ph)throw Error('cutout '+c.name+': size '+r.width+'x'+r.height+' vs reference '+pw+'x'+ph);
-    // The same photo through a foreground run (segmented submission, CPU windows) must give the same bytes.
-    let boundaries=0;const windows=[];
-    const foreground={foregroundOpportunities:{serviceAtBoundary:async()=>{boundaries++;await new Promise(requestAnimationFrame);}},
-      withForeground:async(phase,work)=>{windows.push(phase);return work();}};
-    const s=await removeForegroundU2Net({pixels:src,width:w,height:h,runner,foreground});
+    // The same photo through the real kit foreground service while a page-like
+    // loop submits a small GPU frame every animation frame: bytes must match the
+    // single submission, and frames must be serviced during inference.
+    const kit=await import('/repo/webgpu-inference-kit/src/index.js');
+    const service=kit.createWebGpuForegroundService({routeId:'u2net-witness',device,queue:device.queue});
+    const loop=label=>{const st={label,frames:0,maxGapMs:0,live:true,last:performance.now()};
+      const tick=now=>{if(!st.live)return;st.maxGapMs=Math.max(st.maxGapMs,now-st.last);st.last=now;
+        service.request({requestId:label+'-'+(st.frames++),run:ctx=>{ctx.submit([device.createCommandEncoder().finish()]);}});
+        requestAnimationFrame(tick);};
+      requestAnimationFrame(tick);return st;};
+    const plain=loop(c.name+'-plain');await removeForegroundU2Net({pixels:src,width:w,height:h,runner});plain.live=false;
+    const shared=loop(c.name+'-foreground');const run=await service.beginRun(c.name+'-u2net');
+    const s=await removeForegroundU2Net({pixels:src,width:w,height:h,runner,foreground:run});await run.finish();shared.live=false;
+    await service.dispose();
     let same=s.rgba.length===r.rgba.length;for(let i=0;same&&i<s.rgba.length;i++)same=s.rgba[i]===r.rgba[i];
-    if(!same)throw Error('cutout '+c.name+': segmented foreground run differs from single submission');
-    report.cases[c.name]={size:[r.width,r.height],seconds,...compareCutouts(c.name,r.rgba,want),foreground:{identical:true,boundaries,windows}};
+    if(!same)throw Error('cutout '+c.name+': foreground run differs from single submission');
+    report.cases[c.name]={size:[r.width,r.height],seconds,...compareCutouts(c.name,r.rgba,want),
+      frames:{plain:{frames:plain.frames,maxGapMs:plain.maxGapMs},foreground:{frames:shared.frames,maxGapMs:shared.maxGapMs,identical:true}}};
   }
   runner.dispose();report.phase=null;report.status='done';
 }catch(e){report.status='error';report.error=String(e.stack||e);}
