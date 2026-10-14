@@ -10,8 +10,12 @@ import {fireAtBoot} from '../fire-boot.mjs';
 const source=fs.readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 const a=source.indexOf('sceneInitialization.then(() => {'),b=source.indexOf('</script>',a);assert.ok(a>=0&&b>a);
 const tail=source.slice(a,b);
+const presentationStart=source.indexOf('  if (hasVolumePrimitiveScene || activeSceneComposition ||');
+const presentationEnd=source.indexOf('\n  syncRimAuthoringHandle();',presentationStart);
+assert.ok(presentationStart>=0&&presentationEnd>presentationStart);
+const loaderPresentation=source.slice(presentationStart,presentationEnd);
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture({saved=true,authoring=true,workspace=null,restoreFailure=false,silentFailure=false}={}){
+function fixture({saved=true,authoring=true,workspace=null,restoreFailure=false,silentFailure=false,restoredPresentation='none'}={}){
  let releaseVolume,releaseRestore,resolveReady,rejectReady,ownerCount=0,session;
  const volume=new Promise(resolve=>releaseVolume=resolve),restore=new Promise(resolve=>releaseRestore=resolve),ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});ready.catch(()=>{});
  const scene=new THREE.Scene(),rows=[],frames=createWorkbenchFrameService(),events=[];
@@ -20,7 +24,8 @@ function fixture({saved=true,authoring=true,workspace=null,restoreFailure=false,
  const c={URLSearchParams,Promise,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location:{search:'?experiment=fixture'}},location:{hash:saved?(authoring?'#authoring=1&scene=saved.json':'#workspace=workbench&scene=saved.json'):'',search:'?experiment=fixture'+(workspace?'&workspace='+workspace:'')},console:{error(){}},File:class{},sceneSaveBlockedByFailedRestore:false,
   initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
   fireAtBoot,initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(tab){selectedTab=tab;},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
-  async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');if(silentFailure){events.push('restore refused');return;}for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
+  activeSceneComposition:restoredPresentation==='composition'?{flame:{}}:null,hasVolumePrimitiveScene:restoredPresentation==='volume',volumePrototype:{async setActive(){}},sceneLoadRequests:{isCurrent:()=>true},loadRequestId:1,
+  async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');if(silentFailure){events.push('restore refused');return;}for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;await vm.runInContext('(async()=>{'+loaderPresentation+'})()',c);c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
   resolveWorkbenchViewerReady(){events.push('viewer ready');resolveReady();},rejectWorkbenchViewerReady(error){events.push('viewer failed');rejectReady(error);},
   async installOwnerWorkbenchEntry(){await ready;ownerCount++;session=host.open();const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());await session.attach(root,{owned:true});session.onFrame(()=>{});events.push('owner attached');},
  };
@@ -41,3 +46,11 @@ test('Workbench saved-scene address also waits for the actual starting scene',as
 test('handled scene-loader failure cannot masquerade as a completed starting scene',async t=>{const f=fixture({silentFailure:true});t.after(f.dispose);f.releaseVolume();await flush();f.releaseRestore();await assert.rejects(f.ready,/restoration did not complete/);await flush();assert.equal(f.ownerCount(),0);assert.equal(f.rows.length,0);});
 test('Workbench reopening an ordinary authored save selects the shared bench',async t=>{const f=fixture({workspace:'workbench'});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),'making-bench');});
 test('Authoring reopening keeps its existing asset context',async t=>{const f=fixture({workspace:'authoring'});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),'assets');});
+for(const restoredPresentation of ['composition','volume']){
+ test('saved Workbench '+restoredPresentation+' retains its bench after the actual loader presentation',async t=>{
+  const f=fixture({workspace:'workbench',restoredPresentation});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),'making-bench');
+ });
+ test('saved Authoring '+restoredPresentation+' preserves its loader context',async t=>{
+  const f=fixture({workspace:'authoring',restoredPresentation});t.after(f.dispose);f.releaseVolume();f.releaseRestore();await f.ready;assert.equal(f.tab(),restoredPresentation==='composition'?'assets':'volume');
+ });
+}

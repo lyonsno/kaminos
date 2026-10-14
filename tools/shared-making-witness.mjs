@@ -72,6 +72,17 @@ try {
   await page.waitForFunction(id=>window.kaminosWorkbenchExperiments&&window.kaminosSceneObjectDebugState?.().some(o=>o.id===id),subject.id);
   check('saved scene reopens on the bench',await page.evaluate(()=>window.__kaminosActiveTab()==='making-bench'));
   await page.screenshot({path:path.join(out,'restored.png')});
+  report.phase='authoring-control-ownership';save();
+  await page.locator('[data-workspace-mode="authoring"]').click();
+  await page.evaluate(()=>window.kaminosSelectSceneRimLight());
+  check('Rim Light leaves Authoring transform controls visible',await page.locator('#authoring-gizmo-slot #tb-gizmo-rotate').isVisible());
+  await page.evaluate(()=>window.kaminosSceneAuthoring.addWaterEmitter());
+  check('Add Water Emitter leaves Authoring transform controls visible',await page.locator('#authoring-gizmo-slot #tb-gizmo-rotate').isVisible());
+  await page.evaluate(()=>window.__kaminosSetActiveTab('assets'));
+  check('repeated Assets selection preserves Authoring controls',await page.locator('#authoring-gizmo-slot #tb-gizmo-rotate').isVisible());
+  await page.screenshot({path:path.join(out,'authoring-controls.png')});
+  await page.locator('[data-workspace-mode="workbench"]').click();
+  check('bench reacquires controls after authoring additions',await page.locator('#experiment-making-tools #tb-gizmo-rotate').isVisible());
   if(args.asset){
     report.phase='arm-scene';save();
     await page.goto(new URL('/index.html',args.origin).href,{waitUntil:'load'});
