@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {radialSoftVisibility,BLOCKER_DISK,FILTER_DISK} from './fire-shadow-filter.mjs';
+import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
@@ -27,10 +28,11 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,Ren
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed'}) {
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
   const softness=uniform(validateSoftness(shadowSoftness));
+  const complementary=uniform(validateShadowSampling(shadowSampling)==='complementary','bool');
   if(shadowSoftness>0&&sourceSizeNode===null)throw Error('soft shadows require a source size node');
   const enabled=uniform(requested?1:0),effective=uniform(0);
   const target=new THREE.CubeRenderTarget(resolution,{
@@ -68,11 +70,12 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   return shadowSample.r;
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility});
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
-  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,blockerSamples:BLOCKER_DISK.length,filterSamples:FILTER_DISK.length};
+  const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples:BLOCKER_DISK.length,filterSamples:FILTER_DISK.length};
   return {
+    setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,
     resource() {
       return {texture:status.effective ? renderer.backend.get(target.texture).texture : null,

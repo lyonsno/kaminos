@@ -1,0 +1,17 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import experiment from '../experiments/fire-shadow-sampling.experiment.mjs';
+let state={shadowSampling:'fixed',shadowSoftness:1,pointCount:1,shadows:[]},callback,removed=0,disposed=0,redraws=0;
+const win={__kaminosSceneRadiance:{debugState:()=>({...state}),setShadowSampling:value=>state.shadowSampling=value,setShadowSoftness:value=>state.shadowSoftness=value},kaminosSceneGIDebugState:()=>({gain:10})};
+const session={onFrame:fn=>{callback=fn;return()=>removed++;},redraw:()=>redraws++,dispose:async()=>disposed++};
+const records=[];
+const result=await experiment.create({host:{controls:{document:{defaultView:win}},scene:{open:async()=>session}},inputs:{sampling:'complementary'},record:value=>records.push(value)});
+assert.equal(result.read().effective,'fixed','state must describe actual runtime before deferred mount');
+callback();assert.equal(result.read().effective,'complementary');assert.equal(removed,1);
+assert.equal(result.operations.setSampling('fixed').effective,'fixed');assert.equal(records.length,1);assert.equal(redraws,1);
+assert.throws(()=>result.operations.setSampling('blur'),/sampling/);assert.equal(result.read().effective,'fixed');
+assert.equal(result.operations.setSoftness(.5).softness,.5);
+win.__kaminosSceneRadiance=null;assert.equal(result.read().available,false);
+assert.throws(()=>result.operations.setSampling('complementary'),/no hybrid/);
+await result.dispose();assert.equal(disposed,1);
+console.log('PASS Workbench sampling operations reflect actual consumer, reject fallback and release lifetime');
