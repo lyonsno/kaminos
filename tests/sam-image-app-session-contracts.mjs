@@ -7,6 +7,7 @@ import { withPngProvenance, readPngProvenance } from '../authoring-image-generat
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 const saved = [], delivered = [];
+let assetHandoff = entry => delivered.push(entry);
 
 const elements = new Map();
 const context2d = { drawImage() {}, fillRect() {}, putImageData() {},
@@ -70,7 +71,7 @@ const createTools = vm.runInNewContext(`${source.replace(/^import[^\n]*\n/gm, ''
 });
 const tools = createTools({ inferenceSession: session, rendererDevice: device,
   foregroundService: applicationForeground, config: { mounted: true, manifestUrl: '/sam3-packet/tensor-manifest.json' },
-  onAsset: entry => delivered.push(entry) });
+  onAsset: entry => assetHandoff(entry) });
 await tools.open('/api/read?root=image-inbox&path=selected.png', { name: 'selected.png' });
 await tools.run();
 assert.equal(options.inferenceSession, session);
@@ -102,6 +103,24 @@ for (const kind of ['mask', 'cutout']) {
   assert.deepEqual(entry.maskProvenance, delivered.at(-1).maskProvenance);
   assert.deepEqual(JSON.parse(JSON.stringify(entry.maskProvenance)), provenance);
 }
+let releaseHandoff, handoffStarted;
+const handoffEntered = new Promise(resolve => { handoffStarted = resolve; });
+const handoffPending = new Promise(resolve => { releaseHandoff = resolve; });
+assetHandoff = () => { handoffStarted(); return handoffPending; };
+let saveSettled = false;
+const pendingSave = tools.save('mask').then(value => { saveSettled = true; return value; });
+await handoffEntered;
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(saveSettled, false, 'save must wait for the Authoring asset handoff');
+assert.equal(tools.progress().busy, true, 'export remains busy until host selection settles');
+releaseHandoff();
+await pendingSave;
+assert.equal(tools.progress().busy, false);
+const handoffFailure = new Error('Authoring selection failed');
+assetHandoff = async () => { throw handoffFailure; };
+await assert.rejects(tools.save('mask'), error => error === handoffFailure,
+  'a failed host handoff must not appear as a successful saved selection');
+assetHandoff = entry => delivered.push(entry);
 closeFailure = new Error('unsettled model queue');
 try { await element('sam-image-unload').onclick(); } catch { /* Pre-fix callback rejection is not settlement. */ }
 assert.ok(tools.evidence().runtime, 'a failed unload must retain the runtime handle and its resources');
