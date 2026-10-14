@@ -17,7 +17,7 @@ const report={phase:'page',cases:{}};
 try{
   const {loadU2NetPackage,createU2NetRunner}=await import('/repo/models/u2net/u2net-webgpu.js');
   const {removeForegroundU2Net}=await import('/repo/models/u2net/rembg-u2net.js');
-  const {admitReferenceCases,admitReferenceBytes,compareCutouts}=await import('/repo/models/u2net/witness-checks.js');
+  const {admitReferenceCases,admitReferenceBytes,compareCutouts,admitForegroundHandback}=await import('/repo/models/u2net/witness-checks.js');
   report.phase='adapter';const adapter=await navigator.gpu?.requestAdapter();if(!adapter)throw Error('no WebGPU adapter');
   report.adapter={vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,fallback:adapter.info?.isFallbackAdapter??null};
   const device=await adapter.requestDevice({requiredLimits:{maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize,maxBufferSize:adapter.limits.maxBufferSize}});
@@ -35,23 +35,28 @@ try{
     const t=performance.now(),r=await removeForegroundU2Net({pixels:src,width:w,height:h,runner}),seconds=(performance.now()-t)/1000;
     if(r.width!==pw||r.height!==ph)throw Error('cutout '+c.name+': size '+r.width+'x'+r.height+' vs reference '+pw+'x'+ph);
     // The same photo through the real kit foreground service while a page-like
-    // loop submits a small GPU frame every animation frame: bytes must match the
-    // single submission, and frames must be serviced during inference.
+    // loop requests a small GPU frame every animation frame. Bytes must match the
+    // single submission, and the queue order must show page submissions between
+    // U2Net segments (requests alone, or ones drained at finish, do not count).
     const kit=await import('/repo/webgpu-inference-kit/src/index.js');
     const service=kit.createWebGpuForegroundService({routeId:'u2net-witness',device,queue:device.queue});
-    const loop=label=>{const st={label,frames:0,maxGapMs:0,live:true,last:performance.now()};
+    const queue=[];let inPage=false;const submit=device.queue.submit;
+    device.queue.submit=function(list){queue.push(inPage?'page':'model');return submit.call(this,list);};
+    const loop=label=>{const st={label,requested:0,maxGapMs:0,live:true,last:performance.now()};
       const tick=now=>{if(!st.live)return;st.maxGapMs=Math.max(st.maxGapMs,now-st.last);st.last=now;
-        service.request({requestId:label+'-'+(st.frames++),run:ctx=>{ctx.submit([device.createCommandEncoder().finish()]);}});
+        service.request({requestId:label+'-'+(st.requested++),run:ctx=>{inPage=true;try{ctx.submit([device.createCommandEncoder().finish()]);}finally{inPage=false;}}});
         requestAnimationFrame(tick);};
       requestAnimationFrame(tick);return st;};
-    const plain=loop(c.name+'-plain');await removeForegroundU2Net({pixels:src,width:w,height:h,runner});plain.live=false;
-    const shared=loop(c.name+'-foreground');const run=await service.beginRun(c.name+'-u2net');
-    const s=await removeForegroundU2Net({pixels:src,width:w,height:h,runner,foreground:run});await run.finish();shared.live=false;
-    await service.dispose();
+    let shared,s,handback;
+    try{
+      shared=loop(c.name+'-foreground');const run=await service.beginRun(c.name+'-u2net');
+      s=await removeForegroundU2Net({pixels:src,width:w,height:h,runner,foreground:run});await run.finish();shared.live=false;
+    }finally{if(shared)shared.live=false;device.queue.submit=submit;await service.dispose();}
+    handback=admitForegroundHandback(c.name,queue);
     let same=s.rgba.length===r.rgba.length;for(let i=0;same&&i<s.rgba.length;i++)same=s.rgba[i]===r.rgba[i];
     if(!same)throw Error('cutout '+c.name+': foreground run differs from single submission');
     report.cases[c.name]={size:[r.width,r.height],seconds,...compareCutouts(c.name,r.rgba,want),
-      frames:{plain:{frames:plain.frames,maxGapMs:plain.maxGapMs},foreground:{frames:shared.frames,maxGapMs:shared.maxGapMs,identical:true}}};
+      foreground:{identical:true,...handback,requested:shared.requested,maxCallbackGapMs:shared.maxGapMs}};
   }
   runner.dispose();report.phase=null;report.status='done';
 }catch(e){report.status='error';report.error=String(e.stack||e);}
