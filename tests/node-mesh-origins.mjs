@@ -5,6 +5,8 @@ import {mkdtemp,mkdir,realpath,readFile,writeFile,readdir,rm} from 'node:fs/prom
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import fs from 'node:fs/promises';
+import {syncBuiltinESMExports} from 'node:module';
 import {createKaminosAppHost} from '../node-app-host.mjs';
 import {createAuthoringAssets} from '../authoring-assets.mjs';
 
@@ -103,4 +105,25 @@ test('corrupt provenance stays visibly unverified and cannot be silently replace
   assert.equal(listing.body.entries.length,1);assert.equal(listing.body.entries[0].generation,undefined);assert.ok(listing.body.warnings.length>0);
   assert.equal((await f.publish(f.a,f.result())).status,400);
   assert.equal(await readFile(join(f.root,'.'+f.artifact.sha256+'.glb.origins.json'),'utf8'),'{');
+});
+
+test('publication after a held temporary write determines display order across restart and retry',async t=>{
+  const f=await fixture(t),b=await f.start(),aValue=f.result('held-run-a','Published last.glb'),bValue=f.result('run-b','Published earlier.glb');
+  let observed,release;const held=new Promise(resolve=>observed=resolve),gate=new Promise(resolve=>release=resolve);
+  const originalLink=fs.link,originalRename=fs.rename;
+  const hold=async(target,action)=>{if(target.endsWith('/'+sha(aValue.generation.runId)+'.json')||target.endsWith('/'+sha(aValue.generation.runId))){observed();await gate;}return action();};
+  fs.link=(source,target)=>hold(target,()=>originalLink(source,target));fs.rename=(source,target)=>hold(target,()=>originalRename(source,target));syncBuiltinESMExports();
+  try {
+    const pending=f.publish(f.a,aValue);await held;
+    // Real modification times differ; the gate controls publication order.
+    await new Promise(resolve=>setTimeout(resolve,25));assert.equal((await f.publish(b,bValue)).status,200);
+    release();assert.equal((await pending).status,200);
+    const verify=async(client)=>{
+      const catalog=await client.call('/api/authoring-assets?collection=generated-meshes');assert.equal(catalog.body.entries[0].generation.runId,aValue.generation.runId,'last published origin must be displayed');
+      const browse=await client.call('/api/browse?root=generated-meshes');assert.equal(browse.body.entries[0].generation.runId,aValue.generation.runId);
+    };
+    await verify(b);await f.a.host.close();await b.host.close();const fresh=await f.start();await verify(fresh);
+    assert.equal((await f.publish(fresh,bValue)).status,200);await verify(fresh);
+    assert.equal((await f.publish(fresh,{...bValue,name:'Cannot replace.glb'})).status,409);await verify(fresh);
+  }finally {release();fs.link=originalLink;fs.rename=originalRename;syncBuiltinESMExports();}
 });

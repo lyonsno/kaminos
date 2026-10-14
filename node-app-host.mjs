@@ -1,5 +1,5 @@
 import {createServer} from 'node:http';
-import {mkdir, readFile, writeFile, readdir, stat, realpath, rename, unlink, link} from 'node:fs/promises';
+import {mkdir, readFile, writeFile, readdir, stat, realpath, rename, unlink, link, rm} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
 import {join, resolve, relative, dirname, basename, extname, isAbsolute} from 'node:path';
 import {createHash, randomUUID} from 'node:crypto';
@@ -46,6 +46,16 @@ async function atomicJson(path,value,{exclusive=false}={}) {
     if(exclusive)await link(temporary,path);else await rename(temporary,path);
   }
   finally {await unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+}
+
+async function publishOrigin(directory,value) {
+  const temporary=join(dirname(directory),`.origin-${randomUUID()}.tmp`);
+  try {
+    await mkdir(temporary);await writeFile(join(temporary,'origin.json'),JSON.stringify(value)+'\n',{flag:'wx'});
+    // A complete nonempty directory is published in one rename. Another complete
+    // run with this identity cannot be replaced by directory rename.
+    await rename(temporary,directory);
+  }finally {await rm(temporary,{recursive:true,force:true});}
 }
 
 async function bodyBytes(request) {
@@ -158,19 +168,23 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
     if(info) {
       if(!info.isDirectory())throw failure('Mesh origin directory is invalid');
       for(const name of await readdir(directory)) {
-        if(!/^[a-f0-9]{64}\.json$/.test(name))continue; // Completed immutable records only; pending atomic writes are not origins.
-        const path=await mountedPath(root,join(basename(directory),name));let value;
+        const container=/^[a-f0-9]{64}$/.test(name),imported=/^[a-f0-9]{64}\.json$/.test(name);
+        if(!container&&!imported)continue; // Pending atomic writes are not origins.
+        const publicationPath=await mountedPath(root,join(basename(directory),name)),publicationInfo=await stat(publicationPath);
+        if(container&&!publicationInfo.isDirectory())throw failure('Mesh origin publication is invalid');
+        const path=container?await mountedPath(root,join(basename(directory),name,'origin.json')):publicationPath;let value;
         try{value=JSON.parse(await readFile(path,'utf8'));}catch{throw failure('Unreadable mesh origin record');}
         if(!value||value.schema!=='kaminos.mesh-generation-origin.v1')throw failure('Invalid mesh origin record');
         const origin=validateOrigin(value.result,hash,size),runId=origin.generation.runId;
-        if(name!==digest(runId)+'.json')throw failure('Conflicting mesh origin run identity');
+        if(name!==digest(runId)+(container?'':'.json'))throw failure('Conflicting mesh origin run identity');
         if(records.has(runId)&&!isDeepStrictEqual(records.get(runId),origin))throw failure('Conflicting mesh origin records');
-        records.set(runId,origin);published.push({origin,mtime:(await stat(path)).mtimeMs});
+        records.set(runId,origin);published.push({origin,container,time:container?publicationInfo.ctimeMs:publicationInfo.mtimeMs});
       }
     }
-    // Node continuation records follow any imported Python aggregate. Publication
-    // time selects the displayed run; digest tie-breaks keep restart deterministic.
-    published.sort((a,b)=>b.mtime-a.mtime||digest(a.origin.generation.runId).localeCompare(digest(b.origin.generation.runId)));
+    // Rename changes the immutable container's ctime at publication; writing or
+    // removing the prior temporary container cannot subsequently change it.
+    // Newly published containers follow imported Python/file-only Node records.
+    published.sort((a,b)=>Number(b.container)-Number(a.container)||b.time-a.time||digest(a.origin.generation.runId).localeCompare(digest(b.origin.generation.runId)));
     return {records,latest:published[0]?.origin||latest};
   }
   async function meshEntry(path,warnings) {
@@ -266,11 +280,11 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
       if(!isDeepStrictEqual(records.get(runId),origin))throw failure('Generation run origin is immutable',409);
     }else {
       const directory=await mountedPath(root,`.${hash}.glb.origins`);await mkdir(directory,{recursive:true});
-      const target=await mountedPath(root,join(basename(directory),digest(runId)+'.json'));
-      try{await atomicJson(target,{schema:'kaminos.mesh-generation-origin.v1',result},{exclusive:true});}
+      const target=await mountedPath(root,join(basename(directory),digest(runId)));
+      try{await publishOrigin(target,{schema:'kaminos.mesh-generation-origin.v1',result});}
       catch(error) {
-        if(error.code!=='EEXIST')throw error;
-        const value=JSON.parse(await readFile(target,'utf8'));
+        if(!['EEXIST','ENOTEMPTY'].includes(error.code))throw error;
+        const value=JSON.parse(await readFile(await mountedPath(root,join(basename(directory),digest(runId),'origin.json')),'utf8'));
         if(value.schema!=='kaminos.mesh-generation-origin.v1'||!isDeepStrictEqual(validateOrigin(value.result,hash,bytes.length),origin))throw failure('Generation run origin is immutable',409);
       }
     }
