@@ -38,14 +38,6 @@
       "signature": "Error: support maximum spatial Lipschitz bound must be finite",
       "testLastChanged": "2026-07-25 79bc04fe"
     },
-    "tests/finger-fluid-bench-contracts.mjs": {
-      "class": "stale-pin",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "already failing at the commit that last changed it (2026-09-23 58ea38c6 compare fluid populations at fixed volume); its assertions never matched main",
-      "signature": "AssertionError [ERR_ASSERTION]: refraction can capture the exact same-camera support presentation from the current canvas texture",
-      "testLastChanged": "2026-09-23 58ea38c6"
-    },
     "tests/finger-fluid-waterfall-continuity-contracts.mjs": {
       "class": "regression",
       "owner": "soggy",
@@ -53,14 +45,6 @@
       "reason": "passed at its last change and first fails at 2026-09-23 58ea38c6 compare fluid populations at fixed volume; the owner decides whether the source or the test is wrong; owner is the lane prefix of the first-bad commit's branch",
       "signature": "AssertionError [ERR_ASSERTION]: particle allocation preflight must run before proportional CPU truth-scene arrays are created",
       "testLastChanged": "2026-07-20 2460360d"
-    },
-    "tests/finger-fluid-waterfall-resolution-oracle-contracts.mjs": {
-      "class": "regression",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "passed at its last change and first fails at 2026-07-27 5941fe7d finger fluid: compose canonical moving Hill support; the owner decides whether the source or the test is wrong; the first-bad commit came from big-papa-canonical-moving-hill-support-0727, a closed lane, so this needs a domain owner",
-      "signature": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /COMPUTE_SHADER\\.replaceAll\\(\\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/. Input: | \"export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';\\n\" + | \"export const KAMINOS_FINGER_FLUID_BOUNDARY_PRESSURE_CONTRACT = 'wgsl-analytic-boundary-density-support-v0';\\n\" +",
-      "testLastChanged": "2026-07-25 79bc04fe"
     },
     "tests/fire-shadow-burner-frame-contracts.mjs": {
       "class": "regression",

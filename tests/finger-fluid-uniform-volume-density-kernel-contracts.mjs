@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createWebGPUFingerFluidSolver } from '../finger-fluid-webgpu-core.js';
+import { createWebGPUFingerFluidSolver, resolveFingerFluidPressureOptimizations } from '../finger-fluid-webgpu-core.js';
 
 const shaderSource = readFileSync(new URL('../finger-fluid-webgpu-core.js', import.meta.url), 'utf8');
 const browserSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -28,7 +28,8 @@ function assertDensityProjectionScope(source) {
 
 assert.match(shaderSource, /uniformVolumeDensityKernel = false/, 'direct API keeps specialization separately opt-in');
 assert.match(shaderSource, /uniformVolumeDensityKernel !== 'boolean'/, 'direct API rejects truthy nonboolean requests');
-assert.match(shaderSource, /const safeUniformVolumeDensityKernel = uniformVolumeDensityKernel === true && !safeAdaptiveDensity;/, 'adaptive particles bypass a uniform-volume specialization');
+for(const config of [{adaptiveDensity:true},{pressureSolver:'ipbf'}])assert.equal(resolveFingerFluidPressureOptimizations({...config,uniformVolumeDensityKernel:true}).uniformVolumeDensityKernel,false,'variable volume and IPBF bypass PBF specialization');
+assert.equal(resolveFingerFluidPressureOptimizations({uniformVolumeDensityKernel:true}).uniformVolumeDensityKernel,true);
 assert.match(shaderSource, /densityControl: vec4<f32>/, 'uniform density constants have an explicit GPU parameter block');
 assert.match(shaderSource, /const buffer = new ArrayBuffer\(224\)/, 'CPU upload matches the extended WGSL parameter layout');
 assert.match(shaderSource, /view\.setFloat32\(208, safeUniformParticleVolumeScale, true\)/, 'the active uniform volume scale reaches the shader');

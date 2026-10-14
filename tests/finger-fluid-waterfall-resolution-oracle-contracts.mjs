@@ -207,7 +207,7 @@ assert.match(coreSource, /params\.particleShift\.w/);
 assert.match(coreSource, /safeKernelRadius/);
 assert.match(coreSource, /safeVisibleParticleRadius/);
 assert.match(coreSource, /KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/);
-assert.match(coreSource, /COMPUTE_SHADER\.replaceAll\(\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/);
+assert.match(coreSource, /COMPUTE_SHADER\s*\.replaceAll\(\s*KAMINOS_FINGER_FLUID_COMPUTE_MAX_SPEED_TOKEN/);
 assert.match(witnessSource, /captured_pending_operator_disposition/);
 assert.match(witnessSource, /requestedPreset/);
 assert.match(witnessSource, /effectivePreset/);

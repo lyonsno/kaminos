@@ -19,7 +19,7 @@ test('the actual domain helper retires when its field is absent and survives tog
   activeSceneComposition={};refresh();assert.equal(flameDomainGuide.visible,true);assert.equal(scene.children.length,1);
 });
 
-test('both actual GI graph arms retain the mounted water host linear input',()=>{
+test('both actual GI graph arms preserve ordinary final display while shared water captures raw input',()=>{
   for(const cached of [false,true]) {
     const sceneGISettings={mode:'gtao',view:'scene'},document={body:{dataset:{}}},localLiquidHost={};
     const scenePass={},prePassDepth={},prePassNormal={},sceneGI={};let activeSceneDepth,fireLightFieldPass;
@@ -29,6 +29,6 @@ test('both actual GI graph arms retain the mounted water host linear input',()=>
     const refreshRenderingControls=()=>{},createFireLightFieldReceiverPass=()=>({outputNode:{}});
     const giOutputGraphs=new Map(cached?[['gtao:true:false',{rawSceneOutput:{},outlinedSceneOutput:{},outlinedCameraOutput:null,sceneEmissiveCamera:null,fireLightFieldPass:{}}]]:[]);
     const a=source.indexOf('  function rebuildSceneGIOutput()'),b=source.indexOf('  updateSceneGI =',a);
-    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,false);
+    const rebuild=eval('('+source.slice(a,b).trim()+')');rebuild();assert.equal(renderPipeline.outputColorTransform,true);assert.ok(rawSceneOutput);
   }
 });
