@@ -12694,7 +12694,7 @@ async function releaseAuthoredWater(id){
  setAuthoredWaterPreviewVisible(false);
  authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
 }
-window.kaminosWaterSources={requestDiagnostics(options){if(!localLiquidHost?.requestDiagnostics)throw Error('Finite water is not mounted');return localLiquidHost.requestDiagnostics(options);},read:authoredWaterState,add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;window._kaminosDirty?.();return result;}};
+window.kaminosWaterSources={requestParticleState(){if(!localLiquidHost?.requestParticleState)throw Error('Finite water is not mounted');return localLiquidHost.requestParticleState();},read:authoredWaterState,add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;window._kaminosDirty?.();return result;}};
 
 function installSharedWorkbench() {
   if(sharedWorkbench)return;

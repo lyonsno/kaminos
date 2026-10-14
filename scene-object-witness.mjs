@@ -1568,9 +1568,9 @@ async function runAuthoredWaterDropScenario(ws) {
   const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;
   lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
     await window.kaminosWaterSources.release(${JSON.stringify(id)});window.kaminosPauseLocalLiquid(true);
-    const initialParticles=await window.kaminosWaterSources.requestDiagnostics({captureParticleState:true});
+    const initialParticles=await window.kaminosWaterSources.requestParticleState();
     await window.kaminosWaterSources.advanceTo(12);
-    const releasedParticles=await window.kaminosWaterSources.requestDiagnostics({captureParticleState:true});
+    const releasedParticles=await window.kaminosWaterSources.requestParticleState();
     await new Promise(r=>setTimeout(r,700));
     const water=window.kaminosLocalLiquidState();
     if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on the actual shared WebGPU route: '+JSON.stringify(water));
