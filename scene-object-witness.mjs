@@ -1547,6 +1547,54 @@ async function runLocalLiquidPerformanceScenario(ws) {
   await evaluate(ws,`document.getElementById('local-liquid-performance').scrollIntoView({block:'center'})`);
 }
 
+async function runAuthoredWaterDropScenario(ws) {
+  phase='authored-water-drop-preview';
+  lastEvidence.authoredWater=await evaluate(ws,`(async()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    for(let i=0;i<240;i++){if(window.kaminosWaterSources&&document.querySelector('.authored-water-controls'))break;await wait(125);}
+    if(!window.kaminosWaterSources||!document.querySelector('.authored-water-controls'))throw Error('Authored water instruments did not mount');
+    document.querySelector('.tab[data-tab="finger-fluid-bench"]').click();
+    const id=await window.kaminosWaterSources.add();
+    window.kaminosSetSceneObjectTransform(id,{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]});
+    window.kaminosWaterSources.edit(id,{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}});
+    window.kaminosFrameSelected();
+    const before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
+    return {id,before,source:await(await fetch('/api/runtime-config')).json(),initial:window.kaminosWaterSources.read()};
+  })()`,{timeoutMs:60000});
+  await delay(600);await capturePngScreenshot(ws,siblingPngPath('-preview'));
+  phase='authored-water-drop-release';
+  const id=lastEvidence.authoredWater.id;
+  lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
+    await window.kaminosWaterSources.release(${JSON.stringify(id)});window.kaminosPauseLocalLiquid(true);
+    await window.kaminosWaterSources.advanceTo(12);
+    await new Promise(r=>setTimeout(r,700));
+    const water=window.kaminosLocalLiquidState();
+    if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on the actual shared WebGPU route: '+JSON.stringify(water));
+    const saved=await window.saveSceneAs({name:'hotwet-authored-water-native',result:true});
+    if(!saved)throw Error('Native scene save failed');
+    return {water,saved,scene:window.kaminosSceneObjectDebugState(),ui:document.querySelector('.authored-water-controls').textContent};
+  })()`,{timeoutMs:90000});
+  const e=lastEvidence.authoredWater;
+  assert.equal(e.released.water.solver.particleCount,4096);assert.equal(e.released.water.paused,true);
+  await capturePngScreenshot(ws,siblingPngPath('-released'));
+  const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes('hotwet-authored-water-native')&&n.endsWith('.json'));})()`);
+  assert.equal(files.length,1);
+  const document=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
+  e.savedDocument=document;e.savedFile=files[0];
+  const restoredUrl=compositionRestoreUrl(document.composition,files[0],new URL(url).origin);
+  phase='authored-water-drop-fresh-reopen';
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(300);await wsRequest(ws,'Page.navigate',{url:restoredUrl});
+  for(let i=0;i<240;i++){
+    await delay(125);try{const current=await evaluate(ws,`({scene:window.kaminosSceneObjectDebugState?.(),water:window.kaminosLocalLiquidState?.(),info:document.getElementById('info-bar')?.textContent})`);
+      if(current.water?.lastFrame?.presentedByHost&&current.scene?.some(r=>r.id===id)){e.reopened=current;break;}
+    }catch{}
+  }
+  assert.ok(e.reopened,'Fresh document must restore the actual water source and native allocation');
+  assert.equal(e.reopened.water.solver.particleCount,4096);assert.equal(e.reopened.water.paused,true);
+  assert.deepEqual(e.reopened.water.emitters[0].transform,e.released.water.emitters[0].transform);
+  assert.deepEqual(e.reopened.water.emitters[0].localLiquidEmitter,e.released.water.emitters[0].localLiquidEmitter);
+}
+
 async function runLocalLiquidLiveHostScenario(ws) {
   phase = 'scenario-local-liquid-live-host';
   const first = await evaluate(ws, `
@@ -6015,6 +6063,8 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'local-liquid-performance') {
     await runLocalLiquidPerformanceScenario(ws);
+  } else if (scenario === 'authored-water-drop') {
+    await runAuthoredWaterDropScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
     await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'local-liquid-selection-continuity') {
