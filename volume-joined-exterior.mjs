@@ -218,8 +218,14 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
         const coarseFaces = []; for (let i = 0; i < coarse.length; i += 8) coarseFaces.push(coarse[i], coarse[i + 1], coarse[i + 2]);
         const offs = built.storage.lowerOffsets;
         const planes = ['x', 'y', 'z'].map((axis, a) => ({ axis, ...summarize(lower.subarray(offs[a], offs[a + 1])) }));
-        const smoke = [], heat = []; for (let i = 0; i < coarse.length; i += 8) { smoke.push(coarse[i + 4]); heat.push(coarse[i + 5]); }
-        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes, exteriorSmoke: summarize(smoke), exteriorHeat: summarize(heat) };
+        const smoke = [], heat = [], outside = [];
+        const S = built.summary.shape.map(n => n + 1), o = built.summary.origin, f = built.summary.fineCoarse;
+        for (let i = 0, site = 0; i < coarse.length; i += 8, site++) {
+          smoke.push(coarse[i + 4]); heat.push(coarse[i + 5]);
+          const q = [site % S[0], Math.floor(site / S[0]) % S[1], Math.floor(site / (S[0] * S[1]))];
+          if (q.every((v, a) => v < S[a] - 1) && q.some((v, a) => v < o[a] || v >= o[a] + f[a])) outside.push(coarse[i + 4]);
+        }
+        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes, exteriorSmoke: summarize(smoke), exteriorHeat: summarize(heat), smokeOutsideFineBox: summarize(outside) };
       } finally { paused = false; }
     },
     // Pauses the joined step (the core skips the whole sim step while paused)
