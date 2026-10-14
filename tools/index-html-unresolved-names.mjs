@@ -20,12 +20,15 @@
 //
 // Parsing uses the acorn that ships inside Node (process.versions.acorn), which
 // is reachable only with --expose-internals; the command line re-executes
-// itself with that flag, and a program that imports this module runs under it.
+// itself with that flag once, and a program that imports this module runs
+// under it. KAMINOS_UNRESOLVED_ACORN_MODULE replaces the module path, so the
+// parser-unavailable path can be exercised.
 //
 //   node tools/index-html-unresolved-names.mjs [--json] [--allow a,b] [index.html]
 //
 // Exit 0 when nothing is unresolved, 1 when something is (or a script does not
-// parse), 2 for a usage error.
+// parse), 2 for a usage error, 3 when the parser is unavailable (the reason is
+// on stderr).
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -35,6 +38,8 @@ import { fileURLToPath } from 'node:url';
 
 export const SCHEMA = 'kaminos.index-html-unresolved-names.v1';
 export const ACORN_INTERNAL_PATH = 'internal/deps/acorn/acorn/dist/acorn';
+export const EXIT_PARSER_UNAVAILABLE = 3;
+const acornModulePath = () => process.env.KAMINOS_UNRESOLVED_ACORN_MODULE || ACORN_INTERNAL_PATH;
 
 // Names the global scope provides in a browser. Short ambiguous window
 // properties (`name`, `status`, `length`, `closed`, `event`, `find`, `close`,
@@ -93,7 +98,7 @@ SpeechSynthesisUtterance ScreenOrientation
 
 export function loadAcorn() {
   try {
-    return createRequire(import.meta.url)(ACORN_INTERNAL_PATH);
+    return createRequire(import.meta.url)(acornModulePath());
   } catch (error) {
     const self = path.basename(fileURLToPath(import.meta.url));
     throw new Error(`Node's bundled acorn (${process.versions.acorn || 'unknown version'}) is reachable only with --expose-internals; run \`node --expose-internals tools/${self}\` (${error.message})`);
@@ -555,11 +560,16 @@ export function parseArgs(argv) {
 const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && fs.realpathSync(fileURLToPath(import.meta.url)) === fs.realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (invokedAsMain) {
   let acorn = null;
-  try { acorn = createRequire(import.meta.url)(ACORN_INTERNAL_PATH); } catch { acorn = null; }
-  if (!acorn) {
-    // Re-run under the flag that exposes Node's acorn; nothing else changes.
+  let loadError = null;
+  try { acorn = createRequire(import.meta.url)(acornModulePath()); } catch (error) { acorn = null; loadError = error; }
+  if (!acorn && !process.execArgv.includes('--expose-internals')) {
+    // Re-run once under the flag that exposes Node's acorn; nothing else changes.
     const child = spawnSync(process.execPath, ['--expose-internals', ...process.execArgv, ...process.argv.slice(1)], { stdio: 'inherit' });
     process.exit(child.status ?? 1);
+  }
+  if (!acorn) {
+    console.error(`parser unavailable: Node ${process.version} does not provide ${acornModulePath()} even with --expose-internals (${loadError?.message?.split('\n')[0]})`);
+    process.exit(EXIT_PARSER_UNAVAILABLE);
   }
   let args;
   try { args = parseArgs(process.argv.slice(2)); } catch (error) { console.error(error.message); process.exit(2); }
