@@ -3670,7 +3670,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             if error.phase == "select" and not body.get("page"):
                 port = self.server.server_address[1]
                 message += f". Open http://127.0.0.1:{port}/index.html in a WebGPU browser and keep the tab visible."
-            self.send_json({"ok": False, "phase": error.phase, "error": message}, error.status)
+            self.send_json({"ok": False, "phase": error.phase, "error": message, **error.details}, error.status)
             return
         self.send_json(result)
 
