@@ -20,6 +20,7 @@ import { createCompositeStorageGPU, createCompositeLowerFaceGPU } from './volume
 import { createCompositePCGGPU } from './volume-composite-pcg-gpu.mjs';
 
 export const JOINED_EXTERIOR_ROUTE = 'joined-exterior-quiescent-pressure-only-v0';
+export const JOINED_EXTERIOR_OUTER_ROUTE = 'joined-exterior-on-outer-smoke-v0';
 
 // Exterior shape for a fine box of `fineDims` cells at `ratio`: `extent`
 // coarse cells across and deep, tall enough to hold the box with one coarse
@@ -41,6 +42,26 @@ export function resolveJoinedExteriorGeometry({ fineDims, pitch, ratio, extent }
     geometry: { shape, min: [0, 0, 0], cellWidth, fine: { min: origin.map(v => v * cellWidth), max: origin.map((v, a) => (v + fineCoarse[a]) * cellWidth), ratio } },
     // The fine producer's ghost geometry: exterior origin in fine cells
     // relative to the fine box, exterior cell width in fine cells.
+    ghosts: { originFine: origin.map(v => -v * ratio), cellWidthFine: ratio, dims: shape, finePitchLocal: pitch },
+  };
+}
+
+// Geometry on Sexy Fireman's exterior smoke lattice (volume-outer-smoke.mjs):
+// shape [g, 2g, g], local min -E, cell width 2E/g, fine box [-1, 1] x
+// [-1, 2 nearHeightRatio - 1] x [-1, 1]. The composite needs a whole number of
+// fine cells per exterior cell and the fine box on exterior cell faces.
+export function resolveOuterLatticeGeometry({ fineDims, pitch, outer }) {
+  const cw = outer.cellWidth, ratioExact = cw / pitch, ratio = Math.round(ratioExact);
+  if (Math.abs(ratioExact - ratio) > 1e-6 || ratio < 1) return { admitted: false, reason: `outer-cell-${cw.toFixed(5)}-not-whole-fine-cells-${ratioExact.toFixed(4)}` };
+  if (fineDims.some(d => d % ratio !== 0)) return { admitted: false, reason: `fine-dims-${fineDims.join('x')}-not-multiples-of-ratio-${ratio}` };
+  const top = -1 + 2 * fineDims[1] / fineDims[0];
+  const originExact = [-1, -1, -1].map((v, a) => (v - outer.min[a]) / cw), origin = originExact.map(Math.round);
+  if (originExact.some((v, a) => Math.abs(v - origin[a]) > 1e-6)) return { admitted: false, reason: 'fine-box-not-on-outer-cell-faces' };
+  const fineCoarse = fineDims.map(d => d / ratio), shape = outer.shape.slice();
+  if (origin.some((o, a) => o < 1 || o + fineCoarse[a] > shape[a] - 1)) return { admitted: false, reason: `fine-box-not-inside-outer-with-margin:${JSON.stringify({ origin, fineCoarse, shape, top })}` };
+  return {
+    admitted: true, reason: null, shape, origin, fineCoarse, cellWidth: cw, ratio, lattice: 'outer-smoke',
+    geometry: { shape, min: outer.min.slice(), cellWidth: cw, fine: { min: [-1, -1, -1], max: [1, top, 1], ratio } },
     ghosts: { originFine: origin.map(v => -v * ratio), cellWidthFine: ratio, dims: shape, finePitchLocal: pitch },
   };
 }
@@ -73,11 +94,11 @@ export function joinedExteriorSolids(shape, wall) {
   return { shape: shape.slice(), cells, revision: wall ? `wall:${wall.axis}:${wall.at}:${wall.thickness ?? 1}` : 'none' };
 }
 
-export function createJoinedExterior(device, { extent, ratio = 4, wall = null, budget = 32, tolerance = 1e-3 } = {}) {
+export function createJoinedExterior(device, { extent, ratio = 4, wall = null, budget = 32, tolerance = 1e-3, outer = null } = {}) {
   if (!Number.isInteger(budget) || budget < 1) throw new Error('positive integer budget required');
   let built = null, destroyed = false, lastStep = null, paused = false;
   const destroyBuilt = () => { if (!built) return; for (const r of built.owned) r.destroy?.(); built = null; };
-  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall });
+  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall, outer: outer ? [outer.shape, outer.min, outer.cellWidth] : null });
 
   // Builds the composite around the producer's current grid. Runs outside
   // encoding (it allocates and uploads); the caller binds the ghost geometry
@@ -87,7 +108,7 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
     const k = key(producer);
     if (built && built.key === k) return { rebuilt: false, ...built.summary };
     destroyBuilt();
-    const g = resolveJoinedExteriorGeometry({ fineDims: producer.dims, pitch: producer.pitch, ratio, extent });
+    const g = outer ? resolveOuterLatticeGeometry({ fineDims: producer.dims, pitch: producer.pitch, outer }) : resolveJoinedExteriorGeometry({ fineDims: producer.dims, pitch: producer.pitch, ratio, extent });
     if (!g.admitted) { built = { key: k, owned: [], refused: g.reason, summary: { admitted: false, reason: g.reason } }; return { rebuilt: true, admitted: false, reason: g.reason }; }
     if (!producer.fluidBuffers || producer.fluidBuffers.length !== 2 || !producer.lowerFaceTexture || !producer.burnRateTexture) {
       built = { key: k, owned: [], refused: 'producer-resources-missing', summary: { admitted: false, reason: 'producer-resources-missing' } };
@@ -107,11 +128,13 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
       const storage = createCompositeStorageLayout(grid);
       if (storage.fineLength * 4 !== producer.fluidBuffers[0].size) throw new Error(`fine buffer ${producer.fluidBuffers[0].size} bytes does not match the composite's ${storage.fineLength * 4}`);
       const alloc = (label, size) => { const b = device.createBuffer({ label, size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST }); owned.push(b); return b; };
-      const coarse = alloc('joined exterior coarse sites', storage.coarseLength * 4);
+      const coarse = outer ? null : alloc('joined exterior coarse sites', storage.coarseLength * 4);
       const lower = alloc('joined exterior lower sidecar', storage.lowerLength * 4);
       const solver = createCompositePCGGPU(device, grid, { tolerance }); owned.push(solver);
       const intake = createCompositeProducerGPU(device, layout); owned.push(intake);
-      const bridges = producer.fluidBuffers.map(fine => { const b = createCompositeStorageGPU(device, storage, { fine, coarse, lower, flux: solver.fluxBuffer }); owned.push(b); return b; });
+      const bridgeCache = new Map();
+      const bridgeFor = (fine, coarseBuffer) => { const k = `${producer.fluidBuffers.indexOf(fine)}:${coarseBuffer.label}`; let b = bridgeCache.get(k); if (!b) { b = createCompositeStorageGPU(device, storage, { fine, coarse: coarseBuffer, lower, flux: solver.fluxBuffer }); owned.push(b); bridgeCache.set(k, b); } return b; };
+      if (coarse) producer.fluidBuffers.forEach(fine => bridgeFor(fine, coarse));
       const lowerExport = createCompositeLowerFaceGPU(device, { dims: producer.dims, lowerBuffer: lower, lowerFaceTexture: producer.lowerFaceTexture });
       // Ghost A from the coarse sites: her coarse storage is 8 floats per
       // (N+1)^3 site, lower-face velocity in local units at 0..2; ghost A is
@@ -126,12 +149,12 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
   let i = id.x; if (i >= SITES) { return; }
   let p = vec3<i32>(i32(i % SX), i32((i / SX) % SY), i32(i / (SX * SY)));
   textureStore(ghostA, p, vec4<f32>(coarse[i * 8u], coarse[i * 8u + 1u], coarse[i * 8u + 2u], 0.0));
-  textureStore(ghostB, p, vec4<f32>(0.0));
+  textureStore(ghostB, p, select(vec4<f32>(0.0), vec4<f32>(coarse[i * 8u + 4u], coarse[i * 8u + 5u], 0.0, 0.0), ${outer ? 'true' : 'false'}));
 }` });
       const ghostPipeline = device.createComputePipeline({ layout: 'auto', compute: { module: ghostModule, entryPoint: 'fill' } });
-      const ghostGroup = textures => device.createBindGroup({ layout: ghostPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: coarse } }, { binding: 1, resource: textures.a.createView() }, { binding: 2, resource: textures.b.createView() }] });
-      const summary = { admitted: true, reason: null, route: JOINED_EXTERIOR_ROUTE, shape: g.shape, origin: g.origin, fineCoarse: g.fineCoarse, cellWidth: g.cellWidth, ratio, extent, cells: grid.cells.length, faces: grid.faces.length, budget, tolerance, solids: { fine: fineSolids.revision, coarse: coarseSolids.revision, wall: slab, exteriorSolidCells: coarseSolids.cells.reduce((s, v) => s + v, 0) }, solver: 'gpu-composite-pcg-candidate' };
-      built = { key: k, owned, layout, storage, grid, solver, intake, bridges, lowerExport, ghostPipeline, ghostGroup, sites, ghosts: g.ghosts, solidRevisions: { fine: fineSolids.revision, coarse: coarseSolids.revision }, summary, steps: 0 };
+      const ghostGroup = (textures, coarseBuffer = coarse) => device.createBindGroup({ layout: ghostPipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: coarseBuffer } }, { binding: 1, resource: textures.a.createView() }, { binding: 2, resource: textures.b.createView() }] });
+      const summary = { admitted: true, reason: null, route: outer ? JOINED_EXTERIOR_OUTER_ROUTE : JOINED_EXTERIOR_ROUTE, lattice: outer ? 'outer-smoke' : 'own', shape: g.shape, origin: g.origin, fineCoarse: g.fineCoarse, cellWidth: g.cellWidth, ratio: g.ratio ?? ratio, extent: outer ? null : extent, cells: grid.cells.length, faces: grid.faces.length, budget, tolerance, solids: { fine: fineSolids.revision, coarse: coarseSolids.revision, wall: slab, exteriorSolidCells: coarseSolids.cells.reduce((s, v) => s + v, 0) }, solver: 'gpu-composite-pcg-candidate' };
+      built = { key: k, owned, layout, storage, grid, solver, intake, bridgeFor, coarse, lowerExport, ghostPipeline, ghostGroup, sites, ghosts: g.ghosts, solidRevisions: { fine: fineSolids.revision, coarse: coarseSolids.revision }, summary, steps: 0 };
       return { rebuilt: true, ...summary, ghosts: g.ghosts };
     } catch (e) { for (const r of owned) r.destroy?.(); built = { key: k, owned: [], refused: e.message, summary: { admitted: false, reason: e.message } }; return { rebuilt: true, admitted: false, reason: e.message }; }
   };
@@ -139,7 +162,7 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
   // Fills the ghosts from the current (initially zero) exterior so the first
   // fine step has a bound generation; submits its own encoder.
   const seedGhosts = producer => {
-    if (!built?.solver) return false;
+    if (!built?.solver || !built.coarse) return false;
     const textures = producer.ghosts?.textures; if (!textures) return false;
     const e = device.createCommandEncoder({ label: 'joined exterior ghost seed' });
     const pass = e.beginComputePass(); pass.setPipeline(built.ghostPipeline); pass.setBindGroup(0, built.ghostGroup(textures)); pass.dispatchWorkgroups(Math.ceil(built.sites / 64)); pass.end();
@@ -149,20 +172,23 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
 
   // One joined step on the caller's encoder. Returns whether the exterior
   // stepped; a refusal names why and leaves the fine state untouched.
-  const step = (encoder, producer) => {
+  const step = (encoder, producer, coarseBuffer = null) => {
     if (destroyed) throw new Error('joined exterior destroyed');
     if (!built || built.key !== key(producer)) { lastStep = { stepped: false, reason: 'exterior-not-prepared-for-current-producer' }; return lastStep; }
     if (!built.solver) { lastStep = { stepped: false, reason: built.refused }; return lastStep; }
     const textures = producer.ghosts?.textures;
     if (!textures) { lastStep = { stepped: false, reason: 'ghost-textures-missing' }; return lastStep; }
-    const bridge = built.bridges[producer.fluidReadIndex];
+    const coarseNow = coarseBuffer ?? built.coarse;
+    if (!coarseNow) { lastStep = { stepped: false, reason: 'outer-state-buffer-required' }; return lastStep; }
+    const bridge = built.bridgeFor(producer.fluidBuffers[producer.fluidReadIndex], coarseNow);
     built.intake.encode(encoder, { targetTexture: producer.burnRateTexture, solidRevisions: built.solidRevisions });
     bridge.encodeGather(encoder, { interfaceSource: 'fine' });
     built.solver.encodeGPU(encoder, { targetBuffer: built.intake.targetBuffer, iterations: budget });
     bridge.encodeScatter(encoder);
     built.lowerExport.encode(encoder);
     const pass = encoder.beginComputePass({ label: 'joined exterior ghost fill' });
-    pass.setPipeline(built.ghostPipeline); pass.setBindGroup(0, built.ghostGroup(textures)); pass.dispatchWorkgroups(Math.ceil(built.sites / 64)); pass.end();
+    pass.setPipeline(built.ghostPipeline); pass.setBindGroup(0, built.ghostGroup(textures, coarseNow)); pass.dispatchWorkgroups(Math.ceil(built.sites / 64)); pass.end();
+    built.lastCoarse = coarseNow;
     built.steps += 1;
     lastStep = { stepped: true, reason: null, steps: built.steps, budget };
     return lastStep;
@@ -171,6 +197,7 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
   return {
     prepare, seedGhosts, step,
     get ghosts() { return built?.ghosts ?? null; },
+    get usesOuter() { return Boolean(outer); },
     receipt() { return { route: JOINED_EXTERIOR_ROUTE, extent, ratio, wall, budget, tolerance, prepared: Boolean(built?.solver), ...(built?.summary ?? {}), lastStep, steps: built?.steps ?? 0 }; },
     // Solve receipt from the last encoded step (maps a buffer; not for the frame loop).
     get paused() { return paused; },
@@ -184,7 +211,7 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
       try {
         await device.queue.onSubmittedWorkDone();
         const read = async (buffer, length) => { const dst = device.createBuffer({ size: length * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }); try { const e = device.createCommandEncoder(); e.copyBufferToBuffer(buffer, 0, dst, 0, length * 4); device.queue.submit([e.finish()]); await dst.mapAsync(GPUMapMode.READ); return new Float32Array(dst.getMappedRange().slice(0)); } finally { dst.destroy(); } };
-        const coarseBuf = built.owned.find(b => b.label === 'joined exterior coarse sites');
+        const coarseBuf = built.coarse ?? built.lastCoarse;
         const lowerBuf = built.owned.find(b => b.label === 'joined exterior lower sidecar');
         const coarse = await read(coarseBuf, built.storage.coarseLength), lower = await read(lowerBuf, built.storage.lowerLength);
         const summarize = values => { let max = 0, sum = 0, n = 0, nonzero = 0; for (const v of values) { const a = Math.abs(v); if (!Number.isFinite(a)) return { nonfinite: true }; max = Math.max(max, a); sum += a; n++; if (a > 1e-7) nonzero++; } return { max, mean: n ? sum / n : 0, nonzero, of: n }; };

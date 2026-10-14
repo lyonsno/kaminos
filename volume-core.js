@@ -14260,7 +14260,10 @@ export function createKaminosVolumePrototype({
         const g = joinedExterior.ghosts;
         const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal;
         if (!same) { applyJoinedGhostGeometry(g); continue; }
-        if (joinedExterior.seedGhosts(joinedProducerSnapshot())) { joinedGhostSynthetic = null; state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount }; }
+        // Own exterior: fill the ghosts from it. Sexy's exterior: its state is
+        // reachable only inside her step, so the first step reads the freshly
+        // zeroed ghost textures (a quiescent exterior) and her step fills them.
+        if (joinedExterior.usesOuter || joinedExterior.seedGhosts(joinedProducerSnapshot())) { joinedGhostSynthetic = null; state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount }; }
         break;
       }
       state.joinedExterior = joinedExterior.receipt();
@@ -17553,7 +17556,14 @@ export function createKaminosVolumePrototype({
     encodeAnalyticEmitterInjection(encoder);
     if (state.joinedBoundary?.admitted) {
       if (joinedExterior) {
-        const result = joinedExterior.step(encoder, joinedProducerSnapshot());
+        const snapshot = joinedProducerSnapshot();
+        let result;
+        if (outerSmoke && joinedExterior.usesOuter) {
+          // Sexy's exterior advects its smoke and heat, the shared solve
+          // projects her state in place, then she publishes the optical field.
+          outerSmoke.encodeExternalProjection(encoder, currentFluid, resolveTimeStepConfig(controlsSnapshot).effective, (enc, stateBuffer) => { result = joinedExterior.step(enc, snapshot, stateBuffer); return undefined; });
+          state.outerSmoke = { ...outerSmoke.receipt(), nearBoundary: 'joined-shared-pressure', transform: { ...productTransform } };
+        } else result = joinedExterior.step(encoder, snapshot);
         state.joinedExterior = joinedExterior.receipt();
         // The exterior wrote the ghosts for the next step.
         if (result.stepped && state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: state.simStepCount + 1 };
@@ -28107,7 +28117,7 @@ export function createKaminosVolumePrototype({
       joinedExterior = null;
       state.joinedExterior = null;
       if (!config || config.enabled === false) return { enabled: false };
-      joinedExterior = createJoinedExterior(device, { extent: config.extent, ratio: config.ratio ?? 4, wall: config.wall ?? null, budget: config.budget ?? 32, tolerance: config.tolerance ?? 1e-3 });
+      joinedExterior = createJoinedExterior(device, { extent: config.extent, ratio: config.ratio ?? 4, wall: config.wall ?? null, budget: config.budget ?? 32, tolerance: config.tolerance ?? 1e-3, outer: outerSmoke ? outerSmoke.config : null });
       const prepared = prepareJoinedExterior();
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
