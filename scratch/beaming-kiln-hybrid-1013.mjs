@@ -49,6 +49,8 @@ try{
    assertMountedScene(document,state.objects);report.effective=state;
    if(shadowSoftness>0){
      report.phase='held-shadow-comparison';await write();
+     report.requestedComparisonSimStep=400;
+     await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=400);
      report.pause=await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
      const before=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
      const raw=Buffer.from(new Float32Array(before.values).buffer);await fs.writeFile(out+'/held-source.f32',raw);
