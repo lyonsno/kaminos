@@ -76,11 +76,6 @@ function cacheSam3ImageStageResult(result) {
   return cached;
 }
 
-function cacheSam3ImageStageResult(result) {
-  const { debugReadback, ...cached } = result;
-  return cached;
-}
-
 // The model and invocation state belong to the caller, not a diagnostic page.
 export function createSam3BrowserImageRuntime(options = {}) {
 const baseUrl = options.baseUrl || globalThis.location?.href || 'http://localhost/';
