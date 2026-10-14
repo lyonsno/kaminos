@@ -1565,21 +1565,21 @@ async function runAuthoredWaterDropScenario(ws) {
   })()`,{timeoutMs:60000});
   await delay(600);await capturePngScreenshot(ws,siblingPngPath('-preview'));
   phase='authored-water-drop-release';
-  const id=lastEvidence.authoredWater.id;
+  const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;
   lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
     await window.kaminosWaterSources.release(${JSON.stringify(id)});window.kaminosPauseLocalLiquid(true);
     await window.kaminosWaterSources.advanceTo(12);
     await new Promise(r=>setTimeout(r,700));
     const water=window.kaminosLocalLiquidState();
     if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on the actual shared WebGPU route: '+JSON.stringify(water));
-    const saved=await window.saveSceneAs({name:'hotwet-authored-water-native',result:true});
+    const saved=await window.saveSceneAs({name:${JSON.stringify(fixtureName)},result:true});
     if(!saved)throw Error('Native scene save failed');
     return {water,saved,scene:window.kaminosSceneObjectDebugState(),ui:document.querySelector('.authored-water-controls').textContent};
   })()`,{timeoutMs:90000});
   const e=lastEvidence.authoredWater;
   assert.equal(e.released.water.solver.particleCount,4096);assert.equal(e.released.water.paused,true);
   await capturePngScreenshot(ws,siblingPngPath('-released'));
-  const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes('hotwet-authored-water-native')&&n.endsWith('.json'));})()`);
+  const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes(${JSON.stringify(fixtureName)})&&n.endsWith('.json'));})()`);
   assert.equal(files.length,1);
   const document=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
   e.savedDocument=document;e.savedFile=files[0];
