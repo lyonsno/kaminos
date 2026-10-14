@@ -10,6 +10,7 @@ export {
 } from './flash-attention-kernel.js';
 export { createWebGpuLatentPreview, latentPreviewShader, projectLatentPreview } from './latent-preview.js';
 export { createWebGpuInferenceControl } from './inference-control.js';
+export { createWebGpuModelBufferBudget, WEBGPU_MODEL_BUFFER_BUDGET_SCHEMA } from './model-buffer-budget.js';
 
 export {
   assertAuthoritativeRouteReceipt,

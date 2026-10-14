@@ -43,6 +43,7 @@ import {
   createUniformBuffer as createRuntimeUniformBuffer,
   defineComputeKernel as defineRuntimeComputeKernel,
 } from './runtime-primitives.js';
+import { WEBGPU_MODEL_BUFFER_BUDGET_SCHEMA } from './model-buffer-budget.js';
 
 export const WEBGPU_INFERENCE_RUNTIME_SCHEMA = 'kaminos.webgpu-inference-runtime.v0';
 
@@ -317,13 +318,13 @@ export function createWebGpuResourceCaches(device) {
   };
 }
 
-function createBuffer(device, descriptor) {
+function createBuffer(device, descriptor, bufferBudget) {
   if (!descriptor || typeof descriptor !== 'object') throw new Error('buffer descriptor must be an object');
   if (!isNonEmptyString(descriptor.label)) throw new Error('buffer label must be a non-empty string');
   if (!Number.isInteger(descriptor.size) || descriptor.size < 0) throw new Error('buffer size must be a non-negative integer');
   if (!Number.isInteger(descriptor.usage) || descriptor.usage < 0) throw new Error('buffer usage must be a non-negative integer');
   if (typeof device.createBuffer !== 'function') throw new Error('device.createBuffer must be available');
-  return device.createBuffer({ ...descriptor });
+  return bufferBudget ? bufferBudget.createBuffer({ ...descriptor }) : device.createBuffer({ ...descriptor });
 }
 
 function byteLengthOf(data) {
@@ -558,6 +559,13 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   const queue = input.queue || device?.queue;
   if (!device || typeof device !== 'object') throw new Error('device must be an object');
   if (!queue || typeof queue !== 'object') throw new Error('queue must be available on input or device.queue');
+
+  const bufferBudget = input.bufferBudget ?? null;
+  if (bufferBudget !== null && (bufferBudget.schema !== WEBGPU_MODEL_BUFFER_BUDGET_SCHEMA
+    || bufferBudget.device !== device || bufferBudget.queue !== queue
+    || ['createBuffer', 'snapshot', 'settleRetirements'].some(method => typeof bufferBudget[method] !== 'function'))) {
+    throw new TypeError('bufferBudget must be a model buffer budget for this exact device and queue');
+  }
 
   const backendIdentity = normalizeBackendIdentity(input, context);
   const resourceCaches = input.resourceCaches || createWebGpuResourceCaches(device);
@@ -892,14 +900,14 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
     createBuffer(descriptor) {
       if (disposalReport) throw new Error('runtime is disposed');
-      const buffer = createBuffer(device, descriptor);
+      const buffer = createBuffer(device, descriptor, bufferBudget);
       ownedBuffers.set(buffer, { label: descriptor.label, size: descriptor.size });
       return buffer;
     },
 
     createManagedBuffer(descriptor) {
       if (disposalReport) throw new Error('runtime is disposed');
-      return createBuffer(device, descriptor);
+      return createBuffer(device, descriptor, bufferBudget);
     },
 
     writeBuffer(buffer, data, offset = 0, dataOffset = 0, size = undefined) {
