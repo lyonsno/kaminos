@@ -39,7 +39,7 @@ export async function createCreatureBinding({host,inputs={},record=()=>{}},{load
   globalThis.window?.selectSceneObject?.(asset.id);
   return {read,operations:{pose},dispose,mount({root,invoke}) {
    const panel=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p'),status=document.createElement('output'),select=document.createElement('select');
-   title.textContent='Creature · automatic attachment';note.textContent='Editable actual joints on the retained mesh. Pose presets test attachment; they are not generated gait.';
+   title.textContent='Creature · automatic attachment';note.textContent='Actual joint poses on the retained mesh. Pose presets test attachment; they are not generated gait.';
    select.setAttribute('aria-label','Binding pose');
    for(const p of data.manifest.presets){const option=document.createElement('option');option.value=p.name;option.textContent=p.name;select.append(option);}
    select.onchange=async()=>{try{await invoke('pose',{name:select.value});}catch(e){status.textContent=e.message;}};
