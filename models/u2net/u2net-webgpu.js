@@ -87,6 +87,8 @@ const SIGMOID=`struct P{count:u32,_a:u32,_b:u32,_c:u32};
 fn main(@builtin(global_invocation_id)g:vec3u){let i=g.x+g.y*65535u*256u;if(i>=p.count){return;}dst[i]=1.0/(1.0+exp(-src[i]));}`;
 
 const elements=shape=>shape.reduce((a,b)=>a*b,1);
+// Dispatches per foreground segment: the 314-dispatch network yields about ten times.
+const SEGMENT=32;
 
 export async function loadU2NetPackage(baseUrl,{fetchImpl=globalThis.fetch,signal}={}){
   const base=new URL(baseUrl.endsWith('/')?baseUrl:baseUrl+'/',globalThis.location?.href);
@@ -150,12 +152,31 @@ export function createU2NetRunner({device,graph,weights}){
     // input: Float32Array of 1x3x320x320 normalized pixels. Returns the first
     // output (sigmoid d0), 320x320. `capture` names tensors to read back too
     // (only valid for tensors not reused before the end of the run).
-    async run(input,{capture=[]}={}){
+    // With `foreground` (a kit foreground run: {foregroundOpportunities}) the
+    // dispatches are submitted in segments and the page gets a before-encode
+    // boundary ahead of each one; Stop (`signal`) is honoured between segments.
+    // Without it, one submission. Same dispatches and order either way.
+    async run(input,{capture=[],foreground,signal,invocationId='u2net',segmentSize=SEGMENT}={}){
       if(disposed)throw Error('U2Net runner disposed');
       if(!(input instanceof Float32Array)||input.length!==elements(graph.input.shape))throw TypeError('1x3x320x320 F32 input required');
+      const serviceAtBoundary=foreground?.foregroundOpportunities?.serviceAtBoundary;
+      if(foreground!==undefined&&typeof serviceAtBoundary!=='function')throw TypeError('foreground run with foregroundOpportunities.serviceAtBoundary required');
+      const stop=()=>{if(signal?.aborted)throw signal.reason?.name==='AbortError'?signal.reason:new DOMException('U2Net stopped','AbortError');};
+      stop();
       device.queue.writeBuffer(buffers.get(inputName),0,input);
-      const enc=device.createCommandEncoder();
-      for(const [p,b,[x,y,z]] of steps){const pass=enc.beginComputePass();pass.setPipeline(p);pass.setBindGroup(0,b);pass.dispatchWorkgroups(x,y,z);pass.end();}
+      const encode=(enc,list)=>{for(const [p,b,[x,y,z]] of list){const pass=enc.beginComputePass();pass.setPipeline(p);pass.setBindGroup(0,b);pass.dispatchWorkgroups(x,y,z);pass.end();}};
+      const segments=serviceAtBoundary?[]:[steps];
+      if(serviceAtBoundary)for(let i=0;i<steps.length;i+=segmentSize)segments.push(steps.slice(i,i+segmentSize));
+      let enc;
+      for(let i=0;i<segments.length;i++){
+        if(serviceAtBoundary){
+          await serviceAtBoundary.call(foreground.foregroundOpportunities,{invocationId,boundaryId:`${invocationId}:u2net:${i}`,
+            dutyId:`${invocationId}:u2net-segment:${i}`,phase:'u2net-inference',position:'before-encode'});
+          stop();
+        }
+        enc=device.createCommandEncoder();encode(enc,segments[i]);
+        if(i<segments.length-1)device.queue.submit([enc.finish()]);
+      }
       const reads=[outputName,...capture].map(name=>{const bytes=elements(shapes.get(name))*4;
         const staging=device.createBuffer({size:bytes,usage:U.MAP_READ|U.COPY_DST});enc.copyBufferToBuffer(buffers.get(name),0,staging,0,bytes);return [name,staging];});
       device.queue.submit([enc.finish()]);

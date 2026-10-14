@@ -34,7 +34,14 @@ try{
     const src=await bin(c.name,'source','source-rgb.u8',w*h*3),want=await bin(c.name,'cutout','cutout-rgba.u8',pw*ph*4,c.cutoutSha256);
     const t=performance.now(),r=await removeForegroundU2Net({pixels:src,width:w,height:h,runner}),seconds=(performance.now()-t)/1000;
     if(r.width!==pw||r.height!==ph)throw Error('cutout '+c.name+': size '+r.width+'x'+r.height+' vs reference '+pw+'x'+ph);
-    report.cases[c.name]={size:[r.width,r.height],seconds,...compareCutouts(c.name,r.rgba,want)};
+    // The same photo through a foreground run (segmented submission, CPU windows) must give the same bytes.
+    let boundaries=0;const windows=[];
+    const foreground={foregroundOpportunities:{serviceAtBoundary:async()=>{boundaries++;await new Promise(requestAnimationFrame);}},
+      withForeground:async(phase,work)=>{windows.push(phase);return work();}};
+    const s=await removeForegroundU2Net({pixels:src,width:w,height:h,runner,foreground});
+    let same=s.rgba.length===r.rgba.length;for(let i=0;same&&i<s.rgba.length;i++)same=s.rgba[i]===r.rgba[i];
+    if(!same)throw Error('cutout '+c.name+': segmented foreground run differs from single submission');
+    report.cases[c.name]={size:[r.width,r.height],seconds,...compareCutouts(c.name,r.rgba,want),foreground:{identical:true,boundaries,windows}};
   }
   runner.dispose();report.phase=null;report.status='done';
 }catch(e){report.status='error';report.error=String(e.stack||e);}
