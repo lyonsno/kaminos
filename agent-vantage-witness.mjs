@@ -68,6 +68,17 @@ function colors(file) {
   return {width, height, red: red / total, blue: blue / total, yellow: yellow / total, varied};
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
+// The map paints the sub's cone teal and the operator's white over a dark ground.
+function mapColors(file) {
+  const {channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+  let teal = 0, white = 0;
+  for (let i = 0; i < pixels.length; i += channels) {
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    if (g > 150 && b > 150 && r < 0.6 * g) teal++;
+    if (r > 185 && g > 185 && b > 185) white++;
+  }
+  return {teal, white};
+}
 
 // A minimal binary glTF: one quad, positions and indices only.
 function minimalGlb() {
@@ -146,6 +157,7 @@ try {
 
   report.phase = 'snap-red'; save();
   await vantageOk('goto', '0', '1.2', '3', '--look', 'Witness red');
+  await page.waitForFunction(() => document.querySelector('#agent-vantage-hud canvas')?.hidden === false, null, {timeout: 10000});
   const before = await page.evaluate(() => window.kaminosCameraDebugState());
   const snapRed = await vantageOk('snap', '--annotate', '--name', 'red');
   const after = await page.evaluate(() => window.kaminosCameraDebugState());
@@ -159,12 +171,24 @@ try {
     before.position.every((v, i) => Math.abs(v - after.position[i]) < 1e-9) && before.target.every((v, i) => Math.abs(v - after.target[i]) < 1e-9),
     {before: {position: before.position, target: before.target}, after: {position: after.position, target: after.target}});
   check('the sub hides itself from its own picture', redColors.yellow < 0.002, {yellow: redColors.yellow});
+  const panelInPicture = mapColors(imageOf(snapRed, 'snap'));
+  check("the sub's own map panel is not in its picture", panelInPicture.teal < 20, panelInPicture);
 
   report.phase = 'peek-blue'; save();
   const peek = await vantageOk('peek', '--clean', '--name', 'operator');
   const peekColors = colors(imageOf(peek, 'peek'));
   report.effective.peek = {route: peek.result.route, colors: peekColors};
   check('peek shows the operator view of the blue box', peekColors.blue > 0.05 && peekColors.red < 0.005, peekColors);
+
+  report.phase = 'map'; save();
+  const snapMap = mapColors(imageOf(snapRed, 'map'));
+  check('a picture carries a map with both view cones', snapMap.teal > 50 && snapMap.white > 50, snapMap);
+  const map = await vantageOk('map', '--size', '320', '--name', 'map');
+  check('map paints the scene on request', !!imageOf(map, 'map') && map.result.images[0].width === 640, {width: map.result.images[0].width});
+  const sketch = await vantageOk('sketch');
+  check('sketch names both boxes and the sub without drawing',
+    [scene.red, scene.blue].every(id => sketch.result.objects.some(object => object.id === id)) && sketch.result.subs.some(sub => sub.id === 'vantage-bebop'),
+    {objects: sketch.result.objects.map(object => object.label), subs: sketch.result.subs.map(sub => sub.label)});
 
   report.phase = 'operator-places-sub'; save();
   const placed = poseLookingAt([8, 1.2, 3], [8, 0.5, 0]);
