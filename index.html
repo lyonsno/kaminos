@@ -26910,13 +26910,22 @@ function setupAuthoringAssets(){
   // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
   // server's mounted checkpoint package. pixels:'package' uses the package's own prepared
   // image as the caller input until browser image preparation exists.
-  window.kaminosTrellisPage=async({pixels,label='TRELLIS page',signal,onPhase}={})=>{
+  window.kaminosTrellisPage=async({pixels,image,label='TRELLIS page',signal,onPhase}={})=>{
     if(meshBusy('sf3d')||meshBusy('trellis')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
     const pack=await createTrellisPageCheckpoints({config:config.trellisPage});
-    const pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels;
+    // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
+    // Generate step's prepared image) prepared here by the model's own browser kernel.
+    let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null;
+    if(image){
+      const {prepareTrellisAlphaImage}=await import('./models/trellis2/alpha-preparation.js');
+      const {normalizePreparedTrellisRgb}=await import('./models/trellis2/generation-inputs.js');
+      const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`TRELLIS input image HTTP ${response.status}`);
+      const prepared=await prepareTrellisAlphaImage(await response.blob(),{signal});
+      pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
+    }
     const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
     meshRunning.trellis=true;redraw();
     try{
@@ -26925,9 +26934,9 @@ function setupAuthoringAssets(){
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
-          input:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'selected image, prepared in the page'}});
+          input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
-        input:{pixels:pixels==='package'?'checkpoint-package-prepared':'caller-prepared',checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
+        input:{pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
       return await persistGeneratedMesh(result.glb,generation,label,'TRELLIS');
     }finally{meshRunning.trellis=false;redraw();}
