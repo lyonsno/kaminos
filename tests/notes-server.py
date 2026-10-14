@@ -1,0 +1,313 @@
+# kaminos-test: python
+"""Kaminos notes on the server: one append-only log shared by every server on
+the machine, provenance stamped by the server, notes claimed once by the agent
+they are for, and the HTTP routes the page and tools/notes.mjs use."""
+
+import base64
+import hashlib
+import http.client
+import importlib.util
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+PNG_URL = "data:image/png;base64," + base64.b64encode(PNG).decode()
+SOURCE = {"origin": "http://127.0.0.1:1", "branch": "cc/test", "commit": "a" * 40, "dirty": False}
+
+
+def load_notes():
+    spec = importlib.util.spec_from_file_location("kaminos_notes_under_test", ROOT / "kaminos_notes.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def expect_error(notes, status, phase, call):
+    try:
+        call()
+    except notes.NotesError as error:
+        assert (error.status, error.phase) == (status, phase), (error.status, error.phase, str(error))
+        return error
+    raise AssertionError(f"expected NotesError {status} {phase}")
+
+
+PAGE = {"via": "page", "pageId": "page-aaaaaaaa", "source": SOURCE}
+CLI = {"via": "cli", "source": SOURCE}
+
+
+def log_contracts(notes):
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "notes"
+        a = notes.NotesLog(root, page_author="noah")
+        b = notes.NotesLog(root, page_author="noah")  # a second server on the same machine
+
+        first = a.post({"kind": "note", "text": "why does the plume lean here?", "to": ["@Sub-Pilot"],
+                        "anchor": {"kind": "object", "id": "flame-source", "label": "Flame source"},
+                        "subject": {"scene": "kiln.kaminos.json"}, "context": {"view": {"fov": 45}},
+                        "picture": {"dataUrl": PNG_URL}}, origin=PAGE)
+        assert first["schema"] == notes.NOTES_SCHEMA and first["type"] == "note" and first["seq"] == 1, first
+        assert notes.NOTE_ID.match(first["id"]) and first["thread"] == first["id"] and first["parent"] is None, first
+        assert (first["author"], first["via"], first["pageId"]) == ("noah", "page", "page-aaaaaaaa"), first
+        assert first["to"] == ["sub-pilot"] and first["recipients"] == ["sub-pilot"], first
+        assert first["subject"] == {"scene": "kiln.kaminos.json", "source": SOURCE}, first["subject"]
+        picture = first["picture"]
+        stored = root / picture["file"]
+        assert stored.read_bytes() == PNG and picture["bytes"] == len(PNG), picture
+        assert picture["sha256"] == hashlib.sha256(PNG).hexdigest() and (picture["width"], picture["height"]) == (1, 1), picture
+
+        # The other server sees it, and sequence numbers stay one line across processes.
+        assert [event["id"] for event in b.events()] == [first["id"]]
+        reply = b.post({"kind": "note", "text": "the draft from the open side", "parent": first["id"], "author": "sub-pilot"}, origin=CLI)
+        assert reply["seq"] == 2 and reply["thread"] == first["id"] and reply["anchor"] is None, reply
+        assert reply["recipients"] == ["noah"], "a reply reaches the author of the note it answers"
+        assert (reply["author"], reply["via"]) == ("sub-pilot", "cli") and "pageId" not in reply, reply
+        nested = a.post({"kind": "note", "text": "and from the closed side?", "parent": reply["id"], "to": ["water-agent"]}, origin=PAGE)
+        assert nested["thread"] == first["id"] and nested["recipients"] == ["water-agent", "sub-pilot"], nested
+        assert a.last_seq == 3 and b.last_seq == 3
+
+        # Provenance is stamped, never claimed.
+        for field in ("via", "author", "id", "seq", "thread", "recipients", "pageId", "type", "at", "schema"):
+            body = {"kind": "note", "text": "x", "anchor": {"kind": "scene"}, field: "forged"}
+            if field != "author":
+                body["author"] = "sub-pilot"
+            origin = PAGE if field == "author" else CLI
+            expect_error(notes, 400, "request", lambda: a.post(body, origin=origin))
+        expect_error(notes, 403, "reserved-author", lambda: a.post({"kind": "note", "text": "x", "anchor": {"kind": "scene"}, "author": "noah"}, origin=CLI))
+        expect_error(notes, 400, "request", lambda: a.post({"kind": "note", "text": "x", "anchor": {"kind": "scene"}}, origin=CLI))
+        expect_error(notes, 400, "request", lambda: a.post({"kind": "note", "text": "x", "anchor": {"kind": "scene"}, "author": "Bad Name"}, origin=CLI))
+        expect_error(notes, 400, "request", lambda: a.post({"kind": "note", "text": "  ", "anchor": {"kind": "scene"}}, origin=PAGE))
+        expect_error(notes, 400, "request", lambda: a.post({"kind": "note", "text": "x"}, origin=PAGE))
+        expect_error(notes, 404, "parent", lambda: a.post({"kind": "note", "text": "x", "parent": "kn-cccccccccccc"}, origin=PAGE))
+        expect_error(notes, 400, "picture", lambda: a.post({"kind": "note", "text": "x", "anchor": {"kind": "scene"},
+                                                            "picture": {"dataUrl": "data:image/png;base64," + base64.b64encode(b"not a png").decode()}}, origin=PAGE))
+        assert a.last_seq == 3, "refused posts write nothing"
+
+        # A note is handed to the agent it is for once; the handover is recorded.
+        claimed = a.claim("sub-pilot", timeout=0)
+        assert [note["id"] for note in claimed] == [first["id"], nested["id"]], claimed
+        assert a.claim("sub-pilot", timeout=0.05) == []
+        delivered = [event for event in b.events() if event["type"] == "delivered"]
+        assert len(delivered) == 1 and delivered[0]["notes"] == [first["id"], nested["id"]], delivered
+        assert (delivered[0]["recipient"], delivered[0]["route"]) == ("sub-pilot", "wait"), delivered[0]
+        assert a.claim("noah", timeout=0)[0]["id"] == reply["id"]
+
+        # A waiting agent wakes when another server records a note for it.
+        assert [note["id"] for note in a.claim("water-agent", timeout=0)] == [nested["id"]]
+        result = {}
+
+        def wait():
+            started = time.monotonic()
+            result["notes"] = a.claim("water-agent", timeout=10)
+            result["elapsed"] = time.monotonic() - started
+
+        waiter = threading.Thread(target=wait)
+        waiter.start()
+        time.sleep(0.3)
+        assert waiter.is_alive(), "the claim waits while nothing is addressed to it"
+        listening = {row["name"]: row for row in a.presence()["listeners"]}
+        assert listening.get("water-agent", {}).get("waiting") is True, a.presence()
+        late = b.post({"kind": "note", "text": "the water rim is clipping", "to": ["water-agent"],
+                       "anchor": {"kind": "scene"}, "author": "notes-agent"}, origin=CLI)
+        waiter.join(5)
+        assert not waiter.is_alive() and [note["id"] for note in result["notes"]] == [late["id"]], result
+        assert result["elapsed"] < 3, result
+
+        # Receipts: seen, resolved and reopened are stamped like posts.
+        seen = b.receipt({"type": "seen", "notes": [first["id"]], "author": "sub-pilot"}, origin=CLI)
+        assert (seen["type"], seen["author"], seen["notes"]) == ("seen", "sub-pilot", [first["id"]]), seen
+        resolved = a.receipt({"type": "resolved", "notes": [first["id"]]}, origin=PAGE)
+        assert (resolved["author"], resolved["via"]) == ("noah", "page"), resolved
+        expect_error(notes, 404, "note", lambda: a.receipt({"type": "seen", "notes": ["kn-cccccccccccc"]}, origin=PAGE))
+        expect_error(notes, 400, "request", lambda: a.receipt({"type": "deleted", "notes": [first["id"]]}, origin=PAGE))
+
+        # A damaged line is reported, and the events after it still load.
+        with (root / "notes.jsonl").open("a") as handle:
+            handle.write("{not json\n")
+        after = a.post({"kind": "ref", "anchor": {"kind": "scene"}}, origin=PAGE)
+        fresh = notes.NotesLog(root, page_author="noah")
+        assert fresh.events()[-1]["id"] == after["id"] and after["kind"] == "ref" and after["text"] == "", after
+        assert len(fresh.issues) == 1 and "line" in fresh.issues[0], fresh.issues
+
+
+# --- HTTP, through a real serve.py ------------------------------------------
+
+def free_port():
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        return server.getsockname()[1]
+
+
+def call(port, method, path, payload=None, headers=None, timeout=15):
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    body = None if payload is None else json.dumps(payload).encode()
+    sent = {"Content-Type": "application/json"} if body is not None else {}
+    sent.update(headers or {})
+    connection.request(method, path, body=body, headers=sent)
+    response = connection.getresponse()
+    data = response.read()
+    kind = response.getheader("Content-Type") or ""
+    connection.close()
+    if kind.startswith("application/json"):
+        return response.status, json.loads(data or b"null")
+    return response.status, data
+
+
+class Stream:
+    """Reads /api/notes/stream the way EventSource does."""
+
+    def __init__(self, port, page_id):
+        self.events = []
+        self.lock = threading.Condition()
+        self.connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+        self.connection.request("GET", f"/api/notes/stream?page={page_id}&after=0")
+        self.response = self.connection.getresponse()
+        self.status = self.response.status
+        self.thread = threading.Thread(target=self.read, daemon=True)
+        if self.status == 200:
+            self.thread.start()
+
+    def read(self):
+        event, data = None, []
+        try:
+            while True:
+                line = self.response.fp.readline()
+                if not line:
+                    return
+                line = line.decode().rstrip("\r\n")
+                if line.startswith("event:"):
+                    event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data.append(line[5:].strip())
+                elif line == "" and event:
+                    with self.lock:
+                        self.events.append((event, json.loads("\n".join(data))))
+                        self.lock.notify_all()
+                    event, data = None, []
+        except (OSError, ValueError):
+            return
+
+    def next(self, kind, predicate=lambda payload: True, seconds=8):
+        deadline = time.monotonic() + seconds
+        with self.lock:
+            while True:
+                for index, (event, payload) in enumerate(self.events):
+                    if event == kind and predicate(payload):
+                        del self.events[: index + 1]
+                        return payload
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise AssertionError(f"no {kind} event; saw {[event for event, _ in self.events]}")
+                self.lock.wait(remaining)
+
+    def close(self):
+        try:
+            self.connection.sock.shutdown(socket.SHUT_RDWR)
+        except (OSError, AttributeError):
+            pass
+        self.connection.close()
+
+
+def http_contracts():
+    port = free_port()
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "notes"
+        process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                   env={**os.environ, "KAMINOS_BIND_HOST": "127.0.0.1", "KAMINOS_NOTES_ROOT": str(root),
+                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah"})
+        stream = None
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    status, listing = call(port, "GET", "/api/notes")
+                    break
+                except OSError:
+                    if time.monotonic() > deadline or process.poll() is not None:
+                        raise AssertionError(process.stderr.read().decode() if process.poll() is not None else "serve.py did not start")
+                    time.sleep(0.1)
+            assert status == 200 and listing["events"] == [] and listing["root"] == str(root.resolve()), (status, listing)
+            assert listing["pageAuthor"] == "noah" and listing["schema"] == "kaminos.notes.v1", listing
+
+            stream = Stream(port, "page-aaaaaaaa")
+            assert stream.status == 200, stream.status
+            hello = stream.next("hello")
+            assert hello["author"] == "noah" and hello["token"] and hello["lastSeq"] == 0, hello
+            page = {"X-Kaminos-Notes-Page": "page-aaaaaaaa", "X-Kaminos-Notes-Token": hello["token"]}
+
+            status, note = call(port, "POST", "/api/notes", {"kind": "note", "text": "look at the rim", "to": ["notes-agent"],
+                                                             "anchor": {"kind": "object", "id": "cube", "label": "Cube"},
+                                                             "picture": {"dataUrl": PNG_URL}}, headers=page)
+            assert status == 200 and (note["via"], note["author"], note["pageId"]) == ("page", "noah", "page-aaaaaaaa"), (status, note)
+            source = note["subject"]["source"]
+            assert source["origin"] == f"http://127.0.0.1:{port}" and len(source["commit"]) == 40, source
+            assert stream.next("events", lambda payload: any(event.get("id") == note["id"] for event in payload["events"]))
+
+            # A page claim needs the token its stream was given; a tool may not use the page author's name.
+            status, body = call(port, "POST", "/api/notes", {"kind": "note", "text": "x", "anchor": {"kind": "scene"}},
+                                headers={"X-Kaminos-Notes-Page": "page-aaaaaaaa", "X-Kaminos-Notes-Token": "guessed"})
+            assert status == 403 and body["phase"] == "page-token", (status, body)
+            status, body = call(port, "POST", "/api/notes", {"kind": "note", "text": "x", "anchor": {"kind": "scene"}, "author": "noah"})
+            assert status == 403 and body["phase"] == "reserved-author", (status, body)
+            status, body = call(port, "POST", "/api/notes", {"kind": "note", "text": "x", "anchor": {"kind": "scene"}},
+                                headers={"Origin": "http://evil.example"})
+            assert status == 403 and body["phase"] == "forbidden", (status, body)
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            connection.request("POST", "/api/notes", body=b"text=x", headers={"Content-Type": "application/x-www-form-urlencoded"})
+            refused = connection.getresponse()
+            assert refused.status == 415, refused.status
+            connection.close()
+
+            # The agent's wait returns the note at once, then waits; presence shows it listening.
+            status, waited = call(port, "GET", "/api/notes/wait?as=notes-agent&timeout=5")
+            assert status == 200 and [event["id"] for event in waited["notes"]] == [note["id"]], (status, waited)
+            assert waited["root"] == str(root.resolve()), waited
+            result = {}
+            waiter = threading.Thread(target=lambda: result.update(answer=call(port, "GET", "/api/notes/wait?as=notes-agent&timeout=10")))
+            waiter.start()
+            time.sleep(0.4)
+            status, presence = call(port, "GET", "/api/notes/presence")
+            assert status == 200 and any(row["name"] == "notes-agent" and row["waiting"] for row in presence["listeners"]), presence
+            assert any(row["id"] == "page-aaaaaaaa" for row in presence["pages"]), presence
+            status, reply = call(port, "POST", "/api/notes", {"kind": "note", "text": "rim is clipped by the near plane",
+                                                              "parent": note["id"], "author": "notes-agent"})
+            assert status == 200 and reply["via"] == "cli" and reply["recipients"] == ["noah"], (status, reply)
+            status, other = call(port, "POST", "/api/notes", {"kind": "note", "text": "for you", "anchor": {"kind": "scene"},
+                                                              "to": ["notes-agent"]}, headers=page)
+            waiter.join(8)
+            status, answer = result["answer"]
+            assert status == 200 and [event["id"] for event in answer["notes"]] == [other["id"]], answer
+            assert stream.next("events", lambda payload: any(event.get("id") == reply["id"] for event in payload["events"]))
+
+            status, image = call(port, "GET", f"/api/notes/picture?note={note['id']}")
+            assert status == 200 and image == PNG, status
+            status, missing = call(port, "GET", f"/api/notes/picture?note={reply['id']}")
+            assert status == 404, status
+
+            status, seen = call(port, "POST", "/api/notes/receipt", {"type": "seen", "notes": [reply["id"]]}, headers=page)
+            assert status == 200 and seen["author"] == "noah" and seen["via"] == "page", seen
+            status, listing = call(port, "GET", f"/api/notes?after={note['seq']}")
+            assert [event["type"] for event in listing["events"]] == ["delivered", "note", "note", "delivered", "seen"], listing["events"]
+        finally:
+            if stream:
+                stream.close()
+            process.terminate()
+            try:
+                process.wait(10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
+if __name__ == "__main__":
+    notes = load_notes()
+    log_contracts(notes)
+    http_contracts()
+    print("notes server contracts passed")
