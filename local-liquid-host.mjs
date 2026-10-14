@@ -7,6 +7,7 @@ import {
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
 } from './finger-fluid-webgpu-core.js';
 import { normalizeLocalLiquidSetup, localLiquidInletPacket } from './local-liquid-setup.mjs';
+import { createLocalLiquidScenePasses } from './local-liquid-scene-passes.mjs';
 
 const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
@@ -38,8 +39,10 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
+export async function createLocalLiquidHost({renderer, scene, camera, device, setup, emitters = [], isCurrent = () => true, getDisplayPolicy, decorateOutput}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
+  if(typeof getDisplayPolicy!=='function'||typeof decorateOutput!=='function')
+    throw Error('Local liquid requires scene lighting and presentation bindings');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
   let publishedEmitterKey=JSON.stringify(initialPacket.emitters);
@@ -63,9 +66,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   depthTarget.texture.name='Local liquid host linear depth';
   const depthMaterial = new THREE.NodeMaterial(); depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);
   depthMaterial.blending=THREE.NoBlending; depthMaterial.toneMapped=false; depthMaterial.side=THREE.DoubleSide;
-  const presentation = new THREE.RenderPipeline(renderer,texture(outputTarget.texture));
-  const originalOutputTransform=pipeline.outputColorTransform;
-  pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
+  const scenePasses=createLocalLiquidScenePasses({renderer,composedOutput:texture(outputTarget.texture),getDisplayPolicy,decorateOutput});
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
@@ -108,10 +109,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       renderer.initRenderTarget(outputTarget);
       if (advance && !paused) solver.step(1/60);
       renderEnvironment();
-      // The host color attachment is linear HDR even if another consumer
-      // replaced the scene graph since the preceding water frame.
-      if(pipeline.outputColorTransform){pipeline.outputColorTransform=false;pipeline.needsUpdate=true;}
-      renderer.setRenderTarget(colorTarget); pipeline.render();
+      scenePasses.update();
+      renderer.setRenderTarget(colorTarget); scenePasses.capture.render();
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
@@ -139,11 +138,11 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
       solver.render({hostFrame,externalCamera:cameraSnapshot});
       device.queue.submit([commandEncoder.finish()]);
-      renderer.setRenderTarget(previousTarget); presentation.render();
+      renderer.setRenderTarget(previousTarget); scenePasses.presentation.render();
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
         environmentSource:environmentSource.uuid,environmentGeneration,
-        route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
+        route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:scenePasses.state().camera.transform,
         simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
@@ -195,13 +194,12 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
       frameCount,paused,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
-      linearSceneColorInput:pipeline.outputColorTransform===false,lastFrame,solver:solver.getDebugState()}),
+      ...scenePasses.state(),lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
       for(const material of materials)material.dispose();
       for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget])target?.dispose();
-      depthMaterial.dispose(); environmentQuad?.material.dispose(); presentation.dispose();
-      pipeline.outputColorTransform=originalOutputTransform; pipeline.needsUpdate=true;
+      depthMaterial.dispose(); environmentQuad?.material.dispose(); scenePasses.dispose();
     }};
 }

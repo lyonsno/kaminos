@@ -11529,7 +11529,7 @@ async function initScene() {
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
       renderPipeline.outputNode = outlinedSceneOutput;
-      renderPipeline.outputColorTransform = !localLiquidHost;
+      renderPipeline.outputColorTransform = true;
       renderPipeline.needsUpdate = true;
       refreshRenderingControls();
       return;
@@ -11554,7 +11554,7 @@ async function initScene() {
     outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
     renderPipeline.outputNode=outlinedSceneOutput;
     giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
-    renderPipeline.outputColorTransform = !localLiquidHost;
+    renderPipeline.outputColorTransform = true;
     renderPipeline.needsUpdate = true;
   }
   updateSceneGI = value => {
