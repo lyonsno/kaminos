@@ -28,3 +28,9 @@ test('fire without a named recipe uses the semantic flame basin, Noah’s smokey
  assert.equal(artifact.initialLabel,'smokeyfuckinkilndemo-basin');
  assert.equal(artifact.preset.domControls['volume-resolution'].value,'64');
 });
+
+test('a saved-scene address boots the fluid, since the scene may hold fire',()=>{
+ assert.deepEqual(fireAtBoot(new URLSearchParams(''),new URLSearchParams('authoring=1&scene=saved.json')),{boot:true,reason:'saved scene'});
+ assert.equal(fireAtBoot(new URLSearchParams('fire=off'),new URLSearchParams('scene=saved.json')).boot,false,'fire=off still wins');
+ assert.equal(fireAtBoot(new URLSearchParams(''),new URLSearchParams('authoring=1')).boot,false,'an empty Authoring page stays without fluid');
+});

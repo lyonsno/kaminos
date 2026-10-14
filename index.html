@@ -26919,7 +26919,7 @@ sceneInitialization.then(() => {
   });
   // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
   // ordinary scene starts without it; the app is then the frame owner models borrow.
-  const fireBoot = fireAtBoot(new URLSearchParams(location.search));
+  const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
   window.__kaminosFireBoot = fireBoot;
   const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
@@ -26990,7 +26990,7 @@ sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  if (fireAtBoot(new URLSearchParams(location.search)).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  if (fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1))).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();

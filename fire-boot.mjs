@@ -1,7 +1,7 @@
 // Whether the page boots the fluid simulation. Ordinary scenes start without it; a URL
 // carrying fire intent (a saved flame recipe, a volume route or volume parameters) gets
-// it, which is also how a saved scene containing fire reopens. fire=off and fire=on
-// override.
+// it, and so does a saved-scene address (#scene=), since the scene may hold fire and its
+// restore waits for the volume route. fire=off and fire=on override.
 // The basin semantic flame uses when no recipe is named: Noah's smokeyfuckinkilndemo-basin
 // (64x128x64, 28 ray steps, 30% render scale), his cheapest recent preview, chosen
 // 2026-10-13. Committed byte-identical so a fresh checkout has it.
@@ -11,7 +11,7 @@ export const SEMANTIC_FLAME_BASIN=Object.freeze({
   label:'smokeyfuckinkilndemo-basin',
 });
 
-export function fireAtBoot(params){
+export function fireAtBoot(params,hash=new URLSearchParams()){
   const fire=params.get('fire');
   if(fire==='off')return {boot:false,reason:'fire=off'};
   if(fire==='on')return params.has('settings_preset')?{boot:true,reason:'fire=on'}:{boot:true,reason:'fire=on',basin:SEMANTIC_FLAME_BASIN.url};
@@ -19,5 +19,6 @@ export function fireAtBoot(params){
   if(params.get('kaminos_volume_smoke')==='1')return {boot:true,reason:'kaminos_volume_smoke'};
   const key=[...params.keys()].find(name=>name.startsWith('volume_'));
   if(key)return {boot:true,reason:key};
+  if(hash.get('scene'))return {boot:true,reason:'saved scene'};
   return {boot:false,reason:'no fire in this page'};
 }
