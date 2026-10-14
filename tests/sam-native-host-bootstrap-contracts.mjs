@@ -44,6 +44,14 @@ assert.equal(connected.handoffs[1][1], 'generate');
 assert.equal(connected.handoffs[2][1].source, cutout.source);
 assert.equal(connected.handoffs[2][1].maskProvenance, cutout.maskProvenance);
 
+const upload = fixture(async () => app);
+await upload.bootstrap();
+upload.options().onAsset({ name: 'source.jpg', source: '/api/read?root=image-inbox&path=source.jpg' });
+assert.equal(upload.context.window.kaminosWorkspace.state().mode, 'workbench',
+  'source ingestion must leave Masks open for the prompt, not take the export handoff');
+assert.equal(upload.handoffs.some(row => row[0] === 'open'), false,
+  'a newly uploaded source is not a saved mask or cutout');
+
 const failed = fixture(async () => { throw new Error('application GPU host failed'); });
 await assert.rejects(failed.bootstrap(), /application GPU host failed/,
   'a failed app host must not silently substitute the legacy SAM session');
