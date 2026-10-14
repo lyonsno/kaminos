@@ -2296,6 +2296,10 @@ SAM3_PACKET_ROOT = Path(os.environ['KAMINOS_SAM3_PACKET_ROOT']).expanduser().res
 # The browser caches weights per origin, so serving the staged package locally spares each
 # Kaminos port a 3 GB download from the published repository.
 KLEIN_WEIGHTS_ROOT = Path(os.environ['KAMINOS_KLEIN_WEIGHTS_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_KLEIN_WEIGHTS_ROOT') else None
+# A local TRELLIS 2 checkpoint package (manifest.json plus tensor files), served at
+# /trellis-checkpoints/ for TRELLIS in the page.
+TRELLIS_CHECKPOINT_ROOT = Path(os.environ['KAMINOS_TRELLIS_CHECKPOINT_ROOT']).expanduser().resolve() if os.environ.get('KAMINOS_TRELLIS_CHECKPOINT_ROOT') else None
+MOUNTED_PACKAGES = {'/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
 
 BROWSE_ROOTS = {
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
@@ -2397,6 +2401,13 @@ def runtime_config():
             "modelRoot": str(KLEIN_WEIGHTS_ROOT),
             "mounted": all((KLEIN_WEIGHTS_ROOT / part / "manifest.json").is_file() for part in ("te", "dit", "vae")),
         } if KLEIN_WEIGHTS_ROOT else None,
+        "trellisPage": {
+            "checkpointUrl": "/trellis-checkpoints",
+            "modelRoot": str(TRELLIS_CHECKPOINT_ROOT),
+            "mounted": (TRELLIS_CHECKPOINT_ROOT / "manifest.json").is_file(),
+            "manifestSha256": hashlib.sha256((TRELLIS_CHECKPOINT_ROOT / "manifest.json").read_bytes()).hexdigest()
+                if (TRELLIS_CHECKPOINT_ROOT / "manifest.json").is_file() else None,
+        } if TRELLIS_CHECKPOINT_ROOT else None,
         "volumeBasinSessionStore": str(VOLUME_BASIN_SESSION_STORE),
         "volumeCockpitLayoutStore": str(VOLUME_COCKPIT_LAYOUT_STORE),
         "volumeSettingsStore": str(VOLUME_SETTINGS_STORE),
@@ -3536,16 +3547,22 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
 
+    def mounted_package(self, path):
+        return next((prefix for prefix in MOUNTED_PACKAGES if path.startswith(prefix)), None)
+
     def send_klein_weight(self, path):
-        # One byte range or the whole file; klein refuses an embedding row that is not a 206.
+        # A file from a mounted model package. One byte range or the whole file; klein
+        # refuses an embedding row that is not a 206.
         from urllib.parse import unquote
         target = None
-        if KLEIN_WEIGHTS_ROOT:
-            candidate = (KLEIN_WEIGHTS_ROOT / unquote(path[len('/klein-weights/'):])).resolve()
-            if candidate.is_relative_to(KLEIN_WEIGHTS_ROOT) and candidate.is_file():
+        prefix = self.mounted_package(path)
+        root = MOUNTED_PACKAGES[prefix]() if prefix else None
+        if root:
+            candidate = (root / unquote(path[len(prefix):])).resolve()
+            if candidate.is_relative_to(root) and candidate.is_file():
                 target = candidate
         if target is None:
-            self.send_error(404, "klein weight not found")
+            self.send_error(404, "model package file not found")
             return
         size = target.stat().st_size
         start, end, status = 0, size - 1, 200
@@ -3587,13 +3604,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 remaining -= len(chunk)
 
     def do_HEAD(self):
-        if urlparse(self.path).path.startswith('/klein-weights/'):
+        if self.mounted_package(urlparse(self.path).path):
             return self.send_klein_weight(urlparse(self.path).path)
         return super().do_HEAD()
 
     def do_GET(self):
         parsed = urlparse(self.path)
-        if parsed.path.startswith('/klein-weights/'):
+        if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/sf3d-source-admission":
             report = sf3d_source_admission()

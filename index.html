@@ -26775,6 +26775,29 @@ function setupAuthoringAssets(){
     if(!originResponse.ok||origin.result?.sha256!==sha256||origin.result?.generation?.runId!==generation.runId)throw Error(origin.error||'Generation origin storage returned a different result');
     return result;
   };
+  // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
+  // server's mounted checkpoint package. pixels:'package' uses the package's own prepared
+  // image as the caller input until browser image preparation exists.
+  window.kaminosTrellisPage=async({pixels,label='TRELLIS page',signal,onPhase}={})=>{
+    if(meshBusy('sf3d')||meshBusy('trellis')||authoringImageGenerator?.busy())throw Error('Another model is generating');
+    const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
+    const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
+      import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
+    const pack=await createTrellisPageCheckpoints({config:config.trellisPage});
+    const pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels;
+    const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
+    meshRunning.trellis=true;redraw();
+    try{
+      const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
+        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker}),unwrapMesh:createWasmXatlasUnwrapper()},
+        provenance:{checkpointManifestSha256:pack.manifestSha256}});
+      const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
+        input:{pixels:pixels==='package'?'checkpoint-package-prepared':'caller-prepared',checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
+        uv:result.uv,material:result.material};
+      return await persistGeneratedMesh(result.glb,generation,label,'TRELLIS');
+    }finally{meshRunning.trellis=false;redraw();}
+  };
   const trellis=()=>{
     if(!authoringTrellisGenerator){
       fetch('/api/pipeline-manifest',{cache:'no-store'}).then(r=>r.json()).then(manifest=>{

@@ -77,3 +77,28 @@ test('the real app GPU host and the real TRELLIS bridge compose, with frames on 
   assert.equal(app.snapshot().foreground.activeRun,null,'the run released the app service');
   const sessionRoutes=(await app.session()).snapshot().routes;assert.equal(sessionRoutes.length,0,'the TRELLIS route was unregistered');
 });
+
+test('the checkpoint package is read from the server mount, identity-checked against the runtime config',async()=>{
+  const {createTrellisPageCheckpoints}=await import('../authoring-trellis-page.mjs');
+  const {createHash}=await import('node:crypto');
+  const tensor=new Float32Array([1,2,3]).buffer,sha=b=>createHash('sha256').update(new Uint8Array(b)).digest('hex');
+  const manifestBytes=new TextEncoder().encode(JSON.stringify({image:{pixelTensor:'px'},tensors:{px:{file:'px.f32',byteLength:12,sha256:sha(tensor)}}}));
+  const files={'/trellis-checkpoints/manifest.json':manifestBytes.buffer,'/trellis-checkpoints/px.f32':tensor};
+  const fetch=async url=>files[url]?{ok:true,arrayBuffer:async()=>files[url].slice(0)}:{ok:false,status:404};
+  const pack=await createTrellisPageCheckpoints({config:{checkpointUrl:'/trellis-checkpoints',mounted:true,manifestSha256:sha(manifestBytes.buffer)},fetch});
+  assert.deepEqual([...await pack.fetchTensor('px')],[1,2,3]);
+  assert.equal(pack.manifestSha256,sha(manifestBytes.buffer));
+  await assert.rejects(createTrellisPageCheckpoints({config:{checkpointUrl:'/trellis-checkpoints',mounted:true,manifestSha256:'0'.repeat(64)},fetch}),/manifest changed/);
+  await assert.rejects(createTrellisPageCheckpoints({config:null,fetch}),/no TRELLIS checkpoint package/);
+});
+
+test('f16 decoder activations are applied to a copy of the manifest, and refused without shader-f16',async()=>{
+  const f=fixture();let seen;
+  const manifest={id:'pack',models:{shapeDecoder:{config:{}},textureDecoder:{config:{}}}};
+  f.deps.loadGenerationInputs=async m=>{seen=m;return {};};
+  await call(f,{manifest,decoderActivationStorage:'f16'});
+  assert.equal(seen.models.shapeDecoder.config.activationStorage,'f16');assert.equal(seen.models.textureDecoder.config.activationStorage,'f16');
+  assert.equal(manifest.models.shapeDecoder.config.activationStorage,undefined,'the mounted manifest is not changed');
+  const g=fixture();g.appGpu.device={features:new Set()};
+  await assert.rejects(call(g,{manifest,decoderActivationStorage:'f16'}),/shader-f16/);
+});

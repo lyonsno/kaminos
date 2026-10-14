@@ -11,11 +11,17 @@ const MODEL_DEPS=async()=>{
     createTrellisImageGenerationAdapter:generation.createTrellisImageGenerationAdapter,createTrellisAssetAdapter:material.createTrellisAssetAdapter};
 };
 
-export async function runTrellisInPage({appGpu,manifest,fetchTensor,pixelValues,finishing,signal,onPhase=()=>{},provenance={},deps}){
+// decoderActivationStorage 'f16' is the queued route's accepted setting (half the decoder
+// activation memory); it needs shader-f16 on the shared device.
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,finishing,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
   if(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function')
     throw TypeError('TRELLIS page finishing needs mesh cleanup and UV providers');
+  if(decoderActivationStorage!==undefined&&!['f32','f16'].includes(decoderActivationStorage))throw TypeError('f32 or f16 decoder activation storage');
+  if(decoderActivationStorage==='f16'&&appGpu.device?.features?.has?.('shader-f16')===false)throw Error('f16 decoder activations need shader-f16 on the page device');
+  const manifest=decoderActivationStorage?structuredClone(source):source;
+  if(decoderActivationStorage)for(const role of ['shapeDecoder','textureDecoder'])manifest.models[role].config.activationStorage=decoderActivationStorage;
   const d=deps??await MODEL_DEPS();
   const stop=signal??new AbortController().signal;
   // The bridge takes the session itself; the app host hands it out asynchronously.
@@ -52,4 +58,23 @@ export async function runTrellisInPage({appGpu,manifest,fetchTensor,pixelValues,
     if(released){asset?.dispose();generation?.dispose();await host.dispose();}
     if(failure)throw failure;
   }
+}
+
+const sha256=async bytes=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
+// The checkpoint package the server mounts (serve.py /trellis-checkpoints/). The manifest
+// must be the one the runtime config identified; each tensor is checked by the model's reader.
+export async function createTrellisPageCheckpoints({config,fetch=globalThis.fetch}){
+  if(!config?.mounted||!config.checkpointUrl)throw Error('no TRELLIS checkpoint package is mounted on this server');
+  const base=config.checkpointUrl.replace(/\/$/,'');
+  const response=await fetch(`${base}/manifest.json`,{cache:'no-store'});
+  if(!response.ok)throw Error(`TRELLIS checkpoint manifest unavailable (${response.status})`);
+  const bytes=await response.arrayBuffer(),manifestSha256=await sha256(bytes);
+  if(manifestSha256!==config.manifestSha256)throw Error('the TRELLIS checkpoint manifest changed since the server identified it');
+  const manifest=JSON.parse(new TextDecoder().decode(bytes));
+  const {readGenerationTensor}=await import('./models/trellis2/generation-storage.js');
+  const fetchTensor=name=>{
+    const row=manifest.tensors?.[name];if(!row)throw Error(`TRELLIS checkpoint tensor missing: ${name}`);
+    return readGenerationTensor(row,{fetchFile:file=>fetch(`${base}/${file}`),hash:sha256});
+  };
+  return {manifest,manifestSha256,fetchTensor};
 }
