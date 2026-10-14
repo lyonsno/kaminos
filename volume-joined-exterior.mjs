@@ -218,7 +218,8 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
         const coarseFaces = []; for (let i = 0; i < coarse.length; i += 8) coarseFaces.push(coarse[i], coarse[i + 1], coarse[i + 2]);
         const offs = built.storage.lowerOffsets;
         const planes = ['x', 'y', 'z'].map((axis, a) => ({ axis, ...summarize(lower.subarray(offs[a], offs[a + 1])) }));
-        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes };
+        const smoke = [], heat = []; for (let i = 0; i < coarse.length; i += 8) { smoke.push(coarse[i + 4]); heat.push(coarse[i + 5]); }
+        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes, exteriorSmoke: summarize(smoke), exteriorHeat: summarize(heat) };
       } finally { paused = false; }
     },
     // Pauses the joined step (the core skips the whole sim step while paused)
