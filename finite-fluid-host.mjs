@@ -33,6 +33,7 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
   getMaterialControls:()=>solver.getMaterialControls?.()??{available:false},
   setMaterialControls(patch){assertActive();const receipt=solver.setMaterialControls(patch);currentSetup={...currentSetup,solver:{...currentSetup.solver,...receipt.effective}};redraw();return receipt;},
   readSceneColor:region=>presentation.readSceneColor(region),
+  requestDiagnostics(options){assertActive();return solver.requestDiagnostics(options);},
   dispose(){if(closed)return;closed=true;presentation.dispose();solver.destroy();},
  };
  host.capability=createOwnerWaterCapability({state,debug:()=>solver.getDebugState(),pressure:()=>solver.getPressureControls?.()??{available:false},apply:patch=>solver.setPressureControls(patch),pause:host.setPaused,advance:host.advanceTo,restart:host.restart,dispose:host.dispose,identity:()=>lifetime,material:host.getMaterialControls,applyMaterial:host.setMaterialControls,setPlaybackRate:host.setPlaybackRate,setPlaybackMode:host.setPlaybackMode});

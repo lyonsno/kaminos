@@ -28,3 +28,6 @@ await host.capability.advanceTo(5);assert.equal(host.capability.read().clock.ste
 nextAvailable=false;await assert.rejects(()=>host.restart(),/allocation refused/);assert.equal(host.capability.read().clock.step,5,'failed replacement retains actual water');
 nextAvailable=true;await host.capability.restart();assert.equal(host.capability.read().clock.step,0);assert.equal(host.capability.read().clock.generation,2);host.dispose();host.dispose();assert.equal(retired,3);assert.throws(()=>host.capability.read(),/generation/);
 console.log('Actual source pose, fixed amount, finite clock, renewal and failed replacement invariants pass');
+const diagnosticSignal={stepCount:0,particleSnapshot:{words:[1,2,3]}};
+const inspectingHost=await createFiniteFluidHost({setup,device:{queue:{onSubmittedWorkDone:async()=>{}}},createSolver:async()=>({available:true,getDebugState:()=>({particleCount:4096}),requestDiagnostics:async options=>{assert.deepEqual(options,{captureParticleState:true});return diagnosticSignal;},destroy(){}}),createPresentation:()=>({state:()=>({}),dispose(){}})});
+assert.equal(await inspectingHost.requestDiagnostics({captureParticleState:true}),diagnosticSignal,'Native inspection must retain the actual solver payload');inspectingHost.dispose();
