@@ -7,6 +7,7 @@
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
+  SKETCH_SCHEMA, sketchMapLayout,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -156,7 +157,24 @@ export function createVantagePilot(host) {
     return images;
   }
 
+  // The scene as named boxes, fields and cameras: readable without drawing.
+  const sketch = () => ({schema: SKETCH_SCHEMA, capturedAt: new Date(host.now()).toISOString(),
+    objects: host.objects().filter(object => !object.id.startsWith(SUB_PREFIX)), fields: host.extraTargets(),
+    operator: {view: host.readView(), aspect: aspect()},
+    subs: cameras().filter(isSub).map(record => ({pilot: pilotOf(record), id: record.id, label: record.label, view: viewOf(record)}))});
+  const mapOf = (current, size) => {
+    const layout = sketchMapLayout(current, {width: size, height: Math.round(size * 0.75)});
+    return {image: {name: 'map', ...host.encode(host.paintMap(layout))}, scaleBar: layout.scaleBar};
+  };
+  const withMap = (images, wanted) => wanted && host.paintMap ? [...images, mapOf(sketch(), 480).image] : images;
+
   const handlers = {
+    sketch: () => sketch(),
+    map({size}) {
+      const current = sketch(), {image, scaleBar} = mapOf(current, size);
+      return {schema: VANTAGE_SCHEMA, kind: 'map', images: [image], scaleBar, sketch: current, capturedAt: current.capturedAt};
+    },
+
     status: () => ({schema: VANTAGE_SCHEMA, subs: cameras().filter(isSub).map(describe),
       operator: {view: host.readView(), selection: host.selection()}, viewport: host.viewportSize(), aspect: aspect(),
       busy: host.busy(), visible: host.visible(), cameraMode: host.cameras.state(), frame: host.frameState()}),
@@ -223,26 +241,26 @@ export function createVantagePilot(host) {
       return pose(record, poseLookingAt(view.position, view.target, view.up), 'align to operator view');
     },
 
-    async snap({pilot, settle, maxSize, annotate, helpers}) {
+    async snap({pilot, settle, maxSize, annotate, helpers, map}) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record), hideHelpers = !helpers;
       const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers});
       const seen = namesFor(taken.shots[0], hideHelpers);
-      const images = picture('snap', taken.shots[0].shot, annotate, seen);
+      const images = withMap(picture('snap', taken.shots[0].shot, annotate, seen), map);
       host.shutter?.({kind: 'snap', label: record.label, image: images[0]});
       return pictureResult({kind: 'snap', routeName, record, taken, settle, hideHelpers, images, seen});
     },
 
-    async peek({maxSize, annotate, clean}) {
+    async peek({maxSize, annotate, clean, map}) {
       admitCapture();
       const taken = await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean});
       const seen = namesFor(taken.shots[0], clean);
-      const images = picture('peek', taken.shots[0].shot, annotate, seen);
+      const images = withMap(picture('peek', taken.shots[0].shot, annotate, seen), map);
       return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
     },
 
-    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames}) {
+    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map}) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record);
@@ -252,6 +270,7 @@ export function createVantagePilot(host) {
       const images = [{name: 'sheet', ...host.encode(sheet)}];
       if (annotate) images.push({name: 'annotated', ...host.encode(host.annotate(taken.shots[0].shot.canvas, seen.inView))});
       if (frames) taken.shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
+      if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
       return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
         extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view,
@@ -265,7 +284,7 @@ export function createVantagePilot(host) {
     catch (error) { throw new VantageCommandError('validate', error.message); }
     return handlers[checked.command](checked.args);
   }
-  return {run, isCapturing: () => capturing};
+  return {run, isCapturing: () => capturing, sketch};
 }
 
 // --- pixels ---------------------------------------------------------------
@@ -280,7 +299,8 @@ const opaque = color => {
 };
 
 // Composite the canvases the viewport displays, in stacking order, with each
-// canvas's own CSS background behind it. DOM overlays are not pictured.
+// canvas's own CSS background behind it. DOM overlays are not pictured, nor are
+// canvases inside an element marked data-vantage-ignore (the sub's own panel).
 export function composeViewport({document, window, viewport, hostCanvas, maxSize = 1280}) {
   const base = hostCanvas.getBoundingClientRect();
   if (!(base.width > 0 && base.height > 0 && hostCanvas.width > 0 && hostCanvas.height > 0)) {
@@ -289,7 +309,7 @@ export function composeViewport({document, window, viewport, hostCanvas, maxSize
   const sx = hostCanvas.width / base.width, sy = hostCanvas.height / base.height;
   const layers = [...viewport.querySelectorAll('canvas')]
     .map((canvas, order) => ({canvas, order, style: window.getComputedStyle(canvas), rect: canvas.getBoundingClientRect()}))
-    .filter(({canvas, style, rect}) => canvas === hostCanvas || (style.display !== 'none' && style.visibility !== 'hidden'
+    .filter(({canvas, style, rect}) => canvas === hostCanvas || (!canvas.closest('[data-vantage-ignore]') && style.display !== 'none' && style.visibility !== 'hidden'
       && Number(style.opacity) > 0 && canvas.width > 1 && canvas.height > 1 && rect.width > 1 && rect.height > 1
       && rect.right > base.left && rect.left < base.right && rect.bottom > base.top && rect.top < base.bottom))
     .sort((a, b) => zIndex(a.style) - zIndex(b.style) || a.order - b.order);
@@ -382,6 +402,65 @@ export function contactSheet(document, frames, {cell = 480} = {}) {
   return canvas;
 }
 
+const MAP_COLORS = {'procedural-mesh': [168, 178, 194], glb: [168, 178, 194], light: [255, 210, 90], 'flame-emitter': [255, 128, 48],
+  'local-liquid-emitter': [80, 168, 255], camera: [200, 200, 210], splat: [190, 140, 255], 'simulation-domain': [255, 140, 40]};
+const rgba = ([r, g, b], a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+
+// Paint a scene map layout: ground grid and axes, boxes back to front, the
+// operator's view cone (white) and each sub's (teal), labels and a scale bar.
+export function paintSceneMap(document, layout, {ratio = 2} = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(layout.width * ratio); canvas.height = Math.round(layout.height * ratio);
+  const context = canvas.getContext('2d');
+  context.scale(ratio, ratio);
+  context.fillStyle = '#101317';
+  context.fillRect(0, 0, layout.width, layout.height);
+  const line = ([x0, y0, x1, y1]) => { context.beginPath(); context.moveTo(x0, y0); context.lineTo(x1, y1); context.stroke(); };
+  const shape = points => { context.beginPath(); points.forEach(([x, y], i) => i ? context.lineTo(x, y) : context.moveTo(x, y)); context.closePath(); };
+  context.lineWidth = 1;
+  context.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+  layout.grid.forEach(line);
+  context.lineWidth = 1.5;
+  context.strokeStyle = 'rgba(229, 72, 77, 0.8)'; line(layout.axes.x);
+  context.strokeStyle = 'rgba(62, 123, 250, 0.8)'; line(layout.axes.z);
+  context.lineWidth = 1;
+  for (const box of layout.boxes) {
+    const color = MAP_COLORS[box.type] ?? [168, 178, 194];
+    shape(box.polygon);
+    context.fillStyle = rgba(color, box.kind === 'field' ? 0.1 : 0.32);
+    context.fill();
+    context.strokeStyle = rgba(color, box.kind === 'field' ? 0.55 : 0.9);
+    box.edges.forEach(line);
+  }
+  for (const cone of layout.cones) {
+    const color = cone.kind === 'sub' ? [56, 242, 224] : [255, 255, 255];
+    shape(cone.polygon);
+    context.fillStyle = rgba(color, 0.12);
+    context.fill();
+    context.strokeStyle = rgba(color, 0.75);
+    cone.edges.forEach(line);
+    context.beginPath(); context.arc(cone.apex[0], cone.apex[1], 3.5, 0, Math.PI * 2);
+    context.fillStyle = rgba(color, 1); context.fill();
+  }
+  context.font = '10px ui-monospace, Menlo, monospace';
+  context.textBaseline = 'bottom';
+  const label = (text, [x, y], color) => {
+    const width = context.measureText(text).width;
+    context.fillStyle = 'rgba(10, 12, 16, 0.75)';
+    context.fillRect(x - width / 2 - 2, y - 13, width + 4, 12);
+    context.fillStyle = color;
+    context.fillText(text, x - width / 2, y - 2);
+  };
+  for (const box of layout.boxes) label(box.label, box.labelAt, rgba(MAP_COLORS[box.type] ?? [220, 225, 232], 1));
+  for (const cone of layout.cones) label(cone.label, [cone.apex[0], cone.apex[1] - 4], cone.kind === 'sub' ? '#38f2e0' : '#ffffff');
+  const bar = Math.min(layout.scaleBar.pixels, layout.width * 0.4);
+  context.strokeStyle = '#d8dde4'; context.lineWidth = 1.5;
+  line([8, layout.height - 8, 8 + bar, layout.height - 8]);
+  context.fillStyle = '#d8dde4'; context.textBaseline = 'bottom';
+  context.fillText(`${(layout.scaleBar.meters * bar / layout.scaleBar.pixels).toPrecision(2)} m`, 8, layout.height - 11);
+  return canvas;
+}
+
 // --- presence in the scene -------------------------------------------------
 
 // A small yellow sub with a glowing lens and a few octopus arms. Its nose and
@@ -425,11 +504,14 @@ const HUD_STYLE = `
 #agent-vantage-hud[data-link="linked"] .vantage-dot{background:#38f2e0}
 #agent-vantage-hud .vantage-title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #agent-vantage-hud button{background:none;border:0;color:#9aa3ad;cursor:pointer;font:inherit;padding:0 2px}
-#agent-vantage-hud img{display:block;width:100%;height:auto}
+#agent-vantage-hud img,#agent-vantage-hud canvas{display:block;width:100%;height:auto}
+#agent-vantage-hud [hidden]{display:none}
+#agent-vantage-hud .vantage-map{border-bottom:1px solid rgba(95,211,200,.25)}
 #agent-vantage-hud.flash{animation:agent-vantage-flash .6s ease-out}
 @keyframes agent-vantage-flash{from{box-shadow:0 0 0 3px rgba(56,242,224,.9)}to{box-shadow:0 6px 18px rgba(0,0,0,.35)}}`;
 
-// Shows the operator each picture the sub takes, so both see the same image.
+// Shows the operator a live map of where everyone is looking, and each
+// picture the sub takes, so both see the same image.
 export function installVantageHud({document, viewport}) {
   if (!document.getElementById('agent-vantage-style')) {
     const style = document.createElement('style');
@@ -439,17 +521,33 @@ export function installVantageHud({document, viewport}) {
   }
   const root = document.createElement('div');
   root.id = 'agent-vantage-hud';
+  root.dataset.vantageIgnore = '';
   root.hidden = true;
-  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub picture">×</button></div><img alt="Latest picture from the agent sub">';
+  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><img alt="Latest picture from the agent sub" hidden>';
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'click', 'dblclick', 'wheel']) root.addEventListener(type, event => event.stopPropagation());
-  root.querySelector('button').addEventListener('click', () => { root.hidden = true; });
+  const mapCanvas = root.querySelector('canvas'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
+  let dismissed = false;
+  const show = () => { root.hidden = dismissed || (mapCanvas.hidden && picture.hidden); };
+  root.querySelector('button').addEventListener('click', () => { dismissed = true; show(); });
   viewport.append(root);
   return {
     link(status) { root.dataset.link = status.state; },
+    map(canvas) {
+      mapCanvas.hidden = !canvas;
+      if (canvas) {
+        const context = mapCanvas.getContext('2d');
+        context.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+        context.drawImage(canvas, 0, 0, mapCanvas.width, mapCanvas.height);
+        if (picture.hidden) title.textContent = 'Sub · map';
+      }
+      show();
+    },
     shutter({kind, label, image}) {
-      root.querySelector('img').src = image.dataUrl;
-      root.querySelector('.vantage-title').textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
-      root.hidden = false;
+      picture.src = image.dataUrl;
+      picture.hidden = false;
+      title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
+      dismissed = false;
+      show();
       root.classList.remove('flash');
       void root.offsetWidth;
       root.classList.add('flash');
@@ -578,16 +676,34 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     blank: isBlankCanvas,
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
+    paintMap: layout => paintSceneMap(document, layout),
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });
   glyph();
   const glyphTimer = window.setInterval(glyph, 1000);
+  // Keep the operator's map current while a sub is in the scene; repaint
+  // only when the scene, the operator's view or a sub changed.
+  let mapKey = null;
+  const refreshMap = () => {
+    if (document.visibilityState !== 'visible') return;
+    let current;
+    try { current = pilot.sketch(); } catch { return; }
+    if (!current.subs.length) {
+      if (mapKey !== null) { mapKey = null; hud.map(null); }
+      return;
+    }
+    const key = JSON.stringify([current.objects.map(object => [object.id, object.bounds]), current.fields, current.operator, current.subs]);
+    if (key === mapKey) return;
+    mapKey = key;
+    hud.map(paintSceneMap(document, sketchMapLayout(current, {width: 220, height: 165})));
+  };
+  const mapTimer = window.setInterval(refreshMap, 400);
   const pageId = `page-${window.crypto.randomUUID()}`;
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
     pageId, run: pilot.run,
-    dispose() { window.clearInterval(glyphTimer); connection?.close(); hud.dispose(); },
+    dispose() { window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }
 
