@@ -1,0 +1,31 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+let module;try{module=await import('../experiments/creature-motion/given-palette-playback.mjs');}catch(error){if(error.code!=='ERR_MODULE_NOT_FOUND'||!error.message.includes('given-palette-playback.mjs'))throw error;module={};}
+assert.equal(typeof module.attachGivenPalettePlayback,'function','ordinary live Bone runtime lacks source-motion playback');
+class Element{constructor(){this.children=[];this.style={};}append(...nodes){this.children.push(...nodes);}setAttribute(){}remove(){this.removed=true;}}
+const document={createElement:()=>new Element()},mountRoot=new Element(),scene=new THREE.Scene(),group=new THREE.Group(),bone=new THREE.Bone();bone.name='pelvis';group.add(bone);scene.add(group);
+let clock=0,updates=0;const original=()=>{updates++;},runtime={group,bones:new Map([['pelvis',bone]]),update:original};
+const I=new THREE.Matrix4().toArray(),adapter={frames:3,fps:30,jointNames:['pelvis'],frame(index){const actor=new THREE.Matrix4().makeTranslation(index,0,0).toArray();return {frame:index,actorMatrix:actor,bones:[{name:'pelvis',parent:null,localMatrix:I,worldMatrix:actor,skinMatrix:I}]};}};
+const source={motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)};
+bone.position.y=.4; // Starting pose deliberately differs from source frame zero.
+const player=module.attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,now:()=>clock,dirty:()=>{}});
+player.play();clock=34;player.tick(clock);assert.equal(player.read().frame,1);assert.equal(group.position.x,1);assert.equal(bone.position.x,0,'actor travel must not duplicate into the Bone');
+player.pause();clock=1000;player.tick(clock);assert.equal(player.read().frame,1);assert.equal(group.position.x,1);
+player.seek(2);assert.equal(player.read().status,'held');assert.equal(group.position.x,2);
+player.replay();clock+=34;player.tick(clock);assert.equal(player.read().frame,1);
+player.pause();bone.position.y=.2;runtime.update();assert.equal(player.read().editedSinceSourcePose,true,'gizmo edits must not impersonate exact source pose');
+assert.equal(typeof player.restore,'function','source playback must retain the editable pre-motion actor and Bone pose');
+player.restore();assert.equal(group.position.x,0);assert.equal(bone.position.y,.4);assert.equal(player.read().status,'restored');assert.equal(player.read().frame,null,'starting pose is not a generated source frame');
+player.pause();assert.equal(player.read().frame,null,'Pause must not label the different starting pose as source frame zero');assert.equal(player.read().time,null);
+assert.match(mountRoot.children[0].children[2].textContent,/not a generated frame/);
+player.play();assert.equal(player.read().frame,0);assert.equal(bone.position.y,0,'Play after restored Pause must apply actual source frame zero');player.restore();
+assert.throws(()=>player.seek(3),/frame/);assert.equal(player.read().frame,null);assert.equal(player.read().status,'restored');
+player.dispose();assert.equal(runtime.update,original);assert.equal(group.parent,scene,'motion disposal must preserve skin owner root');assert.equal(mountRoot.children[0].removed,true);assert.ok(updates>0);
+const extended=module.attachGivenPalettePlayback({THREE,runtime,adapter:{...adapter,frames:110},source:{...source,prefixFrames:60,sampling:'replacement-euler-50'},document,mountRoot,now:()=>clock,dirty:()=>{}});
+const instruments=mountRoot.children.at(-1),buttons=instruments.children.filter(node=>node.textContent);
+const before=buttons.find(button=>button.textContent==='Before continuation join'),after=buttons.find(button=>button.textContent==='After continuation join');
+assert.ok(before&&after,'continued full-body playback needs exact join controls');
+before.onclick();assert.equal(extended.read().frame,59);after.onclick();assert.equal(extended.read().frame,60);
+assert.match(instruments.children[1].textContent,/60-frame prefix/);extended.seek(109);assert.equal(extended.read().status,'held');extended.dispose();
+console.log('Existing host update drives source playback once; pause/hold/edit identity/dispose remain explicit');
