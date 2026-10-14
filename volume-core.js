@@ -27832,6 +27832,12 @@ export function createKaminosVolumePrototype({
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
     async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
+    // Volume-local coordinates -> clip space, as last used to render (for
+    // overlays drawn above the volume canvas).
+    localViewProjection() {
+      const transformed = productFrameOwner === 'caller' || productTransform.translate.some(value => value !== 0) || productTransform.scale !== 1;
+      return Array.from((transformed ? productViewProj : viewProj).elements);
+    },
     async joinedExteriorStats() { return joinedExterior ? joinedExterior.stats() : { status: 'disabled' }; },
     setJoinedBoundary(request = {}) {
       return { ...refreshJoinedBoundary(request.enabled === true) };

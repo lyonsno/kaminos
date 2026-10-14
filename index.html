@@ -18319,30 +18319,37 @@ function wireJoinedProvisionalControls(prototype) {
     set('volume-pressure-solver', 'converged-open-top'); set('volume-emitter-source-law', 'immersed-source');
     setTimeout(() => { if (boundary.value === 'on') { prototype.setJoinedBoundary({ enabled: true }); if (size.value !== '0') applyExterior(); } }, 300);
   });
-  // Outlines of both grids, from the transform the volume renders with.
-  let fineBox = null, outerBox = null;
-  const ensureBoxes = () => {
-    if (fineBox || typeof scene === 'undefined' || !scene) return;
-    const make = (color, name) => { const h = new THREE.Box3Helper(new THREE.Box3(), color); h.name = name; h.userData.kaminosEditorHelper = true; h.material.transparent = true; h.material.opacity = 0.7; h.material.depthTest = false; h.renderOrder = 1001; h.visible = false; scene.add(h); return h; };
-    fineBox = make(0xffb347, 'Joined fine grid bounds'); outerBox = make(0xd070ff, 'Joined exterior grid bounds');
+  // Outlines of both grids, drawn on a 2D canvas pinned over the volume canvas
+  // with the volume's own local-to-clip matrix (the editor scene is not drawn
+  // on the volume route, so scene helpers would never show).
+  let overlay = null;
+  const ensureOverlay = () => {
+    const host = prototype.canvasElement?.(); if (!host) return null;
+    if (!overlay) { overlay = document.createElement('canvas'); overlay.id = 'volume-joined-bounds-overlay'; Object.assign(overlay.style, { position: 'fixed', pointerEvents: 'none', zIndex: 50 }); document.body.appendChild(overlay); }
+    const r = host.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    Object.assign(overlay.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    if (overlay.width !== Math.round(r.width * dpr) || overlay.height !== Math.round(r.height * dpr)) { overlay.width = Math.round(r.width * dpr); overlay.height = Math.round(r.height * dpr); }
+    return overlay;
+  };
+  const drawBox = (ctx, m, lo, hi, color) => {
+    const project = p => { const x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15]; return w > 1e-6 ? [(x / w + 1) / 2 * ctx.canvas.width, (1 - y / w) / 2 * ctx.canvas.height] : null; };
+    const c = [0, 1, 2, 3, 4, 5, 6, 7].map(i => project([i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]));
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1) * 0.75); ctx.globalAlpha = 0.85; ctx.beginPath();
+    for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) if (c[a] && c[b]) { ctx.moveTo(...c[a]); ctx.lineTo(...c[b]); }
+    ctx.stroke();
   };
   const updateBoxes = () => {
-    ensureBoxes(); if (!fineBox) return;
     const s = prototype.debugState?.(); const dims = s?.simGridDimensions;
-    const on = bounds.checked && Array.isArray(dims);
-    fineBox.visible = on; outerBox.visible = false;
-    if (!on) return;
-    const t = s.ordinaryDomainTranslation ?? [0, 0, 0], k = s.ordinaryDomainScale ?? 1;
-    const world = (lo, hi) => [new THREE.Vector3(...lo.map((v, a) => v * k + t[a])), new THREE.Vector3(...hi.map((v, a) => v * k + t[a]))];
-    const top = -1 + 2 * dims[1] / dims[0];
-    fineBox.box.set(...world([-1, -1, -1], [1, top, 1]));
+    if (!bounds.checked || !Array.isArray(dims)) { if (overlay) overlay.style.display = 'none'; return; }
+    const o = ensureOverlay(); if (!o) return; o.style.display = '';
+    const ctx = o.getContext('2d'); ctx.clearRect(0, 0, o.width, o.height);
+    const m = prototype.localViewProjection?.(); if (!m) return;
+    drawBox(ctx, m, [-1, -1, -1], [1, -1 + 2 * dims[1] / dims[0], 1], '#ffb347');
     const x = s.joinedExterior;
-    if (x?.admitted) {
-      const cw = 2 / dims[0] * x.ratio;
-      const lo = x.origin.map(o => -1 - o * cw), hi = lo.map((v, a) => v + x.shape[a] * cw);
-      outerBox.box.set(...world(lo, hi)); outerBox.visible = true;
-    }
+    if (x?.admitted) { const cw = 2 / dims[0] * x.ratio; const lo = x.origin.map(v => -1 - v * cw); drawBox(ctx, m, lo, lo.map((v, a) => v + x.shape[a] * cw), '#d070ff'); }
   };
+  const boundsLoop = () => { if (bounds.checked) updateBoxes(); requestAnimationFrame(boundsLoop); };
+  requestAnimationFrame(boundsLoop);
   bounds.addEventListener('change', updateBoxes);
   // Live readouts.
   let probing = false;
