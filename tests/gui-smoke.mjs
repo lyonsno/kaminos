@@ -239,7 +239,7 @@ async function main() {
   step('server-up', { stores: receipt.isolation.effective });
 
   setPhase('browser-launch');
-  browser = spawn(chromeReal, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${dirs.browserProfile}`, '--no-first-run',
+  browser = spawn(chromeReal, ['--headless=new', '--use-mock-keychain', '--password-store=basic', '--remote-debugging-port=0', `--user-data-dir=${dirs.browserProfile}`, '--no-first-run',
     '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
     '--window-size=1400,1000', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'], env: { ...baseEnv, HOME: dirs.home } });
   receipt.browserPid = browser.pid;
