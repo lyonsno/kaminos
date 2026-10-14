@@ -4,7 +4,7 @@ import * as fire from '../scene-fire-domain.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
-const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time'];
+const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'];
 // Native74383 restore-diagnostic-r2 observed these three declared additions
 // absent from an otherwise intact saved fire record (249 controls).
 function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}
