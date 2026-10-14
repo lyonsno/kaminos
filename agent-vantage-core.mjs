@@ -2,7 +2,7 @@
 // agent pilots from the terminal and the operator places like any scene object.
 // Poses use the scene's camera convention: the camera looks down local -Z with
 // local +Y up, and rotation is an XYZ Euler triple in radians.
-import {Vector3, Quaternion, Euler, Matrix4, Box3, Frustum, PerspectiveCamera} from './lib/three.core.js';
+import {Vector3, Quaternion, Euler, Matrix4, Box3, Frustum, PerspectiveCamera, WebGLCoordinateSystem} from './lib/three.core.js';
 
 export const VANTAGE_SCHEMA = 'kaminos.agent-vantage.v1';
 export const DEFAULT_PILOT = 'bebop';
@@ -120,13 +120,14 @@ const round = value => Math.round(value * 1e4) / 1e4;
 // Bounds-based: an object reported in view may still be hidden behind another.
 // Image coordinates are normalized with the origin at the top left. `optics`
 // is the camera actually used for the picture: its projection (including any
-// camera-frame zoom or offset) and world-to-view matrices, as arrays.
-export function objectsInProjection({projection, viewInverse, near}, objects, {excludeIds = []} = {}) {
+// camera-frame zoom or offset) and world-to-view matrices, as arrays, with the
+// renderer's clip-space convention (WebGPU clips depth to 0..1, WebGL to -1..1).
+export function objectsInProjection({projection, viewInverse, near, coordinateSystem = WebGLCoordinateSystem, reversedDepth = false}, objects, {excludeIds = []} = {}) {
   if (!(near > 0)) throw new Error('Projection naming needs a positive near plane');
   const project = new Matrix4().fromArray(projection), view = new Matrix4().fromArray(viewInverse);
   const world = view.clone().invert(), eye = new Vector3().setFromMatrixPosition(world);
   const inverse = new Quaternion().setFromRotationMatrix(world).invert(), excluded = new Set(excludeIds);
-  const frustum = new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(project, view));
+  const frustum = new Frustum().setFromProjectionMatrix(new Matrix4().multiplyMatrices(project, view), coordinateSystem, !!reversedDepth);
   const inView = [], outOfView = [];
   for (const object of objects) {
     if (excluded.has(object.id) || !object.bounds) continue;
@@ -163,7 +164,8 @@ export function objectsInProjection({projection, viewInverse, near}, objects, {e
 // and an aspect, for planning where the sub would look.
 export function objectsInView(view, aspect, objects, options = {}) {
   const camera = viewCamera(view, aspect);
-  return objectsInProjection({projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near}, objects, options);
+  return objectsInProjection({projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near,
+    coordinateSystem: camera.coordinateSystem}, objects, options);
 }
 
 const unit = values => { const v = new Vector3(...values); return v.lengthSq() > 1e-18 ? v.normalize() : v; };

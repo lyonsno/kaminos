@@ -83,9 +83,10 @@ export function createVantagePilot(host) {
     return fail('camera-view', `The viewport is looking through scene camera "${cameraLabel(state.activeId)}". Leave camera view (Numpad 0) first, or use peek to picture that view.`);
   };
   // Name what a picture shows from the matrices it was rendered with, which
-  // include camera-frame zoom and offset, roll and lens.
+  // include camera-frame zoom and offset, roll and lens, and from the scene
+  // as it stood when that picture was composed.
   const namesFor = (shot, hideHelpers) => {
-    const rows = targets().filter(object => !(hideHelpers && object.type === CAMERA_TYPE));
+    const rows = (shot.rows ?? targets()).filter(object => !(hideHelpers && object.type === CAMERA_TYPE));
     return shot.optics ? objectsInProjection(shot.optics, rows, {excludeIds: subIds()})
       : objectsInView(shot.view, aspect(), rows, {excludeIds: subIds()});
   };
@@ -114,7 +115,7 @@ export function createVantagePilot(host) {
         if (check && deviation.changed) {
           fail('view-changed', `The viewport camera changed during the capture (${deviation.position.toFixed(3)} m, ${deviation.angle.toFixed(2)}° heading, ${deviation.roll.toFixed(2)}° roll, ${deviation.fov.toFixed(2)}° lens); nothing was kept`);
         }
-        const optics = host.cameraMatrices?.() ?? null, shot = host.compose({maxSize}), stale = [], unverified = [];
+        const optics = host.cameraMatrices?.() ?? null, rows = targets(), shot = host.compose({maxSize}), stale = [], unverified = [];
         // Every pictured canvas must have drawn since the view was requested.
         for (const layer of shot.layers) {
           const now = frame.layers?.[layer], then = since.layers?.[layer];
@@ -124,7 +125,7 @@ export function createVantagePilot(host) {
         if (stale.length) fail('stale-frame', `Kaminos did not draw a new frame from the requested view in ${stale.join(', ')}, so nothing was kept. The page may still be loading or paused.`);
         if (host.blank?.(shot.canvas)) fail('blank-frame', 'The picture came back as one flat color, which usually means the page has not drawn its scene yet. Try again in a moment; if the sub faces a blank surface, point it elsewhere.');
         since = frame;
-        shots.push({index, atMs: host.now() - started, view, deviation, optics, frame, shot, unverified});
+        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified});
       }
       return {requested, shots, before, after: host.frameState()};
     } finally {
@@ -253,7 +254,8 @@ export function createVantagePilot(host) {
       if (frames) taken.shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
       return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
-        extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view, viewDeviation: item.deviation}))}});
+        extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view,
+          viewDeviation: item.deviation, objects: namesFor(item, true)}))}});
     },
   };
 

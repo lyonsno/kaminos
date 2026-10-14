@@ -5,7 +5,7 @@ import {
   VANTAGE_SCHEMA, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose, orbitPose,
   framingDistance, framePose, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
 } from '../agent-vantage-core.mjs';
-import {PerspectiveCamera, Matrix4, Vector3} from '../lib/three.core.js';
+import {PerspectiveCamera, Matrix4, Vector3, WebGPUCoordinateSystem} from '../lib/three.core.js';
 
 const near = (actual, expected, epsilon = 1e-6, message = '') => {
   assert.equal(actual.length, expected.length, message);
@@ -154,4 +154,20 @@ test('commands are validated before they reach the page', () => {
   assert.equal(snap.args.annotate, false);
   assert.ok(Number.isInteger(snap.args.settle) && snap.args.settle >= 1);
   assert.throws(() => checkedCommand({ command: 'burst', args: { count: 0 } }), /count/);
+});
+
+test('naming uses the renderer clipping convention, so a near-clipped object is not in view', () => {
+  const camera = new PerspectiveCamera(50, 1, 1, 100);
+  camera.coordinateSystem = WebGPUCoordinateSystem;
+  camera.updateProjectionMatrix(); camera.updateMatrixWorld(true);
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 1, coordinateSystem: WebGPUCoordinateSystem};
+  const objects = [
+    {id: 'clipped', label: 'Clipped', type: 'mesh', bounds: {min: [-0.05, -0.05, -0.8], max: [0.05, 0.05, -0.7]}},
+    {id: 'straddling', label: 'Straddling', type: 'mesh', bounds: {min: [-0.05, -0.05, -1.2], max: [0.05, 0.05, -0.5]}},
+    {id: 'ahead', label: 'Ahead', type: 'mesh', bounds: {min: [-0.5, -0.5, -5.5], max: [0.5, 0.5, -4.5]}},
+  ];
+  const result = objectsInProjection(optics, objects);
+  assert.deepEqual(result.inView.map(object => object.id).sort(), ['ahead', 'straddling']);
+  assert.ok(result.outOfView.some(object => object.id === 'clipped'), 'wholly inside the near plane is not pictured');
+  assert.equal(result.inView.find(object => object.id === 'straddling').partial, true);
 });
