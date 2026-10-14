@@ -26,11 +26,14 @@ export const JOINED_EXTERIOR_ROUTE = 'joined-exterior-quiescent-pressure-only-v0
 // cell below and at least one above; the box is centred in x and z.
 export function resolveJoinedExteriorGeometry({ fineDims, pitch, ratio, extent }) {
   if (!Number.isInteger(ratio) || ratio < 1) return { admitted: false, reason: 'integer-ratio-required' };
-  if (!Number.isInteger(extent) || extent < 4) return { admitted: false, reason: 'extent-below-4' };
+  // `extent`: coarse cells across (x and z; height at least the box plus one
+  // cell above and below), or an explicit [x, y, z] shape.
+  const ext = Array.isArray(extent) ? extent : [extent, extent, extent];
+  if (ext.length !== 3 || ext.some(n => !Number.isInteger(n) || n < 4)) return { admitted: false, reason: 'extent-below-4' };
   if (fineDims.some(d => d % ratio !== 0)) return { admitted: false, reason: `fine-dims-${fineDims.join('x')}-not-multiples-of-ratio-${ratio}` };
   const fineCoarse = fineDims.map(d => d / ratio);
-  if (extent < fineCoarse[0] + 2 || extent < fineCoarse[2] + 2) return { admitted: false, reason: `extent-${extent}-too-small-for-fine-${fineCoarse.join('x')}-plus-margins` };
-  const shape = [extent, Math.max(extent, fineCoarse[1] + 2), extent];
+  if (ext[0] < fineCoarse[0] + 2 || ext[2] < fineCoarse[2] + 2) return { admitted: false, reason: `extent-${ext.join('x')}-too-small-for-fine-${fineCoarse.join('x')}-plus-margins` };
+  const shape = [ext[0], Math.max(ext[1], fineCoarse[1] + 2), ext[2]];
   const origin = [Math.floor((extent - fineCoarse[0]) / 2), 1, Math.floor((extent - fineCoarse[2]) / 2)];
   const cellWidth = pitch * ratio;
   return {

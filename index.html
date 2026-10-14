@@ -1191,13 +1191,32 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
       <span class="slider-val" id="volume-joined-boundary-val">off</span>
     </div>
+      <div class="slider-row"><button class="btn" id="volume-joined-make-admissible">Use immersed source + converged solver</button></div>
       <span class="slider-help">Provisional smoke control, not saved with the basin. Joins the fine box to an exterior at the pressure level: the fine projection stops and the exterior's shared solve sets the boundary faces. Needs the immersed source and the converged solver; the field says why when refused.</span>
       <div class="slider-row">
-      <span class="slider-label">Exterior extent</span>
-      <select id="volume-joined-exterior-extent"><option value="0">none</option><option value="16">16</option><option value="20">20</option><option value="24">24</option><option value="32">32</option><option value="40">40</option></select>
+      <span class="slider-label">Exterior size (× fine width)</span>
+      <select id="volume-joined-exterior-size"><option value="0">none</option><option value="1.5">1.5</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
       <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
     </div>
-      <span class="slider-help">Provisional quiescent exterior: a coarse box this many cells across (cells four fine cells wide) with the fine box centred one cell above its floor, open at top and bottom. Pressure coupling only; the exterior has no transport of its own. Changing it rebuilds the exterior (a moment). The field reports the composite size and the last solve.</span>
+      <span class="slider-help">How big the exterior is in world space, as a multiple of the fine box on every axis, snapped to whole exterior cells and never less than the fine box plus one exterior cell on each side. The fine box sits centred in x and z, one exterior cell above the floor, so extra height goes above it. Changing it rebuilds only the exterior.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior cell (fine cells)</span>
+      <select id="volume-joined-exterior-ratio"><option value="2">2</option><option value="4" selected>4</option><option value="8">8</option></select>
+      <span class="slider-val" id="volume-joined-exterior-ratio-val">4</span>
+    </div>
+      <span class="slider-help">How many fine cells across one exterior cell is: the exterior's resolution. The fine width must divide by it. Smaller is finer and slower.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior solve budget</span>
+      <select id="volume-joined-exterior-budget"><option value="16">16</option><option value="32" selected>32</option><option value="64">64</option><option value="128">128</option></select>
+      <span class="slider-val" id="volume-joined-exterior-solve-val">—</span>
+    </div>
+      <span class="slider-help">Iterations of the shared pressure solve per step. The readout shows the worst cell's remaining divergence after the solve against the 0.001 gate, and the standalone fine solver's figure when the join is off, for comparison.</span>
+      <div class="slider-row">
+      <span class="slider-label">Grid bounds</span>
+      <input type="checkbox" id="volume-joined-grid-bounds">
+      <span class="slider-val" id="volume-joined-grid-bounds-val"><span style="color:#ffb347">fine</span> · <span style="color:#d070ff">exterior</span></span>
+    </div>
+      <span class="slider-help">Thin outlines of the fine grid (orange) and the exterior grid (violet) in the viewport, drawn from the transform the volume renders with.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior wall</span>
       <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
@@ -18278,31 +18297,73 @@ function linkedVolumeEmitterInletVelocity() {
 // and coarse live and independently). They drive the prototype's joined API
 // directly and are not part of the saved basin.
 function wireJoinedProvisionalControls(prototype) {
-  const boundary = document.getElementById('volume-joined-boundary'), extent = document.getElementById('volume-joined-exterior-extent'), wall = document.getElementById('volume-joined-exterior-wall');
-  if (!boundary || !extent || !wall || !prototype?.setJoinedBoundary) return;
-  const text = (id, value) => { document.getElementById(id).textContent = value; };
+  const $ = id => document.getElementById(id);
+  const boundary = $('volume-joined-boundary'), size = $('volume-joined-exterior-size'), ratio = $('volume-joined-exterior-ratio'), wall = $('volume-joined-exterior-wall'), budget = $('volume-joined-exterior-budget'), bounds = $('volume-joined-grid-bounds');
+  if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
+  const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
+  const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
   const applyExterior = () => {
-    const n = parseInt(extent.value, 10);
+    const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
+    if (!(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
+    const extent = dims.map(d => Math.max(Math.round(mult * d / r), d / r + 2));
     const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
-    const r = prototype.setJoinedExterior(n > 0 ? { enabled: true, extent: n, wall: side } : null);
-    const receipt = r?.receipt;
-    text('volume-joined-exterior-extent-val', n > 0 ? (receipt?.admitted ? `${receipt.shape.join('×')} coarse, ${receipt.cells} cells` : `refused: ${receipt?.reason ?? 'unknown'}`) : 'none');
-    text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `axis ${receipt.solids.wall.axis} at ${receipt.solids.wall.at}, ${receipt.solids.wall.thickness} thick` : 'pending exterior') : 'none');
+    const res = prototype.setJoinedExterior({ enabled: true, extent, ratio: r, wall: side, budget: parseInt(budget.value, 10) });
+    const receipt = res?.receipt;
+    if (!receipt?.admitted) text('volume-joined-exterior-extent-val', `refused: ${receipt?.reason ?? 'unknown'}`, true);
+    text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
   };
-  boundary.addEventListener('change', () => {
-    const r = prototype.setJoinedBoundary({ enabled: boundary.value === 'on' });
-    text('volume-joined-boundary-val', boundary.value === 'on' ? (r?.admitted ? 'admitted' : `refused: ${r?.reason ?? 'unknown'}`) : 'off');
-    if (extent.value !== '0') applyExterior();
+  boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); if (size.value !== '0') applyExterior(); });
+  for (const el of [size, ratio, wall, budget]) el.addEventListener('change', applyExterior);
+  $('volume-joined-make-admissible').addEventListener('click', () => {
+    const set = (id, value) => { const el = $(id); if (!el) return; el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+    set('volume-pressure-solver', 'converged-open-top'); set('volume-emitter-source-law', 'immersed-source');
+    setTimeout(() => { if (boundary.value === 'on') { prototype.setJoinedBoundary({ enabled: true }); if (size.value !== '0') applyExterior(); } }, 300);
   });
-  extent.addEventListener('change', applyExterior);
-  wall.addEventListener('change', applyExterior);
-  // Live readout of the exterior step and the fine side's admission.
-  setInterval(() => {
+  // Outlines of both grids, from the transform the volume renders with.
+  let fineBox = null, outerBox = null;
+  const ensureBoxes = () => {
+    if (fineBox || typeof scene === 'undefined' || !scene) return;
+    const make = (color, name) => { const h = new THREE.Box3Helper(new THREE.Box3(), color); h.name = name; h.userData.kaminosEditorHelper = true; h.material.transparent = true; h.material.opacity = 0.7; h.material.depthTest = false; h.renderOrder = 1001; h.visible = false; scene.add(h); return h; };
+    fineBox = make(0xffb347, 'Joined fine grid bounds'); outerBox = make(0xd070ff, 'Joined exterior grid bounds');
+  };
+  const updateBoxes = () => {
+    ensureBoxes(); if (!fineBox) return;
+    const s = prototype.debugState?.(); const dims = s?.simGridDimensions;
+    const on = bounds.checked && Array.isArray(dims);
+    fineBox.visible = on; outerBox.visible = false;
+    if (!on) return;
+    const t = s.ordinaryDomainTranslation ?? [0, 0, 0], k = s.ordinaryDomainScale ?? 1;
+    const world = (lo, hi) => [new THREE.Vector3(...lo.map((v, a) => v * k + t[a])), new THREE.Vector3(...hi.map((v, a) => v * k + t[a]))];
+    const top = -1 + 2 * dims[1] / dims[0];
+    fineBox.box.set(...world([-1, -1, -1], [1, top, 1]));
+    const x = s.joinedExterior;
+    if (x?.admitted) {
+      const cw = 2 / dims[0] * x.ratio;
+      const lo = x.origin.map(o => -1 - o * cw), hi = lo.map((v, a) => v + x.shape[a] * cw);
+      outerBox.box.set(...world(lo, hi)); outerBox.visible = true;
+    }
+  };
+  bounds.addEventListener('change', updateBoxes);
+  // Live readouts.
+  let probing = false;
+  setInterval(async () => {
     const s = prototype.debugState?.(); if (!s) return;
-    if (boundary.value === 'on') text('volume-joined-boundary-val', s.joinedBoundary?.admitted ? `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}` : `refused: ${s.joinedBoundary?.reason ?? 'unknown'}`);
-    const x = s.joinedExterior; if (!x || extent.value === '0') return;
-    if (x.admitted) text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse, ${x.cells} cells · ${x.lastStep?.stepped ? `step ${x.steps}, budget ${x.budget}` : `idle: ${x.lastStep?.reason ?? 'not stepped'}`}`);
-  }, 1000);
+    if (boundary.value === 'on') {
+      if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
+      else text('volume-joined-boundary-val', `REFUSED: ${s.joinedBoundary?.reason ?? 'unknown'} (the sim is running standalone)`, true);
+    } else text('volume-joined-boundary-val', 'off');
+    const x = s.joinedExterior;
+    if (x?.admitted && size.value !== '0') {
+      const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted;
+      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${stepping ? `stepping (${x.steps})` : 'NOT STEPPING: the join is off or refused'}`, !stepping);
+      text('volume-joined-exterior-ratio-val', `${x.ratio} fine cells, ${x.cellWidth.toFixed(3)} local`);
+      if (stepping && !probing) { probing = true; try { const p = await prototype.probeJoinedExterior(); if (p?.status === 'sampled') text('volume-joined-exterior-solve-val', `${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`, false); } finally { probing = false; } }
+    } else {
+      const after = s.pressureSolver?.residual?.compact?.after?.maxAbs;
+      text('volume-joined-exterior-solve-val', Number.isFinite(after) ? `standalone fine solve: ${s.pressureSolver?.effective?.iterations ?? '?'} sweeps, worst cell ${after.toExponential(1)}` : '—');
+    }
+    updateBoxes();
+  }, 2000);
 }
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
