@@ -62,7 +62,8 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
       selectedTool=id;
       const making=id==='making-bench';
       byId('experiment-owner-browser').open=!making;
-      makingSlots.setActive(active&&making);
+      // An inactive workspace must not restore nodes another workspace owns.
+      if(active)makingSlots.setActive(making);
       inspector.setWorkbenchTreeDestination?.(making?byId('making-bench-tree'):null);
       byId('experiment-making-tools').hidden=!making;
       const fluid=id==='finger-fluid-bench', label=tools.find(tool=>tool.id===id)?.label||id;
@@ -92,6 +93,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     },
     setActive(value){
       if(active===value)return;
+      if(!value)makingSlots.setActive(false);
       // Existing focus/blur handlers own commit semantics.
       document.activeElement?.blur?.();slots.setActive(value);toolSlots.setActive(value);extras.setActive(value);instrumentSlots.setActive(value);inspector.setWorkbenchInspector(value);active=value;
       document.body.classList.toggle('experiment-workspace',value);

@@ -26949,6 +26949,10 @@ sceneInitialization.then(() => {
     // The ordinary loader reports some refusals in the UI and returns without
     // throwing. Its effective completion flag still governs owner admission.
     if (sceneSaveBlockedByFailedRestore) throw new Error('Starting scene restoration did not complete');
+    // Flame/volume restoration selects its legacy tools while mounting. Resolve
+    // the saved Workbench destination afterward; owner experiments open next.
+    const restoredWorkspace=new URLSearchParams(location.search).get('workspace')??hash.get('workspace');
+    if(restoredWorkspace==='workbench')setActiveTab('making-bench',{reveal:false});
   });
   startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
