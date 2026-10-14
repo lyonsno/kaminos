@@ -43,7 +43,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     const out=completed.output;
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
       postprocessMesh:finishing.postprocessMesh,unwrapMesh:finishing.unwrapMesh,
-      provenance:{...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities,input:'selected image, prepared in the page'},
+      provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase});
     const finished=await asset.run();
     return {glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};

@@ -10767,8 +10767,9 @@ async function ensureSamImageTools() {
       ...(appGpu ? { foregroundService: appGpu } : {}),
       // A saved mask or cutout becomes the selected image in Authoring, ready for Generate.
       onAsset(entry) {
-        // Back to Authoring's Generate with the saved mask or cutout selected.
-        if (!window.kaminosAssets) return;
+        // Back to Authoring's Generate with the saved mask or cutout selected. SAM calls
+        // this for an uploaded source too; that stays in Masks for its prompt.
+        if (!window.kaminosAssets || !entry?.maskProvenance) return;
         if (window.kaminosWorkspace?.state?.().mode !== 'authoring') window.kaminosWorkspace?.setMode?.('authoring');
         window.kaminosAssets.open('generate');
         window.kaminosAssets.select({ ...entry, kind: 'image', root: entry.root_id || 'image-inbox', label: entry.name });
@@ -26790,8 +26791,10 @@ function setupAuthoringAssets(){
     try{
       const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
-        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker}),unwrapMesh:createWasmXatlasUnwrapper()},
-        provenance:{checkpointManifestSha256:pack.manifestSha256}});
+        // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
+        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
+        provenance:{checkpointManifestSha256:pack.manifestSha256,
+          input:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'selected image, prepared in the page'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
         input:{pixels:pixels==='package'?'checkpoint-package-prepared':'caller-prepared',checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};

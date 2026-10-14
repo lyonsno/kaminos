@@ -102,3 +102,9 @@ test('f16 decoder activations are applied to a copy of the manifest, and refused
   const g=fixture();g.appGpu.device={features:new Set()};
   await assert.rejects(call(g,{manifest,decoderActivationStorage:'f16'}),/shader-f16/);
 });
+
+test('the caller names where the pixels came from and the GLB provenance keeps it',async()=>{
+  const f=fixture();let seen;f.deps.createTrellisAssetAdapter=options=>{seen=options.provenance;return {async run(){return {glb};},dispose(){}};};
+  await call(f,{provenance:{input:'checkpoint package prepared pixels'}});
+  assert.equal(seen.input,'checkpoint package prepared pixels');
+});
