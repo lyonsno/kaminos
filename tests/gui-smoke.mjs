@@ -167,7 +167,7 @@ async function main() {
 
   phase = 'browser-launch';
   userDataDir = mkdtempSync(path.join(os.tmpdir(), 'kaminos-gui-smoke-profile-'));
-  browser = spawn(chrome, ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, '--no-first-run',
+  browser = spawn(chrome, ['--headless=new', '--use-mock-keychain', '--password-store=basic', '--remote-debugging-port=0', `--user-data-dir=${userDataDir}`, '--no-first-run',
     '--no-default-browser-check', '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
     '--window-size=1400,1000', 'about:blank'], { detached: true, stdio: ['ignore', 'ignore', 'pipe'] });
   let browserStderr = '';
