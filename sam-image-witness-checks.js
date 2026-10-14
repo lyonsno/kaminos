@@ -66,3 +66,42 @@ export function validateSamConsumerExport(exported, { kind, width, height, mask,
   check(foregroundPixels > 0 && foregroundPixels < mask.length, 'export lacks a discriminating foreground/background selection');
   return { width, height, foregroundPixels, exactPixels: true };
 }
+
+export function validateSamApplicationForeground(evidence, invocationId) {
+  check(evidence?.sameDevice === true && evidence?.sameRendererDevice === true, 'application device mismatch');
+  const foreground = evidence.runtime?.applicationForegroundEvidence;
+  const routeId = 'sam3.resident-model-owner.webgpu-local.v0';
+  check(foreground?.routeId === routeId && foreground.status === 'idle' && foreground.error === null,
+    'missing or unsettled application foreground evidence');
+  const run = foreground.lastRun;
+  check(run?.runId === invocationId && run.routeId === routeId, 'application foreground belongs to another run or route');
+  check(run.status === 'succeeded' && run.pendingRequestCount === 0, 'application foreground handback failed');
+  check(Array.isArray(run.receipts) && run.receipts.some(receipt => receipt.status === 'completed'
+    && receipt.metadata?.renderer === 'kaminos-app'),
+    'no completed application foreground callback');
+  check(run.receipts.every(receipt => receipt.runId === invocationId && receipt.routeId === routeId
+    && receipt.failure === null), 'application foreground receipt failed or belongs to another run');
+  return { runId: invocationId, routeId, completedCallbacks: run.receipts.filter(row => row.status === 'completed'
+    && row.metadata?.renderer === 'kaminos-app').length,
+    authority: 'application-callback-and-queue-settlement-not-presented-frame-cadence' };
+}
+
+export function validateSamExportProvenance(provenance, { kind, source, output, indices, width, height }) {
+  const expected = {
+    schema: 'kaminos.sam3-mask-export.v1', kind,
+    sourceImage: source.source, sourceImageSha256: source.sha256, sourceArtifactId: source.artifactId,
+    sourceResolution: [width, height], promptText: output.promptText, promptSha256: output.promptSha256,
+    invocationId: output.invocationId, indices, maskResolution: [output.width, output.height],
+    effectiveRouteId: output.effectiveRouteId, outputAuthority: output.outputAuthority,
+    verificationState: output.verificationState,
+  };
+  check(provenance && typeof provenance === 'object', 'persisted PNG has no mask provenance');
+  for (const [key, value] of Object.entries(expected)) {
+    const actual = provenance[key];
+    check(Array.isArray(value) ? Array.isArray(actual) && actual.length === value.length
+      && actual.every((entry, index) => entry === value[index]) : actual === value,
+    `persisted PNG provenance ${key} mismatch`);
+  }
+  return { invocationId: provenance.invocationId, sourceImageSha256: provenance.sourceImageSha256,
+    indices: [...provenance.indices], authority: 'persisted-PNG-metadata-matched-to-live-source-and-selection' };
+}
