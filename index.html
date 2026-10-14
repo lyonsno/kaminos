@@ -4363,6 +4363,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   },
   onMounted: host => {
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
+    if(host.state().mode==='finite_drop')localLiquidPaused=true;
     host.setPaused(localLiquidPaused);
   },
 });
@@ -12625,7 +12626,7 @@ async function releaseAuthoredWater(id){
  for(const row of sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object.children)if(child.userData.kaminosWaterPreview)child.visible=false;
  authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
 }
-window.kaminosWaterSources={read:authoredWaterState,add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused)};
+window.kaminosWaterSources={read:authoredWaterState,add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;window._kaminosDirty?.();return result;}};
 
 function installSharedWorkbench() {
   if(sharedWorkbench)return;
