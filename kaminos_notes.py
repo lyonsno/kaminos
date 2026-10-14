@@ -278,7 +278,10 @@ class NotesLog:
             note_id = "kn-" + secrets.token_hex(6)
             while note_id in self._notes:
                 note_id = "kn-" + secrets.token_hex(6)
-            recipients = [name for name in dict.fromkeys(to + ([parent["author"]] if parent else [])) if name != author]
+            # A reply reaches the author it answers; a follow-up to your own
+            # message reaches whoever that message reached.
+            inherited = (parent.get("recipients") or []) if parent and parent["author"] == author else ([parent["author"]] if parent else [])
+            recipients = [name for name in dict.fromkeys(to + inherited) if name != author]
             thread = parent["thread"] if parent else note_id
             scene = subject.get("scene") or ((self._notes[thread].get("subject") or {}).get("scene") if parent else None)
             event = self._stamp(seq, "note", author, origin)
@@ -381,8 +384,10 @@ class NotesLog:
         partial.write_text(json.dumps(record))
         partial.replace(path)
 
-    def presence(self):
-        """Agents waiting for notes, through any server sharing this log."""
+    def presence(self, detail=False):
+        """Agents waiting for notes, through any server sharing this log. Pages
+        get only what changes when someone starts or stops listening; `detail`
+        adds heartbeat times for tools."""
         now = self._clock()
         listeners = []
         for path in sorted((self.root / "listeners").glob("*.json")):
@@ -391,9 +396,13 @@ class NotesLog:
             except (OSError, ValueError):
                 continue
             age = now - record.get("lastSeen", 0)
+            # A waiting agent re-asks every few seconds; the short gap between
+            # one wait and the next still counts as listening.
             if (record.get("waiting") and age < LISTENER_STALE_SECONDS) or age < LISTENER_GRACE_SECONDS:
-                listeners.append({"name": record["name"], "waiting": bool(record.get("waiting")) and age < LISTENER_STALE_SECONDS,
-                                  "since": iso(record["since"]), "lastSeen": iso(record["lastSeen"]), "server": record.get("server")})
+                row = {"name": record["name"], "waiting": True, "since": iso(record["since"]), "server": record.get("server")}
+                if detail:
+                    row.update(lastSeen=iso(record["lastSeen"]), waitingNow=bool(record.get("waiting")))
+                listeners.append(row)
         return {"listeners": listeners}
 
     def picture_path(self, note_id):
@@ -536,7 +545,7 @@ class NotesHttp:
                     for page_id, page in self._pages.items() if page["streams"] > 0]
 
     def presence(self, handler, query):
-        self._json(handler, {"schema": NOTES_SCHEMA, **self.log.presence(), "pages": self._pages_now()})
+        self._json(handler, {"schema": NOTES_SCHEMA, **self.log.presence(detail=True), "pages": self._pages_now()})
 
     def picture(self, handler, query):
         note_id = self._first(query, "note") or ""

@@ -130,10 +130,14 @@ export function parseRef(text) {
   return match[0];
 }
 
+// The note travels in the address hash beside the saved scene, so a saved
+// flame scene's trip through its preset page keeps it.
 export function noteLink(note, origin = note?.subject?.source?.origin) {
   if (!origin) return null;
-  const scene = note?.subject?.scene;
-  return `${origin}/index.html?note=${note.id}${scene ? `#scene=${encodeURIComponent(scene)}` : ''}`;
+  const hash = new URLSearchParams();
+  if (note?.subject?.scene) hash.set('scene', note.subject.scene);
+  hash.set('note', note.id);
+  return `${origin}/index.html#${hash}`;
 }
 
 const anchorText = anchor => anchor?.kind === 'object' ? `object "${anchor.label}" (${anchor.id})` : 'the scene';
@@ -157,26 +161,44 @@ function describeLines(note, root, depth, focus) {
   return lines;
 }
 
-// Everything an agent needs to act on a note without asking what it means.
+// The view a note was written from: its camera, selection, served code and
+// picture, as the agent should read them.
+function viewLines(note, root) {
+  const lines = [];
+  const source = note.subject?.source;
+  if (source) lines.push(`served by ${source.branch}@${String(source.commit).slice(0, 7)}${source.dirty ? ' (uncommitted changes)' : ''} at ${source.origin}`);
+  const view = note.context?.view;
+  if (view) lines.push(`camera: position ${numbers(view.position)} target ${numbers(view.target)} fov ${numbers(view.fov)}`);
+  const selection = note.context?.selection;
+  if (selection?.ids?.length) lines.push(`selection: ${selection.ids.join(', ')}`);
+  if (note.picture) lines.push(`picture: ${root}/${note.picture.file} (${note.picture.width}x${note.picture.height})`);
+  if (note.context?.pictureIssue) lines.push(`picture problem: ${note.context.pictureIssue}`);
+  return lines;
+}
+
+// Everything an agent needs to act on a note without asking what it means. A
+// reply is described with its own view; the thread's opening view follows,
+// labeled, so one is never presented as the other.
 export function describeNote(state, id, {root}) {
   const target = state.notes.get(id);
   if (!target) throw new Error(`No note ${id} in this log`);
   const thread = state.notes.get(target.thread) ?? target;
+  const reply = thread.id !== target.id;
+  const where = `${anchorText(thread.anchor)}${thread.subject?.scene ? ` in scene ${thread.subject.scene}` : ''}`;
   const lines = [`Kaminos note ${target.id} from ${target.author} (${target.via}) at ${target.at}`];
-  if (thread.id !== target.id) lines.push(`in reply within thread ${thread.id}`);
-  lines.push(`on ${anchorText(thread.anchor)}${thread.subject?.scene ? ` in scene ${thread.subject.scene}` : ''}`);
-  const source = thread.subject?.source;
-  if (source) lines.push(`served by ${source.branch}@${String(source.commit).slice(0, 7)}${source.dirty ? ' (uncommitted changes)' : ''} at ${source.origin}`);
-  const view = thread.context?.view;
-  if (view) lines.push(`camera: position ${numbers(view.position)} target ${numbers(view.target)} fov ${numbers(view.fov)}`);
-  const selection = thread.context?.selection;
-  if (selection?.ids?.length) lines.push(`selection: ${selection.ids.join(', ')}`);
-  if (thread.picture) lines.push(`picture: ${root}/${thread.picture.file} (${thread.picture.width}x${thread.picture.height})`);
-  if (thread.context?.pictureIssue) lines.push(`picture problem: ${thread.context.pictureIssue}`);
+  lines.push(reply ? `a reply in thread ${thread.id} on ${where}` : `on ${where}`);
+  const own = viewLines(target, root);
+  const recorded = target.context?.view || target.picture || target.context?.selection?.ids?.length;
+  if (reply && !recorded) lines.push(...own.filter(line => line.startsWith('served by')), 'no view was recorded with this note');
+  else lines.push(...own);
+  if (reply) {
+    const opening = viewLines(thread, root).filter(line => !line.startsWith('served by'));
+    if (opening.length) lines.push(`thread opened by ${thread.author} with:`, ...opening.map(line => `  ${line}`));
+  }
   const delivered = Object.entries(thread.receipts.delivered).map(([name, receipt]) => `delivered to ${name} (${receipt.route})`);
-  lines.push([thread.to?.length ? `to: ${thread.to.join(', ')}` : 'to: anyone', ...delivered, thread.resolved ? 'resolved' : 'open'].join(' · '));
+  lines.push([thread.to?.length ? `to: ${thread.to.join(', ')}` : 'to: anyone', ...delivered, thread.resolved ? 'resolved' : 'open'].join(' \u00b7 '));
   lines.push(`> ${thread.text || '(picture)'}`);
-  for (const reply of thread.replies) lines.push(...describeLines(reply, root, 1, target.id));
+  for (const answer of thread.replies) lines.push(...describeLines(answer, root, 1, target.id));
   lines.push(`reply: node tools/notes.mjs reply ${target.id} "<your reply>" --as <your name> [--picture <png>]`);
   const link = noteLink(thread);
   if (link) lines.push(`open: ${link}`);
