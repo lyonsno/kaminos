@@ -67,12 +67,12 @@ fn freeFlight(node:u32)->bool{
  return true;
 }
 @compute @workgroup_size(64) fn predict(@builtin(global_invocation_id) id:vec3u){
- let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];var y=p.position.xyz+settings.time.x*p.velocity.xyz*settings.time.z+vec3f(0,-settings.time.y,0)*settings.time.x*settings.time.x;
+ let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];if(p.predicted.w==2.0){return;}var y=p.position.xyz+settings.time.x*p.velocity.xyz*settings.time.z+vec3f(0,-settings.time.y,0)*settings.time.x*settings.time.x;
  let ballistic=freeFlight(i);if(p.velocity.w==1.0){y=p.rest.xyz;points[i].position=vec4f(y,p.position.w);}else if(ballistic){var x=y;if(settings.grip.z==1.0){x.y=max(x.y,diagnostics[i*6u+4u].w);}points[i].position=vec4f(x,p.position.w);}points[i].predicted=vec4f(y,select(0.0,1.0,ballistic));
 }
 @compute @workgroup_size(64) fn solve(@builtin(global_invocation_id) id:vec3u){
  let colors=settings.counts.x+1u+incidence[settings.counts.x]*2u;let start=incidence[colors+settings.counts.y];let end=incidence[colors+settings.counts.y+1u];if(id.x>=end-start){return;}
- let i=incidence[colors+settings.topology.x+1u+start+id.x];let p=points[i];if(p.velocity.w==1.0||p.predicted.w==1.0){return;}
+ let i=incidence[colors+settings.topology.x+1u+start+id.x];let p=points[i];if(p.velocity.w==1.0||p.predicted.w==1.0||p.predicted.w==2.0){return;}
  let before=evaluate(i,p.position.xyz,true);if(before.invalid!=0u){return;}
  let H=before.hessian;let determinant=dot(H[0],cross(H[1],H[2]));if(!(determinant>0.0)){return;}
  let inverse=transpose(mat3x3f(cross(H[1],H[2]),cross(H[2],H[0]),cross(H[0],H[1])))*(1.0/determinant);
@@ -83,7 +83,7 @@ fn freeFlight(node:u32)->bool{
  }
 }
 @compute @workgroup_size(64) fn finish(@builtin(global_invocation_id) id:vec3u){
- let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];var x=p.position.xyz;
+ let i=id.x;if(i>=settings.counts.x){return;}let p=points[i];if(p.predicted.w==2.0){return;}var x=p.position.xyz;
  var v=(x-p.predicted.xyz)/settings.time.x+p.velocity.xyz*settings.time.z+vec3f(0,-settings.time.y,0)*settings.time.x;
  if(p.velocity.w==1.0){x=p.rest.xyz;v=vec3f(0);}else if(x.y<settings.time.w){x.y=settings.time.w;v.y=max(v.y,0.0);}
  points[i].position=vec4f(x,p.position.w);points[i].velocity=vec4f(v,p.velocity.w);

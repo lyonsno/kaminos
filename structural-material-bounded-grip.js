@@ -59,6 +59,8 @@ export async function createBoundedResidentGrip(resident,initialBonds,{connectio
   };
   return {route:'kaminos.bounded-grip.resident-connectivity.v1',
    changeBuffer:control,
+   componentBuffer:parents,
+   refreshComponents(){submit(2,[0,0,0]);},
    clearChanges(){const encoder=device.createCommandEncoder(),pass=encoder.beginComputePass();pass.setPipeline(pipelines.clear);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();device.queue.submit([encoder.finish()]);},
    async begin(node,point,patchRadius,stiffness){if(!Number.isInteger(node)||node<0||node>=n||!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite)||!(Number.isFinite(patchRadius)&&patchRadius>0))throw new Error('Finite resident contact required');anchor=node;center=[...point];radius=patchRadius;await resident.captureResidentPatch(anchor,stiffness);submit(1,[0,0,0]);},
    update(travel,threshold=0){submit(0,travel,threshold);},

@@ -10,6 +10,10 @@ export function packSolidTopology(model){
     elementBonds:elementBonds.length?elementBonds:new Uint32Array(4)};
 }
 export function prepareSolidTopology(mesh,settings={}){if(mesh.status!=='passed'||mesh.route!=='ftetwild-cpu-wildmeshing-0.4.1')throw new Error('An admitted exterior-derived tetrahedral interior is required');return buildTopology(mesh,settings);}
+export function prepareProceduralFixtureTopology(mesh,settings={}){
+  if(mesh?.status!=='passed'||mesh.route!=='kaminos.stone.axial-chunk-fixture.v1'||mesh.provenance!=='authored-procedural-control-not-imported-or-calibrated-stone')throw new Error('An explicit axial procedural control is required');
+  return{...buildTopology(mesh,settings),route:'kaminos.procedural-fixture.material-topology.v1',claim:'Authored axial control topology only; no imported-mesh, dynamic or fracture admission'};
+}
 export function prepareSeparatedTopology(mesh,settings={}){if(mesh.status!=='passed'||mesh.route!==INTERIOR_CUT_ROUTE)throw new Error('A conservative split interior is required');return buildTopology(mesh,{...settings,kind:'graph'},true);}
 function buildTopology(mesh,{kind,young=1000,poisson=.25,density=1000,horizon,volumeBarrier=0,damageLaw}={},separated=false){
   const compact=damageLaw==='event-frozen-isotropic-degradation-v1';if(damageLaw!==undefined&&!compact)throw new Error('Unknown graph damage law');if(compact&&(kind!=='graph'||separated))throw new Error('Compact damage law requires fixed graph topology');

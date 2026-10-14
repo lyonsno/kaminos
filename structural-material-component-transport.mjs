@@ -4,6 +4,16 @@ export const COMPONENT_TRANSPORT_ROUTE='kaminos.deformable-surface.corotated-pos
 const finitePoints=a=>Array.isArray(a)&&a.length>0&&a.every(p=>Array.isArray(p)&&p.length===3&&p.every(Number.isFinite));
 const labels=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(x=>Number.isInteger(x)&&x>=0);
 
+export function buildDetachedTranslationBody({positions,velocities,masses,components,pinned,component,gripComponent}){
+ if(!finitePoints(positions)||!finitePoints(velocities)||velocities.length!==positions.length||!labels(components,positions.length)||!Array.isArray(pinned)||pinned.length!==positions.length||!pinned.every(v=>typeof v==='boolean')||!Number.isInteger(component)||!(gripComponent===null||Number.isInteger(gripComponent)))throw Error('A complete acquired component field is required');
+ if(!Array.isArray(masses)||masses.length!==positions.length||!masses.every(v=>Number.isFinite(v)&&v>0))throw Error('Complete positive material masses required');
+ const ids=components.flatMap((c,i)=>c===component?[i]:[]);
+ if(ids.length<2||ids.some(i=>pinned[i])||gripComponent===component)return null;
+ const mass=ids.reduce((sum,i)=>sum+masses[i],0),center=[0,0,0],velocity=[0,0,0];
+ for(const i of ids)for(let k=0;k<3;k++){center[k]+=masses[i]*positions[i][k]/mass;velocity[k]+=masses[i]*velocities[i][k]/mass;}
+ return{motion:'translation-only',ids,mass,center,velocity,offsets:ids.map(i=>positions[i].map((v,k)=>v-center[k])),claim:'Acquired shape and linear momentum only; angular transport remains separate'};
+}
+
 export function createComponentSupportIndex(rest,ids){
  if(!finitePoints(rest)||!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||!ids.every(i=>Number.isInteger(i)&&i>=0&&i<rest.length))throw new Error('Finite component points and unique in-range ids required');
  const order=(a,b)=>a.distance-b.distance||a.id-b.id;
