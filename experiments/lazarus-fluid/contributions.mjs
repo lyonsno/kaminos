@@ -1,3 +1,4 @@
+import {resolveFingerFluidParticleCount} from '../../finger-fluid-webgpu-core.js';
 import {createFingerFluidBoxReference,describeFingerFluidBoxReference} from '../../finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from '../../finger-fluid-viscosity-scale.mjs';
 import {validateMaterialControls} from '../../finger-fluid-material-controls.mjs';
@@ -10,10 +11,13 @@ export function describeLazarusFiniteSetup(input={}){
  const fixture=describeFingerFluidBoxReference(values),h=fixture.supportRadius;
  const viscosityFactor=viscosityScale(values.scaling,values.dt,h);
  validateMaterialControls({particleRepulsionStrength:values.particleRepulsionStrength,densityIterations:values.densityIterations,capillaryStrength:values.capillaryStrength,freeFlightViscosityBoost:values.freeFlightViscosityBoost});
- return {inputs:values,sampling:{worldVolume:fixture.representedVolume,blockVolume:fixture.blockVolume,puddleVolume:fixture.puddleVolume,particleCount:fixture.particleCount,blockSamples:fixture.blockSamples,blockWidth:fixture.blockWidth,particleVolume:fixture.particleVolume,spacing:fixture.spacing,supportRadius:h,collisionRadius:fixture.collisionRadius,baseGlyphRadius:fixture.baseGlyphRadius,supportRatio:h/fixture.spacing,viscosityFactor,supportMode:'PBF_volume_scaled'},fixture};
+ let particleAdmission;try{resolveFingerFluidParticleCount(fixture.particleCount);particleAdmission={ok:true};}catch(e){particleAdmission={ok:false,reason:e.message};}
+ return {inputs:values,sampling:{worldVolume:fixture.representedVolume,blockVolume:fixture.blockVolume,puddleVolume:fixture.puddleVolume,particleCount:fixture.particleCount,blockSamples:fixture.blockSamples,blockWidth:fixture.blockWidth,particleVolume:fixture.particleVolume,spacing:fixture.spacing,supportRadius:h,collisionRadius:fixture.collisionRadius,baseGlyphRadius:fixture.baseGlyphRadius,supportRatio:h/fixture.spacing,viscosityFactor,particleAdmission,supportMode:'PBF_volume_scaled'},fixture};
 }
 export function lazarusFiniteSetup(input={}) {
- const preview=describeLazarusFiniteSetup(input),values=preview.inputs,fixture=createFingerFluidBoxReference(values);
+ const preview=describeLazarusFiniteSetup(input),values=preview.inputs;
+ if(!preview.sampling.particleAdmission.ok)throw Error(preview.sampling.particleAdmission.reason);
+ const fixture=createFingerFluidBoxReference(values);
  return {inputs:values,dt:values.dt,playbackRate:values.rate,playbackMode:values.playbackMode,support:{kind:'invisible_box',box:fixture.box},sampling:preview.sampling,
  guide:{question:'Does this water remain coherent at the same physical size as sampling changes?',tryThis:'Hold samples per unit to change only block amount. Hold block width to refine sampling. Compare the same simulated time.',whyThisMatters:'Nominal diffusion scaling derives b h² / dt independently of the accepted river tuning.'},
  solver:{particleCount:fixture.particleCount,diagnosticPopulation:fixture.population,diagnosticBox:fixture.box,diagnosticDynamics:'assembled',pressureSolver:'pbf',ipbfBoundaryMode:'collision_only',cohesionModel:'legacy',truthScene:'multi_regime_playground',rendererMode:'screen_space_refraction',colorMode:'phase',viscosityScaling:values.scaling,particleRepulsionStrength:values.particleRepulsionStrength,densityIterations:values.densityIterations,capillaryStrength:values.capillaryStrength,freeFlightViscosityBoost:values.freeFlightViscosityBoost,substeps:1,adaptiveDensity:false,densityCellRejection:true,uniformVolumeDensityKernel:true,energyDiagnosticsMode:'disabled'}};

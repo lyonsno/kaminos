@@ -32,3 +32,4 @@ let expected=0;for(let z=0;z<24;z++)for(let y=0;y<24;y++)for(let x=0;x<24;x++){
  const ds=((x-slice.center[0])**2+(y-slice.center[1])**2+(z-slice.z)**2)*p.spacing**2;if(ds>0&&ds<p.supportRadius**2)expected++;
 }assert.equal(slice.neighbors,expected);
 console.log('Allocation-free proposed counts, live scalar population identity and exact initial support counts pass');
+assert.throws(()=>lazarusFiniteSetup({resolution:32,blockWidth:.25}),/at least 1024/,'existing backend minimum must be rejected before replacement');

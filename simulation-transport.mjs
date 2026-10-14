@@ -43,12 +43,13 @@ export function mountSimulationTransport({document,root,transport,exportSequence
  <span data-rate-meaning></span><select data-cadence aria-label="Playback cadence"><option value="wall_time">Wall-time playback</option><option value="render_cadence">Ticks per drawn frame</option></select>
  <label>Time <input data-time type="number" min="0" step="any" aria-label="Seek simulated seconds"></label><button data-action="seek" title="Pause at nearest physics tick; backwards seeks restart using current settings">Go</button><output></output>
  <details><summary>Render sequence</summary><div><p class="export-help">Export the current view and settings. Water stays paused at the final frame. Choose a folder; a new sequence directory preserves each PNG. Cancel keeps completed frames.</p><label>From <input data-start type="number" min="0" step="any"></label><label>Through <input data-end type="number" min="0" step="any"></label><label>Frames/s <input data-fps type="number" min="0" step="any" value="30"></label><button data-action="export">Choose folder & render</button><button data-action="cancel" disabled>Cancel export</button><span data-progress></span></div></details><span role="alert"></span>`;
- root.append(node);let disposed=false,reading=false,exporting=false,abort=null,errorSource=null;
+ root.append(node);let disposed=false,reading=false,exporting=false,abort=null,actionError=null,readError=null;
  const $=q=>node.querySelector(q),error=$('[role=alert]');
+ const showErrors=()=>{error.textContent=[actionError,readError].filter(Boolean).join(' · ');};
  const controls=[...node.querySelectorAll('button,select,input')];
  const lock=()=>{for(const c of controls)c.disabled=transport.state().busy||exporting;$('[data-action=cancel]').disabled=!exporting;if(!exportSequence)$('[data-action=export]').disabled=true;};
- const update=()=>{if(disposed||reading)return;if(transport.state().busy){lock();return;}reading=true;try{const s=transport.read();if(errorSource==='read'){error.textContent='';errorSource=null;}$('[data-action=play]').textContent=s.paused?'▶ Play':'Ⅱ Pause';$('output').textContent=`${(s.step*s.dt).toFixed(4)} s · tick ${s.step}`;if(document.activeElement!==$('[data-time]'))$('[data-time]').value=String(s.step*s.dt);$('select').value=String(s.rate);$('[data-cadence]').hidden=!s.cadence;if(s.cadence)$('[data-cadence]').value=s.cadence;$('[data-rate-meaning]').textContent=s.cadence==='render_cadence'?'ticks / drawn frame':'simulated / wall time';lock();}catch(e){error.textContent=e.message;errorSource='read';}finally{reading=false;}};
- const call=action=>{error.textContent='';errorSource=null;const p=action();lock();Promise.resolve(p).catch(e=>{error.textContent=e.message;errorSource='action';}).finally(update);};
+ const update=()=>{if(disposed||reading)return;if(transport.state().busy){lock();return;}reading=true;try{const s=transport.read();readError=null;showErrors();$('[data-action=play]').textContent=s.paused?'▶ Play':'Ⅱ Pause';$('output').textContent=`${(s.step*s.dt).toFixed(4)} s · tick ${s.step}`;if(document.activeElement!==$('[data-time]'))$('[data-time]').value=String(s.step*s.dt);$('select').value=String(s.rate);$('[data-cadence]').hidden=!s.cadence;if(s.cadence)$('[data-cadence]').value=s.cadence;$('[data-rate-meaning]').textContent=s.cadence==='render_cadence'?'ticks / drawn frame':'simulated / wall time';lock();}catch(e){readError=e.message;showErrors();}finally{reading=false;}};
+ const call=action=>{actionError=null;readError=null;showErrors();const p=action();lock();Promise.resolve(p).catch(e=>{actionError=e.message;showErrors();}).finally(update);};
  for(const [name,action]of Object.entries({replay:()=>transport.replay(),back:()=>transport.step(-1),play:()=>transport.toggle(),step:()=>transport.step(1),seek:()=>transport.seek(Number($('[data-time]').value))}))$(`[data-action=${name}]`).onclick=()=>call(action);
  $('select').onchange=()=>call(()=>transport.rate(Number($('select').value)));
  $('[data-cadence]').onchange=()=>call(()=>transport.cadence($('[data-cadence]').value));
@@ -57,10 +58,10 @@ export function mountSimulationTransport({document,root,transport,exportSequence
  $('[data-action=export]').onclick=()=>{
   if(!exportSequence)return;
   const request={startSeconds:Number($('[data-start]').value),endSeconds:Number($('[data-end]').value),fps:Number($('[data-fps]').value)};
-  abort=new AbortController();exporting=true;error.textContent='';errorSource=null;lock();
+  abort=new AbortController();exporting=true;actionError=null;readError=null;showErrors();lock();
   // The producer's export function opens the picker synchronously in this gesture.
   let task;try{task=exportSequence({request,signal:abort.signal,onProgress:p=>{$('[data-progress]').textContent=`${p.completedFrames}/${p.requestedFrames} frames · ${p.timeSeconds.toFixed(4)} s`;}});}catch(e){task=Promise.reject(e);}
-  Promise.resolve(task).then(result=>{$('[data-progress]').textContent=result;}).catch(e=>{error.textContent=e.message;errorSource='action';}).finally(()=>{exporting=false;abort=null;update();});
+  Promise.resolve(task).then(result=>{$('[data-progress]').textContent=result;}).catch(e=>{actionError=e.message;showErrors();}).finally(()=>{exporting=false;abort=null;update();});
  };
  update();const timer=setInterval(update,250);
  return {node,update,async dispose(){disposed=true;clearInterval(timer);abort?.abort();await transport.dispose();node.remove();}};
