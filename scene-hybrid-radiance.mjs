@@ -34,7 +34,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let sourceTransform=validateSceneSourceTransform();
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,volumeGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
-    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','hard-point-shadows','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
+    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
   function installMaterials(){
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
