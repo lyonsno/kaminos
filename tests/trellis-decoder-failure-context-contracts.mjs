@@ -4,7 +4,7 @@ import {test} from 'node:test';
 import {createTrellisSLatDecoderAdapter,buildSLatDecoderPlan,slatDecoderWeightShapes} from '../models/trellis2/slat-decoder.js';
 import {WEBGPU_BUFFER_USAGE as U} from '../webgpu-inference-kit/src/core.js';
 
-function fixture({count=0,failStage}={}){
+function fixture({count=0,failStage,mode='shape'}={}){
   const allocated=[],runs=[],reads=[],invocation={id:'observed-failed-decoder'};
   const runtime={device:{limits:{maxStorageBufferBindingSize:134217728},queue:{async onSubmittedWorkDone(){}}},
     createTensor(spec){const t={...spec,byteLength:spec.shape.reduce((a,b)=>a*b,4),buffer:{destroy(){t.destroyed=true;}}};allocated.push(t);return t;},
@@ -13,12 +13,15 @@ function fixture({count=0,failStage}={}){
     async readTensor(t){reads.push(t);assert.equal(t.dtype,'u32');assert.equal(t.byteLength,4);return new Uint32Array([t.name.includes('hash-status')?0:count]);}};
   const sample=runtime.createTensor({name:'borrowed.shape-codes',shape:[2,2],dtype:'f32',usage:U.storage}),
     coordinates=runtime.createTensor({name:'borrowed.coordinates',shape:[2,3],dtype:'i32',usage:U.storage}),
-    config={tokenRows:2,latentChannels:2,resolution:2,channels:[8,4],numBlocks:[0,0]},
+    config={tokenRows:2,latentChannels:2,resolution:2,mode,
+      channels:mode==='texture'?[8,8,4]:[8,4],numBlocks:mode==='texture'?[0,0,0]:[0,0]},
     weights=Object.fromEntries(Object.entries(slatDecoderWeightShapes(buildSLatDecoderPlan(config)))
       .map(([name,shape])=>[name,new Float32Array(shape.reduce((a,b)=>a*b,1))]));
+  const guides=mode==='texture'?[2,3].map((rows,level)=>runtime.createTensor({name:'borrowed.guide'+level,
+    shape:[rows,8],dtype:'f32',usage:U.storage})):undefined;
   const adapter=createTrellisSLatDecoderAdapter({route:{runtime,routeId:'local-failure-context'},config,weights,
-    siluTable:new Float32Array(65536),sampleTensor:sample,coordinateTensor:coordinates});
-  return {adapter,allocated,runs,reads,sample,coordinates,invocation};
+    siluTable:new Float32Array(65536),sampleTensor:sample,coordinateTensor:coordinates,guideSubdivisions:guides});
+  return {adapter,allocated,runs,reads,sample,coordinates,invocation,guides};
 }
 
 test('empty-child failure exposes exact resident replay inputs and selection boundary until disposal',async()=>{
@@ -63,4 +66,17 @@ test('successful decoder publishes no failed context and retains scalar-only ser
 
 test('actual generation composition exposes failed geometry and material decoders before resource release',async()=>{
   await import('../models/trellis2/tests/generation-composition-contracts.mjs');
+});
+
+test('texture replay retains every borrowed guide, including levels not yet reached',async()=>{
+  const f=fixture({mode:'texture'}),original=[...f.guides];
+  f.guides[0]=f.guides[1]; // Replacing the caller's list must not relabel admitted execution inputs.
+  await assert.rejects(f.adapter.run(f.invocation),/learned decoder generated empty cells/);
+  const guides=f.adapter.failureContext.inputs.guideSubdivisions;
+  assert.ok(guides,'replaying texture requires the complete matching shape guide, not only failed-level logits');
+  assert.equal(guides.length,2);assert.ok(Object.isFrozen(guides));
+  for(let i=0;i<guides.length;i++)assert.strictEqual(guides[i],original[i]);
+  assert.strictEqual(f.adapter.failureContext.subdivisionLogits,original[0]);
+  assert.equal(f.reads.length,2,'retaining guides must not download them');
+  f.adapter.dispose();assert.ok(original.every(t=>!t.destroyed),'borrowed guide buffers remain caller owned');
 });

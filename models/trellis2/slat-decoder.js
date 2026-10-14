@@ -85,8 +85,12 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
   }
   if (plan.mode === 'texture' && (!Array.isArray(guideSubdivisions) || guideSubdivisions.length !== plan.subdivisionLevels)) throw TypeError('resident complete learned shape subdivision guide required for texture');
   if (plan.mode === 'shape' && guideSubdivisions !== undefined) throw TypeError('shape uses learned subdivision, not replacement guide');
+  // Snapshot descriptor identity, not tensor bytes. Replay and execution must
+  // refer to the same complete caller-owned guide buffers, including later levels.
+  if (guideSubdivisions) guideSubdivisions = Object.freeze([...guideSubdivisions]);
   const ops = createSLatDecoderKernelOps(runtime), parameters = {};let disposed = false, running = false, state = 'new', output, convNeXtBlocksExecuted = 0;
-  const outputs = {}, inputs = Object.freeze({ sample: sampleTensor, coordinates: coordinateTensor });
+  const outputs = {}, inputs = Object.freeze({ sample: sampleTensor, coordinates: coordinateTensor,
+    ...(guideSubdivisions ? { guideSubdivisions } : {}) });
   let boundary, failureContext;
   for (const name of ['features', 'coordinates', 'subdivisions']) Object.defineProperty(outputs, name, { enumerable: true, get: () => output?.[name] });
   try {
