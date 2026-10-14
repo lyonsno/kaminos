@@ -24,6 +24,7 @@ export function runFinishingWorker({WorkerClass,url,message,transfer,signal,labe
       settle(resolve,data);
     };
     worker.onerror=e=>settle(reject,Error(label+' worker error: '+(e?.message??e)));
-    worker.postMessage({id,...message},transfer);
+    // A dispatch that throws (e.g. DataCloneError) still releases the run.
+    try{worker.postMessage({id,...message},transfer);}catch(error){settle(reject,error);}
   });
 }

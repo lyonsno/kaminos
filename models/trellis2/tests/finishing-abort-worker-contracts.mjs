@@ -47,3 +47,16 @@ for(const key of ['vertices','triangles','normals','uvs'])assert.equal(sha(there
 assert.equal(there.uvMetadata.execution,'module-worker');assert.equal(here.uvMetadata.execution,'caller-thread');
 assert.equal(there.metadata.source,'fixture','caller metadata carried through the worker');
 assert.equal(cleaned.vertices.length,clean.vertices.length,'caller arrays stay attached');
+
+// A dispatch that throws (e.g. DataCloneError) must still release the run:
+// worker terminated and abort listener removed at rejection, not at a later Stop.
+let throwTerminated=0;
+class ThrowingWorker{postMessage(){throw new DOMException('cannot clone','DataCloneError');}terminate(){throwTerminated++;}}
+for(const make of [o=>createBrowserMeshPostprocess({targetFaces:spec.targetFaces,...o}),o=>createWasmXatlasUnwrapper(o)]){
+  throwTerminated=0;
+  const stop=new AbortController();
+  await assert.rejects(make({WorkerClass:ThrowingWorker,signal:stop.signal})({vertices,triangles,metadata:{}}),e=>e.name==='DataCloneError','original dispatch error preserved');
+  assert.equal(throwTerminated,1,'rejected worker dispatch must terminate its worker');
+  stop.abort();
+  assert.equal(throwTerminated,1,'no abort listener left behind after a rejected dispatch');
+}
