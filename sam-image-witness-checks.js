@@ -105,3 +105,13 @@ export function validateSamExportProvenance(provenance, { kind, source, output, 
   return { invocationId: provenance.invocationId, sourceImageSha256: provenance.sourceImageSha256,
     indices: [...provenance.indices], authority: 'persisted-PNG-metadata-matched-to-live-source-and-selection' };
 }
+
+export function validateSamNativeSourceHandoff({ selected, source, mode, maskPanelActive }, expectedSha256) {
+  check(selected?.kind === 'image' && typeof selected.source === 'string' && selected.source.length > 0,
+    'no selected library image at Masks entry');
+  check(selected.sha256 === expectedSha256 && source?.sha256 === expectedSha256
+    && source.source === selected.source, 'Masks opened a different source than the selected library image');
+  check(mode === 'workbench' && maskPanelActive === true, 'selected-image Masks action did not open the mask tools');
+  return { source: source.source, sha256: source.sha256, entry: 'asset-open-masks',
+    authority: 'actual-Authoring-selected-image-action-and-loaded-source' };
+}

@@ -106,6 +106,17 @@ for (const change of [null, {}, { ...pngProvenance, invocationId: 'old' },
   { ...pngProvenance, outputAuthority: 'cpu-oracle' }, { ...pngProvenance, promptSha256: 'sha256:other' }]) {
   assert.throws(() => consumer.validateSamExportProvenance(change, provenanceContract));
 }
+assert.equal(typeof consumer.validateSamNativeSourceHandoff, 'function',
+  'native entry must retain the selected library image at the actual Masks action');
+const nativeEntry = { selected: { source: '/source.png', sha256: 'sha256:source', kind: 'image' },
+  source: { source: '/source.png', sha256: 'sha256:source' }, mode: 'workbench', maskPanelActive: true };
+consumer.validateSamNativeSourceHandoff(nativeEntry, 'sha256:source');
+for (const mutate of [value => { value.selected = null; }, value => { value.source = null; },
+  value => { value.source.source = '/other.png'; }, value => { value.source.sha256 = 'sha256:old'; },
+  value => { value.maskPanelActive = false; }, value => { value.mode = 'authoring'; }]) {
+  const value = structuredClone(nativeEntry); mutate(value);
+  assert.throws(() => consumer.validateSamNativeSourceHandoff(value, 'sha256:source'));
+}
 const out = mkdtempSync(join(tmpdir(), 'kaminos-sam-consumer-'));
 const result = spawnSync(process.execPath, [witness.pathname, '--out-dir', out, '--expected-commit', 'not-the-source'], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);

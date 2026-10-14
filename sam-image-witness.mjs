@@ -9,7 +9,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { validateSamConsumerInteraction, validateSamApplicationForeground } from './sam-image-witness-checks.js';
 import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
 export { validateSamConsumerInteraction, validateSamConsumerExport, validateSamApplicationForeground,
-  validateSamExportProvenance } from './sam-image-witness-checks.js';
+  validateSamExportProvenance, validateSamNativeSourceHandoff } from './sam-image-witness-checks.js';
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
   assert.ok(output, 'missing live output');
@@ -78,7 +78,7 @@ async function main() {
     server.stdout.pipe(serverLog, { end: false }); server.stderr.pipe(serverLog, { end: false });
     server.once('error', failRuntime);
     server.once('exit', code => failRuntime(new Error(`server exited: ${code}`)));
-    const url = `http://127.0.0.1:${values.port}/?sam=1&commit=${report.effectiveCommit}`;
+    const url = `http://127.0.0.1:${values.port}/?${values['app-host'] ? '' : 'sam=1&'}commit=${report.effectiveCommit}`;
     const waitServer = async () => {
       for (;;) {
         try { const response = await fetch(new URL('/api/runtime-config', url)); if (response.ok) return response.json(); }
@@ -100,7 +100,9 @@ async function main() {
     page.on('pageerror', error => { report.errors.push(error.message); failRuntime(error); });
     report.failurePhase = 'host-load'; saveReport();
     await checked(page.goto(url, { waitUntil: 'load' }));
-    await checked(page.waitForFunction(() => Boolean(window.kaminosSamImageTools)));
+    if (values['app-host']) {
+      await checked(page.waitForFunction(() => Boolean(window.kaminosAssets && window.kaminosAppGpu)));
+    } else await checked(page.waitForFunction(() => Boolean(window.kaminosSamImageTools)));
     await checked(page.evaluate(() => {
       const transfers = new Map();
       window.__samEvidenceTransfers = transfers;
@@ -389,8 +391,39 @@ async function main() {
 
     report.failurePhase = 'image-ingress'; saveReport();
     // The accepted source bytes keep numerical parity while the name exercises export persistence.
-    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(245)}.jpg`,
-      mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
+    const sourceFile = { name: `${'a'.repeat(245)}.jpg`, mimeType: 'image/jpeg', buffer: readFileSync(values.image) };
+    if (values['app-host']) {
+      await checked(page.evaluate(() => {
+        window.kaminosWorkspace.setMode('authoring');
+        window.kaminosAssets.open('browse');
+      }));
+      await checked(page.locator('#asset-file').setInputFiles(sourceFile));
+      await checked(page.waitForFunction(sha256 => window.kaminosAssets.read().selected?.sha256 === sha256,
+        report.inputs.image.sha256));
+      report.nativeSourceSelection = await checked(page.evaluate(async () => {
+        const selected = window.kaminosAssets.read().selected;
+        const response = await fetch('/api/assets?kind=image');
+        if (!response.ok) throw new Error('native image library could not be read');
+        const library = await response.json();
+        if (!library.entries.some(entry => entry.id === selected.id && entry.sha256 === selected.sha256)) {
+          throw new Error('selected source image is not persisted in the library');
+        }
+        return selected;
+      }));
+      const selectionPath = join(out, 'selected-library-image.png');
+      await checked(page.screenshot({ path: selectionPath }));
+      report.captures.push({ name: 'selected-library-image', path: selectionPath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
+      await checked(page.locator('#asset-open-masks').click());
+      await checked(page.waitForFunction(() => window.kaminosSamImageTools?.progress().source
+        && !window.kaminosSamImageTools.progress().busy));
+      report.nativeSourceHandoff = await checked(page.evaluate(async sha256 => {
+        const { validateSamNativeSourceHandoff } = await import('./sam-image-witness-checks.js');
+        return validateSamNativeSourceHandoff({ selected: window.kaminosAssets.read().selected,
+          source: window.kaminosSamImageTools.progress().source, mode: window.kaminosWorkspace.state().mode,
+          maskPanelActive: document.querySelector('.tab.active')?.dataset.tab === 'masks' }, sha256);
+      }, report.inputs.image.sha256));
+      saveReport();
+    } else await checked(page.locator('#sam-image-file').setInputFiles(sourceFile));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
     await capture('source-desktop');
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
