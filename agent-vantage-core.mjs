@@ -312,8 +312,26 @@ const niceStep = span => {
   return [1, 2, 5, 10].map(factor => factor * power).find(step => step >= raw);
 };
 
+const VIEW_CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+// The world-space ray through each viewport corner (lower left first,
+// counterclockwise), scaled to unit depth along the view, from the matrices a
+// camera renders with. A camera frame's zoom and offset live in the
+// projection, so these rays follow them where fov and aspect cannot.
+export function viewCornerRays({projection, viewInverse}) {
+  const unproject = new Matrix4().fromArray(projection).invert(), world = new Matrix4().fromArray(viewInverse).invert();
+  const apex = new Vector3().setFromMatrixPosition(world);
+  const rays = VIEW_CORNERS.map(([x, y]) => {
+    const point = new Vector3(x, y, 0.5).applyMatrix4(unproject);
+    return point.multiplyScalar(-1 / point.z).applyMatrix4(world).sub(apex);
+  });
+  return {apex, rays};
+}
+
 // A fixed three-quarter orthographic view, fitted to the scene and both kinds
-// of camera, laid out in pixels. Painting is left to the caller.
+// of camera, laid out in pixels. Painting is left to the caller. A camera with
+// `optics` (its effective matrices) is drawn from them; otherwise from its
+// view's lens and the operator's aspect.
 export function sketchMapLayout(sketch, {width = 320, height = 240, azimuth = 35, elevation = 30, margin = 0.08} = {}) {
   const az = azimuth * DEG, el = elevation * DEG;
   const eye = new Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
@@ -323,28 +341,31 @@ export function sketchMapLayout(sketch, {width = 320, height = 240, azimuth = 35
   const aspect = sketch.operator?.aspect ?? 16 / 9;
   const boxes = [...(sketch.objects ?? []).map(object => ({...object, kind: 'object'})),
     ...(sketch.fields ?? []).map(field => ({...field, kind: 'field'}))].filter(box => box.bounds);
-  const cone = (kind, label, view) => {
+  const cone = (kind, label, view, optics) => {
+    if (optics) return {kind, label, ...viewCornerRays(optics)};
     const apex = new Vector3(...view.position), forward = new Vector3(...view.target).sub(apex).normalize();
     const up = new Vector3(...view.up);
     up.addScaledVector(forward, -up.dot(forward));
     if (up.lengthSq() < 1e-12) up.set(0, 1, 0);
     up.normalize();
-    const tangent = Math.tan(view.fov * DEG / 2);
-    return {kind, label, apex, forward, up, right: new Vector3().crossVectors(forward, up).normalize(), vertical: tangent, horizontal: tangent * aspect};
+    const right = new Vector3().crossVectors(forward, up).normalize(), vertical = Math.tan(view.fov * DEG / 2), horizontal = vertical * aspect;
+    return {kind, label, apex, rays: VIEW_CORNERS.map(([sx, sy]) => forward.clone()
+      .addScaledVector(right, sx * horizontal).addScaledVector(up, sy * vertical))};
   };
-  const cones = [...(sketch.operator ? [cone('operator', 'you', sketch.operator.view)] : []),
-    ...(sketch.subs ?? []).map(sub => cone('sub', sub.label, sub.view))];
+  const cones = [...(sketch.operator ? [cone('operator', 'you', sketch.operator.view, sketch.operator.optics)] : []),
+    ...(sketch.subs ?? []).map(sub => cone('sub', sub.label, sub.view, sub.optics))];
   const world = [...boxes.flatMap(box => cornersOf(box.bounds)), ...cones.map(item => item.apex.toArray()), [0, 0, 0]];
   const extent = new Box3().setFromPoints(world.map(point => new Vector3(...point)));
   // Cones share one length scaled to the scene, so the two read alike.
   const length = Math.min(Math.max(Math.max(extent.getSize(new Vector3()).length() / 2, 1) * 0.6, 0.5), 6);
-  for (const item of cones) {
-    item.far = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => item.apex.clone().addScaledVector(item.forward, length)
-      .addScaledVector(item.right, sx * item.horizontal * length).addScaledVector(item.up, sy * item.vertical * length).toArray());
+  for (const item of cones) item.far = item.rays.map(ray => item.apex.clone().addScaledVector(ray, length).toArray());
+  // Extremes by iteration: spreading every point into Math.min overflows the
+  // call stack in large scenes.
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const point of [...world, ...cones.flatMap(item => item.far)]) {
+    const [x, y] = flat(point);
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
   }
-  const flats = [...world, ...cones.flatMap(item => item.far)].map(flat);
-  const xs = flats.map(point => point[0]), ys = flats.map(point => point[1]);
-  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const scale = Math.min(width * (1 - 2 * margin) / Math.max(x1 - x0, 1e-6), height * (1 - 2 * margin) / Math.max(y1 - y0, 1e-6));
   const project = point => {
     const [x, y] = flat(point);

@@ -11780,6 +11780,7 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
+    viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
@@ -12040,20 +12041,21 @@ async function initScene() {
   // ?vantage=0 leaves the terminal link closed.
   const vantageBusy=()=>authoringBusy?'A scene document action is running':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
   // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
+  // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
   const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
-    const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,controlsEnabled=controls.enabled,keep=object=>{if(object)hidden.push([object,object.visible]);};
+    const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,keep=object=>{if(object)hidden.push([object,object.visible]);};
     if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);}
     for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
     if(all){if(helper)helper.visible=false;selectionCaptureSuspended=true;selectionFeedback?.suspend(true);for(const box of selectionBoxes.values())box.visible=false;}
     for(const [object] of hidden)object.visible=false;
-    controls.enabled=false;
-    return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}controls.enabled=controlsEnabled;window._kaminosDirty?.();};
+    return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}window._kaminosDirty?.();};
   };
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
   const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
   // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
-  // flag rather than authoringBusy, which in-flight imports read as a stale document.
-  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;return ()=>{vantageCaptureHeld=false;button.disabled=false;};};
+  // flag rather than authoringBusy, which in-flight imports read as a stale document. Pointer input on
+  // the viewport canvases waits too: it would act through the borrowed camera. Overlaid controls still work.
+  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','pointerup','mousedown','mouseup','click','dblclick'],wait=event=>{if(event.target?.tagName==='CANVAS'&&!event.target.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)viewportEl.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)viewportEl.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
   const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
   const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
   try{

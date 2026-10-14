@@ -32,9 +32,9 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * `{id,label,type,bounds}` rows; `compose`, `encode`, `annotate` and `sheet`
  * own pixels; `suspendHelpers({all, hide})` hides all editor drawing when
  * `all` is true plus the listed object ids, and returns a restore function.
- * `hold()` takes the page's document lock for the whole capture so the
- * operator's camera actions cannot save the borrowed view; it returns a
- * release function. `frameState().layers` maps canvas ids to frame counters
+ * `hold()` holds the operator's camera actions, navigation and viewport
+ * input for the whole capture, so nothing saves or acts through the
+ * borrowed view; it returns a release function. `frameState().layers` maps canvas ids to frame counters
  * and `cameraMatrices()` returns the matrices the page is rendering with.
  */
 export function createVantagePilot(host) {
@@ -157,11 +157,19 @@ export function createVantagePilot(host) {
     return images;
   }
 
-  // The scene as named boxes, fields and cameras: readable without drawing.
-  const sketch = () => ({schema: SKETCH_SCHEMA, capturedAt: new Date(host.now()).toISOString(),
-    objects: host.objects().filter(object => !object.id.startsWith(SUB_PREFIX)), fields: host.extraTargets(),
-    operator: {view: host.readView(), aspect: aspect()},
-    subs: cameras().filter(isSub).map(record => ({pilot: pilotOf(record), id: record.id, label: record.label, view: viewOf(record)}))});
+  // The scene as named boxes, fields and cameras: readable without rendering the scene.
+  // `optics` are the matrices the operator's viewport renders with, including
+  // a camera frame's zoom and offset; a sub the operator is looking through
+  // pictures through those same matrices.
+  const sketch = () => {
+    const optics = host.cameraMatrices?.() ?? null, state = host.cameras.state();
+    const through = record => optics && state.mode === 'camera' && state.activeId === record.id;
+    return {schema: SKETCH_SCHEMA, capturedAt: new Date(host.now()).toISOString(),
+      objects: host.objects().filter(object => !object.id.startsWith(SUB_PREFIX)), fields: host.extraTargets(),
+      operator: {view: host.readView(), aspect: aspect(), ...(optics ? {optics} : {})},
+      subs: cameras().filter(isSub).map(record => ({pilot: pilotOf(record), id: record.id, label: record.label, view: viewOf(record),
+        ...(through(record) ? {optics} : {})}))};
+  };
   const mapOf = (current, size) => {
     const layout = sketchMapLayout(current, {width: size, height: Math.round(size * 0.75)});
     return {image: {name: 'map', ...host.encode(host.paintMap(layout))}, scaleBar: layout.scaleBar};
@@ -683,16 +691,20 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   glyph();
   const glyphTimer = window.setInterval(glyph, 1000);
   // Keep the operator's map current while a sub is in the scene; repaint
-  // only when the scene, the operator's view or a sub changed.
+  // only when the scene, the operator's view or a sub changed. Without a sub
+  // nothing is measured. During a picture the viewport camera is borrowed,
+  // so the map waits.
   let mapKey = null;
   const refreshMap = () => {
-    if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState !== 'visible' || pilot.isCapturing()) return;
     let current;
-    try { current = pilot.sketch(); } catch { return; }
-    if (!current.subs.length) {
-      if (mapKey !== null) { mapKey = null; hud.map(null); }
-      return;
-    }
+    try {
+      if (!cameras.read().cameras.some(isSub)) {
+        if (mapKey !== null) { mapKey = null; hud.map(null); }
+        return;
+      }
+      current = pilot.sketch();
+    } catch { return; }
     const key = JSON.stringify([current.objects.map(object => [object.id, object.bounds]), current.fields, current.operator, current.subs]);
     if (key === mapKey) return;
     mapKey = key;

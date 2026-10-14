@@ -1,10 +1,13 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createVantagePilot, createCommandPump} from '../agent-vantage.mjs';
+import {readFileSync} from 'node:fs';
+import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
 import {poseAxes, poseLookingAt} from '../agent-vantage-core.mjs';
 import {createSceneCameras} from '../scene-camera.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
+import {installScenePlacementTools} from '../scene-placement-tools.mjs';
+import * as THREE from '../lib/three.core.js';
 import {PerspectiveCamera, Vector3} from '../lib/three.core.js';
 
 const HOST = 'kaminos-host-renderer-canvas', VOLUME = 'kaminos-volume-canvas';
@@ -395,4 +398,185 @@ test('pictures carry the map unless asked not to', async () => {
   assert.deepEqual((await pilot.run('snap', {map: false})).images.map(image => image.name), ['snap']);
   assert.deepEqual((await pilot.run('peek', {})).images.map(image => image.name), ['peek', 'map']);
   assert.deepEqual((await pilot.run('burst', {count: 2})).images.map(image => image.name), ['sheet', 'map']);
+});
+
+// --- index.html wiring, read from its source ---------------------------------
+
+const INDEX = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+// The `const name=` statement in index.html, up to its top-level semicolon.
+function definition(name) {
+  const start = INDEX.indexOf(`const ${name}=`);
+  assert.ok(start >= 0, `index.html defines ${name}`);
+  let depth = 0, quote = null;
+  for (let i = start; i < INDEX.length; i++) {
+    const c = INDEX[i];
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === "'" || c === '"' || c === '`') quote = c;
+    else if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c)) depth--;
+    else if (c === ';' && depth === 0) return INDEX.slice(start, i + 1);
+  }
+  throw new Error(`${name} has no end`);
+}
+// Evaluates that statement with stand-ins for the page variables it reads.
+const fromIndex = (name, scope) => new Function(...Object.keys(scope), `${definition(name)}\nreturn ${name};`)(...Object.values(scope));
+
+class FakeElement extends EventTarget {
+  constructor(tag = 'div') { super(); this.tagName = tag.toUpperCase(); this.style = {}; this.dataset = {}; this.children = []; this.clientWidth = 800; this.clientHeight = 600; this.hidden = false; this.textContent = ''; }
+  setAttribute() {} append(...children) { this.children.push(...children); } remove() {} contains() { return true; } closest() { return null; }
+  getBoundingClientRect() { return {left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600}; }
+  setPointerCapture() {} hasPointerCapture() { return false; } releasePointerCapture() {}
+}
+
+// The real placement tools over a fake viewport, as index.html installs them.
+function placementFixture() {
+  const document = new FakeElement(), window = new FakeElement(), viewport = new FakeElement();
+  document.body = new FakeElement(); document.activeElement = document.body;
+  document.createElement = tag => new FakeElement(tag); document.createElementNS = () => new FakeElement();
+  document.querySelectorAll = () => []; document.getElementById = () => null;
+  Object.assign(globalThis, {document, window, ResizeObserver: class { observe() {} }});
+  const camera = new PerspectiveCamera(45, 4 / 3, 0.1, 100); camera.position.z = 10;
+  const controls = new THREE.EventDispatcher(); controls.enabled = true;
+  const helper = {visible: true}, gizmo = new THREE.EventDispatcher();
+  Object.assign(gizmo, {enabled: true, dragging: false, getHelper: () => helper});
+  let pose = {position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1]};
+  const tools = installScenePlacementTools({viewport, camera, controls, gizmo, selected: () => 'kiln',
+    read: () => structuredClone(pose), write: (_, next) => { pose = structuredClone(next); },
+    object: () => ({userData: {kaminosSceneObject: {label: 'kiln'}}, updateWorldMatrix() {}}), refresh() {}});
+  return {tools, controls, gizmo, viewport};
+}
+
+test('a transform overlapping a picture leaves navigation as the operator had it', () => {
+  const {tools, controls, gizmo} = placementFixture();
+  const suspend = fromIndex('suspendEditorDrawingForVantage', {transformControls: gizmo, controls,
+    scene: {traverse() {}}, sceneObjects: [], FLAME_EMITTER_TYPE: 'flame-emitter', LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
+    RIM_LIGHT_ID: 'rim-light', selectionCaptureSuspended: false, selectionFeedback: null, selectionBoxes: new Map(),
+    updateSelectionFeedback() {}, window: {}});
+  const orders = {
+    'picture ends first': restore => { restore(); tools.finish(true); },
+    'transform ends first': restore => { tools.finish(true); restore(); },
+    'transform cancelled': restore => { tools.finish(false); restore(); },
+  };
+  for (const [order, end] of Object.entries(orders)) {
+    controls.enabled = true;
+    const restore = suspend({all: true});
+    assert.ok(tools.start('translate'), `${order}: the transform starts`);
+    assert.equal(controls.enabled, false, `${order}: the transform holds navigation`);
+    end(restore);
+    assert.equal(controls.enabled, true, `${order}: navigation is back once both are done`);
+  }
+  controls.enabled = true;
+  const restore = suspend({all: true});
+  tools.start('translate');
+  restore();
+  assert.equal(controls.enabled, false, 'navigation stays off while the transform is still running');
+  tools.finish(true);
+  assert.equal(controls.enabled, true);
+});
+
+test('while a picture holds the viewport, pointer input on its canvases waits', () => {
+  const viewportEl = new FakeElement(), canvas = new FakeElement('canvas'), panel = new FakeElement('button'), button = {disabled: false};
+  const hold = fromIndex('holdViewportForVantage', {authoringBusy: false, vantageCaptureHeld: false, viewportEl,
+    document: {getElementById: id => (id === 'composition-capture' ? button : null)}});
+  const reached = [];
+  const press = target => {
+    const event = new Event('pointerdown', {cancelable: true});
+    Object.defineProperty(event, 'target', {value: target});
+    viewportEl.dispatchEvent(event);
+    return event;
+  };
+  const release = hold();
+  viewportEl.addEventListener('pointerdown', event => reached.push(event.target.tagName), true);
+  assert.equal(press(canvas).defaultPrevented, true, 'a press on the borrowed canvas is held');
+  assert.equal(press(panel).defaultPrevented, false, 'controls laid over the viewport keep working');
+  assert.deepEqual(reached, ['BUTTON']);
+  assert.equal(button.disabled, true);
+  release();
+  assert.equal(press(canvas).defaultPrevented, false, 'the canvas answers again after the picture');
+  assert.deepEqual(reached, ['BUTTON', 'CANVAS']);
+  assert.equal(button.disabled, false);
+});
+
+test('the sketch carries the matrices the operator viewport renders with', async () => {
+  const {state, pilot} = await launched();
+  const optics = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 30, near: 0.1, far: 1000});
+  optics.projection[8] = 0.2;
+  state.optics = optics;
+  const sketch = await pilot.run('sketch', {});
+  assert.deepEqual(sketch.operator.optics, optics, 'a frame zoom or offset lives in the projection, so the sketch must carry it');
+});
+
+test('a default picture of a very large scene still returns its picture and map', async () => {
+  const {state, pilot} = await launched();
+  state.objects = Array.from({length: 20000}, (_, i) => ({id: `box-${i}`, label: `Box ${i}`, type: 'procedural-mesh',
+    bounds: {min: [i % 100, 0, Math.floor(i / 100)], max: [i % 100 + 1, 1, Math.floor(i / 100) + 1]}}));
+  const shot = await pilot.run('snap', {});
+  assert.deepEqual(shot.images.map(image => image.name), ['snap', 'map']);
+});
+
+// installAgentVantage over a fake page: the panel map refresh runs on a timer.
+function installedPage({subs = []} = {}) {
+  const intervals = [], painted = [];
+  const element = tag => {
+    const node = new FakeElement(tag), parts = {};
+    node.querySelector = selector => (parts[selector] ??= element(selector === 'canvas' ? 'canvas' : 'span'));
+    node.classList = {add() {}, remove() {}};
+    node.getContext = () => new Proxy({}, {get: (_, key) => (key === 'measureText' ? () => ({width: 0}) : () => {
+      if (key === 'drawImage') painted.push(node);
+    }), set: () => true});
+    return node;
+  };
+  const document = {visibilityState: 'visible', head: {append() {}}, getElementById: () => null, createElement: element};
+  const window = {setInterval: (fn, ms) => intervals.push({fn, ms}), clearInterval() {}, crypto: {randomUUID: () => 'test'}};
+  let bounds = 0, projection = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
+  const entries = Array.from({length: 3}, (_, i) => {
+    const object = new THREE.Group(), update = object.updateWorldMatrix.bind(object);
+    object.updateWorldMatrix = (...args) => { bounds++; return update(...args); };
+    object.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)));
+    object.position.x = i * 2;
+    return {id: `box-${i}`, label: `Box ${i}`, type: 'procedural-mesh', object};
+  });
+  let records = copy(subs);
+  const viewport = element('div');
+  const vantage = installAgentVantage({THREE, document, window, edits: {state: () => ({active: null, replaying: false})},
+    cameras: {read: () => ({settings: {activeId: null, aspect: [16, 9]}, cameras: copy(records)}), state: () => ({mode: 'user', activeId: null})},
+    entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
+    writeView() {}, viewport, hostCanvas: element('canvas'), busy: () => null, hold: () => () => {},
+    cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false});
+  const refresh = intervals.find(item => item.ms === 400).fn;
+  return {vantage, refresh, painted, map: viewport.children[0].querySelector('canvas'),
+    get bounds() { return bounds; }, set bounds(value) { bounds = value; },
+    set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
+}
+const BEBOP = {id: 'vantage-bebop', label: 'Bebop', type: 'camera', source: 'kaminos:camera',
+  transform: {position: [0, 1, 4], rotation: [0, 0, 0], scale: [1, 1, 1]},
+  camera: {projection: 'perspective', lens: 24, sensorWidth: 36, near: 0.05, far: 1000}};
+
+test('the panel map measures nothing while there is no sub, and clears when the last one goes', () => {
+  const page = installedPage();
+  page.bounds = 0;
+  page.refresh(); page.refresh();
+  assert.equal(page.bounds, 0, 'no sub, so no object bounds are computed');
+  page.records = [BEBOP];
+  page.refresh();
+  assert.ok(page.bounds > 0, 'with a sub the map is built');
+  assert.equal(page.map.hidden, false);
+  page.records = [];
+  page.bounds = 0;
+  page.refresh();
+  assert.equal(page.bounds, 0, 'removing the last sub clears the map without measuring the scene');
+  assert.equal(page.map.hidden, true);
+});
+
+test('a change to the operator projection alone repaints the panel map', () => {
+  const page = installedPage({subs: [BEBOP]});
+  page.refresh();
+  const before = page.painted.length;
+  page.refresh();
+  assert.equal(page.painted.length, before, 'nothing changed, nothing repainted');
+  const zoomed = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
+  zoomed.projection[0] *= 1.4; zoomed.projection[5] *= 1.4;
+  page.projection = zoomed;
+  page.refresh();
+  assert.equal(page.painted.length, before + 1, 'a frame zoom changes what the operator sees, so the map follows');
 });

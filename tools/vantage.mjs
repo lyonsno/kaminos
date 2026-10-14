@@ -25,8 +25,8 @@ Commands
   snap [--annotate] [--helpers] [--settle FRAMES] [--max-size PX] [--no-map] [--name NAME]
   peek [--annotate] [--clean] [--max-size PX] [--no-map] [--name NAME]     the operator's own view
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--name NAME]
-  map [--size PX]            three-quarter map of the scene with your view cone and each sub's; needs no drawing
-  sketch                     the scene as named boxes, fields and cameras; needs no drawing
+  map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
+  sketch                     the scene as named boxes, fields and cameras; renders no scene
 
 Pictures carry the map unless --no-map is given.
 

@@ -254,6 +254,65 @@ try {
   const registered = await page.evaluate(() => window.kaminosSceneObjectDebugState().filter(object => object.label === 'witness-import').length);
   check('an import that lands during a capture registers exactly once', !imported.error && imported.heldAtArrival === true && registered === 1, {imported, registered});
 
+  report.phase = 'editor-input-held'; save();
+  // While the sub borrows the viewport, transform and framing keys and clicks
+  // on the canvas wait; afterwards navigation and transforms work as before.
+  await page.evaluate(() => window.kaminosSetCameraDebugPose({position: [8, 1.2, 3.5], target: [8, 0.5, 0]}));
+  await page.evaluate(id => window.kaminosSelection.set([id], id), scene.blue);
+  const centre = await page.evaluate(() => {
+    const rect = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect(), x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {x, y, hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}` : null};
+  });
+  report.effective.canvasHit = centre.hit;
+  await page.mouse.move(centre.x, centre.y);
+  const keysHeld = vantage('burst', '--count', '6', '--interval', '200', '--name', 'keys-held');
+  await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
+  await page.keyboard.press('g');
+  await page.keyboard.press('f');
+  const duringKeys = await page.evaluate(() => ({held: document.getElementById('composition-capture').disabled,
+    modal: window.kaminosPlacementDebugState().modal?.operation ?? null, hud: document.getElementById('scene-edit-hud')?.textContent ?? null}));
+  const keysResult = await keysHeld;
+  check('a burst with transform and framing keys pressed during it completes', keysResult.code === 0, {code: keysResult.code, stderr: keysResult.stderr});
+  check('transform and framing keys wait while the sub holds the viewport', duringKeys.held && duringKeys.modal === null, duringKeys);
+  const afterKeys = await page.evaluate(() => window.kaminosPlacementDebugState().controlsEnabled);
+  await page.keyboard.press('g');
+  const resumed = await page.evaluate(() => window.kaminosPlacementDebugState().modal?.operation ?? null);
+  await page.keyboard.press('Escape');
+  const settled = await page.evaluate(() => ({modal: window.kaminosPlacementDebugState().modal, controls: window.kaminosPlacementDebugState().controlsEnabled}));
+  check('afterwards navigation is on and the same key starts a transform', afterKeys === true && resumed === 'translate' && settled.modal === null && settled.controls === true,
+    {afterKeys, resumed, settled});
+  await page.evaluate(() => window.kaminosSelection.clear());
+  const clickHeld = vantage('burst', '--count', '6', '--interval', '200', '--name', 'click-held');
+  await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
+  await page.mouse.click(centre.x, centre.y);
+  const duringClick = await page.evaluate(() => ({held: document.getElementById('composition-capture').disabled, selection: window.kaminosSelection.read().ids}));
+  const clickResult = await clickHeld;
+  check('a burst with a canvas click during it completes', clickResult.code === 0, {code: clickResult.code, stderr: clickResult.stderr});
+  const heldSelection = await page.evaluate(() => window.kaminosSelection.read().ids);
+  check('a click on the canvas waits while the sub holds the viewport', duringClick.held && duringClick.selection.length === 0 && heldSelection.length === 0,
+    {duringClick, after: heldSelection});
+  await page.mouse.click(centre.x, centre.y);
+  const clicked = await page.evaluate(() => window.kaminosSelection.read().ids);
+  check('the same click selects the box once the picture is done', clicked.includes(scene.blue), {clicked});
+
+  report.phase = 'scene-camera-map'; save();
+  // Looking through the sub with a zoomed camera frame: the operator's
+  // effective projection reaches the sketch, and the panel map follows it.
+  await page.evaluate(() => { window.kaminosSceneCameras.setActive('vantage-bebop'); window.kaminosSceneCameras.enter(); });
+  await page.waitForTimeout(900);
+  const panel = () => page.evaluate(() => document.querySelector('#agent-vantage-hud canvas').toDataURL());
+  const framedBefore = (await vantageOk('sketch')).result.operator.optics?.projection ?? null;
+  const panelBefore = await panel();
+  await page.evaluate(() => window.kaminosSceneCameras.zoomFrame(1.6));
+  await page.waitForTimeout(900);
+  const framedAfter = (await vantageOk('sketch')).result.operator.optics?.projection ?? null;
+  const panelAfter = await panel();
+  await page.evaluate(() => window.kaminosSceneCameras.leave());
+  check('the sketch carries the projection the camera frame renders with',
+    !!framedBefore && !!framedAfter && framedBefore.some((value, i) => Math.abs(value - framedAfter[i]) > 1e-6), {framedBefore, framedAfter});
+  check('a frame zoom alone repaints the map panel', panelBefore !== panelAfter, {changed: panelBefore !== panelAfter});
+
   report.phase = 'remove'; save();
   await vantageOk('remove');
   const remaining = await page.evaluate(() => window.kaminosSceneObjectDebugState().some(object => object.id === 'vantage-bebop'));

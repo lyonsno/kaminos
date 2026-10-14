@@ -29,13 +29,13 @@ Exit codes: 1 when the page refused the command (for example `busy` or `page-hid
 
 ## In the page
 
-The sub is an ordinary camera object, labeled Bebop for the default pilot. Select it in the viewport or the scene list and move it with G, R and S or the gizmo. Undo works, and saving keeps it with the scene. Each agent move is one labeled history entry, such as "Bebop: look at Cube". View through camera shows what the sub sees. The panel at the top right of the viewport shows the last picture the sub took. `?vantage=0` in the page address leaves the terminal link closed.
+The sub is an ordinary camera object, labeled Bebop for the default pilot. Select it in the viewport or the scene list and move it with G, R and S or the gizmo. Undo works, and saving keeps it with the scene. Each agent move is one labeled history entry, such as "Bebop: look at Cube". View through camera shows what the sub sees. While a sub is in the scene, the panel at the top right of the viewport shows a live map of the scene with your view and the sub's, and the last picture the sub took. `?vantage=0` in the page address leaves the terminal link closed.
 
 ## What a picture is
 
 `snap` moves the page's own camera to the sub for a few frames (`--settle`, default 2). Every layer the page draws renders from there through its own loop: the scene, the fire volume and the water. The visible canvases are composited in stacking order and the person's view is restored. The record names the requested and effective view and how far they differ, the composited canvases, the frame counters before and after, and the objects whose bounds fall inside the frame.
 
-While a picture is taken the page holds camera view, viewport navigation, the view pie, Save, Load and Capture until it finishes. Imports and ordinary editing continue. Objects in frame are named from the matrices and clip-space convention the page actually rendered with, including a camera frame's zoom and offset when someone is looking through the sub. They are named from the scene as it stood when each picture was taken, so every frame of a burst is named from its own moment.
+While a picture is taken the page holds camera view, viewport navigation, the view pie, Save, Load and Capture until it finishes. Clicks on the viewport canvas and the G, R, S and F keys wait too, because they would act through the borrowed camera; panels laid over the viewport keep working. Imports and ordinary editing continue. Objects in frame are named from the matrices and clip-space convention the page actually rendered with, including a camera frame's zoom and offset when someone is looking through the sub. They are named from the scene as it stood when each picture was taken, so every frame of a burst is named from its own moment.
 
 A capture refuses instead of returning the wrong picture when:
 
@@ -49,6 +49,10 @@ A capture refuses instead of returning the wrong picture when:
 A pictured canvas without a frame counter is listed under `unverifiedLayers`.
 
 A command waits for the page for `--timeout` seconds. If the page never took it, it is withdrawn and will not run later. If the page took it but did not answer, the CLI says its outcome is unknown.
+
+## Map and sketch
+
+`sketch` describes the scene without rendering it: each object's bounds, the simulation fields, your view with the matrices your viewport renders with (`operator.optics`, which include a camera frame's zoom and offset), and every sub. `map` paints that as a three-quarter orthographic map: boxes, a ground grid, red X and blue Z axes, your view cone in white and each sub's in teal. Your cone follows the effective projection, so in camera view it shows the framed view you see. Pictures carry a map unless `--no-map` is given. Neither command waits for the scene to draw; a run in a hidden tab has not been witnessed.
 
 ## Limits
 
