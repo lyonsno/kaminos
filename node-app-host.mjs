@@ -5,6 +5,7 @@ import {join, resolve, relative, dirname, basename, extname, isAbsolute} from 'n
 import {createHash, randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {isDeepStrictEqual} from 'node:util';
 
 const imageExtensions=new Set(['.png','.jpg','.jpeg','.webp']);
 const mediaTypes={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css',
@@ -128,6 +129,61 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
       display:{title:name,load_label:'Use Image'},
       renderability:{schema:'kaminos.image-preview.v0',status:'image',previewState:'direct-read',reason:'Local image served through /api/read'}};
   }
+  function validateOrigin(result,hash,size) {
+    const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+    const generation=result?.generation;
+    if(!object(result)||result.sha256!==hash||result.source!==fileSource('generated-meshes',hash+'.glb'))throw failure('Origin must identify the stored generated mesh');
+    if(typeof result.name!=='string'||!result.name.trim())throw failure('Origin needs an authored name');
+    if(!object(generation)||generation.schema!=='kaminos.asset-generation.v1'||generation.sha256!==hash||generation.bytes!==size)throw failure('Generation metadata must match stored mesh identity and bytes');
+    if(typeof generation.runId!=='string'||!generation.runId.trim())throw failure('Generation runId required');
+    if(!object(generation.input)||typeof generation.input.sha256!=='string'||!/^[a-f0-9]{64}$/.test(generation.input.sha256))throw failure('Generation input digest required');
+    if(typeof generation.route!=='string'||!generation.route.trim()||generation.receiptValidation?.ok!==true)throw failure('Validated producer route required');
+    return {name:result.name,generation};
+  }
+  async function meshOrigins(hash,size) {
+    const root=roots['generated-meshes'],records=new Map();let latest=null;
+    const legacy=await mountedPath(root,`.${hash}.glb.origins.json`),legacyInfo=await exists(legacy);
+    if(legacyInfo) {
+      let value;try{value=JSON.parse(await readFile(legacy,'utf8'));}catch{throw failure('Unreadable mesh origin record');}
+      if(!value||value.schema!=='kaminos.mesh-generation-origins.v1'||value.sha256!==hash||!value.origins||typeof value.origins!=='object'||Array.isArray(value.origins))throw failure('Invalid mesh origin record');
+      for(const [runId,origin] of Object.entries(value.origins)) {
+        const checked=validateOrigin({...origin,sha256:hash,source:fileSource('generated-meshes',hash+'.glb')},hash,size);
+        if(checked.generation.runId!==runId)throw failure('Conflicting mesh origin run identity');
+        records.set(runId,checked);
+      }
+      if(!records.has(value.latestRunId))throw failure('Mesh origin latest run is missing');
+      latest=records.get(value.latestRunId);
+    }
+    const directory=await mountedPath(root,`.${hash}.glb.origins`),info=await exists(directory),published=[];
+    if(info) {
+      if(!info.isDirectory())throw failure('Mesh origin directory is invalid');
+      for(const name of await readdir(directory)) {
+        if(!/^[a-f0-9]{64}\.json$/.test(name))continue; // Completed immutable records only; pending atomic writes are not origins.
+        const path=await mountedPath(root,join(basename(directory),name));let value;
+        try{value=JSON.parse(await readFile(path,'utf8'));}catch{throw failure('Unreadable mesh origin record');}
+        if(!value||value.schema!=='kaminos.mesh-generation-origin.v1')throw failure('Invalid mesh origin record');
+        const origin=validateOrigin(value.result,hash,size),runId=origin.generation.runId;
+        if(name!==digest(runId)+'.json')throw failure('Conflicting mesh origin run identity');
+        if(records.has(runId)&&!isDeepStrictEqual(records.get(runId),origin))throw failure('Conflicting mesh origin records');
+        records.set(runId,origin);published.push({origin,mtime:(await stat(path)).mtimeMs});
+      }
+    }
+    // Node continuation records follow any imported Python aggregate. Publication
+    // time selects the displayed run; digest tie-breaks keep restart deterministic.
+    published.sort((a,b)=>b.mtime-a.mtime||digest(a.origin.generation.runId).localeCompare(digest(b.origin.generation.runId)));
+    return {records,latest:published[0]?.origin||latest};
+  }
+  async function meshEntry(path,warnings) {
+    const file=await mountedPath(roots['generated-meshes'],path),info=await stat(file),source=fileSource('generated-meshes',path);
+    const entry={id:source,kind:'mesh',root:'generated-meshes',path,name:basename(file),label:basename(file),source,size:info.size,mtime:info.mtimeMs/1000};
+    const hash=/^([a-f0-9]{64})\.glb$/.exec(path)?.[1];if(!hash)return entry;
+    entry.label=`Saved mesh · ${hash.slice(0,8)}`;
+    try {
+      const {latest}=await meshOrigins(hash,info.size);
+      if(latest){entry.generation=latest.generation;entry.label=latest.name;entry.display={title:latest.name,load_label:'Add to scene'};}
+    }catch(error){warnings.push({source:path,reason:error.message});}
+    return entry;
+  }
   async function catalog(collection) {
     if(!['image-inbox','generated-meshes'].includes(collection))throw failure(`Authoring collection not implemented: ${collection}`,501,'unsupported-service');
     const root=await rootFor(collection),entries=[],warnings=[];
@@ -138,7 +194,7 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
         const file=await mountedPath(root,path),info=await stat(file);if(!info.isFile())continue;
         const source=fileSource(collection,path);
         if(collection==='image-inbox') {const entry=await imageEntry(path);entries.push({...entry,id:source,root:collection,label:entry.name});}
-        else entries.push({id:source,kind,root:collection,path,name:basename(file),label:basename(file),source,size:info.size,mtime:info.mtimeMs/1000});
+        else entries.push(kind==='mesh'?await meshEntry(path,warnings):{id:source,kind,root:collection,path,name:basename(file),label:basename(file),source,size:info.size,mtime:info.mtimeMs/1000});
       }catch(error){warnings.push({source:path,reason:error.message});}
     }
     entries.sort((a,b)=>b.mtime-a.mtime||a.id.localeCompare(b.id));
@@ -198,6 +254,28 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
     }finally {await unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
     return {schema:'kaminos.generated-mesh.v0',sha256:hash,bytes:bytes.length,source:`/api/read?root=generated-meshes&path=${hash}.glb`};
   }
+  async function saveMeshOrigin(request) {
+    let result;try{result=JSON.parse((await bodyBytes(request)).toString('utf8'));}catch{throw failure('Invalid JSON');}
+    const hash=result?.sha256;
+    if(typeof hash!=='string'||!/^[a-f0-9]{64}$/.test(hash))throw failure('Generated mesh digest required');
+    const root=roots['generated-meshes'],mesh=await mountedPath(root,hash+'.glb');
+    if(!(await exists(mesh))?.isFile())throw failure('Stored generated mesh is missing');
+    const bytes=await readFile(mesh);if(digest(bytes)!==hash)throw failure('Stored generated mesh digest no longer matches');
+    const origin=validateOrigin(result,hash,bytes.length),runId=origin.generation.runId,{records}=await meshOrigins(hash,bytes.length);
+    if(records.has(runId)) {
+      if(!isDeepStrictEqual(records.get(runId),origin))throw failure('Generation run origin is immutable',409);
+    }else {
+      const directory=await mountedPath(root,`.${hash}.glb.origins`);await mkdir(directory,{recursive:true});
+      const target=await mountedPath(root,join(basename(directory),digest(runId)+'.json'));
+      try{await atomicJson(target,{schema:'kaminos.mesh-generation-origin.v1',result},{exclusive:true});}
+      catch(error) {
+        if(error.code!=='EEXIST')throw error;
+        const value=JSON.parse(await readFile(target,'utf8'));
+        if(value.schema!=='kaminos.mesh-generation-origin.v1'||!isDeepStrictEqual(validateOrigin(value.result,hash,bytes.length),origin))throw failure('Generation run origin is immutable',409);
+      }
+    }
+    return {schema:'kaminos.mesh-generation-origin.v1',result};
+  }
   const server=createServer(async(request,response)=>{
     response.setHeader('X-Content-Type-Options','nosniff');
     response.setHeader('Cache-Control','no-store');
@@ -209,7 +287,7 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
           jsonResponse(response,{schema:'kaminos.runtime-config.v0',hybridSplatOverlayModuleUrl:null,
             sam3:sam3PacketRoot?{manifestUrl:'/sam3-packet/tensor-manifest.json',modelRoot:sam3PacketRoot,mounted}:null,
             source:{...appSourceIdentity(repoRoot),serverPort:server.address().port},
-            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,implemented:['static','sam3-packet','images','scene-persistence']}},200,head);return;
+            applicationHost:{runtime:'node',repoRoot,stateRoot,dependencyRoot,implementation,implemented:['static','sam3-packet','images','scene-persistence','mesh-generation-origin']}},200,head);return;
         }
         if(url.pathname==='/api/roots') {
           const value={};for(const [id,path] of Object.entries(roots))value[id]={path,exists:Boolean(await exists(path))};
@@ -229,7 +307,13 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
           for(const name of (await readdir(path)).sort()) {
             if(name.startsWith('.'))continue;
             const file=await mountedPath(root,join(part,name)),entry=await stat(file);
-            entries.push({name,type:entry.isDirectory()?'dir':'file',size:entry.isFile()?entry.size:null});
+            const value={name,type:entry.isDirectory()?'dir':'file',size:entry.isFile()?entry.size:null};
+            if(id==='generated-meshes'&&entry.isFile()&&extname(name).toLowerCase()==='.glb') {
+              const warnings=[],metadata=await meshEntry([part,name].filter(Boolean).join('/'),warnings);
+              if(metadata.generation){value.generation=metadata.generation;value.display=metadata.display;}
+              if(warnings.length)value.warnings=warnings;
+            }
+            entries.push(value);
           }
           jsonResponse(response,{type:'dir',root:id,path:part,entries},200,head);return;
         }
@@ -256,6 +340,7 @@ export async function createKaminosAppHost({repoRoot,stateRoot,sam3PacketRoot=nu
       }
       if(request.method==='POST'&&url.pathname==='/api/ingest-image') {jsonResponse(response,await ingestImage(request,q.get('name')));return;}
       if(request.method==='POST'&&url.pathname==='/api/ingest-mesh') {jsonResponse(response,await ingestMesh(request));return;}
+      if(request.method==='POST'&&url.pathname==='/api/mesh-generation-origin') {jsonResponse(response,await saveMeshOrigin(request));return;}
       if(request.method==='POST'&&url.pathname==='/api/save-scene') {jsonResponse(response,await saveScene(request));return;}
       throw failure(`Node application service not implemented: ${url.pathname}`,501,'unsupported-service');
     }catch(error) {
