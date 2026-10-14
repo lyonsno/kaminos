@@ -12,10 +12,10 @@ function service(over={}){
   return {s,calls,states};
 }
 
-test('the prepared cutout is the input, the stage is named, and the mesh is saved',async()=>{
+test('the selected image is the input, the stage is named, and the mesh is saved',async()=>{
   const {s,calls,states}=service();
   const saved=await s.run(input);
-  assert.equal(calls[0].image.source,input.preparation.prepared.source,'the alpha cutout, not the original photo');
+  assert.equal(calls[0].image.source,input.source,'the page prepares the selected image itself');
   assert.ok(calls[0].signal instanceof AbortSignal);
   assert.equal(calls[1].persist,'a');assert.equal(saved.name,'a · TRELLIS.glb');
   assert.ok(states.some(st=>st.stage==='Shape structure'),'model phases become readable stages');
@@ -37,7 +37,7 @@ test('a mesh that could not be saved is kept and can be saved again',async()=>{
 });
 
 test('without a prepared image, or while unavailable or blocked, nothing runs',async()=>{
-  await assert.rejects(service().s.run({...input,preparation:null}),/Prepare the image/);
+  await assert.rejects(service().s.run({...input,source:null}),/Choose a source image/);
   const u=service({availability:()=>({status:'unavailable',message:'No TRELLIS checkpoint package on this server'})});
   assert.equal(u.s.read().status,'unavailable');assert.match(u.s.read().error,/checkpoint package/);
   const b=service({blocked:()=>'Stable Fast 3D is generating.'});

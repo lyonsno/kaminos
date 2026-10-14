@@ -127,7 +127,7 @@ export async function createTrellisPageCheckpoints({config,fetch=globalThis.fetc
 }
 
 // The Generate drawer's service for TRELLIS in this page: same read/run/stop/retryPersistence
-// shape as the SF3D and queued TRELLIS services. The input is the prepared alpha cutout.
+// shape as the SF3D and queued TRELLIS services. The input is the selected image.
 const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[/^sparse-structure|^occupancy/,'Shape structure'],
   [/^low-resolution-shape|^high-resolution-shape|learned-geometry/,'Shape detail'],[/texture-sampling|material-decoding/,'Texture'],
   [/^post-model-(mesh-extraction|material-readback|mesh-postprocess)/,'Cleaning the mesh'],[/^post-model-uv/,'Unwrapping UVs'],[/^post-model-(texture-bake|pbr-glb)/,'Baking textures']];
@@ -161,7 +161,8 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     async run(input){
       if(active)throw Error('Generation is already running');
       if(state.pending)throw Error('Save the retained generated output before another run');
-      const cutout=input?.preparation?.prepared?.source;if(!cutout)throw Error('Prepare the image before generation');
+      // The selected image itself: the page prepares it (alpha, or browser U2Net for a photo).
+      const cutout=input?.source;if(!cutout)throw Error('Choose a source image');
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
       set({status:'running',error:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
@@ -169,7 +170,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
-        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source,original:input.preparation.original?.sha256??null}},label:out.label||label};
+        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
         phase='persistence';return await storePending();
       }catch(error){
         if(abort.signal.aborted&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
@@ -177,4 +178,34 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       }finally{active=false;abort=null;state.canStop=false;publish();}
     },
   };
+}
+
+// A selected image becomes TRELLIS input in the page, with no server step: decoded RGBA with
+// real alpha goes straight to the alpha preparation; an opaque photo is first segmented by
+// browser U2Net (models/u2net). Decoding copies native pixels, as the alpha preparation does.
+export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClass=globalThis.ImageDecoder,
+  prepareTrellisAlphaRgba,removeForegroundU2Net,runner}){
+  if(typeof ImageDecoderClass!=='function')throw Error('ImageDecoder is unavailable; no Canvas pixel fallback');
+  const data=bytes instanceof Uint8Array?bytes:new Uint8Array(bytes);
+  if(!type&&[137,80,78,71,13,10,26,10].every((v,i)=>data[i]===v))type='image/png';
+  if(!type)throw Error('image MIME type is required');
+  const decoder=new ImageDecoderClass({type,data,colorSpaceConversion:'none',preferAnimation:false});
+  let rgba,width,height;
+  try{
+    const decoded=await decoder.decode({frameIndex:0,completeFramesOnly:true});const frame=decoded.image;
+    if(!decoded.complete||!frame||!['RGBA','BGRA'].includes(frame.format))throw Error('unsupported decoded image: '+frame?.format);
+    width=frame.codedWidth;height=frame.codedHeight;rgba=new Uint8Array(width*height*4);
+    await frame.copyTo(rgba,{layout:[{offset:0,stride:width*4}]});
+    if(frame.format==='BGRA')for(let i=0;i<rgba.length;i+=4){const b=rgba[i];rgba[i]=rgba[i+2];rgba[i+2]=b;}
+    frame.close();
+  }finally{decoder.close();}
+  if(signal?.aborted)throw signal.reason;
+  let hasAlpha=false;for(let i=3;i<rgba.length;i+=4)if(rgba[i]!==255){hasAlpha=true;break;}
+  let segmentation=null;
+  if(!hasAlpha){
+    const cut=await removeForegroundU2Net({pixels:rgba,width,height,channels:4,runner:await runner(),signal});
+    segmentation=cut.provenance;rgba=cut.rgba;width=cut.width;height=cut.height;
+  }
+  const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});
+  return {...prepared,provenance:{route:hasAlpha?'input-alpha':'browser-u2net',segmentation,preparation:prepared.provenance}};
 }

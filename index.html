@@ -3852,7 +3852,7 @@ import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
-import {createTrellisPageAuthoringGeneration} from './authoring-trellis-page.mjs';
+import {createTrellisPageAuthoringGeneration,prepareImageForTrellis} from './authoring-trellis-page.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
@@ -27050,6 +27050,9 @@ function setupAuthoringAssets(){
   // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
   // server's mounted checkpoint package. pixels:'package' uses the package's own prepared
   // image as the caller input until browser image preparation exists.
+  // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
+  const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
+  let u2netRunner=null;
   const trellisPageRun=async({pixels,image,label='TRELLIS page',signal,onPhase}={})=>{
     if(meshBusy('sf3d')||meshBusy('trellis')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
@@ -27059,17 +27062,27 @@ function setupAuthoringAssets(){
     // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
     // Generate step's prepared image) prepared here by the model's own browser kernel.
     let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null,imageSha256=pixels==='package'?pack.manifest.image.pixelValuesSha256:null;
+    const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
     if(image){
-      const {prepareTrellisAlphaImage}=await import('./models/trellis2/alpha-preparation.js');
-      const {normalizePreparedTrellisRgb}=await import('./models/trellis2/generation-inputs.js');
+      // In the page, no server step: real alpha goes to the alpha preparation, an opaque photo
+      // through browser U2Net first (weights from the shop's hosted package).
+      const [{prepareTrellisAlphaRgba},{normalizePreparedTrellisRgb},{removeForegroundU2Net}]=await Promise.all([
+        import('./models/trellis2/alpha-preparation.js'),import('./models/trellis2/generation-inputs.js'),import('./models/u2net/rembg-u2net.js')]);
       const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`TRELLIS input image HTTP ${response.status}`);
-      const blob=await response.blob();imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())),b=>b.toString(16).padStart(2,'0')).join('');
-      const prepared=await prepareTrellisAlphaImage(blob,{signal});
+      const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());
+      imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+      const prepared=await prepareImageForTrellis({bytes,type:blob.type||undefined,signal,prepareTrellisAlphaRgba,
+        removeForegroundU2Net:async options=>{
+          // One model at a time on the page device: U2Net holds the app run while it segments.
+          const run=await appGpu.beginRun(`u2net-${crypto.randomUUID()}`,{routeId:'u2net.foreground-removal'});
+          try{return await removeForegroundU2Net(options);}finally{await run.finish();}
+        },
+        runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
+          return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
       pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
     }
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
-    const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
     meshRunning.trellis=true;redraw();
     try{
       const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
