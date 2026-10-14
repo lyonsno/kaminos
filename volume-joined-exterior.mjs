@@ -43,13 +43,13 @@ export function joinedExteriorSolids(shape,wall){
 }
 export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=null,budget=32,tolerance=1e-3}={}){
   if(!Number.isInteger(budget)||budget<1)throw Error('positive integer budget required');
-  let built=null,destroyed=false,paused=false,lastStep=null;
+  let built=null,destroyed=false,paused=false,lastStep=null,generation=0;
   const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.solidMask?.revision??'disabled']);
   const clear=()=>{if(built)for(const r of built.owned)r.destroy?.();built=null;lastStep=null;};
   function prepare(p){
     if(destroyed)throw Error('joined exterior destroyed');
     const k=key(p);if(built?.key===k)return {rebuilt:false,...built.summary};
-    clear();
+    clear();generation++;
     const g=resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size});
     if(!g.admitted){built={key:k,owned:[],summary:g};return g;}
     const owned=[];
@@ -105,7 +105,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
   }
   return {prepare,seedGhosts,step,probe,
     get paused(){return paused;},get ghosts(){return built?.g?.ghosts??null;},get optical(){return built?.outer?.optical??null;},
-    receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,...built?.summary,steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
+    receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,generation,...built?.summary,steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
     async stats(){if(!built?.outer)return {status:'unprepared'};const b=built;paused=true;try{await device.queue.onSubmittedWorkDone();const values=await b.outer.readState();return {status:b===built?'sampled':'generation-changed',steps:b.steps,values:Array.from(values),receipt:b.outer.receipt()};}finally{paused=false;}},
     destroy(){if(!destroyed){clear();destroyed=true;}}
   };

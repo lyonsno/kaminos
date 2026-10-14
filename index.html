@@ -18443,12 +18443,26 @@ function wireJoinedProvisionalControls(prototype) {
   if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
   const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
   const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
+  let exteriorRevision = 0, measurementIdentity = null;
+  const currentMeasurementIdentity = () => {
+    const s = prototype.debugState?.();
+    return JSON.stringify([exteriorRevision, s?.joinedExterior?.generation ?? null, s?.simGridDimensions, Boolean(s?.joinedBoundary?.admitted)]);
+  };
+  const invalidateMeasurement = () => {
+    measurementIdentity = currentMeasurementIdentity();
+    text('volume-joined-exterior-solve-val', 'not measured for current grid/wall');
+  };
+  const refreshMeasurementIdentity = () => {
+    if (measurementIdentity !== currentMeasurementIdentity()) invalidateMeasurement();
+  };
   const remember = () => {
     const u = new URL(location.href);
     for (const [key, value] of Object.entries({volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'})) u.searchParams.set(key,value);
     history.replaceState(history.state,'',u);
   };
   const applyExterior = () => {
+    exteriorRevision++;
+    invalidateMeasurement();
     if (!(parseFloat(size.value) > 0)) boundary.value = 'off';
     remember();
     const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
@@ -18503,13 +18517,23 @@ function wireJoinedProvisionalControls(prototype) {
   let probing = false;
   $('volume-joined-measure').addEventListener('click', async () => {
     if(probing)return; probing=true;
+    const measuredIdentity = currentMeasurementIdentity();
+    measurementIdentity = measuredIdentity;
     text('volume-joined-exterior-solve-val','measuring (simulation paused)…');
-    try { const p=await prototype.probeJoinedExterior(); text('volume-joined-exterior-solve-val',p?.status==='sampled'?`${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`:`not measured: ${p?.status ?? 'no exterior'}`,p?.status!=='sampled'); }
-    catch(e){text('volume-joined-exterior-solve-val',`measurement failed: ${e.message}`,true);}
+    try {
+      const p=await prototype.probeJoinedExterior();
+      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
+      text('volume-joined-exterior-solve-val',p?.status==='sampled'?`snapshot at exterior step ${p.steps}: ${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`:`not measured: ${p?.status ?? 'no exterior'}`,p?.status!=='sampled');
+    }
+    catch(e){
+      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
+      text('volume-joined-exterior-solve-val',`measurement failed: ${e.message}`,true);
+    }
     finally{probing=false;}
   });
   setInterval(() => {
     const s = prototype.debugState?.(); if (!s) return;
+    refreshMeasurementIdentity();
     if (boundary.value === 'on') {
       if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
       else text('volume-joined-boundary-val', `REFUSED: ${s.joinedBoundary?.reason ?? 'unknown'} (the sim is running standalone)`, true);
