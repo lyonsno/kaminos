@@ -9,3 +9,8 @@ const shader=fingerFluidReferenceBoxSupport(box);
 assert.match(shader,/fn resolveSupportPenetration\(p:vec3<f32>,r:f32\)->vec3<f32>\s*\{\s*_=r;\s*return p;/,'disabling the container must remove its collision projection, including the implicit floor');
 assert.throws(()=>validateFingerFluidReferenceBox({...box,collisions:'off'}),/collision/i);
 console.log('Explicit container-off support removes implicit terrain and floor');
+const {boxBoundaryDensitySource}=await import('../finger-fluid-box-fixtures.mjs');
+const pressure=boxBoundaryDensitySource(box);
+assert.match(pressure,/return vec4<f32>\(0(?:\.0)?\);/,'Search-only bounds must contribute zero pressure density and gradient');
+assert.doesNotMatch(pressure,/boundary_missing_fraction\(/,'Disabled faces cannot add missing-kernel density');
+assert.match(boxBoundaryDensitySource({...box,collisions:true}),/boundary_missing_fraction\(/,'Enabled container retains its analytic face support');

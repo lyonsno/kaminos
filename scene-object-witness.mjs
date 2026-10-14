@@ -1580,6 +1580,7 @@ async function runAuthoredWaterDropScenario(ws) {
   })()`,{timeoutMs:90000});
   const e=lastEvidence.authoredWater;
   assert.equal(e.released.water.solver.particleCount,4096);assert.equal(e.released.water.paused,true);
+  assert.match(e.released.ui,/Paused · tick 12/,'The source panel must display the effective host tick without reselection');
   await capturePngScreenshot(ws,siblingPngPath('-released'));
   const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes(${JSON.stringify(fixtureName)})&&n.endsWith('.json'));})()`);
   assert.equal(files.length,1);
