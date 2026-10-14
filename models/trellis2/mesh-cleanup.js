@@ -6,6 +6,7 @@
 // numpy reduction order and trimesh/networkx traversal. Those orders are
 // reproduced here so the same input gives the same triangles, not a look-alike.
 import {simplifyMesh} from './mesh-simplify.js';
+import {admitSignal,abortError,runFinishingWorker} from './finishing-worker.js';
 
 export const MESH_POSTPROCESS_ROUTE='Trellis2MLX/surface-preserving/browser-port-of-fast-simplify-first';
 
@@ -360,22 +361,23 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
 // finisher in the page, with the same receipt shape the server finisher emits.
 // With WorkerClass it runs in mesh-cleanup-worker.js; without, on the caller's
 // thread. Either way the input arrays are copied, never detached from the caller.
-export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass}={}){
+export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
-  const run=WorkerClass?mesh=>new Promise((resolve,reject)=>{
+  admitSignal(signal);
+  const run=WorkerClass?async mesh=>{
     admitSurface(mesh.vertices,mesh.triangles); // before copying, so nothing is coerced
-    const worker=new WorkerClass(new URL('./mesh-cleanup-worker.js',import.meta.url),{type:'module'}),id=Math.random().toString(36).slice(2);
     const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
-    const done=f=>(...a)=>{worker.terminate();f(...a);};
-    worker.onmessage=done(({data})=>{
-      if(data?.id!==id)return reject(Error('mesh finisher worker response identity mismatch'));
-      if(data.ok!==true)return reject(Error('mesh finisher worker failed: '+data.error));
-      resolve({vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace});
-    });
-    worker.onerror=done(e=>reject(Error('mesh finisher worker error: '+(e?.message??e))));
-    worker.postMessage({id,vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest},[vertices.buffer,triangles.buffer]);
-  }):async mesh=>cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest});
+    const data=await runFinishingWorker({WorkerClass,url:new URL('./mesh-cleanup-worker.js',import.meta.url),signal,label:'mesh finisher',
+      message:{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest},transfer:[vertices.buffer,triangles.buffer]});
+    return {vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace};
+  }:async mesh=>{
+    // Synchronous on this thread: Stop is honoured before and after, not mid-call.
+    if(signal?.aborted)throw abortError(signal);
+    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest});
+    if(signal?.aborted)throw abortError(signal);
+    return result;
+  };
   return async mesh=>{
     const started=performance.now(),inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
     const result=await run(mesh);
