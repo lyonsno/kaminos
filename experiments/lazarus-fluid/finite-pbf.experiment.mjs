@@ -40,7 +40,7 @@ export default {
       let active=false,before=null;
       const begin=()=>{if(!active){before=operation==='material'?read().settings[key]:operation==='playback'?water.read().clock.playbackRate:input.value;active=true;}};
       input.addEventListener('focusin',begin);input.addEventListener('beforeinput',begin);
-      input.addEventListener('pointercancel',()=>{if(!active)return;active=false;input.value=before;if(operation)call(operation,operation==='material'?{[key]:Number(before)}:Number(before));});
+      input.addEventListener('pointercancel',()=>{if(!active)return;active=false;input.value=before;if(operation)call(operation,operation==='material'?{[key]:Number(before)}:Number(before));else preview();});
       input.addEventListener('change',()=>{active=false;});input.addEventListener('blur',()=>{active=false;});
       scrubs.push(host.controls.installNumberDrag({input,step,onStart:begin,onEnd:()=>{active=false;}}));
     };
@@ -54,7 +54,7 @@ export default {
     node.querySelector('[data-action=setup]').onclick=()=>call('reset',proposed());
 
     const publishedSettings={...setup.inputs};
-    const update=()=>{if(transport.state().busy)return;try{const current=read();for(const [key,value]of Object.entries(setup.inputs)){if(publishedSettings[key]!==value){const input=$(key);if(input&&document.activeElement!==input)input.value=value;publishedSettings[key]=value;}}const r=current.water;node.querySelector('[data-status]').textContent=`${r.clock.paused?'Paused':'Playing'} · ${r.clock.playbackRate} ${r.clock.playbackMode==='render_cadence'?'ticks/drawn frame':'× simulated/wall time'}\nStep ${r.clock.step} · ${r.clock.timeSeconds.toFixed(6)} simulated s\nPhysics dt ${r.clock.frameTimeStepSeconds} s\n${r.runtime.particleCount.toLocaleString()} particles · volume ${setup.sampling.worldVolume.toPrecision(5)}\nPBF support ${r.runtime.viscosityScaling.supportRadius.toPrecision(5)}`;node.querySelector('[data-share]').href=lazarusFiniteReplayURL(location.href,setup.inputs);}catch(e){error.textContent=e.message;}};
+    const update=()=>{if(transport.state().busy)return;try{const current=read();let proposalChanged=false;for(const [key,value]of Object.entries(setup.inputs)){if(publishedSettings[key]!==value){const input=$(key);if(input&&document.activeElement!==input){input.value=value;if(['scene','resolution','blockWidth','scaling','dt'].includes(key))proposalChanged=true;}publishedSettings[key]=value;}}if(proposalChanged)preview();const r=current.water;node.querySelector('[data-status]').textContent=`${r.clock.paused?'Paused':'Playing'} · ${r.clock.playbackRate} ${r.clock.playbackMode==='render_cadence'?'ticks/drawn frame':'× simulated/wall time'}\nStep ${r.clock.step} · ${r.clock.timeSeconds.toFixed(6)} simulated s\nPhysics dt ${r.clock.frameTimeStepSeconds} s\n${r.runtime.particleCount.toLocaleString()} particles · volume ${setup.sampling.worldVolume.toPrecision(5)}\nPBF support ${r.runtime.viscosityScaling.supportRadius.toPrecision(5)}`;node.querySelector('[data-share]').href=lazarusFiniteReplayURL(location.href,setup.inputs);}catch(e){error.textContent=e.message;}};
     // Provisional composition with the existing shared host slot; own nodes only.
     const runRoot=document.getElementById('experiment-run-controls');
     if(!runRoot)throw Error('Shared simulation run slot unavailable');
