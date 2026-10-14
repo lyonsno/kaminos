@@ -36,7 +36,8 @@ try{
   return {backend:renderer.backend.constructor.name,adapter:renderer.backend.device.adapterInfo,shadow:pass.debugState()};
  });
  report.rows=[];
- for(const [name,z,softness] of [['near-hard',2.3,0],['near-soft',2.3,1],['far-hard',6,0],['far-soft',6,1],['far-restored',6,0]]){
+ for(const [name,z,softness] of [['near-hard',2.3,0],['near-soft',2.3,1],['far-hard',4.5,0],['far-soft',4.5,1],['far-restored',4.5,0]]){
+  assert.ok(z<report.setup.shadow.far,'fixture receiver must lie inside the rendered cube range');
   const row=await page.evaluate(async({name,z,softness})=>{
    const f=window.softShadowFixture;f.plane.position.z=z;f.pass.setSoftness(softness);
    f.renderer.setRenderTarget(f.target);f.renderer.render(f.probe,f.camera);
