@@ -12918,7 +12918,7 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets', preserveFluid = 
   const fingerFluidBenchPanel = document.getElementById('finger-fluid-bench-operator-panel');
   if (fingerFluidBenchPanel) {
     fingerFluidBenchPanel.hidden = tabName !== 'finger-fluid-bench' && !preserveFluid;
-    if (tabName === 'finger-fluid-bench' && !window.__kaminosInvestigationEntryOnly) {
+    if (tabName === 'finger-fluid-bench' && !window.__kaminosInvestigationEntryOnly && !fingerFluidOwnerPair) {
       if(fingerFluidBenchSolver?.available && fingerFluidBenchViewport)resumeFingerFluidBenchAfterWitness();
       else startFingerFluidBench();
     }
@@ -14627,6 +14627,7 @@ function drawFingerFluidBenchFrame(now = performance.now(),{fromHost=false}={}) 
 }
 
 async function startFingerFluidBench() {
+  if(fingerFluidOwnerPair)return 'paired-owner-active';
   const startGeneration=++fingerFluidBenchStartGeneration;
   const isCurrent=()=>startGeneration===fingerFluidBenchStartGeneration;
   try {
