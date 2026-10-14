@@ -1198,13 +1198,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-joined-boundary-val">off</span>
     </div>
       <div class="slider-row"><button class="btn" id="volume-joined-make-admissible">Use immersed source + converged solver</button></div>
-      <span class="slider-help">Shared pressure, transported exterior smoke and heat, and one combined ray march. Requires immersed source + converged solver. Changes apply immediately; grid changes restart the simulation. Material and camera controls remain live. Grid settings are kept in this URL, not in basin presets.</span>
+      <span class="slider-help">Shared pressure, transported exterior smoke and heat, and one combined ray march. Requires immersed source + converged solver. Changes apply immediately. Exterior changes clear exterior state; resolution changes also restart the fine field. Material and camera controls remain live. Grid settings are kept in this URL, not in basin presets.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior size (× fine width)</span>
       <select id="volume-joined-exterior-size"><option value="0">none</option><option value="1.5">1.5</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
       <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
     </div>
-      <span class="slider-help">Exterior width relative to the fine width. The exterior is twice as tall as it is wide, with extra space above the flame. Independent of exterior resolution; changing either restarts the simulation.</span>
+      <span class="slider-help">Exterior width relative to the fine width. The exterior is twice as tall as it is wide, with extra space above the flame. Changing size clears the exterior; changing resolution also restarts the fine field. None turns the joined boundary off.</span>
       <div class="slider-row">
       <span class="slider-label">Exterior resolution</span>
       <select id="volume-joined-exterior-ratio"><option value="24">24×48×24</option><option value="28">28×56×28</option><option value="32" selected>32×64×32</option><option value="48">48×96×48</option><option value="64">64×128×64</option></select>
@@ -1229,7 +1229,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+y">roof (+y)</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
       <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
     </div>
-      <span class="slider-help">A synthetic solid slab two coarse cells thick, two cells off the named fine-box side, spanning the exterior. Applies immediately and restarts simulation; not an authored scene object.</span>
+      <span class="slider-help">A synthetic solid slab two coarse cells thick, two cells off the named fine-box side, spanning the exterior. Applies immediately and clears exterior state; the fine field continues. Not an authored scene object.</span>
     </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
@@ -18449,6 +18449,7 @@ function wireJoinedProvisionalControls(prototype) {
     history.replaceState(history.state,'',u);
   };
   const applyExterior = () => {
+    if (!(parseFloat(size.value) > 0)) boundary.value = 'off';
     remember();
     const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
     if (boundary.value !== 'on' || !(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }

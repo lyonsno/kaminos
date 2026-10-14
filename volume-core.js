@@ -27878,7 +27878,14 @@ export function createKaminosVolumePrototype({
       joinedExterior = null;
       state.joinedExterior = null;
       if (!device) return {enabled:false,receipt:{admitted:false,reason:'device-not-initialized'}};
-      if (!config || config.enabled === false) { syncJoinedRender(); return { enabled: false }; }
+      if (!config || config.enabled === false) {
+        // No exterior owner means no shared projection or snapshot publisher.
+        // Restore the standalone fine route instead of retaining stale ghosts.
+        applyJoinedGhostGeometry(null);
+        refreshJoinedBoundary(false);
+        syncJoinedRender();
+        return { enabled: false };
+      }
       joinedExterior = createJoinedExterior(device, config);
       const prepared = prepareJoinedExterior();
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
