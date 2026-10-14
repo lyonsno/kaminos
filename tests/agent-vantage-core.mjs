@@ -201,3 +201,55 @@ test('the scene map lays out a three-quarter view with both cameras and their co
   const empty = sketchMapLayout({...sketch, objects: [], fields: []}, {width: 160, height: 120});
   assert.equal(empty.cones.length, 2, 'an empty scene still shows where both cameras are');
 });
+
+// Each cone edge from the apex must follow the ray through that viewport corner,
+// with one shared length. Checked in the map's own 2D projection.
+function coneFollows(layout, cone, rays, apex) {
+  const origin = layout.project(apex), lengths = [];
+  cone.edges.slice(0, 4).forEach((edge, i) => {
+    const drawn = [edge[2] - edge[0], edge[3] - edge[1]];
+    const tip = layout.project(apex.map((value, axis) => value + rays[i][axis]));
+    const expected = [tip[0] - origin[0], tip[1] - origin[1]];
+    const cross = drawn[0] * expected[1] - drawn[1] * expected[0], dot = drawn[0] * expected[0] + drawn[1] * expected[1];
+    assert.ok(Math.abs(cross) <= 1e-6 * Math.hypot(...drawn) * Math.hypot(...expected) && dot > 0, `corner ${i} points along its ray`);
+    lengths.push(Math.hypot(...drawn) / Math.hypot(...expected));
+  });
+  lengths.forEach(length => assert.ok(Math.abs(length - lengths[0]) <= 1e-6 * lengths[0], 'every corner at the same depth'));
+}
+// The world ray through each viewport corner (lower left first, counterclockwise), at unit depth.
+function cornerRays(camera) {
+  const inverse = camera.projectionMatrix.clone().invert(), forward = camera.getWorldDirection(new Vector3());
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([x, y]) => {
+    const ray = new Vector3(x, y, 0.5).applyMatrix4(inverse).applyMatrix4(camera.matrixWorld).sub(camera.position);
+    return ray.multiplyScalar(1 / ray.dot(forward)).toArray();
+  });
+}
+
+test('the map draws the operator cone from the matrices the viewport renders with', async () => {
+  const {sketchMapLayout} = await import('../agent-vantage-core.mjs');
+  const camera = new PerspectiveCamera(45.747, 16 / 9, 0.1, 100);
+  camera.position.set(2, 1.5, 6); camera.lookAt(0, 0.5, 0); camera.updateMatrixWorld(true);
+  // In scene-camera mode index.html applies the camera frame's zoom and offset to the projection.
+  camera.projectionMatrix.premultiply(new Matrix4().set(0.6, 0, 0, 0.12, 0, 0.9, 0, -0.08, 0, 0, 1, 0, 0, 0, 0, 1));
+  const view = {position: camera.position.toArray(), target: [0, 0.5, 0], up: [0, 1, 0], fov: camera.fov, near: 0.1, far: 100};
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
+  const sketch = {objects: [{id: 'box', label: 'Box', type: 'mesh', bounds: {min: [-1, 0, -1], max: [1, 1, 1]}}], fields: [],
+    operator: {view, aspect: 814 / 858, optics}, subs: []};
+  const layout = sketchMapLayout(sketch);
+  coneFollows(layout, layout.cones[0], cornerRays(camera), camera.position.toArray());
+  // Control: without a frame, the matrices and the nominal lens describe the same cone.
+  const plain = new PerspectiveCamera(40, 16 / 9, 0.1, 100);
+  plain.position.set(2, 1.5, 6); plain.lookAt(0, 0.5, 0); plain.updateMatrixWorld(true);
+  const nominal = sketchMapLayout({...sketch, operator: {view: {...view, fov: 40}, aspect: 16 / 9}});
+  coneFollows(nominal, nominal.cones[0], cornerRays(plain), plain.position.toArray());
+});
+
+test('a very large scene lays out its map without running out of call stack', async () => {
+  const {sketchMapLayout} = await import('../agent-vantage-core.mjs');
+  const objects = Array.from({length: 20000}, (_, i) => ({id: String(i), label: String(i), type: 'mesh',
+    bounds: {min: [i % 100, 0, Math.floor(i / 100)], max: [i % 100 + 1, 1, Math.floor(i / 100) + 1]}}));
+  const layout = sketchMapLayout({objects, fields: [], subs: [],
+    operator: {view: {position: [50, 20, 260], target: [50, 0, 100], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000}, aspect: 16 / 9}});
+  assert.equal(layout.boxes.length, 20000);
+  assert.ok(Number.isFinite(layout.scale) && layout.boxes.every(box => box.center.every(Number.isFinite)));
+});
