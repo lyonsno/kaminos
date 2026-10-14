@@ -120,7 +120,8 @@ test('the supplied frontend dependency directory is a reported mount even when w
 });
 
 test('valid GLB containers persist by digest and malformed containers never enter the saved-mesh catalog',async t=>{
-  const f=await fixture(t),json=Buffer.from('{"asset":{"version":"2.0"}}  ');
+  const f=await fixture(t),document=Buffer.from('{"asset":{"version":"2.0"}}');
+  const json=Buffer.concat([document,Buffer.alloc((4-document.length%4)%4,32)]);
   const content=Buffer.alloc(20+json.length);content.write('glTF');content.writeUInt32LE(2,4);content.writeUInt32LE(content.length,8);content.writeUInt32LE(json.length,12);content.write('JSON',16);json.copy(content,20);
   const saved=await f.request('/api/ingest-mesh',{method:'POST',body:content});
   assert.equal(saved.schema,'kaminos.generated-mesh.v0');assert.equal(saved.sha256,sha(content));assert.equal(saved.bytes,content.length);
