@@ -27151,8 +27151,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
+  // Scenes without a saved GI record use defaults, independent of prior tuning.
+  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (data.postprocessing) {
-    setSceneGIControls(data.postprocessing.sceneGI ?? {});
     const ao = data.postprocessing.ao;
     if (ao) {
       const aoEnabled = ao.enabled ?? true;
