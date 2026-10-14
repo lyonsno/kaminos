@@ -21,6 +21,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
 import {noteLink} from './notes-core.mjs';
+import {followUpsDelivered} from './notes-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/notes.mjs');
@@ -301,20 +302,36 @@ try {
   await otherListener;
 
   report.phase = 'follow-ups'; save();
-  // Two follow-ups in a row both reach the agent without re-addressing (review F1).
+  // Two follow-ups in a row both reach the agent without re-addressing (review
+  // F1), counted by the ids handed over and receipted, not by text in the
+  // printed thread (review F5).
+  const idOfText = async text => {
+    for (const deadline = Date.now() + 15000; Date.now() < deadline; await sleep(150)) {
+      const found = (await log()).find(event => event.type === 'note' && event.author === PERSON && event.text === text);
+      if (found) return found.id;
+    }
+    throw new Error(`No note "${text}" in the log`);
+  };
   await page.uncheck(`${card} .kn-replybox input[type=checkbox]`);
   await page.fill(`${card} .kn-replybox textarea`, 'which light did you mean?');
   await page.click(`${card} .kn-replybox .kn-btn.primary`);
   await page.waitForSelector(`${card} .kn-replybox[hidden]`, {state: 'attached', timeout: 15000});
+  const firstFollowUp = await idOfText('which light did you mean?');
   await page.click(`${card} .kn-actions .kn-btn:nth-child(1)`);
   await page.fill(`${card} .kn-replybox textarea`, 'the rim one, I mean');
   await page.click(`${card} .kn-replybox .kn-btn.primary`);
   await page.waitForSelector(`${card} .kn-replybox[hidden]`, {state: 'attached', timeout: 15000});
-  const followUps = await notes(['wait', '--as', AGENT, '--timeout', '10'], {timeoutMs: 40000});
-  writeFileSync(path.join(out, 'follow-ups.txt'), followUps.stdout);
-  check('two follow-ups in a row both reach the waiting agent', followUps.code === 0 && followUps.stdout.includes('which light did you mean?')
-    && followUps.stdout.includes('the rim one, I mean'), {code: followUps.code, excerpt: followUps.stdout.slice(0, 700)});
-  check('a reply is described as a reply in its thread', /a reply in thread kn-/.test(followUps.stdout), {excerpt: followUps.stdout.slice(0, 300)});
+  const secondFollowUp = await idOfText('the rim one, I mean');
+  const followUps = await notes(['--json', 'wait', '--as', AGENT, '--timeout', '10'], {timeoutMs: 40000});
+  writeFileSync(path.join(out, 'follow-ups.json'), followUps.stdout);
+  let waitResult = null;
+  try { waitResult = JSON.parse(followUps.stdout); } catch {}
+  const delivery = followUpsDelivered({waitResult, events: await log(), agent: AGENT, ids: [firstFollowUp, secondFollowUp]});
+  check('two follow-ups in a row are both handed to the waiting agent, by id, with delivery receipts',
+    followUps.code === 0 && delivery.ok, {ids: [firstFollowUp, secondFollowUp], code: followUps.code, ...delivery});
+  const shownFollowUp = await notes(['show', secondFollowUp]);
+  check('a follow-up reads as a reply in its thread', shownFollowUp.code === 0 && /a reply in thread kn-/.test(shownFollowUp.stdout)
+    && shownFollowUp.stdout.includes('the rim one, I mean'), {code: shownFollowUp.code, excerpt: shownFollowUp.stdout.slice(0, 300)});
 
   report.phase = 'saved-scene-link'; save();
   // A link into a saved scene opens on the note's own view after the scene,
