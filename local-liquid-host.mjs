@@ -100,6 +100,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
+    const previousBackgroundNode=scene.backgroundNode;
     const previousRenderObject=renderer.getRenderObjectFunction();
     const clearColor=renderer.getClearColor(new THREE.Color()), clearAlpha=renderer.getClearAlpha();
     try {
@@ -115,13 +116,21 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
-      scene.overrideMaterial=depthMaterial; scene.background=null;
+      // This attachment carries distances, so backgrounds and editor overlays
+      // must not contribute their display colors or synthetic surfaces.
+      scene.overrideMaterial=depthMaterial; scene.background=null; scene.backgroundNode=null;
       renderer.setRenderObjectFunction((...args)=>{
+        const [object,,,,material]=args;
+        if(!object.isMesh||material.depthWrite===false||material.transparent||material.visible===false)return;
+        for(let node=object;node;node=node.parent){
+          if(node.userData.kaminosEditorHelper||node.userData.kaminosEditorOnly)return;
+        }
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
       });
       renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
       renderer.setRenderTarget(depthTarget); renderer.render(scene,camera);
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
+      scene.backgroundNode=previousBackgroundNode;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha);
       const generation=frameCount+1, frameId=`local-liquid-${generation}`;
@@ -148,6 +157,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
       scene.overrideMaterial=previousOverride; scene.background=previousBackground;
+      scene.backgroundNode=previousBackgroundNode;
       renderer.setRenderObjectFunction(previousRenderObject);
       renderer.setClearColor(clearColor,clearAlpha); renderer.setRenderTarget(previousTarget);
     }
