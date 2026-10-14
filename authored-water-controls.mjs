@@ -26,7 +26,7 @@ export function mountAuthoredWaterControls({document,root,controls,api}) {
   refreshStatus(s);
  }
  function refreshStatus(s=api.read()){
-  const text=s.runtime?`${s.runtime.paused?'Paused':'Playing'} · tick ${s.runtime.step??0} · ${s.runtime.particleCount?.toLocaleString()??'unknown'} particles`:'Initial preview; release starts a new water allocation.';
+  const text=s.runtime?`${s.runtime.paused?'Paused':'Playing'} · tick ${s.runtime.step??0} · ${s.runtime.particleCount?.toLocaleString()??'unknown'} particles`:s.failure?`Water stopped: ${s.failure}`:'Initial preview; release starts a new water allocation.';
   if($('[data-state]').textContent!==text)$('[data-state]').textContent=text;
   $('[data-pause]').disabled=!s.runtime;$('[data-pause]').textContent=s.runtime?.paused?'Resume water':'Pause water';
  }

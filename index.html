@@ -7190,6 +7190,7 @@ document.getElementById('local-liquid-support-visible').addEventListener('change
 window.kaminosPauseLocalLiquid = paused => {
   localLiquidPaused = Boolean(paused);
   localLiquidHost?.setPaused(localLiquidPaused);
+  authoredWaterControls?.refreshStatus();
   refreshLocalLiquidPerformance();
   window._kaminosDirty?.();
   return localLiquidPaused;
@@ -11921,12 +11922,13 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
     if (localLiquidHost) {
-      try { localLiquidHost.render();if(localLiquidHost.state().mode==='finite_drop'){const c=localLiquidHost.state().clock;authoredWaterControls?.refreshStatus();sharedWorkbench?.update({source:'Authored finite water',status:c.paused?'Paused':'Playing',clock:`tick ${c.step} · ${(c.timeSeconds).toFixed(4)} s`});} }
+      try { localLiquidHost.render();authoredWaterControls?.refreshStatus();if(localLiquidHost.state().mode==='finite_drop'){const c=localLiquidHost.state().clock;sharedWorkbench?.update({source:'Authored finite water',status:c.paused?'Paused':'Playing',clock:`tick ${c.step} · ${(c.timeSeconds).toFixed(4)} s`});} }
       catch (error) {
         console.error('Local water frame failed', error);
         localLiquidFailure = String(error?.message || error);
         localLiquidHost.dispose();
         localLiquidHost = null;
+        authoredWaterControls?.refreshStatus();
         refreshLocalLiquidPerformance();
         renderPipeline.render();
         setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
@@ -12601,7 +12603,7 @@ window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
 
 function setAuthoredWaterPreviewVisible(visible){for(const row of sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE))for(const child of row.object.children)if(child.userData.kaminosWaterPreview)child.visible=visible;}
 function selectedWaterSource(){const row=selectedSceneObjectEntry();return row?.type===LOCAL_LIQUID_EMITTER_TYPE?row:null;}
-function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter)}:null,runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount}:null};}
+function authoredWaterState(){const row=selectedWaterSource(),runtime=localLiquidHost?.state();return {selected:row?{id:row.id,label:sceneObjectDisplayLabel(row),settings:structuredClone(row.localLiquidEmitter)}:null,failure:localLiquidFailure,runtime:runtime?{paused:localLiquidHost.paused,step:runtime.clock?.step??runtime.solver?.stepCount??0,particleCount:runtime.solver?.particleCount}:null};}
 const waterSettingTargets=new Set();
 function applyAuthoredWaterSettings(id,patch){
  assertSceneConstructionAvailable();const row=sceneObjects.find(r=>r.id===id);if(row?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
@@ -12610,7 +12612,7 @@ function applyAuthoredWaterSettings(id,patch){
   const entry=sceneObjects.find(r=>r.id===id),pose=sceneObjectTransformState(entry.object),checked=normalizeLocalLiquidEmitter(value,pose);
   const replacement=createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked}).object;
   const children=[...entry.object.children];for(const child of children){entry.object.remove(child);child.traverse(node=>{node.geometry?.dispose();for(const mat of(Array.isArray(node.material)?node.material:[node.material]).filter(Boolean))mat.dispose();});}
-  for(const child of [...replacement.children])entry.object.add(child);
+  for(const child of [...replacement.children]){if(localLiquidHost&&child.userData.kaminosWaterPreview)child.visible=false;entry.object.add(child);}
   entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();window._kaminosDirty?.();
  }});waterSettingTargets.add(target);}
  return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');

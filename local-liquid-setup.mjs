@@ -102,15 +102,15 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
   if(!checked)throw Error('Local liquid setup is required to create an inlet packet');
   if(checked.legacySource)throw Error('Legacy local liquid source must migrate into a scene emitter before mounting');
   if(!Array.isArray(sceneEmitters))throw Error('Local liquid emitters must be an array');
-  if(sceneEmitters.length>LOCAL_LIQUID_EMITTER_CAPACITY) {
-    throw Error(`Local liquid emitter count ${sceneEmitters.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
-  }
-  const emitters=sceneEmitters.filter(record=>record.localLiquidEmitter?.mode!=='finite_drop').map((record,index)=>{
-    if(record?.type!==LOCAL_LIQUID_EMITTER_TYPE || typeof record.id!=='string' || !record.id) {
-      throw Error(`Invalid local liquid emitter scene object at index ${index}`);
-    }
+  const sources=sceneEmitters.map((record,index)=>{
+    if(record?.type!==LOCAL_LIQUID_EMITTER_TYPE || typeof record.id!=='string' || !record.id)throw Error(`Invalid local liquid emitter scene object at index ${index}`);
     const pose=normalizeLocalLiquidEmitterPose(record.transform);
     const settings=normalizeLocalLiquidEmitter(record.localLiquidEmitter,pose);
+    return {record,pose,settings};
+  });
+  const inlets=sources.filter(source=>source.settings.mode!=='finite_drop');
+  if(inlets.length>LOCAL_LIQUID_EMITTER_CAPACITY)throw Error(`Local liquid emitter count ${inlets.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
+  const emitters=inlets.map(({record,pose,settings})=>{
     const radius=settings.baseRadius*pose.scale[0];
     const aim=new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).normalize().toArray();
     return {id:record.id,active:settings.rate>0,emission_state:settings.rate>0?'jet':'off',
