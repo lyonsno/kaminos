@@ -14,7 +14,11 @@ import {admitReferenceCases,admitReferenceBytes,compareCutouts} from '../models/
 const sha=b=>createHash('sha256').update(b).digest('hex');
 assert.throws(()=>admitReferenceCases({}),/no reference cases/);
 assert.throws(()=>admitReferenceCases({truck:{source:[2,2]}}),/truck/);
-const cases=admitReferenceCases({truck:{source:[4,2],pre:[2,1],sha:{cutout:'x'}}});
+// An empty or malformed recorded hash cannot disable verification.
+for(const cutout of ['','x','0'.repeat(63),'G'.repeat(64)])
+  assert.throws(()=>admitReferenceCases({truck:{source:[4,2],pre:[2,1],sha:{cutout}}}),/truck/,'cutout hash '+JSON.stringify(cutout));
+await assert.rejects(admitReferenceBytes({name:'truck',what:'cutout',status:200,bytes:new Uint8Array(8),length:8,sha256:''}),/truck.*cutout.*hash/);
+const cases=admitReferenceCases({truck:{source:[4,2],pre:[2,1],sha:{cutout:'a'.repeat(64)}}});
 assert.deepEqual(cases.map(c=>c.name),['truck']);
 
 const good=new Uint8Array([1,2,3,4,5,6,7,8]);

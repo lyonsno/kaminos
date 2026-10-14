@@ -1,13 +1,14 @@
 // Admission for the U2Net WebGPU witness's reference evidence, shared by the
 // witness page and its contracts: a measurement is reported only against
 // present, complete, as-recorded references, and only with finite deltas.
+const SHA256=/^[0-9a-f]{64}$/;
 export function admitReferenceCases(stages){
   const cases=Object.entries(stages??{});
   if(!cases.length)throw Error('no reference cases in stages.json');
   return cases.map(([name,row])=>{
     const ok=Array.isArray(row?.source)&&row.source.length===2&&Array.isArray(row?.pre)&&row.pre.length===2&&
-      [...row.source,...row.pre].every(v=>Number.isSafeInteger(v)&&v>0)&&typeof row?.sha?.cutout==='string';
-    if(!ok)throw Error(`reference case ${name} lacks source/pre sizes or a recorded cutout hash`);
+      [...row.source,...row.pre].every(v=>Number.isSafeInteger(v)&&v>0)&&SHA256.test(row?.sha?.cutout??'');
+    if(!ok)throw Error(`reference case ${name} lacks source/pre sizes or a recorded 64-hex cutout hash`);
     return {name,source:row.source,pre:row.pre,cutoutSha256:row.sha.cutout};
   });
 }
@@ -19,7 +20,9 @@ const hex=async bytes=>{
 export async function admitReferenceBytes({name,what,status,bytes,length,sha256}){
   if(status!==200)throw Error(`reference ${name} ${what}: HTTP ${status}`);
   if(bytes.length!==length)throw Error(`reference ${name} ${what}: ${bytes.length} bytes, expected ${length}`);
-  if(sha256&&await hex(bytes)!==sha256)throw Error(`reference ${name} ${what}: bytes differ from the recorded hash`);
+  // A supplied hash must be a real one: an empty or malformed value cannot skip verification.
+  if(sha256!==undefined&&!SHA256.test(sha256))throw Error(`reference ${name} ${what}: malformed recorded hash`);
+  if(sha256!==undefined&&await hex(bytes)!==sha256)throw Error(`reference ${name} ${what}: bytes differ from the recorded hash`);
   return bytes;
 }
 
