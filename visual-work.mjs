@@ -35,6 +35,8 @@ export function assertMountedScene(document, actual, {authoredObjects=[],volume=
         assert.ok(volume?.active&&Number.isFinite(volume.ordinaryDomainScale)&&volume.ordinaryDomainScale>0
           &&volume.ordinaryDomainTranslation?.length===3&&volume.ordinaryDomainTranslation.every(Number.isFinite),'Live domain runtime is unavailable');
         const scale=volume.ordinaryDomainScale,[x,y,z]=volume.ordinaryDomainTranslation;
+        const requestedGrid=expected.simulation?.settings?.['volume-resolution']?.value;
+        if(requestedGrid!==undefined)assert.equal(volume.controls?.resolution,Number(requestedGrid),'Live domain grid differs from saved domain grid');
         mounted={...domain,transform:{position:[x,y+scale,z],rotation:[0,0,0],scale:[scale,scale,scale]}};
       }
     }
