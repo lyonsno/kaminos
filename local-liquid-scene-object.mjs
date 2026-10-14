@@ -72,6 +72,14 @@ export function createLocalLiquidEmitterObject(THREE, input) {
   object.rotation.set(...record.transform.rotation);
   object.scale.fromArray(record.transform.scale);
 
+  if(record.localLiquidEmitter.mode==='finite_drop'){
+    const preview=new THREE.Mesh(new THREE.BoxGeometry(record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width),new THREE.MeshStandardMaterial({color:0x68d4e3,transparent:true,opacity:.32,roughness:.3,metalness:0,depthWrite:false}));
+    preview.name='Initial water preview';preview.userData.kaminosWaterPreview=true;
+    object.add(preview);
+    object.userData.kaminosSceneObject={...record,localLiquidEmitter:clone(record.localLiquidEmitter)};
+    return {object,record};
+  }
+
   const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4a8588, metalness: 0.22, roughness: 0.42 });
   const nozzleMaterial = new THREE.MeshStandardMaterial({ color: 0xd0e7e4, metalness: 0.12, roughness: 0.28 });
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.072, 0.2, 18), bodyMaterial);
