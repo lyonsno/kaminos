@@ -19,8 +19,13 @@ test('sampleSimGpuProfile times the sim pass and the projection over N steps wit
   assert.match(body, /encodeSim\(encoder, \{\s*timestampWrites: \{ querySet, beginningOfPassWriteIndex: step \* 4, endOfPassWriteIndex: step \* 4 \+ 1 \},\s*finalTimestampWrites: \{ querySet, beginningOfPassWriteIndex: step \* 4 \+ 2, endOfPassWriteIndex: step \* 4 \+ 3 \},\s*\}\)/);
   assert.match(body, /updateUniforms\(/, 'each step packs its uniforms like a real step');
   assert.match(body, /resolveQuerySet\(querySet, 0, steps \* 4, resolveBuffer, 0\)/);
+  assert.match(body, /const encoder = device\.createCommandEncoder\([^)]*\);\n\s*updateUniforms\(/, 'one encoder and one submit per step, like the frame loop');
+  assert.match(body, /profile\.simPass = stats\(simSamples\);/, 'order statistics (median, min, p10, p90) beside the mean');
+  assert.match(body, /return \{ mean: [^}]*median: q\(0\.5\), min: sorted\[0\], p10: q\(0\.1\), p90: q\(0\.9\), count: samples\.length \};/);
   assert.match(body, /simPassMicrosecondsPerStep/);
   assert.match(body, /projectionMicrosecondsPerStep/);
+  assert.match(body, /const overrideModel = APPEARANCE_MODELS\.includes\(options\.appearanceModel\) \? options\.appearanceModel : null;/, 'one page can profile either model (ABAB) without reloading');
+  assert.match(body, /controlsSnapshot\.appearanceModel = savedAppearanceModel;/, 'the override is restored in finally');
   assert.match(body, /reactionLaw: state\.reactantCombustion\?\.effective\?\.law \?\? null, appearanceModel: state\.appearanceModel\?\.effective \?\? null/, 'the receipt names what was in force');
   assert.match(source, /^\s*sampleSimGpuProfile,$/m, 'exposed on the page API');
   assert.match(source, /const SIM_GPU_PROFILE_IDENTITY = 'kaminos\.volume\.sim-gpu-profile\.v0';/);
