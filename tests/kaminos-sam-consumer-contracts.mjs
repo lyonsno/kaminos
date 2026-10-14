@@ -69,6 +69,43 @@ for (const change of [{ width: 1 }, { mimeType: 'image/jpeg' }, { pixels: new Ui
 }
 consumer.validateSamConsumerExport({ ...exported, pixels: Uint8Array.from([42, 43, 44, 255, 0, 0, 0, 0]) }, { ...exportContract, kind: 'cutout' });
 assert.throws(() => consumer.validateSamConsumerExport({ ...exported, pixels: sourcePixels }, { ...exportContract, kind: 'cutout' }), /alpha/);
+assert.equal(typeof consumer.validateSamApplicationForeground, 'function',
+  'native consumer must reject missing or stale application foreground evidence');
+const ownerRoute = 'sam3.resident-model-owner.webgpu-local.v0';
+const appEvidence = { sameDevice: true, sameRendererDevice: true, runtime: {
+  applicationForegroundEvidence: { status: 'idle', error: null, routeId: ownerRoute,
+    lastRun: { status: 'succeeded', runId: 'new', routeId: ownerRoute, pendingRequestCount: 0,
+      receipts: [{ status: 'completed', runId: 'new', routeId: ownerRoute, failure: null,
+        metadata: { renderer: 'kaminos-app' } }] } } } };
+consumer.validateSamApplicationForeground(appEvidence, 'new');
+for (const mutate of [value => { value.runtime = null; }, value => { value.sameDevice = false; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.runId = 'old'; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.routeId = 'fallback'; },
+  value => { value.runtime.applicationForegroundEvidence.status = 'settlement-failed'; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.receipts = []; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].metadata = {}; },
+  value => { value.runtime.applicationForegroundEvidence.lastRun.receipts[0].failure = { message: 'failed' }; }]) {
+  const value = structuredClone(appEvidence); mutate(value);
+  assert.throws(() => consumer.validateSamApplicationForeground(value, 'new'));
+}
+assert.equal(typeof consumer.validateSamExportProvenance, 'function',
+  'native export must match persisted PNG provenance to the live source and selection');
+const source = { source: '/source.png', sha256: 'sha256:source', artifactId: 'source-1' };
+const pngProvenance = { schema: 'kaminos.sam3-mask-export.v1', kind: 'cutout',
+  sourceImage: source.source, sourceImageSha256: source.sha256, sourceArtifactId: source.artifactId,
+  sourceResolution: [2, 1], promptText: output.promptText, promptSha256: 'sha256:prompt',
+  invocationId: 'new', indices: [7], maskResolution: [288, 288],
+  effectiveRouteId: output.effectiveRouteId, outputAuthority: output.outputAuthority,
+  verificationState: output.verificationState };
+const provenanceContract = { kind: 'cutout', source, output: { ...output, promptSha256: 'sha256:prompt' },
+  indices: [7], width: 2, height: 1 };
+consumer.validateSamExportProvenance(pngProvenance, provenanceContract);
+consumer.validateSamExportProvenance({ ...pngProvenance, futureField: true }, provenanceContract);
+for (const change of [null, {}, { ...pngProvenance, invocationId: 'old' },
+  { ...pngProvenance, sourceImageSha256: 'sha256:stale' }, { ...pngProvenance, indices: [] },
+  { ...pngProvenance, outputAuthority: 'cpu-oracle' }, { ...pngProvenance, promptSha256: 'sha256:other' }]) {
+  assert.throws(() => consumer.validateSamExportProvenance(change, provenanceContract));
+}
 const out = mkdtempSync(join(tmpdir(), 'kaminos-sam-consumer-'));
 const result = spawnSync(process.execPath, [witness.pathname, '--out-dir', out, '--expected-commit', 'not-the-source'], { encoding: 'utf8' });
 assert.notEqual(result.status, 0);
