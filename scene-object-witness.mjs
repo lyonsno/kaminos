@@ -1555,6 +1555,7 @@ async function runAuthoredWaterDropScenario(ws) {
     for(let i=0;i<240;i++){if(window.kaminosWaterSources&&document.querySelector('.authored-water-controls'))break;await wait(125);}
     if(!window.kaminosWaterSources||!document.querySelector('.authored-water-controls'))throw Error('Authored water instruments did not mount');
     document.querySelector('.tab[data-tab="finger-fluid-bench"]').click();
+    const legacy=document.getElementById('finger-fluid-bench-operator-panel');if(!legacy.hidden)throw Error('A competing standalone water viewport is covering the shared scene');
     const id=await window.kaminosWaterSources.add();
     window.kaminosSetSceneObjectTransform(id,{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]});
     window.kaminosWaterSources.edit(id,{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}});
