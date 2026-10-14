@@ -79,6 +79,12 @@ async function fixture(t, { onMain = false } = {}) {
     return git(cwd, 'rev-parse', 'HEAD');
   };
   git(dir, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+  // The origin logs every update of a land/ ref ("<ref> <old> <new>"), which is
+  // what the stub's push trigger reads, and denies them while deny-land exists.
+  const updatesLog = path.join(dir, 'land-ref-updates.log');
+  const denyFile = path.join(dir, 'deny-land');
+  await fs.writeFile(path.join(origin, 'hooks', 'update'), `#!/bin/sh\ncase "$1" in refs/heads/land/*)\n  if [ -e ${quote(denyFile)} ]; then echo "land refs denied" >&2; exit 1; fi\n  echo "$1 $2 $3" >> ${quote(updatesLog)};;\nesac\nexit 0\n`);
+  await fs.chmod(path.join(origin, 'hooks', 'update'), 0o755);
   git(dir, 'init', '--quiet', '--initial-branch=main', seed);
   const base = await commit(seed, 'base.txt');
   git(seed, 'remote', 'add', 'origin', origin);
@@ -100,7 +106,11 @@ async function fixture(t, { onMain = false } = {}) {
     lists: async () => (await gh.state()).calls.filter(c => c.startsWith('run list')),
     views: async () => (await gh.state()).calls.filter(c => c.startsWith('run view')),
     dispatches: async () => (await gh.state()).dispatches,
+    // The tests workflow's push trigger: each push of land/<commit> from now on starts a copy of run.
+    pushTrigger: async (run, commit = sha) => gh.set({ pushTrigger: { headSha: commit, run, originDir: origin, updatesLog, logOffset: (await refUpdates()).length } }),
+    pushesSeen: async () => (await gh.state()).pushTrigger?.pushesSeen || 0,
   };
+  const refUpdates = async () => { try { return (await fs.readFile(updatesLog, 'utf8')).split('\n').filter(Boolean); } catch { return []; } };
   const hook = async script => { const file = path.join(dir, 'hook.sh'); await fs.writeFile(file, `${script}\n`); await gh.set({ hook: file }); };
 
   const calls = [];
@@ -112,7 +122,9 @@ async function fixture(t, { onMain = false } = {}) {
   const makeRun = (over = {}) => ({ databaseId: 4242, status: 'completed', conclusion: 'success', workflowName: 'tests', _file: WORKFLOW_FILE, headSha: sha, event: 'push', headBranch: 'feature', url: `https://github.com/${REPO}/actions/runs/${over.databaseId ?? 4242}`, createdAt: '2026-10-13T12:00:00Z', attempt: 1, ...over });
   const lastArg = c => String(c.at(-1));
   const f = {
-    dir, env, origin, seed, clone, base, sha, ghPath, receiptPath, calls, lines, clock, gh, hook, git, commit, runner: baseRunner,
+    dir, env, origin, seed, clone, base, sha, ghPath, receiptPath, calls, lines, clock, gh, hook, git, commit, runner: baseRunner, refUpdates, denyFile,
+    // The land ref updates as [old, new] pairs, for one commit's ref.
+    landUpdates: async s => (await refUpdates()).map(l => l.split(' ')).filter(([name]) => name === `refs/heads/land/${s}`).map(([, before, after]) => [before, after]),
     landRef: s => `land/${s}`,
     run: makeRun,
     originMain: () => git(origin, 'rev-parse', 'refs/heads/main'),
@@ -149,7 +161,6 @@ async function fixture(t, { onMain = false } = {}) {
 }
 
 const check = (receipt, name) => receipt.checks.find(c => c.name === name);
-const dispatchCommand = branch => `gh workflow run ${WORKFLOW_FILE} -R ${REPO} --ref ${branch}`;
 
 test('a dirty working tree refuses before anything is fetched or queried', async t => {
   const f = await fixture(t);
@@ -208,9 +219,11 @@ test('with --no-dispatch, no run of the tests workflow for the exact commit refu
   assert.equal(receipt.outcome, 'refused');
   assert.equal(receipt.reason, 'ci-no-run');
   assert.equal(check(receipt, 'ci').result, 'fail');
-  assert.match(receipt.message, new RegExp(`no run of the tests workflow for ${f.sha}`));
+  assert.match(receipt.message, new RegExp(`no push run of the tests workflow for ${f.sha}`));
   assert.ok(receipt.message.includes('--ci-only'), receipt.message);
-  assert.ok(receipt.message.includes(dispatchCommand('feature')), receipt.message);
+  assert.ok(receipt.message.includes('land/<sha>'), receipt.message);
+  assert.match(receipt.message, /tests workflow runs on/);
+  assert.doesNotMatch(receipt.message, /gh workflow run|dispatches from/, 'no gh workflow run text');
   const lists = await f.gh.lists();
   assert.equal(lists.length, 1);
   assert.ok(lists[0].includes(`-R ${REPO}`), lists[0]);
@@ -219,6 +232,18 @@ test('with --no-dispatch, no run of the tests workflow for the exact commit refu
   for (const field of ['databaseId', 'status', 'conclusion', 'headSha', 'event', 'headBranch', 'url', 'attempt']) assert.ok(lists[0].includes(field), `--json carries ${field}`);
   assert.deepEqual(await f.gh.dispatches(), []);
   assert.deepEqual(receipt.ci.runs, []);
+
+  // --no-trigger is the same refuse-only mode, and pushes nothing either.
+  await f.gh.pushTrigger(f.run({ databaseId: 31 }));
+  ({ receipt } = await f.land({ noDispatch: true }));
+  assert.equal(receipt.reason, 'ci-no-run');
+  const viaCli = await f.cli(['--no-trigger', '--receipt', f.receiptPath, '--gh', f.ghPath, '--repo', REPO]);
+  assert.equal(viaCli.code, 1, viaCli.stderr);
+  assert.match(viaCli.stdout, /^refused\b/);
+  assert.equal(JSON.parse(await fs.readFile(f.receiptPath, 'utf8')).noDispatch, true);
+  assert.equal(f.calls.filter(c => c[0] === 'git' && c[1] === 'push').length, 0, 'no push of any kind');
+  assert.equal(await f.gh.pushesSeen(), 0);
+  assert.equal(f.originRef(`refs/heads/${f.landRef(f.sha)}`), null);
 
   // Even when gh answers with runs for other commits, only a run whose headSha
   // is this commit counts.
@@ -399,7 +424,7 @@ test('a rebased branch with a green run lands and the receipt records it', async
   assert.deepEqual([written.ci.run.id, written.ci.run.conclusion, written.ci.run.event, written.ci.run.headBranch, written.ci.run.url, written.ci.run.attempt],
     [4242, 'success', 'push', 'feature', `https://github.com/${REPO}/actions/runs/4242`, 1]);
   assert.equal(written.ci.workflowFile, WORKFLOW_FILE);
-  assert.equal(written.ci.dispatch, null);
+  assert.equal(written.ci.trigger, null);
   assert.deepEqual(written.checks.map(c => [c.name, c.result]),
     [['clean-tree', 'pass'], ['fetch', 'pass'], ['rebased', 'pass'], ['ci', 'pass'], ['push', 'pass']]);
   assert.deepEqual([written.dryRun, written.ciOnly], [false, false]);
@@ -492,17 +517,19 @@ test('--dry-run performs every check, changes nothing on the remote, writes the 
   assert.equal(written.outcome, 'dry-run');
   assert.deepEqual([written.main.before, written.main.after], [f.base, f.base]);
 
-  // With no run and a dispatch available, a dry run still dispatches nothing
-  // and pushes no ref; it reports the checks and how to get a run.
+  // With no run, a dry run pushes no ref (so nothing runs) and dispatches
+  // nothing; it reports the checks and how to get a run.
   await f.gh.runs([]);
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 1, _timeline: ['queued', 'completed:success'] }) } });
+  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 2, event: 'workflow_dispatch' }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 1, _timeline: ['queued', 'completed:success'] }));
   ({ ok, receipt } = await f.land({ dryRun: true }));
   assert.equal(ok, false);
   assert.equal(receipt.reason, 'ci-no-run');
   assert.deepEqual(await f.gh.dispatches(), []);
   assert.equal(f.originRef(`refs/heads/${f.landRef(f.sha)}`), null, 'no land ref was pushed');
   assert.equal(f.calls.filter(c => c[0] === 'git' && c[1] === 'push').length, 0, 'no push of any kind');
-  assert.equal(receipt.ci.dispatch, null);
+  assert.equal(receipt.ci.trigger, null);
+  assert.equal(await f.gh.pushesSeen(), 0);
   assert.deepEqual(receipt.checks.map(c => c.result), ['pass', 'pass', 'pass', 'fail', 'skipped']);
 
   // A dry run still refuses what a real run would refuse.
@@ -524,42 +551,72 @@ test('--dry-run performs every check, changes nothing on the remote, writes the 
   assert.equal(f.pushes('refs/heads/main'), 0);
 });
 
-test('with no run for the commit, a land/<sha> ref is pushed, the workflow dispatched once from it, the run awaited, and the ref deleted', async t => {
+test('with no run for the commit, pushing a land/<sha> ref is the trigger: the push run is awaited, gh workflow run is never called, and the ref is deleted', async t => {
   const f = await fixture(t);
   const ref = f.landRef(f.sha);
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9001, event: 'workflow_dispatch', headBranch: ref, _timeline: ['queued', 'in_progress', 'in_progress', 'completed:success'] }) } });
+  // A dispatch is available too; the tool must never use it.
+  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9999, event: 'workflow_dispatch' }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9001, _timeline: ['queued', 'in_progress', 'in_progress', 'completed:success'] }));
   const { ok, receipt } = await f.land();
   assert.equal(ok, true, receipt.message);
   assert.equal(receipt.outcome, 'landed');
   assert.equal(f.originMain(), f.sha);
   assert.equal(f.originRef('refs/heads/feature'), null, "the lane's branch was never pushed");
-  assert.equal(f.pushes(`refs/heads/${ref}`), 1, 'the land ref was pushed once');
+  assert.deepEqual(await f.gh.dispatches(), [], 'gh workflow run is never called');
+  assert.ok(!(await f.gh.calls()).some(c => c.startsWith('workflow ')), 'no workflow command at all');
+  assert.equal(await f.gh.pushesSeen(), 1, 'one push of the land ref, so one push run');
+  const zero = '0'.repeat(40);
+  assert.deepEqual(await f.landUpdates(f.sha), [[zero, f.sha], [f.sha, zero]], 'created at the commit, then deleted');
   assert.equal(f.originRef(`refs/heads/${ref}`), null, 'the land ref is gone afterwards');
-  assert.equal(f.deletions(`refs/heads/${ref}`), 1);
-  assert.deepEqual(await f.gh.dispatches(), [`workflow run ${WORKFLOW_FILE} -R ${REPO} --ref ${ref}`]);
-  assert.deepEqual([receipt.ci.dispatch.ref, receipt.ci.dispatch.refExisted, receipt.ci.dispatch.refPushed, receipt.ci.dispatch.performed, receipt.ci.dispatch.refDeleted, receipt.ci.dispatch.refDeleteError],
-    [ref, false, true, true, true, null]);
-  assert.equal(receipt.ci.run.id, 9001);
-  // gh printed the run URL, so the run was followed by id.
-  assert.deepEqual([receipt.ci.dispatch.runId, receipt.ci.dispatch.runUrl], [9001, `https://github.com/${REPO}/actions/runs/9001`]);
-  assert.equal(receipt.ci.wait.followedRunId, 9001);
-  assert.ok((await f.gh.views()).length >= 3, 'the run was polled through gh run view');
+  assert.deepEqual([receipt.ci.trigger.ref, receipt.ci.trigger.refExisted, receipt.ci.trigger.refRepushed, receipt.ci.trigger.refPushed, receipt.ci.trigger.refDeleted, receipt.ci.trigger.refDeleteError],
+    [ref, false, false, true, true, null]);
+  assert.deepEqual([receipt.ci.run.id, receipt.ci.run.event, receipt.ci.run.headBranch, receipt.ci.run.counted], [9001, 'push', ref, true]);
   assert.ok(receipt.ci.wait.polls >= 4, `polled ${receipt.ci.wait.polls} times`);
-  assert.ok(f.clock.slept.length >= 3);
   assert.ok(f.clock.slept.every(ms => ms === POLL_MS), `sleeps of ${POLL_MS} ms: ${f.clock.slept}`);
-  assert.equal(receipt.ci.wait.pollMs, POLL_MS);
   assert.equal(receipt.ci.wait.bounds.timeoutMinutes, 360, 'no workflow file in the fixture: GitHub\'s default job timeout');
-  // One line per state change.
   const states = f.lines.map(l => l.replace(/^landing: /, ''));
-  for (const pattern of [/dispatched/, /queued/, /in progress/, /concluded success/]) assert.ok(states.some(s => pattern.test(s)), `${pattern} in ${JSON.stringify(states)}`);
-  assert.deepEqual(receipt.ci.wait.states.map(s => s.state), ['queued', 'running', 'concluded']);
+  for (const pattern of [/pushed/, /queued/, /in progress/, /concluded success/]) assert.ok(states.some(s => pattern.test(s)), `${pattern} in ${JSON.stringify(states)}`);
+  assert.ok(!states.some(s => /dispatch/.test(s)), JSON.stringify(states));
+  assert.deepEqual(receipt.ci.wait.states.map(s => s.state), ['pushed', 'queued', 'running', 'concluded']);
   assert.equal(check(receipt, 'ci').result, 'pass');
+  assert.doesNotMatch(receipt.message, /dispatch/);
 });
 
-test('from a checkout on main one commit ahead, a dispatch that fails never moves main, in a dry run or a landing', async t => {
+test('a green workflow_dispatch run for the commit does not count: the required check ignores it, so the land ref is pushed and the push run decides', async t => {
+  const f = await fixture(t);
+  const ref = f.landRef(f.sha);
+  await f.gh.runs([
+    f.run({ databaseId: 8001, event: 'workflow_dispatch', headBranch: ref, createdAt: '2026-10-13T12:00:00Z' }),
+    f.run({ databaseId: 8002, event: 'workflow_dispatch', headBranch: ref, status: 'in_progress', conclusion: '', createdAt: '2026-10-13T12:05:00Z' }),
+  ]);
+  await f.gh.pushTrigger(f.run({ databaseId: 9101, _timeline: ['queued', 'completed:success'] }));
+  const { ok, receipt } = await f.land();
+  assert.equal(ok, true, receipt.message);
+  assert.equal(receipt.outcome, 'landed');
+  assert.equal(receipt.ci.run.id, 9101, 'the push run decided');
+  assert.equal(receipt.ci.run.event, 'push');
+  assert.equal(await f.gh.pushesSeen(), 1);
+  assert.deepEqual(await f.gh.dispatches(), []);
+  const dispatched = receipt.ci.runs.filter(r => r.event === 'workflow_dispatch');
+  assert.deepEqual(dispatched.map(r => [r.id, r.counted]), [[8001, false], [8002, false]], 'listed in the receipt, not counted');
+  for (const r of dispatched) assert.match(r.reason, /not a push run; the required check ignores it/);
+  assert.ok(!receipt.ci.wait.states.some(s => /8002/.test(s.detail)), 'the in-progress dispatch run was never awaited');
+  assert.equal(f.originMain(), f.sha);
+
+  // With --no-dispatch the same commit refuses as having no push run, and says why the dispatch run does not count.
+  const g = await fixture(t);
+  await g.gh.runs([g.run({ databaseId: 8003, event: 'workflow_dispatch', headBranch: g.landRef(g.sha) })]);
+  const refused = await g.land({ noDispatch: true });
+  assert.equal(refused.receipt.reason, 'ci-no-run');
+  assert.match(refused.receipt.message, /not a push run; the required check ignores it/);
+  assert.equal(g.calls.filter(c => c[0] === 'git' && c[1] === 'push').length, 0);
+});
+
+test('from a checkout on main one commit ahead, a land ref push that is denied never moves main and deletes nothing, in a dry run or a landing', async t => {
   const f = await fixture(t, { onMain: true });
   assert.equal(f.git(f.clone, 'symbolic-ref', '--short', 'HEAD'), 'main');
-  await f.gh.set({ dispatchFails: { code: 1, stderr: 'could not create workflow dispatch event: HTTP 422\n' } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9011, _timeline: ['completed:success'] }));
+  await fs.writeFile(f.denyFile, '');
   let { ok, receipt } = await f.land({ dryRun: true });
   assert.equal(ok, false);
   assert.equal(receipt.reason, 'ci-no-run');
@@ -569,16 +626,18 @@ test('from a checkout on main one commit ahead, a dispatch that fails never move
   ({ ok, receipt } = await f.land());
   assert.equal(ok, false);
   assert.equal(receipt.outcome, 'error');
-  assert.equal(receipt.reason, 'dispatch-failed');
-  assert.match(receipt.message, /HTTP 422/);
+  assert.equal(receipt.reason, 'trigger-failed');
+  assert.match(receipt.message, /land refs denied/);
   assert.equal(f.originMain(), f.base, 'landing attempt: main untouched');
   assert.equal(f.pushes('refs/heads/main'), 0);
-  assert.equal(f.pushes(`refs/heads/${f.landRef(f.sha)}`), 1, 'only the land ref was pushed');
-  assert.equal(f.originRef(`refs/heads/${f.landRef(f.sha)}`), null, 'and deleted after the error');
-  assert.equal(receipt.ci.dispatch.refDeleted, true);
+  assert.equal(f.pushes(`refs/heads/${f.landRef(f.sha)}`), 1, 'only the land ref push was tried');
+  assert.equal(f.deletions(`refs/heads/${f.landRef(f.sha)}`), 0, 'nothing of this run to delete');
+  assert.deepEqual([receipt.ci.trigger.refPushed, receipt.ci.trigger.refDeleted], [false, null]);
+  assert.equal(await f.gh.pushesSeen(), 0);
+  assert.deepEqual(await f.gh.dispatches(), []);
 });
 
-test('a lane that pushed its branch and then rebased dispatches from land/<sha>; its remote branch is untouched and the ref is deleted', async t => {
+test('a lane that pushed its branch and then rebased triggers through land/<sha>; its remote branch is untouched and the ref is deleted', async t => {
   const f = await fixture(t);
   f.git(f.clone, 'push', '--quiet', 'origin', 'feature');
   const pushed = f.originRef('refs/heads/feature');
@@ -589,7 +648,7 @@ test('a lane that pushed its branch and then rebased dispatches from land/<sha>;
   const rebased = f.cloneHead();
   assert.notEqual(rebased, f.sha);
   const ref = f.landRef(rebased);
-  await f.gh.set({ dispatch: { headSha: rebased, run: f.run({ databaseId: 9010, headSha: rebased, headBranch: ref, _timeline: ['queued', 'completed:success'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9010, headSha: rebased, _timeline: ['queued', 'completed:success'] }), rebased);
   const { ok, receipt } = await f.land();
   assert.equal(ok, true, receipt.message);
   assert.equal(receipt.outcome, 'landed');
@@ -597,29 +656,47 @@ test('a lane that pushed its branch and then rebased dispatches from land/<sha>;
   assert.equal(f.originMain(), rebased);
   assert.equal(f.originRef('refs/heads/feature'), pushed, "the lane's remote branch still holds the pre-rebase commit");
   assert.equal(f.pushes('refs/heads/feature'), 0);
-  assert.deepEqual(await f.gh.dispatches(), [`workflow run ${WORKFLOW_FILE} -R ${REPO} --ref ${ref}`]);
+  assert.equal(receipt.ci.run.headBranch, ref);
+  assert.deepEqual(await f.gh.dispatches(), []);
   assert.equal(f.originRef(`refs/heads/${ref}`), null, 'the land ref is deleted afterwards');
-  assert.equal(receipt.ci.dispatch.refDeleted, true);
+  assert.equal(receipt.ci.trigger.refDeleted, true);
 });
 
-test('a land/<sha> ref already at the commit is reused: no second push, and it is deleted afterwards', async t => {
+test('a land/<sha> ref already at the commit is deleted and pushed again, since an unchanged ref fires no push, and the push run is awaited', async t => {
   const f = await fixture(t);
   const ref = f.landRef(f.sha);
   f.git(f.clone, 'push', '--quiet', 'origin', `${f.sha}:refs/heads/${ref}`);
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9002, _timeline: ['queued', 'completed:success'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9002, _timeline: ['queued', 'completed:success'] }));
   const { ok, receipt } = await f.land({ ciOnly: true });
   assert.equal(ok, true, receipt.message);
-  assert.equal(f.pushes(`refs/heads/${ref}`), 0);
-  assert.deepEqual([receipt.ci.dispatch.refExisted, receipt.ci.dispatch.refPushed, receipt.ci.dispatch.performed], [true, false, true]);
-  assert.equal((await f.gh.dispatches()).length, 1);
+  const zero = '0'.repeat(40);
+  assert.deepEqual(await f.landUpdates(f.sha), [[zero, f.sha], [f.sha, zero], [zero, f.sha], [f.sha, zero]],
+    'the fixture\'s push, then the tool\'s delete and create, then the cleanup');
+  assert.deepEqual([receipt.ci.trigger.refExisted, receipt.ci.trigger.refRepushed, receipt.ci.trigger.refPushed, receipt.ci.trigger.refDeleted], [true, true, true, true]);
+  assert.equal(await f.gh.pushesSeen(), 1);
+  assert.equal(receipt.ci.run.id, 9002);
+  assert.deepEqual(await f.gh.dispatches(), []);
   assert.equal(f.originRef(`refs/heads/${ref}`), null);
-  assert.equal(receipt.ci.dispatch.refDeleted, true);
 });
 
-test('--ci-only dispatches, waits, reports, and never pushes main', async t => {
+test('a land/<sha> ref holding another commit is replaced: the push is forced', async t => {
   const f = await fixture(t);
   const ref = f.landRef(f.sha);
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9020, _timeline: ['queued', 'in_progress', 'completed:success'] }) } });
+  const stray = await f.commit(f.seed, 'stray.txt');
+  f.git(f.seed, 'push', '--quiet', 'origin', `${stray}:refs/heads/${ref}`);
+  await f.gh.pushTrigger(f.run({ databaseId: 9090, _timeline: ['queued', 'completed:success'] }));
+  const { ok, receipt } = await f.land({ ciOnly: true });
+  assert.equal(ok, true, receipt.message);
+  const zero = '0'.repeat(40);
+  assert.deepEqual((await f.landUpdates(f.sha)).slice(1), [[stray, f.sha], [f.sha, zero]], 'forced from the stray commit to the sha, then deleted');
+  assert.deepEqual([receipt.ci.trigger.refExisted, receipt.ci.trigger.previousSha, receipt.ci.trigger.refRepushed, receipt.ci.trigger.refPushed], [false, stray, false, true]);
+  assert.equal(f.originRef(`refs/heads/${ref}`), null);
+});
+
+test('--ci-only pushes the land ref, waits for the push run, reports, and never pushes main', async t => {
+  const f = await fixture(t);
+  const ref = f.landRef(f.sha);
+  await f.gh.pushTrigger(f.run({ databaseId: 9020, _timeline: ['queued', 'in_progress', 'completed:success'] }));
   const { ok, receipt } = await f.land({ ciOnly: true });
   assert.equal(ok, true, receipt.message);
   assert.equal(receipt.outcome, 'ci-only');
@@ -628,105 +705,110 @@ test('--ci-only dispatches, waits, reports, and never pushes main', async t => {
   assert.equal(f.pushes('refs/heads/main'), 0);
   assert.equal(receipt.push, null);
   assert.equal(check(receipt, 'push').result, 'skipped');
-  assert.equal((await f.gh.dispatches()).length, 1);
+  assert.equal(await f.gh.pushesSeen(), 1);
   assert.equal(receipt.ci.run.id, 9020);
   assert.equal(f.originRef(`refs/heads/${ref}`), null);
   assert.match(receipt.message, /green/);
 
-  // A green commit then lands without dispatching again.
-  await f.gh.set({ dispatch: null });
+  // A green commit then lands without pushing the land ref again.
   const landed = await f.land();
   assert.equal(landed.receipt.outcome, 'landed', landed.receipt.message);
-  assert.equal((await f.gh.dispatches()).length, 1);
+  assert.equal(landed.receipt.ci.trigger, null);
+  assert.equal(await f.gh.pushesSeen(), 1);
+  assert.deepEqual(await f.gh.dispatches(), []);
   assert.equal(f.originMain(), f.sha);
 });
 
-test('a detached HEAD dispatches from land/<sha> like any other commit', async t => {
+test('a detached HEAD triggers through land/<sha> like any other commit', async t => {
   const f = await fixture(t);
   f.git(f.clone, 'checkout', '--quiet', '--detach');
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9030, _timeline: ['queued', 'completed:success'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9030, _timeline: ['queued', 'completed:success'] }));
   const { ok, receipt } = await f.land({ ciOnly: true });
   assert.equal(ok, true, receipt.message);
   assert.equal(receipt.branch, null);
-  assert.deepEqual(await f.gh.dispatches(), [`workflow run ${WORKFLOW_FILE} -R ${REPO} --ref ${f.landRef(f.sha)}`]);
+  assert.equal(receipt.ci.run.headBranch, f.landRef(f.sha));
+  assert.deepEqual(await f.gh.dispatches(), []);
 });
 
-test('a run already pending for the commit is awaited, not dispatched again', async t => {
+test('a push run already pending for the commit is awaited, and no land ref is pushed', async t => {
   const f = await fixture(t);
   await f.gh.runs([f.run({ databaseId: 9003, status: 'queued', conclusion: '', _timeline: ['queued', 'in_progress', 'completed:success'] })]);
+  await f.gh.pushTrigger(f.run({ databaseId: 9033 }));
   const { ok, receipt } = await f.land();
   assert.equal(ok, true, receipt.message);
   assert.equal(receipt.outcome, 'landed');
   assert.deepEqual(await f.gh.dispatches(), []);
-  assert.equal(receipt.ci.dispatch, null);
+  assert.equal(receipt.ci.trigger, null);
   assert.equal(receipt.ci.run.id, 9003);
   assert.ok(f.clock.slept.length >= 2);
   assert.equal(f.calls.filter(c => c[0] === 'git' && c[1] === 'push' && c.at(-1).includes('land/')).length, 0, 'no land ref for a run that already exists');
+  assert.equal(await f.gh.pushesSeen(), 0);
   assert.equal(f.originMain(), f.sha);
 });
 
-test('a failed run is refused and never re-dispatched, whether it was found or awaited', async t => {
+test('a failed run is refused and the land ref is never pushed again, whether the run was found or awaited', async t => {
   const f = await fixture(t);
   await f.gh.runs([f.run({ databaseId: 9004, conclusion: 'failure' })]);
+  await f.gh.pushTrigger(f.run({ databaseId: 9034 }));
   let { ok, receipt } = await f.land();
   assert.equal(ok, false);
   assert.equal(receipt.reason, 'ci-failed');
-  assert.deepEqual(await f.gh.dispatches(), []);
+  assert.equal(await f.gh.pushesSeen(), 0);
   assert.deepEqual(f.clock.slept, []);
   assert.equal(f.originMain(), f.base);
 
   const g = await fixture(t);
   const ref = g.landRef(g.sha);
-  await g.gh.set({ dispatch: { headSha: g.sha, run: g.run({ databaseId: 9005, _timeline: ['queued', 'in_progress', 'completed:failure'] }) } });
+  await g.gh.pushTrigger(g.run({ databaseId: 9005, _timeline: ['queued', 'in_progress', 'completed:failure'] }));
   ({ ok, receipt } = await g.land());
   assert.equal(ok, false);
   assert.equal(receipt.reason, 'ci-failed');
   assert.equal(receipt.ci.run.id, 9005);
-  assert.equal((await g.gh.dispatches()).length, 1, 'dispatched once, never again after the failure');
+  assert.equal(await g.gh.pushesSeen(), 1, 'pushed once, never again after the failure');
+  assert.match(receipt.message, /not pushing the land ref again/);
   assert.equal(g.originMain(), g.base);
   assert.equal(g.originRef(`refs/heads/${ref}`), null, 'the land ref is deleted after a refusal too');
 });
 
-test('when gh prints no run URL, the run is found by listing; one that never appears ends the wait after its own bound', async t => {
+test('the push run is found by listing; one that never appears ends the wait after its own bound', async t => {
   const f = await fixture(t);
-  await f.gh.set({ dispatchSilent: true, dispatch: { headSha: f.sha, run: f.run({ databaseId: 9040, _hiddenFor: 2, _timeline: ['queued', 'completed:success'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9040, _hiddenFor: 2, _timeline: ['queued', 'completed:success'] }));
   let { ok, receipt } = await f.land({ ciOnly: true });
   assert.equal(ok, true, receipt.message);
-  assert.deepEqual([receipt.ci.dispatch.runId, receipt.ci.dispatch.runUrl, receipt.ci.wait.followedRunId], [null, null, null]);
   assert.deepEqual(await f.gh.views(), [], 'nothing to view by id');
   assert.ok((await f.gh.lists()).length >= 4, 'listed until the run appeared and concluded');
-  assert.deepEqual(receipt.ci.wait.states.map(s => s.state), ['dispatched', 'queued', 'concluded']);
+  assert.deepEqual(receipt.ci.wait.states.map(s => s.state), ['pushed', 'queued', 'concluded']);
 
   const g = await fixture(t);
-  await g.gh.set({ dispatchSilent: true, dispatch: { headSha: g.sha, run: g.run({ databaseId: 9041, _hiddenFor: 100000 }) } });
+  await g.gh.pushTrigger(g.run({ databaseId: 9041, _hiddenFor: 100000 }));
   ({ ok, receipt } = await g.land({ ciOnly: true }));
   assert.equal(ok, false);
   assert.equal(receipt.outcome, 'error');
   assert.equal(receipt.reason, 'ci-wait-exceeded');
-  assert.match(receipt.message, /not listed within 10 minutes/);
+  assert.match(receipt.message, /not listed within 10 minutes of the land ref push/);
   assert.equal(g.clock.slept.length * POLL_MS, 10 * 60 * 1000 + POLL_MS, 'polled through the 10-minute bound and one more');
-  assert.equal((await g.gh.dispatches()).length, 1);
+  assert.equal(await g.gh.pushesSeen(), 1);
   assert.equal(g.originRef(`refs/heads/${g.landRef(g.sha)}`), null, 'the land ref is deleted after the error');
 });
 
-test('a dispatched run followed by id whose head SHA is not the commit is refused at once', async t => {
+test('a pending run for another commit, even on the land ref, is never awaited', async t => {
   const f = await fixture(t);
-  await f.gh.set({ dispatch: { headSha: f.base, run: f.run({ databaseId: 9050, headSha: f.base, status: 'queued', conclusion: '' }) } });
+  await f.gh.runs([f.run({ databaseId: 9050, headSha: f.base, headBranch: f.landRef(f.sha), status: 'in_progress', conclusion: '' })], f.base);
+  await f.gh.set({ ignoreCommit: true });
+  await f.gh.pushTrigger(f.run({ databaseId: 9051, _timeline: ['queued', 'completed:success'] }));
   const { ok, receipt } = await f.land({ ciOnly: true });
-  assert.equal(ok, false);
-  assert.equal(receipt.outcome, 'refused');
-  assert.equal(receipt.reason, 'ci-wrong-commit');
-  assert.match(receipt.message, new RegExp(`run 9050 .*${f.base}.*not ${f.sha}`));
-  assert.deepEqual(f.clock.slept, [], 'refused before any wait');
-  assert.equal(f.originRef(`refs/heads/${f.landRef(f.sha)}`), null);
+  assert.equal(ok, true, receipt.message);
+  assert.equal(receipt.ci.run.id, 9051);
+  const other = receipt.ci.runs.find(r => r.id === 9050);
+  assert.deepEqual([other.counted, other.reason], [false, 'another commit']);
 });
 
-test('the wait is bounded per state by the workflow\'s own lifecycle and ends as an error, without another dispatch', async t => {
+test('the wait is bounded per state by the workflow\'s own lifecycle and ends as an error, without another land ref push', async t => {
   const f = await fixture(t);
   // A step-level timeout of 5 written before the job-level 60: the job's is the bound.
-  const workflow = 'name: tests\non:\n  workflow_dispatch:\njobs:\n  suite:\n    runs-on: macos-latest\n    steps:\n      - run: echo one\n        timeout-minutes: 5\n      - run: echo two\n    timeout-minutes: 60\n';
+  const workflow = 'name: tests\non:\n  push:\njobs:\n  suite:\n    runs-on: macos-latest\n    steps:\n      - run: echo one\n        timeout-minutes: 5\n      - run: echo two\n    timeout-minutes: 60\n';
   const sha = await f.commit(f.clone, `.github/workflows/${WORKFLOW_FILE}`, workflow);
-  await f.gh.set({ dispatch: { headSha: sha, run: f.run({ databaseId: 9006, headSha: sha, _timeline: ['in_progress'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9006, headSha: sha, _timeline: ['in_progress'] }), sha);
   let { ok, receipt } = await f.land({ ciOnly: true, sleep: async ms => { f.clock.slept.push(ms); f.clock.now += 3600_000; } });
   assert.equal(ok, false);
   assert.equal(receipt.outcome, 'error');
@@ -734,19 +816,20 @@ test('the wait is bounded per state by the workflow\'s own lifecycle and ends as
   assert.equal(receipt.failurePhase, 'ci');
   assert.deepEqual([receipt.ci.wait.bounds.timeoutMinutes, receipt.ci.wait.bounds.timeoutSource], [60, `.github/workflows/${WORKFLOW_FILE}`]);
   assert.match(receipt.message, /running .*70 minutes.*timeout-minutes 60 from \.github\/workflows\/tests\.yml/);
-  assert.ok(f.clock.slept.length >= 2 && f.clock.slept.length <= 4, `${f.clock.slept.length} polls for a 60-minute job timeout`);
-  assert.equal((await f.gh.dispatches()).length, 1);
+  assert.ok(f.clock.slept.length >= 3 && f.clock.slept.length <= 5, `${f.clock.slept.length} polls for a 60-minute job timeout`);
+  assert.equal(await f.gh.pushesSeen(), 1);
   assert.equal(receipt.ci.run.id, 9006);
   assert.equal(f.originMain(), f.base);
 
   // Queued forever: the bound is GitHub's queue limit, and the message says so.
   const g = await fixture(t);
-  await g.gh.set({ dispatch: { headSha: g.sha, run: g.run({ databaseId: 9007, _timeline: ['queued'] }) } });
+  await g.gh.pushTrigger(g.run({ databaseId: 9007, _timeline: ['queued'] }));
   ({ receipt } = await g.land({ ciOnly: true, sleep: async ms => { g.clock.slept.push(ms); g.clock.now += 3600_000; } }));
   assert.equal(receipt.reason, 'ci-wait-exceeded');
   assert.match(receipt.message, /queued .*24-hour queue limit/);
   assert.doesNotMatch(receipt.message, /github-default/);
-  assert.ok(g.clock.slept.length >= 24 && g.clock.slept.length <= 26, `${g.clock.slept.length} polls for the 24-hour queue limit`);
+  assert.ok(g.clock.slept.length >= 24 && g.clock.slept.length <= 27, `${g.clock.slept.length} polls for the 24-hour queue limit`);
+  assert.deepEqual([...await f.gh.dispatches(), ...await g.gh.dispatches()], [], 'gh workflow run is never called');
 
   assert.equal(L.jobTimeoutMinutes(workflow), 60);
   assert.equal(L.jobTimeoutMinutes('jobs:\n  a:\n    steps:\n      - run: x\n        timeout-minutes: 5\n'), null);
@@ -757,7 +840,7 @@ test('the wait is bounded per state by the workflow\'s own lifecycle and ends as
 test('an interrupted wait writes a partial receipt naming the awaited run and deletes the land ref', async t => {
   const f = await fixture(t);
   const ref = f.landRef(f.sha);
-  await f.gh.set({ dispatch: { headSha: f.sha, run: f.run({ databaseId: 9060, _timeline: ['queued', 'in_progress'] }) } });
+  await f.gh.pushTrigger(f.run({ databaseId: 9060, _timeline: ['in_progress'] }));
   const controller = new AbortController();
   const { ok, receipt, receiptPath } = await f.land({
     ciOnly: true, signal: controller.signal,
@@ -770,20 +853,30 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   assert.equal(receipt.ci.run.id, 9060);
   assert.equal(JSON.parse(await fs.readFile(receiptPath, 'utf8')).outcome, 'interrupted');
   assert.equal(f.originRef(`refs/heads/${ref}`), null);
-  assert.equal(receipt.ci.dispatch.refDeleted, true);
-  assert.equal((await f.gh.dispatches()).length, 1);
+  assert.equal(receipt.ci.trigger.refDeleted, true);
+  assert.equal(await f.gh.pushesSeen(), 1);
+
+  // Interrupted before gh listed the push run: the message says a re-run would push again.
+  const h = await fixture(t);
+  await h.gh.pushTrigger(h.run({ databaseId: 9062, _hiddenFor: 100000 }));
+  const stop = new AbortController();
+  const early = await h.land({ ciOnly: true, signal: stop.signal, sleep: async ms => { h.clock.slept.push(ms); h.clock.now += ms; stop.abort(); } });
+  assert.equal(early.receipt.outcome, 'interrupted');
+  assert.match(early.receipt.message, /before gh listed its push run/);
+  assert.doesNotMatch(early.receipt.message, /dispatch/);
 
   // Through the CLI: SIGINT during the wait does the same and exits 130.
   const g = await fixture(t);
-  await g.gh.set({ dispatch: { headSha: g.sha, run: g.run({ databaseId: 9061, _timeline: ['queued', 'in_progress'] }) } });
+  await g.gh.pushTrigger(g.run({ databaseId: 9061, _timeline: ['in_progress'] }));
   const { done } = g.cliSpawn(['--ci-only', '--receipt', g.receiptPath, '--gh', g.ghPath, '--repo', REPO], (line, child) => { if (/in progress/.test(line)) child.kill('SIGINT'); });
   const result = await done;
   assert.equal(result.code, 130, `${result.stdout}\n${result.stderr}`);
   assert.match(result.stdout, /^interrupted\b.*run 9061/);
-  assert.match(result.stderr, /dispatched/);
+  assert.match(result.stderr, /pushed land\//);
   assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).ci.run.id, 9061);
   assert.equal(g.originRef(`refs/heads/${g.landRef(g.sha)}`), null);
   assert.equal(g.originMain(), g.base);
+  assert.deepEqual(await g.gh.dispatches(), []);
 });
 
 test('a listing that fills the --limit is signalled', async t => {
@@ -851,6 +944,7 @@ test('the CLI exits 0 when the checks pass, 1 on a refusal, 2 on bad arguments, 
   assert.deepEqual(L.parseArgs(['--dry-run', '--remote', 'upstream', '--receipt', 'r.json']),
     { dryRun: true, remote: 'upstream', receiptPath: path.resolve('r.json') });
   assert.deepEqual(L.parseArgs(['--ci-only', '--no-dispatch']), { ciOnly: true, noDispatch: true });
+  assert.deepEqual(L.parseArgs(['--no-trigger']), { noDispatch: true }, '--no-trigger is an alias');
   assert.throws(() => L.parseArgs(['--receipt']), /requires a value/);
   assert.throws(() => L.parseArgs(['--dry-run', '--ci-only']), /exclude/);
 });
