@@ -4339,6 +4339,7 @@ const sceneMembershipRetainedObjects = new Map();
 const sceneMembershipDisposers = new WeakMap();
 let localLiquidSetup = null;
 let localLiquidHost = null;
+let getLocalLiquidDisplayPolicy = null;
 let localLiquidFailure = null;
 let localLiquidPaused = false;
 let localLiquidGeneration = 0;
@@ -4350,8 +4351,9 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   createHost: async ({ setup, emitters, isCurrent }) => {
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
     return createLocalLiquidHost({
-      renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent,
+      renderer, scene, camera, device: sharedGpu?.device,
+      setup, emitters, isCurrent, getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),
+      decorateOutput:output=>selectionFeedback.output(output),
     });
   },
   onFailure: error => {
@@ -11492,7 +11494,7 @@ async function initScene() {
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
       renderPipeline.outputNode = outlinedSceneOutput;
-      renderPipeline.outputColorTransform = !localLiquidHost;
+      renderPipeline.outputColorTransform = true;
       renderPipeline.needsUpdate = true;
       refreshRenderingControls();
       return;
@@ -11517,7 +11519,7 @@ async function initScene() {
     outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
     renderPipeline.outputNode=outlinedSceneOutput;
     giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
-    renderPipeline.outputColorTransform = !localLiquidHost;
+    renderPipeline.outputColorTransform = true;
     renderPipeline.needsUpdate = true;
   }
   updateSceneGI = value => {
@@ -11532,6 +11534,9 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
+  getLocalLiquidDisplayPolicy=()=>({rawOutput:rawSceneOutput,
+    cameraState:sceneEmissiveCamera&&(sceneGISettings.mode==='gtao'||sceneGISettings.view==='scene')
+      ?sceneEmissiveCamera.debugState():{effective:false}});
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
