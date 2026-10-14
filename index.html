@@ -27081,6 +27081,11 @@ function setupAuthoringAssets(){
         receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
       return {...await persistGeneratedMesh(result.glb,generation,label,'TRELLIS'),timing:result.timing};
+    }catch(error){
+      // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
+      if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
+        input:{pixels:pixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
+      throw error;
     }finally{meshRunning.trellis=false;redraw();}
   };
   const trellis=()=>{

@@ -57,12 +57,17 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     const finished=await asset.run();
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
     result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
+  }catch(error){
+    // While the run still holds its tensors: what a decoder-only replay needs.
+    if(run&&generation&&error&&typeof error==='object')
+      error.trellisCapture=await captureFailure(generation,run.route.runtime).catch(failure=>({captureError:failure.message}));
+    throw error;
   }finally{
     let failure=null;
     if(run){
       const gpu=await run.route?.runtime?.settleGpuTiming?.().catch(()=>null);
       closePhase();
-      timing={gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
+      timing={gpu:gpu?{...gpu}:run.route?.runtime?.profile?.gpuTiming??null,stages:stageSummary(run.route?.runtime?.profile),phases:phases.map(p=>({phase:p.phase,modelRole:p.modelRole,
         wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';
@@ -74,6 +79,32 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
   }
   // Checked here: the run's GPU route was released and the asset is a GLB.
   return {...result,timing,receiptValidation:{ok:true,by:'authoring-trellis-page',checks:['route-released','glb-magic']}};
+}
+
+// Kit profile stages grouped by name: resolved GPU time per stage, not running-total deltas.
+export function stageSummary(profile){
+  const out={};
+  for(const stage of profile?.stages??[]){
+    const row=out[stage.name]??={count:0,wallMs:0,gpuMs:0,yields:0};
+    row.count++;row.wallMs+=stage.ms??0;if(stage.gpuStatus==='resolved')row.gpuMs+=stage.gpuMs??0;row.yields+=stage.metadata?.yields?.length??0;
+  }
+  for(const row of Object.values(out)){row.wallMs=Math.round(row.wallMs*10)/10;row.gpuMs=Math.round(row.gpuMs*10)/10;}
+  return out;
+}
+
+async function captureFailure(generation,runtime){
+  const context=generation.decoderFailureContext;
+  const tensors={};
+  const read=async(name,tensor)=>{if(!tensor?.shape)return;tensors[name]={shape:[...tensor.shape],dtype:tensor.dtype,bytes:await runtime.readTensor(tensor)};};
+  if(context){
+    await read('inputs.sample',context.inputs?.sample);await read('inputs.coordinates',context.inputs?.coordinates);
+    for(const [i,guide] of (context.inputs?.guideSubdivisions??[]).entries())await read(`inputs.guideSubdivisions.${i}`,guide);
+    await read('coordinates',context.coordinates);await read('features',context.features);await read('subdivisionLogits',context.subdivisionLogits);
+  }
+  const noise={};
+  for(const [stage,n] of Object.entries(generation.noiseInputs??{}))noise[stage]={shape:[...n.shape],values:n.values,seed:n.seed??null,source:n.source??null};
+  return {decoder:context?{mode:context.mode,operation:context.operation,level:context.level,rows:context.rows,resolution:context.resolution,
+    plan:JSON.parse(JSON.stringify(context.plan??null)),error:{...context.error}}:null,tensors,noise,stages:stageSummary(runtime?.profile)};
 }
 
 const sha256=async bytes=>Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');

@@ -132,3 +132,29 @@ test('each phase records its wall time and the kit GPU time spent in it, settled
   assert.equal(result.timing.gpu.totalGpuMs,30);assert.equal(result.timing.gpu.status,'active');
   assert.ok(result.timing.phases.every(p=>Number.isFinite(p.wallMs)));
 });
+
+test('a failed decode is captured before the route is released: tensor bytes, boundary, noise and the stage profile',async()=>{
+  const f=fixture({jobStatus:'failed'});const order=[];
+  const t=(name,shape,dtype)=>({name,shape,dtype,byteLength:4*shape.reduce((a,b)=>a*b,1)});
+  const sample=t('sample',[2,8],'f32'),coords=t('coords',[2,4],'i32'),logits=t('logits',[2,8],'f32');
+  const context={mode:'shape',operation:'subdivision-count',level:0,rows:2,resolution:2,plan:{mode:'shape',activationStorage:'f16'},
+    inputs:{sample,coordinates:coords,guideSubdivisions:[]},coordinates:coords,features:sample,subdivisionLogits:logits,
+    error:{name:'Error',message:'learned decoder generated empty cells; no replacement support'}};
+  const runtime={profile:{stages:[{name:'decoder-linear',ms:5,gpuMs:2,gpuStatus:'resolved',metadata:{yields:[1,2]}},{name:'decoder-linear',ms:3,gpuMs:1,gpuStatus:'resolved'}]},
+    async readTensor(x){order.push('read:'+x.name);return new ArrayBuffer(x.byteLength);},async settleGpuTiming(){return {status:'active',totalGpuMs:3};}};
+  const base=f.deps.createTrellisSharedHost;
+  f.deps.createTrellisSharedHost=async o=>{const h=await base(o);return {...h,async beginRun(x){const r=await h.beginRun(x);r.route.runtime=runtime;
+    const finish=r.finish;r.finish=async()=>{order.push('finish');return finish();};return r;}};};
+  f.deps.createTrellisImageGenerationAdapter=()=>({decoderFailureContext:context,noiseInputs:{sparse:{shape:[1,8],values:new Float32Array(8),seed:42,source:'browser'}},
+    async run(){return null;},dispose(){}});
+  const error=await call(f).then(()=>null,e=>e);
+  assert.match(error.message,/flow diverged/);
+  const c=error.trellisCapture;
+  assert.ok(c,'the failure carries its capture');
+  assert.equal(c.decoder.operation,'subdivision-count');assert.equal(c.decoder.error.message,context.error.message);
+  assert.deepEqual(Object.keys(c.tensors).sort(),['coordinates','features','inputs.coordinates','inputs.sample','subdivisionLogits']);
+  assert.equal(c.tensors.subdivisionLogits.bytes.byteLength,64);assert.deepEqual(c.tensors.subdivisionLogits.shape,[2,8]);
+  assert.equal(c.noise.sparse.values.length,8);
+  assert.deepEqual(c.stages['decoder-linear'],{count:2,wallMs:8,gpuMs:3,yields:2});
+  assert.ok(order.indexOf('finish')>order.lastIndexOf('read:logits'),'tensors are read before the route releases them');
+});
