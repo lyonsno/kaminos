@@ -107,3 +107,27 @@ test('goto reads coordinates and pilot, and pages lists linked tabs', async t =>
   assert.equal(pages.code, 0, pages.stderr);
   assert.match(pages.stdout, /page-aaaaaaaa/);
 });
+
+test('map writes the painted map, and pictures can leave it out', async t => {
+  const sketchResult = {schema: 'kaminos.scene-sketch.v1', objects: [{id: 'centre', label: 'Centre box', type: 'mesh', bounds: {min: [0, 0, 0], max: [1, 1, 1]}}],
+    fields: [], subs: [], operator: {view: {position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 100}, aspect: 1.5}};
+  const {server, received, url} = await fakeServer((request, body) => [200, body.command === 'map'
+    ? {ok: true, page: {id: 'page-aaaaaaaa'}, result: {schema: 'kaminos.agent-vantage.v1', kind: 'map', scaleBar: {meters: 1, pixels: 40},
+      images: [{name: 'map', mime: 'image/png', dataUrl, width: 1, height: 1}], sketch: sketchResult}}
+    : body.command === 'sketch' ? {ok: true, page: {id: 'page-aaaaaaaa'}, result: sketchResult}
+    : snapReply(body.command, body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-map-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const map = await run(['--server', url, '--out', out, 'map', '--size', '320']);
+  assert.equal(map.code, 0, map.stderr);
+  assert.deepEqual(received.at(-1).body, {command: 'map', args: {size: 320}, timeoutMs: 30000});
+  assert.ok(readdirSync(out).some(name => name.endsWith('-map.png')));
+  assert.match(map.stdout, /map/);
+  const snap = await run(['--server', url, '--out', out, 'snap', '--no-map']);
+  assert.equal(snap.code, 0, snap.stderr);
+  assert.equal(received.at(-1).body.args.map, false);
+  const sketch = await run(['--server', url, 'sketch']);
+  assert.equal(sketch.code, 0, sketch.stderr);
+  assert.equal(received.at(-1).body.command, 'sketch');
+  assert.match(sketch.stdout, /Centre box/);
+});

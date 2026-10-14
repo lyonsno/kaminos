@@ -155,3 +155,33 @@ test('commands are validated before they reach the page', () => {
   assert.ok(Number.isInteger(snap.args.settle) && snap.args.settle >= 1);
   assert.throws(() => checkedCommand({ command: 'burst', args: { count: 0 } }), /count/);
 });
+
+test('the scene map lays out a three-quarter view with both cameras and their cones', async () => {
+  const {sketchMapLayout, SKETCH_SCHEMA} = await import('../agent-vantage-core.mjs');
+  const sketch = {
+    schema: SKETCH_SCHEMA,
+    objects: [
+      {id: 'left', label: 'Left box', type: 'procedural-mesh', bounds: {min: [-3, 0, -0.5], max: [-2, 1, 0.5]}},
+      {id: 'right', label: 'Right box', type: 'procedural-mesh', bounds: {min: [2, 0, -0.5], max: [3, 1, 0.5]}},
+      {id: 'tall', label: 'Tall box', type: 'procedural-mesh', bounds: {min: [-0.25, 0, -0.25], max: [0.25, 4, 0.25]}},
+    ],
+    fields: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', bounds: {min: [-1, 0, -1], max: [1, 4, 1]}}],
+    operator: {view: {position: [0, 1.5, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 100}, aspect: 16 / 9},
+    subs: [{pilot: 'bebop', label: 'Bebop', view: {position: [4, 1, 2], target: [2.5, 0.5, 0], up: [0, 1, 0], fov: 60, near: 0.05, far: 100}}],
+  };
+  const layout = sketchMapLayout(sketch, {width: 320, height: 240});
+  const points = [...layout.boxes.flatMap(box => box.polygon), ...layout.cones.flatMap(cone => cone.polygon)];
+  assert.ok(points.every(([x, y]) => x >= -1e-6 && x <= 320 + 1e-6 && y >= -1e-6 && y <= 240 + 1e-6), 'everything fits the map');
+  const [sub] = layout.cones.filter(cone => cone.kind === 'sub'), [operator] = layout.cones.filter(cone => cone.kind === 'operator');
+  near(sub.apex, layout.project([4, 1, 2]), 1e-9, 'the sub cone starts at the sub');
+  near(operator.apex, layout.project([0, 1.5, 6]), 1e-9, 'the operator cone starts at the operator camera');
+  assert.equal(sub.label, 'Bebop');
+  const box = id => layout.boxes.find(item => item.id === id);
+  assert.ok(box('right').center[0] > box('left').center[0], '+X reads to the right');
+  assert.ok(layout.project([0, 4, 0])[1] < layout.project([0, 0, 0])[1], 'up reads up');
+  assert.equal(box('flame-field').kind, 'field');
+  assert.deepEqual(layout.boxes.map(item => item.depth), [...layout.boxes.map(item => item.depth)].sort((a, b) => a - b), 'boxes are painted back to front');
+  assert.ok(layout.scaleBar.pixels > 0 && layout.scaleBar.meters > 0);
+  const empty = sketchMapLayout({...sketch, objects: [], fields: []}, {width: 160, height: 120});
+  assert.equal(empty.cones.length, 2, 'an empty scene still shows where both cameras are');
+});

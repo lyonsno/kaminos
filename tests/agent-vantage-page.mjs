@@ -86,6 +86,7 @@ function fakeApp({mode = 'user', activeId = null, cameras = []} = {}) {
     encode: canvas => ({mime: 'image/png', dataUrl: `data:image/png;base64,${Buffer.from(JSON.stringify(canvas)).toString('base64')}`, width: 1280, height: 720}),
     annotate: canvas => ({...canvas, annotated: true}),
     sheet: frames => ({sheet: frames.length}),
+    paintMap: layout => ({map: [layout.width, layout.height], cones: layout.cones.map(cone => cone.kind)}),
     frameState: () => ({sceneFrameCount: state.frames, layers: {[HOST]: state.frames, ...(state.volume ? {[VOLUME]: state.volumeFrames} : {})}}),
     now: () => Date.parse('2026-10-14T18:00:00Z'),
   };
@@ -160,7 +161,7 @@ test('snap borrows the viewport, pictures the sub view, and restores the operato
   assert.deepEqual(state.writes.at(-1), operator);
   assert.equal(state.helpersHidden, 1);
   assert.equal(state.helpersRestored, 1);
-  assert.deepEqual(shot.images.map(image => image.name), ['snap', 'annotated']);
+  assert.deepEqual(shot.images.map(image => image.name), ['snap', 'annotated', 'map']);
   assert.ok(shot.images[0].dataUrl.startsWith('data:image/png;base64,'));
   assert.deepEqual(shot.objects.inView.map(object => object.id), ['side'], 'the sub sees what it looks at, not itself');
   assert.equal(shot.objects.occlusion, 'not-tested');
@@ -235,7 +236,7 @@ test('burst holds the sub view across frames and returns a contact sheet', async
   assert.equal(new Set(state.composed.map(view => JSON.stringify(view))).size, 1, 'every frame comes from the sub');
   assert.deepEqual(state.view, operator);
   assert.equal(burst.frames.length, 3);
-  assert.deepEqual(burst.images.map(image => image.name), ['sheet']);
+  assert.deepEqual(burst.images.map(image => image.name), ['sheet', 'map']);
 });
 
 test('remove deletes the sub and clears it as the active camera', async () => {
@@ -347,4 +348,37 @@ test('a queued command whose deadline passed is not run', async () => {
   await pump.idle();
   assert.deepEqual(ran, ['status']);
   assert.deepEqual(replies.map(reply => [reply.id, reply.ok, reply.phase ?? null]), [['late', false, 'expired'], ['fresh', true, null]]);
+});
+
+test('sketch describes the scene without drawing, even when the tab is hidden', async () => {
+  const {state, pilot} = await launched();
+  state.visible = false;
+  const before = state.frames;
+  const sketch = await pilot.run('sketch', {});
+  assert.equal(sketch.schema, 'kaminos.scene-sketch.v1');
+  assert.deepEqual(sketch.objects.map(object => object.id), ['centre', 'side'], 'the sub is a camera in the sketch, not an object');
+  assert.deepEqual(sketch.subs.map(sub => [sub.pilot, sub.label]), [['bebop', 'Bebop']]);
+  assert.deepEqual(sketch.operator.view.position, [0, 1, 6]);
+  assert.equal(state.frames, before, 'no frame was drawn');
+  assert.equal(state.writes.length, 0);
+});
+
+test('map paints a three-quarter map with both cameras', async () => {
+  const {state, pilot} = await launched();
+  state.visible = false;
+  const map = await pilot.run('map', {size: 320});
+  assert.equal(map.kind, 'map');
+  assert.deepEqual(map.images.map(image => image.name), ['map']);
+  const painted = JSON.parse(Buffer.from(map.images[0].dataUrl.split(',')[1], 'base64').toString());
+  assert.deepEqual(painted.map, [320, 240]);
+  assert.deepEqual(painted.cones, ['operator', 'sub']);
+  assert.ok(map.scaleBar.meters > 0);
+});
+
+test('pictures carry the map unless asked not to', async () => {
+  const {pilot} = await launched();
+  assert.deepEqual((await pilot.run('snap', {})).images.map(image => image.name), ['snap', 'map']);
+  assert.deepEqual((await pilot.run('snap', {map: false})).images.map(image => image.name), ['snap']);
+  assert.deepEqual((await pilot.run('peek', {})).images.map(image => image.name), ['peek', 'map']);
+  assert.deepEqual((await pilot.run('burst', {count: 2})).images.map(image => image.name), ['sheet', 'map']);
 });

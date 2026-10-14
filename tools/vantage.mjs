@@ -22,9 +22,13 @@ Commands
   orbit TARGET [--radius R] [--azimuth DEG] [--elevation DEG]
   frame TARGET [--margin M]
   align                      move the sub to the operator's view
-  snap [--annotate] [--helpers] [--settle FRAMES] [--max-size PX] [--name NAME]
-  peek [--annotate] [--clean] [--max-size PX] [--name NAME]     the operator's own view
-  burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--name NAME]
+  snap [--annotate] [--helpers] [--settle FRAMES] [--max-size PX] [--no-map] [--name NAME]
+  peek [--annotate] [--clean] [--max-size PX] [--no-map] [--name NAME]     the operator's own view
+  burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--name NAME]
+  map [--size PX]            three-quarter map of the scene with your view cone and each sub's; needs no drawing
+  sketch                     the scene as named boxes, fields and cameras; needs no drawing
+
+Pictures carry the map unless --no-map is given.
 
 TARGET is an object id, a label or a unique part of one, "selection", or X Y Z.
 
@@ -36,9 +40,9 @@ Options
   --timeout S      seconds to wait for the page (default 30; bursts add their duration)
   --json           print the full JSON record instead of a summary`;
 
-const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help']);
+const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
-  'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell']);
+  'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -80,10 +84,12 @@ function commandArgs(command, rest, options, pilot) {
     case 'look': return {pilot, target: targetOf(rest, command)};
     case 'orbit': return defined({pilot, target: targetOf(rest, command), radius: number(options.radius), azimuth: number(options.azimuth), elevation: number(options.elevation)});
     case 'frame': return defined({pilot, target: targetOf(rest, command), margin: number(options.margin)});
-    case 'snap': return defined({pilot, settle: number(options.settle), maxSize: number(options['max-size']), annotate: options.annotate, helpers: options.helpers});
-    case 'peek': return defined({maxSize: number(options['max-size']), annotate: options.annotate, clean: options.clean});
+    case 'snap': return defined({pilot, settle: number(options.settle), maxSize: number(options['max-size']), annotate: options.annotate, helpers: options.helpers, map: options['no-map'] ? false : undefined});
+    case 'peek': return defined({maxSize: number(options['max-size']), annotate: options.annotate, clean: options.clean, map: options['no-map'] ? false : undefined});
     case 'burst': return defined({pilot, count: number(options.count), interval: number(options.interval), settle: number(options.settle),
-      maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames});
+      maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined});
+    case 'map': return defined({size: number(options.size)});
+    case 'sketch': return {};
     default: return {};
   }
 }
@@ -142,7 +148,20 @@ function describePose(sub) {
 
 function summarize(command, record) {
   const result = record.result ?? {}, lines = [];
-  if (result.images) {
+  if (result.kind === 'map') {
+    lines.push(`map · ${result.images[0]?.width}×${result.images[0]?.height} · grid ${fmt(result.scaleBar?.meters ?? 0)} m`);
+    for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
+    lines.push(`  record    ${record.recordPath}`);
+    lines.push(`  ${(result.sketch?.objects ?? []).length} objects, ${(result.sketch?.fields ?? []).length} fields, ${(result.sketch?.subs ?? []).length} subs`);
+  } else if (command === 'sketch') {
+    const list = value => Array.isArray(value) ? value : [];
+    lines.push(`${list(result.objects).length} objects, ${list(result.fields).length} fields`);
+    if (result.operator) lines.push(`you at ${point(result.operator.view.position)} toward ${point(result.operator.view.target)}`);
+    for (const sub of list(result.subs)) lines.push(`${sub.label} at ${point(sub.view.position)} toward ${point(sub.view.target)}`);
+    for (const object of [...list(result.objects), ...list(result.fields)]) {
+      lines.push(`  ${object.label} [${object.id}] ${object.type}${object.bounds ? ` ${point(object.bounds.min)}..${point(object.bounds.max)}` : ''}`);
+    }
+  } else if (result.images) {
     lines.push(`${result.kind} · ${result.pilot ?? 'operator'} · ${result.route} · ${result.image?.width}×${result.image?.height} · layers: ${(result.layers || []).join(', ')}`);
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
     lines.push(`  record    ${record.recordPath}`);

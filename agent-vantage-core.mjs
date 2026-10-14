@@ -265,11 +265,13 @@ const COMMANDS = {
   frame: args => ({pilot: pilotArg(args), target: targetArg(args.target), margin: positive(args.margin, 'margin', 1.15)}),
   align: args => ({pilot: pilotArg(args)}),
   snap: args => ({pilot: pilotArg(args), settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64),
-    annotate: flag(args.annotate), helpers: flag(args.helpers)}),
-  peek: args => ({maxSize: count(args.maxSize, 'maxSize', 1280, 64), annotate: flag(args.annotate), clean: flag(args.clean)}),
+    annotate: flag(args.annotate), helpers: flag(args.helpers), map: args.map !== false}),
+  peek: args => ({maxSize: count(args.maxSize, 'maxSize', 1280, 64), annotate: flag(args.annotate), clean: flag(args.clean), map: args.map !== false}),
   burst: args => ({pilot: pilotArg(args), count: count(args.count, 'count', 6), interval: positive(args.interval, 'interval', 250),
     settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64), cell: count(args.cell, 'cell', 480, 64),
-    annotate: flag(args.annotate), frames: flag(args.frames)}),
+    annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false}),
+  sketch: () => ({}),
+  map: args => ({size: count(args.size, 'size', 480, 64)}),
 };
 export const VANTAGE_COMMANDS = Object.freeze(Object.keys(COMMANDS));
 
@@ -281,3 +283,90 @@ export function checkedCommand(raw) {
   return {command, args: COMMANDS[command](args)};
 }
 
+
+// --- scene sketch and map ---------------------------------------------------
+
+// A light representation of the scene that needs no rendering: named boxes,
+// simulation fields, the operator's camera and every sub.
+export const SKETCH_SCHEMA = 'kaminos.scene-sketch.v1';
+
+function hull(points) {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length < 3) return sorted;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const chain = list => list.reduce((out, point) => {
+    while (out.length >= 2 && cross(out.at(-2), out.at(-1), point) <= 0) out.pop();
+    out.push(point);
+    return out;
+  }, []);
+  const lower = chain(sorted), upper = chain([...sorted].reverse());
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+const BOX_EDGES = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+const cornersOf = ({min, max}) => Array.from({length: 8}, (_, i) => [i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]]);
+const niceStep = span => {
+  const raw = span / 8, power = 10 ** Math.floor(Math.log10(raw));
+  return [1, 2, 5, 10].map(factor => factor * power).find(step => step >= raw);
+};
+
+// A fixed three-quarter orthographic view, fitted to the scene and both kinds
+// of camera, laid out in pixels. Painting is left to the caller.
+export function sketchMapLayout(sketch, {width = 320, height = 240, azimuth = 35, elevation = 30, margin = 0.08} = {}) {
+  const az = azimuth * DEG, el = elevation * DEG;
+  const eye = new Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+  const basis = new Matrix4().lookAt(eye, new Vector3(), new Vector3(0, 1, 0));
+  const axes = [0, 1, 2].map(column => new Vector3().setFromMatrixColumn(basis, column));
+  const flat = point => axes.map(axis => axis.dot(new Vector3(...point)));
+  const aspect = sketch.operator?.aspect ?? 16 / 9;
+  const boxes = [...(sketch.objects ?? []).map(object => ({...object, kind: 'object'})),
+    ...(sketch.fields ?? []).map(field => ({...field, kind: 'field'}))].filter(box => box.bounds);
+  const cone = (kind, label, view) => {
+    const apex = new Vector3(...view.position), forward = new Vector3(...view.target).sub(apex).normalize();
+    const up = new Vector3(...view.up);
+    up.addScaledVector(forward, -up.dot(forward));
+    if (up.lengthSq() < 1e-12) up.set(0, 1, 0);
+    up.normalize();
+    const tangent = Math.tan(view.fov * DEG / 2);
+    return {kind, label, apex, forward, up, right: new Vector3().crossVectors(forward, up).normalize(), vertical: tangent, horizontal: tangent * aspect};
+  };
+  const cones = [...(sketch.operator ? [cone('operator', 'you', sketch.operator.view)] : []),
+    ...(sketch.subs ?? []).map(sub => cone('sub', sub.label, sub.view))];
+  const world = [...boxes.flatMap(box => cornersOf(box.bounds)), ...cones.map(item => item.apex.toArray()), [0, 0, 0]];
+  const extent = new Box3().setFromPoints(world.map(point => new Vector3(...point)));
+  // Cones share one length scaled to the scene, so the two read alike.
+  const length = Math.min(Math.max(Math.max(extent.getSize(new Vector3()).length() / 2, 1) * 0.6, 0.5), 6);
+  for (const item of cones) {
+    item.far = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => item.apex.clone().addScaledVector(item.forward, length)
+      .addScaledVector(item.right, sx * item.horizontal * length).addScaledVector(item.up, sy * item.vertical * length).toArray());
+  }
+  const flats = [...world, ...cones.flatMap(item => item.far)].map(flat);
+  const xs = flats.map(point => point[0]), ys = flats.map(point => point[1]);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const scale = Math.min(width * (1 - 2 * margin) / Math.max(x1 - x0, 1e-6), height * (1 - 2 * margin) / Math.max(y1 - y0, 1e-6));
+  const project = point => {
+    const [x, y] = flat(point);
+    return [width / 2 + (x - (x0 + x1) / 2) * scale, height / 2 - (y - (y0 + y1) / 2) * scale];
+  };
+  const laidBoxes = boxes.map(box => {
+    const corners = cornersOf(box.bounds), points = corners.map(project);
+    const center = box.bounds.min.map((value, i) => (value + box.bounds.max[i]) / 2);
+    return {id: box.id, label: box.label, type: box.type, kind: box.kind, polygon: hull(points),
+      edges: BOX_EDGES.map(([a, b]) => [...points[a], ...points[b]]), center: project(center),
+      labelAt: project([center[0], box.bounds.max[1], center[2]]), depth: flat(center)[2]};
+  }).sort((a, b) => a.depth - b.depth);
+  const laidCones = cones.map(item => {
+    const apex = project(item.apex.toArray()), far = item.far.map(project);
+    return {kind: item.kind, label: item.label, apex, polygon: hull([apex, ...far]),
+      edges: [...far.map(point => [...apex, ...point]), ...far.map((point, i) => [...point, ...far[(i + 1) % 4]])]};
+  });
+  const step = niceStep(Math.max(extent.max.x - extent.min.x, extent.max.z - extent.min.z, 1));
+  const gx = [Math.floor(extent.min.x / step) * step, Math.ceil(extent.max.x / step) * step];
+  const gz = [Math.floor(extent.min.z / step) * step, Math.ceil(extent.max.z / step) * step];
+  const grid = [];
+  for (let x = gx[0]; x <= gx[1] + 1e-9; x += step) grid.push([...project([x, 0, gz[0]]), ...project([x, 0, gz[1]])]);
+  for (let z = gz[0]; z <= gz[1] + 1e-9; z += step) grid.push([...project([gx[0], 0, z]), ...project([gx[1], 0, z])]);
+  return {width, height, azimuth, elevation, scale, project, boxes: laidBoxes, cones: laidCones, grid,
+    axes: {x: [...project([0, 0, 0]), ...project([step, 0, 0])], z: [...project([0, 0, 0]), ...project([0, 0, step])]},
+    scaleBar: {meters: step, pixels: step * scale}};
+}
