@@ -145,6 +145,26 @@ function defaultNow() {
 }
 
 function defaultSleep(ms) {
+  // A posted task yields to the browser without nested timers' minimum delay.
+  if (ms === 0 && typeof globalThis.MessageChannel === 'function') {
+    return new Promise((resolve, reject) => {
+      const channel = new globalThis.MessageChannel();
+      const close = () => {
+        channel.port1.close();
+        channel.port2.close();
+      };
+      channel.port1.onmessage = () => {
+        close();
+        resolve();
+      };
+      try {
+        channel.port2.postMessage(null);
+      } catch (error) {
+        close();
+        reject(error);
+      }
+    });
+  }
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
