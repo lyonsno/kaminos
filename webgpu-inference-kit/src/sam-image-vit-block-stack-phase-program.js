@@ -67,7 +67,7 @@ const LAYERNORM_WGSL = `
 struct LnDims {
   token_count: u32,
   channels: u32,
-  _pad0: u32,
+  layer_norm_eps: f32,
   _pad1: u32,
 };
 
@@ -96,7 +96,7 @@ fn main(
     variance = variance + delta * delta;
   }
   variance = variance / f32(dims.channels);
-  let inv_std = inverseSqrt(variance + 0.000001);
+  let inv_std = inverseSqrt(variance + dims.layer_norm_eps);
   for (var c = 0u; c < dims.channels; c = c + 1u) {
     output_values[base + c] = (input_values[base + c] - mean) * inv_std * norm_weight[c] + norm_bias[c];
   }
@@ -377,7 +377,7 @@ function normalizeShape(shape = {}) {
   if (!Number.isInteger(out.finalLayerIndex) || out.finalLayerIndex < out.endLayerIndex) throw new Error('shape.finalLayerIndex must be an integer >= shape.endLayerIndex');
   if (!Array.isArray(out.globalAttnIndexes) || out.globalAttnIndexes.length === 0 || !out.globalAttnIndexes.every(value => Number.isInteger(value) && value >= 0)) throw new Error('shape.globalAttnIndexes must be non-empty integer array');
   if (!Number.isInteger(out.headDim) || out.headDim % 4 !== 0) throw new Error('shape.hiddenSize / shape.numHeads must be divisible by 4 for SAM3 axial RoPE');
-  if (out.layerNormEps !== 0.000001) throw new Error('shape.layerNormEps must be 0.000001 until the WebGPU block-stack shader accepts configurable epsilon');
+  if (!Number.isFinite(out.layerNormEps) || !Number.isFinite(Math.fround(out.layerNormEps)) || Math.fround(out.layerNormEps) <= 0) throw new Error('shape.layerNormEps must be positive finite f32');
   if (out.ropeTheta !== 10000) throw new Error('shape.ropeTheta must be 10000 until the WebGPU block-stack shader accepts configurable RoPE theta');
   if (!Number.isInteger(out.ropePretrainGridSize) || out.ropePretrainGridSize <= 0) throw new Error('shape.ropePretrainGridSize must be a positive integer');
   return out;
@@ -1050,7 +1050,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
           ],
           values: blockDimsValues(blockShapeForLayer(shape, weights.layers[0])),
         }),
-        lnDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.ln-dims', schema: [{ name: 'token_count', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: '_pad0', type: 'u32' }, { name: '_pad1', type: 'u32' }], values: { token_count: shape.tokenCount, channels: shape.hiddenSize, _pad0: 0, _pad1: 0 } }),
+        lnDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.ln-dims', schema: [{ name: 'token_count', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'layer_norm_eps', type: 'f32' }, { name: '_pad1', type: 'u32' }], values: { token_count: shape.tokenCount, channels: shape.hiddenSize, layer_norm_eps: shape.layerNormEps, _pad1: 0 } }),
         windowLinearDims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.window-linear-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.hiddenSize, total_output: blockShapeForLayer(shape, weights.layers[0]).paddedTotalValues, _pad0: 0 } }),
         fc1Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc1-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.hiddenSize, output_channels: shape.intermediateSize, total_output: shape.tokenCount * shape.intermediateSize, _pad0: 0 } }),
         fc2Dims: stage.createUniformBuffer({ label: 'sam3.image-vit-block-stack.fc2-dims', schema: [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: '_pad0', type: 'u32' }], values: { input_channels: shape.intermediateSize, output_channels: shape.hiddenSize, total_output: shape.totalValues, _pad0: 0 } }),
