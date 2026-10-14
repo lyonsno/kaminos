@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import {materialComponents} from '../structural-material-solid-surface.mjs';
 import {elasticSupportBonds} from '../structural-material-bounded-fragments.mjs';
 import {buildAxialChunkFixture} from '../structural-material-stone-fixture.js';
-import {requireChunkStage} from './stone-chunk-chain-evidence.mjs';
+import {requireChunkStage,requireMovedPieceFracture} from './stone-chunk-chain-evidence.mjs';
 
 const [url,out,playwrightPath,executable,compositionPath]=process.argv.slice(2);
 if(!out)throw Error('Explicit persistent output required');
@@ -73,10 +73,10 @@ try{
  const held=await acquire('second-down');check('contact belongs to moved lobe',nodes.includes(held.witness.lastPick?.cellAnchor),held.witness.lastPick);
  check('grip begins without rest pose snap',nodes.every(i=>point(held.witness.state,i).every((v,k)=>Math.abs(v-point(ls,i)[k])<3e-5)));
  await invoke('step',1);const awake=await acquire('awake');check('gripped component resumes material solve',nodes.every(i=>awake.motion.ownership[i*4+3]===0));
- await invoke('tension',1);await invoke('move',[0,.5,0]);await invoke('step',20);await invoke('release');await invoke('step',1);
+ await invoke('tension',180);await invoke('move',[0,.5,0]);await invoke('step',20);await invoke('release');await invoke('step',1);
  const repeated=await acquire('refractured'),rs=repeated.witness.state;
  check('prior damage retained',s.bonds.every((v,i)=>i%4!==2||v!==0||rs.bonds[i]===0));
- const additional=[];for(let i=0;i<rs.bonds.length;i+=4)if(ms.bonds[i+2]===1&&rs.bonds[i+2]===0&&nodes.includes(rs.bonds[i])&&nodes.includes(rs.bonds[i+1]))additional.push(i/4);
+ const {inside:additional,outside}=requireMovedPieceFracture(awake.witness.state,rs,nodes);report.secondaryFracture={inside:additional.length,outside:outside.length};
  check('same moved lobe fractures internally again',additional.length>0,{additional});report.additional=additional;
  check('no runtime errors',report.errors.length===0&&!(report.consoleErrors?.length),{errors:report.errors,console:report.consoleErrors});report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};process.exitCode=1;if(page)try{await page.screenshot({path:path.join(out,'failure.png')});}catch(e){report.retentionError=e.message;}}

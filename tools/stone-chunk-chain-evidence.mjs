@@ -7,3 +7,16 @@ export function requireChunkStage({status,state,motion}){
  if(motion?.route!==status.motion.route||motion.runId!==state.runId||motion.steps!==state.steps||motion.motion!=='translation-only'||!Array.isArray(motion.ownership)||motion.ownership.length!==model.points*4||!motion.ownership.every(Number.isFinite))throw Error('Current complete coherent ownership required');
  for(let i=0;i<model.points;i++){const owner=motion.ownership[i*4+3];if(!Number.isInteger(owner)||owner<0||owner>model.points||(owner>0)!==(state.state[i*16+15]===2)||owner>0&&state.state[i*16+11]===1)throw Error('Rigid ownership must agree with acquired material and supports');}
 }
+
+export function requireMovedPieceFracture(before,after,nodes){
+ const count=before?.model?.points,bonds=before?.model?.bonds;
+ if(!Number.isSafeInteger(count)||count<=0||!Number.isSafeInteger(bonds)||bonds<=0||before.runId!==after?.runId||after.steps<=before.steps||after.model?.points!==count||after.model?.bonds!==bonds||!Array.isArray(nodes)||nodes.length<2||new Set(nodes).size!==nodes.length||!nodes.every(i=>Number.isSafeInteger(i)&&i>=0&&i<count)||![before.bonds,after.bonds].every(a=>Array.isArray(a)&&a.length===bonds*4))throw Error('Complete same-run moved-piece fracture control required');
+ const selected=new Set(nodes),inside=[],outside=[];
+ for(let i=0;i<before.bonds.length;i+=4){
+  const [a,b,live]=before.bonds.slice(i,i+3),[nextA,nextB,nextLive]=after.bonds.slice(i,i+3);
+  if(a!==nextA||b!==nextB||![0,1].includes(live)||![0,1].includes(nextLive)||live===0&&nextLive!==0)throw Error('Stable bond identities and prior damage required');
+  if(live===1&&nextLive===0)(selected.has(a)&&selected.has(b)?inside:outside).push(i/4);
+ }
+ if(!inside.length||outside.length)throw Error('New pull must fracture the same moved piece without collateral control release');
+ return{inside,outside};
+}
