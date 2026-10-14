@@ -11920,7 +11920,7 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
     if (localLiquidHost) {
-      try { localLiquidHost.render(); }
+      try { localLiquidHost.render();if(localLiquidHost.state().mode==='finite_drop'){const c=localLiquidHost.state().clock;sharedWorkbench?.update({source:'Authored finite water',status:c.paused?'Paused':'Playing',clock:`tick ${c.step} · ${(c.timeSeconds).toFixed(4)} s`});} }
       catch (error) {
         console.error('Local water frame failed', error);
         localLiquidFailure = String(error?.message || error);
@@ -12616,7 +12616,7 @@ function applyAuthoredWaterSettings(id,patch){
 async function addAuthoredWaterDrop(){
  assertSceneConstructionAvailable();localLiquidSetup||=defaultLocalLiquidSetup();const id=makeSceneObjectId(LOCAL_LIQUID_EMITTER_TYPE);
  const record=createLocalLiquidEmitterSceneRecord({id,label:'Water drop',transform:{position:controls.target.clone().add(new THREE.Vector3(0,1,0)).toArray(),rotation:[0,0,0],scale:[1,1,1]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.5,samplesPerUnit:48}}});
- const {object}=createLocalLiquidEmitterObject(THREE,record);scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);setActiveSceneObject(id);authoredWaterControls?.refresh();window._kaminosDirty?.();return id;
+ const {object}=createLocalLiquidEmitterObject(THREE,record);scene.add(object);registerSceneObject(object,record);await recordSceneObjectInsertion(id);setActiveSceneObject(id);authoredWaterControls?.refresh();sharedWorkbench?.update({source:'Authored water source',status:'Initial preview',clock:'Release starts water'});window._kaminosDirty?.();return id;
 }
 async function releaseAuthoredWater(id){
  assertSceneConstructionAvailable();const selected=sceneObjects.find(r=>r.id===id);if(selected?.type!==LOCAL_LIQUID_EMITTER_TYPE)throw Error('Choose a water source');
