@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork,assertMountedScene} from '../visual-work.mjs';
-const [out,store,origin='http://127.0.0.1:18588',softnessInput='0',sceneInput='dj-with-a-kiln-pretty.kaminos.json']=process.argv.slice(2);
+const [out,store,origin='http://127.0.0.1:18588',softnessInput='0',sceneInput='dj-with-a-kiln-pretty.kaminos.json',sampling='fixed']=process.argv.slice(2);
+if(!['fixed','complementary'].includes(sampling))throw Error('valid shadow sampling required');
+const owner=sampling==='complementary'?{id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling})}:null;
+const workspace=owner?'workbench':'authoring';
 const shadowSoftness=Number(softnessInput);if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('finite nonnegative shadow softness required');
 if(!out||!store)throw Error('explicit output and copied store required');
 await fs.mkdir(out,{recursive:true});
@@ -18,6 +21,7 @@ try{
  const doc=JSON.parse(bytes);report.input={file:sceneInput,sha256:createHash('sha256').update(bytes).digest('hex'),preset:doc.composition.flame.presetId};
  Object.assign(doc.composition.route,{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:'1',volume_light_field_hybrid_smoke_refinement:'1'});
  if(shadowSoftness>0)doc.composition.route.volume_light_field_hybrid_shadow_softness=String(shadowSoftness);
+ doc.composition.route.volume_light_field_hybrid_shadow_sampling=sampling;
  await fs.writeFile(store+'/scenes/kiln-hybrid-preview.kaminos.json',JSON.stringify(doc,null,2));
  const executablePath='/Users/noahlyons/.local/state/kaminos/browsers/chrome-for-testing-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';report.browser=executablePath;
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
@@ -38,7 +42,7 @@ try{
    });
    assert.deepEqual(report.errors,[]);
  };
- report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile:'kiln-hybrid-preview.kaminos.json',workspace:'authoring',out,exercise:async({document,retain,open})=>{
+ report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile:'kiln-hybrid-preview.kaminos.json',workspace,owner,out,exercise:async({document,retain,open})=>{
    await settle();report.phase='settings';report.loaded=await observe();await write();
    await page.evaluate(()=>{
      for(const [id,value] of [['rendering-angular-samples','8'],['rendering-angular-pattern','guided']]){const input=document.getElementById(id);input.value=value;input.dispatchEvent(new Event('change'));}
@@ -55,24 +59,38 @@ try{
      const before=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
      const raw=Buffer.from(new Float32Array(before.values).buffer);await fs.writeFile(out+'/held-source.f32',raw);
      report.heldSource={...before,values:undefined,sha256:createHash('sha256').update(raw).digest('hex')};
-     report.heldCamera=await page.evaluate(()=>{
+     report.heldCamera=await page.evaluate(sampling=>{
+       if(sampling==='complementary')return window.kaminosSetCameraDebugPose({position:[7,5,11],target:[0,-.3,1]});
        const {position:p,target:t}=window.kaminosCameraDebugState();
        return window.kaminosSetCameraDebugPose({position:p.map((v,i)=>t[i]+(v-t[i])*.65),target:t});
-     });
+     },sampling);
+     if(owner){
+       report.experiment=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+       assert.equal(report.experiment.effective,'complementary');
+       await page.locator('select[aria-label="Fire shadow sampling"]').selectOption('fixed');
+       await page.waitForFunction(()=>window.kaminosWorkbenchExperiments.read().effective==='fixed');
+       report.controlExercise=await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setSampling','complementary'));
+       assert.equal(report.controlExercise.effective,'complementary');
+       report.giBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState());
+       await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setBounceGain',0));
+       assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),0);
+     }
      const lights=await page.evaluate(()=>window.kaminosSceneAuthoring.read().objects.filter(o=>o.type==='light'));
      report.held=[];
      for(const spotlight of [true,false]){
        await page.evaluate(({lights,spotlight})=>{for(const light of lights)window.kaminosSceneAuthoring.setLight(light.id,{enabled:spotlight&&light.light.enabled});},{lights,spotlight});
-       for(const softness of [0,shadowSoftness]){
+       for(const [softness,mode]of [[0,'fixed'],[shadowSoftness,'fixed'],...(owner?[[shadowSoftness,'complementary']]:[])]){
          await page.evaluate(value=>window.__kaminosSceneRadiance.setShadowSoftness(value),softness);
+         await page.evaluate(({owner,mode})=>owner?window.kaminosWorkbenchExperiments.invoke('setSampling',mode):window.__kaminosSceneRadiance.setShadowSampling(mode),{owner:!!owner,mode});
          await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
          const row=await observe();assert.equal(row.volume.simStepCount,report.pause.simStepCount);
-         report.held.push({spotlight,softness,lighting:row.lighting,simStepCount:row.volume.simStepCount,camera:await page.evaluate(()=>window.kaminosCameraDebugState())});
-         await page.screenshot({path:out+'/'+(spotlight?'authored':'fire-only')+'-'+(softness?'soft':'hard')+'.png'});await write();
+         report.held.push({spotlight,softness,sampling:mode,lighting:row.lighting,gi:await page.evaluate(()=>window.kaminosSceneGIDebugState()),simStepCount:row.volume.simStepCount,camera:await page.evaluate(()=>window.kaminosCameraDebugState())});
+         await page.screenshot({path:out+'/'+(spotlight?'authored':'fire-only')+'-'+(softness?(mode==='complementary'?'complementary':'soft'):'hard')+'.png'});await write();
        }
      }
      const after=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
      assert.deepEqual(after.values,before.values,'shadow comparison must preserve actual source coefficients');
+     if(owner)await page.evaluate(gain=>window.kaminosWorkbenchExperiments.invoke('setBounceGain',gain),report.giBefore.gain);
      await page.evaluate(lights=>{for(const light of lights)window.kaminosSceneAuthoring.setLight(light.id,{enabled:light.light.enabled});window.__kaminosVolumePrototype.setSimulationPaused(false);},lights);
    }
    report.phase='capture';await write();
@@ -93,6 +111,7 @@ try{
    assert.equal(report.reopened.lighting.frame.directions,8);assert.equal(report.reopened.lighting.frame.angularPattern,'guided');
    assert.equal(report.reopened.lighting.pointCount,1);assert.equal(report.reopened.lighting.frame.smokeReconstruction.refinement,1);
    assert.equal(report.reopened.lighting.shadowSoftness,shadowSoftness);
+   assert.equal(report.reopened.lighting.shadowSampling,sampling);
    await page.screenshot({path:out+'/reopened.png'});
    report.camera=await page.evaluate(()=>window.kaminosCameraDebugState());
    report.obliqueCamera=await page.evaluate(()=>{
