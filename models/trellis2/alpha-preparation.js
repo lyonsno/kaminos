@@ -1,6 +1,7 @@
 // Conditioning pixels from an already decoded RGBA8 foreground cutout.
 // Source: TRELLIS2MLX1201553 trellmlx/preprocess.py, followed by DINO RGB512.
-// This does not decode images or remove backgrounds. Pixel/kernel identity is
+// The encoded-image entry point decodes alpha cutouts; neither entry removes
+// backgrounds. Pixel/kernel identity is
 // separate from the image decoder's color/orientation/alpha interpretation.
 // Lanczos: Pillow12.3.0 src/libImaging/Resample.c and Convert.c (MIT-CMU).
 // https://github.com/python-pillow/Pillow/tree/12.3.0/src/libImaging
@@ -122,4 +123,57 @@ export async function prepareTrellisAlphaRgba({pixels,width,height,signal}={}){
     integerCropBox:integerBox,croppedSize:[cropWidth,cropHeight],croppedRgbSha256,
     resampling:'Pillow12.3 U8 Lanczos coefficient and two-pass rounding law; no Canvas resize',
     output:{format:'RGB8',size:[512,512],sha256:await sha(prepared)}}};
+}
+
+/** Prepare a selected alpha image, without Canvas color/alpha conversion.
+ * Blob/File carries its MIME type. Byte callers may supply `type`; PNG is
+ * recognized by its signature. Other formats depend on the actual decoder's
+ * native RGBA/BGRA support and are not covered by the PNG parity witness.
+ * ImageDecoderClass is an explicit injectable codec for local contract tests.
+ */
+export async function prepareTrellisAlphaImage(imageBytes,{signal,type,ImageDecoderClass=globalThis.ImageDecoder}={}){
+  stop(signal);
+  let bytes;
+  if(imageBytes instanceof Blob){
+    type ||= imageBytes.type;
+    bytes=new Uint8Array(await imageBytes.arrayBuffer());
+  }else if(imageBytes instanceof ArrayBuffer){
+    bytes=new Uint8Array(imageBytes.slice(0));
+  }else if(imageBytes instanceof Uint8Array||imageBytes instanceof Uint8ClampedArray){
+    bytes=new Uint8Array(imageBytes);
+  }else throw TypeError('encoded image Blob, ArrayBuffer or U8 bytes required');
+  stop(signal);
+  if(!bytes.length)throw Error('encoded image is empty');
+  const png=[137,80,78,71,13,10,26,10];
+  if(!type&&png.every((v,i)=>bytes[i]===v))type='image/png';
+  if(!type)throw Error('image MIME type is required for this encoded input');
+  if(typeof ImageDecoderClass!=='function')throw Error('ImageDecoder is unavailable; no Canvas pixel fallback');
+  const encodedSha256=await sha(bytes);stop(signal);
+  let decoder,frame,closed=false;
+  const close=()=>{if(decoder&&!closed){closed=true;decoder.close();}};
+  try{
+    decoder=new ImageDecoderClass({type,data:bytes,colorSpaceConversion:'none',preferAnimation:false});
+    signal?.addEventListener('abort',close,{once:true});stop(signal);
+    const decoded=await decoder.decode({frameIndex:0,completeFramesOnly:true});frame=decoded.image;stop(signal);
+    if(!decoded.complete)throw Error('incomplete decoded image is not conditioning');
+    if(!frame||!['RGBA','BGRA'].includes(frame.format))throw Error('native alpha pixel format is unsupported: '+frame?.format);
+    const width=frame.codedWidth,height=frame.codedHeight;dimensions(width,height);
+    const rgba=new Uint8Array(width*height*4),layout=[{offset:0,stride:width*4}];
+    // Explicit format:'RGBA' can introduce alpha-dependent color rounding.
+    // Copy native bytes and change only channel order, never pixel values.
+    const actualLayout=await frame.copyTo(rgba,{layout});stop(signal);
+    if(actualLayout.length!==1||actualLayout[0].offset!==0||actualLayout[0].stride!==width*4)
+      throw Error('native alpha pixel layout differs from the requested packed plane');
+    if(frame.format==='BGRA')for(let i=0;i<rgba.length;i+=4){const b=rgba[i];rgba[i]=rgba[i+2];rgba[i+2]=b;}
+    const nativeFormat=frame.format,orientation={rotation:frame.rotation??0,flip:frame.flip??false};
+    const decodedRgbaSha256=await sha(rgba);stop(signal);
+    frame.close();frame=null;close();
+    const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});stop(signal);
+    return {...prepared,provenance:{...prepared.provenance,
+      encodedImage:{type,byteLength:bytes.length,sha256:encodedSha256},
+      decoder:{route:ImageDecoderClass===globalThis.ImageDecoder?'browser ImageDecoder':'explicit injected ImageDecoderClass',
+        nativeFormat,copyLayout:actualLayout,colorSpaceConversion:'none',frameIndex:0,complete:true,
+        orientation,orientationApplied:false,decodedRgbaSha256}}};
+  }catch(error){stop(signal);throw error;}
+  finally{signal?.removeEventListener('abort',close);frame?.close();close();}
 }

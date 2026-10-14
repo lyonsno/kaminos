@@ -24,6 +24,58 @@ function pattern({width,height,variant}){
 test('source-matched alpha conditioning is a callable without Python',()=>{
   assert.equal(typeof module.prepareTrellisAlphaRgba,'function','missing browser alpha-to512RGB capability');
 });
+test('selected encoded alpha image has a browser callable',()=>{
+  assert.equal(typeof module.prepareTrellisAlphaImage,'function','missing selected encoded image capability');
+});
+function decoderFixture({format='BGRA',complete=true,copyError=false,abortDuringCopy=false,control}={}){
+  const row=fixture.cases[0],rgba=pattern(row),state={closed:0,frameClosed:0,options:null};
+  class Decoder{
+    constructor(options){state.options=options;}
+    async decode(options){state.decodeOptions=options;return {complete,image:{
+      format,codedWidth:row.width,codedHeight:row.height,rotation:0,flip:false,
+      async copyTo(output,options){
+        state.copyOptions=options;if(copyError)throw Error('copy failed');
+        output.set(rgba);
+        if(format==='BGRA')for(let i=0;i<output.length;i+=4)[output[i],output[i+2]]=[output[i+2],output[i]];
+        if(abortDuringCopy)control.abort();
+        return [{offset:0,stride:row.width*4}];
+      },close(){state.frameClosed++;}}};}
+    close(){state.closed++;}
+  }
+  return {Decoder,state,row};
+}
+test('encoded image keeps native alpha bytes, caller ownership and truthful provenance',{skip:!module.prepareTrellisAlphaImage},async()=>{
+  for(const format of ['RGBA','BGRA']){
+    const {Decoder,state,row}=decoderFixture({format});
+    const bytes=Uint8Array.from([137,80,78,71,13,10,26,10]),before=sha(bytes);
+    const result=await module.prepareTrellisAlphaImage(bytes,{ImageDecoderClass:Decoder});
+    assert.equal(sha(result.pixels),row.preparedRgbSha256);
+    assert.equal(sha(bytes),before);assert.notEqual(state.options.data.buffer,bytes.buffer);
+    assert.equal(state.options.colorSpaceConversion,'none');assert.equal(state.options.type,'image/png');
+    assert.equal('format' in state.copyOptions,false,'Do not ask copyTo for a lossy format conversion.');
+    assert.deepEqual(state.copyOptions.layout,[{offset:0,stride:row.width*4}]);
+    assert.deepEqual(state.decodeOptions,{frameIndex:0,completeFramesOnly:true});
+    assert.equal(state.closed,1);assert.equal(state.frameClosed,1);
+    assert.equal(result.provenance.encodedImage.sha256,before);
+    assert.equal(result.provenance.decoder.nativeFormat,format);
+    assert.equal(result.provenance.decoder.decodedRgbaSha256,row.inputRgbaSha256);
+  }
+});
+test('decoder failure, partial output, unsupported layout and Stop release only owned codec',{skip:!module.prepareTrellisAlphaImage},async()=>{
+  const bytes=Uint8Array.from([137,80,78,71,13,10,26,10]);
+  for(const [options,expected] of [[{complete:false},/incomplete/],[{format:'I420'},/native alpha/],[{copyError:true},/copy failed/]]){
+    const {Decoder,state}=decoderFixture(options);
+    await assert.rejects(module.prepareTrellisAlphaImage(bytes,{ImageDecoderClass:Decoder}),expected);
+    assert.equal(state.closed,1);assert.equal(state.frameClosed,1);
+  }
+  const control=new AbortController(),{Decoder,state}=decoderFixture({control,abortDuringCopy:true});
+  await assert.rejects(module.prepareTrellisAlphaImage(bytes,{signal:control.signal,ImageDecoderClass:Decoder}),e=>e.name==='AbortError');
+  assert.equal(state.closed,1);assert.equal(state.frameClosed,1);
+  const pre=new AbortController();pre.abort();
+  await assert.rejects(module.prepareTrellisAlphaImage(bytes,{signal:pre.signal,ImageDecoderClass:Decoder}),e=>e.name==='AbortError');
+  assert.equal(state.closed,1);
+  await assert.rejects(module.prepareTrellisAlphaImage(new Uint8Array(0),{ImageDecoderClass:Decoder}),/empty/);
+});
 for(const row of fixture.cases)test('complete actual-source pixels: '+row.name,{skip:!module.prepareTrellisAlphaRgba},async()=>{
   const rgba=pattern(row),before=sha(rgba);
   assert.equal(before,row.inputRgbaSha256,'The complete source RGBA must match the observed fixture input.');

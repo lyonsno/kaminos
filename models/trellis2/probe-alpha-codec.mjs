@@ -7,9 +7,10 @@ import {startServer,launchChrome,sourceIdentity} from '../flux2-klein/cdp-harnes
 const option=name=>{const i=process.argv.indexOf(name);if(i<0||!process.argv[i+1])throw Error(name+' is required');return process.argv[i+1];};
 const out=path.resolve(option('--out')),images=path.resolve(option('--images')),root=path.resolve(option('--repo-root'));
 const nativeLayout=process.argv.includes('--native-layout');
+const wrapper=process.argv.includes('--wrapper');
 await mkdir(out,{recursive:true});
 const report={schema:'trellis2.alpha-codec-probe.v0',status:'running',phase:'admission',
-  requestedRoute:nativeLayout?'ImageDecoder PNG / native copyTo + explicit channel mapping / source-law alpha conditioning':'ImageDecoder PNG / RGBA copyTo / source-law alpha conditioning',
+  requestedRoute:wrapper?'prepareTrellisAlphaImage / browser ImageDecoder / source-law alpha conditioning':nativeLayout?'ImageDecoder PNG / native copyTo + explicit channel mapping / source-law alpha conditioning':'ImageDecoder PNG / RGBA copyTo / source-law alpha conditioning',
   source:sourceIdentity(root),repoRoot:root,imagesRoot:images,modelCalls:0,gpuRequested:false,rows:[]};
 const persist=()=>writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2)+'\n');
 let browser,server;
@@ -26,12 +27,22 @@ try{
   const url=hosted.origin+'/repo/models/trellis2/alpha-codec-probe.html';report.url=url;
   await browser.navigate(url,'document.readyState==="complete"');
   report.effectiveUrl=await browser.evaluate('location.href');report.phase='codec-comparison';await persist();
+  report.servedModuleSha256=await browser.evaluate(`(async()=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',await (await fetch('/repo/models/trellis2/alpha-preparation.js')).arrayBuffer())),v=>v.toString(16).padStart(2,'0')).join(''))()`);
+  if(report.servedModuleSha256!==report.moduleSha256)throw Error('served preparation module differs from recorded source');
   for(const expected of fixture.cases){
     const row=await browser.evaluate(`(async()=>{
       const row=${JSON.stringify(expected)},sha=async b=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b)),v=>v.toString(16).padStart(2,'0')).join('');
       const bytes=new Uint8Array(await (await fetch('/inputs/'+row.name+'.png')).arrayBuffer());
       const result={name:row.name,inputPngSha256:await sha(bytes),inputBytes:bytes.length};
       if(typeof ImageDecoder!=='function')return {...result,status:'unsupported',error:'ImageDecoder is unavailable'};
+      if(${wrapper}){
+        const {prepareTrellisAlphaImage}=await import('/repo/models/trellis2/alpha-preparation.js');
+        const prepared=await prepareTrellisAlphaImage(bytes);
+        return {...result,status:'observed',complete:prepared.provenance.decoder.complete,
+          format:prepared.provenance.decoder.nativeFormat,inputRgbaSha256:prepared.provenance.decoder.decodedRgbaSha256,
+          preparedRgbSha256:await sha(prepared.pixels),preparedBytes:prepared.pixels.byteLength,
+          provenance:prepared.provenance};
+      }
       const decoder=new ImageDecoder({type:'image/png',data:bytes,colorSpaceConversion:'none',preferAnimation:false});
       let frame;
       try{
@@ -54,12 +65,14 @@ try{
     row.preparedMatches=row.preparedRgbSha256===expected.preparedRgbSha256;
     report.rows.push(row);await persist();
   }
-  report.status=report.rows.length===fixture.cases.length&&report.rows.every(r=>r.status==='observed'&&r.complete&&r.inputBytesMatch&&r.preparedMatches)?'succeeded':'mismatch';
+  report.status=report.rows.length===fixture.cases.length&&report.rows.every(r=>r.status==='observed'&&r.complete&&r.inputBytesMatch&&r.rgbaMatches&&r.preparedMatches)?'succeeded':'mismatch';
   report.phase=null;
 }catch(error){report.status='failed';report.error={message:error.message,stack:error.stack};}
 finally{
-  if(browser)await browser.close();
-  if(server)await new Promise(resolve=>server.close(resolve));
+  try{if(browser)await browser.close();}
+  catch(error){report.status='failed';report.phase='browser-close';report.closeError=String(error);}
+  try{if(server)await new Promise(resolve=>server.close(resolve));}
+  catch(error){report.status='failed';report.phase='server-close';report.serverCloseError=String(error);}
   await persist();
 }
 console.log(JSON.stringify({status:report.status,phase:report.phase,rows:report.rows.map(r=>({name:r.name,rgbaMatches:r.rgbaMatches,preparedMatches:r.preparedMatches})),report:path.join(out,'report.json')}));
