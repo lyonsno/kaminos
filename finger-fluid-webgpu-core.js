@@ -15850,6 +15850,26 @@ export async function createWebGPUFingerFluidSolver({
     return lastHostFrameCompositionEvidence;
   }
 
+  // Explicit native position inspection can run at tick zero, before the
+  // optional contact/interface kernels have produced their diagnostic headers.
+  async function requestParticleState() {
+    if(diagnosticsPending)throw new Error('Particle readback is busy');
+    if(runtimeLifecycle.stopped)throw new Error('Particle readback runtime stopped');
+    diagnosticsPending=true;
+    const capturedStep=stepCount;
+    try {
+      const encoder=device.createCommandEncoder({label:'authored-water-particle-state'});
+      encoder.copyBufferToBuffer(particleBuffer,0,diagnosticsBuffer,0,particleData.byteLength);
+      device.queue.submit([encoder.finish()]);
+      await diagnosticsBuffer.mapAsync(GPUMapMode.READ);
+      const values=new Float32Array(diagnosticsBuffer.getMappedRange().slice(0));
+      return captureFingerFluidParticleWordsForWitness(values,safeParticleCount,{stepCount:capturedStep,pressureSolver:safePressureSolver,boundaryPressureContract:pressureBoundary.boundaryPressureContract});
+    } finally {
+      if(diagnosticsBuffer.mapState==='mapped')diagnosticsBuffer.unmap();
+      diagnosticsPending=false;
+    }
+  }
+
   async function requestDiagnostics({captureParticleState=false,captureIPBFDamping=false}={}) {
     if(typeof captureIPBFDamping!=='boolean')throw new TypeError('Damping capture must be boolean');
     if(captureIPBFDamping&&(!ipbfDampingReadback||!captureParticleState||stepCount<1))throw new Error('Damping capture requires enabled IPBF records and a completed full particle step');
@@ -17326,6 +17346,7 @@ export async function createWebGPUFingerFluidSolver({
     finishRendererGpuTimestampCaptureForWitness,
     render,
     requestDiagnostics,
+    requestParticleState,
     setLiveInletPacket,
     setAnalyticCarrierOpticalGeometry,
     clearAnalyticCarrierOpticalGeometry,
