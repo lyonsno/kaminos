@@ -27832,6 +27832,7 @@ export function createKaminosVolumePrototype({
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
     async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
+    async joinedExteriorStats() { return joinedExterior ? joinedExterior.stats() : { status: 'disabled' }; },
     setJoinedBoundary(request = {}) {
       return { ...refreshJoinedBoundary(request.enabled === true) };
     },

@@ -171,6 +171,26 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
     receipt() { return { route: JOINED_EXTERIOR_ROUTE, extent, ratio, wall, budget, tolerance, prepared: Boolean(built?.solver), ...(built?.summary ?? {}), lastStep, steps: built?.steps ?? 0 }; },
     // Solve receipt from the last encoded step (maps a buffer; not for the frame loop).
     get paused() { return paused; },
+    // What the exterior carries after the last step: coarse face velocities
+    // and the fine box's lower boundary faces (side/bottom inflow), in the
+    // producers' units (coarse local units; fine cells per reference tick).
+    async stats() {
+      if (!built?.solver) return { status: 'unprepared' };
+      if (!built.steps) return { status: 'no-step-yet' };
+      paused = true;
+      try {
+        await device.queue.onSubmittedWorkDone();
+        const read = async (buffer, length) => { const dst = device.createBuffer({ size: length * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }); try { const e = device.createCommandEncoder(); e.copyBufferToBuffer(buffer, 0, dst, 0, length * 4); device.queue.submit([e.finish()]); await dst.mapAsync(GPUMapMode.READ); return new Float32Array(dst.getMappedRange().slice(0)); } finally { dst.destroy(); } };
+        const coarseBuf = built.owned.find(b => b.label === 'joined exterior coarse sites');
+        const lowerBuf = built.owned.find(b => b.label === 'joined exterior lower sidecar');
+        const coarse = await read(coarseBuf, built.storage.coarseLength), lower = await read(lowerBuf, built.storage.lowerLength);
+        const summarize = values => { let max = 0, sum = 0, n = 0, nonzero = 0; for (const v of values) { const a = Math.abs(v); if (!Number.isFinite(a)) return { nonfinite: true }; max = Math.max(max, a); sum += a; n++; if (a > 1e-7) nonzero++; } return { max, mean: n ? sum / n : 0, nonzero, of: n }; };
+        const coarseFaces = []; for (let i = 0; i < coarse.length; i += 8) coarseFaces.push(coarse[i], coarse[i + 1], coarse[i + 2]);
+        const offs = built.storage.lowerOffsets;
+        const planes = ['x', 'y', 'z'].map((axis, a) => ({ axis, ...summarize(lower.subarray(offs[a], offs[a + 1])) }));
+        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes };
+      } finally { paused = false; }
+    },
     // Pauses the joined step (the core skips the whole sim step while paused)
     // so the readback sees one encoded solve, then resumes.
     async probe() {

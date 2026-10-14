@@ -264,6 +264,20 @@ try {
         if (!route?.bound || !route?.joined) { report.lastTrustworthyEvidence.joinedGhosts = { ...sample, route }; fail(report.failurePhase, `synthetic ghosts filled but not consumed (${route?.reason ?? (route?.joined ? 'ghosts not bound' : 'joined boundary not admitted')})`); }
         continue;
       }
+      if (cid === '@joinedExteriorStats') {
+        // Read-only: coarse face velocities and the fine box's lower boundary planes.
+        const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.joinedExteriorStats) return { status: 'missing-api' }; return await p.joinedExteriorStats(); })()`));
+        (arm.joinedExteriorStats ||= []).push(sample);
+        applied.push([cid, value, sample?.status ?? null]);
+        continue;
+      }
+      if (cid === '@joinedPanelText') {
+        // Read-only: what the joined panel's readouts say.
+        const sample = await evaluate(op(`(() => Object.fromEntries(['volume-joined-boundary-val', 'volume-joined-exterior-extent-val', 'volume-joined-exterior-wall-val'].map(id => [id, d.getElementById(id)?.textContent ?? null])))()`));
+        (arm.joinedPanelText ||= []).push(sample);
+        applied.push([cid, value, 'read']);
+        continue;
+      }
       if (cid === '@joinedExteriorProbe') {
         // Read-only: the exterior solve's last receipt (iterations, divergence error).
         const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.probeJoinedExterior) return { status: 'missing-api' }; return await p.probeJoinedExterior(); })()`));
@@ -333,7 +347,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], joinedExterior: arm.joinedExterior || [], joinedExteriorProbe: arm.joinedExteriorProbe || [], fluidBandStats: arm.fluidBandStats || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], joinedExterior: arm.joinedExterior || [], joinedExteriorProbe: arm.joinedExteriorProbe || [], joinedExteriorStats: arm.joinedExteriorStats || [], joinedPanelText: arm.joinedPanelText || [], fluidBandStats: arm.fluidBandStats || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
