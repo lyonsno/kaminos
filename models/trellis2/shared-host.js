@@ -13,7 +13,7 @@ const throwIfStopped=signal=>{
 // the scene/device/session; this bridge owns only its route and frame-service
 // connection. It does not request a device, run a fixture model, or claim frame
 // latency. Consume resident fields before finish releases the owned route.
-export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,session:providedSession,sessionId}={}){
+export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,session:providedSession,sessionId,bufferBudget}={}){
   const application=appGpu!==undefined;
   if(application&&(sharedGpu!==undefined||host!==undefined||prototype!==undefined||providedSession!==undefined||sessionId!==undefined))
     throw Error('one app-owned or legacy TRELLIS host source required');
@@ -93,6 +93,7 @@ export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,s
           throw Error('application foreground run must carry the actual TRELLIS model route identity');
         const opportunities=frameRun.foregroundOpportunities;
         route=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{
+          ...(bufferBudget!==undefined?{bufferBudget}:{}),
           kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:{...opportunities,
             async serviceAtBoundary(boundary){
               const report=await opportunities.serviceAtBoundary(boundary);
