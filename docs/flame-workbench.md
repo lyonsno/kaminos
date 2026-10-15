@@ -12,6 +12,22 @@ inspector. Pause uses the ordinary fire Freeze control; the camera remains live.
 Frame uses the existing camera operation. The full Volume controls remain in
 the shared inspector rather than being duplicated in the experiment.
 
+The selected simulation domain groups its active controls into **Look**, **Shape**,
+**Motion** and **Quality**. Search finds settings across those views. Front/ridge
+and support shaping remain editable alongside material color, smoke, wind,
+combustion, solver and raymarch controls. The emitter's supply controls remain
+with the selected emitter. This grouping does not change scene/source/material
+storage ownership. Retired research routes remain in the original Volume tool;
+the ordinary inspector does not require switching back there for these controls.
+
+Numeric fields retain the shared drag, click-to-type, fine adjustment and undo
+behavior. Typed decimal values use the same precision-preserving range adapter
+as saved presets. Binary backing-wall values appear as a checkbox while keeping
+their existing numerical save representation. AgX hides the custom-curve knee;
+effective physics appearance hides unused carrier controls and reports whether
+the requested physics material is actually active. Hiding a control does not
+rewrite its saved value.
+
 Agents use the same operations:
 
 ```js
