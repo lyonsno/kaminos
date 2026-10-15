@@ -116,7 +116,8 @@ function pickArgs(rest, options, pilot) {
   if (!optics) throw new Exit(2, frame === null ? `${options.picture} records no camera; take the picture again with this version` : `${options.picture} has no frame ${frame} with a camera`);
   const {width, height} = result.image ?? {};
   if (!(width > 0 && height > 0)) throw new Exit(2, `${options.picture} records no picture size`);
-  return {pilot, from: 'sub', at: [x / width, y / height], optics};
+  const pose = frame === null ? result.scenePose : result.frames?.[frame - 1]?.scenePose;
+  return {pilot, from: 'sub', at: [x / width, y / height], optics, ...(pose ? {pose} : {})};
 }
 
 async function request(server, method, route, body) {
@@ -191,11 +192,13 @@ function summarize(command, record) {
     lines.push(`ray from ${who} through (${fmt(result.at[0])}, ${fmt(result.at[1])}) of the frame`);
     const hit = result.hit;
     if (hit) {
-      lines.push(`  hits      ${hit.label} [${hit.id}] ${fmt(hit.distance)} m away at ${point(hit.point)}`);
+      lines.push(`  hits      ${hit.label} [${hit.id}] ${fmt(hit.distance)} m away at ${point(hit.point)}${hit.pictured ? ' (where the picture showed it)' : ''}`);
+      if (hit.pictured) lines.push(`  since     ${hit.moved ? 'it has moved' : 'it has not moved'}; geometry ${hit.geometry?.status}`);
       const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null].filter(Boolean).join(', ');
       lines.push(`  on it     ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
       if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
     } else lines.push('  hits      nothing along that ray');
+    if (result.missing?.length) lines.push(`  missing   ${result.missing.join(', ')}: in the picture but no longer in the scene`);
     for (const field of result.fields ?? []) lines.push(`  through   ${field.label} from ${fmt(field.enter)} to ${fmt(field.exit)} m`);
     if (result.beyond?.length) lines.push(`  behind    ${result.beyond.map(item => `${item.label} ${fmt(item.distance)} m`).join(' · ')}`);
   } else if (result.images) {

@@ -56,17 +56,22 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 ## Pointing at things
 
-`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left; `--from operator` uses your view. `pick X Y --picture RECORD.json` takes a pixel of a kept picture and the camera that took it (`--frame N` for a burst frame), so it names what that picture showed even after things have moved. Every picture's record carries that camera as `optics`.
+`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left; `--from operator` uses your view. These picks read the scene as it is now.
+
+`pick X Y --picture RECORD.json` takes a pixel of a kept picture (`--frame N` for a burst frame). Every picture's record carries the camera it was rendered with (`optics`) and where each object it shows stood (`scenePose`). The pick puts those objects back where the picture showed them, casts from that camera, and then reports:
+- whether the object has moved since;
+- whether its geometry is `same`, `edited`, `replaced`, or `unverified`. After a page reload, matching vertex counts are all that can be checked.
+
+Objects the picture showed that are gone are listed as `missing`.
 
 A pick answers with:
 - the first object the ray meets;
 - the point in world and in the object's own frame;
 - the surface normal;
 - the mesh path and face it struck;
-- the vertex and index counts of that mesh, so a saved reference can notice the geometry was replaced;
 - the fields the ray passes through.
 
-A pick renders nothing and never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same.
+A pick renders nothing and never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
 
 ## Limits
 

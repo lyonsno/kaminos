@@ -289,10 +289,21 @@ const fraction = at => {
   }
   return [...at];
 };
+const sixteen = value => Array.isArray(value) && value.length === 16 && value.every(Number.isFinite);
 const matrices = optics => {
-  const sixteen = value => Array.isArray(value) && value.length === 16 && value.every(Number.isFinite);
   if (!optics || !sixteen(optics.projection) || !sixteen(optics.viewInverse)) throw new Error('Pick optics need projection and viewInverse matrices of 16 numbers');
   return {projection: [...optics.projection], viewInverse: [...optics.viewInverse]};
+};
+// The objects a picture showed, as it recorded them: where each mesh stood and
+// how to recognise its geometry later.
+const poseArg = pose => {
+  const mesh = item => item && Array.isArray(item.path) && item.path.every(Number.isInteger) && sixteen(item.matrixWorld)
+    && item.geometry && typeof item.geometry === 'object';
+  if (!Array.isArray(pose) || !pose.every(entry => entry && typeof entry.id === 'string' && sixteen(entry.root)
+    && Array.isArray(entry.meshes) && entry.meshes.every(mesh))) {
+    throw new Error('Pick pose needs the objects a picture recorded: an id, a root matrix, and meshes with path, matrix and geometry');
+  }
+  return structuredClone(pose);
 };
 
 const COMMANDS = {
@@ -321,7 +332,8 @@ const COMMANDS = {
   pick: args => {
     const from = args.from ?? 'sub';
     if (!['sub', 'operator'].includes(from)) throw new Error('Pick from "sub" or "operator", or give the optics of a picture');
-    return {pilot: pilotArg(args), from, at: fraction(args.at), ...(args.optics != null ? {optics: matrices(args.optics)} : {})};
+    return {pilot: pilotArg(args), from, at: fraction(args.at), ...(args.optics != null ? {optics: matrices(args.optics)} : {}),
+      ...(args.pose != null ? {pose: poseArg(args.pose)} : {})};
   },
 };
 export const VANTAGE_COMMANDS = Object.freeze(Object.keys(COMMANDS));

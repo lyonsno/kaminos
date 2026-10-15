@@ -38,7 +38,8 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * and `cameraMatrices()` returns the matrices the page is rendering with.
  */
 export function createVantagePilot(host) {
-  let capturing = false;
+  // `released` resolves when the current picture releases the camera.
+  let capturing = false, released = Promise.resolve(), markReleased = () => {};
   const aspect = () => {
     const {width, height} = host.viewportSize();
     if (!(width > 0 && height > 0)) fail('viewport', 'The Kaminos viewport has no visible area');
@@ -95,6 +96,7 @@ export function createVantagePilot(host) {
   async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0}) {
     if (capturing) fail('busy', 'Another vantage capture is in progress');
     capturing = true;
+    released = new Promise(resolve => { markReleased = resolve; });
     let release = null, restore = null, original = null, requested = null, before = null, started = null;
     const shots = [];
     try {
@@ -116,7 +118,7 @@ export function createVantagePilot(host) {
         if (check && deviation.changed) {
           fail('view-changed', `The viewport camera changed during the capture (${deviation.position.toFixed(3)} m, ${deviation.angle.toFixed(2)}° heading, ${deviation.roll.toFixed(2)}° roll, ${deviation.fov.toFixed(2)}° lens); nothing was kept`);
         }
-        const optics = host.cameraMatrices?.() ?? null, rows = targets(), shot = host.compose({maxSize}), stale = [], unverified = [];
+        const optics = host.cameraMatrices?.() ?? null, rows = targets(), pose = host.pose?.() ?? null, shot = host.compose({maxSize}), stale = [], unverified = [];
         // Every pictured canvas must have drawn since the view was requested.
         for (const layer of shot.layers) {
           const now = frame.layers?.[layer], then = since.layers?.[layer];
@@ -126,7 +128,7 @@ export function createVantagePilot(host) {
         if (stale.length) fail('stale-frame', `Kaminos did not draw a new frame from the requested view in ${stale.join(', ')}, so nothing was kept. The page may still be loading or paused.`);
         if (host.blank?.(shot.canvas)) fail('blank-frame', 'The picture came back as one flat color, which usually means the page has not drawn its scene yet. Try again in a moment; if the sub faces a blank surface, point it elsewhere.');
         since = frame;
-        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified});
+        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, pose, frame, shot, unverified});
       }
       return {requested, shots, before, after: host.frameState()};
     } finally {
@@ -135,18 +137,21 @@ export function createVantagePilot(host) {
         try { restore?.(); }
         finally {
           try { host.redraw(); }
-          finally { capturing = false; release?.(); }
+          finally { capturing = false; markReleased(); release?.(); }
         }
       }
     }
   }
+
+  // The recorded pose of the objects a picture shows, for picks on it later.
+  const shownPose = (shot, names) => shot.pose ? shot.pose.filter(entry => names.inView.some(object => object.id === entry.id)) : null;
 
   function pictureResult({kind, routeName, record, taken, settle, hideHelpers, images, seen, extra = {}}) {
     const first = taken.shots[0];
     return {schema: VANTAGE_SCHEMA, kind, route: routeName, ...(record ? {pilot: pilotOf(record), sub: describe(record)} : {}),
       requestedView: taken.requested, view: first.view, viewDeviation: first.deviation, aspect: aspect(),
       layers: first.shot.layers, unverifiedLayers: [...new Set(taken.shots.flatMap(item => item.unverified))],
-      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
+      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, scenePose: shownPose(first, seen), settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
       image: {width: first.shot.width, height: first.shot.height}, images, objects: seen,
       frame: {before: taken.before, after: taken.after}, capturedAt: new Date(host.now()).toISOString(), ...extra};
   }
@@ -281,14 +286,17 @@ export function createVantagePilot(host) {
       if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
       return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
-        extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view,
-          viewDeviation: item.deviation, optics: item.optics ?? null, objects: namesFor(item, true)}))}});
+        extra: {interval, frames: taken.shots.map(item => {
+          const names = namesFor(item, true);
+          return {index: item.index, atMs: item.atMs, frame: item.frame, view: item.view, viewDeviation: item.deviation,
+            optics: item.optics ?? null, scenePose: shownPose(item, names), objects: names};
+        })}});
     },
 
     // What lies under a point of a view or of a kept picture: the first object
     // the ray meets, where on it, and the fields it passes through. Picks read
     // the scene's geometry and render nothing, so they never borrow the camera.
-    pick({pilot, from, at, optics}) {
+    pick({pilot, from, at, optics, pose}) {
       let source, camera;
       if (optics) { source = 'picture'; camera = optics; }
       else if (from === 'operator') {
@@ -298,11 +306,11 @@ export function createVantagePilot(host) {
       }
       else { const record = requireSub(pilot); source = record.id; camera = opticsOfView(viewOf(record), aspect()); }
       if (!host.raycast) fail('pick', 'This page cannot cast rays into its scene');
-      const ray = rayThrough(camera, at), hits = host.raycast(ray, {exclude: subIds()});
+      const ray = rayThrough(camera, at), {hits, missing} = host.raycast(ray, {exclude: subIds(), pose: pose ?? null});
       const fields = host.extraTargets().filter(field => field.bounds).map(field => ({field, crossing: rayCrossesBox(ray, field.bounds)}))
         .filter(item => item.crossing).map(({field, crossing}) => ({id: field.id, label: field.label, type: field.type, enter: crossing.enter, exit: crossing.exit}));
       return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, hit: hits[0] ?? null,
-        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields,
+        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields, missing,
         pickedAt: new Date(host.now()).toISOString()};
     },
   };
@@ -313,7 +321,9 @@ export function createVantagePilot(host) {
     catch (error) { throw new VantageCommandError('validate', error.message); }
     return handlers[checked.command](checked.args);
   }
-  return {run, isCapturing: () => capturing, sketch};
+  // idle() waits until no picture holds the camera, through back-to-back pictures.
+  const idle = async () => { while (capturing) await released; };
+  return {run, isCapturing: () => capturing, idle, sketch};
 }
 
 // --- pixels ---------------------------------------------------------------
@@ -669,12 +679,48 @@ const animationFrames = (window, count) => new Promise(resolve => {
   window.requestAnimationFrame(tick);
 });
 
+const isPickable = entry => entry.object && entry.type !== CAMERA_TYPE && entry.type !== 'light';
+const meshPath = (root, node) => {
+  const path = [];
+  for (let at = node; at && at !== root; at = at.parent) path.unshift(at.parent ? at.parent.children.indexOf(at) : -1);
+  return path;
+};
+const geometryIdentity = geometry => ({uuid: geometry?.uuid ?? null, version: geometry?.attributes?.position?.version ?? null,
+  vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null});
+// Whether the geometry under a mesh is the one a picture recorded. Within one
+// page session a geometry keeps its uuid and counts edits in its version; after
+// a reload every uuid differs, so equal counts can only be reported unverified.
+function geometryStatus(recorded, current) {
+  if (!current) return 'replaced';
+  if (recorded.uuid && recorded.uuid === current.uuid) return recorded.version === current.version ? 'same' : 'edited';
+  return recorded.vertices === current.vertices && recorded.indices === current.indices ? 'unverified' : 'replaced';
+}
+const sameMatrix = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(value)));
+
+// Where each scene object stands and how to recognise its geometry: what a
+// picture records about the objects it shows.
+export function poseOfEntries(entries) {
+  const poses = [];
+  for (const entry of entries) {
+    if (!isPickable(entry)) continue;
+    entry.object.updateWorldMatrix(true, true);
+    const meshes = [];
+    entry.object.traverse(node => {
+      if (node.isMesh) meshes.push({path: meshPath(entry.object, node), matrixWorld: node.matrixWorld.toArray(), geometry: geometryIdentity(node.geometry)});
+    });
+    poses.push({id: entry.id, root: entry.object.matrixWorld.toArray(), meshes});
+  }
+  return poses;
+}
+
 // The nearest visible mesh hit of a ray in each scene entry, nearest first.
 // Cameras, lights, editor helpers and hidden objects are skipped. A hit names
 // the entry, the point in world and in the entry's own frame, the surface
-// normal, and which mesh and face it struck, so a reference can find the same
-// spot again and notice when the geometry under it was replaced.
-export function raycastEntries(THREE, entries, {origin, direction}, {exclude = []} = {}) {
+// normal, and which mesh and face it struck. With `pose`, the objects a kept
+// picture recorded are put back where they stood for the cast, only they are
+// candidates, and each hit says whether its object has moved since and whether
+// its geometry is the same, edited, replaced or unverified.
+export function raycastEntries(THREE, entries, {origin, direction}, {exclude = [], pose = null} = {}) {
   const caster = new THREE.Raycaster(new THREE.Vector3(...origin), new THREE.Vector3(...direction).normalize());
   const shown = object => {
     for (let node = object; node; node = node.parent) {
@@ -682,23 +728,46 @@ export function raycastEntries(THREE, entries, {origin, direction}, {exclude = [
     }
     return true;
   };
-  const hits = [];
-  for (const entry of entries) {
-    if (!entry.object || exclude.includes(entry.id) || entry.type === CAMERA_TYPE || entry.type === 'light' || !shown(entry.object)) continue;
-    entry.object.updateWorldMatrix(true, true);
-    const hit = caster.intersectObject(entry.object, true).find(item => item.object.isMesh && shown(item.object));
-    if (!hit) continue;
-    const path = [];
-    for (let node = hit.object; node && node !== entry.object; node = node.parent) path.unshift(node.parent ? node.parent.children.indexOf(node) : -1);
+  const posed = pose ? new Map(pose.map(entry => [entry.id, entry])) : null, present = new Set(), hits = [];
+  const describe = (entry, hit, frame, extra) => {
     const normal = hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize() : null;
     const geometry = hit.object.geometry;
-    hits.push({id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, distance: hit.distance,
-      point: hit.point.toArray(), local: entry.object.worldToLocal(hit.point.clone()).toArray(), normal: normal?.toArray() ?? null,
-      surface: {path, mesh: hit.object.name || null, face: hit.faceIndex ?? null},
+    return {id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, distance: hit.distance,
+      point: hit.point.toArray(), local: hit.point.clone().applyMatrix4(frame.clone().invert()).toArray(), normal: normal?.toArray() ?? null,
+      surface: {path: meshPath(entry.object, hit.object), mesh: hit.object.name || null, face: hit.faceIndex ?? null},
       geometry: {vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null},
-      source: entry.object.userData?.kaminosSceneObject?.source ?? null});
+      source: entry.object.userData?.kaminosSceneObject?.source ?? null, ...extra};
+  };
+  for (const entry of entries) {
+    if (!isPickable(entry) || exclude.includes(entry.id)) continue;
+    entry.object.updateWorldMatrix(true, true);
+    const recorded = posed?.get(entry.id);
+    if (posed && !recorded) continue;
+    if (!recorded) {
+      if (!shown(entry.object)) continue;
+      const hit = caster.intersectObject(entry.object, true).find(item => item.object.isMesh && shown(item.object));
+      if (hit) hits.push(describe(entry, hit, entry.object.matrixWorld, {pictured: false}));
+      continue;
+    }
+    present.add(entry.id);
+    const moved = !sameMatrix(entry.object.matrixWorld.toArray(), recorded.root);
+    let best = null;
+    try {
+      for (const mesh of recorded.meshes) {
+        let node = entry.object;
+        for (const index of mesh.path) node = node?.children?.[index];
+        if (!node?.isMesh) continue;
+        node.matrixWorld.fromArray(mesh.matrixWorld);
+        const hit = caster.intersectObject(node, false)[0];
+        if (hit && (!best || hit.distance < best.hit.distance)) best = {hit, mesh, status: geometryStatus(mesh.geometry, geometryIdentity(node.geometry))};
+      }
+    } finally {
+      entry.object.updateWorldMatrix(true, true);
+    }
+    if (best) hits.push(describe(entry, best.hit, new THREE.Matrix4().fromArray(recorded.root),
+      {pictured: true, moved, geometry: {...geometryIdentity(best.hit.object.geometry), status: best.status}}));
   }
-  return hits.sort((a, b) => a.distance - b.distance);
+  return {hits: hits.sort((a, b) => a.distance - b.distance), missing: posed ? [...posed.keys()].filter(id => !present.has(id)) : []};
 }
 
 /**
@@ -739,6 +808,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
     raycast: (ray, options) => raycastEntries(THREE, entries(), ray, options),
+    pose: () => poseOfEntries(entries()),
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });
@@ -768,7 +838,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const pageId = `page-${window.crypto.randomUUID()}`;
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
-    pageId, run: pilot.run,
+    pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
     dispose() { window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }
