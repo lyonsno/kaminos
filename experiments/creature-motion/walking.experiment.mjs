@@ -9,12 +9,15 @@ import {createWorkbenchSceneHost} from '../../workbench-scene-host.mjs';
 import {createSkinCaseSelection,validateSkinCaseChoices} from './skin-case-selection.mjs';
 import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
+import {createWanderMotion,wanderAreaInPlacement} from './wander-motion.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
+ if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
@@ -53,30 +56,62 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
  let session,runtime,asset,floor,floorAsset,pathGuide,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
+ let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1;
+ const relatedAssets=[];
+ const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   skin:runtime.read(),playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
   transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView()},
+  action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
+  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
-  pathGuide:pathGuide?{mode,kind:mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
+  pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function refreshGuide(){
   const y=(floor?.position.y??runtime.mesh.geometry.boundingBox?.min.y??0)+.025;
-  const geometry=new THREE.BufferGeometry().setFromPoints(walking.guidePoints(mode).map(p=>new THREE.Vector3(p[0],y,p[2])));
+  let points=walking.guidePoints(mode);
+  if(wander){const [a,b,c]=wander.snapshot().path.points;points=Array.from({length:65},(_,i)=>{const t=i/64,u=1-t;return [u*u*a[0]+2*u*t*b[0]+t*t*c[0],y,u*u*a[1]+2*u*t*b[1]+t*t*c[1]];});guideSegment=wander.read().path.segments;}
+  const geometry=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(p[0],y,p[2])));
   geometry.computeBoundingBox();
   if(!pathGuide){pathGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x55cbd7,depthTest:true}));pathGuide.name='Creature motion path';Object.assign(pathGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.visible=false;placement.add(pathGuide);}
   else{const old=pathGuide.geometry;pathGuide.geometry=geometry;old.dispose();}
  }
+ async function ensureArea(transform){
+  if(areaRoot?.parent)return;
+  areaRoot=new THREE.Group();areaRoot.name='Wander area';areaRoot.userData.kaminosEditorOnly=true;
+  const disk=new THREE.Mesh(new THREE.CircleGeometry(1,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x4bc9d8,side:THREE.DoubleSide,transparent:true,opacity:.09,depthWrite:false}));
+  const edge=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({length:64},(_,i)=>new THREE.Vector3(Math.cos(i/64*Math.PI*2),.002,Math.sin(i/64*Math.PI*2)))),new THREE.LineBasicMaterial({color:0x55cbd7}));areaRoot.add(disk,edge);
+  if(transform){checkAuthoredTransform(transform);areaRoot.position.fromArray(transform.position);areaRoot.quaternion.fromArray(transform.quaternion);areaRoot.scale.fromArray(transform.scale);}
+  else{placement.updateMatrixWorld(true);runtime.group.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),p=root.getWorldPosition(new THREE.Vector3());areaRoot.position.set(p.x,(floor?.position.y??runtime.mesh.geometry.boundingBox?.min.y??0)+.03,p.z);areaRoot.scale.set(inputs.radius??10,1,inputs.radius??10);}
+  areaAsset=await session.attach(areaRoot,{owned:true,metadata:{fileName:'Wander area',source:null,label:'Wander area'}});relatedAssets.push(areaAsset);
+ }
+ function syncArea(){
+  if(!wander)return true;
+  if(!areaRoot?.parent){actionError='Wander area was removed; current pose is held';unsubscribe();player.pause();refresh();return false;}
+  try{const area=wanderAreaInPlacement({THREE,areaRoot,placement}),key=JSON.stringify(area);if(key!==areaKey){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
+  catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}
+ }
+ function presentWander(delta,playing){
+  if(!syncArea())return read();
+  const state=wander.advance(delta);cycle=state.cycle;source.presentation.cycle=cycle;
+  player.seek(state.frame);if(playing)player.play();
+  if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
+ }
  function startClock(){
   if(stop)return;
   stop=session.onFrame(({deltaSeconds})=>{
-   if(disposed)return;
+   if(disposed||!stop)return;
    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Walking clock requires a finite nonnegative host delta');
    clock+=deltaSeconds*1000*rate;
    try{
+    if(wander){
+     if(player.read().status==='removed'){unsubscribe();return;}
+     presentWander(deltaSeconds*rate,true);return;
+    }
     player.tick(clock);
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
     else if(player.read().status!=='playing'){unsubscribe();if(player.read().status!=='removed')host.scene.refreshPresentation?.(asset);}
@@ -97,7 +132,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function inspect({geometry=true}={}){if(!geometry)return read();placement.updateMatrixWorld(true);return {...read(),placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
-  const derivedAdapter={...adapter,frame:index=>walking.frame(index,{mode,cycle})};
+  const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,now:()=>clock,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
@@ -122,6 +157,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
+  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(wanderAreaInPlacement({THREE,areaRoot,placement}));mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
   refreshGuide();
   if(inputs.gizmos!==undefined){
    if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
@@ -138,13 +174,28 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    try{const result=action(input);return result?.then?result.then(applied,failed):applied(result);}catch(error){return failed(error);}
   };
   const operations={
+   action:operation('action',async input=>{
+    if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
+    unsubscribe();player.pause();
+    if(input.kind==='preview'){wander=null;actionError=null;mode='source';cycle=0;source.presentation.mode=mode;source.presentation.action='preview';player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}
+    await ensureArea();active();
+    const area=wanderAreaInPlacement({THREE,areaRoot,placement});
+    if(!wander){
+     placement.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),point=placement.worldToLocal(root.getWorldPosition(new THREE.Vector3()));
+     const first=adapter.frame(0).bones.find(b=>b.parent===null).worldMatrix,last=adapter.frame(adapter.frames-1).bones.find(b=>b.parent===null).worldMatrix;
+     wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
+    }
+    areaKey=JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';refreshGuide();player.seek(wander.read().frame);player.play();startClock();host.scene.refreshPresentation?.(asset);return read();
+   }),
+   selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();clock+=input.seconds*1000;const state=presentWander(input.seconds,false);host.scene.refreshPresentation?.(asset);return state;}),
    rate:operation('rate',input=>{if(!Number.isFinite(input?.rate)||input.rate<=0)throw Error('Playback rate must be finite and positive');rate=input.rate;return read();}),
    skin:operation('skin',input=>{if(!skinSelection)throw Error('This creature has no registered cast choices');return skinSelection.select(input);}),
-   play:operation('play',()=>{player.play();if(player.read().status==='playing')startClock();return read();}),
+   play:operation('play',()=>{if(wander&&!syncArea())return read();player.play();if(player.read().status==='playing')startClock();return read();}),
    pause:operation('pause',()=>{unsubscribe();player.pause();host.scene.refreshPresentation?.(asset);return read();}),
-   replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
-   seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),
-   mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}),
+   replay:operation('replay',()=>{unsubscribe();if(wander){if(!syncArea())return read();wander.seek(0);}cycle=wander?.read().cycle??0;source.presentation.cycle=cycle;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
+   seek:operation('seek',input=>{unsubscribe();if(wander)wander.seek(input?.frame);player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),
+   mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();wander=null;actionError=null;mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.action='preview';source.presentation.cycle=0;player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}),
    motion:operation('motion',async input=>{
     const requestId=++motionRequest;
     const next=choices.find(c=>c.id===input?.id);if(!next)throw Error('Unknown retained motion');
@@ -154,24 +205,26 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
     if(next.prompt!==undefined&&next.prompt!==loaded.motion.prompt||next.seed!==undefined&&next.seed!==loaded.motion.seed)throw Error('Motion choice prompt or seed differs from retained source');
     const nextAdapter=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:data.frame}),nextWalking=createWalkingPoseAdapter({THREE,adapter:nextAdapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
-    const prior={adapter,walking,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
+    const prior={adapter,walking,wander,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
     const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
+     if(wander)wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,pathSnapshot:prior.wander.snapshot().path});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
     }
     catch(error){
-     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
    }),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
-  if(inputs.mode!==undefined)operations.mode({mode:inputs.mode});
-  if(inputs.cycle!==undefined){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
-  if(inputs.sample!==undefined)operations.seek({frame:inputs.sample});
+  if(inputs.mode!==undefined&&!wander)operations.mode({mode:inputs.mode});
+  if(inputs.cycle!==undefined&&!wander){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
+  if(inputs.sample!==undefined&&!wander)operations.seek({frame:inputs.sample});
+  if(inputs.action==='wander'&&!wander){await operations.action({kind:'wander'});if(inputs.play===false)operations.pause();}
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
   host.scene.refreshPresentation?.(asset);
@@ -186,10 +239,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
      const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
      createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
+     if(recipe.wander)createWanderMotion({THREE,adapter:check,walking:createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6}),sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
      active();await reopen(recipe);
     }});
    refresh=presentation.update;
-   if(host.controls.mountObject)seating=host.controls.mountObject({asset,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
+   if(host.controls.mountObject)seating=host.controls.mountObject({asset,relatedAssets,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
    else root.append(presentation.properties,presentation.playback);
    refresh();return {dispose(){seating?.dispose();presentation?.dispose();refresh=()=>{};}};
   }};
