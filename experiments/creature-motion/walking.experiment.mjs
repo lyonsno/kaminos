@@ -157,7 +157,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
-  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(wanderAreaInPlacement({THREE,areaRoot,placement}));mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
+  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(wander.read().path.area);if(!syncArea())throw Error(actionError);mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
   refreshGuide();
   if(inputs.gizmos!==undefined){
    if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
@@ -191,7 +191,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();clock+=input.seconds*1000;const state=presentWander(input.seconds,false);host.scene.refreshPresentation?.(asset);return state;}),
    rate:operation('rate',input=>{if(!Number.isFinite(input?.rate)||input.rate<=0)throw Error('Playback rate must be finite and positive');rate=input.rate;return read();}),
    skin:operation('skin',input=>{if(!skinSelection)throw Error('This creature has no registered cast choices');return skinSelection.select(input);}),
-   play:operation('play',()=>{if(wander&&!syncArea())return read();player.play();if(player.read().status==='playing')startClock();return read();}),
+   play:operation('play',()=>{if(wander){if(!syncArea())return read();presentWander(0,true);}else player.play();if(player.read().status==='playing')startClock();return read();}),
    pause:operation('pause',()=>{unsubscribe();player.pause();host.scene.refreshPresentation?.(asset);return read();}),
    replay:operation('replay',()=>{unsubscribe();if(wander){if(!syncArea())return read();wander.seek(0);}cycle=wander?.read().cycle??0;source.presentation.cycle=cycle;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
    seek:operation('seek',input=>{unsubscribe();if(wander)wander.seek(input?.frame);player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),

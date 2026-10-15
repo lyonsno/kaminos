@@ -25,4 +25,8 @@ const projected=feature.wanderAreaInPlacement({THREE,areaRoot,placement});
 for(let i=0;i<100;i++){const angle=i/100*Math.PI*2,p=new THREE.Vector3(Math.cos(angle),0,Math.sin(angle)).applyMatrix4(areaRoot.matrixWorld);placement.worldToLocal(p);const x=p.x-projected.center[0],z=p.z-projected.center[1],c=Math.cos(projected.yaw),s=Math.sin(projected.yaw);assert.ok(Math.abs(((c*x+s*z)/projected.radii[0])**2+((-s*x+c*z)/projected.radii[1])**2-1)<1e-8,'The editable scene area must preserve its actual projected footprint');}
 assert.throws(()=>motion.advance(-1),/time|delta/i);
 assert.throws(()=>feature.createWanderMotion({THREE,adapter,walking,sourceKey:'different-motion',snapshot}),/source/i);
+const source30={...adapter,frames:260,fps:30},walking30=createWalkingPoseAdapter({THREE,adapter:source30,blendFrames:6});
+const boundary=feature.createWanderMotion({THREE,adapter:source30,walking:walking30,sourceKey:'260x30-boundary',area,position:[0,0],direction:[0,1]});
+boundary.advance(2*(259/30)-9/30);
+for(let i=0;i<20;i++){assert.equal(boundary.read().frame,(250+i)%259,'Exact source-time steps skip or duplicate a source frame');if(i<19)boundary.advance(1/30);}
 console.log('Wander transports source-paced actual poses, retains elapsed cycles and respects the editable area footprint');

@@ -35,19 +35,22 @@ export async function witness(args){
   const input=page.locator('input[data-transform-field="position.x"]');assert.equal(await input.isVisible(),true);assert.equal(await input.isEnabled(),true);
   const nextX=report.held.action.area.transform.position[0]+6;await input.click();await input.fill(String(nextX));await input.press('Enter');await settle();
   report.areaEdited=await read();assert.equal(report.areaEdited.action.area.transform.position[0],nextX);assert.deepEqual(report.areaEdited.action.motion.path.position,report.held.action.motion.path.position,'Editing area teleports the creature');
-  // A zero-time invocation applies the edited footprint through the same owner
-  // operation as playback, without inventing a second rendering clock.
-  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('advance',{seconds:0}));report.areaApplied=await read();validateWanderObservation(report.areaApplied);
-  assert.notDeepEqual(report.areaApplied.action.motion.path.area,report.held.action.motion.path.area);assert.deepEqual(report.areaApplied.action.motion.path.position,report.held.action.motion.path.position);
   await capture('edited-area');
   report.phase='save-open';await page.getByText('Save / open creature',{exact:true}).click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'Save creature setup',exact:true}).click();const download=await downloading,saved=join(out,'saved-creature.json');await download.saveAs(saved);report.saved=JSON.parse(readFileSync(saved));
-  const previousId=report.areaApplied.host.id;await page.getByLabel('Open creature setup',{exact:true}).setInputFiles(saved);
+  const previousId=report.areaEdited.host.id;await page.getByLabel('Open creature setup',{exact:true}).setInputFiles(saved);
   await page.waitForFunction(id=>typeof window.kaminosWalkingCreature==='function'&&window.kaminosWalkingCreature({geometry:false}).host.id!==id,previousId);
   report.reopened=await read();validateCreatureControlRead(report.reopened,setup);validateWanderObservation(report.reopened);
-  assert.deepEqual(report.reopened.action.motion.path,report.areaApplied.action.motion.path);assert.deepEqual(report.reopened.action.area.transform,report.areaApplied.action.area.transform);assert.notEqual(report.reopened.playback.status,'playing');
+  assert.deepEqual(report.reopened.action.motion.path.position,report.areaEdited.action.motion.path.position);assert.deepEqual(report.reopened.action.area.transform,report.areaEdited.action.area.transform);assert.notEqual(report.reopened.playback.status,'playing');
+  assert.notDeepEqual(report.reopened.action.motion.path.area,report.held.action.motion.path.area,'Paused edit did not control the reopened path');
+  report.areaApplied=report.reopened;
   await capture('reopened');
+  report.phase='endpoint-resume';
+  await page.evaluate(()=>{const frames=window.kaminosWalkingCreature({geometry:false}).playback.frames;return window.kaminosWorkbenchExperiments.invoke('seek',{frame:frames-1});});
+  report.endpointHeld=await read();await page.locator('.playback-play').click();
+  await page.waitForFunction(time=>window.kaminosWalkingCreature({geometry:false}).action.motion.elapsed>time+.2,report.endpointHeld.action.motion.elapsed);await page.locator('.playback-play').click();
+  report.endpointResumed=await read();validateWanderProgress(report.endpointHeld,report.endpointResumed);
   report.phase='consecutive-action-frames';
-  const initial=report.reopened.action.motion,elapsed=initial.elapsed,period=initial.period,fps=report.reopened.playback.fps;
+  const initial=report.endpointResumed.action.motion,elapsed=initial.elapsed,period=initial.period,fps=report.reopened.playback.fps;
   // Twenty adjacent samples straddle a source seam, not twenty selected poses.
   const untilSeam=(Math.floor(elapsed/period)+1)*period-elapsed;
   await page.evaluate(seconds=>window.kaminosWorkbenchExperiments.invoke('advance',{seconds}),Math.max(0,untilSeam-9/fps));
@@ -63,6 +66,7 @@ export async function witness(args){
    if(i<19)await page.evaluate(seconds=>window.kaminosWorkbenchExperiments.invoke('advance',{seconds}),1/fps);
   }
   for(let i=1;i<20;i++)assert.ok(Math.abs(report.continuous[i].elapsed-report.continuous[i-1].elapsed-1/fps)<1e-9);
+  for(let i=1;i<20;i++)assert.equal(report.continuous[i].sourceFrame,(report.continuous[i-1].sourceFrame+1)%(report.reopened.playback.frames-1),'Exact consecutive steps skipped a retained source frame');
   assert.ok(report.continuous.at(-1).cycle>report.continuous[0].cycle,'Consecutive sample window did not cross the source seam');
   // Native playback must also continue after the ordinary edited-area roundtrip.
   report.phase='resume-edited-area';const before=await read();await page.locator('.playback-play').click();await page.waitForFunction(time=>window.kaminosWalkingCreature({geometry:false}).action.motion.elapsed>time+.5,before.action.motion.elapsed);await page.locator('.playback-play').click();report.afterResume=await read();validateWanderProgress(before,report.afterResume);
