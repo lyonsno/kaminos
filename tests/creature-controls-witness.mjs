@@ -9,4 +9,7 @@ for(const change of [s=>s.registration=[],s=>s.registration[0].objectVisible=fal
 console.log('Native control witness rejects wrong/fallback source and route, partial body, invalid clock and absent registration');
 const display={display:{castsShadows:true,receivesShadows:true,boneMarkers:Array.from({length:28},()=>({visible:false}))},mode:'path',source:{presentation:{mode:'path'}},pathGuide:{mode:'path',visible:true,points:129,kind:'complete-circular-rail'}};
 const expected={bones:false,paths:true,mode:'path'};validateCreatureDisplayRead(display,expected);
+assert.throws(()=>validateCreatureDisplayRead({...display,cycle:0},{...expected,minimumCycle:1}),/cycle/i,'Path witness accepts no repeat as a completed cycle');
+const staleSwitch=structuredClone(display);staleSwitch.motion={id:'walk-1'};
+assert.throws(()=>validateCreatureDisplayRead(staleSwitch,{...expected,motionId:'trot-2'}),/motion/i,'Path witness accepts the previous motion instead of the requested switch');
 for(const change of [s=>s.display.castsShadows=false,s=>s.display.boneMarkers=[],s=>s.display.boneMarkers[0].visible=true,s=>s.mode='cycle',s=>s.source.presentation.mode='cycle',s=>s.pathGuide.mode='cycle',s=>s.pathGuide.visible=false,s=>s.pathGuide.points=0]){const r=structuredClone(display);change(r);assert.throws(()=>validateCreatureDisplayRead(r,expected));}

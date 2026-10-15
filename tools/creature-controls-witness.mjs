@@ -13,12 +13,14 @@ export function validateCreatureControlRead(r,setup){
  assert.ok(r.registration?.some(row=>row.id===r.host.id&&row.objectVisible),'Creature is not registered and visible');
  assert.equal(r.vertices?.length,r.skin.vertices*3);assert.ok(r.vertices.every(Number.isFinite));assert.ok(r.vertices.some(v=>v!==0));
 }
-export function validateCreatureDisplayRead(r,{helpers=true,bones=true,paths=false,mode=r.mode}={}){
+export function validateCreatureDisplayRead(r,{helpers=true,bones=true,paths=false,mode=r.mode,motionId,minimumCycle}={}){
  assert.equal(r.display.castsShadows,true);assert.equal(r.display.receivesShadows,true);
  assert.equal(r.display.boneMarkers.length,28,'Actual Bone-marker inventory is missing');
  assert.ok(r.display.boneMarkers.every(b=>b.visible===(helpers&&bones)),'Bone visibility differs from effective viewport settings');
  assert.equal(r.mode,mode);assert.equal(r.source.presentation.mode,mode);assert.equal(r.pathGuide.mode,mode);assert.equal(r.pathGuide.visible,helpers&&paths);
  assert.ok(r.pathGuide.points>=2);if(mode==='path'){assert.equal(r.pathGuide.kind,'complete-circular-rail');assert.equal(r.pathGuide.points,129);}
+ if(motionId!==undefined)assert.equal(r.motion?.id,motionId,'Effective motion differs from requested switch');
+ if(minimumCycle!==undefined)assert.ok(r.cycle>=minimumCycle,'Requested repeat cycle has not completed');
 }
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});
@@ -37,13 +39,13 @@ export async function witness(args){
   report.source=[];for(const file of ['index.html','playback-controls.mjs','scene-owner-controls.mjs','viewport-display-settings.mjs','authoring-workspace.mjs','scene-frame-selected.mjs','experiments/creature-motion/walking-pose.mjs','experiments/creature-motion/creature-properties.mjs','experiments/creature-motion/walking.experiment.mjs','experiments/creature-motion/full-body-runtime.mjs']){const response=await page.request.get(new URL('/'+file,url).href);assert.equal(response.status(),200);const expected=hash(readFileSync(join(root,file))),actual=hash(await response.body());assert.equal(actual,expected);report.source.push({file,sha256:actual});}
   // Full vertex transfer belongs to the three geometry observations, not every
   // timing/interaction predicate. Use the ordinary owner read for live control.
-  const read=({geometry=false}={})=>page.evaluate(async geometry=>({...geometry?window.kaminosWalkingCreature():await window.kaminosWorkbenchExperiments.read(),registration:window.kaminosSceneObjectDebugState()}),geometry);
+  const read=({geometry=false}={})=>page.evaluate(geometry=>({...window.kaminosWalkingCreature({geometry}),registration:window.kaminosSceneObjectDebugState()}),geometry);
   const capture=async name=>{const path=join(out,name+'.png');await page.screenshot({path});report.captures.push(path);};
   report.initial=await read({geometry:true});validateCreatureControlRead(report.initial,setup);assert.notEqual(report.initial.playback.status,'playing');
   assert.equal(await page.locator('#experiment-owner-slot').isVisible(),false,'Creature context still exposes the experiment picker instead of ordinary scene objects');
   assert.equal(await page.getByRole('button',{name:'Replay source',exact:true}).count(),0);assert.equal(await page.getByLabel('Creature cast',{exact:true}).isVisible(),true);
   await capture('initial');
-  report.phase='replay';await page.getByLabel('Playback speed',{exact:true}).selectOption('0.25');await page.getByRole('button',{name:'↻ Replay',exact:true}).click();assert.ok(['playing','held'].includes((await read()).playback.status),'Replay did not start the owner clock');await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).playback.frame>0);assert.equal((await read()).playback.status,'playing','Pause hit-target observation requires a still-playing source');await page.locator('.playback-play').click();
+  report.phase='replay';await page.getByLabel('Playback speed',{exact:true}).selectOption('0.25');await page.getByRole('button',{name:'↻ Replay',exact:true}).click();assert.ok(['playing','held'].includes((await read()).playback.status),'Replay did not start the owner clock');await page.waitForFunction(()=>window.kaminosWalkingCreature({geometry:false}).playback.frame>0);assert.equal((await read()).playback.status,'playing','Pause hit-target observation requires a still-playing source');await page.locator('.playback-play').click();
   report.held=await read();assert.notEqual(report.held.playback.status,'playing');report.actions.push({kind:'replay-pause',frame:report.held.playback.frame});await capture('held');
   report.phase='scrub';const track=page.getByLabel('Playback position',{exact:true}),bounds=await track.boundingBox();assert.ok(bounds?.width>100);report.scrubBounds=[bounds];
   await page.mouse.move(bounds.x+2,bounds.y+bounds.height/2);await page.mouse.down();
@@ -58,7 +60,7 @@ export async function witness(args){
   await page.getByLabel('Playback speed',{exact:true}).selectOption('0.5');await page.waitForFunction(()=>window.kaminosWalkingCreature().rate===.5);
   report.phase='save-open';await page.getByText('Save / open creature',{exact:true}).click();const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Save creature setup',exact:true}).click();const download=await downloadPromise;const saved=join(out,'saved-creature.json');await download.saveAs(saved);report.saved=JSON.parse(readFileSync(saved));assert.equal(report.saved.case_sha256,target.case_sha256);assert.equal(report.saved.rate,.5);
   const previousId=(await read()).host.id;
-  await page.getByLabel('Open creature setup',{exact:true}).setInputFiles(saved);await page.waitForFunction(async({sha,previousId})=>{const r=await window.kaminosWorkbenchExperiments.read();return r.host.id!==previousId&&r.source.caseSha256===sha&&r.rate===.5;},{sha:target.case_sha256,previousId});report.reopened=await read({geometry:true});validateCreatureControlRead(report.reopened,setup);await capture('reopened');
+  await page.getByLabel('Open creature setup',{exact:true}).setInputFiles(saved);await page.waitForFunction(({sha,previousId})=>{const r=window.kaminosWalkingCreature({geometry:false});return r.host.id!==previousId&&r.source.caseSha256===sha&&r.rate===.5;},{sha:target.case_sha256,previousId});report.reopened=await read({geometry:true});validateCreatureControlRead(report.reopened,setup);await capture('reopened');
   report.phase='workspace';await page.getByRole('button',{name:'Authoring',exact:true}).click();assert.equal(await page.getByLabel('Creature motion',{exact:true}).isVisible(),true);assert.equal(await track.isVisible(),true);await capture('authoring');
   await page.getByRole('button',{name:'Workbench',exact:true}).click();assert.equal(await page.locator('#experiment-scene-slot #scene-object-list').isVisible(),true);await capture('workbench-return');
   if(args.display==='true'){
@@ -69,18 +71,18 @@ export async function witness(args){
    await page.getByLabel('Motion paths',{exact:true}).check();await menu.locator('summary').click();
    const mode=page.locator('.creature-properties select[aria-label="Creature playback"]');await mode.selectOption('path');
    report.pathSwitches=[];
-   for(const id of ['trot-2','run-3','walk-1']){await page.getByLabel('Creature motion',{exact:true}).selectOption(id);await page.waitForFunction(async id=>(await window.kaminosWorkbenchExperiments.read()).motion.id===id,id);const r=await read();validateCreatureDisplayRead(r,{bones:false,paths:true,mode:'path'});report.pathSwitches.push({motion:r.motion,mode:r.mode,path:r.pathGuide});}
-   await page.getByLabel('Playback speed',{exact:true}).selectOption('4');await page.getByRole('button',{name:'↻ Replay',exact:true}).click();await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).cycle>=1);await page.locator('.playback-play').click();report.pathRepeated=await read();validateCreatureDisplayRead(report.pathRepeated,{bones:false,paths:true,mode:'path'});
+   for(const id of ['trot-2','run-3','walk-1']){await page.getByLabel('Creature motion',{exact:true}).selectOption(id);await page.waitForFunction(id=>window.kaminosWalkingCreature({geometry:false}).motion.id===id,id);const r=await read();validateCreatureDisplayRead(r,{bones:false,paths:true,mode:'path',motionId:id});report.pathSwitches.push({requestedId:id,motion:r.motion,mode:r.mode,path:r.pathGuide});}
+   await page.getByLabel('Playback speed',{exact:true}).selectOption('4');await page.getByRole('button',{name:'↻ Replay',exact:true}).click();await page.waitForFunction(()=>window.kaminosWalkingCreature({geometry:false}).cycle>=1);await page.locator('.playback-play').click();report.pathRepeated=await read();validateCreatureDisplayRead(report.pathRepeated,{bones:false,paths:true,mode:'path',minimumCycle:1});
    const bounds=report.pathRepeated.pathGuide.bounds,center=bounds.min.map((v,i)=>(v+bounds.max[i])/2);report.pathCamera=await page.evaluate(c=>window.__kaminosSetSceneCameraFrame([c[0]+24,c[1]+23,c[2]-28],c),center);await capture('path-circle');
    await page.getByRole('button',{name:'Frame',exact:true}).click();report.creatureFrameCamera=await page.evaluate(()=>window.kaminosCameraDebugState());await capture('frame-creature');
-   report.phase='shadow';await mode.selectOption('source');await page.getByLabel('Creature motion',{exact:true}).selectOption('continued-trot');await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).motion.id==='continued-trot');
+   report.phase='shadow';await mode.selectOption('source');await page.getByLabel('Creature motion',{exact:true}).selectOption('continued-trot');await page.waitForFunction(()=>window.kaminosWalkingCreature({geometry:false}).motion.id==='continued-trot');
    await page.evaluate(view=>window.__kaminosSetSceneCameraFrame(view.position,view.target),setup.view);
    report.shadowLight=await page.evaluate(()=>{
     const values={intensity:160,azimuth:135,elevation:45,distance:6,angle:45,penumbra:.2,'target-x':0,'target-y':-1,'target-z':-1};
     for(const [key,value]of Object.entries(values)){const input=document.getElementById('rim-'+key+'-number');input.value=String(value);input.dispatchEvent(new Event('input',{bubbles:true}));}
     const enabled=document.getElementById('rim-enabled');enabled.checked=true;enabled.dispatchEvent(new Event('change',{bubbles:true}));window.kaminosViewportSettings.set({helpers:false});return {requested:values,effective:window.kaminosSceneLightState()};
    });report.shadowRead=await read();validateCreatureDisplayRead(report.shadowRead,{helpers:false,bones:false,paths:true,mode:'source'});assert.equal(report.shadowRead.referenceFloor.visible,true);await capture('shadow-start');
-   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:20}));await capture('shadow-frame20');
+   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:20}));await page.getByRole('button',{name:'Frame',exact:true}).click();await capture('shadow-frame20');
   }
   report.phase='close';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.equal(await page.locator('.scene-owner-playback').count(),0);assert.equal(await page.locator('.creature-properties').count(),0);
   assert.deepEqual(report.errors,[]);report.status='complete';report.phase='complete';
