@@ -23,9 +23,10 @@ export async function loadExperimentContributions(urls, {loadModule=url=>import(
   return definitions;
 }
 
-export async function openExperiment(definition, {host,inputs={},record=operation=>investigationOperations.emit(operation)}={}) {
+export async function openExperiment(definition, {host,inputs={},record=operation=>investigationOperations.emit(operation),onInputsChange=()=>{}}={}) {
   validateDefinition(definition);
-  const instance=await definition.create({host,inputs,record});
+  let disposed=false, disposal;
+  const instance=await definition.create({host,inputs,record,updateInputs:value=>{if(disposed)throw Error(`Experiment ${definition.id} is disposed`);onInputsChange(value);}});
   try {
     if(typeof instance?.read !== 'function')throw Error(`${definition.id}: read required`);
     if(!instance.operations || typeof instance.operations !== 'object')throw Error(`${definition.id}: operations required`);
@@ -42,7 +43,6 @@ export async function openExperiment(definition, {host,inputs={},record=operatio
     }
     throw error;
   }
-  let disposed=false, disposal;
   const active=()=>{if(disposed)throw Error(`Experiment ${definition.id} is disposed`);};
   const api={
     id:definition.id,
