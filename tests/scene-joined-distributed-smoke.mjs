@@ -25,6 +25,11 @@ try{
  report.sourceField=await browser.evaluate(`(()=>{const s=window.__kaminosVolumePrototype.sceneVolumeSourceField();return {...s,texture:!!s.texture,scatteringTexture:!!s.scatteringTexture,exterior:s.exterior?{...s.exterior,texture:!!s.exterior.texture,scatteringTexture:!!s.exterior.scatteringTexture}:null};})()`);
  assert.equal(report.lighting.identity,'hybrid-distributed-smoke-point-surfaces-v0');assert.equal(report.lighting.pointCount,2);assert.equal(report.lighting.shadowSampling,'complementary');
  assert.equal(report.lighting.smokeMode,'distributed');assert.equal(report.lighting.frame.integration,'exact-cell');
+ assert.equal(report.lighting.directions,8);assert.equal(report.lighting.frame.angularPattern,'guided');
+ assert.equal(report.state.physicalColor.incidentLight.legacyDispatched,false);
+ assert.equal(report.state.physicalColor.materialLawEffective,'physics-soot-blackbody-v0');
+ assert.equal(report.state.reactantCombustion.effective.admitted,true);
+ assert.equal(report.state.reactantCombustion.effective.law,'reactant-v0');
  assert(report.lighting.frame.exteriorVolumeReceivers>0);assert(report.sourceField.exterior?.texture);assert(report.state.joinedRendering.enabled);assert(report.state.ordinarySceneDepth.effective);
  report.canRender=await browser.evaluate('window.__kaminosSceneRadiance.canRender()');assert.equal(report.canRender,true);
  const shot=async name=>{const r=await browser.send('Page.captureScreenshot',{format:'png'});assert(r.result?.data,'screenshot missing');await fs.writeFile(out+'/'+name+'.png',Buffer.from(r.result.data,'base64'));};
