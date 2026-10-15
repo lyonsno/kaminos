@@ -3563,6 +3563,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
+import { createFlameWorkbench } from './flame-workbench.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -13030,7 +13031,8 @@ async function installOwnerWorkbenchEntry() {
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     select:()=>setActiveSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
-    readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)}};
+    readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
+  flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
     onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
@@ -13038,6 +13040,33 @@ async function installOwnerWorkbenchEntry() {
   window.kaminosWorkbenchExperiments=ownerExperimentEntry;
   const {id,inputsText}=readOwnerExperimentAddress(location);if(id)await ownerExperimentEntry.open(id,JSON.parse(inputsText));
 }
+function openFlameWorkbench() {
+  const listeners=new Set();
+  const subscribe=listener=>{
+    listeners.add(listener);
+    const stopped=scenePlacementTools.edits.subscribe(listener);
+    controls.addEventListener('change',listener);
+    const changed=event=>{if(event.target?.matches?.('#tab-volume input,#tab-volume select,[data-authoring-alias],#burner-controls input,#volume-authored-mix-panel input'))listener();};
+    document.addEventListener('input',changed);document.addEventListener('change',changed);
+    return()=>{listeners.delete(listener);stopped();controls.removeEventListener('change',listener);document.removeEventListener('input',changed);document.removeEventListener('change',changed);};
+  };
+  const select=target=>{
+    if(target==='emitter'){if(!authoredFlamePresent)throw Error('No authored flame emitter');setActiveSceneObject(FLAME_EMITTER_ID);}
+    else if(target==='domain')window.selectSceneField('flame-field');
+    else throw Error('Unknown flame target: '+target);
+    for(const listener of listeners)listener();
+    return window.kaminosSelection.read();
+  };
+  return createFlameWorkbench({
+    readSettings:()=>window.kaminosFlameAuthoring.read(),applySettings:(next,label)=>window.kaminosFlameAuthoring.apply(next,label),
+    readRuntime:()=>volumePrototype?.debugState()??{active:false},readView:readAuthoredCameraView,
+    readScene:()=>({objects:readAuthoredFireObjects().map(({id,type,source,transform})=>({id,type,source,transform})),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read()}),
+    async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
+    async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
+  });
+}
+window.kaminosFlameWorkbench={async open(){await workbenchViewerReady;return openFlameWorkbench();}};
 window.kaminosMountInvestigationEntry=async(options={})=>{
   await workbenchViewerReady;const tool=options.tool||'assets';
   if(![...document.querySelectorAll('.tab[data-tab]')].some(node=>node.dataset.tab===tool))throw Error('Unknown Workbench tool: '+tool);
