@@ -7089,6 +7089,12 @@ function handleViewportSelectionClick(event) {
   }
   if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
+  const record = pickSceneObjectFromViewportPointer(event);
+  // Source symbols are drawn through the scene, including domain edges.
+  if(record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)){
+    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
+    setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
+  }
   if (pickFlameDomainFromViewportPointer(event)) {
     window.selectSceneField('flame-field');
     setInfo('Selected: Fire & smoke domain');
@@ -7098,7 +7104,6 @@ function handleViewportSelectionClick(event) {
   if (pickWaterDomainFromViewportPointer(event)) {
     window.selectSceneField('water-field');window._kaminosDirty?.();return;
   }
-  const record = pickSceneObjectFromViewportPointer(event);
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
