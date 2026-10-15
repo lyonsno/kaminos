@@ -52,6 +52,9 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
 // does not assign simulator-wide coefficients to independent scene emitters.
 export function flameControlDisplayValue(id,value) {return id==='volume-render-scale'?Number(value)*100:value;}
 export function flameControlSourceValue(id,value) {return id==='volume-render-scale'?Number(value)/100:value;}
+export function flamePropertyInputType(source) {
+  return source.type==='range'?(source.min==='0'&&source.max==='1'&&source.step==='1'?'checkbox':'number'):source.type;
+}
 const reflectedRangeBounds=new WeakMap();
 export function syncFlameRangeBounds(source,bounds) {
   const requested={min:String(bounds.min),max:String(bounds.max)},previous=reflectedRangeBounds.get(source);
@@ -240,7 +243,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       const grip=document.createElement('label');grip.className='slider-label';grip.textContent=label;
       const field=document.createElement(source.tagName==='SELECT'?'select':'input');
       if(source.tagName==='SELECT')for(const option of id==='emitter-assay-family'?authoredFlameShapeOptions(source.options):source.options)field.append(option.cloneNode(true));
-      else {field.type=source.type==='range'?'number':source.type;field.step='any';}
+      else {field.type=flamePropertyInputType(source);field.step='any';}
       field.className='transform-input';field.dataset.authoringAlias=id;field.id=`selected-${id}`;grip.htmlFor=field.id;
       if(source.dataset.volumeCommit==='confirm') {
         field.dataset.volumeCommit='confirm';
@@ -268,14 +271,15 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
-        if(field.type==='checkbox')field.checked=source.checked;else field.value=String(flameControlDisplayValue(id,source.value));
+        if(field.type==='checkbox')field.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else field.value=String(flameControlDisplayValue(id,source.value));
       }
       if(id==='emitter-assay-family')field.title='Placeable flame shapes. Cluster bowl is available in Workbench.';
-      const eventName=source.tagName==='SELECT'||source.type==='checkbox'?'change':'input';
+      const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
-        if(field.type==='checkbox')source.checked=field.checked;else source.value=String(flameControlSourceValue(id,field.value));
+        if(field.type==='checkbox'){if(source.type==='checkbox')source.checked=field.checked;else source.value=field.checked?'1':'0';}
+        else source.value=String(flameControlSourceValue(id,field.value));
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
       });
       source.addEventListener('input',syncField);source.addEventListener('change',()=>{syncField();syncVisibility();});
