@@ -28,13 +28,14 @@ const debugPort = Number(args.get('--debug-port') || 9731);
 const settleSteps = Number(args.get('--settle-steps') || 200);
 const smoke = args.get('--smoke') === '1';  // harness check only: three short arms
 const armWindowMs = Number(args.get('--arm-ms') || (smoke ? 800 : 3000));
+const renderSamples = Number(args.get('--render-samples') || (smoke ? 3 : 12));
 const chrome = process.env.KAMINOS_CHROME;
 const delay = ms => new Promise(r => setTimeout(r, ms));
 // Ambient GPU load from every process on the box (ioreg IOAccelerator), so each
 // arm is read against the load it ran under. Greenroom serializes queue jobs,
 // not the operator's own browser work.
 const utilization = [];
-const utilizationTimer = setInterval(() => execFile('ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator'], (error, stdout) => {
+const utilizationTimer = setInterval(() => execFile('/usr/sbin/ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator'], (error, stdout) => {
   const m = !error && /"Device Utilization %"=(\d+)/.exec(stdout || '');
   if (m) utilization.push([Date.now(), Number(m[1])]);
 }), 500);
@@ -42,7 +43,7 @@ const utilizationBetween = (t0, t1) => { const v = utilization.filter(([t]) => t
   return v.length ? { n: v.length, p50: v[Math.floor(v.length / 2)], max: v.at(-1) } : { n: 0 }; };
 
 mkdirSync(out, { recursive: true });
-const report = { identity: 'kaminos.fire-proxy-cost-sweep.v0', status: 'running', phase: 'source', presetId, settleSteps, armWindowMs, smoke,
+const report = { identity: 'kaminos.fire-proxy-cost-sweep.v0', status: 'running', phase: 'source', presetId, settleSteps, armWindowMs, renderSamples, smoke,
   claim: 'fire-frame queue completion in one uncontended browser; not isolated pass timing or presented latency', arms: [], errors: [] };
 const save = () => writeFileSync(resolve(out, 'report.json'), JSON.stringify(report, null, 2));
 save();
@@ -166,6 +167,13 @@ try {
       const d = r.debugState();
       const stepsAdvanced = d.simStepCount - startStep, windowS = (performance.now() - t0) / 1000;
       const sorted = [...samples].sort((a, b) => a - b), at = p => sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))] : null;
+      // Ambient load from other processes only ever adds time, so the minimum of
+      // back-to-back held-frame renders (render + readback) estimates the arm's
+      // own cost; the median shows what the load did to it.
+      const renders = [];
+      for (let i = 0; i < ${renderSamples}; i++) { const t = performance.now(); await r.sampleFrame({ advanceSim: false, includeRgba: false, now: 4000 }); renders.push(performance.now() - t); }
+      renders.sort((a, b) => a - b);
+      const heldRenderMs = { n: renders.length, min: renders[0] ?? null, p50: renders[renders.length >> 1] ?? null, max: renders.at(-1) ?? null };
       const frame = (await r.sampleFrame({ advanceSim: false, includeRgba: true, now: 4000 })).image;
       let png = null, sha256 = null;
       if (frame?.rgba?.length) {
@@ -181,7 +189,7 @@ try {
           shader: d.raymarchShaderSpecialization?.effective ?? null, physicalColor: d.physicalColor?.effective ?? null,
           runtimeQuality: d.runtimeQuality?.effective ?? null, canvas: [d.width, d.height], lookFreeze: d.controls?.lookFreeze ?? null,
           simulationPaused: d.simulationPaused ?? null, backend: d.backend },
-        queueDoneMs: { n: samples.length, p50: at(0.5), p95: at(0.95), max: sorted.at(-1) ?? null },
+        queueDoneMs: { n: samples.length, p50: at(0.5), p95: at(0.95), max: sorted.at(-1) ?? null }, heldRenderMs,
         simStepsPerSecond: stepsAdvanced / windowS, frameP95Ms: d.timing.frameP95Ms, cpuFrameP95Ms: d.timing.cpuFrameP95Ms,
         frame: frame ? { width: frame.width, height: frame.height } : null, sha256, png };
     })()`, 180000);
