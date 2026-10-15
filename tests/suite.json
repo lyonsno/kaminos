@@ -134,8 +134,7 @@
     },
     "tests/finger-fluid-moving-hill-support-contracts.mjs": {
       "kind": "browser",
-      "reason": "spawns a witness against a live page URL",
-      "route": true
+      "reason": "spawns a witness against a live page URL"
     },
     "tests/finger-fluid-optics-composition-contracts.mjs": {
       "kind": "node"
@@ -658,8 +657,7 @@
     },
     "tests/scene-witness-browser-admission.mjs": {
       "kind": "browser",
-      "reason": "launches a browser executable",
-      "route": true
+      "reason": "launches a browser executable"
     },
     "tests/scheduler-verification-receipt-contracts.mjs": {
       "kind": "node"
@@ -693,8 +691,7 @@
     },
     "tests/sf3d-ordinary-memory-smoke-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches Chrome for Testing",
-      "route": true
+      "reason": "launches Chrome for Testing"
     },
     "tests/sf3d-real-producer-source-contracts.mjs": {
       "kind": "node"
@@ -767,8 +764,7 @@
     },
     "tests/volume-arm-capture-checks-contracts.mjs": {
       "kind": "browser",
-      "reason": "connects to a browser debugging socket",
-      "route": true
+      "reason": "connects to a browser debugging socket"
     },
     "tests/volume-artistic-motion-controls-contracts.mjs": {
       "kind": "node"
@@ -919,8 +915,7 @@
     },
     "tests/volume-exact-basin-full-grid-export-contracts.mjs": {
       "kind": "browser",
-      "reason": "spawns an exporter that can launch Chrome",
-      "route": true
+      "reason": "spawns an exporter that can launch Chrome"
     },
     "tests/volume-exact-basin-support-probe-contracts.mjs": {
       "kind": "node"
@@ -1201,8 +1196,7 @@
     },
     "tests/volume-time-step-scalar-contracts.mjs": {
       "kind": "browser",
-      "reason": "launches a browser with a remote debugging port",
-      "route": true
+      "reason": "launches a browser with a remote debugging port"
     },
     "tests/volume-transport-scheme-contracts.mjs": {
       "kind": "node"
