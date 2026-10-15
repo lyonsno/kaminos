@@ -296,6 +296,48 @@ try {
   const clicked = await page.evaluate(() => window.kaminosSelection.read().ids);
   check('the same click selects the box once the picture is done', clicked.includes(scene.blue), {clicked});
 
+  report.phase = 'box-and-views-held'; save();
+  // Box selection, saved camera views and framing act through the camera too.
+  // A picture waits for an armed box; during a picture they wait for it.
+  const boxAround = async ({x, y}) => {
+    await page.mouse.move(x - 90, y - 90);
+    await page.mouse.down();
+    await page.mouse.move(x + 90, y + 90, {steps: 6});
+    await page.mouse.up();
+  };
+  await page.evaluate(() => window.kaminosSelection.clear());
+  await page.mouse.move(centre.x, centre.y);
+  await page.keyboard.press('b');
+  const refusedForBox = await vantage('snap', '--name', 'box-armed');
+  check('a picture waits while a box selection is armed', refusedForBox.code === 1 && /box selection/i.test(refusedForBox.stderr),
+    {code: refusedForBox.code, stderr: refusedForBox.stderr});
+  await page.keyboard.press('Escape');
+  const viewsBefore = await page.evaluate(() => window.kaminosCameraViews.read().items.length);
+  const boxHeld = vantage('burst', '--count', '6', '--interval', '200', '--name', 'box-held');
+  await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
+  await page.keyboard.press('b');
+  await boxAround(centre);
+  const duringBox = await page.evaluate(() => {
+    let saved = null, framed = null;
+    try { window.kaminosCameraViews.save('Saved during a picture'); saved = 'saved'; } catch (error) { saved = error.message; }
+    framed = window.kaminosFrameSelected();
+    return {held: document.getElementById('composition-capture').disabled, selection: window.kaminosSelection.read().ids, saved, framed};
+  });
+  const boxResult = await boxHeld;
+  await page.keyboard.press('Escape');
+  check('a burst with a box drawn and a view saved during it completes', boxResult.code === 0, {code: boxResult.code, stderr: boxResult.stderr});
+  const viewsAfter = await page.evaluate(() => window.kaminosCameraViews.read().items.length);
+  check('a box drawn during a picture selects nothing', duringBox.held && duringBox.selection.length === 0
+    && (await page.evaluate(() => window.kaminosSelection.read().ids)).length === 0, duringBox);
+  check('saving or framing a view waits while the sub holds the viewport',
+    duringBox.saved === 'The agent sub is taking a picture' && duringBox.framed === false && viewsAfter === viewsBefore, {...duringBox, viewsBefore, viewsAfter});
+  await page.mouse.move(centre.x, centre.y);
+  await page.keyboard.press('b');
+  await boxAround(centre);
+  const boxed = await page.evaluate(() => window.kaminosSelection.read().ids);
+  const savedAfter = await page.evaluate(() => { window.kaminosCameraViews.save('Saved after the picture'); return window.kaminosCameraViews.read().items.length; });
+  check('afterwards the same box selects the box and the view saves', boxed.includes(scene.blue) && savedAfter === viewsBefore + 1, {boxed, savedAfter});
+
   report.phase = 'scene-camera-map'; save();
   // Looking through the sub with a zoomed camera frame: the operator's
   // effective projection reaches the sketch, and the panel map follows it.

@@ -474,27 +474,44 @@ test('a transform overlapping a picture leaves navigation as the operator had it
   assert.equal(controls.enabled, true);
 });
 
-test('while a picture holds the viewport, pointer input on its canvases waits', () => {
-  const viewportEl = new FakeElement(), canvas = new FakeElement('canvas'), panel = new FakeElement('button'), button = {disabled: false};
-  const hold = fromIndex('holdViewportForVantage', {authoringBusy: false, vantageCaptureHeld: false, viewportEl,
-    document: {getElementById: id => (id === 'composition-capture' ? button : null)}});
+test('while a picture holds the viewport, every gesture on its canvas waits, before page-level handlers see it', () => {
+  // Window capture listeners run before the page's document-level handlers
+  // (box selection, the lighting probe) and before the viewport's own.
+  const window = new FakeElement(), viewportEl = new FakeElement(), button = {disabled: false};
+  const hold = fromIndex('holdViewportForVantage', {authoringBusy: false, vantageCaptureHeld: false, viewportEl, window,
+    document: {getElementById: id => (id === 'composition-capture' ? button : null)},
+    viewportEventIsInsideCanvas: event => event.inside, viewportEventHitsInteractiveOverlay: event => event.overlay});
   const reached = [];
-  const press = target => {
-    const event = new Event('pointerdown', {cancelable: true});
-    Object.defineProperty(event, 'target', {value: target});
-    viewportEl.dispatchEvent(event);
+  const press = (type, {inside = true, overlay = false, ignored = false} = {}) => {
+    const event = new Event(type, {cancelable: true});
+    Object.assign(event, {inside, overlay});
+    Object.defineProperty(event, 'target', {value: {tagName: 'DIV', closest: selector => (ignored && selector === '[data-vantage-ignore]' ? {} : null)}});
+    window.dispatchEvent(event);
     return event;
   };
   const release = hold();
-  viewportEl.addEventListener('pointerdown', event => reached.push(event.target.tagName), true);
-  assert.equal(press(canvas).defaultPrevented, true, 'a press on the borrowed canvas is held');
-  assert.equal(press(panel).defaultPrevented, false, 'controls laid over the viewport keep working');
-  assert.deepEqual(reached, ['BUTTON']);
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick']) window.addEventListener(type, event => reached.push(type), {capture: true});
+  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick']) {
+    assert.equal(press(type).defaultPrevented, true, `a ${type} over the borrowed canvas waits, whatever element it lands on`);
+  }
+  assert.deepEqual(reached, [], 'no later handler sees a held gesture');
+  assert.equal(press('pointerdown', {overlay: true}).defaultPrevented, false, 'toolbars over the viewport keep working');
+  assert.equal(press('pointerdown', {ignored: true}).defaultPrevented, false, 'the sub panel keeps working');
+  assert.equal(press('pointerdown', {inside: false}).defaultPrevented, false, 'the rest of the page keeps working');
   assert.equal(button.disabled, true);
   release();
-  assert.equal(press(canvas).defaultPrevented, false, 'the canvas answers again after the picture');
-  assert.deepEqual(reached, ['BUTTON', 'CANVAS']);
+  assert.equal(press('pointerdown').defaultPrevented, false, 'the canvas answers again after the picture');
   assert.equal(button.disabled, false);
+});
+
+test('a picture waits for a box selection the operator has armed or begun', () => {
+  let boxing = false;
+  const busy = fromIndex('vantageBusy', {authoringBusy: false, scenePlacementTools: {edits: {state: () => ({active: null, replaying: false})}},
+    sceneNavigation: {state: () => ({gesture: null})}, transformGizmoDragging: false, transformControls: {dragging: false}, splatCorrectionMode: null,
+    greenroomPreviewIsActive: () => false, window: {kaminosSelection: {boxing: () => boxing}}});
+  assert.equal(busy(), null);
+  boxing = true;
+  assert.equal(busy(), 'A box selection is in progress', 'a box drawn in the operator view must not finish in the sub view');
 });
 
 test('the sketch carries the matrices the operator viewport renders with', async () => {
