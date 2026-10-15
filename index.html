@@ -12678,6 +12678,7 @@ function applyAuthoredWaterSettings(id,patch){
   const replacement=createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked}).object;
   const children=[...entry.object.children];for(const child of children){entry.object.remove(child);child.traverse(node=>{node.geometry?.dispose();for(const mat of(Array.isArray(node.material)?node.material:[node.material]).filter(Boolean))mat.dispose();});}
   for(const child of [...replacement.children]){if(localLiquidHost?.state().sourceIds?.includes(id)&&child.userData.kaminosWaterPreview)child.visible=false;entry.object.add(child);}
+  updateWaterSourceGuides();
   entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();window._kaminosDirty?.();
  }});waterSettingTargets.add(target);}
  return scenePlacementTools.edits.apply(target,normalizeLocalLiquidEmitter({...row.localLiquidEmitter,...patch},sceneObjectTransformState(row.object)),'Edit initial water');
@@ -12722,7 +12723,7 @@ async function releaseAuthoredWater(id){
  try{candidate.setPaused(false);}catch(error){candidate.dispose();throw error;}
  const previous=localLiquidHost;published=true;localLiquidHost=candidate;localLiquidFailure=null;localLiquidPaused=false;previous?.dispose();
  setAuthoredWaterPreviewVisible(false);
- authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
+ updateAuthoringPropertySelection();authoredWaterControls?.refresh();window._kaminosDirty?.();return authoredWaterState();
 }
 window.kaminosWaterSources={requestParticleState(){if(!localLiquidHost?.requestParticleState)throw Error('Finite water is not mounted');return localLiquidHost.requestParticleState();},read:authoredWaterState,editSimulation:editAuthoredWaterSimulation,selectSimulation:()=>window.selectSceneField('water-field'),add:addAuthoredWaterDrop,edit:applyAuthoredWaterSettings,release:releaseAuthoredWater,pause:()=>window.kaminosPauseLocalLiquid(!localLiquidHost?.paused),async advanceTo(step){if(!localLiquidHost?.advanceTo)throw Error('Finite water is not mounted');const result=await localLiquidHost.advanceTo(step);localLiquidPaused=true;authoredWaterControls?.refreshStatus();window._kaminosDirty?.();return result;}};
 
@@ -25777,6 +25778,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   assertSceneConstructionAvailable();const entry=sceneObjects.find(o=>o.id===id);
   if(!canDuplicateObject(entry))throw Error('This object does not support Duplicate');
   const copyId=makeSceneObjectId('mesh'),record={...serializeSceneObject(entry),id:copyId,label:`${sceneObjectDisplayLabel(entry)} copy`,groupId:null,createdAt:new Date().toISOString()};
+  if(entry.type===LOCAL_LIQUID_EMITTER_TYPE&&record.localLiquidEmitter.mode!=='finite_drop'&&localLiquidEmitterRecords().filter(r=>r.localLiquidEmitter.mode!=='finite_drop').length>=LOCAL_LIQUID_EMITTER_CAPACITY)throw Error('Water inlet capacity '+LOCAL_LIQUID_EMITTER_CAPACITY+' would be exceeded');
   const target=ensureSceneObjectMembershipTarget(copyId);scenePlacementTools.edits.assertCanRecordApplied(target);
   if(entry.type===LOCAL_LIQUID_EMITTER_TYPE){const {object}=createLocalLiquidEmitterObject(THREE,record);scene.add(object);registerSceneObject(object,record);syncLocalLiquidHostEmitters();}
   else if(entry.type===PROCEDURAL_MESH_TYPE)mountProceduralMesh(record);

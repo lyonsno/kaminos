@@ -33,3 +33,28 @@ const copy=created.at(-1);assert.equal(copy.label,'Water drop copy');assert.deep
 assert.equal(object.children.filter(r=>r.userData.kaminosWaterSourceGuide).length,1,'Released sources retain their own selectable initial-volume guide');
 const {authoredDropSetup}=await import('../authored-water-host.mjs');
 assert.equal(authoredDropSetup([first,second]).solver.particleCount,27648,'New Add must actually assemble with the saved edited source under the real shared solver contract');
+
+// A released source must remain spatially editable after property changes and
+// history replay without needing an unrelated selection refresh (HWOU-1).
+const {createSceneEdits}=await import('../scene-edit-session.mjs');
+const {normalizeLocalLiquidEmitter}=await import('../local-liquid-setup.mjs');
+const owned=createLocalLiquidEmitterObject(THREE,first),row={...owned.record,object:owned.object};
+const history=createSceneEdits({read:()=>null,write(){throw Error('Unexpected pose writer');}});
+const q={structuredClone,THREE,sceneObjects:[row],activeSceneObjectId:row.id,LOCAL_LIQUID_EMITTER_TYPE,normalizeLocalLiquidEmitter,createLocalLiquidEmitterObject,
+ assertSceneConstructionAvailable(){},sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),
+ serializeSceneObject:r=>({...r,object:undefined}),scenePlacementTools:{edits:history},localLiquidHost:{state:()=>({sourceIds:[row.id]})},syncLocalLiquidHostEmitters(){},authoredWaterControls:{refresh(){}},window:{_kaminosDirty(){}}};
+vm.createContext(q);
+const writerStart=html.indexOf('const waterSettingTargets='),writerEnd=html.indexOf('\nlet authoredWaterSimulationTarget',writerStart);
+vm.runInContext(html.match(/function updateWaterSourceGuides\(\)\{[^\n]+/)[0]+'\n'+html.slice(writerStart,writerEnd),q);
+row.object.children.find(n=>n.userData.kaminosWaterPreview).visible=false;q.updateWaterSourceGuides();
+const guide=width=>{assert.equal(row.object.children.find(n=>n.userData.kaminosWaterPreview).visible,false);const n=row.object.children.find(n=>n.userData.kaminosWaterSourceGuide);assert.equal(n.visible,true,'Selected released volume guide survives Apply and history without reselection');assert.equal(n.geometry.parameters.width,width);};
+guide(.6);q.applyAuthoredWaterSettings(row.id,{drop:{...row.localLiquidEmitter.drop,width:.75,samplesPerUnit:32}});guide(.75);
+await history.undo();guide(.6);await history.redo();guide(.75);
+q.activeSceneObjectId=null;q.updateWaterSourceGuides();assert.equal(row.object.children.find(n=>n.userData.kaminosWaterSourceGuide).visible,false);
+q.activeSceneObjectId=row.id;q.updateWaterSourceGuides();guide(.75);
+
+// The newly enabled ordinary Duplicate must reject continuous inlet overflow
+// before registering a sixth source or disturbing existing authoring state.
+const flows=Array.from({length:5},(_,i)=>createLocalLiquidEmitterSceneRecord({id:'flow'+i,transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}}));
+c.sceneObjects=flows;c.localLiquidEmitterRecords=()=>flows;c.LOCAL_LIQUID_EMITTER_CAPACITY=5;
+const beforeDuplicates=created.length;assert.throws(()=>c.duplicateSceneObject('flow0'),/capacity/);assert.equal(created.length,beforeDuplicates);

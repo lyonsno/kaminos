@@ -1686,6 +1686,7 @@ async function runAuthoredWaterObjectsScenario(ws) {
     await run.querySelector('[data-release]').onclick();window.kaminosPauseLocalLiquid(true);
     if(run.querySelector('[data-run-error]').textContent)throw Error(run.querySelector('[data-run-error]').textContent);
     const state=api.read();if(state.runtime?.particleCount!==41472)throw Error('All three accepted drops were not allocated');
+    if(!document.getElementById('water-simulation-summary').textContent.includes('Current simulation'))throw Error('Water settings still report the initial setup after release');
     await api.advanceTo(12);
     return {water:api.read(),host:window.kaminosLocalLiquidState(),scene:window.kaminosSceneObjectDebugState(),saved:await window.saveSceneAs({name:'hotwet-water-objects-'+${JSON.stringify(port)},result:true})};
   })()`,{timeoutMs:90000});
