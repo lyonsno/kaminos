@@ -94,7 +94,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
   });return disposal;
  }
- function inspect(){placement.updateMatrixWorld(true);return {...read(),placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
+ function inspect({geometry=true}={}){if(!geometry)return read();placement.updateMatrixWorld(true);return {...read(),placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>walking.frame(index,{mode,cycle})};
