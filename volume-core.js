@@ -8531,6 +8531,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+0.00001;}
       let medium=passiveEmissiveMaterial(sampleOuterSmoke(p),1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority);
       let sigma=medium.absorption+medium.scattering;
+      // Adaptive optical stepping owns the position and the integral: outside
+      // samples go through the same observer, or its cursor never advances.
+      if (opticalStepping) {
+        opticalStepObserve(&opticalStep, vec4<f32>(medium.emission+medium.scattering*smokeIncidentAt(p,sigma), sigma));
+        color = opticalStep.transfer.xyz;
+        trans = opticalStep.transfer.w;
+        continue;
+      }
       color+=trans*(medium.emission+medium.scattering*smokeIncidentAt(p,sigma))*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
