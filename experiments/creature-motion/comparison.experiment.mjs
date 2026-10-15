@@ -109,13 +109,14 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
   }
   apply();if(inputs.play!==false)operations.play();if(globalThis.window)window.kaminosCreatureComparison=inspect;
   return {read,operations,dispose,mount({root,invoke}){
+   const timeline=data.reduce((a,b)=>a.motion.frames/a.motion.skeleton.fps>=b.motion.frames/b.motion.skeleton.fps?a:b).motion;
    const panel=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p'),output=document.createElement('output');title.textContent='Creature motion · paired parade';
    note.textContent='One shared clock. In-place holds horizontal root travel; vertical action and yaw remain. Loops use a derived pose seam; no foot/contact correction.';panel.append(title,note,output);
    const call=(name,input)=>Promise.resolve().then(()=>invoke(name,input)).catch(e=>{output.textContent=e.message;});
    for(const [label,name,input] of [['Play all','play'],['Pause all','pause'],['Restart all','restart'],['In-place pairs','presentation',{mode:'in-place'}],['Traveling pairs','presentation',{mode:'travel'}],['Raw once','presentation',{mode:'raw'}]]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>call(name,input);panel.append(b);}
    const range=document.createElement('input');range.type='range';range.min='0';range.max=String(duration);range.step=String(1/30);range.setAttribute('aria-label','Comparison source seconds');range.oninput=()=>call('seek',{seconds:Number(range.value)});panel.append(range);
    const list=document.createElement('ol');for(const row of rows){const item=document.createElement('li');item.textContent=row.spec.label+' · '+(row.source.prompt??'source motion');list.append(item);}panel.append(list);
-   refresh=()=>{output.textContent=mode+' · '+status+' · '+seconds.toFixed(2)+' s';range.value=String(seconds%duration);};root.append(panel);refresh();return {dispose(){panel.remove();}};
+   refresh=()=>{output.textContent=mode+' · '+status+' · '+seconds.toFixed(2)+' s';range.value=String(mode==='raw'?Math.min(seconds,duration):(Math.floor(seconds*timeline.skeleton.fps+1e-6)%timeline.frames)/timeline.skeleton.fps);};root.append(panel);refresh();return {dispose(){panel.remove();}};
   }};
  }catch(error){await dispose();throw error;}
 }

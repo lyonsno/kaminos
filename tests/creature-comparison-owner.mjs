@@ -28,6 +28,11 @@ entry.operations.pause();assert.equal(f.state().active,false);const t=entry.read
 entry.operations.presentation({mode:'travel'});entry.operations.seek({seconds:1/30});assert.equal(entry.read().entries[0].rootMatrix[14],1);
 assert.ok(entry.read().entries.every(e=>!e.skin.poseCache.enabled&&e.skin.poseCache.entries===0),'accumulating travel cannot grow a pose cache');
 entry.operations.presentation({mode:'raw'});entry.operations.restart();f.tick(2);assert.equal(entry.read().status,'held');assert.equal(f.state().active,false);assert.ok(entry.read().entries.every(e=>e.frame===2));
+const controlRoot=new Element();entry.mount({root:controlRoot,invoke:(name,input)=>entry.operations[name](input)});
+const seekControl=controlRoot.children[0].children.find(e=>e.type==='range');
+assert.equal(Number(seekControl.value),Number(seekControl.max),'raw endpoint must display the last source time, not wrap the slider to zero');
+entry.operations.presentation({mode:'in-place'});entry.operations.restart();f.tick(2/30);
+assert.equal(Number(seekControl.value),2/30,'loop display must use the actual frame period, not the last-sample timestamp');
 entry.operations.presentation({mode:'in-place'});entry.operations.restart();const removed=f.scene.children[0];f.scene.remove(removed);f.tick(1/30);
 assert.equal(entry.read().entries[0].status,'removed');assert.equal(entry.read().entries[0].id,null);assert.ok(entry.read().entries.slice(1).every(e=>e.frame===1));
 await entry.dispose();assert.equal(f.state().active,false);assert.equal(f.state().closed,1);assert.equal(f.scene.children.length,0);
