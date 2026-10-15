@@ -18,15 +18,17 @@ function localPoint(point,area) {
 }
 function inside(point,area) {return length(localPoint(point,area))<=1+1e-12;}
 
-// Adaptive geometric flattening gives an arc-distance lookup; it does not
-// discard source motion samples or cap travelled distance/route segments.
+// Bound both arc/chord length error and nonlinear parameter speed. Flatness
+// alone misses a straight quadratic whose control point is off its midpoint.
+// No source motion samples or travelled route segments are discarded.
 function curveTable(points,area) {
  const table=[{t:0,d:0}];let distance=0;
  const scale=Math.max(...points.flat().map(Math.abs),...area.radii,1);
  const tolerance=Math.max(Math.min(...area.radii)*1e-5,Number.EPSILON*scale*64);
  function flatten(a,b,c,from,to,error) {
   const chord=length(minus(c,a)),polygon=length(minus(b,a))+length(minus(c,b));
-  if(polygon-chord<=error) {distance+=chord;table.push({t:to,d:distance});return;}
+  const midpoint=mix(mix(a,b),mix(b,c)),parameterError=length(minus(midpoint,mix(a,c)));
+  if(polygon-chord<=error&&parameterError<=tolerance) {distance+=chord;table.push({t:to,d:distance});return;}
   const ab=mix(a,b),bc=mix(b,c),mid=mix(ab,bc),t=(from+to)/2;
   flatten(a,ab,mid,from,t,error/2);flatten(mid,bc,c,t,to,error/2);
  }
