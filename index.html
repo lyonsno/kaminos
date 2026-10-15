@@ -3855,7 +3855,7 @@ import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUti
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
@@ -26099,7 +26099,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
-  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
+  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
