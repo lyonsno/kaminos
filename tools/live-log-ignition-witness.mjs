@@ -86,6 +86,13 @@ try{
   const off=report.arms.find(a=>!a.feed),on=report.arms.find(a=>a.feed);
   assert.ok(on.after.stats.gas.freshBurn>off.after.stats.gas.freshBurn*2 && on.after.stats.gas.freshBurn>.001,'Wood feed must sustain fresh gas burning beyond residual control');
   assert.ok(on.after.stats.wood.fuelLost>on.hot.stats.wood.fuelLost,'Continuing flame must consume finite wood fuel');
+  report.phase='withdraw-wood-feed';await save();
+  await invoke('fuelFeed',{enabled:false});await invoke('pause');
+  await advance(report.requested.heatSteps+2*report.requested.offSteps);
+  report.withdrawn=await sample('wood-feed-withdrawn');
+  assert.equal(report.withdrawn.state.burner,false);assert.equal(report.withdrawn.state.gasSource.enabled,false);
+  assert.ok(report.withdrawn.stats.gas.freshBurn<on.after.stats.gas.freshBurn*.01,'Withdrawing wood fuel must extinguish continuing gas combustion');
+  assert.equal(report.withdrawn.stats.wood.peakReaction,0,'Wood must stop releasing gas after it cools without flame feedback');
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}
