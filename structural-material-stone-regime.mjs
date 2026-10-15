@@ -1,3 +1,10 @@
+export function configureBoundedStoneRegime(source,name='stiff-brittle-v2'){
+ if(!['stiff-brittle-v1','stiff-brittle-v2'].includes(name))throw Error(`Unknown bounded stone response: ${name}`);
+ if(!source||!['young','density','poisson'].every(key=>Number.isFinite(source[key]))||source.young<=0||source.density<=0||source.poisson<=-1||source.poisson>=.5)throw Error('Explicit finite bounded stone material required');
+ const scale=name==='stiff-brittle-v2'?100:1;
+ return{name:`bounded-${name}`,route:'kaminos.provisional-bounded-stone-regime.v1',sourceMaterial:{...source},material:{...source,kind:'graph',young:100000*scale,damageLaw:'event-frozen-isotropic-degradation-v1'},threshold:180*scale,gripStiffness:200000*scale,volumeBarrier:0,scale,claim:'Explicit supported-stone response; matched grip and fracture stress scaling, not calibrated rock properties'};
+}
+
 export function configureStoneRegime(manifest,arrays,name='stiff-brittle-v1'){
  if(!['stiff-brittle-v1','legacy'].includes(name))throw new Error(`Unknown stone regime: ${name}`);
  const source=manifest.material,model=manifest.model;

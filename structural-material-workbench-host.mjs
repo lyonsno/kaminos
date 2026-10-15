@@ -4,9 +4,11 @@ export function stoneMaterialParameters(search){
  const query=new URLSearchParams(search),mesh=query.get('stoneMesh')??'fine',fragments=query.get('stoneFragments')??'fine';
  if(!['fine','coarse'].includes(mesh))throw Error('Stone granularity must be fine or coarse');
  if(!['fine','grains'].includes(fragments))throw Error('Stone fragments must be fine or grains');
+ const response=query.get('stoneResponse')??'stiff-brittle-v2';
+ if(!['stiff-brittle-v1','stiff-brittle-v2'].includes(response))throw Error('Unknown stone response');
  const fixture=query.get('stoneFixture');if(fixture!==null&&fixture!=='axial-chunks')throw Error('Unknown stone fixture');
  const motion=query.get('stoneMotion');if(motion!==null&&motion!=='coherent-translation')throw Error('Unknown stone motion');
- const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:mesh==='fine'?'./scratch/bounded-fine-inputs':'./scratch/shard-live-inputs',fragments});
+ const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:mesh==='fine'?'./scratch/bounded-fine-inputs':'./scratch/shard-live-inputs',fragments,material:response});
  if(query.has('stoneGrainScale'))parameters.set('grainScale',query.get('stoneGrainScale'));
  if(fixture!==null)parameters.set('fixture',fixture);
  if(motion!==null)parameters.set('motion',motion);

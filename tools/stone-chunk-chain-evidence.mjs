@@ -1,3 +1,17 @@
+export function requireSupportedStoneResponse(observation,expected){
+ const {status,state,configuration,materialRegime}=observation??{},model=expected?.model;
+ if(!model||!['points','elements','bonds'].every(key=>Number.isSafeInteger(model[key])&&model[key]>0)||!Number.isSafeInteger(expected.minimumSteps)||expected.minimumSteps<0||!Number.isFinite(expected.maximumDropFraction)||expected.maximumDropFraction<=0)throw Error('Explicit supported-body inventory and response target required');
+ if(status?.route!=='kaminos.picked-stone.bounded-shards.webgpu.v0'||status.backend!=='webgpu'||status.adapterFallback!==false||status.connectivity!=='elastic-support'||status.failure||status.paused!==true||typeof status.runId!=='string'||state?.runId!==status.runId||state.steps!==status.submittedSteps||state.steps<expected.minimumSteps||state.observation?.kind!=='full-diagnostic'||state.energyKernel!=='isotropic-degradation-v1')throw Error('Current held native supported-stone state required');
+ if(!['points','elements','bonds'].every(key=>state.model?.[key]===model[key]&&status.model?.[key]===model[key])||!Array.isArray(state.state)||state.state.length!==model.points*16||!state.state.every(Number.isFinite)||!Array.isArray(state.bonds)||state.bonds.length!==model.bonds*4)throw Error('Complete fixture-derived supported-body inventory required');
+ if(materialRegime?.name!==expected.name||materialRegime.material?.young!==expected.young||materialRegime.material?.density!==expected.density||materialRegime.threshold!==expected.threshold||status.threshold!==expected.threshold||configuration?.gripStiffness!==expected.gripStiffness||!expected.configuration||!Object.entries(expected.configuration).every(([key,value])=>configuration[key]===value))throw Error('Effective stiffness, hand coupling and load must match the requested profile');
+ for(let i=0;i<state.bonds.length;i+=4){const [a,b,live]=state.bonds.slice(i,i+3);if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<0||b<0||a>=model.points||b>=model.points||a===b||live!==1)throw Error('Uninjured supported-body bonds required');}
+ let min=Infinity,max=-Infinity,drop=0,pinTravel=0,pinned=0;
+ for(let i=0;i<model.points;i++){const base=i*16,a=state.state;min=Math.min(min,a[base]);max=Math.max(max,a[base]);drop=Math.max(drop,a[base+1]-a[base+5]);if(a[base+11]===1){pinned++;pinTravel=Math.max(pinTravel,Math.hypot(...[0,1,2].map(k=>a[base+4+k]-a[base+k])));}}
+ if(pinned===0||pinned===model.points||max<=min||pinTravel>3e-5)throw Error('A supported finite bar with unchanged pins required');
+ const dropFraction=drop/(max-min);if(dropFraction>expected.maximumDropFraction)throw Error(`Supported Stone remains too compliant: ${dropFraction}`);
+ return{steps:state.steps,maximumDrop:drop,restLength:max-min,dropFraction,pinTravel,pinned,releasedBonds:0};
+}
+
 export function requireChunkStage({status,state,motion}){
  if(status?.backend!=='webgpu'||status.adapterFallback!==false||status.fixture?.route!=='kaminos.stone.axial-chunk-fixture.v1'||status.motion?.route!=='kaminos.stone.detached-translation.webgpu.v1')throw Error('Effective native axial fixture and translation route required');
  const model=status.model;
