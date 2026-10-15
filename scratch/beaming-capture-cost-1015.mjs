@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork} from '../visual-work.mjs';
 import {validateCaptureProfile} from './beaming-capture-profiler.mjs';
-const [out,store,origin,sceneFile]=process.argv.slice(2);
+const [out,store,origin,sceneFile,assay]=process.argv.slice(2);
 if(!out||!store||!origin||!sceneFile)throw Error('explicit output, store, origin and scene required');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'identity',repoRoot:process.cwd(),origin,store,sceneFile,errors:[],rows:[],claim:'held-source capture and remaining-render attribution; instrumented GPU pass time is not uninstrumented FPS'};
@@ -31,7 +31,7 @@ try{
   await fs.writeFile(out+'/instrumented-'+name,body);await route.fulfill({status:200,contentType:'text/javascript',body});
  });
  await rewrite('scene-hybrid-radiance.mjs',s=>"import {installCaptureProfiler} from './scratch/beaming-capture-profiler.mjs';\n"+s.replace('  validateShadowQuality(', '  installCaptureProfiler(device);\n  validateShadowQuality(').replace('    // Source coefficients',"    const originalRender=shadow.render.bind(shadow);shadow.render=(...args)=>globalThis.__captureProfile.measure('shadow',()=>originalRender(...args));\n    // Source coefficients"));
- await rewrite('fire-light-field-shadow.mjs',s=>s.replace('cubeCamera.update(renderer,scene);',"globalThis.__captureProfile.measure(globalThis.__captureProfile.scope==='shadow'?'cube':'other-cube',()=>cubeCamera.update(renderer,scene));"));
+ await rewrite('fire-light-field-shadow.mjs',s=>s.replace('cubeCamera.update(renderer,scene);',"const savedAuto=scene.matrixWorldAutoUpdate;try{if(globalThis.__captureProfile.matrixReuse)scene.matrixWorldAutoUpdate=false;globalThis.__captureProfile.measure(globalThis.__captureProfile.scope==='shadow'?'cube':'other-cube',()=>cubeCamera.update(renderer,scene));}finally{scene.matrixWorldAutoUpdate=savedAuto;}"));
  const owner={id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling:'complementary',points:4,pointSampling:'paired',shadowQuality:{resolution:36,blockerSamples:4,filterSamples:2}})};
  report.phase='load';
  report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile,workspace:'workbench',owner,out,exercise:async()=>{
@@ -39,9 +39,11 @@ try{
   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
   const before=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
   await fs.writeFile(out+'/held-source.f32',Buffer.from(new Float32Array(before.values).buffer));
-  for(const [points,pointSampling] of [[1,'all'],[2,'all'],[4,'paired'],[4,'all'],[1,'all']]){
+  const modes=assay==='matrix-reuse'?[[4,'paired',false],[4,'paired',true],[4,'paired',false],[4,'paired',true]]:[[1,'all'],[2,'all'],[4,'paired'],[4,'all'],[1,'all']];
+  for(const [points,pointSampling,matrixReuse=false] of modes){
    report.phase=`measure-${points}-${pointSampling}`;await write();
    await page.evaluate(args=>window.kaminosWorkbenchExperiments.invoke('setQuadrature',args),{points,pointSampling});
+   await page.evaluate(value=>globalThis.__captureProfile.matrixReuse=value,matrixReuse);
    await page.waitForFunction(({points,pointSampling})=>{const s=window.__kaminosSceneRadiance.debugState();return window.__kaminosSceneRadiance.canRender()&&s.pointCount===points&&s.pointSampling===pointSampling&&s.shadows.every(x=>x.effective&&x.resolution===36&&x.blockerSamples===4&&x.filterSamples===2);},{points,pointSampling});
    const row=await page.evaluate(async({points,pointSampling})=>{
     const p=window.__captureProfile,wait=()=>new Promise(requestAnimationFrame);
@@ -56,7 +58,7 @@ try{
     }
     return {points,pointSampling,requestedFrames:72,frames,errors:frames.flatMap(f=>f.errors),backend:window.__kaminosVolumePrototype.debugState().backend,lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState()};
    },{points,pointSampling});
-   report.rows.push(row);await write();validateCaptureProfile(row);
+   row.matrixReuse=matrixReuse;report.rows.push(row);await write();validateCaptureProfile(row);
    await page.screenshot({path:out+`/mode-${report.rows.length}-${points}-${pointSampling}.png`});assert.deepEqual(report.errors,[]);
   }
   const after=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());assert.deepEqual(after.values,before.values);report.sourceUnchanged=true;return {url:page.url()};
