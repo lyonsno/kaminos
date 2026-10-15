@@ -3,7 +3,7 @@
 // occlusion (or x-ray through), and an overlay that rides on the edited mesh.
 // Keys and pointer wiring belong to the host; every operation here is callable
 // the same way by a hand-driven handler or an agent.
-import {BufferGeometry,DoubleSide,Float32BufferAttribute,Group,LineBasicMaterial,LineSegments,Matrix4,Mesh,MeshBasicMaterial,Points,PointsMaterial,Ray,Vector3} from './lib/three.core.js';
+import {BufferGeometry,DoubleSide,Float32BufferAttribute,Uint32BufferAttribute,Group,LineBasicMaterial,LineSegments,Matrix4,Mesh,MeshBasicMaterial,Points,PointsMaterial,Ray,Vector3} from './lib/three.core.js';
 import {MeshBVH} from './node_modules/three-mesh-bvh/build/index.module.js';
 import {buildPolyMesh,NO_EDGE} from './poly-mesh-core.mjs';
 import {createComponentSelection,setSelectMode,clickComponent,selectAll,boxSelect,selectLinkedComponents,selectionCounts} from './poly-selection.mjs';
@@ -16,7 +16,15 @@ function compact(attribute,width){
   for(let i=0;i<attribute.count;i++)for(let k=0;k<width;k++)out[i*width+k]=attribute[get[k]](i);
   return out;
 }
-function triangleMesh(root){let found=null;root.traverse(o=>{if(!found&&o.isMesh&&o.geometry?.attributes?.position)found=o;});return found;}
+function triangleMeshes(root){const found=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)found.push(o);});return found;}
+// Every primitive of the object edits as one face set, in order, each with its own block of
+// vertices: the same order the GLB side merges primitives in, so face indices agree.
+function mergedArrays(meshes){
+  const parts=meshes.map(m=>{const g=m.geometry,count=g.attributes.position.count;return {positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):Uint32Array.from({length:count},(_,i)=>i),count};});
+  const join=(key,width)=>parts.every(p=>p[key])?Float32Array.from(parts.flatMap(p=>[...p[key]])):null;
+  let base=0;const indices=Uint32Array.from(parts.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.count;return out;}));
+  return {positions:join('positions',3),normals:join('normals',3),uvs:join('uvs',2),indices};
+}
 
 export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   let edit=null;
@@ -36,7 +44,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     const points=[];for(let v=0;v<kernel.vertexCount;v++)if(selection.vertices[v])points.push(...q.subarray(3*v,3*v+3));
     if(points.length&&selection.mode==='vertex'){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(points,3));add(new Points(g,new PointsMaterial({color:SELECTED,size:5,sizeAttenuation:false,depthTest:!edit.through})));}
     edit.wire.material.depthTest=!edit.through;edit.wire.material.needsUpdate=true;
-    mesh.material.transparent=edit.through||edit.materialState.transparent;mesh.material.opacity=edit.through?.3:edit.materialState.opacity;mesh.material.depthWrite=edit.through?false:edit.materialState.depthWrite;mesh.material.needsUpdate=true;
+    for(const {material,transparent,opacity,depthWrite} of edit.materialStates){material.transparent=edit.through||transparent;material.opacity=edit.through?.3:opacity;material.depthWrite=edit.through?false:depthWrite;material.needsUpdate=true;}
     onChange(state());
   }
   const commit=selection=>{edit.selection=selection;rebuildOverlay();return result();};
@@ -87,22 +95,25 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     read:()=>result(),
     enter(object,{objectId=null}={}){
       if(edit)this.exit();
-      const mesh=triangleMesh(object);if(!mesh)throw Error('Edit Mode needs an object with a triangle mesh');
-      const g=mesh.geometry,arrays={positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):null},kernel=buildPolyMesh(arrays);
-      const bvh=new MeshBVH(g,{indirect:true}),overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
+      const meshes=triangleMeshes(object);if(!meshes.length)throw Error('Edit Mode needs an object with a triangle mesh');
+      const mesh=meshes[0];object.updateMatrixWorld(true);
+      if(meshes.some(m=>!m.matrixWorld.equals(mesh.matrixWorld)))throw Error('Edit Mode needs every primitive of the mesh to share one placement');
+      const arrays=mergedArrays(meshes),kernel=buildPolyMesh(arrays),picking=new BufferGeometry();
+      picking.setAttribute('position',new Float32BufferAttribute(arrays.positions,3));picking.setIndex(new Uint32BufferAttribute(arrays.indices,1));
+      const bvh=new MeshBVH(picking,{indirect:true}),overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wirePositions=new Float32Array(kernel.edgeCount*6),q=kernel.vertexPositions;
       for(let e=0;e<kernel.edgeCount;e++){wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),6*e);wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3),6*e+3);}
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
-      const m=mesh.material;
-      edit={object,mesh,objectId,arrays,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialState:{transparent:m.transparent,opacity:m.opacity,depthWrite:m.depthWrite}};
+      const materialStates=meshes.flatMap(m=>[m.material].flat()).map(material=>({material,transparent:material.transparent,opacity:material.opacity,depthWrite:material.depthWrite}));
+      edit={object,mesh,objectId,arrays,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
       rebuildOverlay();return result();
     },
     exit(){
       if(!edit)return {editing:false};
-      const {mesh,overlay,materialState}=edit;mesh.remove(overlay);
+      const {mesh,overlay,materialStates}=edit;mesh.remove(overlay);
       overlay.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
-      Object.assign(mesh.material,materialState);mesh.material.needsUpdate=true;
+      for(const {material,...state} of materialStates){Object.assign(material,state);material.needsUpdate=true;}
       edit=null;onChange({editing:false});return {editing:false};
     },
     setMode(mode){need();return commit(setSelectMode(edit.selection,edit.kernel,mode));},
@@ -131,6 +142,13 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     setThrough(on){need();if(typeof on!=='boolean')throw Error('X-ray must be true or false');edit.through=on;rebuildOverlay();return result();},
     selection:()=>need().selection,
     kernel:()=>need().kernel,
+    // Slice's plane: through the drawn line and along the view, in the mesh's own frame.
+    planeFromLine(x0,y0,x1,y1){
+      need();if(Math.hypot(x1-x0,y1-y0)<8)throw Error('Draw a longer line to slice along');
+      const a=localRay(x0,y0),b=localRay(x1,y1),p1=a.origin.clone().add(a.direction),p2=b.origin.clone().add(b.direction);
+      const normal=p1.sub(a.origin).cross(p2.sub(a.origin)).normalize();
+      return {point:a.origin.toArray(),normal:normal.toArray()};
+    },
     // What Separate needs: the selected faces, and the triangles they were selected on.
     selectedFaceMask:()=>Uint8Array.from(need().selection.faces),
     geometry(){const {positions,indices}=need().arrays;return {positions,indices};},

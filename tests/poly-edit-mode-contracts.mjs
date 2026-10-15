@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createPolyEditMode} from '../poly-edit-mode.mjs';
+const {BufferGeometry,Group,Mesh,MeshStandardMaterial}=THREE;
 
 function seamCube(){
   const sides=[[[1,0,0],[0,1,0],[0,0,1]],[[-1,0,0],[0,0,1],[0,1,0]],[[0,1,0],[0,0,1],[1,0,0]],[[0,-1,0],[1,0,0],[0,0,1]],[[0,0,1],[1,0,0],[0,1,0]],[[0,0,-1],[0,1,0],[1,0,0]]];
@@ -75,6 +76,17 @@ const faceMask=edit.selectedFaceMask();assert.equal(faceMask.length,12);assert.e
 assert.ok(faceMask[8]||faceMask[9],'the clicked front face');
 const picked=edit.geometry();assert.deepEqual([...picked.indices],[...mesh.geometry.index.array]);assert.equal(picked.positions.length,mesh.geometry.attributes.position.count*3);
 
+// A line drawn on screen becomes the plane through it along the view, in the mesh's own frame.
+{
+  const flat=edit.planeFromLine(0,200,400,200),n=flat.normal,dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  assert.ok(Math.abs(Math.abs(n[1])-1)<1e-6,'a horizontal line through the middle cuts horizontally');
+  assert.ok(Math.abs(dot(n,flat.point))<1e-6,'and through the middle of the view');
+  const upright=edit.planeFromLine(mx,0,mx,400);
+  assert.ok(Math.abs(upright.normal[1])<1e-6,'a vertical line cuts vertically (tilted toward the eye in perspective)');
+  assert.ok(Math.abs(dot(upright.normal,[0,0,1])-dot(upright.normal,upright.point))<1e-6,'through the front-face centre the line was drawn over');
+  assert.throws(()=>edit.planeFromLine(10,10,12,11),/longer line/);
+}
+
 // Exit removes everything Edit Mode added and leaves the object's material alone.
 state=edit.exit();
 assert.equal(state.editing,false);
@@ -82,3 +94,23 @@ assert.equal(mesh.children.length,0);
 assert.equal(mesh.material,material);assert.equal(material.transparent,false);
 assert.throws(()=>edit.setMode('face'),/Edit Mode/);
 assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mesh/);
+
+// A mesh split across primitives (a derived part with its cut cap in a second material) edits
+// as one face set, primitives in order, so faces line up with the GLB's merged primitives.
+{
+  const whole=seamCube(),index=[...whole.index.array],front=index.slice(24,30),rest=[...index.slice(0,24),...index.slice(30)];
+  const part=indices=>{const g=new BufferGeometry();for(const name of ['position','normal','uv'])g.setAttribute(name,whole.getAttribute(name));g.setIndex(indices);return g;};
+  const capMaterial=new MeshStandardMaterial(),bodyMaterial=new MeshStandardMaterial(),group=new Group();
+  group.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));group.updateMatrixWorld(true);
+  const two=createPolyEditMode({camera,canvas});
+  two.enter(group,{objectId:'two'});two.setMode('face');
+  let picked=two.click(200,200);
+  assert.ok([10,11].includes(picked.active.index),`the front face is the second primitive's, merged after the first's 10 faces; got ${picked.active.index}`);
+  assert.equal(two.selectAll('select').counts.faces,12,'all twelve faces, across both primitives');
+  assert.deepEqual([...two.geometry().indices],[...rest,...front.map(i=>i+24)],'indices in primitive order, each primitive with its own vertex block');
+  two.setThrough(true);assert.ok(bodyMaterial.transparent&&capMaterial.transparent,'x-ray fades every primitive');
+  two.exit();assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent],[false,false],'and exit restores each');
+  const apart=new Group();apart.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));apart.children[1].position.x=1;apart.updateMatrixWorld(true);
+  assert.throws(()=>two.enter(apart,{objectId:'apart'}),/share one placement/);
+}
+
