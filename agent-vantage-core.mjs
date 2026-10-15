@@ -290,7 +290,8 @@ export function pickRunAt({width, height, runs}, [x, y]) {
 
 // A picture's pick map from the numbers read back and the rows the page wrote
 // down when the map was drawn. Only the objects the map shows are kept; an
-// instanced mesh keeps the matrices of the instances it shows.
+// instanced mesh keeps the matrices of the instances it shows, unless it has
+// more instances than the map's 16-bit instance numbers can tell apart.
 export function finishPickMap(ids, rows, context = {}) {
   const shown = new Map();
   for (let i = 0; i < ids.objects.length; i++) {
@@ -300,7 +301,7 @@ export function finishPickMap(ids, rows, context = {}) {
     shown.get(n).add(ids.instances[i]);
   }
   const objects = rows.filter(row => shown.has(row.n)).map(({instanceArray, ...row}) => {
-    if (!instanceArray) return row;
+    if (!instanceArray || row.instancesBeyondMap) return row;
     const instances = {};
     for (const k of [...shown.get(row.n)].sort((a, b) => a - b)) {
       if ((k + 1) * 16 <= instanceArray.length) instances[k] = Array.from(instanceArray.slice(k * 16, k * 16 + 16));

@@ -344,7 +344,8 @@ export function createVantagePilot(host) {
         context = scene ?? {clouds: [], fields: [], water: false};
       } else {
         if (!host.drawIds) fail('pick', 'This page cannot draw a pick map, so it cannot say what is drawn at a point');
-        const {width, height} = host.viewportSize(), w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height));
+        // At the size the viewport is drawn at, so the pixel read is one the operator sees.
+        const {width, height} = host.drawingSize?.() ?? host.viewportSize(), w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height));
         const pixel = [Math.min(w - 1, Math.floor(at[0] * w)), Math.min(h - 1, Math.floor(at[1] * h))];
         let drawing, ids;
         try {
@@ -354,12 +355,15 @@ export function createVantagePilot(host) {
         } catch (error) { fail('pick', `The pick map could not be drawn: ${error?.message || error}`); }
         instance = ids.instances[0];
         row = ids.objects[0] === NOTHING_DRAWN ? {n: NOTHING_DRAWN} : drawing.rows.find(item => item.n === ids.objects[0]) ?? {n: ids.objects[0], unnumbered: true};
-        if (row.instanceArray && (instance + 1) * 16 <= row.instanceArray.length) instanceMatrix = Array.from(row.instanceArray.slice(instance * 16, instance * 16 + 16));
+        if (row.instanceArray && !row.instancesBeyondMap && (instance + 1) * 16 <= row.instanceArray.length) {
+          instanceMatrix = Array.from(row.instanceArray.slice(instance * 16, instance * 16 + 16));
+        }
         context = drawing.context;
       }
       let hit = null, drawn = null;
       if (row.id != null) {
-        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera}), instanced = !!(instanceMatrix || row.instanceArray);
+        // Past 65,536 instances the map's instance number wraps, so it names no instance.
+        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
         hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
           distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
           pointBasis: found.basis ?? null, geometry: found.geometry ?? null,
@@ -843,7 +847,8 @@ export function drawnRows(entries, drawn, session) {
     return {n, id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, path: meshPath(entry.object, object),
       mesh: object.name || null, matrixWorld: object.matrixWorld.toArray(), root: entry.object.matrixWorld.toArray(),
       geometry: geometryIdentity(object, session), ...(custom ? {coverage: 'custom-shader'} : {}),
-      ...(object.isInstancedMesh ? {instanceArray: object.instanceMatrix.array.slice(0, object.count * 16)} : {})};
+      ...(object.isInstancedMesh ? {instanceArray: object.instanceMatrix.array.slice(0, object.count * 16),
+        ...(object.count > 0x10000 ? {instancesBeyondMap: true} : {})} : {})};
   });
 }
 
@@ -893,7 +898,8 @@ export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, opti
   const entry = entries.find(item => item.id === row.id);
   if (!entry?.object) return {now: 'missing'};
   const node = nodeAt(entry.object, row.path);
-  if (!node?.isMesh) return {now: 'mesh-missing'};
+  if (!node) return {now: 'mesh-missing'};
+  if (!node.isMesh) return {now: 'present', geometry: null, point: null, basis: 'not-a-mesh'};
   const geometry = row.geometry ? {status: geometryStatus(row.geometry, geometryIdentity(node, session), session)} : null;
   if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, point: null, basis: 'instance-unknown'};
   const hit = recastSurface(THREE, node, ray, {matrixWorld: row.matrixWorld, instanceMatrix, root: row.root, optics});
@@ -940,6 +946,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
+    drawingSize: () => (hostCanvas.width > 0 && hostCanvas.height > 0 ? {width: hostCanvas.width, height: hostCanvas.height} : null),
     // The rows are written down in the same task as the map is drawn, so they hold the matrices it was drawn with.
     drawIds: idPass ? options => {
       const pass = idPass.draw(options), list = entries();

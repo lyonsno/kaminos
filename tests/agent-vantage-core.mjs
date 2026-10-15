@@ -343,3 +343,10 @@ test('a picture pick carries what its pick map holds at the point, and the cloud
   assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 4, id: 'kiln'}}}), /mesh path and matrices/);
   assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 70000}}}), /object number/);
 });
+
+test('a pick map keeps no instance matrices for a mesh with more instances than it can number', () => {
+  const ids = {width: 1, height: 1, objects: Uint16Array.of(4), instances: Uint16Array.of(3)};
+  const map = core.finishPickMap(ids, [{n: 4, id: 'grass', instanceArray: new Float32Array(64), instancesBeyondMap: true}]);
+  assert.equal(map.objects[0].instances, undefined, 'instance 3 could be any instance 3 + k x 65,536');
+  assert.equal(map.objects[0].instancesBeyondMap, true);
+});

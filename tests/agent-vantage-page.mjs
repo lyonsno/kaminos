@@ -666,11 +666,12 @@ function installedPage({subs = [], drawnAt = null, water = false} = {}) {
   });
   let records = copy(subs);
   const idPass = fakeIdPass(() => entries, {drawnAt});
-  const viewport = element('div');
+  const viewport = element('div'), hostCanvas = element('canvas');
+  hostCanvas.width = 1600; hostCanvas.height = 1200;   // the drawing buffer at a device pixel ratio of 2
   const vantage = installAgentVantage({THREE, document, window, edits: {state: () => ({active: null, replaying: false})},
     cameras: {read: () => ({settings: {activeId: null, aspect: [16, 9]}, cameras: copy(records)}), state: () => ({mode: 'user', activeId: null})},
     entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
-    writeView() {}, viewport, hostCanvas: element('canvas'), busy: () => null, hold: () => () => {},
+    writeView() {}, viewport, hostCanvas, busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
     idPass, water: () => water});
   const refresh = intervals.find(item => item.ms === 400).fn;
@@ -1132,4 +1133,34 @@ test('a pick map hides editor drawing and the named objects for its draw, and pu
   restore();
   assert.deepEqual([helper, editorOnly, sub, gizmo, box, emitter, kiln].map(object => object.visible), Array(7).fill(true));
   assert.equal(alreadyHidden.visible, false, 'what was hidden before stays hidden');
+});
+
+test('a live pick draws its map at the size the viewport is drawn at, so its pixel is one the operator sees', async () => {
+  const page = installedPage(), at = pictureFraction(OPERATOR, 1600 / 900, [2, 0.1, 0.5]);
+  await page.vantage.run('pick', {from: 'operator', at});
+  const call = page.idPass.calls.at(-1);
+  assert.deepEqual([call.width, call.height], [1600, 1200], 'device pixels, not the 800x600 of the page layout');
+  assert.deepEqual(call.region, [Math.floor(at[0] * 1600), Math.floor(at[1] * 1200), 1, 1]);
+});
+
+test('a drawing that is not a mesh is named, without a point', async () => {
+  const page = installedPage({drawnAt: () => ({object: page.entries[1].object.children[1]})});
+  page.entries[1].object.add(new THREE.Sprite(new THREE.SpriteMaterial()));
+  const picked = await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.5]});
+  assert.equal(picked.hit?.id, 'box-1');
+  assert.equal(picked.hit.now, 'present', 'the sprite is there; it is just not a mesh');
+  assert.equal(picked.hit.point, null);
+  assert.equal(picked.hit.pointBasis, 'not-a-mesh');
+});
+
+test('an instance number the pick map cannot hold is not guessed', async () => {
+  // Past 65,536 instances the map's 16-bit instance number wraps, so instance 5 could be 5 + k x 65,536.
+  const grass = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), 70000);
+  const page = installedPage({drawnAt: () => ({object: grass, instanceId: 5})});
+  const group = new THREE.Group(); group.add(grass);
+  page.entries.push({id: 'grass', label: 'Grass', type: 'glb', object: group});
+  const picked = await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.5]});
+  assert.equal(picked.hit?.id, 'grass', 'the object is still the one the map names');
+  assert.equal(picked.hit.surface.instance, null, 'the wrapped instance number is not reported');
+  assert.equal(picked.hit.pointBasis, 'instance-unknown', 'and no instance is guessed for the point');
 });
