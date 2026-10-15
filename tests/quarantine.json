@@ -254,6 +254,14 @@
       "signature": "FileNotFoundError: [Errno 2] No such file or directory: '<root>/artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'",
       "testLastChanged": "2026-08-30 88a7dada"
     },
+    "tests/volume-time-step-scalar-contracts.mjs": {
+      "class": "regression",
+      "owner": "sexy",
+      "since": "2026-10-13",
+      "reason": "never run until browser-kind tests ran with KAMINOS_BROWSER; on main's first-parent line both failing subtests passed at 2026-09-26 db84a597d. The stepRate subtest first fails at 2026-10-01 1e81dc53a Integrate authored kiln collision with current flame domain and timestep (merge from sexy-kiln-land) and fails at every later commit sampled. The 57b45f72-review subtest last passes at 2026-10-13 712ffb485 and first fails at its child f689a44cc volume: joined boundary producer hook, slice 1 (pressure-level join, opt-in). The owner decides whether the source or the test is wrong",
+      "signature": "node:test failing: every per-step decay of a transported channel goes through stepRate :: AssertionError: the transported front topology decays on the same law | review of 57b45f72: relaxation blends and the wall velocity sponge follow the step; scene selectors and floors are the only exceptions :: AssertionError: the vertical velocity floor stays a floor",
+      "testLastChanged": "2026-10-13 43046b943"
+    },
     "tests/volume-transport-scheme-contracts.mjs": {
       "class": "stale-pin",
       "owner": "operlocutor",

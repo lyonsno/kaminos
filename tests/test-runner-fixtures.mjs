@@ -27,8 +27,10 @@ export async function fixture(t, { files, manifest, quarantine }) {
 }
 
 export const manifestOf = tests => ({ schema: 'kaminos.test-suite-manifest.v1', tests });
+// browser: null keeps these contracts independent of a KAMINOS_BROWSER set
+// in the environment that runs them.
 export const run = (f, extra = {}) => runSuite({ root: f.root, manifestPath: f.manifestPath, quarantinePath: f.quarantinePath,
-  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, ...extra });
+  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, browser: null, ...extra });
 export const readReport = async f => JSON.parse(await fs.readFile(f.reportPath, 'utf8'));
 
 // Sets (or, with undefined, clears) an environment variable for one test and

@@ -7,7 +7,11 @@
 //   // kaminos-test: browser — reason
 //   # kaminos-test: manual — reason
 // or by an entry in tests/suite.json. Kinds `node` and `python` execute;
-// `browser`, `helper` and `manual` are counted with their reason and never run.
+// `browser` executes only when KAMINOS_BROWSER names an executable file and the
+// test opts in to that route (`// kaminos-test: browser route — reason`, or
+// "route": true in its manifest entry); it receives the browser's real path
+// as KAMINOS_CHROME. `helper` and `manual` are counted with their reason and
+// never run.
 //
 // A failure is known only when the file is quarantined and fails with exactly
 // its recorded signature. Everything else fails the run: new failures, changed
@@ -56,8 +60,12 @@ export const EVENTS_REPORTER_PATH = fileURLToPath(new URL('./test-events-reporte
 export const EXIT_MARKER_PATH = fileURLToPath(new URL('./test-exit-marker.mjs', import.meta.url));
 export const DEFAULT_NODE_FLAGS = Object.freeze([`--import=${pathToFileURL(EXIT_MARKER_PATH).href}`, '--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(EVENTS_REPORTER_PATH).href}`]);
 const DEFAULT_TIMEOUT_MS = 600000;
-const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
+const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)(?:\s+(route))?\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
+
+// The installed Google Chrome is an operator's browser; a headless run must
+// never take it over.
+const INSTALLED_CHROME = /\/Applications\/Google Chrome\.app\//;
 
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
 const posix = p => p.split(path.sep).join('/');
@@ -104,7 +112,7 @@ async function readDeclaration(root, file) {
     const { buffer, bytesRead } = await handle.read(Buffer.alloc(512), 0, 512, 0);
     const firstLine = buffer.subarray(0, bytesRead).toString('utf8').split('\n')[0];
     const match = firstLine.match(DECLARATION);
-    return match ? { kind: match[1], reason: match[2] || null, source: 'declaration' } : null;
+    return match ? { kind: match[1], route: Boolean(match[2]), reason: match[3] || null, source: 'declaration' } : null;
   } finally { await handle.close(); }
 }
 
@@ -122,6 +130,16 @@ function gitIdentity(root) {
 function executableVersion(executable, args) {
   try { return execFileSync(executable, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
   catch { return null; }
+}
+
+// A browser's --version, bounded: a browser that never answers is recorded
+// without a version instead of holding the run.
+function browserVersion(executable, timeoutMs) {
+  try {
+    return { version: execFileSync(executable, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, killSignal: 'SIGKILL' }).trim().split('\n')[0] || null, error: null };
+  } catch (error) {
+    return { version: null, error: error.code === 'ETIMEDOUT' ? `--version timed out after ${timeoutMs} ms` : String(error.message || error).split('\n')[0] };
+  }
 }
 
 async function checkDependencies(root) {
@@ -397,10 +415,10 @@ function stripTestWarnings(text) {
   return String(text).replace(TEST_WARNING_LINE, '$1');
 }
 
-function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
+function runOne({ root, file, kind, runtime = kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
   const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file, KAMINOS_TEST_RUNNER_ROOT: root };
   const eventsPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.events.jsonl`);
-  const flags = kind === 'node' ? [...nodeFlags] : [];
+  const flags = runtime === 'node' ? [...nodeFlags] : [];
   const withReporter = flags.some(f => f.startsWith('--test-reporter=') && f.includes('test-events-reporter'));
   if (withReporter) flags.push(`--test-reporter-destination=${eventsPath}`);
   const started = Date.now();
@@ -438,7 +456,7 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
           if (events === null) unsigned = 'tests started but no events were written; the process ended before they were flushed';
           if (unsigned) { outcome = 'unsigned-failure'; signature = null; }
         } else {
-          signature = failureSignature(stripTestWarnings(output.replace(EXIT_MARKER, '\n')), { root, kind, exitCode: fields.exitCode });
+          signature = failureSignature(stripTestWarnings(output.replace(EXIT_MARKER, '\n')), { root, kind: runtime, exitCode: fields.exitCode });
         }
       } else if (outcome === 'pass' && testsStarted) {
         // Exiting zero before the summary is not a pass; nothing says the
@@ -507,7 +525,12 @@ export async function runSuite({
   executables = {},
   nodeFlags = DEFAULT_NODE_FLAGS,
   abortSignal = null,
+  // The browser executable for browser-kind tests; null or empty leaves them
+  // not run. Defaults to KAMINOS_BROWSER.
+  browser = process.env.KAMINOS_BROWSER,
+  browserVersionTimeoutMs = 10000,
 } = {}) {
+  browser = browser || null;
   root = path.resolve(root);
   manifestPath ||= path.join(root, 'tests', 'suite.json');
   quarantinePath ||= path.join(root, 'tests', 'quarantine.json');
@@ -515,7 +538,9 @@ export async function runSuite({
   logsDir = logsDir || path.join(path.dirname(reportPath), 'logs');
   // NODE_TEST_CONTEXT would switch child node:test files to the binary
   // protocol used between a parent `node --test` and its children.
-  const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
+  // KAMINOS_BROWSER is the runner's input; tests receive the browser only as
+  // KAMINOS_CHROME, and only browser-kind tests.
+  const { NODE_TEST_CONTEXT: _parentTestContext, KAMINOS_BROWSER: _browserInput, ...inheritedEnv } = process.env;
   const pythonExecutable = resolvePython(root, executables.python, inheritedEnv);
   const resolvedExecutables = { node: process.execPath, ...executables, python: pythonExecutable.resolved };
   const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
@@ -531,6 +556,7 @@ export async function runSuite({
         unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
+      browser: browser ? { executable: browser, realpath: null, source: 'KAMINOS_BROWSER', passedAs: 'KAMINOS_CHROME', version: null } : null,
       manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
@@ -554,6 +580,19 @@ export async function runSuite({
     report.failurePhase = 'arguments';
     if (!Number.isInteger(parallel) || parallel < 1) throw Object.assign(new Error(`parallel must be a positive integer, got ${parallel}`), { phase: 'arguments' });
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) throw Object.assign(new Error(`timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}, got ${timeoutMs}`), { phase: 'arguments' });
+    if (browser) {
+      report.failurePhase = 'browser';
+      const fail = message => Object.assign(new Error(`KAMINOS_BROWSER=${browser}: ${message}`), { phase: 'browser' });
+      let stat;
+      try { stat = await fs.stat(browser); } catch (error) { throw fail(`cannot be read (${error.code || error.message})`); }
+      if (!stat.isFile()) throw fail('is not a file');
+      try { await fs.access(browser, fsConstants.X_OK); } catch { throw fail('is not executable'); }
+      report.effective.browser.realpath = realpathSync(browser);
+      if (INSTALLED_CHROME.test(browser) || INSTALLED_CHROME.test(report.effective.browser.realpath)) throw fail('names the installed Google Chrome; use a Chrome for Testing executable');
+      const probe = browserVersion(report.effective.browser.realpath, browserVersionTimeoutMs);
+      report.effective.browser.version = probe.version;
+      report.effective.browser.versionError = probe.error;
+    }
     report.failurePhase = 'load-manifest';
     const manifest = await readJson(manifestPath, SUITE_MANIFEST_SCHEMA, 'load-manifest');
     report.effective.manifestSha256 = manifest.sha256;
@@ -604,7 +643,9 @@ export async function runSuite({
       const conflict = declared && listed && listed.kind !== declared.kind;
       const badKind = !KNOWN_KINDS.has(entry.kind);
       const missingReason = !EXECUTED_KINDS.has(entry.kind) && !entry.reason;
-      if (conflict || badKind || missingReason) { report.invalid.push(file); continue; }
+      // Only a browser-kind test can opt in to the KAMINOS_BROWSER route.
+      const strayRoute = Boolean(entry.route) && entry.kind !== 'browser';
+      if (conflict || badKind || missingReason || strayRoute) { report.invalid.push(file); continue; }
       classification.set(file, entry);
     }
     report.orphans.manifest = Object.keys(tests).filter(f => !fileSet.has(f)).sort();
@@ -621,7 +662,12 @@ export async function runSuite({
     for (const [file, entry] of classification) {
       if (onlySet && !onlySet.has(file)) continue;
       if (EXECUTED_KINDS.has(entry.kind) && kinds.includes(entry.kind)) planned.push({ file, kind: entry.kind, executable: resolvedExecutables[entry.kind] });
-      else report.notRun.push({ file, kind: entry.kind, reason: entry.reason || `kind ${entry.kind} not selected`, source: entry.source });
+      else if (entry.kind === 'browser' && browser && entry.route === true) {
+        const runtime = file.endsWith('.py') ? 'python' : 'node';
+        planned.push({ file, kind: 'browser', runtime, executable: resolvedExecutables[runtime] });
+      } else if (entry.kind === 'browser' && browser) {
+        report.notRun.push({ file, kind: entry.kind, reason: `not opted in to the KAMINOS_BROWSER route: ${entry.reason}`, source: entry.source });
+      } else report.notRun.push({ file, kind: entry.kind, reason: entry.reason || `kind ${entry.kind} not selected`, source: entry.source });
     }
     report.counts.notRun = report.notRun.length;
     if (!planned.length && !report.unmatchedSelectors.length) report.unmatchedSelectors.push('empty-plan');
@@ -654,8 +700,11 @@ export async function runSuite({
     Object.assign(report.effective.pythonExecutable, { pathPrefixed: Boolean(pathPrefix), pathPrefix });
     const childPath = pathPrefix ? [pathPrefix, inheritedEnv.PATH].filter(Boolean).join(path.delimiter) : inheritedEnv.PATH;
     const childEnv = { ...inheritedEnv, ...(childPath === undefined ? {} : { PATH: childPath }), ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
+    // Browser-kind tests get the browser's real path, so a link cannot stand
+    // in for the executable the report records.
+    const browserEnv = browser ? { ...childEnv, KAMINOS_CHROME: report.effective.browser.realpath } : null;
     report.results = await pool(planned, parallel,
-      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track, nodeFlags }), () => interrupted);
+      item => runOne({ root, ...item, timeoutMs, logsDir, env: item.kind === 'browser' ? browserEnv : childEnv, track, nodeFlags }), () => interrupted);
     for (const result of report.results) for (const message of result.warnings || []) report.warnings.push({ source: 'test', test: result.file, message });
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
@@ -750,6 +799,8 @@ function summarize({ report, reportPath }) {
   ];
   const warned = warningLines(report.warnings);
   if (warned.length) lines.push(`warnings:\n  ${warned.join('\n  ')}`);
+  // The browser line follows the counts line and any warnings.
+  lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
@@ -760,7 +811,7 @@ function summarize({ report, reportPath }) {
   list('invalid classifications', report.invalid, 'unknown kind, a non-executed kind without a reason, or a declaration that disagrees with tests/suite.json');
   list('invalid quarantine entries', report.invalidQuarantine, 'each needs class, owner, reason and signature');
   list('selectors that matched nothing', report.unmatchedSelectors);
-  list('browser launches reached by tests', report.browserLaunchAttempts.map(a => `${a.file}: ${a.args}`), 'classify these tests as browser');
+  list('browser launches reached by tests', report.browserLaunchAttempts.map(a => `${a.file}: ${a.args}`), 'classify these tests as browser; a browser-kind test must take its browser from KAMINOS_CHROME');
   list('test roots that are neither run nor excluded', report.uncoveredTestRoots, 'add them to excludedRoots in tests/suite.json with a reason');
   list('manifest entries for missing files', report.orphans.manifest);
   list('quarantine entries for missing files', report.orphans.quarantine);

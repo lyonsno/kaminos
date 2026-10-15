@@ -180,3 +180,10 @@ test('the runner works when invoked through a symlinked path', async t => {
   assert.equal(res.status, 0, res.stdout + res.stderr);
   assert.equal((await readReport(f)).counts.executed, 1);
 });
+
+test('the route token is only for browser-kind tests', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': '// kaminos-test: node route — not a browser test\nprocess.exit(0);\n', 'b.mjs': PASS },
+    manifest: manifestOf({ 'tests/b.mjs': { kind: 'node', route: true } }) });
+  assert.equal((await run(f)).ok, false);
+  assert.deepEqual((await readReport(f)).invalid, ['tests/a.mjs', 'tests/b.mjs']);
+});
