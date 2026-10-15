@@ -8,7 +8,7 @@ import {NOTES_SCHEMA} from '../notes-core.mjs';
 
 const VIEW = {position: [0, 1, 4], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000};
 
-function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture, avatarOf} = {}) {
+function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture, avatarOf, ownView} = {}) {
   const app = {
     posted: [], receipts: [], view: structuredClone(VIEW), writes: [], selections: [], scene: 'bench.kaminos.json',
     entries: [{id: 'cube', label: 'Cube', type: 'procedural-mesh'}, {id: 'lamp', label: 'Lamp', type: 'light'},
@@ -37,6 +37,7 @@ function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture,
     href: () => 'http://127.0.0.1:8325/index.html',
     title: () => 'Kaminos',
     avatarOf,
+    ...(ownView ? {ownView: () => ownView(app)} : {}),
   });
   return {app, session};
 }
@@ -201,4 +202,56 @@ test("a name leads to that agent's avatar: registered, then the vantage, then th
   assert.deepEqual(app.selections, ['vantage-sub-pilot']);
   assert.deepEqual(session.selectAvatar('no-avatar'), {name: 'no-avatar', object: null});
   assert.deepEqual(app.selections, ['vantage-sub-pilot'], 'nothing is selected when there is no avatar');
+});
+
+test("a note's anchor, scene, selection, view and picture describe one moment", async () => {
+  // The picture is taken over several frames; the person selects something
+  // else, opens another scene and moves the camera before it comes back.
+  let release, calls = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  const {app, session} = fakePage({selected: {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'},
+    capture: async () => { calls++; await gate; return {image: 'data:image/png;base64,iVBORw0KGgo=', width: 4, height: 3}; }});
+  session.hello({author: 'noah', lastSeq: 0});
+  const posting = session.post({text: 'what is this?'});
+  await new Promise(resolve => setTimeout(resolve, 0));
+  app.selected = {ids: ['lamp'], memberIds: ['lamp'], activeId: 'lamp'};
+  app.scene = 'second.kaminos.json';
+  app.view = {...structuredClone(VIEW), position: [3, 2, 1]};
+  release();
+  await posting;
+  const body = app.posted[0];
+  assert.equal(body.anchor.id, body.context.selection.activeId, 'the note is on the object its selection names');
+  assert.deepEqual(body.anchor, {kind: 'object', id: 'lamp', label: 'Lamp'});
+  assert.deepEqual(body.subject, {scene: 'second.kaminos.json'});
+  assert.deepEqual(body.context.view.position, [3, 2, 1]);
+  assert.ok(calls >= 2, 'the picture was taken again after the change, so it shows what the note records');
+});
+
+test('a view that keeps moving while the picture is taken is refused, not mixed', async () => {
+  const {app, session} = fakePage({selected: {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'},
+    capture: async () => {
+      app.view = {...app.view, position: [app.view.position[0] + 1, 1, 4]};
+      return {image: 'data:image/png;base64,iVBORw0KGgo=', width: 4, height: 3};
+    }});
+  session.hello({author: 'noah', lastSeq: 0});
+  await assert.rejects(session.post({text: 'look at this'}), /changing while the picture was taken/);
+  assert.equal(app.posted.length, 0, 'nothing is posted when the picture cannot match the recorded view');
+});
+
+test("while something else has the viewport camera, a note waits for the person's own view", async () => {
+  // A sub's picture borrows the viewport camera; the page says when it is back.
+  const SUB = {...structuredClone(VIEW), position: [9, 9, 9]};
+  const own = fakePage({ownView: async app => { app.view = structuredClone(VIEW); return true; }});
+  own.app.view = structuredClone(SUB);
+  own.session.hello({author: 'noah', lastSeq: 0});
+  await own.session.post({text: 'the rim'});
+  assert.deepEqual(own.app.posted[0].context.view, VIEW, "the note records the person's view, not the borrowed one");
+  const kept = fakePage({ownView: async () => false});
+  kept.app.view = structuredClone(SUB);
+  kept.session.hello({author: 'noah', lastSeq: 0});
+  await kept.session.post({text: 'the rim'});
+  const body = kept.app.posted[0];
+  assert.ok(!('view' in body.context), 'no view is recorded while it is not the person\'s');
+  assert.equal(body.picture, null);
+  assert.match(body.context.pictureIssue, /kept the viewport camera/);
 });

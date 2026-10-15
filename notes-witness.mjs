@@ -14,7 +14,7 @@
 //
 //   node notes-witness.mjs --out DIR --playwright /path/to/playwright-core/index.mjs \
 //     --browser /path/to/chrome-for-testing [--port N] [--headed] [--negative-no-picture]
-import {execFile, spawn} from 'node:child_process';
+import {execFile, execFileSync, spawn} from 'node:child_process';
 import {copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -48,6 +48,12 @@ const check = (name, ok, detail = {}) => {
   if (!ok) throw new Error(`${name} failed: ${JSON.stringify(detail)}`);
 };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Steps that can hang without failing, such as a browser that never finishes
+// starting, get a deadline, so the run ends with a report naming the phase.
+const within = (ms, what, promise) => new Promise((resolve, reject) => {
+  const timer = setTimeout(() => reject(new Error(`${what} took longer than ${ms / 1000} s`)), ms);
+  promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+});
 const freePort = () => new Promise(resolve => {
   const server = net.createServer();
   server.listen(0, '127.0.0.1', () => { const {port} = server.address(); server.close(() => resolve(port)); });
@@ -71,7 +77,7 @@ function colors(file) {
   return {width, height, red: red / (width * height), varied};
 }
 
-let browser, server;
+let browser, server, browserMarker;
 const savedScenes = [];
 const near = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => Math.abs(value - b[index]) < 1e-3);
 async function postFromComposer(target, text) {
@@ -113,11 +119,15 @@ try {
 
   report.phase = 'launch-browser'; save();
   const {chromium} = await import(pathToFileURL(path.resolve(options.playwright)));
-  browser = await chromium.launch({executablePath: options.browser, headless: options.headed !== true,
-    args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--disable-background-timer-throttling', '--disable-renderer-backgrounding']});
+  // The browser carries this run's marker, so one that hangs while starting
+  // can still be found and stopped.
+  browserMarker = `--kaminos-notes-witness=${process.pid}-${Date.now()}`;
+  report.effective.browserMarker = browserMarker;
+  browser = await within(120000, 'Starting the browser', chromium.launch({executablePath: options.browser, headless: options.headed !== true,
+    args: ['--enable-unsafe-webgpu', '--use-angle=metal', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', browserMarker]}));
   report.effective.browser = {executable: options.browser, version: browser.version()};
-  const context = await browser.newContext({viewport: {width: 1440, height: 900}});
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], {origin});
+  const context = await within(60000, 'Opening a browser context', browser.newContext({viewport: {width: 1440, height: 900}}));
+  await within(30000, 'Granting clipboard access', context.grantPermissions(['clipboard-read', 'clipboard-write'], {origin}));
 
   report.phase = 'open-page'; save();
   const page = await context.newPage();
@@ -456,6 +466,60 @@ try {
     const overlap = panels.hud && panels.drawer && panels.hud.left < panels.drawer.right && panels.drawer.left < panels.hud.right
       && panels.hud.top < panels.drawer.bottom && panels.drawer.top < panels.hud.bottom;
     check("the drawer and the sub's panel are both visible", panels.hudShown && panels.drawerShown && !overlap && panels.hudOnTop && panels.drawerHeight >= 240, panels);
+    // A sub's picture borrows the viewport camera. A note written meanwhile
+    // waits for the camera to come back, so it records the person's own view.
+    const ownView = await page.evaluate(() => { const state = window.kaminosCameraDebugState(); return {position: state.position, target: state.target}; });
+    const burst = new Promise(resolve => execFile(process.execPath,
+      [vantageCli, '--server', origin, '--out', path.join(out, 'vantage'), '--json', '--page', vantagePage, '--pilot', PILOT, 'burst', '--count', '16', '--interval', '400', '--no-map'],
+      {timeout: 120000, maxBuffer: 64 * 1024 * 1024}, (error, stdout, stderr) => resolve({code: error ? (error.code ?? 1) : 0, stderr: stderr.trim()})));
+    const held = await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 20000}).then(() => true).catch(() => false);
+    await page.fill('.kn-compose textarea', 'written while the sub was taking pictures');
+    await page.click('.kn-compose .kn-btn.primary');
+    await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 90000}).catch(() => {});
+    const burstDone = await burst;
+    const during = (await log()).filter(event => event.type === 'note' && event.text === 'written while the sub was taking pictures').at(-1);
+    const near = (a, b) => Array.isArray(a) && Array.isArray(b) && a.every((value, index) => Math.abs(value - b[index]) < 1e-3);
+    check("a note written during a sub's picture records the person's own view", held && burstDone.code === 0 && !!during?.picture
+      && near(during?.context?.view?.position, ownView.position) && near(during?.context?.view?.target, ownView.target),
+      {held, burst: burstDone, own: ownView, during: during?.context?.view ?? null, pictureIssue: during?.context?.pictureIssue ?? null});
+    // With the sub's picture under its map the panel is taller; at smaller
+    // windows the drawer must still leave it in view and stay usable.
+    const panelsClear = async (label, expect = 'clear') => {
+      await sleep(1200);
+      const state = await page.evaluate(() => {
+        const box = node => { const rect = node?.getBoundingClientRect(); return rect ? {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom} : null; };
+        const at = rect => rect ? document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2) : null;
+        const hud = document.getElementById('agent-vantage-hud'), drawer = document.querySelector('.kn-drawer');
+        const text = document.querySelector('.kn-compose textarea'), post = document.querySelector('.kn-compose .kn-btn.primary');
+        text.scrollIntoView({block: 'nearest'});
+        post.scrollIntoView({block: 'nearest'});
+        const hudBox = box(hud), textBox = box(text), postBox = box(post);
+        return {window: {width: window.innerWidth, height: window.innerHeight}, hud: hudBox, drawer: box(drawer),
+          hudShown: !!hud && !hud.hidden, picture: !!hud && !hud.querySelector('img').hidden,
+          covering: !!document.querySelector('.kn-covering') && !document.querySelector('.kn-covering').hidden,
+          hudOnTop: !!at(hudBox) && hud.contains(at(hudBox)), textReachable: at(textBox) === text, postReachable: at(postBox) === post};
+      });
+      const overlap = state.hud && state.drawer && state.hud.left < state.drawer.right && state.drawer.left < state.hud.right
+        && state.hud.top < state.drawer.bottom && state.drawer.top < state.hud.bottom;
+      if (expect === 'covering') {
+        check(`at ${label}, with no room for both, notes says the sub's panel is behind it and the composer is usable`,
+          state.hudShown && state.picture && state.covering && state.textReachable && state.postReachable, state);
+      } else {
+        check(`at ${label}, the sub's panel with its picture stays in view and the composer is usable`,
+          state.hudShown && state.picture && !overlap && state.hudOnTop && !state.covering && state.textReachable && state.postReachable, state);
+      }
+    };
+    await panelsClear('1440x900');
+    await page.setViewportSize({width: 1440, height: 720});
+    await panelsClear('1440x720');
+    await page.setViewportSize({width: 1100, height: 720});
+    await panelsClear('1100x720');
+    await page.setViewportSize({width: 1100, height: 520});
+    await panelsClear('1100x520');
+    await page.setViewportSize({width: 900, height: 480});
+    await panelsClear('900x480', 'covering');
+    await page.setViewportSize({width: 1440, height: 900});
+    await sleep(800);
     const subShot = path.join(out, 'sub.png');
     await page.screenshot({path: subShot});
     report.artifacts.push(subShot);
@@ -635,8 +699,11 @@ try {
   }
   report.cleanedScenes = savedScenes;
   save();
-  await browser?.close().catch(() => {});
+  if (browser) await within(20000, 'Closing the browser', browser.close()).catch(() => {});
+  if (browserMarker) try { execFileSync('pkill', ['-f', '--', browserMarker]); } catch {}
   server?.kill();
 }
 console.log(`${report.status}: ${report.checks.filter(item => item.ok).length}/${report.checks.length} checks${report.notExercised.length ? `; not exercised: ${report.notExercised.map(item => `${item.phase} (${item.reason})`).join(', ')}` : ''}; report ${reportPath}`);
-process.exitCode = report.status === 'passed' ? 0 : 1;
+// A browser launch that never settled can hold the event loop open; the
+// report is written, so end here.
+process.exit(report.status === 'passed' ? 0 : 1);

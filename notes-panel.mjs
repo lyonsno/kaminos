@@ -11,7 +11,7 @@ const walk = (note, visit) => { visit(note); for (const reply of note.replies) w
 const involves = (note, name) => { let found = false; walk(note, item => { if (item.author === name || (item.recipients ?? []).includes(name)) found = true; }); return found; };
 
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
-  href = () => '', title = () => '', avatarOf = null}) {
+  href = () => '', title = () => '', avatarOf = null, ownView = async () => true}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
   let participants = [];
   const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
@@ -45,13 +45,40 @@ export function createNotesSession({transport, selection, entries, readView, wri
     }
   }
 
-  async function post({text = '', to = '', parent = null, kind = 'note', attachPicture = parent === null} = {}) {
+  // Where the person is, read at one moment: what a note is on, in which
+  // scene, what is selected and the view.
+  function situation() {
     const current = selection() ?? {};
-    const context = {view: readView(), selection: {ids: selectedIds(), activeId: current.activeId ?? null}, page: {href: href(), title: title()}};
-    const shot = attachPicture ? await picture() : {};
+    return {anchor: anchorFromSelection(), scene: sceneFile() || null, view: readView(),
+      selection: {ids: selectedIds(), activeId: current.activeId ?? null}};
+  }
+  const close = (a, b) => typeof a === 'number' ? typeof b === 'number' && Math.abs(a - b) < 1e-4
+    : Array.isArray(a) ? Array.isArray(b) && a.length === b.length && a.every((value, index) => close(value, b[index]))
+      : a && typeof a === 'object' ? !!b && typeof b === 'object' && Object.keys({...a, ...b}).every(key => close(a[key], b[key]))
+        : a === b;
+
+  async function post({text = '', to = '', parent = null, kind = 'note', attachPicture = parent === null} = {}) {
+    // The view and picture are the person's own: while something else has the
+    // viewport camera, such as a sub taking a picture, they wait for it back.
+    const own = await ownView();
+    let now = situation(), shot = {};
+    if (!own) shot = {issue: 'Something else kept the viewport camera, so no view or picture is attached'};
+    else if (attachPicture) {
+      // The picture is taken over a few frames. If the person moves, selects or
+      // changes scene meanwhile, it is taken again so the note and its picture
+      // describe one moment; a view that keeps moving is refused, not mixed.
+      for (let attempt = 1; ; attempt++) {
+        shot = await picture();
+        const after = situation();
+        if (close(now, after)) break;
+        if (attempt === 3) throw new Error('The view kept changing while the picture was taken, so nothing was posted. Your note is still here; post again once the view is still.');
+        now = after;
+      }
+    }
+    const context = {...(own ? {view: now.view} : {}), selection: now.selection, page: {href: href(), title: title()}};
     if (shot.issue) context.pictureIssue = shot.issue;
     const content = checkedPost({kind, text, to: addressees(text, to), parent,
-      anchor: parent ? undefined : anchorFromSelection(), subject: {scene: sceneFile() || null}, context, picture: shot.picture ?? null});
+      anchor: parent ? undefined : now.anchor, subject: {scene: now.scene}, context, picture: shot.picture ?? null});
     return transport.post(content);
   }
 
@@ -174,6 +201,9 @@ const STYLE = `
 .kn-status{min-height:14px;color:#8fa3a8;font-size:10px}
 .kn-status[data-tone="error"]{color:#f29b8b}
 .kn-threads{flex:1;overflow-y:auto;padding:6px 10px 12px}
+.kn-drawer.kn-compact{overflow-y:auto}
+.kn-drawer.kn-compact .kn-threads{flex:none;overflow:visible}
+.kn-covering{padding:6px 10px;border-bottom:1px solid #2a3033;color:#f0d28a;font-size:10px}
 .kn-empty{color:#7c878a;padding:12px 0;font-size:11px}
 .kn-thread{border:1px solid #2a3033;border-radius:6px;margin:8px 0;padding:8px;background:#151a1c}
 .kn-thread[data-resolved="true"]{opacity:.6}
@@ -238,7 +268,8 @@ export async function capturePicture({capture, document}) {
  * of what the viewport shows.
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
-  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => []}) {
+  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
+  ownView = async () => true}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -257,7 +288,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   transport.post = body => send(endpoint, body);
   transport.receipt = body => send(`${endpoint}/receipt`, body);
   const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
-    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf});
+    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf,
+    ownView: () => ownView({waiting: () => say("Waiting for a sub's picture to finish, so yours shows your view\u2026")})});
 
   // --- structure ---
   const root = element(document, 'div', 'kn-root');
@@ -273,16 +305,28 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   drawer.hidden = true;
   drawer.setAttribute('aria-label', 'Notes');
   // Panels sharing the viewport's top right, such as an agent sub's, stay in
-  // view: the drawer starts below whichever of them is showing.
+  // view. The drawer goes below them when that leaves room for a conversation,
+  // beside them when the viewport is wide enough, below them scrolling as a
+  // whole when there is a little room, and only when there is none over them,
+  // saying so.
+  const covering = element(document, 'div', 'kn-covering', "Too little room to keep the sub's panel in view; it is behind notes.");
+  covering.hidden = true;
   const placeDrawer = () => {
-    const host = viewport.getBoundingClientRect(), right = host.right - 12, left = right - drawer.offsetWidth;
-    let top = 52;
-    for (const panel of avoid()) {
-      if (!panel?.isConnected || panel.hidden) continue;
-      const rect = panel.getBoundingClientRect();
-      if (rect.height && rect.left < right && rect.right > left) top = Math.max(top, rect.bottom - host.top + 8);
-    }
-    drawer.style.top = `${Math.round(Math.min(top, host.height - 58 - 240))}px`;
+    const host = viewport.getBoundingClientRect(), width = Math.min(380, host.width - 24);
+    const panels = avoid().filter(panel => panel?.isConnected && !panel.hidden).map(panel => panel.getBoundingClientRect())
+      .filter(rect => rect.width && rect.height && rect.left < host.right - 12 && rect.right > host.right - 12 - width);
+    const below = Math.max(52, ...panels.map(rect => rect.bottom - host.top + 8));
+    const beside = Math.max(12, ...panels.map(rect => host.right - rect.left + 8));
+    const room = host.height - 58 - below;
+    const place = !panels.length || room >= 240 ? {top: below, right: 12}
+      : host.width - beside - 12 >= 280 ? {top: 52, right: beside}
+        : room >= 120 ? {top: below, right: 12, compact: true}
+          : {top: 52, right: 12, covering: true};
+    drawer.style.top = `${Math.round(place.top)}px`;
+    drawer.style.right = `${Math.round(place.right)}px`;
+    drawer.style.width = place.right > 12 ? `${Math.round(Math.min(380, host.width - place.right - 12))}px` : '';
+    drawer.classList.toggle('kn-compact', !!place.compact);
+    covering.hidden = !place.covering;
   };
   const head = element(document, 'div', 'kn-head');
   const listening = element(document, 'span', 'kn-listening');
@@ -316,7 +360,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   status.setAttribute('role', 'status');
   compose.append(anchorLine, text, reach, to, row, status);
   const threads = element(document, 'div', 'kn-threads');
-  drawer.append(head, threads, compose);
+  drawer.append(head, covering, threads, compose);
   root.append(pins, toasts, toggle, drawer);
   viewport.append(root);
   // The notes sit inside the viewport: a click, drag or scroll on them is not a
@@ -822,6 +866,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
   const unsubscribe = session.onChange(render);
   const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) { refreshAnchor(); placeDrawer(); } }, 500);
+  const placeOnResize = () => { if (!drawer.hidden) placeDrawer(); };
+  window.addEventListener('resize', placeOnResize);
   render();
 
   return {
@@ -834,6 +880,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       unsubscribe();
       window.cancelAnimationFrame(frame);
       window.clearInterval(refreshOnSelection);
+      window.removeEventListener('resize', placeOnResize);
       window.clearTimeout(participantsTimer);
       document.removeEventListener('keydown', onKey);
       root.remove();

@@ -12081,15 +12081,20 @@ async function initScene() {
   const pageQuery=new URLSearchParams(location.search);
   if(pageQuery.get('notes')!=='0'){
     try{
+      // A sub's picture borrows the viewport camera; a note waits for it back so
+      // it records the person's own view. A minute without it gives up.
+      const viewportOwnForNotes=async({waiting}={})=>{if(!vantageCaptureHeld)return true;waiting?.();
+        for(const until=performance.now()+60000;performance.now()<until;){await new Promise(resolve=>setTimeout(resolve,50));if(!vantageCaptureHeld)return true;}return false;};
       // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
-      const captureForNotes=async()=>{window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
         return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition?volumePrototype?.canvasElement?.()??null:null,document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
         sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
         linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
-        avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')]});
+        avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')],ownView:viewportOwnForNotes});
       window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
     }catch(error){console.error('Notes unavailable',error);}
   }
