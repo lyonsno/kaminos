@@ -17335,6 +17335,9 @@ export function createKaminosVolumePrototype({
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
     if (joinedExterior?.paused) return false;
+    // Install current collider occupancy before admitting either predictor.
+    // A changed pressure topology cannot be discovered after fine advances.
+    refreshSceneCollision();
     // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
     // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
     if (joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
@@ -17347,7 +17350,6 @@ export function createKaminosVolumePrototype({
       if (joinedExterior && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
     }
-    refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
     if (transportConfig.effective.predictorPass) {
