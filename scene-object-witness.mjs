@@ -870,6 +870,39 @@ async function runFireProxyBridgeRouteScenario(ws) {
   assert.deepEqual(failures, [], `fire proxy bridge route checks failed:\n- ${failures.join('\n- ')}`);
 }
 
+// Wire cost probe: the loaded mesh (and optionally a flame) rendered
+// continuously, Solid and Wire windows alternated; reports presented frames per
+// second and the app's own CPU ms per frame for each.
+async function runViewportWireCostScenario(ws) {
+  if (!args.get('--no-mesh')) await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-viewport-wire-cost';
+  const evidence = lastEvidence.viewportWireCost = { windows: [] };
+  if (args.get('--with-flame')) {
+    await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
+  }
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  await settleViewportFrames(ws, 1500);
+  const windowMs = Number(args.get('--window-ms') || 3000);
+  const measure = mode => evaluate(ws, `(async () => {
+    window.kaminosViewportSettings.set({ shading: '${mode}' });
+    let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
+    await new Promise(r => setTimeout(r, 800));
+    const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
+    const cpu = []; const el = document.getElementById('fps-counter');
+    const a = read(), t0 = performance.now();
+    const sampler = setInterval(() => { const m = /([0-9.]+)ms app CPU/.exec(el?.textContent || ''); if (m) cpu.push(Number(m[1])); }, 250);
+    await new Promise(r => setTimeout(r, ${windowMs}));
+    clearInterval(sampler); stop = true;
+    const b = read(), seconds = (performance.now() - t0) / 1000;
+    cpu.sort((x, y) => x - y);
+    return { mode: '${mode}', fps: (b - a) / seconds, cpuMsMedian: cpu.length ? cpu[Math.floor(cpu.length / 2)] : null, lastRender: window.kaminosViewportShadingDebugState()?.lastRender ?? null };
+  })()`, { timeoutMs: windowMs + 30000 });
+  for (let round = 0; round < Number(args.get('--rounds') || 3); round++) {
+    for (const mode of round % 2 ? ['wireframe', 'solid'] : ['solid', 'wireframe']) evidence.windows.push({ round, ...(await measure(mode)) });
+  }
+  await evaluate(ws, `window.kaminosViewportSettings.set({ shading: 'solid' }); true`);
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -6730,6 +6763,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'viewport-wire-cost') {
+    await runViewportWireCostScenario(ws);
   } else if (scenario === 'viewport-wire-gpu-deformation') {
     await runViewportWireGpuDeformationScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
