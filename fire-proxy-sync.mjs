@@ -8,14 +8,14 @@ import {decodeHeatBlocks,nextHeatReference} from './proxy-snapshot.mjs';
 
 export function createFireProxySync({registry, createLayer, readDomain, now = () => performance.now(), onDirty = () => {}}) {
  let fireProxy = null;
- function sync({prototype, display: displayRequested, required, camera, layerId, canvas, bridge}) {
+ function sync({prototype, display: displayRequested, required, camera, layerId, canvas, bridge, stepEvery = 1}) {
   // A disabled volume shows no fire in any mode, so its proxy draws nothing;
   // pausing is different and keeps the held field on screen.
   const present = !!prototype && (prototype.isActive?.() ?? true);
   const display = displayRequested && present, wanted = present && (display || required);
   camera?.layers[display ? 'enable' : 'disable'](layerId);
   if (fireProxy && fireProxy.prototype !== prototype) {
-   fireProxy.prototype?.setResidualPartialsConsumer?.(null); fireProxy.prototype?.setCanvasPresentationSuppressed?.(false);
+   fireProxy.prototype?.setResidualPartialsConsumer?.(null); fireProxy.prototype?.setCanvasPresentationSuppressed?.(false); fireProxy.prototype?.setProxyPacing?.(null);
    if (fireProxy.hiddenCanvas) fireProxy.hiddenCanvas.style.visibility = '';
    fireProxy.unsubscribe?.(); fireProxy.layer?.dispose(); registry.clear('fire'); fireProxy = null;
   }
@@ -59,6 +59,14 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   if (fireProxy) { fireProxy.awaitingSnapshot = display && !ready; fireProxy.ready = ready; }
   // While the splats stand in, the fire's own canvas raymarch is not drawn.
   if (prototype && fireProxy && fireProxy.presentationSuppressed !== ready) fireProxy.presentationSuppressed = prototype.setCanvasPresentationSuppressed?.(ready) ?? false;
+  // The scene light field is rebuilt only when a snapshot publishes, so the
+  // lighting stays in step with the splats; the sim itself steps every
+  // stepEvery frames (1 unless opted in).
+  const every = Math.max(1, Math.floor(Number(stepEvery) || 1)), pacingKey = ready ? `snapshots:${every}` : null;
+  if (prototype && fireProxy && fireProxy.pacingKey !== pacingKey) {
+   prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every} : null);
+   fireProxy.pacingKey = pacingKey;
+  }
   // Routes that composite the fire through the canvas-texture bridge hide that
   // plane too; animate() stops refreshing it while Proxy is effective.
   if (ready && bridge?.mesh) bridge.mesh.visible = false;
@@ -69,7 +77,7 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   effective: () => fireProxy?.ready === true,
   layer: () => fireProxy?.layer ?? null,
   state: () => ({attached: fireProxy?.attached ?? false, awaitingSnapshot: fireProxy?.awaitingSnapshot ?? false, fieldGeneration: fireProxy?.fieldGeneration ?? null,
-   presentationSuppressed: fireProxy?.presentationSuppressed ?? false, decodeErrors: fireProxy?.decodeErrors ?? 0, lastError: fireProxy?.lastError ?? null,
+   presentationSuppressed: fireProxy?.presentationSuppressed ?? false, pacing: fireProxy?.pacingKey ?? null, decodeErrors: fireProxy?.decodeErrors ?? 0, lastError: fireProxy?.lastError ?? null,
    layer: fireProxy?.layer?.state() ?? {visible: false}}),
  };
 }

@@ -12067,6 +12067,11 @@ export function createKaminosVolumePrototype({
   // A scene proxy stands in for the fire (viewport Fire Proxy): the sim, light
   // field and probes keep running, and the canvas raymarch is not drawn.
   let canvasPresentationSuppressed = false;
+  // While a scene proxy stands in: rebuild the scene light field only when a
+  // snapshot is taken, and optionally step the sim every Nth frame.
+  let proxyPacing = null;
+  // The pacing armed for the current frame's light field build, or null.
+  let lightFieldPacing = null;
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
@@ -17769,6 +17774,11 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeFireIrradianceLightField(encoder, options = {}) {
+    // Paced while a scene proxy stands in: rebuild on the step whose residual
+    // probe copy feeds the next snapshot, or at least every 16 steps if no
+    // probe copy was taken. The lattice from the last build stays bound.
+    const paced = typeof lightFieldPacing !== 'undefined' ? lightFieldPacing : null;
+    if (paced && pressureResidualCopyFrame !== state.frameCount && state.simStepCount - (paced.lightFieldStep ?? -Infinity) < 16) return false;
     const requested = fireLightFieldRequested();
     state.fireLightFieldRequested = requested;
     state.fireLightFieldIdentity = FIRE_IRRADIANCE_LATTICE_IDENTITY;
@@ -17836,6 +17846,7 @@ export function createKaminosVolumePrototype({
     state.fireLightFieldFrameCount = (state.fireLightFieldFrameCount || 0) + 1;
     state.fireLightFieldGeneration = irradianceAtlasGeneration;
     state.fireLightFieldProducedAtMs = performance.now();
+    if (paced) paced.lightFieldStep = state.simStepCount;
     return true;
   }
 
@@ -20944,12 +20955,21 @@ export function createKaminosVolumePrototype({
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
       }
-      if (!lookFreeze && !simulationPaused) {
+      // typeof: source-extraction contract harnesses run this body without the
+      // closure that declares the pacing.
+      const pacing = typeof proxyPacing !== 'undefined' ? proxyPacing : null;
+      const stepThisFrame = !lookFreeze && !simulationPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
+      // Armed for this frame's light field build only (see
+      // encodeFireIrradianceLightField).
+      if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
+      if (stepThisFrame) {
         encodeSim(encoder);
         encodeFireIrradianceLightField(encoder);
         encodeLiquidFireContactTransfer(encoder);
         encodeSelectiveHeadLiveFields(encoder);
       }
+      if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
+      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -27183,6 +27203,11 @@ export function createKaminosVolumePrototype({
     // Skip the ordinary canvas raymarch while a scene proxy stands in for the
     // fire. Other presentation routes (boundary splats, browser residual) keep
     // drawing; the frame's presentation receipt says which happened.
+    setProxyPacing(pacing) {
+      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true, frame: 0, lightFieldStep: null } : null;
+      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots } : null;
+      return state.proxyPacing;
+    },
     setCanvasPresentationSuppressed(suppressed) {
       canvasPresentationSuppressed = suppressed === true;
       return canvasPresentationSuppressed;

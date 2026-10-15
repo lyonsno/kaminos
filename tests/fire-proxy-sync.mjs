@@ -17,6 +17,8 @@ function fakePrototype() {
   getResidualFieldGeneration: () => generation,
   isActive: () => active,
   setCanvasPresentationSuppressed(value) { suppressed = value === true; return suppressed; },
+  setProxyPacing(value) { this.pacing = value ?? null; return this.pacing; },
+  pacing: null,
   readback(heat) { consumer?.(partials(heat, generation)); },
   setGeneration(value) { generation = value; },
   setActive(value) { active = value; },
@@ -29,7 +31,7 @@ function harness() {
   createLayer: () => { const layer = createFireSplatLayer(); layers.push(layer); return layer; }});
  const enabled = new Set(), camera = {layers: {enable: layer => enabled.add(layer), disable: layer => enabled.delete(layer)}};
  const canvas = {style: {visibility: ''}}, bridge = {mesh: {visible: true}};
- const frame = (display, required = false) => sync.sync({prototype, display, required, camera, layerId: 4, canvas, bridge});
+ const frame = (display, required = false, stepEvery = 1) => sync.sync({prototype, display, required, camera, layerId: 4, canvas, bridge, stepEvery});
  return {registry, layers, prototype, sync, enabled, canvas, bridge, frame};
 }
 const near = (a, b) => Math.abs(a - b) < 1e-6;
@@ -92,4 +94,18 @@ test('the proxy writes the canvas visibility it owns and leaves other writers al
  assert.equal(h.canvas.style.visibility, 'hidden');
  h.frame(false);
  assert.equal(h.canvas.style.visibility, '', 'the proxy restores what it hid');
+});
+
+test('while the splats stand in, the light field rebuilds only with snapshots and the sim steps at the opted-in interval', () => {
+ const h = harness();
+ h.frame(true);
+ assert.equal(h.prototype.pacing, null, 'no pacing before the proxy stands in');
+ h.prototype.readback(0.8); h.frame(true);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: true, simStepEvery: 1});
+ h.frame(true, false, 4);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: true, simStepEvery: 4}, 'the opt-in step interval reaches the sim');
+ h.frame(false);
+ assert.equal(h.prototype.pacing, null, 'Full runs the sim and light field every frame');
+ h.frame(true); h.prototype.setActive(false); h.frame(true);
+ assert.equal(h.prototype.pacing, null, 'a disabled volume carries no pacing');
 });

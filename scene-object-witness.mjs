@@ -762,6 +762,27 @@ async function runFireProxySplatsScenario(ws) {
   evidence.liveState = afterLive;
   check(afterLive.layer.uploads > beforeLive.layer.uploads && afterLive.layer.snapshotWriteTick > beforeLive.layer.snapshotWriteTick, `fire snapshots stopped refreshing while the sim ran: ${beforeLive.layer.uploads} -> ${afterLive.layer.uploads}`);
   const liveShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy-live'));
+  // Pacing while the splats stand in: the scene light field rebuilds about once
+  // per snapshot (16 steps), not every step; with the opt-in, the sim steps
+  // every 4th frame. Full returns both to every frame.
+  const pace = (ms = 4000) => evaluate(ws, `(async () => { const d0 = window.__kaminosVolumePrototype.debugState();
+    await new Promise(r => setTimeout(r, ${ms})); const d1 = window.__kaminosVolumePrototype.debugState();
+    const steps = d1.simStepCount - d0.simStepCount, frames = d1.frameCount - d0.frameCount, builds = (d1.fireLightFieldFrameCount || 0) - (d0.fireLightFieldFrameCount || 0);
+    return { steps, frames, builds, buildsPerStep: steps ? builds / steps : null, stepsPerFrame: frames ? steps / frames : null, pacing: d1.proxyPacing ?? null }; })()`, { timeoutMs: ms + 20000 });
+  evidence.pacing = { proxy: await pace() };
+  await evaluate(ws, 'window.kaminosFireProxyStepEvery(4)');
+  await settleViewportFrames(ws, 300);
+  evidence.pacing.proxyStep4 = await pace();
+  await evaluate(ws, 'window.kaminosFireProxyStepEvery(1)');
+  await clickToggle('full');
+  await settleViewportFrames(ws, 300);
+  evidence.pacing.full = await pace();
+  await clickToggle('proxy');
+  await settleViewportFrames(ws, 600);
+  const pp = evidence.pacing;
+  check(pp.proxy.steps > 32 && pp.proxy.buildsPerStep <= 0.15, `the light field rebuilt more often than once per snapshot in Proxy: ${JSON.stringify(pp.proxy)}`);
+  check(pp.full.steps > 16 && pp.full.buildsPerStep >= 0.5, `Full did not rebuild the light field every step: ${JSON.stringify(pp.full)}`);
+  check(pp.proxyStep4.stepsPerFrame !== null && pp.proxy.stepsPerFrame !== null && pp.proxyStep4.stepsPerFrame <= 0.4 * pp.proxy.stepsPerFrame, `the opt-in did not slow the fire sim: ${JSON.stringify({ step1: pp.proxy.stepsPerFrame, step4: pp.proxyStep4.stepsPerFrame })}`);
 
   phase = 'scenario-fire-proxy-splats-domain-move';
   // Move the domain while paused (the emitter stays put inside the box): the
@@ -881,6 +902,11 @@ async function runViewportWireCostScenario(ws) {
     await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
   }
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  if (args.get('--fire-proxy')) {
+    await evaluate(ws, `window.kaminosViewportSettings.set({ fire: 'proxy' }); true`);
+    for (let i = 0; i < 120; i++) { const f = await evaluate(ws, 'window.kaminosFireProxyDebugState?.()'); if (f?.presentationSuppressed && f.layer?.count > 0) break; await delay(250); }
+    evidence.fireProxy = await evaluate(ws, 'window.kaminosFireProxyDebugState?.()');
+  }
   await settleViewportFrames(ws, 1500);
   const windowMs = Number(args.get('--window-ms') || 3000);
   const measure = mode => evaluate(ws, `(async () => {

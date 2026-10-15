@@ -3991,12 +3991,14 @@ function syncWaterProxy() {
 }
 // Fire proxy: heat-block splats on their own layer stand in for the flame in
 // Proxy display (fire-proxy-sync.mjs reconciles it each frame).
-let fireProxySync=null;
+let fireProxySync=null,fireProxyStepEvery=1;
+// Opt-in: while the fire proxy stands in, step the fire sim every nth frame.
+window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
  fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
-  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge});
+  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
