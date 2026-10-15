@@ -3,9 +3,9 @@ import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {materialComponents} from '../structural-material-solid-surface.mjs';
-import {elasticSupportBonds} from '../structural-material-bounded-fragments.mjs';
+import {elasticSupportBonds,buildFixedCellShell,visibleFixedCellFaces} from '../structural-material-bounded-fragments.mjs';
 import {buildAxialChunkFixture} from '../structural-material-stone-fixture.js';
-import {requireChunkStage,requireMovedPieceFracture} from './stone-chunk-chain-evidence.mjs';
+import {requireChunkStage,requireMovedPieceFracture,requireStoneProducerParticipation,requirePublishedStoneSurface} from './stone-chunk-chain-evidence.mjs';
 
 const [url,out,playwrightPath,executable,compositionPath]=process.argv.slice(2);
 if(!out)throw Error('Explicit persistent output required');
@@ -21,8 +21,17 @@ try{
  check('independent browser',!report.browser.executable.includes('/Google Chrome.app/'));
  const {chromium}=await import(pathToFileURL(playwrightPath));
  report.browser.profile=path.resolve(out,'browser-profile');report.browser.args=['--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal','--use-mock-keychain','--password-store=basic'];save();
- browser=await chromium.launchPersistentContext(report.browser.profile,{executablePath:report.browser.executable,headless:true,args:report.browser.args});
+ browser=await chromium.launchPersistentContext(report.browser.profile,{executablePath:report.browser.executable,headless:true,viewport:{width:1440,height:1000},args:report.browser.args});
  page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(0);
+ const producerFixture=process.env.STONE_PARTICIPATION==='producer';
+ if(process.env.STONE_PARTICIPATION&&!producerFixture)throw Error('Unknown smoke participation');
+ if(producerFixture){
+  const original=fs.readFileSync(path.join(report.source.stoneRoot,'structural-material-workbench-host.mjs'),'utf8'),anchor="async options=>(await import('./structural-material-shard-view.js')).createStoneRuntime(options)";
+  if(original.split(anchor).length!==2)throw Error('Exact producer fixture factory anchor required');
+  const effective=original.replace(anchor,`async options=>{const {createStoneRuntime}=await import('./structural-material-shard-view.js');const api=await createStoneRuntime({...options,participation:'producer'});const proof={...api.viewport,callbacks:window.__stoneSharedHost.identity().callbacks,scene:options.host.scene.uuid,roots:api.roots.map(root=>({id:root.uuid,parentBefore:root.parent?.uuid??null}))};for(const root of api.roots)options.host.scene.add(root);proof.roots.forEach((entry,i)=>entry.parentAfter=api.roots[i].parent?.uuid??null);window.__stoneProducerFixture={proof,api,host:options.host};return api;}`);
+  fs.writeFileSync(path.join(out,'producer-fixture-host.mjs'),effective);report.producerFixture={claim:'actual-producer-with-derived-mount-fixture-not-common-scene-session-adoption',sourceSha256:createHash('sha256').update(original).digest('hex'),effectiveSha256:createHash('sha256').update(effective).digest('hex')};save();
+  await page.route('**/__stone/structural-material-workbench-host.mjs',route=>route.fulfill({body:effective,contentType:'text/javascript'}));
+ }
  let rejectLoad;const failure=new Promise((_,reject)=>{rejectLoad=reject;});failure.catch(()=>{});
  page.on('pageerror',e=>{report.errors.push(e.message);save();rejectLoad(e);});
  page.on('console',m=>{if(m.type()==='error'){(report.consoleErrors??=[]).push(m.text());save();if(/WebGPU|shader|WGSL|validation/i.test(m.text()))rejectLoad(Error(m.text()));}});
@@ -30,18 +39,20 @@ try{
  report.phase='load';save();await page.goto(url);
  const loaded=await Promise.race([page.waitForFunction(()=>{if(window.__stoneSharedHost?.runtime())return{loaded:true};const t=document.querySelector('.owner-experiment-status')?.textContent;return t&&!t.startsWith('Opening ')&&t!=='Stone fracture'?{failure:t}:false;}),failure]);
  const load=await loaded.jsonValue();if(load.failure)throw Error(load.failure);
+ if(producerFixture){report.producerFixture.effective=await page.evaluate(()=>window.__stoneProducerFixture?.proof);requireStoneProducerParticipation(report.producerFixture.effective);check('effective manual producer and unparented mount',true,report.producerFixture.effective);}
  const invoke=async(name,input)=>{report.inputs.push({name,input});save();return page.evaluate(async({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input});};
  await invoke('hold');
  for(const [file,sha] of Object.entries(report.source.stoneFiles)){const response=await page.request.get(new URL('/__stone/'+file,url).href);check('source '+file,response.ok()&&createHash('sha256').update(await response.body()).digest('hex')===sha);}
  const fixture=buildAxialChunkFixture();
  const acquire=async name=>{
-  await page.evaluate(()=>window.__stoneSharedHost.runtime().settle({surface:false}));
+  await page.evaluate(async producerFixture=>{const api=window.__stoneSharedHost.runtime();await api.settle({surface:false});if(producerFixture){if(api.publish().status!=='published')throw Error('Manual publication incomplete');window._kaminosDirty?.();await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));}},producerFixture);
   const stage=await page.evaluate(async()=>{const r=window.__stoneSharedHost.runtime();return{status:r.experimentStatus(),witness:r.witness({resources:false}),motion:await r.coherentMotion()};});
   fs.writeFileSync(path.join(out,name+'.json'),JSON.stringify(stage));
   requireChunkStage({status:stage.status,state:stage.witness.state,motion:stage.motion});
   const s=stage.witness.state,labels=materialComponents(s.model.points,elasticSupportBonds(fixture.tetrahedra,s.bonds,s.stresses)),groups=new Map();
   labels.forEach((root,i)=>{if(!groups.has(root))groups.set(root,[]);groups.get(root).push(i);});
   stage.groups=[...groups.values()];report.lastTrustworthy={stage:name,runId:s.runId,steps:s.steps};save();
+  if(producerFixture){const publication=await page.evaluate(async()=>{const api=window.__stoneSharedHost.runtime();return{surface:await api.surfacePositions(),counts:await api.exposedFaceCounts()};});fs.writeFileSync(path.join(out,name+'.publication.json'),JSON.stringify(publication));const shell=buildFixedCellShell({...fixture,bonds:s.bonds}),expected=visibleFixedCellFaces(shell,elasticSupportBonds(fixture.tetrahedra,s.bonds,s.stresses)).length;check('matching published pose and exposed topology '+name,true,requirePublishedStoneSurface(publication.surface,publication.counts,s,expected));}
   await page.screenshot({path:path.join(out,name+'.png')});return stage;
  };
  const point=(s,i)=>s.state.slice(i*16+4,i*16+7),dead=s=>s.bonds.filter((v,i)=>i%4===2&&v===0).length;
@@ -79,6 +90,7 @@ try{
  check('prior damage retained',s.bonds.every((v,i)=>i%4!==2||v!==0||rs.bonds[i]===0));
  const {inside:additional,outside}=requireMovedPieceFracture(awake.witness.state,rs,nodes);report.secondaryFracture={inside:additional.length,outside:outside.length};
  check('same moved lobe fractures internally again',additional.length>0,{additional});report.additional=additional;
+ if(producerFixture){report.phase='producer-shutdown';report.producerShutdown=await page.evaluate(async()=>{const {api,host}=window.__stoneProducerFixture,parents=api.roots.map(root=>root.parent?.uuid);const stopped=await api.quiesce(),retained=api.roots.every((root,i)=>root.parent?.uuid===parents[i]);let refused=false;try{await api.advance();}catch(error){refused=/closed/.test(error.message);}await api.dispose();host.renderer.render(host.scene,host.camera);await host.device.queue.onSubmittedWorkDone();return {stopped,retained,refused,removed:api.roots.every(root=>root.parent===null),complete:api.disposalStatus().complete};});check('quiescence retains roots and complete disposal preserves shared renderer',report.producerShutdown.stopped.resourcesRetained&&report.producerShutdown.retained&&report.producerShutdown.refused&&report.producerShutdown.removed&&report.producerShutdown.complete,report.producerShutdown);}
  check('no runtime errors',report.errors.length===0&&!(report.consoleErrors?.length),{errors:report.errors,console:report.consoleErrors});report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};process.exitCode=1;if(page)try{await page.screenshot({path:path.join(out,'failure.png')});}catch(e){report.retentionError=e.message;}}
 finally{if(browser){await browser.close();report.browser.ownedChildExited=true;}save();console.log(JSON.stringify({status:report.status,phase:report.phase,out,failure:report.failure}));}

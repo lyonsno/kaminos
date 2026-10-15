@@ -117,7 +117,7 @@ async function observeInteraction(){
  events.splice(0,events.length,...[...groups.values()].sort((a,b)=>a.steps-b.steps));
 }
 async function observeSurface(){surfaceObservation=null;interactionObservation=null;if(affineComparison)return;synchronizePicking();const records=[];for(const p of pieces)records.push({pieceId:p.id,route:p.gpu.route,runId:observed.runId,step:observed.steps,gpu:await p.gpu.readPositions(),reference:Array.from(p.mesh.geometry.attributes.position.array)});surfaceObservation={source:'native-webgpu-transport-compute-readback',runId:observed.runId,steps:observed.steps,pieces:records};await observeInteraction();}
-function present(){if(!observed)return;const current=bounded?null:positions(observed);for(const p of pieces){if(p.gpu&&!bounded)p.gpu.setQuaternion(componentTransportQuaternion(p.binding,current,{components}));else if(!p.gpu)deformPiece(p,current);}pieces[0]?.gpu?.captureState();
+function present(){if(!observed)return;const current=bounded?null:positions(observed);for(const p of pieces){p.exposure?.update();if(p.gpu&&!bounded)p.gpu.setQuaternion(componentTransportQuaternion(p.binding,current,{components}));else if(!p.gpu)deformPiece(p,current);}pieces[0]?.gpu?.captureState();
  $('stats').textContent=bounded&&observed.observation?.kind==='submitted'?`GPU-resident material | submitted step ${observed.steps}`:`${bounded?new Set(components).size:pieces.length} ${bounded?'components':'pieces'} | ${interiorSplit?`${interiorState.epoch} interior cuts`:observed.bonds.filter((v,i)=>i%4===2&&v===0).length+' released bonds'} | step ${interiorSplit?(interiorState.stepOffset??0)+observed.steps:observed.steps}`;
 }
 async function loadVerified(url,expected){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`Input ${url}: HTTP ${r.status}`);const bytes=await r.arrayBuffer(),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');if(expected&&digest!==expected)throw new Error(`Input drift: ${url}`);return bytes;}
@@ -191,7 +191,7 @@ async function advanceBounded({fracture,evidence,publish=true}){
   if(chunkMotion){chunkMotion.prepare(configuration);chunkMotion.advance(configuration);}
   const timing=await resident.step(configuration,{wait:false});residentGrip.clearChanges?.();if(active&&fracture){const threshold=Number($('threshold').value);await resident.fractureStress(threshold);residentSupport?.update();residentGrip.update(applied,threshold);}
   chunkMotion?.prepare(configuration);
-  if(publish)pieces[0]?.exposure?.update();else pieces[0]?.exposure?.prepare();
+  if(!publish){pieces[0]?.exposure?.prepare();pieces[0]?.gpu?.prepare();}
   applyFloorContact();
   chunkMotion?.afterFloor();
   observed={...observed,...resident.submittedState(),observation:{kind:'submitted',stressCurrent:false,readbackBytes:0}};surfaceObservation=null;if(publish)present();
@@ -278,7 +278,7 @@ try{
  api.object=scene;
  api.roots=Object.freeze([scene,...(ground?[ground]:[])]);
  api.placement={coordinates:'material-local',floorCoordinates:'world',gravityAxis:'local-y-upright-only',physicalScale:false,physicalRotation:false};
- api.publish=()=>{if(closing)return{status:'closed'};if(busy||pendingPick||finishing)return{status:'pending'};if(failure)throw Error(failure.message);for(const p of pieces)p.exposure?.update();present();return{status:'published',runId:observed.runId,steps:observed.steps};};
+ api.publish=()=>{if(closing)return{status:'closed'};if(busy||pendingPick||finishing)return{status:'pending'};if(failure)throw Error(failure.message);present();return{status:'published',runId:observed.runId,steps:observed.steps};};
  api.quiesce=()=>{if(!quiescence){
   closing=true;paused=true;lifetime.abort();unsubscribeFrames?.();if(frameRequest!==null)cancelAnimationFrame(frameRequest);gestureGeneration++;pointerContact=null;pendingPick=false;gesture=null;
   quiescence=(async()=>{const errors=[],attempt=async action=>{try{await action();}catch(error){errors.push(error);}};await attempt(()=>pickTask);await attempt(()=>settle());await attempt(()=>resident?.release());await attempt(()=>device?.queue.onSubmittedWorkDone());controls.enabled=previousControlsEnabled;if(errors.length)throw new AggregateError(errors,`Stone quiescence: ${errors[0].message}`);return{status:'quiescent',resourcesRetained:true};})();

@@ -20,3 +20,14 @@ export function requireMovedPieceFracture(before,after,nodes){
  if(!inside.length||outside.length)throw Error('New pull must fracture the same moved piece without collateral control release');
  return{inside,outside};
 }
+
+export function requireStoneProducerParticipation(proof){
+ if(proof?.participation!=='producer'||proof.frameDriver!=='manual'||proof.mount!=='caller-owned'||proof.deviceMatches!==true||proof.callbacks!==0||typeof proof.scene!=='string'||!proof.scene||!Array.isArray(proof.roots)||!proof.roots.length)throw Error('Effective native manual producer participation required');
+ const ids=new Set();for(const root of proof.roots){if(typeof root.id!=='string'||!root.id||ids.has(root.id)||root.parentBefore!==null||root.parentAfter!==proof.scene)throw Error('Distinct initially unparented roots mounted in the effective shared scene required');ids.add(root.id);}
+}
+
+export function requirePublishedStoneSurface(surface,counts,state,expectedTriangles){
+ if(!Array.isArray(surface)||!surface.length||counts?.route!=='kaminos.stone.exposed-cell-faces.webgpu.v1'||!Number.isSafeInteger(expectedTriangles)||expectedTriangles<=0||counts.totalTriangles!==expectedTriangles)throw Error('Complete published exposed-face evidence required');
+ let error=0;for(const piece of surface){if(piece.runId!==state.runId||piece.step!==state.steps||piece.route!=='kaminos.deformable-surface.resident-four-split.webgpu.v0'||!Array.isArray(piece.gpu)||!piece.gpu.length||!Array.isArray(piece.reference)||piece.reference.length!==piece.gpu.length*3||!piece.reference.every(Number.isFinite))throw Error('Current complete native published surface required');for(let i=0;i<piece.gpu.length;i++){const point=piece.gpu[i];if(!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite))throw Error('Finite published positions required');for(let k=0;k<3;k++)error=Math.max(error,Math.abs(point[k]-piece.reference[i*3+k]));}}
+ if(error>3e-5)throw Error(`Published pose disagrees with acquired material ownership: ${error}`);return{maximumError:error,triangles:expectedTriangles};
+}
