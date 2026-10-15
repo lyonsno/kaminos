@@ -2963,6 +2963,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
   <!-- Finger Fluid Bench Tab -->
   <div class="tab-content" id="tab-finger-fluid-bench">
+    <div id="finger-fluid-bench-diagnostics" hidden>
     <h2>Finger Fluid Bench</h2>
     <div class="panel">
       <div class="field"><span class="field-key">Route</span><span class="route-chip">kaminos_finger_fluid_bench=1</span></div>
@@ -2992,6 +2993,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="panel">
       <div class="field"><span class="field-key">Downgrades</span></div>
       <div class="finger-fluid-bench-downgrades" id="finger-fluid-bench-downgrades"></div>
+    </div>
     </div>
   </div>
 
@@ -12963,6 +12965,8 @@ function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   if (fingerFluidBenchPanel) {
     const standaloneFluid=tabName==='finger-fluid-bench'&&new URLSearchParams(window.location.search).get('kaminos_finger_fluid_bench')==='1';
     fingerFluidBenchPanel.hidden = !standaloneFluid;
+    const diagnostics=document.getElementById('finger-fluid-bench-diagnostics');
+    if(diagnostics)diagnostics.hidden=!standaloneFluid;
     if (standaloneFluid) startFingerFluidBench();
     else stopFingerFluidBench();
   }

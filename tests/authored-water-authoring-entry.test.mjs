@@ -28,3 +28,11 @@ test('finite simulation selection does not expose unrelated legacy basin budget 
   syncBurnerInspector(){},syncSceneDataInspector(){},localLiquidEmitterRecords:()=>[{localLiquidEmitter:{mode:'finite_drop'}}]};vm.createContext(c);vm.runInContext(source.slice(a,b+2),c);c.updateAuthoringPropertySelection();
  assert.equal(water.hidden,true,'Finite water field must show its actual settings rather than a legacy basin budget');
 });
+
+test('legacy fluid diagnostics appear only for the standalone bench route',()=>{
+ const nodes=new Map(['sam-image-viewport','finger-fluid-bench-operator-panel','finger-fluid-bench-diagnostics'].map(id=>[id,{hidden:false}]));
+ const c={authoringWorkspace:null,sharedWorkbench:null,document:{body:{classList:{toggle(){}}},getElementById:id=>nodes.get(id),querySelectorAll:()=>[]},samImageTools:null,window:{location:{search:''}},URLSearchParams,startFingerFluidBench(){},stopFingerFluidBench(){}};
+ const a=source.indexOf('function setActiveTab('),b=source.indexOf('\n}',a);vm.createContext(c);vm.runInContext(source.slice(a,b+2),c);
+ c.setActiveTab('finger-fluid-bench');assert.equal(nodes.get('finger-fluid-bench-diagnostics').hidden,true,'Ordinary authored water must not report a separate idle/loading bench');
+ c.window.location.search='?kaminos_finger_fluid_bench=1';c.setActiveTab('finger-fluid-bench');assert.equal(nodes.get('finger-fluid-bench-diagnostics').hidden,false);
+});
