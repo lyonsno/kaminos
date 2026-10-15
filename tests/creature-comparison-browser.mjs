@@ -79,7 +79,8 @@ try{
   assert.equal(await page.locator('#experiment-owner-slot').isVisible(),false,'selected-body context should use the ordinary scene room');
  }
  report.phase='same-pose-gpu-parity';
- for(const seconds of [0,1,59/30]){
+ const parityTimes=args['--gpu-parity']==='false'?[]:[0,1,59/30];report.gpuParity={requested:args['--gpu-parity']!=='false',sampleTimes:parityTimes};
+ for(const seconds of parityTimes){
   await page.evaluate(seconds=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds}),seconds);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
   const samples=await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('inspectGpu'));await fs.writeFile(out+'/gpu-parity-'+Math.round(seconds*30)+'.v8',v8.serialize(samples));
   for(const s of samples){assert.equal(s.backend,'webgpu-dense-dq');assert.ok(s.dispatches>0);const error=(a,b)=>{assert.equal(a.length,50501*3);assert.equal(a.length,b.length);let max=0,sum=0;for(let i=0;i<a.length;i++){assert.ok(Number.isFinite(a[i])&&Number.isFinite(b[i]));const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);sum+=d*d;}return {max,rms:Math.sqrt(sum/a.length)};};
@@ -107,12 +108,26 @@ try{
  report.phase='travel';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'travel'}));await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:1}));const travel=await retain('travel-middle');assert.ok(travel.read.entries.every(e=>e.skin.deformation.backend==='webgpu-dense-dq'&&e.skin.poseCache.bytes===0));
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('restart'));const travelStart=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());await page.evaluate(async()=>{while((await window.kaminosWorkbenchExperiments.read()).seconds<2.2)await new Promise(r=>requestAnimationFrame(r));});const traveled=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
  for(let i=0;i<setup.entries.length;i++){assert.ok(traveled.entries[i].skin.deformation.dispatches>travelStart.entries[i].skin.deformation.dispatches);assert.equal(traveled.entries[i].skin.poseCache.deformations,travelStart.entries[i].skin.poseCache.deformations);}
+ if(args['--shared-controls']==='true'){
+  report.phase='travel-reconstruction';report.travelReconstruction=[];await save();
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('pause'));
+  for(const playing of [false,true]){
+   const result=await page.evaluate(async playing=>{
+    const e=window.kaminosWorkbenchExperiments,before=await e.read(),saved=await e.invoke('setup');saved.play=playing;
+    await e.close();await e.open('marionette/motion-comparison',saved);const after=await e.read();await e.invoke('pause');return {playing,before,saved,after};
+   },playing);
+   assert.equal(result.after.seconds,result.saved.seconds);assert.ok(result.saved.seconds>2,'witness needs accumulated travel, not just the initial cycle');assert.equal(result.after.status,playing?'playing':'paused');assert.equal(result.after.rate,result.before.rate);assert.deepEqual(result.after.view,result.before.view);
+   for(let i=0;i<setup.entries.length;i++){const a=result.before.entries[i],b=result.after.entries[i];assert.equal(b.frame,a.frame);assert.equal(b.cycle,a.cycle);assert.notEqual(b.id,a.id);for(let k=0;k<16;k++)assert.ok(Math.abs(a.rootMatrix[k]-b.rootMatrix[k])<.00001,'travel reconstruction changed current world placement');}
+   report.travelReconstruction.push(result);await save();
+  }
+  await retain('travel-reopened');
+ }
  report.phase='removal';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'in-place'}));const first=(await read()).read.entries[0];await page.evaluate(id=>window.removeSceneObject(id),first.id);await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('play'));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const removed=await retain('one-removed');assert.equal(removed.read.entries[0].status,'removed');assert.equal(removed.read.entries[0].id,null);assert.equal(removed.read.entries.filter(e=>e.id).length,setup.entries.length-1);
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());report.closed=await page.evaluate(()=>({clock:window.kaminosWorkbenchSceneState(),scene:window.kaminosSceneObjectDebugState()}));assert.equal(report.closed.clock.activeSubscriptions,0);assert.equal(report.closed.scene.length,0);assert.deepEqual(report.errors,[]);
  if(report.savedComparison){
   assert.equal(await page.locator('.scene-owner-playback').count(),0);
   await page.evaluate(setup=>window.kaminosWorkbenchExperiments.open('marionette/motion-comparison',setup),report.savedComparison);
-  report.reopened=await read();assert.equal(report.reopened.read.entries.length,6);assert.equal(report.reopened.read.seconds,1);assert.equal(report.reopened.read.rate,.5);assert.equal(report.reopened.clock.activeSubscriptions,0);assert.notEqual(report.reopened.read.entries[0].id,report.closed.scene[0]?.id);
+  report.reopened=await read();assert.equal(report.reopened.read.entries.length,6);assert.equal(report.reopened.read.seconds,1);assert.equal(report.reopened.read.rate,.5);assert.equal(report.reopened.clock.activeSubscriptions,0);assert.notEqual(report.reopened.read.entries[0].id,moving.read.entries[0].id);
   assert.ok(Math.abs(report.reopened.read.entries[0].rootMatrix[12]+2.5)<.1);await retain('shared-reopened');await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
  }
  report.phase='negative-recipe';const wrong=new URL(url);wrong.searchParams.set('experiment_inputs',JSON.stringify({recipe:args['--recipe-url'],recipe_sha256:'0'.repeat(64)}));await page.goto(wrong.href,{timeout:0});await page.evaluate(async()=>{while(!window.kaminosWorkbenchExperimentError)await new Promise(r=>requestAnimationFrame(r));});report.negative=await page.evaluate(()=>({error:window.kaminosWorkbenchExperimentError,scene:window.kaminosSceneObjectDebugState(),clock:window.kaminosWorkbenchSceneState()}));assert.match(report.negative.error,/digest mismatch/);assert.equal(report.negative.scene.length,0);assert.equal(report.negative.clock.activeSubscriptions,0);

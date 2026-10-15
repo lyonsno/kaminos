@@ -121,13 +121,16 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
    replay(){return operations.restart();},
    rate({rate:next}={}){active();if(!Number.isFinite(next)||next<=0)throw Error('Comparison playback rate must be positive');rate=next;refresh();return read();},
    step({direction}={}){if(direction!==1&&direction!==-1)throw Error('Step direction must be -1 or 1');return operations.seek({seconds:Math.min(duration,Math.max(0,displayTime()+direction/timeline.skeleton.fps))});},
-   setup(){active();return {...structuredClone(inputs),entries:rows.filter(mounted).map(row=>({...structuredClone(row.spec),position:row.placement.position.toArray(),quaternion:row.placement.quaternion.toArray(),scale:row.placement.scale.toArray()})),presentation:mode,rate,seconds:displayTime(),play:status==='playing',view:session.readView()};},
+   setup(){active();return {...structuredClone(inputs),entries:rows.filter(mounted).map(row=>({...structuredClone(row.spec),position:row.placement.position.toArray(),quaternion:row.placement.quaternion.toArray(),scale:row.placement.scale.toArray()})),presentation:mode,rate,seconds,play:status==='playing',view:session.readView()};},
    seek({seconds:next}={}){active();if(!Number.isFinite(next)||next<0||next>duration)throw Error('Comparison seek outside source duration');unsubscribe();seconds=next;status='paused';apply();present();return read();},
    presentation({mode:next}={}){active();if(!['in-place','travel','raw'].includes(next))throw Error('Unknown comparison presentation');unsubscribe();mode=next;for(const row of rows)row.runtime.setPoseRetention(mode!=='travel');seconds=0;status='paused';apply();present();return read();},
   };
   // GPU transport consumes the current bone palette in every presentation. No
   // finite-mesh cache, warmup traversal, private renderer or private frame loop.
-  apply();if(inputs.seconds!==undefined)operations.seek({seconds:inputs.seconds});if(inputs.play!==false)operations.play();if(globalThis.window)window.kaminosCreatureComparison=inspect;
+  // A saved clock is accumulated state; the scrubber's source-duration seek
+  // contract is deliberately separate from reconstructing later travel cycles.
+  if(inputs.seconds!==undefined){if(!Number.isFinite(inputs.seconds)||inputs.seconds<0||(mode==='raw'&&inputs.seconds>duration))throw Error('Invalid saved comparison elapsed time');seconds=inputs.seconds;}
+  apply();if(inputs.play!==false)operations.play();if(globalThis.window)window.kaminosCreatureComparison=inspect;
   return {read,operations,dispose,mount({root,invoke}){
    const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
    const updates=[];

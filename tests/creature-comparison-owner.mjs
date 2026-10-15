@@ -54,4 +54,15 @@ await labelledEntry.dispose();
 const bad=fixture();await assert.rejects(module.createCreatureComparison({host:bad.host,inputs},{loadSources:async source=>{throw Error('source digest mismatch');},makeLabel:()=>new THREE.Group()}),/digest mismatch/);assert.equal(bad.scene.children.length,0);assert.equal(bad.state().active,false);
 await assert.rejects(module.createCreatureComparison({host:bad.host,inputs:{...inputs,entries:[inputs.entries[0],inputs.entries[0]]}},{loadSources:async()=>data}),/unique/);
 assert.throws(()=>entry.operations.play(),/disposed/);
+// The timeline wraps, but reconstruction must retain accumulated world travel.
+for(const playing of [false,true]){
+ const original=fixture(),live=await module.createCreatureComparison({host:original.host,inputs},{loadSources:async()=>structuredClone(data),makeLabel:()=>null});
+ live.operations.presentation({mode:'travel'});live.operations.rate({rate:2});live.operations.restart();original.tick(7/60);
+ original.scene.children[0].position.y=1;if(!playing)live.operations.pause();
+ const before=live.read(),saved=live.operations.setup(),restored=fixture(),reopened=await module.createCreatureComparison({host:restored.host,inputs:saved},{loadSources:async()=>structuredClone(data),makeLabel:()=>null});
+ const after=reopened.read();assert.equal(after.seconds,before.seconds,'saved travel must keep elapsed time, not wrapped display time');
+ assert.deepEqual(after.entries.map(e=>[e.frame,e.cycle,e.rootMatrix]),before.entries.map(e=>[e.frame,e.cycle,e.rootMatrix]),'saved travel must keep every current world placement');
+ assert.equal(after.rate,2);assert.equal(after.status,playing?'playing':'paused');assert.deepEqual(after.view,before.view);assert.deepEqual(reopened.operations.setup().entries,saved.entries);
+ await live.dispose();await reopened.dispose();
+}
 console.log('Comparison keeps six independent sources/placements on one clock, preserves vertical action, exposes travel/raw, and closes/removes honestly');
