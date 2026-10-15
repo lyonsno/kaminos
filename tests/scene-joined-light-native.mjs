@@ -13,11 +13,13 @@ import {createSceneVolumeSource} from '../scene-volume-source.mjs';
 const [native,out]=process.argv.slice(2);
 assert.ok(native&&out,'name native WebGPU module and persistent evidence directory');
 mkdirSync(out,{recursive:true});
-const report={status:'running',phase:'adapter',cases:[],source:{root:resolve('.'),revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),files:{}}};
-for(const f of ['scene-joined-light-transport.mjs','scene-volume-source.mjs','scene-volume-gather.mjs','scene-prepared-smoke.mjs','scene-smoke-reconstruction.mjs','tests/scene-joined-light-native.mjs'])report.source.files[f]=createHash('sha256').update(readFileSync(f)).digest('hex');
+const report={status:'running',phase:'source-discovery',cases:[],source:{root:resolve('.'),revision:null,files:{}}};
 let device;const owned=[];
 const save=()=>writeFileSync(resolve(out,'report.json'),JSON.stringify(report,null,2));save();
 try{
+  report.source.revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+  for(const f of ['scene-joined-light-transport.mjs','scene-volume-source.mjs','scene-volume-gather.mjs','scene-prepared-smoke.mjs','scene-smoke-reconstruction.mjs','tests/scene-joined-light-native.mjs'])report.source.files[f]=createHash('sha256').update(readFileSync(f)).digest('hex');
+  report.phase='adapter';save();
   const {create,globals}=await import(pathToFileURL(resolve(native)));Object.assign(globalThis,globals);
   const gpu=create(['backend=metal']),adapter=await gpu.requestAdapter();assert(adapter&&!adapter.isFallbackAdapter,'native adapter required');
   report.adapter={vendor:adapter.info.vendor,architecture:adapter.info.architecture,native:resolve(native),backend:'metal'};

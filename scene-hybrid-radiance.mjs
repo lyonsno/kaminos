@@ -16,7 +16,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   validateShadowSampling(shadowSampling);
   const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
-  let points,external,lights,irradiance;
+  let points,external,lights,irradiance,fineSourceRadius=Math.sqrt(11);
   function buildPoints(count){
   points=createPointRegions(device,{count,partition:count===2?'energy':'vertical'});
   external=new THREE.ExternalTexture(points.texture);
@@ -25,7 +25,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*fineSourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
@@ -100,6 +100,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed'});
       const exteriorFrame=exteriorGather&&smokeMode==='distributed'?exteriorGather.encode(field.source,{gain,sourceSoftness,smokeEnabled:true}):null;
       const reduction=points.encode(gather.transportSource());
+      fineSourceRadius=Math.hypot(...fineDomain.lo.map((v,a)=>Math.max(Math.abs(v),Math.abs(fineDomain.hi[a]))));
       for(const light of lights)light.shadow.render();
       frame={...frame,exteriorSmokeReconstruction:exteriorFrame?.smokeReconstruction??null,exteriorSourceGeneration:exteriorFrame?ext.generation:null,
         exteriorVolumeReceivers:exteriorFrame?.volumeReceivers??0,pointRegions:reduction,surfaceTransport:status.surfaceTransport,previewStale:false};
