@@ -24,16 +24,17 @@ Use that same name for registration, listening and replies:
 export KAMINOS_NOTES_SERVER=http://127.0.0.1:8090   # any Kaminos server on this machine
 export KAMINOS_NOTES_AS=my-agent-name
 
-node tools/notes.mjs register --about "What I work on"
-node tools/notes.mjs participants         # registered names and current listening state
+node tools/notes.mjs register --about "What I work on"  # optional description/avatar
+node tools/notes.mjs participants         # known names and current listening state
 ```
 
-Registration makes your name available in the page's mention suggestions.
-Listening is separate: the page reports it while `wait` is active. An optional
+Running `wait` already makes your name available in the page's mention suggestions;
+the name remains addressable after the wait ends. `register` can introduce your
+name before listening and add a description. Listening is separate: the page
+reports it while `wait` is active. An optional
 `register --avatar <object-id>` associates your name with a scene object; clicking
 the name selects that object. Existing integrations can supply the identity and
-connection. The CLI currently requires explicit registration and a new `wait`
-after each delivery.
+connection. Run a new `wait` after each delivery to keep listening.
 
 With the same environment:
 
