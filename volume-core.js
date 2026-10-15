@@ -3,7 +3,7 @@ import { AGX_WGSL } from './volume-agx.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
-import { opticalSteppingConfig, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
@@ -11911,6 +11911,7 @@ export function createKaminosVolumePrototype({
   let leanEmissiveProductRaymarchPipeline = null;
   let debugRaymarchShaderSpecialization = 'auto';
   let debugOpticalStepping = opticalSteppingConfig();
+  let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
   let opticalTransportContributionPipeline = null;
   let browserResidualPipeline = null;
@@ -20475,14 +20476,13 @@ export function createKaminosVolumePrototype({
     }
     let drawPipeline = selectRaymarchPipeline(targetPipeline);
     const selectEmissive = drawPipeline === leanEmissivePipeline || drawPipeline === leanEmissiveReadbackPipeline;
-    if (debugOpticalStepping.mode !== 'current' && (!selectEmissive || options.opticalTrace)) {
-      throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture');
-    }
-    const opticalConstants = {OPTICAL_STEP_MODE:debugOpticalStepping.value, OPTICAL_STEP_TOLERANCE:debugOpticalStepping.tolerance};
-    state.opticalStepping = { ...debugOpticalStepping, effective: debugOpticalStepping.mode,
-      source:'native-emissive-material-and-current-incident-light', fullRay:debugOpticalStepping.mode !== 'current' };
-    const opticalKey = `:${debugOpticalStepping.mode}:${debugOpticalStepping.tolerance}`;
-    if (debugOpticalStepping.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const optical = resolveOpticalStepping(debugOpticalStepping, {emissive:selectEmissive,
+      trace:Boolean(options.opticalTrace),explicit:debugOpticalSteppingExplicit});
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value, OPTICAL_STEP_TOLERANCE:optical.tolerance};
+    state.opticalStepping = { ...optical, effective: optical.mode,
+      source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current' };
+    const opticalKey = `:${optical.mode}:${optical.tolerance}`;
+    if (optical.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
@@ -27171,6 +27171,7 @@ export function createKaminosVolumePrototype({
         throw new Error('optical stepping comparison requires native emissive beauty raymarch');
       }
       debugOpticalStepping = next;
+      debugOpticalSteppingExplicit = true;
       return { ...next };
     },
     applyPersistentSparseCohortGpuState,
