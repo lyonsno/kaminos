@@ -33,10 +33,10 @@ test('an emitter symbol wins over a simulation edge crossing the same pixel',()=
 import * as framing from '../scene-frame-selected.mjs';
 test('Frame selected fits the simulation bounds rather than an ignored helper origin',()=>{
  for(const field of ['flame-field','water-field']){
-  const guide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(-3,-1,-3),new THREE.Vector3(3,3,3)));guide.userData.kaminosEditorHelper=true;
+  const guide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(-2,-1,3),new THREE.Vector3(4,3,9)));guide.userData.kaminosEditorHelper=true;
   const camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.set(4,3,6);const controls={target:new THREE.Vector3(),update(){camera.lookAt(this.target);camera.updateMatrixWorld(true);}};
   const c={THREE,activeSceneFieldId:field,flameDomainGuide:guide,localLiquidDomainGuide:guide,frameObjects:framing.frameObjects,frameBox:framing.frameBox,camera,controls,sceneSelection:{ids:[]},selectedSceneGroupEntry:()=>null,selectedSceneObjectEntry:()=>null,frameSceneObjectRecord:()=>false};
-  vm.createContext(c);vm.runInContext(grab('frameAuthoredSelection'),c);assert.equal(c.frameAuthoredSelection(),true,field+' must frame its full solver box');assert.deepEqual(controls.target.toArray(),[0,1,0]);
+  vm.createContext(c);vm.runInContext(grab('frameAuthoredSelection'),c);assert.equal(c.frameAuthoredSelection(),true,field+' must frame its full solver box');assert.deepEqual(controls.target.toArray(),[1,1,6]);for(const x of [-2,4])for(const y of [-1,3])for(const z of [3,9]){const point=new THREE.Vector3(x,y,z).project(camera);assert.ok(Math.abs(point.x)<1&&Math.abs(point.y)<1&&Math.abs(point.z)<1,'every solver-box corner fits the viewport');}
  }
 });
 
