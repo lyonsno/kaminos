@@ -5,7 +5,7 @@
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import path from 'node:path';
-import {checkedCommand, poseAxes, DEFAULT_PILOT} from '../agent-vantage-core.mjs';
+import {checkedCommand, poseAxes, pickRunAt, DEFAULT_PILOT} from '../agent-vantage-core.mjs';
 
 const USAGE = `Usage: node tools/vantage.mjs [options] <command> [arguments]
 
@@ -27,11 +27,12 @@ Commands
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--name NAME]
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
-  pick X Y [--from sub|operator]      what lies under a point of the view; X and Y are fractions from the top left
-  pick X Y --picture RECORD.json [--frame N] [--now]   a pixel of a kept picture, where its objects stood;
-                             --now casts that picture's camera into the scene as it is now
+  pick X Y [--from sub|operator]      what the renderer draws at a point of the view now; X and Y are fractions from the top left
+  pick X Y --picture RECORD.json [--frame N] [--now]   what a kept picture drew at its pixel X Y, from the
+                             picture's own pick map; --now casts that picture's camera into the scene as it is now
 
-Pictures carry the map unless --no-map is given. A pick renders nothing.
+Pictures carry the map unless --no-map is given, and always a pick map: the renderer's record of which
+object it drew at each pixel. A live pick draws one pixel of a pick map; it never borrows your view.
 
 TARGET is an object id, a label or a unique part of one, "selection", or X Y Z.
 
@@ -100,7 +101,8 @@ function commandArgs(command, rest, options, pilot) {
 }
 
 // A pick names a point as fractions of the view from its top left, or as a
-// pixel of a kept picture, whose record holds the camera that took it.
+// pixel of a kept picture. A picture's own pick map says what it drew there;
+// the page then finds that object and the point on it.
 function pickArgs(rest, options, pilot) {
   if (rest.length !== 2 || !rest.every(token => token.trim() !== '' && Number.isFinite(Number(token)))) throw new Exit(2, 'pick needs X Y');
   const [x, y] = rest.map(Number);
@@ -113,15 +115,25 @@ function pickArgs(rest, options, pilot) {
   catch (error) { throw new Exit(2, `Cannot read the picture record ${options.picture}: ${error.message}`); }
   const result = record.result ?? record, frame = options.frame === undefined ? null : Number(options.frame);
   if (frame !== null && !(Number.isInteger(frame) && frame >= 1)) throw new Exit(2, '--frame counts burst frames from 1');
-  const optics = frame === null ? result.optics : result.frames?.[frame - 1]?.optics;
+  // A burst keeps a pick map per frame; without --frame, its first frame's.
+  const source = frame !== null ? result.frames?.[frame - 1] : result.kind === 'burst' ? result.frames?.[0] : result;
+  const optics = frame === null ? result.optics : source?.optics;
   if (!optics) throw new Exit(2, frame === null ? `${options.picture} records no camera; take the picture again with this version` : `${options.picture} has no frame ${frame} with a camera`);
   const {width, height} = result.image ?? {};
   if (!(width > 0 && height > 0)) throw new Exit(2, `${options.picture} records no picture size`);
-  const pose = frame === null ? result.scenePose : result.frames?.[frame - 1]?.scenePose;
-  if (!pose && !options.now) {
-    throw new Exit(2, `${options.picture} predates object records, so a pick cannot find what it showed. Take a new picture, or add --now to cast its camera into the scene as it is now.`);
+  const at = [x / width, y / height];
+  if (options.now) return {pilot, from: 'sub', at, optics};
+  const map = source?.pickMap;
+  if (!map) {
+    throw new Exit(2, `${options.picture}${frame ? ` frame ${frame}` : ''} has no pick map${source?.pickMapError ? ` (${source.pickMapError})` : ''}, so a pick cannot say what it drew there. Take a new picture, or add --now to cast its camera into the scene as it is now.`);
   }
-  return {pilot, from: 'sub', at: [x / width, y / height], optics, ...(pose && !options.now ? {pose} : {})};
+  let found;
+  try { found = pickRunAt(map, at); }
+  catch (error) { throw new Exit(2, `${options.picture}: ${error.message}`); }
+  const {instances, ...pictured} = map.objects?.find(row => row.n === found.n) ?? {n: found.n};
+  const instanceMatrix = instances?.[found.instance];
+  return {pilot, from: 'sub', at, optics, pictured: {...pictured, instance: found.instance, ...(instanceMatrix ? {instanceMatrix} : {})},
+    scene: {clouds: map.clouds ?? [], fields: map.fields ?? [], water: map.water === true}};
 }
 
 async function request(server, method, route, body) {
@@ -192,27 +204,29 @@ function summarize(command, record) {
       lines.push(`  ${object.label} [${object.id}] ${object.type}${object.bounds ? ` ${point(object.bounds.min)}..${point(object.bounds.max)}` : ''}`);
     }
   } else if (command === 'pick') {
-    const who = result.from === 'picture' ? 'the picture, where its objects stood' : result.from === 'camera' ? 'the picture camera, into the scene as it is now'
-      : result.from === 'operator' ? 'your view' : result.from;
+    const who = {picture: 'the picture', camera: 'the picture camera, into the scene as it is now', operator: 'your view'}[result.from] ?? result.from;
     lines.push(`ray from ${who} through (${fmt(result.at[0])}, ${fmt(result.at[1])}) of the frame`);
-    const hit = result.hit;
+    const pictured = result.referent === 'pictured', whose = pictured ? 'the picture drew' : 'the renderer draws', when = pictured ? '' : ' now';
+    const hit = result.hit, drawn = result.drawn;
     if (hit) {
-      lines.push(`  hits      ${hit.label} [${hit.id}] ${fmt(hit.distance)} m away at ${point(hit.point)}${hit.pictured ? ' (where the picture showed it)' : ''}`);
-      if (hit.pictured) lines.push(`  since     ${hit.moved ? 'it has moved' : 'it has not moved'}; geometry ${hit.geometry?.status}`);
-      const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null,
-        Number.isInteger(hit.surface?.instance) ? `instance ${hit.surface.instance}` : null].filter(Boolean).join(', ');
-      lines.push(`  on it     ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
-      if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
-    } else lines.push('  hits      nothing along that ray');
-    if (result.reconstruction) {
-      const changed = result.reconstruction.changed.map(item => `${item.id} ${item.what}${item.status ? ` (${item.status})` : ''}`).join(', ');
-      lines.push(`  vouched   ${{exact: 'exact: nothing the ray crosses has changed', sampled: 'sampled: unchanged by sampled content after a reload',
-        approximate: `approximate: the picture may have shown something else here${changed ? `; changed: ${changed}` : ''}`}[result.reconstruction.status]}`);
-    }
-    if (result.missing?.length) lines.push(`  missing   ${result.missing.join(', ')}: in the picture but no longer in the scene`);
-    for (const item of result.unresolved ?? []) lines.push(`  in front  ${item.label} (${item.type}) at ${fmt(item.distance)} m: ${item.reason}; it may be what the point shows`);
+      lines.push(`  names     ${hit.label} [${hit.id}], which ${whose} there${when} (${hit.authority})`);
+      if (hit.point) {
+        const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null,
+          Number.isInteger(hit.surface?.instance) ? `instance ${hit.surface.instance}` : null].filter(Boolean).join(', ');
+        lines.push(`  at        ${fmt(hit.distance)} m, ${point(hit.point)}; ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
+        if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
+        lines.push(`  point     ${hit.pointBasis === 'recast-now' ? 'cast on the mesh as it is posed now' : pictured ? 'cast on the mesh placed where the picture drew it' : 'cast on the mesh as drawn'}`);
+      } else {
+        lines.push(`  point     ${{missing: 'none: the object is no longer in the scene', 'mesh-missing': 'none: that mesh is no longer in the object',
+          'instance-unknown': 'none: the instance is not known', missed: 'none: the ray does not meet the mesh as it is now'}[hit.now === 'present' ? hit.pointBasis : hit.now] ?? 'none'}`);
+      }
+      if (pictured && hit.geometry?.status) lines.push(`  geometry  ${hit.geometry.status} since the picture`);
+      if (hit.coverage) lines.push(`  coverage  drawn with its own fragment shader; the map traced it with a stand-in`);
+    } else if (drawn?.kind === 'not-a-scene-object') lines.push(`  names     ${drawn.name || 'an unnamed drawing'} (${drawn.type ?? 'unknown'}): drawn there, but not a scene object`);
+    else if (drawn?.kind === 'unidentified') lines.push(`  names     an unidentified drawing (number ${drawn.n})`);
+    else lines.push(`  names     nothing: ${whose} nothing there${when}`);
+    for (const item of result.unresolved ?? []) lines.push(`  in front  ${item.label} (${item.type})${Number.isFinite(item.distance) ? ` at ${fmt(item.distance)} m` : ''}: ${item.reason}; it may be what the point shows`);
     for (const field of result.fields ?? []) lines.push(`  through   ${field.label} from ${fmt(field.enter)} to ${fmt(field.exit)} m`);
-    if (result.beyond?.length) lines.push(`  behind    ${result.beyond.map(item => `${item.label} ${fmt(item.distance)} m`).join(' · ')}`);
   } else if (result.images) {
     lines.push(`${result.kind} · ${result.pilot ?? 'operator'} · ${result.route} · ${result.image?.width}×${result.image?.height} · layers: ${(result.layers || []).join(', ')}`);
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
@@ -224,6 +238,9 @@ function summarize(command, record) {
     if (elsewhere.length) lines.push(`  elsewhere ${elsewhere.map(o => `${o.label} ${fmt(o.distance)} m ${bearing(o.bearing)}`).join(' · ')}`);
     if (result.objects?.occlusion === 'not-tested') lines.push('  (in view means inside the frame by bounds; something nearer may hide it)');
     if (result.frames) lines.push(`  frames    ${result.frames.map(frame => `+${Math.round(frame.atMs)} ms`).join(', ')}`);
+    const maps = result.frames ? result.frames : [result];
+    const kept = maps.filter(item => item.pickMap).length, failed = maps.find(item => item.pickMapError);
+    lines.push(`  pick map  ${kept === maps.length ? `kept${maps.length > 1 ? ` for all ${maps.length} frames` : ''}: pick on a pixel with --picture` : `${kept} of ${maps.length}${failed ? `: ${failed.pickMapError}` : ''}`}`);
   } else if (command === 'status') {
     lines.push(`page ${record.page?.id} · ${record.page?.title ?? ''} · ${result.visible ? 'visible' : 'hidden'}${result.busy ? ` · busy: ${result.busy}` : ''}`);
     lines.push(`viewport ${result.viewport?.width}×${result.viewport?.height} · camera mode ${result.cameraMode?.mode}`);

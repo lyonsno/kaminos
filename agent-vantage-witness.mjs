@@ -68,6 +68,26 @@ function colors(file) {
   return {width, height, red: red / total, blue: blue / total, yellow: yellow / total, varied};
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
+// Where a picture's red pixels are and where its pick map says the red box was
+// drawn: how much they overlap, and how far apart their centres lie.
+function mapAgreement(file, pickMap, n) {
+  const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+  const ids = new Uint16Array(pickMap.width * pickMap.height), runs = pickMap.runs.split(' ').map(Number);
+  for (let i = 0, at = 0; i < runs.length; at += runs[i + 2], i += 3) ids.fill(runs[i], at, at + runs[i + 2]);
+  if (width !== pickMap.width || height !== pickMap.height) return {width, height, map: [pickMap.width, pickMap.height], sized: false};
+  let red = 0, mapped = 0, both = 0, rx = 0, ry = 0, mx = 0, my = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * channels, r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      const isRed = r > 70 && r > 1.6 * g && r > 1.6 * b, isMapped = ids[y * width + x] === n;
+      if (isRed) { red++; rx += x; ry += y; }
+      if (isMapped) { mapped++; mx += x; my += y; }
+      if (isRed && isMapped) both++;
+    }
+  }
+  return {sized: true, red, mapped, redInMap: red ? both / red : 0, mapInRed: mapped ? both / mapped : 0,
+    centreGap: red && mapped ? Math.hypot(rx / red - mx / mapped, ry / red - my / mapped) / width : 1};
+}
 // The map paints the sub's cone teal and the operator's white over a dark ground.
 function mapColors(file) {
   const {channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
@@ -181,24 +201,34 @@ try {
   check('peek shows the operator view of the blue box', peekColors.blue > 0.05 && peekColors.red < 0.005, peekColors);
 
   report.phase = 'pick'; save();
-  // A pixel of a kept picture, picked later, names what that picture showed.
+  // Every picture keeps a pick map: the renderer's record of which object it drew at each pixel.
+  const redRow = snapRed.result.pickMap?.objects?.find(row => row.id === scene.red);
+  check('the red snap keeps a pick map that names the red box', !!redRow, {pickMapError: snapRed.result.pickMapError ?? null,
+    objects: snapRed.result.pickMap?.objects?.map(row => row.id ?? row.name)});
+  const agreement = mapAgreement(imageOf(snapRed, 'snap'), snapRed.result.pickMap, redRow?.n);
+  report.effective.pickMapAgreement = agreement;
+  check('the pick map lies over the picture: its red box is where the picture is red', agreement.sized && agreement.redInMap > 0.97
+    && agreement.mapInRed > 0.6 && agreement.centreGap < 0.01, agreement);
+  // A pixel of a kept picture, picked later, names what that picture drew.
   const middle = record => [String(record.result.image.width / 2), String(record.result.image.height / 2)];
   const pickRed = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
-  check('a pick on the red snap names the red box under its centre', pickRed.result.from === 'picture' && pickRed.result.hit?.id === scene.red,
-    {hit: pickRed.result.hit});
+  check('a pick on the red snap names the red box the picture drew under its centre', pickRed.result.from === 'picture'
+    && pickRed.result.referent === 'pictured' && pickRed.result.hit?.id === scene.red && pickRed.result.hit.authority === 'exact'
+    && pickRed.result.hit.point?.length === 3, {hit: pickRed.result.hit});
   const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
-  check('a pick at the centre of the operator view names the blue box, with a point on its surface',
-    pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.local.length === 3 && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
+  check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it',
+    pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.local?.length === 3
+    && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
   const pickNothing = await vantageOk('pick', '0.5', '0.02', '--from', 'operator');
-  check('a pick above everything hits nothing', pickNothing.result.hit === null, {hit: pickNothing.result.hit});
-  // The red box moves after the picture; a pick on that picture still finds it where it stood, and says it moved.
+  check('a pick above everything names no scene object', pickNothing.result.hit === null, {hit: pickNothing.result.hit, drawn: pickNothing.result.drawn});
+  // The red box moves after the picture; a pick on that picture still names it, cast where the picture drew it.
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, -3]}), scene.red);
   const pickMoved = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
-  check('after the red box moves, a pick on the old picture still names it and says it moved',
-    pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.pictured === true && pickMoved.result.hit.moved === true
-    && pickMoved.result.hit.geometry?.status === 'same' && pickMoved.result.reconstruction?.status === 'exact',
-    {hit: pickMoved.result.hit, reconstruction: pickMoved.result.reconstruction});
+  check('after the red box moves, a pick on the old picture still names it, with the point where the picture drew it',
+    pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.authority === 'exact' && pickMoved.result.hit.now === 'present'
+    && pickMoved.result.hit.geometry?.status === 'same' && Math.abs((pickMoved.result.hit.point?.[2] ?? 0) - pickRed.result.hit.point[2]) < 1e-6,
+    {hit: pickMoved.result.hit, before: pickRed.result.hit.point});
   const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
   check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
 
@@ -398,6 +428,17 @@ try {
   check('the sketch carries the projection the camera frame renders with',
     !!framedBefore && !!framedAfter && framedBefore.some((value, i) => Math.abs(value - framedAfter[i]) > 1e-6), {framedBefore, framedAfter});
   check('a frame zoom alone repaints the map panel', panelBefore !== panelAfter, {changed: panelBefore !== panelAfter});
+
+  report.phase = 'pick-after-removal'; save();
+  // The red box is removed: the old picture still names what it drew, and today's sub view does not show it.
+  await page.evaluate(id => window.removeSceneObject(id), scene.red);
+  await page.waitForTimeout(300);
+  const pickGone = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  const liveGone = await vantageOk('pick', '0.5', '0.5');
+  check('after the red box is removed, the old picture still names it and says it is gone',
+    pickGone.result.hit?.id === scene.red && pickGone.result.hit.now === 'missing' && pickGone.result.hit.point === null, {hit: pickGone.result.hit});
+  check('and a live pick through the same sub view no longer names it', liveGone.result.referent === 'rendered' && liveGone.result.hit?.id !== scene.red,
+    {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
 
   report.phase = 'remove'; save();
   await vantageOk('remove');

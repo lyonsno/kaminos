@@ -56,43 +56,41 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 ## Pointing at things
 
-`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left. While you are looking through the sub, those fractions refer to the framed view you see. `--from operator` uses your own view. These picks read the scene as it is now.
+A pick says what the renderer drew at a point of a picture or a view. Every picture keeps a pick map for that. In the same task that composes the picture, the page draws the scene once more with the picture's matrices into its own target, and every material keeps its own shader. What decides coverage is therefore the renderer's own logic: face side, alpha test and cut-outs, discards, vertex nodes, morphs, depth and colour-write state, and clipping. The only change is what each fragment writes: the drawing object's number, and its instance. The record keeps the map as runs, beside a row for each object it shows:
+- its scene entry, mesh path and name;
+- the world matrices it was drawn with;
+- its geometry identity;
+- for an instanced mesh, the matrices of the instances it shows.
 
-`pick X Y --picture RECORD.json` takes a pixel of a kept picture (`--frame N` for a burst frame). Every picture's record carries:
-- `optics`: the camera it was rendered with;
-- `scenePose`: for each object it could show, where its visible meshes stood, how to recognise their geometry and instance layout, its bounds, and any point clouds.
+The map draws no editor drawing, and nothing that is drawn outside the scene renderer (see below). It costs one more render per picture, and the first one in a page also compiles its shaders.
 
-The pick puts those objects back where the picture showed them and casts from that camera. Only those objects are candidates. The answer's `reconstruction` says how far the result can be vouched for:
+`pick X Y --picture RECORD.json` (with `--frame N` for a burst frame) reads the picture's own map at pixel X Y:
+- the named object is the one the picture drew there, whatever has happened to the scene since;
+- the page then casts the ray at that mesh, placed where the picture drew it, for the point, the point in the object's own frame, the normal and the face.
 
-| Reconstruction | Meaning |
+`pick X Y` (fractions of the sub's view, or of the framed view you see while looking through the sub) and `--from operator` draw one pixel of a pick map now. The answer's `referent` is `pictured` for a kept picture and `rendered` for a live pick.
+
+A hit carries:
+
+| Field | Meaning |
 | --- | --- |
-| `exact` | Every recorded object the ray crosses is verifiably unchanged in this page session. |
-| `sampled` | The same, after a page reload, by counts and sampled content. |
-| `approximate` | Something the ray crosses changed (geometry, instances, a mesh or the whole object is gone) or is a point cloud. The picture may have shown something else at that point, and `changed` and `unresolved` say why. |
+| `authority` | `exact` when the renderer drew this object at that pixel and nothing drawn outside the map lies along the ray in front of it. Otherwise `approximate`, with `unresolved` saying what may cover it. |
+| `now` | `present`, `missing` (the object is gone) or `mesh-missing`. A missing object is still named, as the picture drew it. |
+| `point`, `local`, `normal`, `surface` | From casting the ray at the named mesh where it was drawn. A skinned mesh is cast as it is posed now (`pointBasis: recast-now`). When the ray does not meet the mesh as it is now, these are empty (`pointBasis: missed`). |
+| `geometry.status` | How the mesh's geometry compares with the picture: `same`, `edited` (an attribute, buffer, edit count, content or instance matrix changed), `replaced`, or after a reload `likely-same` or `unverified`. |
 
-Hits carry the same value as `authority`, plus whether their object has moved since and their own geometry status:
+When no scene object was drawn at the pixel, `hit` is empty and `drawn` says what was there: `nothing`, a drawing that is not a scene object (the ground, a proxy), or `unidentified`.
 
-| Geometry status | Meaning |
-| --- | --- |
-| `same` | Unchanged in this session. |
-| `edited` | The same geometry object, with any attribute, edit count or content changed. |
-| `replaced` | Another geometry object, or different content. |
-| `likely-same` | After a reload, the counts and sampled content match. |
-| `unverified` | After a reload, nothing could be checked. |
+The map covers what the scene renderer draws into the scene canvas. Three things are drawn outside it:
+- point clouds such as splats;
+- simulation fields such as fire and smoke;
+- water from the local water host.
 
-The reconstruction covers the scene's meshes. Volumes such as the fire field are listed under `fields`. Water and other renderers that are not scene meshes are not accounted for: `exact` cannot rule out that the picture showed water in front of the hit.
+A cloud or field whose bounds the ray crosses in front of the hit, and water whenever that host is drawing, go under `unresolved` and make the hit `approximate`, because any of them may be what the point shows. `fields` lists every field the ray crosses. A translucent surface in front is what a pick names, though the picture also shows what lies behind it. A material with its own fragment shader is traced with a stand-in, and its hits are `approximate`.
 
-Pictures kept before objects were recorded are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
+Pictures kept without a pick map are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 
-A pick names the first visible surface between the camera's near and far planes. It skips hidden objects, invisible or fully transparent materials, editor helpers, cameras and lights. A hit gives:
-- the object;
-- the point in world and in the object's own frame;
-- the surface normal;
-- the mesh path, face, and instance for instanced meshes.
-
-It also lists the fields the ray passes through. Point clouds such as splats are not picked. One lying along the ray in front of the hit is listed under `unresolved`, because it may be what the point shows.
-
-A pick renders nothing and never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
+A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
 
 ## Limits
 
