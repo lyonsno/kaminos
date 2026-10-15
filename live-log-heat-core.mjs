@@ -1,6 +1,20 @@
-export const LIVE_LOG_HEAT_IDENTITY='kaminos.live-log.local-heat.v2';
-export const LIVE_LOG_THERMAL_MODEL='surface-exchange-diffusion-char-no-self-emission-v2';
+export const LIVE_LOG_HEAT_IDENTITY='kaminos.live-log.local-heat.v3';
+export const LIVE_LOG_THERMAL_MODEL='surface-ignition-finite-fuel-gas-feed-v3';
 export const LIVE_LOG_GRID=16;
+export const LIVE_LOG_BURN_RATE=.025;
+export const LIVE_LOG_CELL_WGSL='struct LogCell { material:vec4<f32>, burn:vec4<f32> }';
+export const LIVE_LOG_EVOLUTION_WGSL=`
+${LIVE_LOG_CELL_WGSL}
+fn evolveLog(old:LogCell,exposure:f32,conducted:f32,dt:f32,surface:bool)->LogCell {
+  let temperature=max(0.0,conducted+(exposure*1.6-conducted*0.35)*dt);
+  let dose=clamp(old.burn.x+max(0.0,temperature-0.8)*dt/1.2-select(dt*0.5,0.0,temperature>=0.8),0.0,1.0);
+  let ignited=select(0.0,1.0,(old.burn.w>0.5||dose>=1.0)&&old.burn.y>0.0);
+  let consumed=select(0.0,old.burn.y*(1.0-exp(-${LIVE_LOG_BURN_RATE}*dt))*smoothstep(0.4,1.0,temperature)*ignited,surface);
+  let fuel=max(0.0,old.burn.y-consumed);
+  let scorch=1.0-(1.0-old.material.y)*exp(-max(0.0,temperature-0.45)*0.02*dt);
+  let damage=max(scorch,1.0-fuel);
+  return LogCell(vec4<f32>(temperature,damage,consumed/(${LIVE_LOG_BURN_RATE}*dt),exposure),vec4<f32>(dose,fuel,consumed,ignited));
+}`;
 export function checkLiveLogFrame(frame,device) {
   if(frame?.device!==device)throw Error('Live log requires the same GPU device as the fluid');
   if(!frame.fluid||!Array.isArray(frame.dimensions)||frame.dimensions.length!==3||!frame.dimensions.every(n=>Number.isInteger(n)&&n>0))throw Error('Live log requires current fluid and dimensions');
@@ -14,7 +28,10 @@ export function checkLiveLogFrame(frame,device) {
 export function stepLiveLogThermal(state,exposure,dt) {
   if(![...state,exposure,dt].every(Number.isFinite)||dt<=0||exposure<0)throw Error('Invalid thermal step');
   const temperature=Math.max(0,state[0]+(exposure*1.6-state[0]*.35)*dt);
-  const t=Math.max(0,Math.min(1,(temperature-.45)/.5));const ignition=t*t*(3-2*t);
-  const consumed=Math.min(1-state[1],(1-state[1])*ignition*.18*dt);
-  return [temperature,state[1]+consumed,consumed/(.18*dt),exposure];
+  const dose=Math.max(0,Math.min(1,(state[4]??0)+Math.max(0,temperature-.8)*dt/1.2-(temperature<.8?dt*.5:0)));
+  const fuelBefore=state[5]??1,ignited=((state[7]??0)>.5||dose>=1)&&fuelBefore>0?1:0;
+  const t=Math.max(0,Math.min(1,(temperature-.4)/.6));
+  const consumed=fuelBefore*(1-Math.exp(-LIVE_LOG_BURN_RATE*dt))*t*t*(3-2*t)*ignited;
+  const fuel=Math.max(0,fuelBefore-consumed),scorch=1-(1-state[1])*Math.exp(-Math.max(0,temperature-.45)*.02*dt);
+  return [temperature,Math.max(scorch,1-fuel),consumed/(LIVE_LOG_BURN_RATE*dt),exposure,dose,fuel,consumed,ignited];
 }

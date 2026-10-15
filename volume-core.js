@@ -3958,6 +3958,7 @@ fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
 // pipelines, so the shared fluid layout keeps every other compute pipeline
 // inside the per-stage storage-buffer limit.
 @group(3) @binding(1) var<storage, read_write> fluidPredict: array<vec4<f32>>;
+@group(3) @binding(2) var residentGasSource: texture_3d<f32>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(0) @binding(16) var sceneSolidCells: texture_3d<u32>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
@@ -6827,6 +6828,22 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, immersedEntry);
   }
 
+  // A resident material producer supplies gas, never visible flame. The gas
+  // then meets transported air and burns through the same reactant law.
+  var residentRate = 0.0;
+  if (reactantOn && all(textureDimensions(residentGasSource) == vec3<u32>(GRID, GRID_Y, GRID))) {
+    let supply = textureLoad(residentGasSource, cellI, 0).xy;
+    residentRate = max(0.0, supply.x);
+    let entry = 1.0 - exp(-residentRate * timeStep);
+    fuel = mix(fuel, 1.0, entry);
+    heat = mix(heat, max(0.0, supply.y), entry);
+    oxidizer = mix(oxidizer, 0.0, entry);
+    smoke = mix(smoke, 0.0, entry);
+  }
+  // The pressure target is in stored-velocity divergence units, whereas the
+  // producer reports gas-volume turnover per reference step.
+  let residentDivergence = residentRate / transportBacktraceScale(dynamicsSpeed());
+
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
   let sourceRadial = length(sourceCenter.xz);
@@ -7651,7 +7668,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (reactantOn) {
     // The candidate's burned amount, already taken from fuel and oxidizer at
     // the burn site, is the expansion source (same gain, same units).
-    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget, 0.0, 0.0, 0.0));
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
   } else {
     let fuelBurnRate = heat * 0.018 + fuelConsumption;
     // The fuel actually consumed this step, per unit time: the decrement is
@@ -12235,6 +12252,8 @@ export function createKaminosVolumePrototype({
   let inflowCoverageMap = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
+  let emptyGasSourceTexture = null;
+  let transportGasSourceTexture = null;
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
   // never persisted, always named in the receipt.
   let confinementEpsilonOverride = null;
@@ -12874,6 +12893,9 @@ export function createKaminosVolumePrototype({
     fluidPredictBuffer = null;
     fluidPredictBufferBytes = 0;
     transportPredictBindGroup = null;
+    emptyGasSourceTexture?.destroy();
+    emptyGasSourceTexture = null;
+    transportGasSourceTexture = null;
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
@@ -13023,22 +13045,34 @@ export function createKaminosVolumePrototype({
     // releases without a rebuild.
     if (!device || !transportPredictBindGroupLayout) return;
     const wantBytes = required ? fluidBufferBytes(gridSize) : TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES;
-    if (fluidPredictBuffer && fluidPredictBufferBytes === wantBytes) return;
-    fluidPredictBuffer?.destroy();
-    fluidPredictBuffer = device.createBuffer({
+    if (!emptyGasSourceTexture) {
+      emptyGasSourceTexture = device.createTexture({label:'empty resident gas source',dimension:'3d',size:[1,1,1],format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+      device.queue.writeTexture({texture:emptyGasSourceTexture},new Float32Array(2),{bytesPerRow:8},[1,1,1]);
+    }
+    const source = gpuThermalConsumer?.gasSource;
+    if (source && (source.device !== device || !source.texture?.createView || source.dimensions?.length !== 3 || source.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i]))) throw Error('Resident gas source requires the current same-device fluid grid');
+    const gasTexture = source?.texture ?? emptyGasSourceTexture;
+    const bufferChanged = !fluidPredictBuffer || fluidPredictBufferBytes !== wantBytes;
+    if (!bufferChanged && transportGasSourceTexture === gasTexture && transportPredictBindGroup) return;
+    if (bufferChanged) {
+      fluidPredictBuffer?.destroy();
+      fluidPredictBuffer = device.createBuffer({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       size: wantBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    fluidPredictBufferBytes = wantBytes;
-    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
+      fluidPredictBufferBytes = wantBytes;
+      device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
+    }
     transportPredictBindGroup = device.createBindGroup({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       layout: transportPredictBindGroupLayout,
       entries: [
         { binding: 1, resource: { buffer: fluidPredictBuffer } },
+        { binding: 2, resource: gasTexture.createView({dimension:'3d'}) },
       ],
     });
+    transportGasSourceTexture = gasTexture;
   }
 
   function rebuildFluidBindGroups() {
@@ -15233,6 +15267,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group layout`,
       entries: [
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     browserResidualBindGroupLayout = device.createBindGroupLayout({
@@ -16547,14 +16582,17 @@ export function createKaminosVolumePrototype({
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
+    const gasPressure = resolvePressureSolverConfig(controlsSnapshot).effective;
+    const residentGasAdmitted = !!gpuThermalConsumer?.gasSource && gasPressure.solver === PRESSURE_SOLVER_CONVERGED && gasPressure.dispatch === PRESSURE_SOLVER_CONVERGED && gasPressure.openTop;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
       grid: gridSize,
       transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
       dt: resolveTimeStepConfig(controlsSnapshot).effective.dtScale,
-      sourceAdmitted: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true,
+      sourceAdmitted: residentGasAdmitted || (String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true),
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
     state.reactantCombustion = reactantCombustionConfig;
+    state.residentGasSource = {registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted && reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
     // law's oxidizer ghost).
     state.joinedGhosts = {
@@ -17230,6 +17268,10 @@ export function createKaminosVolumePrototype({
     refreshSceneCollision();
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
+    if (gpuThermalConsumer?.gasSource) {
+      if (!state.residentGasSource?.admitted) throw Error('Resident gas source refused: '+state.residentGasSource?.reason);
+      gpuThermalConsumer.prepareSource(encoder, thermalGpuFrame());
+    }
     if (transportConfig.effective.predictorPass) {
       if (!transportPredictPipeline || !transportPredictBindGroup) {
         throw new Error('transport predictor pipeline unavailable');
@@ -17285,11 +17327,14 @@ export function createKaminosVolumePrototype({
     return finalTimestampWritten;
   }
 
-  function encodeGpuThermalConsumer(encoder) {
-    gpuThermalConsumer?.encode(encoder,{device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],
+  function thermalGpuFrame() {
+    return {device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],
       simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
       dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,
-      transform:{translate:[...productTransform.translate],scale:productTransform.scale}});
+      transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
+  }
+  function encodeGpuThermalConsumer(encoder) {
+    gpuThermalConsumer?.encode(encoder,thermalGpuFrame());
   }
 
   let pressureResidualCopySolver = null;
@@ -27587,7 +27632,10 @@ export function createKaminosVolumePrototype({
     bindGpuThermalConsumer(consumer){
       if(consumer&&(!device||consumer.device!==device||typeof consumer.encode!=='function'||typeof consumer.read!=='function'))throw Error('Thermal consumer requires active same-device encode/read');
       if(gpuThermalConsumer&&consumer&&gpuThermalConsumer!==consumer)throw Error('A thermal consumer is already bound');
-      gpuThermalConsumer=consumer;return ()=>{if(gpuThermalConsumer===consumer)gpuThermalConsumer=null;};
+      if(consumer?.gasSource && (typeof consumer.prepareSource!=='function'||consumer.gasSource.device!==device||consumer.gasSource.dimensions?.length!==3||consumer.gasSource.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i])||!consumer.gasSource.texture?.createView))throw Error('Resident gas producer requires current same-device dimensions and prepareSource');
+      gpuThermalConsumer=consumer;
+      ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);
+      return ()=>{if(gpuThermalConsumer===consumer){gpuThermalConsumer=null;ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);}};
     },
     thermalConsumerState:()=>gpuThermalConsumer?.read()||null,
     resetThermalExperimentFluid(){

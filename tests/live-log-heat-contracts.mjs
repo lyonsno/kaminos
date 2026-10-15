@@ -9,11 +9,11 @@ import {BURN_TABLE_ASSET} from '../burn-table-core.mjs';
 
 test('local heat accumulates damage, then cools without erasing its history',()=>{
   let state=[0,0,0,0];for(let i=0;i<600;i++)state=stepLiveLogThermal(state,1,1/60);
-  assert.ok(state[0]>1&&state[1]>.6&&state[2]>0);
+  assert.ok(state[0]>1&&state[1]>.2&&state[2]>0);
   const char=state[1];for(let i=0;i<1800;i++)state=stepLiveLogThermal(state,0,1/60);
   assert.ok(state[0]<.01);assert.ok(state[1]>=char);assert.equal(state[2],0);
   let control=[0,0,0,0];for(let i=0;i<2400;i++)control=stepLiveLogThermal(control,0,1/60);
-  assert.deepEqual(control,[0,0,0,0]);
+  assert.deepEqual(control,[0,0,0,0,0,1,0,0]);
 });
 test('GPU source identity rejects fallback device, absent generation and invalid coordinates',()=>{
   const device={},frame={device,fluid:{},collision:{createView(){}},dimensions:[48,48,48],allocationId:'fluid-1',simStepCount:4,dt:1/60,transform:{translate:[0,0,0],scale:1}};
@@ -31,8 +31,9 @@ async function fixture({fire,inspection}={}){
   const runtime={canvasElement:()=>canvas,setSimulationPaused(value){paused=value;return {paused};},borrowThermalGpuContext:async()=>({device,dimensions:[48,48,48]}),
     bindGpuThermalConsumer(value){consumer=value;return ()=>{consumer=null;};},resetThermalExperimentFluid(){reset++;steps=0;return {simStepCount:0};},
     async setActive(value){active=value;},debugState:()=>({backend:'WebGPU:test',active,simStepCount:steps,simGrid:48})};
-  const field=()=>{let ticks=0;const f={stateNode:THREE.TSL.vec4(0),encode(){ticks++;},reset(){ticks=0;},read:()=>({steps:ticks}),dispose(){disposed++;}};fields.push(f);return f;};
+  const field=()=>{let ticks=0;const f={stateNode:THREE.TSL.vec4(0),encode(){ticks++;},encodeGasSource(){},reset(){ticks=0;},read:()=>({steps:ticks}),dispose(){disposed++;}};fields.push(f);return f;};
   const context={THREE,BURN_TABLE_ASSET,LIVE_LOG_HEAT_IDENTITY,crypto:globalThis.crypto,console,
+    createLogGasSourceGpu:async()=>{let enabled=true;return {descriptor:{},read:()=>({enabled}),reset(){},dispose(){},setEnabled(value){if(typeof value!=='boolean')throw Error('Wood fuel feed requires a boolean');enabled=value;}};},
     createLogBurnIndicator:()=>({dispose(){}}),createLiveLogHeatGpu:async()=>field(),createBurnMaterial:()=>({material:new THREE.MeshStandardNodeMaterial(),setView(){},update(){},read:()=>({}),dispose(){}})};
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../live-log-experiment.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
@@ -52,6 +53,18 @@ test('cold start, shared operation reset and removal do not advance or leave GPU
   f.experiment.operations.burnerOff();assert.equal(f.read().burner,false);assert.equal(f.experiment.read().burner,false);
   assert.throws(()=>f.experiment.operations.run(),/removed/);f.experiment.dispose();f.experiment.dispose();assert.equal(f.read().disposed,1);assert.equal(f.read().active,false);
   assert.ok(f.events.some(e=>e.kind==='sinter.live-log.burner-off'&&e.phase==='applied'));
+});
+test('wood fuel feed is separate from the burner and resets with the cold attempt',async()=>{
+  const f=await fixture();
+  assert.equal(f.experiment.read().gasSource?.enabled,true);
+  assert.equal(f.experiment.read().selfEmission,true);
+  f.experiment.operations.run();f.experiment.operations.burnerOff();
+  assert.equal(f.read().burner,false);assert.equal(f.experiment.read().gasSource.enabled,true);
+  f.experiment.operations.fuelFeed({enabled:false});
+  assert.equal(f.experiment.read().gasSource.enabled,false);
+  assert.throws(()=>f.experiment.operations.fuelFeed({enabled:'false'}),/boolean/);
+  f.experiment.operations.reset();assert.equal(f.experiment.read().gasSource.enabled,true);
+  await f.experiment.dispose();
 });
 test('removing or replacing fire cannot abort log resource cleanup',async()=>{
   let reject=false,disposals=0;
