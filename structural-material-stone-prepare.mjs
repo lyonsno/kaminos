@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import Module from 'manifold-3d';
 import path from 'node:path';
 import { readArchGlbTriangles } from './structural-material-arch-profile.mjs';
+import {BufferGeometry,Float32BufferAttribute,Vector3} from 'three';
 
 const wasm = await Module();
 wasm.setup();
@@ -22,7 +23,27 @@ export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
     if (start + accessor.count * count * 4 > binaryStart + (view.byteOffset ?? 0) + view.byteLength) throw new Error(`${name} exceeds buffer view`);
     return Array.from({ length: accessor.count }, (_, i) => Array.from({ length: count }, (_, j) => bytes.readFloatLE(start + (i * count + j) * 4)));
   };
-  const positions = read('POSITION', 3), normals = read('NORMAL', 3), uvs = read('TEXCOORD_0', 2), tangents = read('TANGENT', 4);
+  const positions = read('POSITION', 3), normals = read('NORMAL', 3), uvs = read('TEXCOORD_0', 2);
+  const accessor = gltf.accessors[primitive.indices], view = gltf.bufferViews[accessor.bufferView];
+  const indexStart = binaryStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0), indexBytes = accessor.componentType === 5123 ? 2 : 4;
+  const indices = Uint32Array.from({ length: accessor.count }, (_, i) => indexBytes === 2 ? bytes.readUInt16LE(indexStart + i * 2) : bytes.readUInt32LE(indexStart + i * 4));
+  const hasTangents=primitive.attributes.TANGENT!==undefined;
+  let tangents;
+  if(hasTangents)tangents=read('TANGENT',4);
+  else{
+    const geometry=new BufferGeometry();
+    geometry.setAttribute('position',new Float32BufferAttribute(positions.flat(),3));
+    geometry.setAttribute('normal',new Float32BufferAttribute(normals.flat(),3));
+    geometry.setAttribute('uv',new Float32BufferAttribute(uvs.flat(),2));
+    geometry.setIndex(Array.from(indices));geometry.computeTangents();
+    const values=geometry.getAttribute('tangent');
+    tangents=normals.map((normal,i)=>{
+      const tangent=new Vector3(values.getX(i),values.getY(i),values.getZ(i));
+      // UV-degenerate faces have no texture direction; retain a normal-plane basis.
+      if(tangent.lengthSq()===0){const n=new Vector3(...normal).normalize();tangent.crossVectors(n,Math.abs(n.x)<.9?new Vector3(1,0,0):new Vector3(0,1,0)).normalize();}
+      return[...tangent.toArray(),values.getW(i)];
+    });geometry.dispose();
+  }
   const bounds = extracted.bounds3d, scale = size.map((v, a) => v / (bounds.max[a] - bounds.min[a]));
   const center = bounds.min.map((v, a) => (v + bounds.max[a]) / 2);
   const normalize = vector => { const n = Math.hypot(...vector); if (!(n > 0)) throw new Error('Degenerate normal/tangent'); return vector.map(v => v / n); };
@@ -32,9 +53,6 @@ export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
     ...normalize(normals[i].map((v, a) => v / scale[a])), ...uvs[i],
     ...normalize(tangents[i].slice(0, 3).map((v, a) => v * scale[a])), tangents[i][3],
   ], i * 12));
-  const accessor = gltf.accessors[primitive.indices], view = gltf.bufferViews[accessor.bufferView];
-  const indexStart = binaryStart + (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0), indexBytes = accessor.componentType === 5123 ? 2 : 4;
-  const indices = Uint32Array.from({ length: accessor.count }, (_, i) => indexBytes === 2 ? bytes.readUInt16LE(indexStart + i * 2) : bytes.readUInt32LE(indexStart + i * 4));
   const sourceId = Manifold.reserveIDs(1);
   const input = new Mesh({ numProp: 12, vertProperties: properties, triVerts: indices, runIndex: new Uint32Array([0, indices.length]), runOriginalID: new Uint32Array([sourceId]) });
   input.merge();
@@ -102,6 +120,7 @@ export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
       });
     }
     return { schema: STONE_PREPARATION_ROUTE, sourceSha256: hash(bytes), sourceTriangles: indices.length / 3, size, requestedCellSize: cellSize, spacing, grid,
+      attributeSources:{tangent:hasTangents?'source':'three-computed-with-normal-basis-for-degenerate-uv'},
       volume, totalVolume, seamMerges: input.mergeFromVert.length, cells, bonds,
       claim: 'homogeneous coarse cohesive cut volumes; box inertia/collision approximation; no hidden construction inference' };
   } finally { for (const value of owned) value.delete(); }
