@@ -16,7 +16,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'no
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fireSweepArmAdmission } from './fire-proxy-sweep-admission.mjs';
+import { fireSweepArmAdmission } from '../proxy-evidence-admission.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
@@ -171,11 +171,16 @@ try {
       // Ambient load from other processes only ever adds time, so the minimum of
       // back-to-back held-frame renders (render + readback) estimates the arm's
       // own cost; the median shows what the load did to it.
-      const renders = [];
-      for (let i = 0; i < ${renderSamples}; i++) { const t = performance.now(); await r.sampleFrame({ advanceSim: false, includeRgba: false, now: 4000 }); renders.push(performance.now() - t); }
+      const renders = []; let failedRenders = 0, lastFailure = null;
+      for (let i = 0; i < ${renderSamples}; i++) {
+        const t = performance.now(); const sample = await r.sampleFrame({ advanceSim: false, includeRgba: false, now: 4000 });
+        if (sample?.ok) renders.push(performance.now() - t); else { failedRenders++; lastFailure = sample?.reason ?? 'unknown'; }
+      }
       renders.sort((a, b) => a - b);
-      const heldRenderMs = { n: renders.length, min: renders[0] ?? null, p50: renders[renders.length >> 1] ?? null, max: renders.at(-1) ?? null };
-      const frame = (await r.sampleFrame({ advanceSim: false, includeRgba: true, now: 4000 })).image;
+      const heldRenderMs = { n: renders.length, failed: failedRenders, lastFailure, min: renders[0] ?? null, p50: renders[renders.length >> 1] ?? null, max: renders.at(-1) ?? null };
+      const primary = await r.sampleFrame({ advanceSim: false, includeRgba: true, now: 4000 });
+      const frame = primary?.ok ? primary.image : null;
+      const frameCheck = { ok: !!(primary?.ok && frame?.rgba?.length), reason: primary?.ok ? null : (primary?.reason ?? 'no sample'), width: frame?.width ?? null, height: frame?.height ?? null, bytes: frame?.rgba?.length ?? 0 };
       let png = null, sha256 = null;
       if (frame?.rgba?.length) {
         const canvas = document.createElement('canvas'); canvas.width = frame.width; canvas.height = frame.height;
@@ -192,13 +197,14 @@ try {
           simulationPaused: d.simulationPaused ?? null, backend: d.backend },
         queueDoneMs: { n: samples.length, p50: at(0.5), p95: at(0.95), max: sorted.at(-1) ?? null }, heldRenderMs,
         simStepsPerSecond: stepsAdvanced / windowS, frameP95Ms: d.timing.frameP95Ms, cpuFrameP95Ms: d.timing.cpuFrameP95Ms,
-        frame: frame ? { width: frame.width, height: frame.height } : null, sha256, png };
+        frame: frame ? { width: frame.width, height: frame.height } : null, frameCheck, sha256, png };
     })()`, 180000);
     if (result.png) writeFileSync(resolve(out, `${arm.label}.png`), Buffer.from(result.png.split(',')[1], 'base64'));
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(resolve(out, `${arm.label}-page.png`), Buffer.from(shot.data, 'base64'));
-    const admission = fireSweepArmAdmission({ steps: arm.steps, scale: arm.scale, mode: arm.mode }, result.effective, result.steppingError);
-    const entry = { ...arm, ...result, admission, png: undefined, file: `${arm.label}.png`, page: `${arm.label}-page.png`, gpuUtilization: utilizationBetween(armStartedAt, Date.now()) };
+    const admission = fireSweepArmAdmission({ steps: arm.steps, scale: arm.scale, mode: arm.mode }, result.effective, result.steppingError,
+      { frame: result.frameCheck, renders: { ok: result.heldRenderMs.n, failed: result.heldRenderMs.failed } });
+    const entry = { ...arm, ...result, admission, png: undefined, file: result.png ? `${arm.label}.png` : null, page: `${arm.label}-page.png`, gpuUtilization: utilizationBetween(armStartedAt, Date.now()) };
     report.arms.push(entry); save();
     return entry;
   };

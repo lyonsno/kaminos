@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {configureMaterialSideAODepth} from '../scene-ao-depth.mjs';
 import {createInterfaceSurfelProducer} from '../proxy-snapshot.mjs';
-import {fireSweepArmAdmission} from '../scripts/fire-proxy-sweep-admission.mjs';
+import {fireSweepArmAdmission,waterCadenceWindowAdmission} from '../proxy-evidence-admission.mjs';
 
 test('an active proxy mesh stays out of the AO depth draw while ordinary meshes enter it',()=>{
  const drawn=[];
@@ -62,4 +62,52 @@ test('a fire sweep arm whose requested mode or controls did not take effect is e
  assert.match(refused.reasons.join(' '),/stepping/);
  assert.equal(fireSweepArmAdmission(requested,{raySteps:12,renderScale:0.5,opticalStepping:'numerical'},null).admitted,false,'capped ray steps are a different arm');
  assert.equal(fireSweepArmAdmission(requested,{raySteps:6,renderScale:0.75,opticalStepping:'numerical'},null).admitted,false,'changed render scale is a different arm');
+});
+
+import {decodeHeatBlocks,HEAT_BLOCK_FLOATS} from '../proxy-snapshot.mjs';
+test('residual probe partials decode into a world-space heat-block snapshot',()=>{
+ // grid 8 wide, 8 tall: 2 x 2 x 2 blocks of 4^3 cells, 20 floats per block.
+ const grid=8,wx=2,wy=2,wz=2,partials=new Float32Array(wx*wy*wz*20);
+ const put=(bx,by,bz,{vertical=0,heat=0,smoke=0,hot=0,heatX=0,heatZ=0})=>{const at=(bx+by*wx+bz*wx*wy)*20;partials.set([vertical,heat,smoke,hot,heatX,heatZ,0,0],at+12);};
+ // A hot block at (1,0,0): 64 cells of heat 0.5 centred at cell x=5.5, z=1.5.
+ put(1,0,0,{heat:32,smoke:6.4,hot:32*0.8,heatX:32*5.5,heatZ:32*1.5});
+ put(0,1,1,{smoke:0.001});
+ const snapshot=decodeHeatBlocks({partials,grid,gridY:8,workgroupsX:wx,workgroupsY:wy,workgroupsZ:wz,floatsPerWorkgroup:20,step:48},
+  {domain:{translation:[0,0.5,0],scale:2},heatThreshold:1e-3,smokeThreshold:1e-2,capturedAtMs:7});
+ assert.equal(snapshot.schema,'kaminos.proxy-snapshot.v0');
+ assert.equal(snapshot.kind,'heat-blocks');
+ assert.equal(snapshot.count,1,'blocks below both thresholds are dropped');
+ assert.equal(snapshot.floatsPerBlock,HEAT_BLOCK_FLOATS);
+ const [x,y,z,heat,smoke,rise,size]=Array.from(snapshot.data.slice(0,HEAT_BLOCK_FLOATS));
+ // cell 5.5 -> local -1 + (5.5+0.5)*(2/8) = 0.5; world = 0 + 2*0.5 = 1
+ assert.ok(Math.abs(x-1)<1e-6&&Math.abs(z-(2*(-1+2*(2/8))))<1e-6,`lateral centroid from moments: ${x},${z}`);
+ assert.ok(Math.abs(y-(0.5+2*(-1+2*(2/8))))<1e-6,`block centre height: ${y}`);
+ assert.ok(Math.abs(heat-0.5)<1e-6&&Math.abs(smoke-0.1)<1e-6,'block means per cell');
+ assert.ok(Math.abs(rise-0.8)<1e-6,'heat-weighted rise speed');
+ assert.ok(Math.abs(size-2*4*(2/8))<1e-6,'block world size');
+ assert.equal(snapshot.writeTick,48);
+ assert.deepEqual(snapshot.summary.count,1);
+ assert.ok(Math.abs(snapshot.summary.heatCentroid[0]-1)<1e-6);
+ assert.throws(()=>decodeHeatBlocks({partials:new Float32Array(3),grid,gridY:8,workgroupsX:wx,workgroupsY:wy,workgroupsZ:wz,floatsPerWorkgroup:20},{domain:{translation:[0,0,0],scale:1}}),/partials/);
+});
+
+test('a fire sweep arm without a complete primary frame is excluded',()=>{
+ const requested={steps:6,scale:0.5,mode:'numerical'},effective={raySteps:6,renderScale:0.5,opticalStepping:'numerical'};
+ assert.equal(fireSweepArmAdmission(requested,effective,null,{frame:{ok:true,width:4,height:2,bytes:32}}).admitted,true);
+ const missing=fireSweepArmAdmission(requested,effective,null,{frame:{ok:false,reason:'inactive'}});
+ assert.equal(missing.admitted,false);
+ assert.match(missing.reasons.join(' '),/frame/);
+ assert.equal(fireSweepArmAdmission(requested,effective,null,{frame:{ok:true,width:4,height:2,bytes:8}}).admitted,false,'a partial frame is not a frame');
+ assert.equal(fireSweepArmAdmission(requested,effective,null,{renders:{ok:3,failed:1}}).admitted,false,'failed timed renders are not timed renders');
+});
+
+test('a water cadence window is admitted only with the requested workload in effect',()=>{
+ const proxy4={label:'proxy-step4',water:'proxy',stepEvery:4};
+ const good={presentation:'proxy',timePolicy:'one-fixed-1/60-step-every-4-rendered-frames',surfels:3100,producerError:null};
+ assert.deepEqual(waterCadenceWindowAdmission(proxy4,good),{admitted:true,reasons:[]});
+ assert.equal(waterCadenceWindowAdmission(proxy4,{...good,timePolicy:'one-fixed-1/60-step-per-rendered-frame'}).admitted,false,'ineffective step interval');
+ assert.equal(waterCadenceWindowAdmission(proxy4,{...good,surfels:0}).admitted,false,'empty proxy');
+ assert.equal(waterCadenceWindowAdmission(proxy4,{...good,producerError:'map failed'}).admitted,false,'producer failure');
+ assert.equal(waterCadenceWindowAdmission({label:'full',water:'full',stepEvery:1},{presentation:'full',timePolicy:'one-fixed-1/60-step-per-rendered-frame',surfels:null,producerError:null}).admitted,true,'full needs no proxy');
+ assert.equal(waterCadenceWindowAdmission({label:'full',water:'full',stepEvery:1},{presentation:'proxy',timePolicy:'one-fixed-1/60-step-per-rendered-frame'}).admitted,false);
 });

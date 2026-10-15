@@ -9,6 +9,7 @@ import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-e
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
+import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -618,23 +619,106 @@ async function runWaterProxyCadenceScenario(ws) {
         await new Promise(resolve => setTimeout(resolve, ${windowMs}));
         const b = read(), seconds = (performance.now() - t0) / 1000, proxy = window.kaminosWaterProxyDebugState();
         return { hostFramesPerSecond: ((b.frameCount ?? 0) - (a.frameCount ?? 0)) / seconds, stepsPerSecond: ((b.solver?.stepCount ?? 0) - (a.solver?.stepCount ?? 0)) / seconds,
-          presentation: proxy.hostPresentation, timePolicy: b.lastFrame?.simulationTimePolicy ?? null, surfels: proxy.layer?.count ?? null };
+          presentation: proxy.hostPresentation, timePolicy: b.lastFrame?.simulationTimePolicy ?? null, surfels: proxy.layer?.count ?? null,
+          producerError: proxy.producer?.lastError ?? null, hostFailure: b.failure ?? null };
       })()`, { timeoutMs: windowMs + 20000 });
       clearInterval(sampler);
-      const window = { round, ...config, ...measured, gpuUtilization: samples };
-      evidence.windows.push(window);
-      assert.equal(measured.presentation, config.water, `configuration ${config.label} did not take effect: ${JSON.stringify(applied)}`);
+      // A window counts only when the workload it is labelled with ran.
+      const admission = waterCadenceWindowAdmission(config, { ...measured, producerError: measured.producerError || measured.hostFailure });
+      evidence.windows.push({ round, ...config, ...measured, gpuUtilization: samples, admission, applied: { presentation: applied?.hostPresentation ?? null } });
     }
   }
   const summary = {};
   for (const config of configs) {
-    const ws_ = evidence.windows.filter(w => w.label === config.label);
+    const ws_ = evidence.windows.filter(w => w.label === config.label && w.admission.admitted);
+    assert.ok(ws_.length > 0, `no admitted cadence window for ${config.label}: ${JSON.stringify(evidence.windows.filter(w => w.label === config.label).map(w => w.admission.reasons))}`);
     const fps = ws_.map(w => w.hostFramesPerSecond).sort((a, b) => a - b), steps = ws_.map(w => w.stepsPerSecond).sort((a, b) => a - b);
     const util = ws_.flatMap(w => w.gpuUtilization).sort((a, b) => a - b);
-    summary[config.label] = { hostFpsMedian: fps[fps.length >> 1], hostFpsMin: fps[0], hostFpsMax: fps.at(-1), stepsPerSecondMedian: steps[steps.length >> 1], gpuUtilizationMedian: util[util.length >> 1] ?? null };
+    summary[config.label] = { admittedWindows: ws_.length, excludedWindows: evidence.windows.filter(w => w.label === config.label && !w.admission.admitted).length,
+      hostFpsMedian: fps[fps.length >> 1], hostFpsMin: fps[0], hostFpsMax: fps.at(-1), stepsPerSecondMedian: steps[steps.length >> 1], gpuUtilizationMedian: util[util.length >> 1] ?? null };
   }
   evidence.summary = summary;
   await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ water: 'full' }); window.kaminosWaterProxyStepEvery(1); return true; })()`);
+}
+
+
+// Fire proxy: heat-block splats drawn from the fire's residual probe snapshots
+// stand where the fire volume stands. Registration is judged above the empty
+// scene's horizon, where the flame and smoke body is (the fire's light on the
+// floor is present in both presentations and would inflate agreement).
+async function runFireProxySplatsScenario(ws) {
+  phase = 'scenario-fire-proxy-splats';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const presetId = args.get('--flame-preset') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  const settleSteps = Number(args.get('--settle-steps') || 150);
+  const evidence = lastEvidence.fireProxy = { presetId, settleSteps, failures };
+  const readFire = () => evaluate(ws, 'window.kaminosFireProxyDebugState?.() ?? null');
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false })');
+  await settleViewportFrames(ws, 1200);
+  const backgroundShot = await capturePngScreenshot(ws, siblingPngPath('-fire-background'));
+  phase = 'scenario-fire-proxy-splats-add-flame';
+  evidence.added = await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(presetId)}).then(() => {
+    window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.();
+    const rect = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect();
+    return { canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+  })`, { timeoutMs: 180000 });
+  for (let i = 0; i < 1200; i++) { const d = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (d >= settleSteps) break; await delay(250); }
+  await evaluate(ws, 'window.kaminosSelection?.clear?.()');
+  phase = 'scenario-fire-proxy-splats-snapshot';
+  await evaluate(ws, `(() => { window.__fireWitnessRelease = window.kaminosProxyPreview.require('fire'); return true; })()`);
+  let fire = null, firstTick = null;
+  for (let i = 0; i < 480; i++) { fire = await readFire(); if (fire?.snapshot?.writeTick != null) { firstTick = fire.snapshot.writeTick; break; } await delay(250); }
+  check(firstTick !== null, `no fire snapshot arrived after requiring fire: ${JSON.stringify(fire)}`);
+  // Freeze right after the next snapshot so splats and the held fire match within a few steps.
+  for (let i = 0; i < 480 && firstTick !== null; i++) { fire = await readFire(); if (fire.snapshot.writeTick !== firstTick) break; await delay(50); }
+  evidence.frozen = await evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; r.setSimulationPaused(true);
+    const el = document.getElementById('volume-look-freeze'); el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+    return { simStepCount: r.debugState().simStepCount, snapshotWriteTick: window.kaminosFireProxyDebugState().snapshot?.writeTick ?? null }; })()`);
+  evidence.heldInFull = await readFire();
+  check(evidence.heldInFull?.layer?.count > 0 && evidence.heldInFull.viewportCameraSeesProxies === false && evidence.heldInFull.canvasVisibility === '', `fire proxy is not held off-screen under the full render: ${JSON.stringify(evidence.heldInFull)}`);
+  await settleViewportFrames(ws, 1000);
+  const fullShot = await capturePngScreenshot(ws, siblingPngPath('-fire-full'));
+  const [toggle] = await evaluate(ws, `[...document.querySelectorAll('.viewport-fire')].filter(g => g.offsetParent !== null).map(g => { const r = g.querySelector('[data-fire="proxy"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+  assert.ok(toggle, 'Fire Proxy toggle is missing from the visible viewport toolbar');
+  await dispatchMouseClick(ws, toggle);
+  await settleViewportFrames(ws, 1000);
+  const proxy = evidence.proxyPaused = await readFire();
+  check(proxy?.display === 'proxy' && proxy.viewportCameraSeesProxies === true && proxy.canvasVisibility === 'hidden', `fire proxy display did not take effect: ${JSON.stringify(proxy)}`);
+  const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy'));
+  const background = decodeScreenshotPngRgb(readFileSync(backgroundShot.path));
+  const c = evidence.added.canvas, region = { x: c.x, y: c.y + 56, width: c.width, height: c.height - 56 - 120 };
+  const centerColumn = Math.floor(c.x + c.width / 2);
+  const luminance = y => { const i = (y * background.width + centerColumn) * background.channels; return background.pixels[i] + background.pixels[i + 1] + background.pixels[i + 2]; };
+  let horizon = null;
+  for (let y = Math.floor(region.y) + 3; y < Math.floor(region.y + region.height) - 3; y++) if (luminance(y - 3) - luminance(y + 3) > 60) { horizon = y; break; }
+  assert.ok(horizon !== null, 'could not find the horizon in the empty scene');
+  const above = { ...region, height: horizon - region.y };
+  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, above);
+  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, above);
+  const width = background.width, height = background.height, dilation = 10;
+  const fullNear = dilateMask(full.mask, width, height, dilation), proxyNear = dilateMask(proxied.mask, width, height, dilation);
+  let proxyNearFire = 0, fireNearProxy = 0;
+  for (let i = 0; i < full.mask.length; i++) { if (proxied.mask[i] && fullNear[i]) proxyNearFire++; if (full.mask[i] && proxyNear[i]) fireNearProxy++; }
+  evidence.masks = { region: above, horizon, dilation, full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox },
+    locationPrecision: proxied.area ? proxyNearFire / proxied.area : 0, coverageRecall: full.area ? fireNearProxy / full.area : 0 };
+  check(full.area > 500 && proxied.area > 500, `fire not visible against the empty scene above the horizon: full ${full.area}, proxy ${proxied.area}`);
+  check(evidence.masks.locationPrecision >= 0.6, `fire splats drawn away from the fire volume (location precision ${evidence.masks.locationPrecision.toFixed(3)})`);
+  check(evidence.masks.coverageRecall >= 0.5, `fire splats cover too little of the fire volume (coverage recall ${evidence.masks.coverageRecall.toFixed(3)})`);
+  phase = 'scenario-fire-proxy-splats-live';
+  const beforeLive = await readFire();
+  await evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; const el = document.getElementById('volume-look-freeze'); el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); r.setSimulationPaused(false); return true; })()`);
+  let afterLive = beforeLive;
+  for (let i = 0; i < 240; i++) { afterLive = await readFire(); if (afterLive.layer.uploads > beforeLive.layer.uploads + 1) break; await delay(250); }
+  evidence.liveState = afterLive;
+  check(afterLive.layer.uploads > beforeLive.layer.uploads && afterLive.layer.snapshotWriteTick > beforeLive.layer.snapshotWriteTick, `fire snapshots stopped refreshing while the sim ran: ${beforeLive.layer.uploads} -> ${afterLive.layer.uploads}`);
+  const liveShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy-live'));
+  phase = 'scenario-fire-proxy-splats-restore';
+  await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ fire: 'full' }); window.__fireWitnessRelease?.(); return true; })()`);
+  await settleViewportFrames(ws, 800);
+  const restored = evidence.restored = await readFire();
+  check(restored.display === 'full' && restored.canvasVisibility === '' && restored.layer?.visible === false && restored.attached === false, `fire did not return to the full render cleanly: ${JSON.stringify(restored)}`);
+  evidence.shots = [backgroundShot, fullShot, proxyShot, liveShot];
+  assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
@@ -6386,6 +6470,8 @@ try {
     await runWaterProxySurfelsScenario(ws);
   } else if (scenario === 'water-proxy-cadence') {
     await runWaterProxyCadenceScenario(ws);
+  } else if (scenario === 'fire-proxy-splats') {
+    await runFireProxySplatsScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {
