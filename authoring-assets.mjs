@@ -87,6 +87,12 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
   };
 }
 
+// A service's used-input preview names the image it was prepared from; the drawer shows it
+// only while that image is the selection.
+export function usedInputPreviewFor(preview,selectedSource){
+  return preview&&typeof preview==='object'&&preview.input&&preview.input===selectedSource?preview.source:null;
+}
+
 export function installAuthoringAssets({document,controller,edits}) {
   const panel=document.createElement('aside');panel.id='authoring-assets';panel.hidden=true;panel.setAttribute('aria-label','Asset browser and generation');
   panel.innerHTML=`<div id="asset-resize" role="separator" aria-label="Asset browser height" aria-orientation="horizontal" tabindex="0"></div><header><strong>Assets</strong><button type="button" id="asset-close" aria-label="Close assets">×</button></header>
@@ -127,7 +133,7 @@ export function installAuthoringAssets({document,controller,edits}) {
     const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
-    const usedInput=mode==='generate'&&controller.preparesInput?.()?controller.generation().inputPreview:null;
+    const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
     byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=usedInput||(mode==='generate'&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
     byId('asset-preparation-status').textContent=preparation?.error||(controller.preparesInput?.()&&mode==='generate'&&preparation?.status!=='complete'?(usedInput?'This is the cutout generation is using, prepared in this page.':'This model prepares the image in this page; the cutout it uses appears here.'):preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);

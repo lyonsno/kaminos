@@ -77,7 +77,7 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
 test('the service prepares its own input and shows the cutout it used',async()=>{
   const {s}=service({runPage:async({onInput})=>{await onInput('/api/read?root=image-inbox&path=a-cutout.png');return {glb,generation:{runId:'r'},label:'a'};}});
   assert.equal(s.preparesInput,true);
-  await s.run(input);assert.equal(s.read().inputPreview,'/api/read?root=image-inbox&path=a-cutout.png');
+  await s.run(input);assert.deepEqual(s.read().inputPreview,{source:'/api/read?root=image-inbox&path=a-cutout.png',input:input.source},'the preview carries the image it came from');
 });
 
 test('the operation stays busy through saving and while a mesh waits to be saved again',async()=>{

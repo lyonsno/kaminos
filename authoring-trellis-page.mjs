@@ -175,7 +175,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
       try{
         const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
-        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:source=>set({inputPreview:source}),onPhase:event=>{
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:source=>set({inputPreview:{source,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
         phase='persistence';return await storePending();
