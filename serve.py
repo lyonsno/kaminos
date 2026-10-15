@@ -1442,7 +1442,7 @@ def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_k
         summary = _volume_settings_preset_summary_from_document(read_volume_settings_preset(store, ref, schema))
         if identity is not None:
             _VOLUME_SETTINGS_PRESET_SUMMARIES[key] = (identity, summary)
-    return {**summary, "schemaProjection": {field: list(values) for field, values in summary["schemaProjection"].items()}}
+    return {**summary, "schemaProjection": copy.deepcopy(summary["schemaProjection"])}
 
 
 def list_volume_settings_presets(store_path, schema=None):
