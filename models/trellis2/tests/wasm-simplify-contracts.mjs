@@ -8,7 +8,8 @@ import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {cleanupAndSimplifyPreservingSurface,createBrowserMeshPostprocess} from '../mesh-cleanup.js';
 import {simplifyMesh} from '../mesh-simplify.js';
-import {loadSimplifier,probeRelaxedFma,WASM_SIMPLIFY_ROUTE,JS_SIMPLIFY_ROUTE} from '../wasm-simplify.js';
+import {loadSimplifier,probeRelaxedFma,wasmSimplifierEngine,WASM_SIMPLIFY_ROUTE,JS_SIMPLIFY_ROUTE} from '../wasm-simplify.js';
+import factory from '../vendor/fast-simplification/fast-simplification-0.2.0.mjs';
 import {NodeTrellisUVWorker as NodeModuleWorker} from '../node-uv-worker.mjs';
 import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
 
@@ -45,6 +46,14 @@ if(auto.engine){
   simplifyMesh(vertices,triangles,{targetCount:spec.targetFaces,engine,onIteration:(i,f)=>seen.push([i,f])});
   assert.equal(calls,1,'iteration events came from the Wasm run');
   assert.ok(seen.length>0&&seen[0][0]===0&&seen[0][1]===triangles.length/3,'Wasm reports iteration 0 with the input face count');
+  // Addresses above 2 GiB (a multi-million-face surface reaches them) must still
+  // index the right heap bytes: Wasm pointers are unsigned.
+  {const M=await factory(),pad=M._malloc(2**31);
+    assert.ok(pad>0,'reserve 2 GiB so later buffers sit above the signed range');
+    const e=fixture.cases['simplify-route'],high=wasmSimplifierEngine(M);
+    const first=simplifyMesh(vertices,triangles,{targetReduction:e.simplifyPass0.targetReduction,engine:high});
+    assert.equal(sha(first.points),e.simplifyPass0.pointsSha256,'positions read back correctly from above 2 GiB');
+    assert.equal(sha(first.triangles),e.simplifyPass0.trianglesSha256,'triangles read back correctly from above 2 GiB');}
 }
 
 // The provider records the simplifier that ran, on the calling thread and in the worker.

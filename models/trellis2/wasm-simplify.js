@@ -28,17 +28,18 @@ export function probeRelaxedFma(){
 
 // One simplify_mesh run: (points F32/F64 xyz, triangles I32/U32, target count,
 // aggressiveness, preserveBorder, onIteration) -> {points: F64, triangles: I32}.
-function engineFor(M){
+export function wasmSimplifierEngine(M){
   return (points,triangles,count,aggressiveness,preserveBorder,onIteration)=>{
     const nv=points.length/3,nt=triangles.length/3;
     // fs_simplify takes ownership of both input buffers and frees them once loaded.
+    // Wasm addresses are unsigned: index the heaps with >>> so buffers above 2 GiB work.
     const pp=M._malloc(points.length*8),pt=M._malloc(triangles.length*4);
-    M.HEAPF64.set(points,pp>>3);M.HEAP32.set(new Int32Array(triangles.buffer,triangles.byteOffset,triangles.length),pt>>2);
+    M.HEAPF64.set(points,pp>>>3);M.HEAP32.set(new Int32Array(triangles.buffer,triangles.byteOffset,triangles.length),pt>>>2);
     M.onIteration=onIteration;
     try{
       const nOut=M._fs_simplify(nv,nt,pp,pt,count,aggressiveness,preserveBorder?1:0),np=M._fs_points();
       const op=M._malloc(np*24),ot=M._malloc(nOut*12);
-      try{M._fs_read(op,ot);return {points:M.HEAPF64.slice(op>>3,(op>>3)+np*3),triangles:M.HEAP32.slice(ot>>2,(ot>>2)+nOut*3)};}
+      try{M._fs_read(op,ot);return {points:M.HEAPF64.slice(op>>>3,(op>>>3)+np*3),triangles:M.HEAP32.slice(ot>>>2,(ot>>>2)+nOut*3)};}
       finally{M._free(op);M._free(ot);}
     }finally{M.onIteration=undefined;M._fs_release();}
   };
@@ -52,6 +53,6 @@ export function loadSimplifier({prefer='auto'}={}){
   return loading??=(async()=>{
     const probe=probeRelaxedFma();
     if(!probe.fused)return {engine:null,route:JS_SIMPLIFY_ROUTE,reason:probe.reason};
-    return {engine:engineFor(await factory()),route:WASM_SIMPLIFY_ROUTE};
+    return {engine:wasmSimplifierEngine(await factory()),route:WASM_SIMPLIFY_ROUTE};
   })();
 }
