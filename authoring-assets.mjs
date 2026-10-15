@@ -154,14 +154,14 @@ export function installAuthoringAssets({document,controller,edits}) {
   panel.querySelectorAll('[data-assets-mode]').forEach(button=>button.onclick=()=>setMode(button.dataset.assetsMode));
   byId('asset-close').onclick=close;byId('asset-root').onchange=event=>action(()=>controller.browse(event.target.value));byId('asset-up').onclick=()=>action(()=>{const s=controller.read();return controller.browse(s.root,s.path.split('/').slice(0,-1).join('/'));});
   byId('asset-refresh').onclick=()=>action(()=>controller.refresh());byId('asset-filter').oninput=()=>render(controller.read());
-  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
+  byId('asset-add').onclick=()=>action(async()=>{await controller.add();document.activeElement?.blur();});byId('asset-use-image').onclick=()=>{setMode('generate');if(!controller.preparesInput?.())action(()=>controller.prepare());};byId('asset-prepare').onclick=()=>action(()=>controller.prepare());byId('asset-run').onclick=()=>action(()=>controller.generate());
   byId('asset-stop').onclick=()=>controller.stop();runById('generation-header-stop').onclick=()=>controller.stop();
   runById('generation-header-show').onclick=()=>{if(document.defaultView.kaminosWorkspace?.setMode('authoring')===false)return;panel.hidden=false;document.body.classList.add('has-assets-panel');setMode('generate');};
   document.addEventListener('kaminos-workspace-change',()=>render(controller.read()));
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
-  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return next==='generate'&&controller.read().selected?.kind==='image'?Promise.resolve(true):action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
 export function assetPaneHeight(value,height,narrow=false){return Math.max(160,Math.min(value,Math.max(160,height-42-180-(narrow?180:0))));}
