@@ -16,8 +16,8 @@ try{
  browser=await launchChrome(report.executable,['--use-angle=metal','--window-size=1200,900'],report,{profileDir:out+'/profile'});
  report.phase='load';await save();
  await browser.navigate(url,'Boolean(window.__kaminosVolumePrototype && window.kaminosSceneAuthoring && window.kaminosSceneEdits)');
- await browser.evaluate(`window.__editWait=target=>new Promise((resolve,reject)=>{const tick=()=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)return reject(Error(s.error));if(s.simStepCount>=target)return resolve(s);requestAnimationFrame(tick);};tick();})`);
- await browser.evaluate('window.__editWait(15).then(()=>window.__kaminosVolumePrototype.setSimulationPaused(true))');
+ await browser.evaluate(`window.__editWait=(target,loaded=false)=>new Promise((resolve,reject)=>{const tick=()=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)return reject(Error(s.error));if(s.simStepCount>=target&&(!loaded||(s.sceneCollision?.effective==='mesh-voxel-solid'&&s.joinedExterior?.admitted&&s.joinedRendering?.enabled)))return resolve(s);requestAnimationFrame(tick);};tick();})`);
+ await browser.evaluate('window.__editWait(15,true).then(()=>window.__kaminosVolumePrototype.setSimulationPaused(true))');
  report.before=await browser.evaluate('window.__kaminosVolumePrototype.debugState()');
  assert(report.before.joinedExterior?.admitted);assert(report.before.joinedRendering?.enabled);assert.equal(report.before.sceneCollision?.effective,'mesh-voxel-solid');
  report.scene=await browser.evaluate('window.kaminosSceneAuthoring.read()');
