@@ -263,6 +263,12 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
     if (inferenceControl) await inferenceControl.runDuty(() => runPhase(phase));
     else await runPhase(phase);
   }
+  // A readback has already waited for the GPU and flushed kernel timings ahead of its copy, so settling
+  // here costs one map round trip and lets receipts built from runtime.profile carry resolved GPU times.
+  // Programs without a readback stay non-blocking; their timings remain visibly pending.
+  if (program.phases.some(phase => phase.kind === 'readback') && typeof runtime.settleGpuTiming === 'function') {
+    await runtime.settleGpuTiming();
+  }
 
   return {
     schema: WEBGPU_PHASE_PROGRAM_RUN_SCHEMA,
