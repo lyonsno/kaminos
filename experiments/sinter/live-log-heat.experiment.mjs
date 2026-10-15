@@ -21,8 +21,18 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
     showLibrary(){document.getElementById('flame-basin-select')?.focus();},reacquire(){},dispose(){host.fire.setEnabled(false);}};
   const scene={...host.scene,ready:Promise.resolve(),dirty:()=>session.redraw(),
     async load(url,options){const asset=await session.loadAsset({url,...options,normalize:true,arrival:'append'});host.scene.refreshPresentation(asset);return asset.root;}};
+  let inspectionLighting=null;
+  const inspection=enabled=>{
+    if(enabled&&!inspectionLighting){
+      inspectionLighting={gain:host.rendering.readGI().gain,muted:host.rendering.readFireLighting().witnessMuted===true};
+      host.rendering.gi({...host.rendering.readGI(),gain:0});host.rendering.muteFireLighting(true);
+    }else if(!enabled&&inspectionLighting){
+      const previous=inspectionLighting;inspectionLighting=null;
+      host.rendering.gi({...host.rendering.readGI(),gain:previous.gain});host.rendering.muteFireLighting(previous.muted);
+    }
+  };
   try {
-    const instance=await createLiveLogExperiment({host:{scene,fire,volume:host.volume},inputs,record});
+    const instance=await createLiveLogExperiment({host:{scene,fire,volume:host.volume,inspection},inputs,record});
     const close=instance.dispose;instance.dispose=async()=>{try{await close();}finally{await session.dispose();}};
     return instance;
   } catch(error){await session.dispose();throw error;}

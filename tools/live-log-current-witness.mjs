@@ -36,7 +36,7 @@ try {
   const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   const invoke=(name,input)=>page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input});
   const shot=async name=>{await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-    await page.screenshot({path:path.join(out,name+'.png')});report.frames.push({name,state:await read()});await save();};
+    await page.screenshot({path:path.join(out,name+'.png')});report.frames.push({name,state:await read(),presentation:await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),fireLighting:window.kaminosFireLightFieldDebugState()}))});await save();};
   report.cold=await read();assert.equal(report.cold.paused,true);assert.equal(report.cold.fields[0].steps,0);
   report.effective=await page.evaluate(()=>({gi:window.kaminosSceneGIDebugState(),grid:window.__kaminosVolumePrototype.debugState().gridHeight,
     controls:Object.fromEntries(['volume-resolution','volume-grid-height-ratio','volume-steps','volume-immersed-radius'].map(id=>[id,document.getElementById(id).value]))}));
@@ -52,17 +52,11 @@ try {
   await invoke('flameView',{visible:false});
   await invoke('view',{mode:'char'});assert.equal(await page.locator('#live-log-heat [name=burn-view]:checked').inputValue(),'char');await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
-  report.inspectionLighting=await page.evaluate(()=>{
-    const gain=document.getElementById('scene-gi-gain'),before=Number(gain.value);
-    gain.value='0';gain.dispatchEvent(new Event('change',{bubbles:true}));
-    return {priorGain:before,fireMute:window.kaminosFireLightFieldSetWitnessMute(true)};
-  });
-  await invoke('view',{mode:'char'});await shot('char-light-muted');
   report.phase='end-exposure';await save();
-  await invoke('move',{position:[-.4,0,0]});await invoke('pause');
+  await invoke('move',{position:[0,0,-.4]});await invoke('pause');
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=1200);
   await invoke('pause');await invoke('frame');await invoke('view',{mode:'char'});await shot('end-char');
-  await invoke('view',{mode:'beauty'});await shot('end-material');await invoke('burnerOff');
+  await invoke('view',{mode:'beauty'});assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),report.effective.gi.gain);await shot('end-material');await invoke('burnerOff');
   report.phase='reset';await invoke('reset');await shot('reset');assert.equal((await read()).fields[0].steps,0);
   report.phase='mobile';await page.setViewportSize({width:430,height:900});await shot('mobile');
   const active=await read();assert.equal(active.burnStatusAuthority,'resident-gpu-peak-reaction');assert.equal(active.selfEmission,false);

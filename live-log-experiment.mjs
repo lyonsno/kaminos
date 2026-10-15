@@ -57,7 +57,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
     scene.frame([object,...(sourceObject?[sourceObject]:[])]);
     const entry=scene.objects().find(entry=>entry.object===object);if(entry)scene.select(entry.id);scene.dirty();
     const operations={
-      view({mode}={}){if(!['beauty','char','heat'].includes(mode))throw Error('Invalid material view');for(const binding of bindings)binding.setView(mode);view=mode;scene.dirty();emit('view',read(),{mode});updateUI();return read();},
+      view({mode}={}){if(!['beauty','char','heat'].includes(mode))throw Error('Invalid material view');host.inspection?.(mode!=='beauty');for(const binding of bindings)binding.setView(mode);view=mode;scene.dirty();emit('view',read(),{mode});updateUI();return read();},
       run(){assertActive();setSource(true);burner=true;running=true;paused=false;runtime.setSimulationPaused(false);phase='heating';emit('run',read());updateUI();return read();},
       burnerOff(){if(disposed)throw Error('Live log experiment disposed');setSource(false);burner=false;phase=running?'cooling':'cold';emit('burner-off',read());updateUI();return read();},
       pause(){assertActive();paused=!paused;runtime.setSimulationPaused(paused);emit('pause',read());updateUI();return read();},
@@ -86,7 +86,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
       },
       dispose(){if(disposed)return;disposed=true;const errors=[];let stopped;
         const clean=action=>{try{action();}catch(error){errors.push(error);}};
-        clean(()=>unsubscribeFire?.());clean(()=>detach?.());clean(()=>indicator?.dispose());clean(()=>runtime.setSimulationPaused(true));
+        clean(()=>host.inspection?.(false));clean(()=>unsubscribeFire?.());clean(()=>detach?.());clean(()=>indicator?.dispose());clean(()=>runtime.setSimulationPaused(true));
         if(!fire)clean(()=>setSource(false));
         clean(()=>{stopped=runtime.setActive(false);});clean(()=>mounted?.panel.remove());
         for(const {mesh,original} of restores)clean(()=>{mesh.material=original;});

@@ -23,7 +23,7 @@ test('GPU source identity rejects fallback device, absent generation and invalid
   assert.throws(()=>checkLiveLogFrame({...frame,dt:0},device),/duration/);
   assert.throws(()=>checkLiveLogFrame({...frame,transform:{translate:[0,0,NaN],scale:1}},device),/transform/);
 });
-async function fixture({fire}={}){
+async function fixture({fire,inspection}={}){
   const device={},model=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());model.add(mesh);
   let registry=[{id:'log-1',object:model}],consumer,active=false,paused=false,steps=0,burner=true,reset=0,disposed=0;
   const events=[],fields=[],canvas={style:{opacity:'.85'}};
@@ -36,7 +36,7 @@ async function fixture({fire}={}){
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../live-log-experiment.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
   vm.runInContext(source+'\nglobalThis.create=createLiveLogExperiment;',context);
-  const experiment=await context.create({record:e=>events.push(e),host:{fire,scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
+  const experiment=await context.create({record:e=>events.push(e),host:{fire,inspection,scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
   return {experiment,events,canvas,read:()=>({active,paused,burner,reset,disposed,consumer}),remove:()=>{registry=[];},step(){steps++;consumer?.encode({}, {dt:1/60});}};
 }
 test('cold start, shared operation reset and removal do not advance or leave GPU work running',async()=>{
@@ -91,4 +91,13 @@ test('agent and human view changes keep the mounted surface selection in sync',a
   f.experiment.operations.view({mode:'heat'});
   assert.deepEqual(inputs.map(input=>input.checked),[false,false,true]);
   await f.experiment.dispose();
+});
+
+test('diagnostic views suppress received scene lighting and disposal restores beauty lighting',async()=>{
+  const changes=[];const f=await fixture({inspection:enabled=>changes.push(enabled)});
+  f.experiment.operations.view({mode:'char'});
+  assert.equal(changes.at(-1),true);
+  f.experiment.operations.view({mode:'beauty'});assert.equal(changes.at(-1),false);
+  f.experiment.operations.view({mode:'heat'});await f.experiment.dispose();
+  assert.equal(changes.at(-1),false);
 });
