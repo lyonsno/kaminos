@@ -7007,7 +7007,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -7016,7 +7016,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -7069,7 +7069,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -8031,6 +8031,7 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
 }
 
 function frameForgeHostCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.05, 1.85, 4.35);
   controls.target.set(0, -0.18, 0.16);
@@ -8214,6 +8215,7 @@ function disposeMotionTemporalScene() {
 }
 
 function frameMotionAgencyCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
   controls.target.set(0.05, 0.15, 0.15);
@@ -12012,7 +12014,7 @@ async function initScene() {
   };
   // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
   // ?vantage=0 leaves the terminal link closed.
-  const vantageBusy=()=>authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
+  const vantageBusy=()=>authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':(controls?.state??-1)!==-1?'A touch gesture is moving the view':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
   // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
   // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
   const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
@@ -12026,11 +12028,11 @@ async function initScene() {
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
   const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
   // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
-  // flag rather than authoringBusy, which in-flight imports read as a stale document. Every pointer
-  // gesture over the viewport canvas waits too, since it would resolve through the borrowed camera. The
-  // window capture listener runs before document-level handlers such as box selection. Toolbars over the
-  // viewport and the sub panel keep working.
-  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','pointerup','mousedown','mouseup','click','dblclick'],wait=event=>{if(viewportEventIsInsideCanvas(event)&&!viewportEventHitsInteractiveOverlay(event)&&!event.target?.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)window.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)window.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
+  // flag rather than authoringBusy, which in-flight imports read as a stale document. Presses on the
+  // viewport canvases wait too, since they would resolve through the borrowed camera; the window capture
+  // listener runs before document-level handlers. Dialogs, toolbars and the sub panel keep working.
+  // Selection, box selection and framing also check the flag themselves.
+  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','pointerup','mousedown','mouseup','click','dblclick'],wait=event=>{const target=event.target;if(target?.tagName==='CANVAS'&&viewportEl.contains(target)&&!target.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)window.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)window.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
   const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
   const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
   try{
@@ -19370,6 +19372,7 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
@@ -25945,7 +25948,7 @@ function syncSelectionInspector(){
 function installSelectionInput(){
   let box=null,suppressBoxClick=false;const rect=document.createElement('div');rect.id='scene-selection-box';rect.hidden=true;document.getElementById('viewport').append(rect);
   function stopBox(){if(!box)return;controls.enabled=box.prior;box=null;rect.hidden=true;}
-  function beginBox(){if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
+  function beginBox(){if(vantageCaptureHeld){setInfo('The agent sub is taking a picture');return;}if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
   window.kaminosSelection.box=beginBox;window.kaminosSelection.boxing=()=>!!box;
   document.addEventListener('keydown',event=>{
     if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
@@ -25954,7 +25957,7 @@ function installSelectionInput(){
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
   },true);
   document.addEventListener('pointerdown',event=>{
-    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event))return;
+    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event)||event.target.closest?.('[data-vantage-ignore]'))return;
     event.preventDefault();event.stopImmediatePropagation();if(event.button===2){stopBox();return;}controls.enabled=false;box.start={x:event.clientX,y:event.clientY};box.subtract=event.button===1;rect.hidden=false;
   },true);
   document.addEventListener('pointermove',event=>{

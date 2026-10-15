@@ -420,6 +420,31 @@ function definition(name) {
 }
 // Evaluates that statement with stand-ins for the page variables it reads.
 const fromIndex = (name, scope) => new Function(...Object.keys(scope), `${definition(name)}\nreturn ${name};`)(...Object.values(scope));
+// A `function name(` declaration in index.html, up to its closing brace.
+function declaration(name) {
+  const start = INDEX.indexOf(`\nfunction ${name}(`) + 1;
+  assert.ok(start > 0, `index.html declares ${name}`);
+  let depth = 0, quote = null, opened = false;
+  for (let i = start; i < INDEX.length; i++) {
+    const c = INDEX[i];
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; continue; }
+    if (c === "'" || c === '"' || c === '`') quote = c;
+    else if (c === '{') { depth++; opened = true; }
+    else if (c === '}' && --depth === 0 && opened) return INDEX.slice(start, i + 1);
+  }
+  throw new Error(`${name} has no end`);
+}
+// Evaluates a definition against a live scope: the test can flip a page
+// variable between calls. Names the scope lacks and the global object lacks
+// resolve to inert stand-ins, so a test supplies only what it observes.
+function fromIndexLive(name, scope) {
+  const inert = new Proxy(function () {}, {get: (_, key) => (key === Symbol.toPrimitive ? () => 0 : inert), apply: () => inert});
+  const live = new Proxy(scope, {has: (target, key) => key in target || !(key in globalThis),
+    get: (target, key) => (key === Symbol.unscopables ? undefined : key in target ? target[key] : inert),
+    set: (target, key, value) => { target[key] = value; return true; }});
+  const source = INDEX.includes(`const ${name}=`) ? definition(name) : declaration(name);
+  return new Function('scope', `with (scope) { ${source}\nreturn ${name}; }`)(live);
+}
 
 class FakeElement extends EventTarget {
   constructor(tag = 'div') { super(); this.tagName = tag.toUpperCase(); this.style = {}; this.dataset = {}; this.children = []; this.clientWidth = 800; this.clientHeight = 600; this.hidden = false; this.textContent = ''; }
@@ -474,33 +499,34 @@ test('a transform overlapping a picture leaves navigation as the operator had it
   assert.equal(controls.enabled, true);
 });
 
-test('while a picture holds the viewport, every gesture on its canvas waits, before page-level handlers see it', () => {
+const HELD_TYPES = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick'];
+test('while a picture holds the viewport, presses on its canvases wait before page-level handlers see them', () => {
   // Window capture listeners run before the page's document-level handlers
   // (box selection, the lighting probe) and before the viewport's own.
   const window = new FakeElement(), viewportEl = new FakeElement(), button = {disabled: false};
+  viewportEl.contains = node => node?.inViewport === true;
   const hold = fromIndex('holdViewportForVantage', {authoringBusy: false, vantageCaptureHeld: false, viewportEl, window,
     document: {getElementById: id => (id === 'composition-capture' ? button : null)},
-    viewportEventIsInsideCanvas: event => event.inside, viewportEventHitsInteractiveOverlay: event => event.overlay});
-  const reached = [];
-  const press = (type, {inside = true, overlay = false, ignored = false} = {}) => {
+    viewportEventIsInsideCanvas: () => true, viewportEventHitsInteractiveOverlay: () => false});
+  const node = ({tagName = 'CANVAS', inViewport = true, ignored = false} = {}) =>
+    ({tagName, inViewport, closest: selector => (ignored && selector === '[data-vantage-ignore]' ? {} : null)});
+  const press = (type, target) => {
     const event = new Event(type, {cancelable: true});
-    Object.assign(event, {inside, overlay});
-    Object.defineProperty(event, 'target', {value: {tagName: 'DIV', closest: selector => (ignored && selector === '[data-vantage-ignore]' ? {} : null)}});
+    Object.defineProperty(event, 'target', {value: target});
     window.dispatchEvent(event);
     return event;
   };
   const release = hold();
-  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick']) window.addEventListener(type, event => reached.push(type), {capture: true});
-  for (const type of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick']) {
-    assert.equal(press(type).defaultPrevented, true, `a ${type} over the borrowed canvas waits, whatever element it lands on`);
-  }
-  assert.deepEqual(reached, [], 'no later handler sees a held gesture');
-  assert.equal(press('pointerdown', {overlay: true}).defaultPrevented, false, 'toolbars over the viewport keep working');
-  assert.equal(press('pointerdown', {ignored: true}).defaultPrevented, false, 'the sub panel keeps working');
-  assert.equal(press('pointerdown', {inside: false}).defaultPrevented, false, 'the rest of the page keeps working');
+  const reached = [];
+  for (const type of HELD_TYPES) window.addEventListener(type, () => reached.push(type), {capture: true});
+  for (const type of HELD_TYPES) assert.equal(press(type, node()).defaultPrevented, true, `a ${type} on the borrowed canvas waits`);
+  assert.deepEqual(reached, [], 'no later handler sees a held press');
+  assert.equal(press('click', node({tagName: 'BUTTON'})).defaultPrevented, false, 'a dialog button over the canvas keeps working');
+  assert.equal(press('pointerdown', node({ignored: true})).defaultPrevented, false, 'the sub panel keeps working');
+  assert.equal(press('pointerdown', node({inViewport: false})).defaultPrevented, false, 'canvases elsewhere on the page keep working');
   assert.equal(button.disabled, true);
   release();
-  assert.equal(press('pointerdown').defaultPrevented, false, 'the canvas answers again after the picture');
+  assert.equal(press('pointerdown', node()).defaultPrevented, false, 'the canvas answers again after the picture');
   assert.equal(button.disabled, false);
 });
 
@@ -508,10 +534,82 @@ test('a picture waits for a box selection the operator has armed or begun', () =
   let boxing = false;
   const busy = fromIndex('vantageBusy', {authoringBusy: false, scenePlacementTools: {edits: {state: () => ({active: null, replaying: false})}},
     sceneNavigation: {state: () => ({gesture: null})}, transformGizmoDragging: false, transformControls: {dragging: false}, splatCorrectionMode: null,
-    greenroomPreviewIsActive: () => false, window: {kaminosSelection: {boxing: () => boxing}}});
+    greenroomPreviewIsActive: () => false, window: {kaminosSelection: {boxing: () => boxing}}, controls: {state: -1}});
   assert.equal(busy(), null);
   boxing = true;
   assert.equal(busy(), 'A box selection is in progress', 'a box drawn in the operator view must not finish in the sub view');
+});
+
+test('box selection cannot begin during a picture, and never from the sub panel', () => {
+  const document = new FakeElement(), viewport = new FakeElement();
+  document.createElement = tag => new FakeElement(tag);
+  document.getElementById = id => (id === 'viewport' ? viewport : null);
+  let selection = [];
+  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, vantageCaptureHeld: true, controls: {enabled: true},
+    scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
+    greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
+    objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, setSceneSelection: ids => { selection = ids; },
+    renderer: {domElement: {getBoundingClientRect: () => ({left: 0, top: 0, width: 800, height: 600})}}};
+  fromIndexLive('installSelectionInput', scope)();
+  const fire = (type, values = {}) => {
+    const event = new Event(type, {cancelable: true});
+    Object.defineProperty(event, 'target', {value: values.target ?? {closest: () => null}});
+    for (const [key, value] of Object.entries(values)) if (key !== 'target') Object.defineProperty(event, key, {value});
+    document.dispatchEvent(event);
+  };
+  fire('keydown', {key: 'b'});
+  assert.equal(scope.window.kaminosSelection.boxing(), false, 'B during a picture arms nothing');
+  scope.vantageCaptureHeld = false;
+  fire('keydown', {key: 'b'});
+  assert.equal(scope.window.kaminosSelection.boxing(), true);
+  const panel = {closest: selector => (selector === '[data-vantage-ignore]' ? {} : null)};
+  fire('pointerdown', {target: panel, button: 0, clientX: 10, clientY: 10});
+  fire('pointerup', {target: panel, button: 0, clientX: 90, clientY: 90});
+  assert.deepEqual(selection, [], 'a drag on the sub panel never box-selects the scene');
+  fire('pointerdown', {button: 0, clientX: 10, clientY: 10});
+  fire('pointerup', {button: 0, clientX: 90, clientY: 90});
+  assert.deepEqual(selection, ['picked'], 'the same drag on the canvas selects');
+});
+
+test('click selection waits while a picture holds the viewport', () => {
+  const calls = [];
+  const scope = {vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
+    viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
+    pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
+    pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
+    clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
+  const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
+  fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
+  fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
+  fromIndexLive('handleViewportDoubleClick', scope)(event('dblclick'));
+  assert.deepEqual(calls, [], 'nothing is picked through the borrowed camera');
+  scope.vantageCaptureHeld = false;
+  fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
+  assert.ok(calls.includes('object'), 'the same click picks once the picture is done');
+});
+
+test('a picture waits for a touch gesture already moving the view', () => {
+  const scope = {authoringBusy: false, scenePlacementTools: {edits: {state: () => ({active: null, replaying: false})}},
+    sceneNavigation: {state: () => ({gesture: null})}, transformGizmoDragging: false, transformControls: {dragging: false}, splatCorrectionMode: null,
+    greenroomPreviewIsActive: () => false, window: {kaminosSelection: {boxing: () => false}}, controls: {state: -1}};
+  const busy = fromIndexLive('vantageBusy', scope);
+  assert.equal(busy(), null);
+  scope.controls.state = 3;
+  assert.equal(busy(), 'A touch gesture is moving the view', 'a touch begun in the operator view must not move the borrowed camera');
+});
+
+test('tool framing buttons wait while a picture holds the viewport', () => {
+  for (const name of ['frameForgeHostCamera', 'frameMotionAgencyCamera', 'frameVolumeCamera']) {
+    const writes = [];
+    const vector = label => ({set: (...value) => writes.push([label, value]), copy: () => writes.push([label]), fromArray: () => writes.push([label])});
+    const scope = {vantageCaptureHeld: true, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
+      controls: {target: vector('target'), update() {}}};
+    fromIndexLive(name, scope)();
+    assert.deepEqual(writes, [], `${name} leaves the borrowed camera alone`);
+    scope.vantageCaptureHeld = false;
+    fromIndexLive(name, scope)();
+    assert.ok(writes.length > 0, `${name} frames once the picture is done`);
+  }
 });
 
 test('the sketch carries the matrices the operator viewport renders with', async () => {

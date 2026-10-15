@@ -313,10 +313,27 @@ try {
     {code: refusedForBox.code, stderr: refusedForBox.stderr});
   await page.keyboard.press('Escape');
   const viewsBefore = await page.evaluate(() => window.kaminosCameraViews.read().items.length);
-  const boxHeld = vantage('burst', '--count', '6', '--interval', '200', '--name', 'box-held');
+  const operatorBeforeBurst = await page.evaluate(() => window.kaminosCameraDebugState());
+  const boxHeld = vantage('burst', '--count', '10', '--interval', '300', '--name', 'box-held');
   await page.waitForFunction(() => document.getElementById('composition-capture')?.disabled === true, null, {timeout: 15000});
   await page.keyboard.press('b');
+  const armedDuringHold = await page.evaluate(() => window.kaminosSelection.boxing());
   await boxAround(centre);
+  // The sub panel is exempt from the hold; a drag on it must not box-select the scene.
+  const panelCentre = await page.evaluate(() => { const r = document.querySelector('#agent-vantage-hud canvas').getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; });
+  await page.mouse.move(panelCentre.x - 40, panelCentre.y - 30);
+  await page.mouse.down();
+  await page.mouse.move(panelCentre.x + 40, panelCentre.y + 30, {steps: 4});
+  await page.mouse.up();
+  // A dialog over the canvas keeps working, and another tool's Frame button waits.
+  const naming = page.evaluate(() => window.saveSceneAs({promptName: true}));
+  await page.waitForSelector('[data-file-name-cancel]', {timeout: 5000});
+  const cancelAt = await page.evaluate(() => { const r = document.querySelector('[data-file-name-cancel]').getBoundingClientRect(), canvas = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2; return {x, y, overCanvas: x >= canvas.left && x <= canvas.right && y >= canvas.top && y <= canvas.bottom}; });
+  await page.mouse.click(cancelAt.x, cancelAt.y);
+  const dialog = await page.evaluate(() => ({closed: !document.querySelector('.file-name-prompt'), held: document.getElementById('composition-capture').disabled}));
+  const named = await naming;
+  await page.evaluate(() => document.getElementById('volume-fit-camera').click());
   const duringBox = await page.evaluate(() => {
     let saved = null, framed = null;
     try { window.kaminosCameraViews.save('Saved during a picture'); saved = 'saved'; } catch (error) { saved = error.message; }
@@ -325,12 +342,17 @@ try {
   });
   const boxResult = await boxHeld;
   await page.keyboard.press('Escape');
-  check('a burst with a box drawn and a view saved during it completes', boxResult.code === 0, {code: boxResult.code, stderr: boxResult.stderr});
+  const cameraAfterFrame = await page.evaluate(() => window.kaminosCameraDebugState());
+  check('a burst with boxes drawn, a dialog used and a tool Frame button pressed during it completes, so Frame moved nothing', boxResult.code === 0, {code: boxResult.code, stderr: boxResult.stderr});
   const viewsAfter = await page.evaluate(() => window.kaminosCameraViews.read().items.length);
-  check('a box drawn during a picture selects nothing', duringBox.held && duringBox.selection.length === 0
-    && (await page.evaluate(() => window.kaminosSelection.read().ids)).length === 0, duringBox);
+  check('B arms no box during a picture, and boxes on the canvas or the sub panel select nothing',
+    armedDuringHold === false && duringBox.held && duringBox.selection.length === 0
+    && (await page.evaluate(() => window.kaminosSelection.read().ids)).length === 0, {armedDuringHold, ...duringBox});
+  check('a dialog over the canvas keeps working during a picture', cancelAt.overCanvas && dialog.held && dialog.closed && !named,
+    {cancelAt, dialog, named});
   check('saving or framing a view waits while the sub holds the viewport',
-    duringBox.saved === 'The agent sub is taking a picture' && duringBox.framed === false && viewsAfter === viewsBefore, {...duringBox, viewsBefore, viewsAfter});
+    duringBox.saved === 'The agent sub is taking a picture' && duringBox.framed === false && viewsAfter === viewsBefore
+    && sameView(operatorBeforeBurst, cameraAfterFrame), {...duringBox, viewsBefore, viewsAfter});
   await page.mouse.move(centre.x, centre.y);
   await page.keyboard.press('b');
   await boxAround(centre);
