@@ -62,6 +62,20 @@ try {
   await invoke('view',{mode:'beauty'});assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),report.effective.gi.gain);await shot('end-material');await invoke('burnerOff');
   report.phase='reset';await invoke('reset');await shot('reset');assert.equal((await read()).fields[0].steps,0);
   report.phase='mobile';await page.setViewportSize({width:430,height:900});await shot('mobile');
+  report.phase='source-lifecycle';await page.setViewportSize({width:1440,height:1000});
+  await invoke('selectFire');await page.evaluate(()=>window.kaminosSelection.remove());
+  assert.equal((await read()).unavailableReason,'fire');
+  await page.evaluate(()=>window.kaminosSceneEdits.undo());
+  assert.equal((await read()).fire.enabled,false,'Undo must restore a disabled source');
+  await invoke('selectFire');await page.evaluate(()=>window.kaminosSelection.remove());
+  await invoke('reconnectFire');assert.equal((await read()).fire.status,'mounted');assert.equal((await read()).fire.enabled,false);assert.equal((await read()).paused,true);
+  await invoke('run');await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>0);await invoke('reset');
+  report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.equal(report.saved.ok,true);
+  assert.equal(report.saved.document.objects.find(object=>object.id==='flame-emitter').emissionEnabled,false);
+  await page.locator('#scene-file-input').setInputFiles({name:report.saved.filename,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(report.saved.document))});
+  await page.waitForFunction(()=>!new URLSearchParams(location.hash.slice(1)).has('scene'));
+  report.restoredSource=await page.evaluate(()=>window.kaminosFlameEmitterState());
+  assert.equal(report.restoredSource.authoredPresent,true);assert.equal(report.restoredSource.emissionEnabled,false);
   const active=await read();assert.equal(active.burnStatusAuthority,'resident-gpu-peak-reaction');assert.equal(active.selfEmission,false);
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
