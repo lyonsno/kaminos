@@ -238,7 +238,7 @@ export async function capturePicture({capture, document}) {
  * of what the viewport shows.
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
-  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null}) {
+  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => []}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -272,6 +272,18 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   const drawer = element(document, 'aside', 'kn-drawer');
   drawer.hidden = true;
   drawer.setAttribute('aria-label', 'Notes');
+  // Panels sharing the viewport's top right, such as an agent sub's, stay in
+  // view: the drawer starts below whichever of them is showing.
+  const placeDrawer = () => {
+    const host = viewport.getBoundingClientRect(), right = host.right - 12, left = right - drawer.offsetWidth;
+    let top = 52;
+    for (const panel of avoid()) {
+      if (!panel?.isConnected || panel.hidden) continue;
+      const rect = panel.getBoundingClientRect();
+      if (rect.height && rect.left < right && rect.right > left) top = Math.max(top, rect.bottom - host.top + 8);
+    }
+    drawer.style.top = `${Math.round(Math.min(top, host.height - 58 - 240))}px`;
+  };
   const head = element(document, 'div', 'kn-head');
   const listening = element(document, 'span', 'kn-listening');
   const close = element(document, 'button', 'kn-close', '×');
@@ -338,7 +350,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   // A name selects that agent's avatar in the scene, when it has one there.
   function selectAvatarOf(name) {
     const {object} = session.selectAvatar(name);
-    if (object) { redraw(); say(`Selected @${name}'s avatar`); }
+    if (object) { redraw(); refreshAnchor(); say(`Selected @${name}'s avatar`); }
     else say(`@${name} has no avatar in this scene`);
   }
   function nameButton(name, className) {
@@ -656,6 +668,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
 
   function openDrawer({thread = null, composeFocus = false} = {}) {
     drawer.hidden = false;
+    placeDrawer();
     toggle.setAttribute('aria-expanded', 'true');
     if (thread) focusThread = thread;
     else forceBottom = true;
@@ -808,7 +821,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
   source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
   const unsubscribe = session.onChange(render);
-  const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) refreshAnchor(); }, 500);
+  const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) { refreshAnchor(); placeDrawer(); } }, 500);
   render();
 
   return {

@@ -437,8 +437,28 @@ try {
     await page.waitForSelector(`.kn-thread[data-thread="${saidId}"] .kn-name.kn-agent`, {timeout: 10000}).catch(() => {});
     await page.evaluate(() => window.kaminosSelection.clear());
     await page.click(`.kn-thread[data-thread="${saidId}"] .kn-name.kn-agent`).catch(() => {});
-    const toSub = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent}));
+    const toSub = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent,
+      composeOn: document.querySelector('.kn-compose .kn-anchor')?.textContent}));
     check("clicking that agent's name selects its sub", said.code === 0 && toSub.ids.includes(subId) && toSub.status === `Selected @${PILOT}'s avatar`, {...toSub, saidId});
+    check('the composer says the next note goes on the sub', /Vantage sub-pilot/.test(toSub.composeOn ?? ''), {composeOn: toSub.composeOn});
+    // The sub's panel shares the viewport's top right with the drawer; with
+    // both showing, neither covers the other.
+    await page.waitForFunction(() => { const hud = document.getElementById('agent-vantage-hud'); return hud && !hud.hidden; }, null, {timeout: 10000}).catch(() => {});
+    await sleep(800);
+    const panels = await page.evaluate(() => {
+      const box = node => { const rect = node?.getBoundingClientRect(); return rect ? {left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom} : null; };
+      const hud = document.getElementById('agent-vantage-hud'), drawer = document.querySelector('.kn-drawer');
+      const hudBox = box(hud), drawerBox = box(drawer);
+      const atHud = hudBox ? document.elementFromPoint((hudBox.left + hudBox.right) / 2, (hudBox.top + hudBox.bottom) / 2) : null;
+      return {hudShown: !!hud && !hud.hidden, drawerShown: !!drawer && !drawer.hidden, hud: hudBox, drawer: drawerBox,
+        hudOnTop: !!atHud && hud.contains(atHud), drawerHeight: drawerBox ? drawerBox.bottom - drawerBox.top : 0};
+    });
+    const overlap = panels.hud && panels.drawer && panels.hud.left < panels.drawer.right && panels.drawer.left < panels.hud.right
+      && panels.hud.top < panels.drawer.bottom && panels.drawer.top < panels.hud.bottom;
+    check("the drawer and the sub's panel are both visible", panels.hudShown && panels.drawerShown && !overlap && panels.hudOnTop && panels.drawerHeight >= 240, panels);
+    const subShot = path.join(out, 'sub.png');
+    await page.screenshot({path: subShot});
+    report.artifacts.push(subShot);
     await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   }
 
