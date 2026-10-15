@@ -11,7 +11,7 @@ export function installCaptureProfiler(device) {
     const rows=[];
     for(const method of ['beginRenderPass','beginComputePass']){
       const begin=encoder[method].bind(encoder);
-      encoder[method]=spec=>{
+      encoder[method]=(spec={})=>{
         if(spec.timestampWrites)throw Error('capture profiler conflicts with existing timestamps');
         const query=device.createQuerySet({type:'timestamp',count:2});
         rows.push({query,scope:p.scope,kind:method,label:spec.label??descriptor?.label??null});
