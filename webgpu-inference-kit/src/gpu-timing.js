@@ -32,7 +32,8 @@ export function normalizeWebGpuGpuTimingOptions(option) {
   return { enabled: option.enabled !== false, capacity };
 }
 
-export function createWebGpuGpuTimer({ device, queue, options } = {}) {
+export function createWebGpuGpuTimer({ device, queue, options,
+  createBuffer = descriptor => device.createBuffer(descriptor) } = {}) {
   const { enabled, capacity } = normalizeWebGpuGpuTimingOptions(options);
   const supported = hasFeature(device?.features, 'timestamp-query') && typeof device?.createQuerySet === 'function';
   const summary = {
@@ -53,13 +54,18 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
     };
   }
 
+  if (typeof createBuffer !== 'function') throw new TypeError('timer createBuffer must be a function');
   const createQuerySet = () => device.createQuerySet({ label: 'kaminos.gpu-timing.queries', type: QUERY_SET_TYPE, count: 2 * capacity });
   let querySet = createQuerySet();
-  const resolveBuffer = device.createBuffer({
-    label: 'kaminos.gpu-timing.resolve',
-    size: capacity * RESOLVE_ALIGNMENT,
-    usage: USAGE.queryResolve | USAGE.copySrc,
-  });
+  let resolveBuffer;
+  try {
+    resolveBuffer = createBuffer({ label: 'kaminos.gpu-timing.resolve',
+      size: capacity * RESOLVE_ALIGNMENT, usage: USAGE.queryResolve | USAGE.copySrc });
+  } catch (error) {
+    try { querySet.destroy?.(); }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'timer allocation and query cleanup failed'); }
+    throw error;
+  }
   let nextSlot = 0;
   let destroyed = false;
   let outstanding = [];
@@ -124,13 +130,22 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
   function flush() {
     const batch = outstanding.filter(token => token.submitted);
     if (batch.length === 0) return;
-    outstanding = outstanding.filter(token => !token.submitted);
     const size = (Math.max(...batch.map(token => token.slot)) + 1) * RESOLVE_ALIGNMENT;
-    const staging = device.createBuffer({ label: 'kaminos.gpu-timing.readback', size, usage: USAGE.mapRead | USAGE.copyDst });
-    const encoder = device.createCommandEncoder({ label: 'kaminos.gpu-timing.copy' });
-    encoder.copyBufferToBuffer(resolveBuffer, 0, staging, 0, size);
-    queue.submit([encoder.finish()]);
-    const read = staging.mapAsync(USAGE.mapRead).then(() => {
+    const staging = createBuffer({ label: 'kaminos.gpu-timing.readback', size, usage: USAGE.mapRead | USAGE.copyDst });
+    let mapping;
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos.gpu-timing.copy' });
+      encoder.copyBufferToBuffer(resolveBuffer, 0, staging, 0, size);
+      queue.submit([encoder.finish()]);
+      mapping = staging.mapAsync(USAGE.mapRead);
+    } catch (error) {
+      try { staging.destroy?.(); }
+      catch (cleanupError) { throw new AggregateError([error, cleanupError], 'timer copy and buffer cleanup failed'); }
+      throw error;
+    }
+    // Refusal or a failed copy must leave submitted tokens available for an explicit retry.
+    outstanding = outstanding.filter(token => !token.submitted);
+    const read = mapping.then(() => {
       const ns = new BigUint64Array(staging.getMappedRange(0, size));
       for (const token of batch) {
         const begin = ns[token.slot * (RESOLVE_ALIGNMENT / 8)];
