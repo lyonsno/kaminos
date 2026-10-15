@@ -51,6 +51,21 @@ test('late queued preparation cannot rebuild into a newly started drag; refusal 
 test('diagnostic readback pause still prevents fine stepping during a drag',()=>{
  const {ctx,calls,step}=fixture();ctx.joinedExterior.paused=true;step();assert.equal(calls.fine,0);
 });
+test('outside placement settles to standalone dispatch without preparing a rejected exterior',()=>{
+ const {ctx,calls,step,prepare,queued}=fixture();
+ ctx.state.joinedBoundary.deferredAdmission={admitted:false};
+ ctx.state.joinedEditing={held:false,pending:true};
+ ctx.getSceneEditing=()=>null;
+ ctx.refreshJoinedBoundary=()=>{ctx.state.joinedBoundary={admitted:false,reason:'source-disabled'};};
+ vm.runInContext(body('joinedEditingHeld'),ctx);
+ ctx.joinedExterior.prepare=()=>{throw Error('standalone lower-face placeholder cannot prepare exterior');};
+ prepare();assert.equal(ctx.state.joinedEditing.pending,false);
+ step();step();prepare();
+ assert.equal(calls.fine,2);assert.equal(calls.pressure,2);assert.equal(ctx.state.simStepCount,9);
+ assert.equal(calls.outer,0);assert.equal(queued.length,0);
+ // Re-admission must still wait for a current allocation, not reuse held ghosts.
+ ctx.state.joinedBoundary={admitted:true};step();assert.equal(calls.fine,2);assert.equal(queued.length,1);
+});
 test('actual uniform write disables joined boundary and ghost reads, without revoking visible admission',()=>{
  const statement=source.split('\n').find(line=>line.includes('uniforms.set(joinedBoundaryUniformValues('));assert(statement);
  const ctx={state:{joinedBoundary:{admitted:true},joinedGhosts:{bound:true,generation:7},joinedEditing:{held:true}},joinedGhostGeometry:{originFine:[1,2,3],dims:[4,8,4],cellWidthFine:2,finePitchLocal:.5},joinedBoundaryUniformValues,JOINED_BOUNDARY_UNIFORM_OFFSET:0,uniforms:new Float32Array(12)};

@@ -14134,11 +14134,11 @@ export function createKaminosVolumePrototype({
     try {
       if (state.joinedBoundary?.deferredAdmission) {
         refreshJoinedBoundary();
-        if (!state.joinedBoundary.admitted) {
-          joinedEditingHeld();
-          syncJoinedRender();
-          return { admitted: false, reason: state.joinedBoundary.reason };
-        }
+      }
+      if (!state.joinedBoundary?.admitted) {
+        joinedEditingHeld();
+        syncJoinedRender();
+        return { admitted: false, reason: state.joinedBoundary?.reason };
       }
       let result = null;
       for (let round = 0; round < 3; round++) {
@@ -17389,7 +17389,7 @@ export function createKaminosVolumePrototype({
     }
     // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
     // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
-    if (!editingHeld && joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
+    if (!editingHeld && state.joinedBoundary?.admitted && joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
       if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
     }

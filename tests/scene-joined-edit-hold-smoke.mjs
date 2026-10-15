@@ -61,6 +61,22 @@ try{
  await evaluate('window.kaminosSceneEdits.cancel()');report.emitterCancelled=await step(3);
  assert.equal(report.emitterCancelled.joinedEditing.pending,false);assert.equal(report.emitterCancelled.fluidStateResetCount,report.emitterBefore.fluidStateResetCount);
  assert(report.emitterCancelled.joinedExterior.steps>report.emitterBefore.joinedExterior.steps);
+ report.phase='emitter-outside-placement';await save();
+ await evaluate(`{const d=window.kaminosFlameDomain.read();window.kaminosFlameDomain.set({position:[d.translation[0]+.001,d.translation[1]+d.scale,d.translation[2]],rotation:[0,0,0],scale:[d.scale,d.scale,d.scale]});}`);
+ assert.equal(await evaluate('window.kaminosFlameDomain.read().followSource'),false);
+ await step(3);
+ await evaluate(`window.kaminosSceneEdits.begin(${JSON.stringify(emitter.id)},'Outside placement');window.kaminosSceneEdits.preview(${JSON.stringify(outside)});window.kaminosSceneEdits.commit()`);
+ report.emitterPlacedOutside=await step(3);
+ assert.equal(report.emitterPlacedOutside.joinedBoundary.admitted,false);
+ assert.equal(report.emitterPlacedOutside.immersedSource.effective.admitted,false);
+ assert.equal(report.emitterPlacedOutside.joinedEditing.pending,false);
+ report.emitterStandalone=await step(3);
+ assert(report.emitterStandalone.simStepCount>report.emitterPlacedOutside.simStepCount);
+ await evaluate(`window.kaminosSceneEdits.apply(${JSON.stringify(emitter.id)},${JSON.stringify(emitter.transform)},'Return source inside')`);
+ report.emitterRejoined=await step(3);
+ assert.equal(report.emitterRejoined.joinedBoundary.admitted,true);
+ assert.equal(report.emitterRejoined.joinedEditing.pending,false);
+ assert.equal(report.emitterRejoined.joinedGhosts.generation,report.emitterRejoined.simStepCount);
  await evaluate('window.__kaminosVolumePrototype.setSimulationPaused(true)');
  report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);if(browser)report.lastState=await browser.evaluate('window.__kaminosVolumePrototype?.debugState()').catch(()=>null);process.exitCode=1;}
