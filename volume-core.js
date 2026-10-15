@@ -17396,7 +17396,9 @@ export function createKaminosVolumePrototype({
       }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
-      if (residualPartialsConsumer) {
+      // typeof: source-extraction contract harnesses run this body without the
+      // closure that declares the consumer.
+      if (typeof residualPartialsConsumer === 'function') {
         try {
           residualPartialsConsumer({ partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
             workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
