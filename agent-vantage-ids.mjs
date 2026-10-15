@@ -25,7 +25,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
     return n;
   };
 
-  let outputs = null;
+  let outputs = null, idWrite = null, idDistance = null;
   const idOutputs = () => outputs ??= (() => {
     const {mrt, uniform, vec4, instanceIndex, vertexStage, If, Discard, output, Fn, floor, mod, round, positionView} = TSL;
     const id = uniform(new THREE.Vector2()).onObjectUpdate(({object}, self) => {
@@ -38,15 +38,28 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
       If(blended.greaterThan(0.5).and(output.a.lessThan(1 / 255)), () => { Discard(); });
       return vec4(id.x, id.y, mod(instance, 256).div(255), mod(floor(instance.div(256)), 256).div(255));
     })();
+    idWrite = write;
+    idDistance = vec4(positionView.z.negate(), 0, 0, 1);
     // Outputs other than `output` are not blended.
-    return mrt({output: write, distance: vec4(positionView.z.negate(), 0, 0, 1)}).setBlendMode('output', new THREE.BlendMode(THREE.NoBlending));
+    return mrt({output: write, distance: idDistance}).setBlendMode('output', new THREE.BlendMode(THREE.NoBlending));
   })();
+  // A material's own outputs (`mrtNode`) take precedence over the ID outputs
+  // when three merges them, and may hold coverage decisions, such as a
+  // discard. For the ID draw the material gets outputs that still run its own
+  // `output`, which the scene pass writes, and then write the ID and depth.
+  const wrapped = new WeakMap();
+  const idOutputsAround = own => {
+    if (!wrapped.has(own)) {
+      const {mrt, Fn} = TSL, theirs = own.outputNodes?.output;
+      const write = theirs ? Fn(() => { theirs.toVar(); return idWrite; })() : idWrite;
+      wrapped.set(own, mrt({output: write, distance: idDistance}).setBlendMode('output', new THREE.BlendMode(THREE.NoBlending)));
+    }
+    return wrapped.get(own);
+  };
 
   // A material with its own fragment shader writes past the render-target
   // outputs, so it is drawn with a plain stand-in that keeps its face side,
-  // depth state and vertex shader; its coverage is then approximate. A
-  // material's own outputs (`mrtNode`) would take precedence over these, so it
-  // is drawn without them, and keeps its own coverage.
+  // depth state and vertex shader; its coverage is then approximate.
   const standIns = new WeakMap();
   const standIn = material => {
     let copy = standIns.get(material);
@@ -109,7 +122,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
       renderer.setRenderObjectFunction((object, drawScene, drawCamera, geometry, material, group, lightsNode, clippingContext, passId) => {
         const custom = !!material?.fragmentNode, seen = drawn.get(object), ownOutputs = material?.mrtNode ?? null;
         drawn.set(object, {n: numberOf(object), object, ...(custom || seen?.custom ? {custom: true} : {})});
-        if (ownOutputs) material.mrtNode = null;
+        if (ownOutputs) material.mrtNode = idOutputsAround(ownOutputs);
         try { renderer.renderObject(object, drawScene, drawCamera, geometry, custom ? standIn(material) : material, group, lightsNode, clippingContext, passId); }
         finally { if (ownOutputs) material.mrtNode = ownOutputs; }
       });

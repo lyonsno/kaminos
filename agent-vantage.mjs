@@ -915,8 +915,9 @@ export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, opti
   if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, ...without('instance-unknown')};
   const hit = recastSurface(THREE, node, ray, {matrixWorld: row.matrixWorld, instanceMatrix, root: row.root, optics});
   if (!pictured) return {now: 'present', geometry, ...(hit ?? {point: null, basis: 'missed'})};
-  // The mesh agrees with the drawn point to float precision, or not at all.
-  const agrees = !!hit && Math.abs(hit.distance - pictured.distance) <= 1e-4 * pictured.distance + 1e-5;
+  // The mesh agrees with the drawn point to float32 precision (about 16 units
+  // in the last place of the distance, plus a micrometre), or not at all.
+  const agrees = !!hit && Math.abs(hit.distance - pictured.distance) <= 2 ** -20 * pictured.distance + 1e-6;
   return {now: 'present', geometry, ...pictured, normal: agrees ? hit.normal : null, face: agrees ? hit.face : null,
     surfaceBasis: agrees ? 'recast-agrees' : 'recast-differs'};
 }
