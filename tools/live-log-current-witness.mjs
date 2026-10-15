@@ -53,7 +53,7 @@ try {
   await invoke('view',{mode:'char'});assert.equal(await page.locator('#live-log-heat [name=burn-view]:checked').inputValue(),'char');await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
   report.phase='end-exposure';await save();
-  await invoke('move',{position:[0,0,-.4]});await invoke('pause');
+  await invoke('move',{position:[-.25,0,0]});await invoke('pause');
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=1200);
   await invoke('pause');await invoke('frame');await invoke('view',{mode:'char'});await shot('end-char');
   await invoke('view',{mode:'beauty'});assert.equal(await page.evaluate(()=>window.kaminosSceneGIDebugState().gain),report.effective.gi.gain);await shot('end-material');await invoke('burnerOff');

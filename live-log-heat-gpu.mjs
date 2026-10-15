@@ -1,5 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {LIVE_LOG_GRID,LIVE_LOG_HEAT_IDENTITY,LIVE_LOG_THERMAL_MODEL,checkLiveLogFrame} from './live-log-heat-core.mjs';
+import {createLogSurfaceMask} from './live-log-surface-mask.mjs';
 
 export const LIVE_LOG_HEAT_WGSL=`
 struct Params { gridDt:vec4<f32>, lo:vec4<f32>, size:vec4<f32>, localToVolume:mat4x4<f32> }
@@ -32,10 +33,11 @@ fn advance(@builtin(global_invocation_id) c:vec3<u32>) {
 export const LIVE_LOG_SUMMARY_WGSL=`
 @group(0) @binding(0) var<storage,read> cells:array<vec4<f32>>;
 @group(0) @binding(1) var summary:texture_storage_2d<rgba16float,write>;
+@group(0) @binding(2) var<storage,read> surface:array<u32>;
 @compute @workgroup_size(1)
 fn summarize() {
   var peak=vec4<f32>(0.0);
-  for(var i=0u;i<${LIVE_LOG_GRID**3}u;i++){peak=max(peak,cells[i]);}
+  for(var i=0u;i<${LIVE_LOG_GRID**3}u;i++){if(surface[i]!=0u){peak=max(peak,cells[i]);}}
   textureStore(summary,vec2<i32>(0),peak);
 }`;
 
@@ -44,6 +46,8 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds}) {
   if(!device?.createComputePipelineAsync)throw Error('Live log requires WebGPU');
   const size=bounds.getSize(new THREE.Vector3());
   if(Math.min(size.x,size.y,size.z)<=0)throw Error('Live log requires volumetric mesh bounds');
+  const surfaceMask=createLogSurfaceMask(mesh.geometry,bounds,LIVE_LOG_GRID);
+  const summaryCellCount=surfaceMask.reduce((a,b)=>a+b,0);
   const owned=[];let disposed=false;
   try {
     const module=device.createShaderModule({label:'live log local heat',code:LIVE_LOG_HEAT_WGSL});
@@ -56,12 +60,13 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds}) {
     if(summaryInfo.messages.some(m=>m.type==='error'))throw Error('Live log summary WGSL: '+summaryInfo.messages.filter(m=>m.type==='error').map(m=>m.message).join('; '));
     const summaryPipeline=await device.createComputePipelineAsync({label:'live log burn status',layout:'auto',compute:{module:summaryModule,entryPoint:'summarize'}});
     const buffers=[0,1].map(i=>{const b=device.createBuffer({label:'live log resident state '+i,size:LIVE_LOG_GRID**3*16,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(b);return b;});
+    const surface=device.createBuffer({label:'live log mesh-intersecting cells',size:surfaceMask.byteLength,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});owned.push(surface);device.queue.writeBuffer(surface,0,surfaceMask);
     const params=device.createBuffer({label:'live log local-to-volume transform',size:112,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
     const texture=device.createTexture({label:'live log thermal material',dimension:'3d',size:[LIVE_LOG_GRID,LIVE_LOG_GRID,LIVE_LOG_GRID],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(texture);
     const summaryTexture=device.createTexture({label:'live log burn status texture',size:[1,1],format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(summaryTexture);
     const summaryWrapper=new THREE.ExternalTexture(summaryTexture);summaryWrapper.type=THREE.HalfFloatType;summaryWrapper.format=THREE.RGBAFormat;summaryWrapper.colorSpace=THREE.NoColorSpace;
     const summaryNode=THREE.TSL.texture(summaryWrapper,THREE.TSL.vec2(.5,.5));
-    const summaryGroups=buffers.map(buffer=>device.createBindGroup({layout:summaryPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:summaryTexture.createView()}]}));
+    const summaryGroups=buffers.map(buffer=>device.createBindGroup({layout:summaryPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer}},{binding:1,resource:summaryTexture.createView()},{binding:2,resource:{buffer:surface}}]}));
     const wrapper=new THREE.ExternalTexture(texture);wrapper.is3DTexture=true;wrapper.image={width:LIVE_LOG_GRID,height:LIVE_LOG_GRID,depth:LIVE_LOG_GRID};
     wrapper.type=THREE.HalfFloatType;wrapper.format=THREE.RGBAFormat;wrapper.colorSpace=THREE.NoColorSpace;wrapper.minFilter=THREE.LinearFilter;wrapper.magFilter=THREE.LinearFilter;wrapper.generateMipmaps=false;
     const p=THREE.TSL.positionLocal.sub(THREE.TSL.vec3(...bounds.min.toArray())).div(THREE.TSL.vec3(...size.toArray()));
@@ -94,7 +99,7 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds}) {
         const summaryPass=encoder.beginComputePass({label:'live log GPU burn summary'});summaryPass.setPipeline(summaryPipeline);summaryPass.setBindGroup(0,summaryGroups[index]);summaryPass.dispatchWorkgroups(1);summaryPass.end();
         steps++;seconds+=source.dt;lastSource={allocationId:source.allocationId,simStepCount:source.simStepCount,dimensions:[...source.dimensions],transform:structuredClone(source.transform),localToVolume:matrix.toArray()};
       },reset,
-      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:false}),
+      read:()=>({identity:LIVE_LOG_HEAT_IDENTITY,model:LIVE_LOG_THERMAL_MODEL,status:disposed?'disposed':'resident',grid:LIVE_LOG_GRID,generation,steps,referenceSeconds:seconds,lastSource,runtimeReadbacks:0,selfEmission:false,summaryDomain:'mesh-intersecting-voxels',summaryCellCount}),
       dispose(){if(disposed)return;disposed=true;for(const wrapped of [wrapper,summaryWrapper]){delete renderer.backend.get(wrapped).texture;wrapped.dispose();}for(const resource of owned)resource.destroy();cache=new WeakMap();},
     };
   }catch(error){for(const resource of owned)resource.destroy();throw error;}

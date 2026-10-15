@@ -34,6 +34,7 @@ test('visible burn status has resident GPU summary and is reset with the materia
   const mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());mesh.geometry.computeBoundingBox();
   const field=await createLiveLogHeatGpu({renderer:{backend:{device,get:()=>({})}},mesh,bounds:mesh.geometry.boundingBox});
   assert.ok(field.summaryNode,'burn label must sample GPU-derived material summary, not Run or burner state');
+  assert.equal(field.read().summaryDomain,'mesh-intersecting-voxels','empty bounding-box cells cannot establish that wood is reacting');
   const summary=field.summaryTexture;assert.ok(writes.includes(summary));
   field.encode({beginComputePass(spec){passes.push(spec.label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}},
     {device,fluid:{},dimensions:[32,32,32],simStepCount:1,allocationId:'field-1',dt:1/60,transform:{translate:[0,0,0],scale:1}});
