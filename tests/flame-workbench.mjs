@@ -26,6 +26,7 @@ function fixture() {
   };
   return {options,runtime,history,events,notify,listeners,
     setView:next=>{view=next;notify();},setObjects:next=>{objects=next;notify();},
+    draftInput(value){settings.domControls['volume-flow-rate'].value=value;notify();},
     ordinaryInput(value){settings.domControls['volume-flow-rate'].value=value;runtime.controls.flowRate=value;notify();}};
 }
 
@@ -73,6 +74,19 @@ test('a refused edit cannot be recorded as successfully applied',()=>{
   const stop=observeFlameInvestigation({read:api.read,subscribe:f.options.subscribe,channel:investigationOperations});
   assert.throws(()=>api.setControls({'volume-flow-rate':-2}),/invalid flow/);
   assert.equal(recorder.snapshot().operations.length,0);stop();recorder.finish();
+});
+
+test('source observations retain effective renderer controls alongside authored values',()=>{
+  const f=fixture(),api=createFlameWorkbench(f.options);
+  const recorder=createInvestigationRecording({id:'effective',source:{revision:'fixture'},initial:api.read(),startingConditions:{kind:'live-runtime'}});
+  const stop=observeFlameInvestigation({read:api.read,subscribe:f.options.subscribe,channel:investigationOperations});
+  f.ordinaryInput(2);
+  f.draftInput(3);
+  const row=recorder.snapshot().operations.at(-1);
+  stop();recorder.finish();
+  assert.equal(row.phase,'observed','an observation must not label a pending DOM preview as applied GPU state');
+  assert.equal(row.effectiveRuntimeControls.flowRate,2);
+  assert.equal(row.effective.domControls['volume-flow-rate'].value,3);
 });
 
 test('discovered Flame contribution borrows the authored runtime across close and reopen',async()=>{
