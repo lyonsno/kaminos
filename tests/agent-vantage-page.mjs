@@ -2,8 +2,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
-import {poseAxes, poseLookingAt} from '../agent-vantage-core.mjs';
+import {createVantagePilot, createCommandPump, installAgentVantage, raycastEntries, poseOfEntries} from '../agent-vantage.mjs';
+import {poseAxes, poseLookingAt, rayThrough} from '../agent-vantage-core.mjs';
 import {createSceneCameras, cameraViewFromRecord} from '../scene-camera.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {installScenePlacementTools} from '../scene-placement-tools.mjs';
@@ -904,7 +904,7 @@ test('a pick on a kept picture finds what the picture showed, and says what has 
   const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
   const at = pictureFraction(view, 16 / 9, [2, 0.1, 0.5]);
   const box = page.entries[1];
-  const pose = [poseRecord(box)];
+  const pose = poseOfEntries([box], {session: page.vantage.pageId});
   box.object.position.x += 3;   // the box moves away after the picture
   const later = await page.vantage.run('pick', {optics, at, pose});
   assert.equal(later.hit?.id, 'box-1', 'the box the picture showed, where it stood then');
@@ -918,8 +918,8 @@ test('a pick on a kept picture finds what the picture showed, and says what has 
   mesh.geometry.attributes.position.needsUpdate = true;
   assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'edited');
   mesh.geometry = new THREE.BoxGeometry(1, 1, 1);
-  assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'unverified',
-    'same shape counts but another geometry object: replaced, or the page reloaded');
+  assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'replaced',
+    'another geometry object in the same page session, even with the same counts');
   mesh.geometry = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2);
   assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'replaced');
   page.entries.splice(1, 1);
@@ -935,4 +935,78 @@ test('pictures record where the objects they show stood', async () => {
     'only what the picture shows is recorded');
   const burst = await pilot.run('burst', {count: 2, map: false});
   for (const frame of burst.frames) assert.ok(Array.isArray(frame.scenePose), 'every burst frame records its objects');
+});
+
+// --- what a pick may and may not name -----------------------------------------
+
+const boxEntry = (id, position, {material} = {}) => {
+  const object = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material ?? new THREE.MeshBasicMaterial());
+  object.position.fromArray(position);
+  return {id, label: id, type: 'procedural-mesh', object};
+};
+const towardMinusZ = {origin: [0, 0, 10], direction: [0, 0, -1]};
+
+test('while the operator looks through the sub, a sub pick uses the framed view they see', async () => {
+  const framed = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 30, near: 0.1, far: 1000});
+  framed.projection[8] = 0.3;   // a camera-frame offset lives in the projection
+  let cast = null;
+  const app = await launched();
+  app.state.settings.activeId = 'vantage-bebop'; app.state.mode = 'camera'; app.state.optics = framed;
+  app.host.raycast = ray => { cast = ray; return {hits: [], missing: []}; };
+  const viaHost = createVantagePilot(app.host);
+  const result = await viaHost.run('pick', {at: [0.5, 0.5]});
+  closeTo(result.ray.direction, rayThrough(framed, [0.5, 0.5]).direction, 'the framed centre ray, not the nominal one');
+  closeTo(cast.direction, result.ray.direction, 'the page casts the same ray');
+});
+
+test('geometry replaced in the same page session is called replaced, even with the same counts', () => {
+  const entry = boxEntry('kiln', [0, 0, 0]);
+  const pose = poseOfEntries([entry], {session: 'page-a'});
+  entry.object.geometry = new THREE.BoxGeometry(2, 1, 1);
+  const same = raycastEntries(THREE, [entry], towardMinusZ, {pose, session: 'page-a'});
+  assert.equal(same.hits[0]?.geometry.status, 'replaced', 'a new geometry object in the same session is a replacement');
+  const later = raycastEntries(THREE, [entry], towardMinusZ, {pose, session: 'page-b'});
+  assert.equal(later.hits[0]?.geometry.status, 'replaced', 'after a reload, a sampled content check still tells them apart');
+  const untouched = boxEntry('kiln', [0, 0, 0]);
+  const reloaded = raycastEntries(THREE, [untouched], towardMinusZ, {pose: poseOfEntries([untouched], {session: 'page-a'}), session: 'page-b'});
+  assert.equal(reloaded.hits[0]?.geometry.status, 'likely-same', 'the same content after a reload matches by sample, not by identity');
+});
+
+test('invisible surfaces are not what lies under the point', () => {
+  for (const hide of [material => { material.visible = false; }, material => { material.transparent = true; material.opacity = 0; }]) {
+    const material = new THREE.MeshBasicMaterial();
+    hide(material);
+    const result = raycastEntries(THREE, [boxEntry('ghost', [0, 0, 5], {material}), boxEntry('wall', [0, 0, 0])], towardMinusZ);
+    assert.equal(result.hits[0]?.id, 'wall');
+  }
+});
+
+test('a pick respects the camera clipping planes', () => {
+  const camera = new PerspectiveCamera(50, 1, 1, 20);
+  camera.position.set(0, 0, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 1, coordinateSystem: camera.coordinateSystem};
+  const tiny = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial()); tiny.position.set(0, 0, 9.5);
+  const entries = [{id: 'before-near', label: 'tiny', type: 'procedural-mesh', object: tiny}, boxEntry('seen', [0, 0, 0]), boxEntry('past-far', [0, 0, -15])];
+  const result = raycastEntries(THREE, entries, rayThrough(optics, [0.5, 0.5]), {optics});
+  assert.equal(result.hits[0]?.id, 'seen', 'nothing before the near plane intercepts the pick');
+  assert.ok(!result.hits.some(hit => hit.id === 'past-far'), 'nothing past the far plane is named');
+});
+
+test('an instanced surface keeps its instance and its true normal', () => {
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), 2);
+  mesh.setMatrixAt(0, new THREE.Matrix4().makeRotationY(Math.PI / 4));
+  mesh.setMatrixAt(1, new THREE.Matrix4().makeTranslation(10, 0, 0));
+  const result = raycastEntries(THREE, [{id: 'rocks', label: 'rocks', type: 'glb', object: mesh}],
+    {origin: [-3, 0, 3], direction: [1, 0, -1]});
+  assert.equal(result.hits[0]?.surface.instance, 0);
+  closeTo(result.hits[0].normal, [-Math.SQRT1_2, 0, Math.SQRT1_2], 'the face normal turned with its instance', 1e-9);
+});
+
+test('a splat along the ray is reported, not silently looked through', () => {
+  const positions = new Float32Array([0, 0, 5, 0.1, 0, 5, -0.1, 0.05, 5]);
+  const cloud = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(positions, 3)), new THREE.PointsMaterial());
+  const splat = new THREE.Group(); splat.add(cloud);
+  const result = raycastEntries(THREE, [{id: 'plume', label: 'Plume', type: 'splat', object: splat}, boxEntry('wall', [0, 0, 0])], towardMinusZ);
+  assert.deepEqual(result.unresolved.map(item => item.id), ['plume'], 'the splat in front is named as something the pick cannot resolve');
+  assert.equal(result.hits[0]?.id, 'wall');
 });

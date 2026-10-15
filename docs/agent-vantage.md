@@ -56,20 +56,29 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 ## Pointing at things
 
-`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left; `--from operator` uses your view. These picks read the scene as it is now.
+`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left. While you are looking through the sub, those fractions refer to the framed view you see. `--from operator` uses your own view. These picks read the scene as it is now.
 
-`pick X Y --picture RECORD.json` takes a pixel of a kept picture (`--frame N` for a burst frame). Every picture's record carries the camera it was rendered with (`optics`) and where each object it shows stood (`scenePose`). The pick puts those objects back where the picture showed them, casts from that camera, and then reports:
-- whether the object has moved since;
-- whether its geometry is `same`, `edited`, `replaced`, or `unverified`. After a page reload, matching vertex counts are all that can be checked.
+`pick X Y --picture RECORD.json` takes a pixel of a kept picture (`--frame N` for a burst frame). Every picture's record carries:
+- `optics`: the camera it was rendered with;
+- `scenePose`: where each object it shows stood, and how to recognise that object's geometry.
 
-Objects the picture showed that are gone are listed as `missing`.
+The pick puts those objects back where the picture showed them, then casts from that camera. Objects the picture showed that are gone are listed as `missing`. Each hit says whether its object has moved since, and how its geometry compares:
 
-A pick answers with:
-- the first object the ray meets;
+| Status | Meaning |
+| --- | --- |
+| `same` | Same geometry object and edit count, in the same page session. |
+| `edited` | Same geometry object, changed in place, in the same session. |
+| `replaced` | Another geometry object in the same session, or different content. |
+| `likely-same` | After a page reload, the counts and a sampled position fingerprint match. |
+| `unverified` | After a reload, nothing could be checked. |
+
+A pick names the first visible surface between the camera's near and far planes. It skips hidden objects, invisible or fully transparent materials, editor helpers, cameras and lights. A hit gives:
+- the object;
 - the point in world and in the object's own frame;
 - the surface normal;
-- the mesh path and face it struck;
-- the fields the ray passes through.
+- the mesh path, face, and instance for instanced meshes.
+
+It also lists the fields the ray passes through. Point clouds such as splats are not picked. One lying along the ray in front of the hit is listed under `unresolved`, because it may be what the point shows.
 
 A pick renders nothing and never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
 
