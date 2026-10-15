@@ -62,7 +62,13 @@ export function addressMismatch(requested, effective) {
   return null;
 }
 
+// Exact by default. {"$near": x, "tolerance": t} opts one value into an absolute tolerance
+// (default 1e-9), for camera and transform values that round-trip through floats.
 export function subsetMismatch(actual, expected, path = '') {
+  if (expected && typeof expected === 'object' && '$near' in expected) {
+    const tolerance = expected.tolerance ?? 1e-9;
+    return typeof actual === 'number' && Math.abs(actual - expected.$near) <= tolerance ? null : `${path || 'result'}: expected ${expected.$near} within ${tolerance}, got ${JSON.stringify(actual)}`;
+  }
   if (expected === null || typeof expected !== 'object') return Object.is(actual, expected) ? null : `${path || 'result'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
   for (const [key, value] of Object.entries(expected)) { const miss = subsetMismatch(actual?.[key], value, `${path}${path ? '.' : ''}${key}`); if (miss) return miss; }
   return null;

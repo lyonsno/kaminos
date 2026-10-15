@@ -1,6 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {encodeGlb,parseGlb,readTrianglePrimitives} from '../poly-glb-io.mjs';
+import {encodeGlb,parseGlb,readTrianglePrimitives,writeDerivedGlb} from '../poly-glb-io.mjs';
 
 // One interleaved, strided primitive with 16-bit indices and a node matrix,
 // the layout details a reader most easily gets wrong.
@@ -35,6 +35,36 @@ assert.ok(primitive.indices instanceof Uint32Array);
 assert.deepEqual([...primitive.indices],[0,1,2,2,1,3],'16-bit indices widen without loss');
 assert.deepEqual({mesh:primitive.mesh,primitive:primitive.primitive,material:primitive.material,nodes:primitive.nodes},{mesh:0,primitive:0,material:0,nodes:[0]});
 assert.deepEqual(primitive.worldMatrices,[[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]],'the node placement travels with the geometry');
+
+// A derived part keeps the source's material and baked images byte for byte, puts new
+// faces in their own explicit material, and says where it came from.
+const image=new Uint8Array([0x89,0x50,0x4e,0x47,1,2,3,4,5,6,7]);
+const textured=structuredClone(json);
+textured.materials=[{name:'atlas',pbrMetallicRoughness:{baseColorTexture:{index:0}},doubleSided:true}];
+textured.textures=[{source:0,sampler:0}];textured.samplers=[{magFilter:9729}];textured.images=[{mimeType:'image/png',bufferView:2}];
+const texturedBin=new Uint8Array(bin.length+16);texturedBin.set(bin);texturedBin.set(image,bin.length);
+textured.bufferViews.push({buffer:0,byteOffset:bin.length,byteLength:image.length});textured.buffers[0].byteLength=texturedBin.length;
+const sourceGlb=encodeGlb(textured,texturedBin);
+const part={positions:Float32Array.of(0,0,0, 1,0,0, 0,1,0, 1,1,0, 0,0,1),normals:Float32Array.of(0,0,1,0,0,1,0,0,1,0,0,1,0,1,0),uvs:Float32Array.of(0,0,1,0,0,1,1,1,.5,.5),
+  indices:Uint32Array.of(0,1,2, 2,1,3, 0,1,4),faceMaterial:Uint8Array.of(0,0,1)};
+const receipt={schema:'kaminos.poly-derivation.v0',source:{sha256:'abc'},operations:[{op:'separate'}]};
+const derived=writeDerivedGlb(sourceGlb,part,{name:'Cup',receipt,nodeMatrix:[1,0,0,0,0,1,0,0,0,0,1,0,.5,0,0,1]});
+const {json:dj,bin:db}=parseGlb(derived);
+assert.deepEqual(dj.materials[0],textured.materials[0],'the source material is carried unchanged');
+assert.equal(dj.materials[1].name,'Cut cap');
+const dImage=dj.images[0],dView=dj.bufferViews[dImage.bufferView];
+assert.deepEqual([...db.subarray(dView.byteOffset,dView.byteOffset+dView.byteLength)],[...image],'baked images are copied byte for byte');
+assert.deepEqual(dj.textures,textured.textures);assert.deepEqual(dj.samplers,textured.samplers);
+assert.deepEqual(dj.nodes[0].matrix,[1,0,0,0,0,1,0,0,0,0,1,0,.5,0,0,1]);
+assert.equal(dj.nodes[0].name,'Cup');
+assert.deepEqual(dj.asset.extras.kaminosDerivation,receipt);
+const position=dj.accessors[dj.meshes[0].primitives[0].attributes.POSITION];
+assert.deepEqual([position.min,position.max],[[0,0,0],[1,1,1]],'glTF requires position bounds');
+const back=readTrianglePrimitives(derived);
+assert.deepEqual(back.map(q=>[q.material,q.indices.length/3]),[[0,2],[1,1]],'one primitive per material, faces in order');
+assert.deepEqual([...back[0].positions],[...part.positions]);
+assert.deepEqual([...back[1].uvs],[...part.uvs]);
+assert.throws(()=>writeDerivedGlb(sourceGlb,{...part,faceMaterial:Uint8Array.of(0,0,2)}),/material/);
 
 assert.throws(()=>parseGlb(new Uint8Array(12)),/glTF/);
 const sparse=structuredClone(json);sparse.accessors[0].sparse={count:1};

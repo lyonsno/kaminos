@@ -83,3 +83,40 @@ export function readTrianglePrimitives(bytes) {
   }));
   return out;
 }
+
+export const CUT_CAP_MATERIAL=Object.freeze({name:'Cut cap',pbrMetallicRoughness:{baseColorFactor:[.42,.4,.38,1],metallicFactor:.6,roughnessFactor:.55},doubleSided:true});
+
+// A part derived from a source GLB: the source material, textures, samplers and
+// embedded images carry over byte for byte, so preserved UVs keep sampling the
+// same atlas. Faces with material 1 use an explicit cap material. The receipt
+// travels in asset.extras so the file says what it was cut from.
+export function writeDerivedGlb(sourceBytes,part,{name='Part',receipt=null,nodeMatrix=null,sourceMaterial=0,capMaterial=CUT_CAP_MATERIAL}={}) {
+  const {json:src,bin:srcBin}=parseGlb(sourceBytes),faceCount=part.indices.length/3,slots=part.faceMaterial??new Uint8Array(faceCount);
+  for(const slot of slots)if(slot>1)throw Error(`Derived part face material ${slot} has no slot; use 0 for the source material and 1 for caps`);
+  const chunks=[],bufferViews=[],accessors=[];let length=0;
+  const append=(bytes,target)=>{const byteOffset=length+3&~3;chunks.push([byteOffset,bytes]);length=byteOffset+bytes.length;bufferViews.push({buffer:0,byteOffset,byteLength:bytes.length,...(target?{target}:{})});return bufferViews.length-1;};
+  const images=(src.images??[]).map(image=>{
+    if(image.bufferView===undefined)return {...image};
+    const view=src.bufferViews[image.bufferView],start=view.byteOffset??0;
+    return {...image,bufferView:append(srcBin.subarray(start,start+view.byteLength))};
+  });
+  const accessor=(array,type,componentType,target,extra={})=>{accessors.push({bufferView:append(new Uint8Array(array.buffer,array.byteOffset,array.byteLength),target),componentType,count:array.length/WIDTH[type],type,...extra});return accessors.length-1;};
+  const P=part.positions,min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+  for(let i=0;i<P.length;i++){min[i%3]=Math.min(min[i%3],P[i]);max[i%3]=Math.max(max[i%3],P[i]);}
+  const attributes={POSITION:accessor(Float32Array.from(P),'VEC3',5126,34962,{min,max})};
+  if(part.normals)attributes.NORMAL=accessor(Float32Array.from(part.normals),'VEC3',5126,34962);
+  if(part.uvs)attributes.TEXCOORD_0=accessor(Float32Array.from(part.uvs),'VEC2',5126,34962);
+  const primitives=[0,1].flatMap(slot=>{
+    const faces=[];for(let f=0;f<faceCount;f++)if(slots[f]===slot)faces.push(f);
+    if(!faces.length)return [];
+    const indices=new Uint32Array(faces.length*3);faces.forEach((f,j)=>indices.set(part.indices.subarray(3*f,3*f+3),3*j));
+    return [{attributes,indices:accessor(indices,'SCALAR',5125,34963),material:slot}];
+  });
+  const bin=new Uint8Array(length+3&~3);for(const [offset,bytes] of chunks)bin.set(bytes,offset);
+  const json={asset:{version:'2.0',generator:'Kaminos polygon tools',...(receipt?{extras:{kaminosDerivation:receipt}}:{})},scene:0,scenes:[{nodes:[0]}],
+    nodes:[{name,mesh:0,...(nodeMatrix?{matrix:[...nodeMatrix]}:{})}],meshes:[{name,primitives}],
+    materials:[src.materials?.[sourceMaterial]??{name:'Source'},capMaterial],
+    ...(src.textures?{textures:src.textures}:{}),...(src.samplers?{samplers:src.samplers}:{}),...(images.length?{images}:{}),
+    accessors,bufferViews,buffers:[{byteLength:bin.length}]};
+  return encodeGlb(json,bin);
+}

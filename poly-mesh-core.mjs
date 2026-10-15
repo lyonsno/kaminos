@@ -149,15 +149,16 @@ export function faceComponents(mesh,{delimit=0,flags=null}={}) {
   return components(mesh.faceCount,find,Array.from({length:mesh.faceCount},(_,f)=>f));
 }
 
-export function selectLinkedFaces(mesh,seeds,{delimit=0,flags=null}={}) {
+export function selectLinkedFaces(mesh,seeds,{delimit=0,flags=null,barrier=null}={}) {
   flags=checkedDelimit(mesh,delimit,flags);
+  if(barrier&&barrier.length!==mesh.edgeCount)throw Error('Select Linked barrier must have one entry per edge');
   const mask=new Uint8Array(mesh.faceCount),stack=[];
   for(const f of seeds){if(!Number.isInteger(f)||f<0||f>=mesh.faceCount)throw Error(`Face ${f} is not in this mesh`);if(!mask[f]){mask[f]=1;stack.push(f);}}
   const {edgeFaceOffsets:offsets,edgeCorners,cornerEdge}=mesh;
   while(stack.length){
     const f=stack.pop();
     for(let c=3*f;c<3*f+3;c++){
-      const e=cornerEdge[c];if(e===NO_EDGE)continue;
+      const e=cornerEdge[c];if(e===NO_EDGE||barrier?.[e])continue;
       const from=edgeCorners.subarray(offsets[e],offsets[e+1]).indexOf(c);
       forEachLinkedPair(mesh,e,delimit,flags,from,(_,j)=>{const g=edgeCorners[j]/3|0;if(!mask[g]){mask[g]=1;stack.push(g);}});
     }

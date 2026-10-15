@@ -41,6 +41,10 @@ assert.equal(subsetMismatch({ sharpAngle: 60, census: { vertices: 34125, faces: 
 assert.match(subsetMismatch({ sharpAngle: 30 }, { sharpAngle: 60 }), /sharpAngle: expected 60, got 30/, 'a defaulted setting is caught');
 assert.match(subsetMismatch({ census: { vertices: 138656 } }, { census: { vertices: 34125 } }), /census\.vertices/, 'an unwelded fallback is caught');
 assert.match(subsetMismatch(undefined, { source: '/api/read?root=greenroom' }), /source/);
+assert.equal(subsetMismatch({ target: [0, .25, 0.36999999999999994] }, { target: [0, .25, { $near: .37 }] }), null, 'an opted-in camera value tolerates float round-trip');
+assert.match(subsetMismatch({ target: [0, .25, .3701] }, { target: [0, .25, { $near: .37 }] }), /within/, 'but not a different view');
+assert.match(subsetMismatch({ count: '4' }, { count: { $near: 4 } }), /within/, 'and never a non-number');
+assert.match(subsetMismatch({ target: [0, .25, 0.36999999999999994] }, { target: [0, .25, .37] }), /expected 0.37/, 'exact stays exact unless opted in');
 
 const page = 'http://127.0.0.1:8090/index.html?workspace=workbench&experiment=poly-edge-census&experiment_inputs=' + encodeURIComponent('{"url":"/a.glb","sharpAngle":60}');
 assert.equal(addressMismatch(page, 'http://127.0.0.1:8090/index.html?workspace=workbench&experiment=poly-edge-census&experiment_inputs=%7B%22url%22%3A%22%2Fa.glb%22%2C%22sharpAngle%22%3A60%7D'), null, 're-serialized but identical inputs pass');
