@@ -94,9 +94,10 @@ function fakeApp({mode = 'user', activeId = null, cameras = []} = {}) {
       if (state.idPassThrows) throw new Error(state.idPassThrows);
       const {width, height} = options, objects = new Uint16Array(width * height).fill(1), instances = new Uint16Array(width * height);
       objects.fill(2, 0, width);   // the top row shows the side box
+      const depths = options.depth ? new Float32Array(width * height).fill(4) : undefined;
       const row = (n, id, label) => ({n, id, label, type: 'procedural-mesh', path: [0], matrixWorld: Array(16).fill(0), root: Array(16).fill(0)});
       return {rows: [row(1, 'centre', 'Centre box'), row(2, 'side', 'Side box'), row(3, 'covered', 'Covered box')],
-        context: {clouds: [], fields: [], water: false}, ready: Promise.resolve({width, height, objects, instances})};
+        context: {clouds: [], fields: [], water: false}, ready: Promise.resolve({width, height, objects, instances, depths})};
     },
     encode: canvas => ({mime: 'image/png', dataUrl: `data:image/png;base64,${Buffer.from(JSON.stringify(canvas)).toString('base64')}`, width: 1280, height: 720}),
     annotate: canvas => ({...canvas, annotated: true}),
@@ -834,9 +835,10 @@ function fakeIdPass(entries, {drawnAt = null} = {}) {
   const numberOf = object => { if (!numbers.has(object)) { objects.push(object); numbers.set(object, objects.length); } return numbers.get(object); };
   return {
     calls,
-    draw({optics, width, height, hide = [], region = [0, 0, width, height]}) {
-      calls.push({optics, width, height, hide, region});
-      const [x0, y0, w, h] = region, ids = new Uint16Array(w * h), instances = new Uint16Array(w * h), drawn = new Set();
+    draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false}) {
+      calls.push({optics, width, height, hide, region, depth});
+      const [x0, y0, w, h] = region, ids = new Uint16Array(w * h), instances = new Uint16Array(w * h), depths = new Float32Array(w * h), drawn = new Set();
+      const view = new THREE.Matrix4().fromArray(optics.viewInverse);
       const shown = entries().filter(entry => !hide.includes(entry.id)).map(entry => entry.object);
       for (const object of shown) object.updateWorldMatrix(true, true);   // as rendering the scene does
       for (let y = 0; y < h; y++) {
@@ -849,9 +851,11 @@ function fakeIdPass(entries, {drawnAt = null} = {}) {
           }
           if (!hit) continue;
           ids[y * w + x] = numberOf(hit.object); instances[y * w + x] = hit.instanceId ?? 0; drawn.add(hit.object);
+          depths[y * w + x] = hit.depth ?? (hit.point ? -hit.point.clone().applyMatrix4(view).z : 0);
         }
       }
-      return {drawn: [...drawn].map(object => ({n: numberOf(object), object})), ready: Promise.resolve({width: w, height: h, objects: ids, instances})};
+      return {drawn: [...drawn].map(object => ({n: numberOf(object), object})),
+        ready: Promise.resolve({width: w, height: h, objects: ids, instances, ...(depth ? {depths} : {})})};
     },
   };
 }
@@ -865,8 +869,12 @@ test('pick from the operator view names what the renderer drew there, the point 
   assert.equal(picked.referent, 'rendered', 'a live pick asks the renderer what it draws now');
   assert.equal(picked.hit?.id, 'box-1');
   assert.equal(picked.hit.authority, 'exact');
-  closeTo(picked.hit.point, [2, 0.1, 0.5], 'world point');
-  closeTo(picked.hit.local, [0, 0.1, 0.5], 'the same point in the object\'s own frame');
+  // The pick names the pixel `at` falls in, through that pixel's centre: within half a pixel of the asked point.
+  closeTo(picked.hit.point, [2, 0.1, 0.5], 'world point', 5e-3);
+  closeTo(picked.hit.local, [0, 0.1, 0.5], 'the same point in the object\'s own frame', 5e-3);
+  closeTo(picked.ray.direction, rayThrough(opticsOf(OPERATOR), picked.pixelCentre).direction, 'the ray through the pixel centre');
+  assert.equal(picked.hit.pointBasis, 'depth', 'the point is where the renderer drew it');
+  assert.equal(picked.hit.surfaceBasis, 'recast-agrees');
   closeTo(picked.hit.normal, [0, 0, 1], 'the surface faces the camera');
   assert.deepEqual(picked.hit.surface.path, [0], 'the mesh is the first child of the object');
   assert.ok(Number.isInteger(picked.hit.surface.face));
@@ -898,7 +906,7 @@ test('pick from the sub draws the sub view, and a picture camera without its map
   const fromSub = await page.vantage.run('pick', {at: pictureFraction(subView, 800 / 600, [0, 0.1, 0.5])});
   assert.equal(fromSub.from, 'vantage-bebop');
   assert.equal(fromSub.hit?.id, 'box-0');
-  closeTo(fromSub.hit.local, [0, 0.1, 0.5], 'box 0 sits at the origin');
+  closeTo(fromSub.hit.local, [0, 0.1, 0.5], 'box 0 sits at the origin', 5e-3);
   assert.deepEqual(page.idPass.calls.at(-1).hide, ['vantage-bebop'], 'the sub is not drawn into its own pick');
   const view = {position: [4, 1, 5], target: [4, 0, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000};
   const camera = new PerspectiveCamera(view.fov, 16 / 9, view.near, view.far);
@@ -918,7 +926,8 @@ test('while the operator looks through the sub, a sub pick draws the framed view
   let drawnWith = null;
   app.host.drawIds = options => { drawnWith = options.optics; return {rows: [], context: {clouds: [], fields: [], water: false}, ready: Promise.resolve({width: 1, height: 1, objects: Uint16Array.of(0), instances: Uint16Array.of(0)})}; };
   const result = await createVantagePilot(app.host).run('pick', {at: [0.5, 0.5]});
-  closeTo(result.ray.direction, rayThrough(framed, [0.5, 0.5]).direction, 'the framed centre ray, not the nominal one');
+  closeTo(result.ray.direction, rayThrough(framed, result.pixelCentre).direction, 'the framed ray, not the nominal one');
+  closeTo(result.pixelCentre, [0.5 + 0.5 / 1600, 0.5 + 0.5 / 900], 'through the centre of the pixel the point falls in');
   assert.deepEqual(drawnWith.projection, framed.projection, 'the pick map is drawn through the same frame');
 });
 
@@ -986,6 +995,8 @@ function picturedRow(page, index = 1) {
     matrixWorld: mesh.matrixWorld.toArray(), root: entry.object.matrixWorld.toArray(), geometry: vantage.geometryIdentity?.(mesh, page.vantage.pageId) ?? null};
 }
 const PICTURE_VIEW = {position: [2, 1, 6], target: [2, 0, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000};
+// The view depth a picture keeps for a world point: its distance along the camera's viewing axis.
+const viewDepth = (optics, point) => -new Vector3(...point).applyMatrix4(new THREE.Matrix4().fromArray(optics.viewInverse)).z;
 function pictureOptics(view = PICTURE_VIEW) {
   const camera = new PerspectiveCamera(view.fov, 16 / 9, view.near, view.far);
   camera.position.fromArray(view.position); camera.lookAt(new Vector3(...view.target)); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
@@ -1077,15 +1088,17 @@ test('a pictured normal is the one the picture drew, and nothing in the scene is
 
 test('a pick says when something drawn outside the pick map lies in front of what it names', async () => {
   const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
-  const pictured = picturedRow(page);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])};
   const scene = {clouds: [{id: 'plume', label: 'Plume', type: 'splat', bounds: {min: [1, -1, 1], max: [3, 1, 2]}}],
     fields: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', bounds: {min: [1, -1, 0.8], max: [3, 1, 3]}},
       {id: 'far-field', label: 'Far field', type: 'simulation-domain', bounds: {min: [1, -5, -9], max: [3, 5, -8]}}],
     water: false};
   const picked = await page.vantage.run('pick', {optics, at, pictured, scene});
-  assert.deepEqual(picked.unresolved.map(item => item.id), ['flame-field', 'plume'], 'nearest first; the field behind the box is not in front');
+  assert.deepEqual(picked.unresolved.map(item => item.id), ['flame-field', 'plume'], 'nearest first; the field behind what the picture drew is not in front');
   assert.equal(picked.hit.authority, 'approximate');
   assert.deepEqual(picked.fields.map(field => field.id), ['flame-field', 'far-field'], 'every field the ray crosses is still listed');
+  const undated = await page.vantage.run('pick', {optics, at, pictured: picturedRow(page), scene});
+  assert.deepEqual(undated.unresolved.map(item => item.id), ['flame-field', 'plume', 'far-field'], 'without depth, every field the ray crosses may cover the point');
   const wet = await page.vantage.run('pick', {optics, at, pictured, scene: {clouds: [], fields: [], water: true}});
   assert.deepEqual(wet.unresolved.map(item => item.id), ['local-water'], 'water drawn by the local water host is outside the map');
   assert.equal(wet.hit.authority, 'approximate');
@@ -1163,4 +1176,99 @@ test('an instance number the pick map cannot hold is not guessed', async () => {
   assert.equal(picked.hit?.id, 'grass', 'the object is still the one the map names');
   assert.equal(picked.hit.surface.instance, null, 'the wrapped instance number is not reported');
   assert.equal(picked.hit.pointBasis, 'instance-unknown', 'and no instance is guessed for the point');
+});
+
+// --- depth ------------------------------------------------------------------------
+
+
+test('an old picture\'s occlusion warnings come from its own depth, so editing the mesh cannot clear them', async () => {
+  const camera = new PerspectiveCamera(50, 1, 0.1, 100);
+  camera.position.set(0, 0, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 0.1, far: 100};
+  const page = installedPage(), mesh = page.entries[0].object.children[0];
+  const scene = {clouds: [{id: 'mist', label: 'Mist', type: 'splat', bounds: {min: [-1, -1, 3], max: [1, 1, 4]}}], fields: [], water: false};
+  const withDepth = {...picturedRow(page, 0), depth: 9.5}, withoutDepth = picturedRow(page, 0);
+  const before = await page.vantage.run('pick', {optics, at: [0.5, 0.5], pictured: withDepth, scene});
+  assert.deepEqual(before.unresolved.map(item => item.id), ['mist']);
+  // The reviewer's case: today's surface moves toward the camera, past the recorded cloud.
+  mesh.geometry.translate(0, 0, 7); mesh.geometry.attributes.position.needsUpdate = true;
+  const after = await page.vantage.run('pick', {optics, at: [0.5, 0.5], pictured: withDepth, scene});
+  assert.deepEqual(after.unresolved.map(item => item.id), ['mist'], 'the cloud stood in front of what the picture drew');
+  assert.equal(after.hit.authority, 'approximate');
+  closeTo(after.hit.point, [0, 0, 0.5], 'the point the picture drew, from its depth');
+  assert.equal(after.hit.pointBasis, 'depth');
+  assert.equal(after.hit.surfaceBasis, 'recast-differs', 'today\'s mesh no longer passes through that point');
+  assert.equal(after.hit.normal, null);
+  const without = await page.vantage.run('pick', {optics, at: [0.5, 0.5], pictured: withoutDepth, scene});
+  assert.deepEqual(without.unresolved.map(item => item.id), ['mist'], 'without depth, every crossing stays a warning');
+  assert.equal(without.hit.authority, 'approximate');
+});
+
+test('a picture pick gives the point the picture drew, even after the object moved or was removed', async () => {
+  const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])}, box = page.entries[1];
+  box.object.position.x += 3;
+  const moved = await page.vantage.run('pick', {optics, at, pictured});
+  closeTo(moved.hit.point, [2, 0.1, 0.5], 'where the picture drew it');
+  closeTo(moved.hit.local, [0, 0.1, 0.5], 'in the object\'s own frame as it stood');
+  assert.equal(moved.hit.pointBasis, 'depth');
+  assert.equal(moved.hit.surfaceBasis, 'recast-agrees', 'the mesh placed where it was drawn still passes through that point');
+  closeTo(moved.hit.normal, [0, 0, 1], 'so its face and normal are reported');
+  page.entries.splice(1, 1);
+  const gone = await page.vantage.run('pick', {optics, at, pictured});
+  assert.equal(gone.hit.now, 'missing');
+  closeTo(gone.hit.point, [2, 0.1, 0.5], 'a removed object keeps the point the picture drew');
+});
+
+test('a live pick takes its point from the depth the renderer drew', async () => {
+  // A vertex shader drew box 2 where a ray meets nothing: the depth places the point.
+  const page = installedPage({drawnAt: () => ({object: page.entries[2].object.children[0], depth: 5.25})});
+  const picked = await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.5]});
+  assert.equal(picked.hit?.id, 'box-2');
+  assert.equal(picked.hit.pointBasis, 'depth');
+  assert.equal(picked.hit.surfaceBasis, 'recast-differs');
+  closeTo([viewDepth(opticsOf(OPERATOR), picked.hit.point)], [5.25], 'at the depth the renderer drew');
+  assert.equal(page.idPass.calls.at(-1).depth, true, 'a live pick reads its pixel\'s depth');
+});
+
+test('pictures keep depth with their pick map; a burst keeps it only when asked', async () => {
+  const {state, pilot} = await launched();
+  const shot = await pilot.run('snap', {map: false});
+  assert.equal(state.idPasses.at(-1).depth, true);
+  assert.equal(shot.pickMap.depth?.encoding, 'float32le-base64');
+  const burst = await pilot.run('burst', {count: 2, map: false});
+  assert.equal(state.idPasses.at(-1).depth, false, 'a burst is for motion, so its frames keep no depth unless asked');
+  for (const frame of burst.frames) assert.equal(frame.pickMap.depth, undefined);
+  const deep = await pilot.run('burst', {count: 2, map: false, depth: true});
+  for (const frame of deep.frames) assert.equal(frame.pickMap.depth?.encoding, 'float32le-base64');
+});
+
+test('the ID pass draws a material without its own outputs, and with the picture camera\'s far plane', async () => {
+  // The page imports TSL through its import map, which points at the same r185 build; under Node the TSL module's
+  // bare 'three/webgpu' import would reach another three, so the test takes TSL from the build itself.
+  const W = await import('../lib/three.webgpu.js'), TSL = W.TSL;
+  const {createIdPass} = await import('../agent-vantage-ids.mjs');
+  const ownOutputs = TSL.mrt({output: TSL.vec4(2 / 255, 0, 0, 0)});
+  const material = new W.MeshStandardNodeMaterial(); material.mrtNode = ownOutputs;
+  const mesh = new W.Mesh(new W.BoxGeometry(), material), scene = new W.Scene(); scene.add(mesh);
+  let objectFunction = null, drawnWith = 'not drawn', camera = null;
+  const renderer = {coordinateSystem: W.WebGPUCoordinateSystem, reversedDepthBuffer: false, autoClear: false,
+    getRenderTarget: () => null, setRenderTarget() {}, getMRT: () => null, setMRT() {}, getClearColor: color => color, getClearAlpha: () => 1, setClearColor() {},
+    getRenderObjectFunction: () => objectFunction, setRenderObjectFunction(fn) { objectFunction = fn; },
+    renderObject(object, drawScene, drawCamera, geometry, drawnMaterial) { drawnWith = drawnMaterial.mrtNode; },
+    render(drawScene, drawCamera) { camera = drawCamera; objectFunction(mesh, drawScene, drawCamera, mesh.geometry, mesh.material, null, null, null, null); },
+    async readRenderTargetPixelsAsync(target, x, y, w, h, index = 0) {
+      const rows = Math.ceil(w * 4 / 256) * 256 * (h - 1);
+      return index ? new Float32Array(rows / 4 + w) : new Uint8Array(rows + w * 4);
+    }};
+  const source = new W.PerspectiveCamera(50, 1, 0.1, 1000);
+  source.coordinateSystem = W.WebGPUCoordinateSystem; source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
+  const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), near: 0.1, far: 1000, coordinateSystem: W.WebGPUCoordinateSystem};
+  const drawing = createIdPass({THREE: W, TSL, renderer, scene}).draw({optics, width: 4, height: 4, depth: true});
+  assert.equal(drawnWith, null, 'its own outputs would replace the object number, so the ID pass draws it without them');
+  assert.equal(material.mrtNode, ownOutputs, 'and gives them back');
+  assert.equal(drawing.drawn[0].custom, undefined, 'its coverage is still its own shader\'s');
+  assert.equal(camera.far, 1000, 'shaders that read the camera see the picture camera\'s far plane');
+  const ids = await drawing.ready;
+  assert.equal(ids.depths?.length, 16, 'and the depth is read back with the numbers');
 });

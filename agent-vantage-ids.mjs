@@ -2,14 +2,15 @@
 // material's own shader, so the renderer itself decides what covers each pixel
 // (face side, alpha test and cut-outs, discards, vertex deformation, morphs,
 // depth and colour-write state, clipping). Only what a fragment writes changes,
-// through a render-target output: the drawing object's number in red and
-// green, its instance in blue and alpha. A blended fragment that adds nothing
-// (alpha below 1/255) is discarded, so what shows through it is what is named.
+// through render-target outputs: the drawing object's number in red and green
+// and its instance in blue and alpha, and in a second target the fragment's
+// view depth. A blended fragment that adds nothing (alpha below 1/255) is
+// discarded, so what shows through it is what is named.
 //
 // Object numbers last for the page's life. three skips per-object uniform
 // updates for objects that have not changed, so a number once written for an
 // object must stay that object's number.
-import {UNIDENTIFIED, idsFromReadback} from './agent-vantage-core.mjs';
+import {UNIDENTIFIED, idsFromReadback, depthsFromReadback} from './agent-vantage-core.mjs';
 
 export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = () => () => {}, cameraLayers = () => null}) {
   const numbers = new WeakMap();
@@ -26,7 +27,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
 
   let outputs = null;
   const idOutputs = () => outputs ??= (() => {
-    const {mrt, uniform, vec4, instanceIndex, vertexStage, If, Discard, output, Fn, floor, mod, round} = TSL;
+    const {mrt, uniform, vec4, instanceIndex, vertexStage, If, Discard, output, Fn, floor, mod, round, positionView} = TSL;
     const id = uniform(new THREE.Vector2()).onObjectUpdate(({object}, self) => {
       const n = numberOf(object);
       return self.value.set((n & 255) / 255, (n >> 8) / 255);
@@ -37,12 +38,15 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
       If(blended.greaterThan(0.5).and(output.a.lessThan(1 / 255)), () => { Discard(); });
       return vec4(id.x, id.y, mod(instance, 256).div(255), mod(floor(instance.div(256)), 256).div(255));
     })();
-    return mrt({output: write}).setBlendMode('output', new THREE.BlendMode(THREE.NoBlending));
+    // Outputs other than `output` are not blended.
+    return mrt({output: write, distance: vec4(positionView.z.negate(), 0, 0, 1)}).setBlendMode('output', new THREE.BlendMode(THREE.NoBlending));
   })();
 
   // A material with its own fragment shader writes past the render-target
-  // output, so it is drawn with a plain stand-in that keeps its face side,
-  // depth state and vertex shader; its coverage is then approximate.
+  // outputs, so it is drawn with a plain stand-in that keeps its face side,
+  // depth state and vertex shader; its coverage is then approximate. A
+  // material's own outputs (`mrtNode`) would take precedence over these, so it
+  // is drawn without them, and keeps its own coverage.
   const standIns = new WeakMap();
   const standIn = material => {
     let copy = standIns.get(material);
@@ -70,22 +74,25 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
     camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
     camera.coordinateSystem = renderer.coordinateSystem;
     if (renderer.reversedDepthBuffer) camera._reversedDepth = true;
+    // Shaders read near and far from the camera itself, not from its matrices.
     if (Number.isFinite(optics.near)) camera.near = optics.near;
+    if (Number.isFinite(optics.far)) camera.far = optics.far;
     const layers = cameraLayers();
     if (Number.isInteger(layers)) camera.layers.mask = layers;
     return camera;
   };
 
   // Draw the scene from `optics` into a width×height map, with editor drawing
-  // and the `hide` entries left out, and start reading `region` back.
-  // Everything up to the GPU submission happens in this call, so the map shows
-  // the scene as it is at this call. `drawn` lists every object drawn, with its
-  // number, and marks those drawn with a stand-in.
-  function draw({optics, width, height, hide = [], region = [0, 0, width, height]}) {
+  // and the `hide` entries left out, and start reading `region` back, with its
+  // depth when `depth` is set. Everything up to the GPU submission happens in
+  // this call, so the map shows the scene as it is at this call. `drawn` lists
+  // every object drawn, with its number, and marks those drawn with a stand-in.
+  function draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false}) {
     const camera = cameraFor(optics);
-    const target = new THREE.RenderTarget(width, height, {type: THREE.UnsignedByteType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace,
+    const target = new THREE.RenderTarget(width, height, {count: 2, type: THREE.UnsignedByteType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace,
       depthBuffer: true, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
-    target.texture.name = 'output';
+    target.textures[0].name = 'output';
+    Object.assign(target.textures[1], {name: 'distance', type: THREE.FloatType, format: THREE.RedFormat});
     const drawn = new Map();
     const saved = {target: renderer.getRenderTarget(), mrt: renderer.getMRT(), clearColor: renderer.getClearColor(new THREE.Color()),
       clearAlpha: renderer.getClearAlpha(), autoClear: renderer.autoClear, objectFunction: renderer.getRenderObjectFunction(),
@@ -100,13 +107,17 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
       renderer.setMRT(idOutputs());
       renderer.setRenderTarget(target);
       renderer.setRenderObjectFunction((object, drawScene, drawCamera, geometry, material, group, lightsNode, clippingContext, passId) => {
-        const custom = !!material?.fragmentNode, seen = drawn.get(object);
+        const custom = !!material?.fragmentNode, seen = drawn.get(object), ownOutputs = material?.mrtNode ?? null;
         drawn.set(object, {n: numberOf(object), object, ...(custom || seen?.custom ? {custom: true} : {})});
-        renderer.renderObject(object, drawScene, drawCamera, geometry, custom ? standIn(material) : material, group, lightsNode, clippingContext, passId);
+        if (ownOutputs) material.mrtNode = null;
+        try { renderer.renderObject(object, drawScene, drawCamera, geometry, custom ? standIn(material) : material, group, lightsNode, clippingContext, passId); }
+        finally { if (ownOutputs) material.mrtNode = ownOutputs; }
       });
       renderer.render(scene, camera);
       const [x, y, w, h] = region;
-      ready = renderer.readRenderTargetPixelsAsync(target, x, y, w, h).then(bytes => idsFromReadback(bytes, w, h));
+      const ids = renderer.readRenderTargetPixelsAsync(target, x, y, w, h, 0).then(bytes => idsFromReadback(bytes, w, h));
+      const depths = depth ? renderer.readRenderTargetPixelsAsync(target, x, y, w, h, 1).then(floats => depthsFromReadback(floats, w, h)) : null;
+      ready = Promise.all([ids, depths]).then(([numbers, values]) => (values ? {...numbers, depths: values} : numbers));
     } catch (error) {
       target.dispose();
       throw error;

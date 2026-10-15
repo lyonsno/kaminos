@@ -9,7 +9,7 @@ import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
   SKETCH_SCHEMA, sketchMapLayout, opticsOfView, opticsInConvention, rayThrough, rayCrossesBox, insideClipDepth,
-  finishPickMap, NOTHING_DRAWN, UNIDENTIFIED,
+  finishPickMap, NOTHING_DRAWN, UNIDENTIFIED, pixelAt, pointAtViewDepth,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -99,7 +99,7 @@ export function createVantagePilot(host) {
       : objectsInView(shot.view, aspect(), rows, {excludeIds: subIds()});
   };
 
-  async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0}) {
+  async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0, depth = true}) {
     if (capturing) fail('busy', 'Another vantage capture is in progress');
     capturing = true;
     released = new Promise(resolve => { markReleased = resolve; });
@@ -137,7 +137,7 @@ export function createVantagePilot(host) {
         // The pick map is drawn in the task that composed the picture, with the matrices it recorded.
         let drawing = null, drawError = null;
         if (host.drawIds && optics) {
-          try { drawing = host.drawIds({optics, width: shot.width, height: shot.height, hide: record ? [record.id] : []}); }
+          try { drawing = host.drawIds({optics, width: shot.width, height: shot.height, hide: record ? [record.id] : [], depth}); }
           catch (error) { drawError = error?.message || String(error); }
         }
         shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified, drawing, drawError});
@@ -296,11 +296,11 @@ export function createVantagePilot(host) {
       return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
     },
 
-    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map}) {
+    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record);
-      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval}));
+      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval, depth}));
       const seen = namesFor(taken.shots[0], true);
       const sheet = host.sheet(taken.shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
@@ -318,8 +318,10 @@ export function createVantagePilot(host) {
 
     // What lies under a point of a view or of a kept picture. The answer is
     // the renderer's: a kept picture's pick map was drawn with the picture,
-    // and a live pick draws one pixel of a pick map now. The point on the
-    // object comes from casting the ray at that mesh where it was drawn.
+    // and a live pick draws one pixel of a pick map now. A pick names the
+    // pixel its point falls in, through that pixel's centre. The point on the
+    // object comes from the depth drawn there; without depth, from casting the
+    // ray at that mesh where it was drawn.
     async pick({pilot, from, at, optics, pictured, scene}) {
       let source, camera;
       if (pictured) { source = 'picture'; camera = optics; }
@@ -337,36 +339,39 @@ export function createVantagePilot(host) {
         source = record.id;
         camera = through ? host.cameraMatrices() : opticsOfView(viewOf(record), aspect(), {coordinateSystem: host.coordinateSystem});
       }
-      const ray = rayThrough(camera, at);
-      let row, instance = 0, instanceMatrix = null, context;
+      let row, instance = 0, instanceMatrix = null, context, depth = null, pixel = null, centre = at;
       if (pictured) {
-        ({instance = 0, instanceMatrix = null, ...row} = pictured);
+        // The CLI has already moved `at` to the centre of the pixel it read.
+        ({instance = 0, instanceMatrix = null, depth = null, pixel = null, ...row} = pictured);
         context = scene ?? {clouds: [], fields: [], water: false};
       } else {
         if (!host.drawIds) fail('pick', 'This page cannot draw a pick map, so it cannot say what is drawn at a point');
         // At the size the viewport is drawn at, so the pixel read is one the operator sees.
         const {width, height} = host.drawingSize?.() ?? host.viewportSize(), w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height));
-        const pixel = [Math.min(w - 1, Math.floor(at[0] * w)), Math.min(h - 1, Math.floor(at[1] * h))];
+        ({pixel, centre} = pixelAt(at, w, h));
         let drawing, ids;
         try {
           drawing = host.drawIds({optics: host.coordinateSystem ? opticsInConvention(camera, host.coordinateSystem) : camera,
-            width: w, height: h, hide: subIds(), region: [...pixel, 1, 1]});
+            width: w, height: h, hide: subIds(), region: [...pixel, 1, 1], depth: true});
           ids = await drawing.ready;
         } catch (error) { fail('pick', `The pick map could not be drawn: ${error?.message || error}`); }
         instance = ids.instances[0];
+        depth = ids.depths?.[0] > 0 ? ids.depths[0] : null;
         row = ids.objects[0] === NOTHING_DRAWN ? {n: NOTHING_DRAWN} : drawing.rows.find(item => item.n === ids.objects[0]) ?? {n: ids.objects[0], unnumbered: true};
         if (row.instanceArray && !row.instancesBeyondMap && (instance + 1) * 16 <= row.instanceArray.length) {
           instanceMatrix = Array.from(row.instanceArray.slice(instance * 16, instance * 16 + 16));
         }
         context = drawing.context;
       }
+      const ray = rayThrough(camera, centre);
       let hit = null, drawn = null;
       if (row.id != null) {
         // Past 65,536 instances the map's instance number wraps, so it names no instance.
-        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
+        const depthPoint = depth ? pointAtViewDepth(camera, centre, depth) : null;
+        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera, depthPoint}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
         hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
           distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
-          pointBasis: found.basis ?? null, geometry: found.geometry ?? null,
+          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}), geometry: found.geometry ?? null,
           surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
           ...(row.coverage ? {coverage: row.coverage} : {})};
       } else {
@@ -374,20 +379,21 @@ export function createVantagePilot(host) {
           : {kind: 'not-a-scene-object', name: row.name ?? null, type: row.type ?? null};
       }
       // What the pick map cannot see: point clouds and simulation fields along the ray in front of
-      // the hit (anywhere along it when the depth is unknown), and water from the local water host.
-      const depth = hit?.distance ?? Infinity, crossing = item => ({item, crossing: rayCrossesBox(ray, item.bounds)});
+      // what was drawn, and water from the local water host. "In front" is judged only from the
+      // depth drawn there; without it, every crossing may cover the point.
+      const drawnAt = depth && hit?.pointBasis === 'depth' ? hit.distance : Infinity, crossing = item => ({item, crossing: rayCrossesBox(ray, item.bounds)});
       const fields = context.fields.map(crossing).filter(item => item.crossing)
         .map(({item, crossing: {enter, exit}}) => ({id: item.id, label: item.label, type: item.type, enter, exit})).sort((a, b) => a.enter - b.enter);
       const unresolved = [
-        ...context.clouds.map(crossing).filter(({item, crossing: c}) => c && c.enter < depth && item.id !== row.id)
+        ...context.clouds.map(crossing).filter(({item, crossing: c}) => c && c.enter < drawnAt && item.id !== row.id)
           .map(({item, crossing: c}) => ({id: item.id, label: item.label, type: item.type, distance: c.enter, reason: 'point clouds are drawn outside the pick map'})),
-        ...fields.filter(field => field.enter < depth)
+        ...fields.filter(field => field.enter < drawnAt)
           .map(field => ({id: field.id, label: field.label, type: field.type, distance: field.enter, reason: 'simulation fields are drawn outside the pick map'})),
       ].sort((a, b) => a.distance - b.distance);
       if (context.water) unresolved.push({id: 'local-water', label: 'Water', type: 'local-water', distance: null, reason: 'the local water host draws water outside the pick map'});
       if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
-      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, referent: pictured ? 'pictured' : 'rendered', hit,
-        ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
+      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ...(pixel ? {pixel} : {}), pixelCentre: centre, ray,
+        referent: pictured ? 'pictured' : 'rendered', hit, ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
     },
   };
 
@@ -891,19 +897,28 @@ function recastSurface(THREE, node, ray, {matrixWorld, instanceMatrix = null, ro
     face: hit.faceIndex ?? null, basis: node.isSkinnedMesh ? 'recast-now' : 'recast'};
 }
 
-// The mesh a pick map named, as the scene holds it now: whether it is still
-// there, how its geometry compares with the map's record, and where the
-// pick's ray meets it placed as the map drew it.
-export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, optics = null}, session = null) {
+// The surface a pick map named. With `depthPoint`, the point drawn there,
+// from the map's depth, is the point: in the world, and in the entry's own
+// frame as it stood. The mesh as the scene holds it now adds its face and
+// normal only when, placed as it was drawn, it still passes through that point.
+// Without depth, the point is where the ray meets the mesh placed as drawn.
+export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, optics = null, depthPoint = null}, session = null) {
+  const pictured = depthPoint ? {distance: new THREE.Vector3(...depthPoint).distanceTo(new THREE.Vector3(...ray.origin)), point: depthPoint,
+    local: new THREE.Vector3(...depthPoint).applyMatrix4(new THREE.Matrix4().fromArray(row.root).invert()).toArray(), basis: 'depth'} : null;
+  const without = basis => pictured ?? {point: null, basis};
   const entry = entries.find(item => item.id === row.id);
-  if (!entry?.object) return {now: 'missing'};
+  if (!entry?.object) return {now: 'missing', ...without(null)};
   const node = nodeAt(entry.object, row.path);
-  if (!node) return {now: 'mesh-missing'};
-  if (!node.isMesh) return {now: 'present', geometry: null, point: null, basis: 'not-a-mesh'};
+  if (!node) return {now: 'mesh-missing', ...without(null)};
+  if (!node.isMesh) return {now: 'present', geometry: null, ...without('not-a-mesh')};
   const geometry = row.geometry ? {status: geometryStatus(row.geometry, geometryIdentity(node, session), session)} : null;
-  if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, point: null, basis: 'instance-unknown'};
+  if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, ...without('instance-unknown')};
   const hit = recastSurface(THREE, node, ray, {matrixWorld: row.matrixWorld, instanceMatrix, root: row.root, optics});
-  return {now: 'present', geometry, ...(hit ?? {point: null, basis: 'missed'})};
+  if (!pictured) return {now: 'present', geometry, ...(hit ?? {point: null, basis: 'missed'})};
+  // The mesh agrees with the drawn point to float precision, or not at all.
+  const agrees = !!hit && Math.abs(hit.distance - pictured.distance) <= 1e-4 * pictured.distance + 1e-5;
+  return {now: 'present', geometry, ...pictured, normal: agrees ? hit.normal : null, face: agrees ? hit.face : null,
+    surfaceBasis: agrees ? 'recast-agrees' : 'recast-differs'};
 }
 
 /**

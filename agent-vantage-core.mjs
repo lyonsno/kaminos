@@ -178,7 +178,7 @@ export function opticsOfView(view, aspect, {coordinateSystem = WebGLCoordinateSy
   camera.lookAt(new Vector3(...view.target));
   camera.updateMatrixWorld(true);
   camera.updateProjectionMatrix();
-  return {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near, coordinateSystem};
+  return {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near, far: camera.far, coordinateSystem};
 }
 
 // The same optics in another clip convention: WebGL clips depth to -1..1 and
@@ -192,6 +192,23 @@ export function opticsInConvention(optics, coordinateSystem) {
     projection[index] = coordinateSystem === WebGPUCoordinateSystem ? (p[index] + p[w[i]]) / 2 : 2 * p[index] - p[w[i]];
   });
   return {...optics, projection, coordinateSystem};
+}
+
+// The pixel of a width×height picture that `at` falls in, and its centre as
+// fractions: a pick names that pixel, through its centre.
+export function pixelAt([x, y], width, height) {
+  const pixel = [Math.min(width - 1, Math.max(0, Math.floor(x * width))), Math.min(height - 1, Math.max(0, Math.floor(y * height)))];
+  return {pixel, centre: [(pixel[0] + 0.5) / width, (pixel[1] + 0.5) / height]};
+}
+
+// The point a picture drew at `at`, where the surface there lies at view depth
+// `depth`: the distance along the camera's viewing axis, as the pick map keeps
+// it. Two points on the ray fix it, so this holds for orthographic cameras too.
+export function pointAtViewDepth({projection, viewInverse}, [x, y], depth) {
+  const unproject = new Matrix4().fromArray(projection).invert(), world = new Matrix4().fromArray(viewInverse).invert();
+  const near = new Vector3(2 * x - 1, 1 - 2 * y, 0.25).applyMatrix4(unproject), far = new Vector3(2 * x - 1, 1 - 2 * y, 0.75).applyMatrix4(unproject);
+  const t = (-depth - near.z) / (far.z - near.z);
+  return near.clone().lerp(far, t).applyMatrix4(world).toArray();
 }
 
 // The world ray through a point of a picture, from the matrices that drew it.
@@ -261,6 +278,44 @@ export function idsFromReadback(bytes, width, height) {
   return {width, height, objects, instances};
 }
 
+// The pick map's depth: the view depth of the surface drawn at each pixel, 0
+// where nothing was drawn, read from an R32F readback whose rows WebGPU pads
+// to 256 bytes (64 values), except the last.
+export function depthsFromReadback(floats, width, height) {
+  const stride = Math.ceil(width * 4 / 256) * 64, needed = stride * (height - 1) + width;
+  if (!(width > 0 && height > 0) || !(floats?.length >= needed)) {
+    throw new Error(`A ${width}×${height} depth readback needs ${needed} values; got ${floats?.length ?? 0}`);
+  }
+  const depths = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) depths.set(floats.subarray(y * stride, y * stride + width), y * width);
+  return depths;
+}
+
+export function bytesToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+export function base64ToBytes(text) {
+  const binary = atob(text), bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+// Depth travels and is kept as little-endian float32, whatever the machine.
+const littleEndianFloats = values => {
+  const bytes = new Uint8Array(values.length * 4), view = new DataView(bytes.buffer);
+  values.forEach((value, i) => view.setFloat32(i * 4, value, true));
+  return bytes;
+};
+// The depth a pick map kept at a pixel, from its little-endian float32 bytes;
+// null where nothing was drawn.
+export function depthAtPixel(bytes, width, [x, y]) {
+  const offset = (y * width + x) * 4;
+  if (!(offset >= 0 && offset + 4 <= bytes.length)) throw new Error(`Pixel ${x}, ${y} is outside the pick map's depth`);
+  const value = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getFloat32(offset, true);
+  return value > 0 && Number.isFinite(value) ? value : null;
+}
+
 // Runs of equal (object, instance) pixels as one line of text: "object
 // instance length" triples, separated by spaces.
 export function encodePickRuns({width, height, objects, instances}) {
@@ -310,7 +365,9 @@ export function finishPickMap(ids, rows, context = {}) {
   });
   const unknown = [...shown.keys()].filter(n => !rows.some(row => row.n === n));
   return {schema: PICK_MAP_SCHEMA, width: ids.width, height: ids.height, runs: encodePickRuns(ids), objects,
-    ...(unknown.length ? {unnumbered: unknown} : {}), clouds: context.clouds ?? [], fields: context.fields ?? [], water: !!context.water};
+    ...(unknown.length ? {unnumbered: unknown} : {}), clouds: context.clouds ?? [], fields: context.fields ?? [], water: !!context.water,
+    ...(ids.depths ? {depth: {encoding: 'float32le-base64', unit: 'view-depth', width: ids.width, height: ids.height,
+      data: bytesToBase64(littleEndianFloats(ids.depths))}} : {})};
 }
 
 const unit = values => { const v = new Vector3(...values); return v.lengthSq() > 1e-18 ? v.normalize() : v; };
@@ -406,6 +463,7 @@ const matrices = optics => {
   if (!optics || !sixteen(optics.projection) || !sixteen(optics.viewInverse)) throw new Error('Pick optics need projection and viewInverse matrices of 16 numbers');
   return {projection: [...optics.projection], viewInverse: [...optics.viewInverse],
     ...(Number.isFinite(optics.near) ? {near: optics.near} : {}),
+    ...(Number.isFinite(optics.far) ? {far: optics.far} : {}),
     ...(Number.isFinite(optics.coordinateSystem) ? {coordinateSystem: optics.coordinateSystem} : {}),
     ...(typeof optics.reversedDepth === 'boolean' ? {reversedDepth: optics.reversedDepth} : {})};
 };
@@ -418,6 +476,10 @@ const picturedArg = pictured => {
       && pictured.path.every(Number.isInteger) && sixteen(pictured.matrixWorld) && sixteen(pictured.root)))
     && (pictured.instanceMatrix == null || sixteen(pictured.instanceMatrix));
   if (!ok) throw new Error('A picture pick needs what its pick map holds at the point: an object number, and for a scene object its id, mesh path and matrices');
+  if (pictured.depth != null && !(Number.isFinite(pictured.depth) && pictured.depth > 0)) throw new Error('A picture pick\'s depth is a positive view depth, or absent');
+  if (pictured.pixel != null && !(Array.isArray(pictured.pixel) && pictured.pixel.length === 2 && pictured.pixel.every(value => Number.isInteger(value) && value >= 0))) {
+    throw new Error('A picture pick\'s pixel is two whole numbers from the top left');
+  }
   return structuredClone(pictured);
 };
 // What a picture recorded beside its pick map: point clouds, simulation fields
@@ -449,7 +511,7 @@ const COMMANDS = {
   peek: args => ({maxSize: count(args.maxSize, 'maxSize', 1280, 64), annotate: flag(args.annotate), clean: flag(args.clean), map: args.map !== false}),
   burst: args => ({pilot: pilotArg(args), count: count(args.count, 'count', 6), interval: positive(args.interval, 'interval', 250),
     settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64), cell: count(args.cell, 'cell', 480, 64),
-    annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false}),
+    annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)}),
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),
   pick: args => {
