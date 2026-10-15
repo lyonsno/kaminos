@@ -125,6 +125,10 @@ actually provides.
   hold/present/reconstruction remains in the feature adapter.
 - [Repeatable visual work](repeatable-visual-work.md) supplies ordinary authored
   scene edits, saved results and retained comparisons.
+- [Notes](notes.md) carry the conversation about the work: a person leaves a
+  note on a scene object for an agent by name, with the view, selection and
+  served commit attached, and the answer comes back in the page's thread. An
+  agent stays reachable with `tools/notes.mjs wait`.
 
 Current main supplies the common scene/entry services described here. Specialized
 Fluid hosts, numerical transport and sequence destinations have their own

@@ -101,3 +101,7 @@ of substituting the generic fire route or a different renderer.
   gates. Interactive inference and operator workbenches should share the
   accepted runtime kernels while excluding CPU oracles, reference tensors, and
   proof-only readbacks from the serving path.
+
+## Talking With The Person At The Page
+
+People leave notes on scene objects and address them to agents by name. To be reachable, run `node tools/notes.mjs wait --as <your-name>` as a background command: it exits when a note for you arrives, which wakes you, and prints the note with its object, camera, served commit and picture path. Answer with `node tools/notes.mjs reply <ref> "..."`, then wait again. A Kaminos note reference pasted into your conversation (`kn-...`) resolves with `node tools/notes.mjs show <ref>`. Details: `docs/notes.md`.

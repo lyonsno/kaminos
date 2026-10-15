@@ -5,7 +5,8 @@ import {
   VANTAGE_SCHEMA, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose, orbitPose,
   framingDistance, framePose, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
 } from '../agent-vantage-core.mjs';
-import {PerspectiveCamera, Matrix4, Vector3, WebGPUCoordinateSystem} from '../lib/three.core.js';
+import * as core from '../agent-vantage-core.mjs';
+import {PerspectiveCamera, OrthographicCamera, Matrix4, Vector3, Vector4, WebGPUCoordinateSystem, WebGLCoordinateSystem} from '../lib/three.core.js';
 
 const near = (actual, expected, epsilon = 1e-6, message = '') => {
   assert.equal(actual.length, expected.length, message);
@@ -252,4 +253,152 @@ test('a very large scene lays out its map without running out of call stack', as
     operator: {view: {position: [50, 20, 260], target: [50, 0, 100], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000}, aspect: 16 / 9}});
   assert.equal(layout.boxes.length, 20000);
   assert.ok(Number.isFinite(layout.scale) && layout.boxes.every(box => box.center.every(Number.isFinite)));
+});
+
+test('pick names a point of a picture by fractions from its top left, seen from the sub, the operator or a picture camera', () => {
+  assert.deepEqual(checkedCommand({command: 'pick', args: {at: [0.5, 0.25]}}), {command: 'pick', args: {pilot: 'bebop', from: 'sub', at: [0.5, 0.25]}});
+  assert.equal(checkedCommand({command: 'pick', args: {at: [0, 1], from: 'operator'}}).args.from, 'operator');
+  const optics = {projection: Array.from({length: 16}, (_, i) => i), viewInverse: Array.from({length: 16}, (_, i) => -i)};
+  assert.deepEqual(checkedCommand({command: 'pick', args: {at: [1, 0], optics}}).args.optics, optics, 'a picture camera travels as its matrices');
+  for (const at of [[1.2, 0.5], [0.5], ['a', 0.5], null]) assert.throws(() => checkedCommand({command: 'pick', args: {at}}), /fractions/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], from: 'moon'}}), /"sub" or "operator"/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics: {projection: [1], viewInverse: []}}}), /matrices/);
+});
+
+// --- pick maps ------------------------------------------------------------------
+
+// An 8-bit RGBA readback as WebGPU lays it out: rows padded to 256 bytes, the last row not.
+function readback(width, height, at) {
+  const stride = Math.ceil(width * 4 / 256) * 256, bytes = new Uint8Array(stride * (height - 1) + width * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [n, k] = at(x, y), i = y * stride + x * 4;
+      bytes.set([n & 255, n >> 8, k & 255, k >> 8], i);
+    }
+  }
+  return bytes;
+}
+
+test('a pick map reads object and instance numbers from a padded readback, row by row from the top', () => {
+  const ids = core.idsFromReadback(readback(3, 2, (x, y) => [y * 300 + x, x === 2 ? 70000 % 65536 : 0]), 3, 2);
+  assert.deepEqual([...ids.objects], [0, 1, 2, 300, 301, 302], 'the second row starts after the 256-byte padding, and numbers use two bytes');
+  assert.deepEqual([...ids.instances], [0, 0, 4464, 0, 0, 4464]);
+  const unpadded = core.idsFromReadback(readback(64, 2, (x, y) => [x + y, 0]), 64, 2);
+  assert.equal(unpadded.objects[64], 1, 'a 64-pixel row is already 256 bytes and carries no padding');
+  assert.throws(() => core.idsFromReadback(new Uint8Array(10), 3, 2), /needs 268 bytes/, 'a short readback is refused, not read past its end');
+});
+
+test('a pick map keeps its pixels as runs and answers which object a fraction of the picture shows', () => {
+  const width = 4, height = 3, at = (x, y) => (y === 1 && x > 0 ? [7, x === 3 ? 2 : 0] : [0, 0]);
+  const ids = core.idsFromReadback(readback(width, height, at), width, height);
+  const runs = core.encodePickRuns(ids);
+  assert.equal(runs, '0 0 5 7 0 2 7 2 1 0 0 4');
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const found = core.pickRunAt({width, height, runs}, [(x + 0.5) / width, (y + 0.5) / height]);
+      assert.deepEqual([found.n, found.instance, ...found.pixel], [...at(x, y), x, y], `pixel ${x},${y}`);
+    }
+  }
+  assert.deepEqual(core.pickRunAt({width, height, runs}, [1, 1]).pixel, [3, 2], 'the far edge belongs to the last pixel');
+  assert.throws(() => core.pickRunAt({width, height, runs: '0 0 5'}, [0.9, 0.9]), /cover 5 pixels, not 12/);
+});
+
+test('a finished pick map keeps only what it shows, with the matrices of the instances it shows', () => {
+  const ids = {width: 2, height: 1, objects: Uint16Array.of(3, 5), instances: Uint16Array.of(0, 1)};
+  const matrices = Float32Array.from({length: 48}, (_, i) => i);
+  const rows = [{n: 3, id: 'wall'}, {n: 4, id: 'hidden-behind'}, {n: 5, id: 'rocks', instanceArray: matrices}];
+  const map = core.finishPickMap(ids, rows, {clouds: [{id: 'scan', bounds: {min: [0, 0, 0], max: [1, 1, 1]}}], water: true});
+  assert.equal(map.schema, core.PICK_MAP_SCHEMA);
+  assert.deepEqual(map.objects.map(row => row.n), [3, 5], 'an object drawn but covered everywhere is not in the map');
+  assert.deepEqual(map.objects[1].instances, {1: Array.from({length: 16}, (_, i) => 16 + i)});
+  assert.equal(map.objects[1].instanceArray, undefined, 'the whole instance buffer is not kept');
+  assert.equal(map.runs, '3 0 1 5 1 1');
+  assert.equal(map.water, true);
+  assert.equal(map.clouds.length, 1);
+});
+
+test('view optics can be made in either clip convention, and converted between them', () => {
+  const view = {position: [0, 1, 5], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 100};
+  const webgl = core.opticsOfView(view, 2), webgpu = core.opticsOfView(view, 2, {coordinateSystem: WebGPUCoordinateSystem});
+  assert.equal(webgpu.coordinateSystem, WebGPUCoordinateSystem);
+  const depth = (optics, distance) => {
+    const clip = new Vector4(0, 1, 5 - distance, 1).applyMatrix4(new Matrix4().fromArray(optics.viewInverse)).applyMatrix4(new Matrix4().fromArray(optics.projection));
+    return clip.z / clip.w;
+  };
+  near([depth(webgpu, 0.1), depth(webgpu, 100)], [0, 1], 1e-6, 'WebGPU clips depth to 0..1');
+  near([depth(webgl, 0.1), depth(webgl, 100)], [-1, 1], 1e-6, 'WebGL clips depth to -1..1');
+  near(core.opticsInConvention(webgl, WebGPUCoordinateSystem).projection, webgpu.projection, 1e-9, 'converted to WebGPU');
+  near(core.opticsInConvention(webgpu, WebGLCoordinateSystem).projection, webgl.projection, 1e-9, 'and back');
+});
+
+test('a picture pick carries what its pick map holds at the point, and the clouds and fields beside it', () => {
+  const optics = {projection: Array(16).fill(1), viewInverse: Array(16).fill(2)}, matrix = Array(16).fill(0);
+  const pictured = {n: 4, instance: 2, id: 'kiln', path: [0, 1], matrixWorld: matrix, root: matrix, instanceMatrix: matrix};
+  const scene = {clouds: [{id: 'scan', bounds: {min: [0, 0, 0], max: [1, 1, 1]}}], fields: [], water: true};
+  const args = checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured, scene}}).args;
+  assert.deepEqual(args.pictured, pictured);
+  assert.deepEqual(args.scene, scene);
+  assert.equal(checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0}}}).args.pictured.n, 0, 'nothing drawn is a valid answer');
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], pictured}}), /optics of the picture/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 4, id: 'kiln'}}}), /mesh path and matrices/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 70000}}}), /object number/);
+});
+
+test('a pick map keeps no instance matrices for a mesh with more instances than it can number', () => {
+  const ids = {width: 1, height: 1, objects: Uint16Array.of(4), instances: Uint16Array.of(3)};
+  const map = core.finishPickMap(ids, [{n: 4, id: 'grass', instanceArray: new Float32Array(64), instancesBeyondMap: true}]);
+  assert.equal(map.objects[0].instances, undefined, 'instance 3 could be any instance 3 + k x 65,536');
+  assert.equal(map.objects[0].instancesBeyondMap, true);
+});
+
+// --- depth kept with a pick map ---------------------------------------------------
+
+test('a pick map reads its depth from a padded readback, row by row', () => {
+  // An R32F row of 3 pixels is 12 bytes, padded to 256: 64 floats per row, the last row unpadded.
+  const floats = new Float32Array(64 + 3);
+  floats.set([1, 2, 3], 0); floats.set([4, 5, 6], 64);
+  assert.deepEqual([...core.depthsFromReadback(floats, 3, 2)], [1, 2, 3, 4, 5, 6]);
+  assert.throws(() => core.depthsFromReadback(new Float32Array(10), 3, 2), /needs 67 values/);
+});
+
+test('a pick map keeps its depth as little-endian float32 and gives back the depth at a pixel', () => {
+  const ids = {width: 2, height: 1, objects: Uint16Array.of(3, 0), instances: Uint16Array.of(0, 0), depths: Float32Array.of(9.5, 0)};
+  const map = core.finishPickMap(ids, [{n: 3, id: 'wall'}]);
+  assert.equal(map.depth.encoding, 'float32le-base64');
+  assert.equal(map.depth.unit, 'view-depth');
+  const bytes = core.base64ToBytes(map.depth.data);
+  assert.equal(bytes.length, 8);
+  assert.equal(new DataView(bytes.buffer).getFloat32(0, true), 9.5);
+  assert.equal(core.depthAtPixel(bytes, 2, [0, 0]), 9.5);
+  assert.equal(core.depthAtPixel(bytes, 2, [1, 0]), null, 'where nothing was drawn there is no depth');
+  assert.equal(core.finishPickMap({...ids, depths: undefined}, []).depth, undefined, 'a map drawn without depth says nothing about depth');
+});
+
+test('the point a picture drew comes from its depth, on the ray through that point of the picture', () => {
+  const camera = new PerspectiveCamera(50, 1, 0.1, 100);
+  camera.position.set(0, 0, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
+  near(core.pointAtViewDepth(optics, [0.5, 0.5], 9.5), [0, 0, 0.5], 1e-9);
+  const off = core.pointAtViewDepth(optics, [0.75, 0.25], 9.5), ray = core.rayThrough(optics, [0.75, 0.25]);
+  near([off[2]], [0.5], 1e-9, 'view depth runs along the viewing axis');
+  const t = (off[0] - ray.origin[0]) / ray.direction[0];
+  near(off, ray.origin.map((o, i) => o + t * ray.direction[i]), 1e-9, 'and the point lies on that ray');
+  const ortho = new OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
+  ortho.position.set(0, 0, 10); ortho.updateMatrixWorld(true); ortho.updateProjectionMatrix();
+  near(core.pointAtViewDepth({projection: ortho.projectionMatrix.toArray(), viewInverse: ortho.matrixWorldInverse.toArray()}, [0.75, 0.25], 9.5), [1, 0.5, 0.5], 1e-9,
+    'an orthographic picture keeps x and y and takes z from the depth');
+});
+
+test('optics carry the far plane, which shaders read from the camera', () => {
+  const optics = core.opticsOfView({position: [0, 1, 5], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 100}, 2);
+  assert.equal(optics.far, 100);
+  assert.equal(checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics}}).args.optics.far, 100);
+});
+
+test('a picture pick carries the depth and pixel its pick map holds', () => {
+  const optics = {projection: Array(16).fill(1), viewInverse: Array(16).fill(2)};
+  const args = checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0, depth: 9.5, pixel: [3, 1]}}}).args;
+  assert.equal(args.pictured.depth, 9.5);
+  assert.deepEqual(args.pictured.pixel, [3, 1]);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0, depth: -1}}}), /depth/);
 });

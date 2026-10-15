@@ -3,11 +3,13 @@
 // operator selects and moves like any other object. A picture from the sub
 // borrows the viewport camera for a few frames, so every layer the page draws
 // (scene, fire volume, water) renders from the sub through its own loop, then
-// the operator's view is restored.
+// the operator's view is restored. Each picture also keeps a pick map, the
+// renderer's own record of which object it drew at each pixel.
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
-  SKETCH_SCHEMA, sketchMapLayout,
+  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, opticsInConvention, rayThrough, rayCrossesBox, insideClipDepth,
+  finishPickMap, NOTHING_DRAWN, UNIDENTIFIED, pixelAt, pointAtViewDepth,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -36,9 +38,14 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * input for the whole capture, so nothing saves or acts through the
  * borrowed view; it returns a release function. `frameState().layers` maps canvas ids to frame counters
  * and `cameraMatrices()` returns the matrices the page is rendering with.
+ * `drawIds({optics, width, height, hide, region})` draws a pick map now and
+ * returns the rows describing what it drew, the clouds, fields and water
+ * drawn outside it, and a promise of the numbers read back. `surfaceOf`
+ * casts a pick's ray at the mesh a pick map named.
  */
 export function createVantagePilot(host) {
-  let capturing = false;
+  // `released` resolves when the current picture releases the camera.
+  let capturing = false, released = Promise.resolve(), markReleased = () => {};
   const aspect = () => {
     const {width, height} = host.viewportSize();
     if (!(width > 0 && height > 0)) fail('viewport', 'The Kaminos viewport has no visible area');
@@ -92,9 +99,10 @@ export function createVantagePilot(host) {
       : objectsInView(shot.view, aspect(), rows, {excludeIds: subIds()});
   };
 
-  async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0}) {
+  async function capture({record = null, borrow, check, settle, maxSize, hideHelpers, frames = 1, interval = 0, depth = true}) {
     if (capturing) fail('busy', 'Another vantage capture is in progress');
     capturing = true;
+    released = new Promise(resolve => { markReleased = resolve; });
     let release = null, restore = null, original = null, requested = null, before = null, started = null;
     const shots = [];
     try {
@@ -126,7 +134,13 @@ export function createVantagePilot(host) {
         if (stale.length) fail('stale-frame', `Kaminos did not draw a new frame from the requested view in ${stale.join(', ')}, so nothing was kept. The page may still be loading or paused.`);
         if (host.blank?.(shot.canvas)) fail('blank-frame', 'The picture came back as one flat color, which usually means the page has not drawn its scene yet. Try again in a moment; if the sub faces a blank surface, point it elsewhere.');
         since = frame;
-        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified});
+        // The pick map is drawn in the task that composed the picture, with the matrices it recorded.
+        let drawing = null, drawError = null;
+        if (host.drawIds && optics) {
+          try { drawing = host.drawIds({optics, width: shot.width, height: shot.height, hide: record ? [record.id] : [], depth}); }
+          catch (error) { drawError = error?.message || String(error); }
+        }
+        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified, drawing, drawError});
       }
       return {requested, shots, before, after: host.frameState()};
     } finally {
@@ -135,19 +149,33 @@ export function createVantagePilot(host) {
         try { restore?.(); }
         finally {
           try { host.redraw(); }
-          finally { capturing = false; release?.(); }
+          finally { capturing = false; markReleased(); release?.(); }
         }
       }
     }
   }
+
+  // Pick maps are read back once the camera is released. A picture whose map
+  // failed is still a picture; it says why it has no map.
+  async function withPickMaps(taken) {
+    for (const item of taken.shots) {
+      item.pickMap = null;
+      if (!item.drawing) continue;
+      try { item.pickMap = finishPickMap(await item.drawing.ready, item.drawing.rows, item.drawing.context); }
+      catch (error) { item.drawError = error?.message || String(error); }
+      delete item.drawing;
+    }
+    return taken;
+  }
+  const pickMapOf = item => ({pickMap: item.pickMap ?? null, ...(item.drawError ? {pickMapError: item.drawError} : {})});
 
   function pictureResult({kind, routeName, record, taken, settle, hideHelpers, images, seen, extra = {}}) {
     const first = taken.shots[0];
     return {schema: VANTAGE_SCHEMA, kind, route: routeName, ...(record ? {pilot: pilotOf(record), sub: describe(record)} : {}),
       requestedView: taken.requested, view: first.view, viewDeviation: first.deviation, aspect: aspect(),
       layers: first.shot.layers, unverifiedLayers: [...new Set(taken.shots.flatMap(item => item.unverified))],
-      naming: first.optics ? 'effective-camera' : 'nominal-view', settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
-      image: {width: first.shot.width, height: first.shot.height}, images, objects: seen,
+      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
+      image: {width: first.shot.width, height: first.shot.height}, images, objects: seen, ...(kind === 'burst' ? {} : pickMapOf(first)),
       frame: {before: taken.before, after: taken.after}, capturedAt: new Date(host.now()).toISOString(), ...extra};
   }
 
@@ -253,7 +281,7 @@ export function createVantagePilot(host) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record), hideHelpers = !helpers;
-      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers});
+      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers}));
       const seen = namesFor(taken.shots[0], hideHelpers);
       const images = withMap(picture('snap', taken.shots[0].shot, annotate, seen), map);
       host.shutter?.({kind: 'snap', label: record.label, image: images[0]});
@@ -262,17 +290,17 @@ export function createVantagePilot(host) {
 
     async peek({maxSize, annotate, clean, map}) {
       admitCapture();
-      const taken = await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean});
+      const taken = await withPickMaps(await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean}));
       const seen = namesFor(taken.shots[0], clean);
       const images = withMap(picture('peek', taken.shots[0].shot, annotate, seen), map);
       return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
     },
 
-    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map}) {
+    async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record);
-      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval});
+      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval, depth}));
       const seen = namesFor(taken.shots[0], true);
       const sheet = host.sheet(taken.shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
@@ -281,8 +309,91 @@ export function createVantagePilot(host) {
       if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
       return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
-        extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view,
-          viewDeviation: item.deviation, objects: namesFor(item, true)}))}});
+        extra: {interval, frames: taken.shots.map(item => {
+          const names = namesFor(item, true);
+          return {index: item.index, atMs: item.atMs, frame: item.frame, view: item.view, viewDeviation: item.deviation,
+            optics: item.optics ?? null, ...pickMapOf(item), objects: names};
+        })}});
+    },
+
+    // What lies under a point of a view or of a kept picture. The answer is
+    // the renderer's: a kept picture's pick map was drawn with the picture,
+    // and a live pick draws one pixel of a pick map now. A pick names the
+    // pixel its point falls in, through that pixel's centre. The point on the
+    // object comes from the depth drawn there; without depth, from casting the
+    // ray at that mesh where it was drawn.
+    async pick({pilot, from, at, optics, pictured, scene}) {
+      let source, camera;
+      if (pictured) { source = 'picture'; camera = optics; }
+      else if (optics) { source = 'camera'; camera = optics; }
+      else if (from === 'operator') {
+        // During a picture the viewport camera is the sub's, not the operator's.
+        if (capturing) fail('busy', 'The sub is taking a picture; pick from the operator view after it');
+        source = 'operator'; camera = host.cameraMatrices();
+      }
+      else {
+        // Looking through the sub, the operator sees its view through the camera frame's zoom and
+        // offset; a sub pick then uses those same matrices so its fractions mean the same frame.
+        const record = requireSub(pilot), state = host.cameras.state(), through = state.mode === 'camera' && state.activeId === record.id;
+        if (through && capturing) fail('busy', 'The sub is taking a picture; pick after it');
+        source = record.id;
+        camera = through ? host.cameraMatrices() : opticsOfView(viewOf(record), aspect(), {coordinateSystem: host.coordinateSystem});
+      }
+      let row, instance = 0, instanceMatrix = null, context, depth = null, pixel = null, centre = at;
+      if (pictured) {
+        // The CLI has already moved `at` to the centre of the pixel it read.
+        ({instance = 0, instanceMatrix = null, depth = null, pixel = null, ...row} = pictured);
+        context = scene ?? {clouds: [], fields: [], water: false};
+      } else {
+        if (!host.drawIds) fail('pick', 'This page cannot draw a pick map, so it cannot say what is drawn at a point');
+        // At the size the viewport is drawn at, so the pixel read is one the operator sees.
+        const {width, height} = host.drawingSize?.() ?? host.viewportSize(), w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height));
+        ({pixel, centre} = pixelAt(at, w, h));
+        let drawing, ids;
+        try {
+          drawing = host.drawIds({optics: host.coordinateSystem ? opticsInConvention(camera, host.coordinateSystem) : camera,
+            width: w, height: h, hide: subIds(), region: [...pixel, 1, 1], depth: true});
+          ids = await drawing.ready;
+        } catch (error) { fail('pick', `The pick map could not be drawn: ${error?.message || error}`); }
+        instance = ids.instances[0];
+        depth = ids.depths?.[0] > 0 ? ids.depths[0] : null;
+        row = ids.objects[0] === NOTHING_DRAWN ? {n: NOTHING_DRAWN} : drawing.rows.find(item => item.n === ids.objects[0]) ?? {n: ids.objects[0], unnumbered: true};
+        if (row.instanceArray && !row.instancesBeyondMap && (instance + 1) * 16 <= row.instanceArray.length) {
+          instanceMatrix = Array.from(row.instanceArray.slice(instance * 16, instance * 16 + 16));
+        }
+        context = drawing.context;
+      }
+      const ray = rayThrough(camera, centre);
+      let hit = null, drawn = null;
+      if (row.id != null) {
+        // Past 65,536 instances the map's instance number wraps, so it names no instance.
+        const depthPoint = depth ? pointAtViewDepth(camera, centre, depth) : null;
+        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera, depthPoint}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
+        hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
+          distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
+          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}), geometry: found.geometry ?? null,
+          surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
+          ...(row.coverage ? {coverage: row.coverage} : {})};
+      } else {
+        drawn = row.n === NOTHING_DRAWN ? {kind: 'nothing'} : row.n === UNIDENTIFIED || row.unnumbered ? {kind: 'unidentified', n: row.n}
+          : {kind: 'not-a-scene-object', name: row.name ?? null, type: row.type ?? null};
+      }
+      // What the pick map cannot see: point clouds and simulation fields along the ray in front of
+      // what was drawn, and water from the local water host. "In front" is judged only from the
+      // depth drawn there; without it, every crossing may cover the point.
+      const drawnAt = depth && hit?.pointBasis === 'depth' ? hit.distance : Infinity, crossing = item => ({item, crossing: rayCrossesBox(ray, item.bounds)});
+      const fields = context.fields.map(crossing).filter(item => item.crossing)
+        .map(({item, crossing: {enter, exit}}) => ({id: item.id, label: item.label, type: item.type, enter, exit})).sort((a, b) => a.enter - b.enter);
+      const unresolved = [
+        ...context.clouds.map(crossing).filter(({item, crossing: c}) => c && c.enter < drawnAt && item.id !== row.id)
+          .map(({item, crossing: c}) => ({id: item.id, label: item.label, type: item.type, distance: c.enter, reason: 'point clouds are drawn outside the pick map'})),
+        ...fields.filter(field => field.enter < drawnAt)
+          .map(field => ({id: field.id, label: field.label, type: field.type, distance: field.enter, reason: 'simulation fields are drawn outside the pick map'})),
+      ].sort((a, b) => a.distance - b.distance);
+      if (context.water) unresolved.push({id: 'local-water', label: 'Water', type: 'local-water', distance: null, reason: 'the local water host draws water outside the pick map'});
+      if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
+      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ...(pixel ? {pixel} : {}), pixelCentre: centre, ray,
+        referent: pictured ? 'pictured' : 'rendered', hit, ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
     },
   };
 
@@ -292,7 +403,9 @@ export function createVantagePilot(host) {
     catch (error) { throw new VantageCommandError('validate', error.message); }
     return handlers[checked.command](checked.args);
   }
-  return {run, isCapturing: () => capturing, sketch};
+  // idle() waits until no picture holds the camera, through back-to-back pictures.
+  const idle = async () => { while (capturing) await released; };
+  return {run, isCapturing: () => capturing, idle, sketch};
 }
 
 // --- pixels ---------------------------------------------------------------
@@ -648,14 +761,177 @@ const animationFrames = (window, count) => new Promise(resolve => {
   window.requestAnimationFrame(tick);
 });
 
+const meshPath = (root, node) => {
+  const path = [];
+  for (let at = node; at && at !== root; at = at.parent) path.unshift(at.parent ? at.parent.children.indexOf(at) : -1);
+  return path;
+};
+const nodeAt = (root, path) => path.reduce((node, index) => node?.children?.[index], root);
+const shownChain = object => {
+  for (let node = object; node; node = node.parent) {
+    if (!node.visible || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly) return false;
+  }
+  return true;
+};
+// FNV-1a over every component of up to 512 evenly spaced items, quantized, so
+// the same content can be recognised after a page reload. It is a sample: an
+// edit to an item between the sampled ones can escape it.
+function sampled(count, itemSize, valueAt) {
+  let hash = 0x811c9dc5;
+  const mix = value => { hash ^= value & 0xff; hash = Math.imul(hash, 0x01000193) >>> 0; };
+  const step = Math.max(1, Math.floor(count / 512));
+  for (let i = 0; i < count; i += step) {
+    for (let c = 0; c < itemSize; c++) {
+      const q = Math.round(valueAt(i, c) * 1e5);
+      mix(q); mix(q >> 8); mix(q >> 16); mix(q >> 24);
+    }
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+// Attribute objects carry no uuid; within a page session they get a number the
+// first time they are seen, so a swapped attribute is noticed.
+const attributeIds = new WeakMap();
+let nextAttributeId = 1;
+const attributeId = attribute => {
+  if (!attribute) return null;
+  if (!attributeIds.has(attribute)) attributeIds.set(attribute, nextAttributeId++);
+  return attributeIds.get(attribute);
+};
+// An interleaved attribute's data and edit count live on its shared buffer.
+const storeOf = attribute => (attribute?.isInterleavedBufferAttribute ? attribute.data : attribute);
+// How to recognise the geometry under a mesh later: the geometry object, its
+// position and index attributes, their stores and edit counts, sampled content,
+// and for an instanced mesh its instance matrices.
+export function geometryIdentity(mesh, session = null) {
+  const geometry = mesh?.geometry, position = geometry?.attributes?.position, index = geometry?.index, store = storeOf(position);
+  const instances = mesh?.isInstancedMesh ? mesh.instanceMatrix : null;
+  return {uuid: geometry?.uuid ?? null, session,
+    position: attributeId(position), positionStore: attributeId(store), version: store?.version ?? null, vertices: position?.count ?? null,
+    index: attributeId(index), indexVersion: index?.version ?? null, indices: index?.count ?? null,
+    sample: position ? sampled(position.count, position.itemSize, (i, c) => position.getComponent(i, c)) : null,
+    indexSample: index ? sampled(index.count, 1, i => index.getX(i)) : null,
+    ...(instances ? {instanceMatrix: attributeId(instances), instanceVersion: instances.version, instanceCount: mesh.count,
+      instanceSample: sampled(mesh.count, 16, (i, c) => instances.array[i * 16 + c])} : {})};
+}
+// Whether the geometry under a mesh is the one a picture recorded. Within one
+// page session a different geometry object is a replacement, and any change to
+// its attributes, stores, edit counts or sampled content is an edit. Across
+// sessions identities differ, so counts and samples decide likely-same or replaced.
+export function geometryStatus(recorded, current, session) {
+  if (!current) return 'replaced';
+  if (!recorded) return 'unverified';
+  if (session && recorded.session === session) {
+    if (recorded.uuid !== current.uuid) return 'replaced';
+    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample',
+      'instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
+    return keys.every(key => recorded[key] === undefined || recorded[key] === current[key]) ? 'same' : 'edited';
+  }
+  if (recorded.vertices !== current.vertices || recorded.indices !== current.indices || (recorded.instanceCount ?? null) !== (current.instanceCount ?? null)) return 'replaced';
+  if (recorded.sample && current.sample) {
+    return ['sample', 'indexSample', 'instanceSample'].every(key => (recorded[key] ?? null) === (current[key] ?? null)) ? 'likely-same' : 'replaced';
+  }
+  return 'unverified';
+}
+const worldBounds = (THREE, object) => {
+  const box = new THREE.Box3().setFromObject(object);
+  return box.isEmpty() ? null : {min: box.min.toArray(), max: box.max.toArray()};
+};
+
+// What a pick map says about each object its ID pass drew: the scene entry it
+// belongs to and its mesh path and, as they stood when it was drawn, its world
+// matrix, its entry's, its geometry and its instance matrices. A drawing that
+// belongs to no entry (the ground, a proxy) keeps its name and type.
+export function drawnRows(entries, drawn, session) {
+  const owners = new Map(entries.filter(entry => entry.object).map(entry => [entry.object, entry]));
+  const ownerOf = object => {
+    for (let node = object; node; node = node.parent) { const entry = owners.get(node); if (entry) return entry; }
+    return null;
+  };
+  return drawn.map(({n, object, custom}) => {
+    const entry = ownerOf(object);
+    if (!entry) return {n, id: null, name: object.name || null, type: object.type ?? null};
+    return {n, id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, path: meshPath(entry.object, object),
+      mesh: object.name || null, matrixWorld: object.matrixWorld.toArray(), root: entry.object.matrixWorld.toArray(),
+      geometry: geometryIdentity(object, session), ...(custom ? {coverage: 'custom-shader'} : {}),
+      ...(object.isInstancedMesh ? {instanceArray: object.instanceMatrix.array.slice(0, object.count * 16),
+        ...(object.count > 0x10000 ? {instancesBeyondMap: true} : {})} : {})};
+  });
+}
+
+// What a pick map cannot see, as the scene stands: point clouds (splats),
+// simulation fields and water drawn by the local water host.
+export function sceneOutsideMap(THREE, entries, fields, water) {
+  const clouds = [];
+  for (const entry of entries) {
+    if (!entry.object || !shownChain(entry.object)) continue;
+    let cloud = entry.type === 'splat';
+    entry.object.traverse(node => { if (node.isPoints && shownChain(node)) cloud = true; });
+    const bounds = cloud ? worldBounds(THREE, entry.object) : null;
+    if (bounds) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, bounds});
+  }
+  return {clouds, fields: fields.filter(field => field.bounds).map(({id, label, type, bounds}) => ({id, label, type, bounds})), water: !!water};
+}
+
+// Where a ray meets one mesh placed with the given matrices: the nearest
+// intersection inside the camera's depth range. A stand-in mesh shares the
+// mesh's geometry, material and morph weights, so nothing in the scene moves.
+// A skinned mesh is cast as it is posed now.
+function recastSurface(THREE, node, ray, {matrixWorld, instanceMatrix = null, root, optics = null}) {
+  const caster = new THREE.Raycaster(new THREE.Vector3(...ray.origin), new THREE.Vector3(...ray.direction).normalize());
+  const world = new THREE.Matrix4().fromArray(matrixWorld);
+  if (instanceMatrix) world.multiply(new THREE.Matrix4().fromArray(instanceMatrix));
+  let probe = node;
+  if (!node.isSkinnedMesh) {
+    probe = new THREE.Mesh(node.geometry, node.material);
+    probe.matrixAutoUpdate = false;
+    probe.matrixWorldAutoUpdate = false;
+    probe.matrixWorld.copy(world);
+    if (node.morphTargetInfluences) { probe.morphTargetInfluences = node.morphTargetInfluences; probe.morphTargetDictionary = node.morphTargetDictionary; }
+  }
+  const hit = caster.intersectObject(probe, false).find(item => !optics || insideClipDepth(optics, item.point.toArray()));
+  if (!hit) return null;
+  const surface = node.isSkinnedMesh ? node.matrixWorld : world;
+  return {distance: hit.distance, point: hit.point.toArray(),
+    local: hit.point.clone().applyMatrix4(new THREE.Matrix4().fromArray(root).invert()).toArray(),
+    normal: hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(surface)).normalize().toArray() : null,
+    face: hit.faceIndex ?? null, basis: node.isSkinnedMesh ? 'recast-now' : 'recast'};
+}
+
+// The surface a pick map named. With `depthPoint`, the point drawn there,
+// from the map's depth, is the point: in the world, and in the entry's own
+// frame as it stood. The mesh as the scene holds it now adds its face and
+// normal only when, placed as it was drawn, it still passes through that point.
+// Without depth, the point is where the ray meets the mesh placed as drawn.
+export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, optics = null, depthPoint = null}, session = null) {
+  const pictured = depthPoint ? {distance: new THREE.Vector3(...depthPoint).distanceTo(new THREE.Vector3(...ray.origin)), point: depthPoint,
+    local: new THREE.Vector3(...depthPoint).applyMatrix4(new THREE.Matrix4().fromArray(row.root).invert()).toArray(), basis: 'depth'} : null;
+  const without = basis => pictured ?? {point: null, basis};
+  const entry = entries.find(item => item.id === row.id);
+  if (!entry?.object) return {now: 'missing', ...without(null)};
+  const node = nodeAt(entry.object, row.path);
+  if (!node) return {now: 'mesh-missing', ...without(null)};
+  if (!node.isMesh) return {now: 'present', geometry: null, ...without('not-a-mesh')};
+  const geometry = row.geometry ? {status: geometryStatus(row.geometry, geometryIdentity(node, session), session)} : null;
+  if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, ...without('instance-unknown')};
+  const hit = recastSurface(THREE, node, ray, {matrixWorld: row.matrixWorld, instanceMatrix, root: row.root, optics});
+  if (!pictured) return {now: 'present', geometry, ...(hit ?? {point: null, basis: 'missed'})};
+  // The mesh agrees with the drawn point to float precision, or not at all.
+  const agrees = !!hit && Math.abs(hit.distance - pictured.distance) <= 1e-4 * pictured.distance + 1e-5;
+  return {now: 'present', geometry, ...pictured, normal: agrees ? hit.normal : null, face: agrees ? hit.face : null,
+    surfaceBasis: agrees ? 'recast-agrees' : 'recast-differs'};
+}
+
 /**
  * Join the vantage to the running application. `entries()` returns live
  * scene entries `{id,label,fileName,type,object}`; `suspendEditorDrawing`
  * hides editor-only drawing for a clean picture and returns a restore function.
+ * `idPass` (agent-vantage-ids.mjs) draws pick maps; without it pictures carry
+ * none and picks are refused. `water()` says whether the local water host is
+ * drawing, and `coordinateSystem` is the renderer's clip convention.
  */
 export function installAgentVantage({THREE, document, window, edits, cameras, entries, selection, readView, writeView,
   viewport, hostCanvas, busy, hold, cameraMatrices, suspendEditorDrawing, redraw, frameState, extraTargets = () => [],
-  endpoint = '/api/vantage', link = true}) {
+  idPass = null, water = () => false, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
   const hud = installVantageHud({document, viewport});
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
@@ -685,6 +961,14 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
+    drawingSize: () => (hostCanvas.width > 0 && hostCanvas.height > 0 ? {width: hostCanvas.width, height: hostCanvas.height} : null),
+    // The rows are written down in the same task as the map is drawn, so they hold the matrices it was drawn with.
+    drawIds: idPass ? options => {
+      const pass = idPass.draw(options), list = entries();
+      return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
+    } : null,
+    surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
+    coordinateSystem,
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });
@@ -714,7 +998,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const pageId = `page-${window.crypto.randomUUID()}`;
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
-    pageId, run: pilot.run,
+    pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
     dispose() { window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }

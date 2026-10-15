@@ -44,6 +44,24 @@ def vantage_bridge():
         return _VANTAGE
 
 
+_NOTES = None
+_NOTES_LOCK = threading.Lock()
+
+
+def notes_http():
+    """Kaminos notes (kaminos_notes.py, docs/notes.md), loaded from beside this
+    file on first use. Every server on the machine shares one notes log."""
+    global _NOTES
+    with _NOTES_LOCK:
+        if _NOTES is None:
+            spec = importlib.util.spec_from_file_location("kaminos_notes", ROOT / "kaminos_notes.py")
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            log = module.NotesLog(module.default_root(), page_author=module.default_page_author())
+            _NOTES = module.NotesHttp(log, source=lambda: {"origin": f"http://127.0.0.1:{PORT}", **volume_settings_server_source()})
+        return _NOTES
+
+
 def observe_sf3d_source_host():
     """Fresh source-machine identity; no browser/physical-capacity inference."""
     observation = {"source": "live-source-host", "platform": sys.platform,
@@ -3493,6 +3511,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_link(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/pages":
             self.handle_vantage_pages()
+        elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
+            notes_http().handle(self, "GET", self.path)
         else:
             super().do_GET()
 
@@ -3534,6 +3554,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_reply()
         elif parsed.path == "/api/vantage/presence":
             self.handle_vantage_presence()
+        elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
+            notes_http().handle(self, "POST", self.path)
         else:
             self.send_json({"error": "Not found"}, 404)
 
