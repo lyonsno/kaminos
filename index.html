@@ -3855,6 +3855,8 @@ import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
 import {createViewportShading} from './viewport-shading.mjs';
+import {createSurfelProxyLayer} from './proxy-surfels.mjs';
+import {createInterfaceSurfelProducer} from './proxy-snapshot.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
@@ -3923,6 +3925,7 @@ function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
  for(const button of document.querySelectorAll('.viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
+ for(const button of document.querySelectorAll('.viewport-water [data-water]'))button.setAttribute('aria-pressed',String(button.dataset.water===viewportDisplay.water));
 }
 // Wireframe is a view preference over mesh content, applied only around the
 // viewport render (see renderSceneFrame). Like Blender's default it is
@@ -3938,7 +3941,27 @@ function renderWithViewportShading(render) {
  const receipt=viewportShading.renderWith(entries.map(entry=>entry.object),viewportDisplay.shading,render);
  return {mode:receipt.mode,meshes:receipt.meshes,perObject:Object.fromEntries(entries.map((entry,index)=>[entry.id,receipt.perRoot[index]]))};
 }
-document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});});
+document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
+ const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});});
+// Water proxy: in Proxy display the local liquid host skips its liquid passes
+// and a surfel layer drawn from CPU snapshots of the solver's surface records
+// stands in for the water. Reconciled every frame against the current host, so
+// host restarts and disposal need no extra hooks.
+let waterProxy=null;
+function syncWaterProxy() {
+ const host=localLiquidHost,wantProxy=viewportDisplay.water==='proxy'&&!!host;
+ if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.layer.dispose();waterProxy=null;}
+ if(wantProxy&&!waterProxy){
+  const radius=(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.6;
+  const layer=createSurfelProxyLayer({radius});scene.add(layer.mesh);
+  const producer=createInterfaceSurfelProducer({descriptor:()=>localLiquidHost===host?host.interfaceRecordDescriptor():null,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>layer.setSnapshot(snapshot)});
+  waterProxy={host,layer,producer};
+ }
+ if(host&&host.presentation!==(wantProxy?'proxy':'full'))host.setPresentation(wantProxy?'proxy':'full');
+ if(waterProxy){waterProxy.layer.mesh.visible=wantProxy;if(wantProxy)waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
+}
+window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
+ hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,layer:waterProxy?.layer.state()??null});
 // Witness view: authored materials as save/export see them, plus what the last
 // viewport render drew.
 window.kaminosViewportShadingDebugState=()=>{
@@ -11942,6 +11965,7 @@ async function initScene() {
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
+    syncWaterProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
     const shadingReceipt = renderWithViewportShading(() => {
@@ -11958,6 +11982,9 @@ async function initScene() {
         }
       } else renderPipeline.render();
     });
+    // Copy the surface records this frame's step wrote; queue order puts the
+    // copy after the step.
+    if (waterProxy?.layer.mesh.visible) waterProxy.producer.tick();
     sceneFrameCount++;
     lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;

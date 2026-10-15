@@ -408,6 +408,114 @@ async function runViewportWireframeFireShadowScenario(ws) {
   assert.deepEqual(failures, [], `viewport wireframe fire checks failed:\n- ${failures.join('\n- ')}`);
 }
 
+// Water proxy: the surfel layer drawn from CPU snapshots of the solver's
+// surface records stands where the full water render stands, keeps refreshing
+// while the sim runs, holds still while it is paused, and the host returns to
+// the full render when asked. Water masks against the empty scene give the
+// overlap between the two presentations at one paused sim state.
+function waterMask(png, background, bounds, threshold = 40) {
+  const mask = new Uint8Array(png.width * png.height);
+  let area = 0, minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+  for (let y = Math.max(0, Math.floor(bounds.y)); y < Math.min(png.height, Math.floor(bounds.y + bounds.height)); y++) {
+    for (let x = Math.max(0, Math.floor(bounds.x)); x < Math.min(png.width, Math.floor(bounds.x + bounds.width)); x++) {
+      const i = y * png.width + x, a = i * png.channels, b = i * background.channels;
+      const d = Math.abs(png.pixels[a] - background.pixels[b]) + Math.abs(png.pixels[a + 1] - background.pixels[b + 1]) + Math.abs(png.pixels[a + 2] - background.pixels[b + 2]);
+      if (d > threshold) { mask[i] = 1; area++; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    }
+  }
+  return { mask, area, bbox: area ? [minX, minY, maxX, maxY] : null };
+}
+
+async function measureWaterCadence(ws, ms) {
+  return evaluate(ws, `(async () => {
+    const read = () => window.kaminosLocalLiquidState?.() || {};
+    const a = read(), t0 = performance.now();
+    await new Promise(resolve => setTimeout(resolve, ${ms}));
+    const b = read(), seconds = (performance.now() - t0) / 1000;
+    const proxy = window.kaminosWaterProxyDebugState?.();
+    return { hostFramesPerSecond: ((b.frameCount ?? 0) - (a.frameCount ?? 0)) / seconds, stepsPerSecond: ((b.solver?.stepCount ?? 0) - (a.solver?.stepCount ?? 0)) / seconds,
+      presentation: proxy?.hostPresentation ?? null, uploads: proxy?.layer?.uploads ?? null, surfels: proxy?.layer?.count ?? null };
+  })()`, { timeoutMs: ms + 20000 });
+}
+
+async function runWaterProxySurfelsScenario(ws) {
+  phase = 'scenario-water-proxy-surfels';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const evidence = lastEvidence.waterProxy = { failures };
+  const readProxy = () => evaluate(ws, 'window.kaminosWaterProxyDebugState?.() ?? null');
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false })');
+  await settleViewportFrames(ws, 1200);
+  const backgroundShot = await capturePngScreenshot(ws, siblingPngPath('-water-background'));
+
+  phase = 'scenario-water-proxy-surfels-add-water';
+  evidence.added = await evaluate(ws, `(async () => {
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const trigger = document.getElementById('scene-add-menu-trigger');
+    if (!trigger) throw new Error('Scene Add menu is missing');
+    trigger.click();
+    const action = document.querySelector('#scene-add-menu-popup [data-scene-add="water-emitter"]');
+    if (!action || action.closest('[hidden]')) throw new Error('Water Emitter action did not open in the Scene Add menu');
+    action.click();
+    let state = null;
+    for (let i = 0; i < 240; i++) { await wait(125); state = window.kaminosLocalLiquidState?.() || null; if (state?.lastFrame?.frameId) break; }
+    if (!state?.lastFrame?.frameId) throw new Error('Kaminos local-water host did not produce its first frame');
+    if (state.supportGeometryVisible) window.kaminosSetLocalLiquidSupportVisible(false);
+    window.kaminosViewportSettings.set({ overlays: false, gizmos: false });
+    window.kaminosSelection?.clear?.();
+    const rect = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect();
+    return { frameId: state.lastFrame.frameId, presentation: state.lastFrame.presentation ?? null, supportGeometryVisible: state.supportGeometryVisible,
+      canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+  })()`, { timeoutMs: 90000 });
+  await delay(7000);
+  evidence.fullLive = await measureWaterCadence(ws, 3000);
+  check(evidence.fullLive.presentation === null || evidence.fullLive.presentation === 'full', `water did not start in the full render: ${JSON.stringify(evidence.fullLive)}`);
+
+  phase = 'scenario-water-proxy-surfels-paused-compare';
+  await evaluate(ws, 'window.kaminosPauseLocalLiquid(true)');
+  await settleViewportFrames(ws, 800);
+  const fullShot = await capturePngScreenshot(ws, siblingPngPath('-water-full'));
+  const [toggle] = await evaluate(ws, `[...document.querySelectorAll('.viewport-water')].filter(g => g.offsetParent !== null).map(g => { const r = g.querySelector('[data-water="proxy"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+  assert.ok(toggle, 'Water Proxy toggle is missing from the visible viewport toolbar');
+  await dispatchMouseClick(ws, toggle);
+  let proxy = null;
+  for (let i = 0; i < 160; i++) { proxy = await readProxy(); if (proxy?.hostPresentation === 'proxy' && proxy.layer?.uploads >= 1) break; await delay(125); }
+  evidence.proxyPaused = proxy;
+  check(proxy?.hostPresentation === 'proxy', `host did not switch to proxy presentation: ${JSON.stringify(proxy)}`);
+  check(proxy?.layer?.count > 0, `proxy layer drew no surfels: ${JSON.stringify(proxy?.layer)}`);
+  check(proxy?.hostFrame?.presentation === 'proxy', `host frames are not proxy frames: ${JSON.stringify(proxy?.hostFrame)}`);
+  await settleViewportFrames(ws, 800);
+  const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-water-proxy'));
+  const background = decodeScreenshotPngRgb(readFileSync(backgroundShot.path));
+  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, evidence.added.canvas);
+  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, evidence.added.canvas);
+  let intersection = 0, union = 0;
+  for (let i = 0; i < full.mask.length; i++) { if (full.mask[i] && proxied.mask[i]) intersection++; if (full.mask[i] || proxied.mask[i]) union++; }
+  evidence.masks = { full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox }, intersection, union, iou: union ? intersection / union : 0 };
+  check(full.area > 500, `full water render is not visible against the empty scene (${full.area} px)`);
+  check(proxied.area > 500, `proxy water is not visible against the empty scene (${proxied.area} px)`);
+  check(evidence.masks.iou > 0.25, `proxy water does not overlap the full water render (IoU ${evidence.masks.iou.toFixed(3)})`);
+
+  phase = 'scenario-water-proxy-surfels-live';
+  const beforeLive = await readProxy();
+  await evaluate(ws, 'window.kaminosPauseLocalLiquid(false)');
+  await delay(1500);
+  evidence.proxyLive = await measureWaterCadence(ws, 3000);
+  const afterLive = await readProxy();
+  evidence.proxyLiveState = afterLive;
+  check(afterLive.layer.uploads > beforeLive.layer.uploads, `proxy snapshots stopped refreshing while the sim ran: ${beforeLive.layer.uploads} -> ${afterLive.layer.uploads}`);
+  check(afterLive.layer.snapshotWriteTick > beforeLive.layer.snapshotWriteTick, 'proxy snapshot write tick did not advance with the sim');
+  const proxyLiveShot = await capturePngScreenshot(ws, siblingPngPath('-water-proxy-live'));
+
+  phase = 'scenario-water-proxy-surfels-restore';
+  await evaluate(ws, `window.kaminosViewportSettings.set({ water: 'full' })`);
+  await settleViewportFrames(ws, 800);
+  const restored = evidence.restored = await readProxy();
+  check(restored.hostPresentation === 'full', `host did not return to the full render: ${restored.hostPresentation}`);
+  check(restored.layer?.visible === false, 'proxy layer stayed visible in the full render');
+  evidence.shots = [backgroundShot, fullShot, proxyShot, proxyLiveShot];
+  assert.deepEqual(failures, [], `water proxy checks failed:\n- ${failures.join('\n- ')}`);
+}
+
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
 // plane and the camera frames all of it at a readable size.
 async function runMeshAssetArrivalScenario(ws) {
@@ -6153,6 +6261,8 @@ try {
     await runViewportWireframeToggleScenario(ws);
   } else if (scenario === 'viewport-wireframe-fire-shadow') {
     await runViewportWireframeFireShadowScenario(ws);
+  } else if (scenario === 'water-proxy-surfels') {
+    await runWaterProxySurfelsScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {

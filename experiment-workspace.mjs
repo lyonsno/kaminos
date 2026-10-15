@@ -1,5 +1,5 @@
 import {createControlSlots} from './authoring-workspace.mjs';
-import {VIEWPORT_SHADING_TOGGLE_HTML} from './viewport-display-settings.mjs';
+import {VIEWPORT_SHADING_TOGGLE_HTML,VIEWPORT_WATER_TOGGLE_HTML} from './viewport-display-settings.mjs';
 
 // Layout custody only: all scene, controls, clock and rendering stay with their
 // existing owners. Release these slots before another workspace acquires them.
@@ -13,7 +13,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
-    ${VIEWPORT_SHADING_TOGGLE_HTML}<button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
+    ${VIEWPORT_SHADING_TOGGLE_HTML}${VIEWPORT_WATER_TOGGLE_HTML}<button type="button" id="experiment-frame">Frame</button><div id="experiment-navigation-slot"></div>`);
   toolbar.setAttribute('aria-label','Experiment tools'); toolbar.querySelector('strong').textContent=title;
   const run=make('div','experiment-run-strip',`<span id="experiment-source">Synthetic fluid · loading</span><div id="experiment-run-controls"></div><span id="experiment-clock"></span>`);
   run.setAttribute('aria-label','Simulation run');
