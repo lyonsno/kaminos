@@ -27163,9 +27163,10 @@ function setupAuthoringAssets(){
       imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
       const prepared=await prepareImageForTrellis({bytes,type:blob.type||undefined,signal,prepareTrellisAlphaRgba,
         removeForegroundU2Net:async options=>{
-          // One model at a time on the page device: U2Net holds the app run while it segments.
+          // One model at a time on the page device: U2Net holds the app run while it segments,
+          // yielding scene frames and Stop between its GPU segments (foreground: the run).
           const run=await appGpu.beginRun(`u2net-${crypto.randomUUID()}`,{routeId:'u2net.foreground-removal'});
-          try{return await removeForegroundU2Net(options);}finally{await run.finish();}
+          try{return await removeForegroundU2Net({...options,foreground:run});}finally{await run.finish();}
         },
         runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
           return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
