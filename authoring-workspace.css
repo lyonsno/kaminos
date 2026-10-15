@@ -281,7 +281,7 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 #asset-step-mesh #asset-run{background:#33403b;border-color:#56705f;}
 #asset-step-results #asset-results{margin:0;}
 body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asset-detail{display:none;}
-@container asset-pane (max-width:640px){#asset-generate:not([hidden]){grid-template-columns:1fr;overflow:auto;}.asset-step{overflow:visible;}}
+@container asset-pane (max-width:640px){#asset-generate:not([hidden]){grid-template-columns:1fr;grid-auto-rows:max-content;align-content:start;overflow:auto;}.asset-step{overflow:visible;}}
 .asset-step-actions{display:flex;gap:6px;flex-wrap:wrap;}
 body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asset-use-image{display:none;}
 #asset-express-row{display:flex;align-items:center;gap:6px;color:#d7d9da;}#asset-express-row small{color:#929da2;font-size:10.5px;}
