@@ -242,6 +242,20 @@ try {
   const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
   check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
 
+  report.phase = 'glance'; save();
+  // The sub's view from its own camera: the operator's view is never borrowed.
+  const beforeGlance = await page.evaluate(() => ({camera: window.kaminosCameraDebugState(), view: window.kaminosAgentVantage.capturing()}));
+  const glance = await vantageOk('glance', '--name', 'glance');
+  const afterGlance = await page.evaluate(() => window.kaminosCameraDebugState());
+  const glanceColors = colors(imageOf(glance, 'glance'));
+  report.effective.glance = {route: glance.result.route, colors: glanceColors, omitted: glance.result.omitted};
+  check('a glance shows the red box from the sub\'s own camera', glance.result.route === 'own-camera' && glanceColors.varied && glanceColors.red > 0.05, glanceColors);
+  check('and the operator\'s camera never moved', ['position', 'target'].every(key => beforeGlance.camera[key].every((v, i) => Math.abs(v - afterGlance[key][i]) < 1e-12)),
+    {before: beforeGlance.camera, after: afterGlance});
+  const pickGlance = await vantageOk('pick', ...middle(glance), '--picture', glance.recordPath);
+  check('a pick on the glance names the red box, at the point the glance drew', pickGlance.result.hit?.id === scene.red && pickGlance.result.hit.pointBasis === 'depth'
+    && Math.abs(pickGlance.result.hit.point[2] - 0.5) < 2e-3, {hit: pickGlance.result.hit});
+
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
   check('a picture carries a map with both view cones', snapMap.teal > 50 && snapMap.white > 50, snapMap);

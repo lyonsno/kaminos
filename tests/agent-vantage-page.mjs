@@ -1342,3 +1342,31 @@ test('the mesh agrees with the drawn point only to float precision, even far fro
   const millimetre = vantage.surfaceOf(THREE, [{id: 'card', object: nearRoot}], {row: nearRow, ray: rayThrough(closeOptics, [0.5, 0.5]), optics: closeOptics, depthPoint: [0, 0, 7.4336]});
   assert.equal(millimetre.surfaceBasis, 'recast-differs', 'a millimetre at room scale is not float error either');
 });
+
+// --- glance: the sub's view from its own camera -----------------------------------------
+
+test('glance draws the sub view with its own camera, never borrowing the operator\'s, and keeps a pick map', async () => {
+  const {state, host, pilot} = await launched();
+  const renders = [];
+  host.renderView = options => { renders.push({...copy(options), view: copy(state.view)}); return {ready: Promise.resolve({canvas: {glance: true}, width: options.width, height: options.height})}; };
+  const before = {holds: state.holds, writes: state.writes.length, frames: state.frames, view: copy(state.view)};
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 640});
+  assert.equal(shot.kind, 'glance');
+  assert.equal(shot.route, 'own-camera');
+  assert.equal(state.holds, before.holds, 'nothing of the operator\'s is held');
+  assert.equal(state.writes.length, before.writes, 'the operator\'s view is never written');
+  assert.deepEqual(state.view, before.view);
+  assert.equal(renders.length, 1);
+  assert.deepEqual([renders[0].width, renders[0].height], [640, 360], 'at the viewport\'s aspect, to the size asked for');
+  assert.deepEqual(renders[0].hide, ['vantage-bebop'], 'the sub is not in its own view');
+  const subView = cameraViewFromRecord(state.cameras[0], 1600 / 900, 3);
+  closeTo(rayThrough(renders[0].optics, [0.5, 0.5]).direction, new Vector3(...subView.target).sub(new Vector3(...subView.position)).normalize().toArray(), 'through the sub\'s eye');
+  assert.deepEqual(state.idPasses.at(-1).optics, renders[0].optics, 'its pick map uses the same matrices');
+  assert.equal(shot.pickMap?.depth?.encoding, 'float32le-base64');
+  assert.ok(shot.omitted.some(item => /fire/.test(item)) && shot.omitted.some(item => /water/.test(item)), 'it says what a glance does not draw');
+});
+
+test('a page that cannot draw a second view refuses a glance', async () => {
+  const {pilot} = await launched();
+  await assert.rejects(() => pilot.run('glance', {}), error => error.phase === 'glance');
+});

@@ -12,6 +12,7 @@ import {
   finishPickMap, NOTHING_DRAWN, UNIDENTIFIED, pixelAt, pointAtViewDepth,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
+import {GLANCE_OMITS} from './agent-vantage-glance.mjs';
 
 export const VANTAGE_GLYPH_NAME = 'kaminos-vantage-glyph';
 const SUB_PREFIX = 'vantage-';
@@ -294,6 +295,35 @@ export function createVantagePilot(host) {
       const seen = namesFor(taken.shots[0], clean);
       const images = withMap(picture('peek', taken.shots[0].shot, annotate, seen), map);
       return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
+    },
+
+    // The sub's view from its own camera, drawn into its own targets: the
+    // operator's view is never borrowed or held. Its pick map is drawn in the
+    // same task with the same matrices. It shows what the scene renderer draws
+    // and says what it leaves out.
+    async glance({pilot, maxSize, annotate, map}) {
+      const record = requireSub(pilot);
+      if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
+      const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
+      const optics = opticsOfView(viewOf(record), ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
+      let drawn, drawing = null, drawError = null;
+      try { drawn = host.renderView({optics, width, height, hide}); }
+      catch (error) { fail('glance', `The sub's view could not be drawn: ${error?.message || error}`); }
+      if (host.drawIds) {
+        try { drawing = host.drawIds({optics, width, height, hide, depth: true}); }
+        catch (error) { drawError = error?.message || String(error); }
+      }
+      let shot;
+      try { shot = await drawn.ready; }
+      catch (error) { fail('glance', `The sub's view could not be read back: ${error?.message || error}`); }
+      const item = {drawing, drawError};
+      await withPickMaps({shots: [item]});
+      const seen = objectsInProjection(optics, targets().filter(object => !(object.type === CAMERA_TYPE)), {excludeIds: subIds()});
+      const images = withMap(picture('glance', shot, annotate, seen), map);
+      host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
+      return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub: describe(record), view: viewOf(record),
+        aspect: ratio, naming: 'effective-camera', optics, layers: ['scene'], omitted: [...GLANCE_OMITS],
+        image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },
 
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
@@ -932,7 +962,7 @@ export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, opti
  */
 export function installAgentVantage({THREE, document, window, edits, cameras, entries, selection, readView, writeView,
   viewport, hostCanvas, busy, hold, cameraMatrices, suspendEditorDrawing, redraw, frameState, extraTargets = () => [],
-  idPass = null, water = () => false, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
+  idPass = null, glance = null, water = () => false, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
   const hud = installVantageHud({document, viewport});
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
@@ -969,6 +999,16 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
       return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
     } : null,
     surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
+    // A glance's pixels become a canvas like any other picture.
+    renderView: glance ? options => {
+      const view = glance.draw(options);
+      return {ready: view.ready.then(({width, height, pixels}) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').putImageData(new window.ImageData(pixels, width, height), 0, 0);
+        return {canvas, width, height};
+      })};
+    } : null,
     coordinateSystem,
     now: () => Date.now(),
     shutter: info => hud.shutter(info),

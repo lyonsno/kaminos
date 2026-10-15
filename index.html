@@ -3870,6 +3870,7 @@ import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
 import {installAgentVantage} from './agent-vantage.mjs';
 import {createIdPass} from './agent-vantage-ids.mjs';
+import {createGlance} from './agent-vantage-glance.mjs';
 import * as TSL from 'three/tsl';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installNotes} from './notes-panel.mjs';
@@ -12083,11 +12084,12 @@ async function initScene() {
   const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
   try{
     const idPass=createIdPass({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
+    const glance=createGlance({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
     const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>sceneObjects,
       selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
       redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
-      idPass,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
+      idPass,glance,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera.
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,idle:agentVantage.idle};

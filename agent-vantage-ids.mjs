@@ -12,6 +12,30 @@
 // object must stay that object's number.
 import {UNIDENTIFIED, idsFromReadback, depthsFromReadback} from './agent-vantage-core.mjs';
 
+// A camera with exactly the given matrices, which must already be in the
+// renderer's clip convention and depth direction, so the renderer draws
+// through them unchanged. Shaders read near and far from the camera itself.
+export function cameraFromOptics({THREE, renderer, optics, layers = null}) {
+  if ((optics.coordinateSystem ?? THREE.WebGLCoordinateSystem) !== renderer.coordinateSystem) {
+    throw new Error('The optics are not in the renderer\'s clip convention');
+  }
+  if (!!optics.reversedDepth !== !!renderer.reversedDepthBuffer) throw new Error('The optics do not match the renderer\'s depth direction');
+  const camera = new THREE.PerspectiveCamera();
+  camera.matrixAutoUpdate = false;
+  camera.matrixWorldAutoUpdate = false;
+  camera.matrixWorldInverse.fromArray(optics.viewInverse);
+  camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+  camera.matrixWorld.decompose(camera.position, camera.quaternion, camera.scale);
+  camera.projectionMatrix.fromArray(optics.projection);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+  camera.coordinateSystem = renderer.coordinateSystem;
+  if (renderer.reversedDepthBuffer) camera._reversedDepth = true;
+  if (Number.isFinite(optics.near)) camera.near = optics.near;
+  if (Number.isFinite(optics.far)) camera.far = optics.far;
+  if (Number.isInteger(layers)) camera.layers.mask = layers;
+  return camera;
+}
+
 export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = () => () => {}, cameraLayers = () => null}) {
   const numbers = new WeakMap();
   let next = 1;
@@ -70,30 +94,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
     return copy;
   };
 
-  // The camera a pick map is drawn with: exactly the given matrices, which
-  // must already be in the renderer's clip convention and depth direction.
-  const cameraFor = optics => {
-    if ((optics.coordinateSystem ?? THREE.WebGLCoordinateSystem) !== renderer.coordinateSystem) {
-      throw new Error('The pick map optics are not in the renderer\'s clip convention');
-    }
-    if (!!optics.reversedDepth !== !!renderer.reversedDepthBuffer) throw new Error('The pick map optics do not match the renderer\'s depth direction');
-    const camera = new THREE.PerspectiveCamera();
-    camera.matrixAutoUpdate = false;
-    camera.matrixWorldAutoUpdate = false;
-    camera.matrixWorldInverse.fromArray(optics.viewInverse);
-    camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
-    camera.matrixWorld.decompose(camera.position, camera.quaternion, camera.scale);
-    camera.projectionMatrix.fromArray(optics.projection);
-    camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
-    camera.coordinateSystem = renderer.coordinateSystem;
-    if (renderer.reversedDepthBuffer) camera._reversedDepth = true;
-    // Shaders read near and far from the camera itself, not from its matrices.
-    if (Number.isFinite(optics.near)) camera.near = optics.near;
-    if (Number.isFinite(optics.far)) camera.far = optics.far;
-    const layers = cameraLayers();
-    if (Number.isInteger(layers)) camera.layers.mask = layers;
-    return camera;
-  };
+  const cameraFor = optics => cameraFromOptics({THREE, renderer, optics, layers: cameraLayers()});
 
   // Draw the scene from `optics` into a width×height map, with editor drawing
   // and the `hide` entries left out, and start reading `region` back, with its
