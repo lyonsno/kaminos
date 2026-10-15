@@ -1,8 +1,8 @@
 // Per-kernel GPU time from timestamp queries. Each timed compute pass writes a begin/end pair into a
 // query slot and resolves it into that slot's 256-byte-aligned region of a resolve buffer inside the same
-// command buffer. Results are copied out in batches (when free slots run low, before a tensor readback, or
-// on settle) and mapped without blocking the caller. A batch includes only kernels already submitted, so
-// the copy is queued after their resolves; a slot returns to the free list only after it has been read.
+// command buffer. Each physical query pair is used once. Full sets retire after their readbacks settle,
+// then a replacement starts another epoch. prepare() waits only at that rollover boundary; ordinary
+// readbacks remain asynchronous. This avoids both immediate query reuse and a native counter-buffer pool.
 export const WEBGPU_GPU_TIMING_SCHEMA = 'kaminos.webgpu-gpu-timing.v0';
 export const WEBGPU_GPU_TIMING_AUTHORITY = 'gpu-timestamp-query';
 
@@ -47,18 +47,20 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
   };
   if (summary.status !== 'active') {
     return {
-      summary, begin: () => null, encodeResolve() {}, markSubmitted() {}, abandon() {}, flush() {},
+      summary, prepare() {}, begin: () => null, encodeResolve() {}, markSubmitted() {}, abandon() {}, flush() {},
       settle: async () => summary, destroy() {},
     };
   }
 
-  const querySet = device.createQuerySet({ label: 'kaminos.gpu-timing.queries', type: QUERY_SET_TYPE, count: 2 * capacity });
+  const createQuerySet = () => device.createQuerySet({ label: 'kaminos.gpu-timing.queries', type: QUERY_SET_TYPE, count: 2 * capacity });
+  let querySet = createQuerySet();
   const resolveBuffer = device.createBuffer({
     label: 'kaminos.gpu-timing.resolve',
     size: capacity * RESOLVE_ALIGNMENT,
     usage: USAGE.queryResolve | USAGE.copySrc,
   });
-  const free = Array.from({ length: capacity }, (_, slot) => capacity - 1 - slot);
+  let nextSlot = 0;
+  let destroyed = false;
   let outstanding = [];
   const inflight = new Set();
 
@@ -77,12 +79,19 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
   }
 
   function begin() {
-    if (free.length <= capacity / 2) flush();
-    if (free.length === 0) {
+    if (destroyed) throw new Error('GPU timer is destroyed');
+    if (nextSlot >= capacity / 2) flush();
+    if (nextSlot === capacity && summary.pendingKernels === 0 && inflight.size === 0) {
+      querySet?.destroy?.();
+      querySet = null;
+      querySet = createQuerySet();
+      nextSlot = 0;
+    }
+    if (nextSlot === capacity) {
       summary.untimedKernels += 1;
       return null;
     }
-    const slot = free.pop();
+    const slot = nextSlot++;
     const token = {
       slot, ms: null, status: 'pending', submitted: false, listeners: [],
       timestampWrites: { querySet, beginningOfPassWriteIndex: 2 * slot, endOfPassWriteIndex: 2 * slot + 1 },
@@ -93,18 +102,17 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
   }
 
   function encodeResolve(encoder, token) {
-    encoder.resolveQuerySet(querySet, 2 * token.slot, 2, resolveBuffer, token.slot * RESOLVE_ALIGNMENT);
+    encoder.resolveQuerySet(token.timestampWrites.querySet, 2 * token.slot, 2, resolveBuffer, token.slot * RESOLVE_ALIGNMENT);
   }
 
   function markSubmitted(token) {
     if (token) token.submitted = true;
   }
 
-  // The kernel's command buffer was never submitted, so its slot was never written: release it unread.
+  // Abandoned encoders can still retain their query references, so do not recycle their indices.
   function abandon(token) {
     if (!token || token.status !== 'pending' || token.submitted) return;
     outstanding = outstanding.filter(candidate => candidate !== token);
-    free.push(token.slot);
     settleToken(token, NaN);
   }
 
@@ -128,7 +136,6 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
     }, () => {
       for (const token of batch) settleToken(token, NaN);
     }).finally(() => {
-      for (const token of batch) free.push(token.slot);
       staging.destroy?.();
       inflight.delete(read);
     });
@@ -141,12 +148,19 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
     return summary;
   }
 
+  function prepare() {
+    if (destroyed) throw new Error('GPU timer is destroyed');
+    if (nextSlot === capacity) return settle();
+  }
+
   function destroy() {
-    querySet.destroy?.();
+    if (destroyed) return;
+    destroyed = true;
+    querySet?.destroy?.();
     resolveBuffer.destroy?.();
   }
 
-  return { summary, begin, encodeResolve, markSubmitted, abandon, flush, settle, destroy };
+  return { summary, prepare, begin, encodeResolve, markSubmitted, abandon, flush, settle, destroy };
 }
 
 // Attach a stage's timing tokens to its profile record: gpuMs is the sum of its kernels' GPU time once

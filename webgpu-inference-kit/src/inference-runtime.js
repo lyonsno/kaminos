@@ -1170,8 +1170,13 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return runtime.runStage(stageName, async stage => {
         let commandBuffer;
         // An unsubmitted command buffer may never run, so only submitted kernels take a timing slot.
-        const gpuTiming = options.submit === false ? null : gpuTimer.begin();
+        let gpuTiming = null;
         try {
+          if (options.submit !== false) {
+            const pendingTiming = gpuTimer.prepare();
+            if (pendingTiming) await pendingTiming;
+            gpuTiming = gpuTimer.begin();
+          }
           commandBuffer = await runOptionalHostPhase(
             runtime,
             WEBGPU_HOST_PHASE.commandEncoding,
