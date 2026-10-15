@@ -32,7 +32,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;bone.add(marker);
  }
  let cached='',updates=0,lastUpdateMs=0,deformations=0,cacheHits=0,cacheBytes=0;
- let deformer=null,cpuKey='';
+ let deformer=null,cpuKey='',cpuGeometry=null;
  const makeDeformer=(target,data)=>{
   if(!deformerFactory)return null;
   const next=deformerFactory({geometry:target,...data,channels:channels.length});
@@ -66,13 +66,13 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
  // Picking, held-pose bounds, export and diagnostics are explicit CPU consumers.
  // Updating the CPU mirror does not mark GPU-owned output buffers for upload.
  function syncCpuGeometry(){
-  active();if(!deformer||cpuKey===cached)return geometry;
-  geometry.attributes.position.array.set(skinTransport(skin.rest,skin.weights,palette()));deformations++;
-  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(geometry.attributes.position.array,3));mirror.setIndex(new THREE.BufferAttribute(skin.triangles,1));mirror.computeVertexNormals();
-  geometry.attributes.normal.array.set(mirror.attributes.normal.array);mirror.dispose();
-  geometry.computeBoundingSphere();geometry.computeBoundingBox();cpuKey=cached;return geometry;
+  active();if(!deformer)return geometry;if(cpuKey===cached)return cpuGeometry;
+  const mirror=new THREE.BufferGeometry();mirror.setAttribute('position',new THREE.BufferAttribute(skinTransport(skin.rest,skin.weights,palette()),3));deformations++;
+  mirror.setIndex(new THREE.BufferAttribute(skin.triangles,1));mirror.computeVertexNormals();mirror.computeBoundingSphere();mirror.computeBoundingBox();
+  geometry.boundingSphere=mirror.boundingSphere.clone();geometry.boundingBox=mirror.boundingBox.clone();
+  cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=cached;return mirror;
  }
- if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){syncCpuGeometry();return raycast.apply(this,args);};}
+ if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
  function replaceSkin(candidate){
   active();validate(candidate);
   const begin=performance.now(),matrices=palette();let nextDeformer;
@@ -86,10 +86,10 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
-  const previous=geometry;geometry=next;deformer=nextDeformer;mesh.geometry=next;skin=candidate;clearPoses();cpuKey='';cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
+  const previous=geometry;geometry=next;deformer=nextDeformer;mesh.geometry=next;skin=candidate;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;cpuKey='';cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,syncCpuGeometry,async readGpuGeometry(){active();if(!deformer)throw Error('CPU reference is not GPU evidence');return deformer.readback();},setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=deformer?false:enabled;if(!retainPoses)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',deformation:deformer?.read()??{backend:'cpu-reference'},vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();cpuGeometry?.dispose();cpuGeometry=null;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  update();return runtime;
 }

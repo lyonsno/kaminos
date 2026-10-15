@@ -33,7 +33,12 @@ try{
  report.runtime=await (await fetch(origin+'/api/runtime-config')).json();assert.equal(report.runtime.source.repoRoot,root);assert.equal(report.runtime.source.dirty,false);
  const url=new URL(origin+'/index.html');url.searchParams.set('experiment','marionette/motion-comparison');url.searchParams.set('experiment_inputs',JSON.stringify({recipe:args['--recipe-url'],recipe_sha256:sha}));report.url=url.href;
  const {chromium}=await import(pathToFileURL(args['--playwright']));browser=await chromium.launch({executablePath:args['--chrome'],headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});report.browserVersion=browser.version();
- context=await browser.newContext({viewport:{width:1800,height:1200},recordVideo:{dir:out+'/video',size:{width:1800,height:1200}}});page=await context.newPage();page.on('pageerror',e=>report.errors.push(String(e)));
+ context=await browser.newContext({viewport:{width:1800,height:1200},recordVideo:{dir:out+'/video',size:{width:1800,height:1200}}});page=await context.newPage();
+ await page.route('**/favicon.ico',r=>r.fulfill({status:204}));
+ let rejectPage;const failedPage=new Promise((_,reject)=>rejectPage=reject);failedPage.catch(()=>{});
+ const evaluate=page.evaluate.bind(page);page.evaluate=(...args)=>Promise.race([evaluate(...args),failedPage]);
+ page.on('pageerror',e=>{report.errors.push(String(e));void fs.appendFile(out+'/console.log',String(e)+'\n');rejectPage(e);});
+ page.on('console',m=>{if(m.type()==='error'){report.errors.push(m.text());void fs.appendFile(out+'/console.log',m.text()+'\n');rejectPage(Error(m.text()));}});
  report.phase='mount';await save();await page.goto(url.href,{timeout:0});await page.evaluate(async()=>{for(;;){if(window.kaminosWorkbenchExperimentError)throw Error(window.kaminosWorkbenchExperimentError);if(window.kaminosCreatureComparison)return;await new Promise(r=>requestAnimationFrame(r));}});
  const read=()=>page.evaluate(()=>({read:window.kaminosCreatureComparison(),scene:window.kaminosSceneObjectDebugState(),clock:window.kaminosWorkbenchSceneState()}));
  async function retain(label,validate=false){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const state=await read();if(validate)check(state,setup);await fs.writeFile(out+'/'+label+'.state.v8',v8.serialize(state));await page.screenshot({path:out+'/'+label+'.png'});report.images.push(label+'.png');await save();return state;}

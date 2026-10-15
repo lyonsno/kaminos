@@ -12,13 +12,15 @@ const original=r.mesh.geometry.attributes.position.array.slice();r.bones.get('pe
 assert.deepEqual(r.mesh.geometry.attributes.position.array,original,'playback must not rewrite CPU vertices');
 assert.equal(r.read().poseCache.deformations,0,'playback must not call CPU transport');
 assert.throws(()=>r.mesh.onBeforeRender({backend:{isWebGPUBackend:false}}),/WebGPU/);
-let dispatches=0;const renderer={backend:{isWebGPUBackend:true,destroyAttribute(){}},compute(nodes){assert.equal(nodes.length,2);dispatches++;}};
+let dispatches=0;const renderer={backend:{isWebGPUBackend:true},_attributes:{delete(){}},compute(nodes){assert.equal(nodes.length,2);dispatches++;}};
 r.mesh.onBeforeRender(renderer);r.mesh.onBeforeRender(renderer);assert.equal(dispatches,1,'multiple render passes reuse one posed GPU buffer');
-r.syncCpuGeometry();assert.deepEqual([...r.mesh.geometry.attributes.position.array],[2,0,0,3,0,0,2,1,0]);
+assert.deepEqual([...r.syncCpuGeometry().attributes.position.array],[2,0,0,3,0,0,2,1,0]);
+assert.deepEqual(r.mesh.geometry.attributes.position.array,original,'CPU picking mirror must not overwrite GPU-owned output');
+assert.equal(r.mesh.geometry.attributes.position.itemSize,4,'compute and vertex fetch share explicit vec4 storage');
 assert.equal(r.read().poseCache.deformations,1,'explicit geometry inspection may compute the current CPU reference');
 r.syncCpuGeometry();assert.equal(r.read().poseCache.deformations,1);r.bones.get('pelvis').position.x=3;r.update();r.mesh.onBeforeRender(renderer);assert.equal(dispatches,2);
 const hits=[];r.mesh.raycast(new THREE.Raycaster(new THREE.Vector3(3.2,.2,2),new THREE.Vector3(0,0,-1)),hits);assert.equal(hits.length,1,'picking uses current posed triangles, not stale rest geometry');
 const handles={mesh:r.mesh,bone:r.bones.get('pelvis'),material:r.mesh.material};r.replaceSkin({...data,rest:new Float32Array([0,0,0,2,0,0,0,2,0])});
 assert.equal(r.mesh,handles.mesh);assert.equal(r.bones.get('pelvis'),handles.bone);assert.equal(r.mesh.material,handles.material);assert.equal(r.read().deformation.backend,'webgpu-dense-dq');
-r.syncCpuGeometry();assert.deepEqual([...r.mesh.geometry.attributes.position.array],[3,0,0,5,0,0,3,2,0]);
+assert.deepEqual([...r.syncCpuGeometry().attributes.position.array],[3,0,0,5,0,0,3,2,0]);
 r.dispose();assert.throws(()=>r.update(),/disposed/);console.log('GPU runtime skips CPU solves/cache, shares GPU passes, retains current posed picking and skin exchange');

@@ -98,7 +98,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
   const operations={
    async inspectGpu(){active();if(status==='playing')throw Error('Pause comparison before same-pose GPU readback');return Promise.all(rows.filter(mounted).map(async row=>{
     const gpu=await row.runtime.readGpuGeometry(),cpu=row.runtime.syncCpuGeometry();
-    return {key:row.spec.id,frame:row.last,source:row.source,backend:gpu.backend,dispatches:gpu.dispatches,positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),cpuPositions:Array.from(cpu.attributes.position.array),cpuNormals:Array.from(cpu.attributes.normal.array)};
+    return {key:row.spec.id,frame:row.last,source:row.source,backend:gpu.backend,dispatches:gpu.dispatches,layout:gpu.layout,packedPositions:Array.from(gpu.packedPositions),packedNormals:Array.from(gpu.packedNormals),positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),cpuPositions:Array.from(cpu.attributes.position.array),cpuNormals:Array.from(cpu.attributes.normal.array)};
    }));},
    play(){active();if(status==='removed')throw Error('All comparison bodies removed');status='playing';start();refresh();return read();},
    pause(){active();unsubscribe();status='paused';present();refresh();return read();},
