@@ -253,3 +253,13 @@ test('a very large scene lays out its map without running out of call stack', as
   assert.equal(layout.boxes.length, 20000);
   assert.ok(Number.isFinite(layout.scale) && layout.boxes.every(box => box.center.every(Number.isFinite)));
 });
+
+test('pick names a point of a picture by fractions from its top left, seen from the sub, the operator or a picture camera', () => {
+  assert.deepEqual(checkedCommand({command: 'pick', args: {at: [0.5, 0.25]}}), {command: 'pick', args: {pilot: 'bebop', from: 'sub', at: [0.5, 0.25]}});
+  assert.equal(checkedCommand({command: 'pick', args: {at: [0, 1], from: 'operator'}}).args.from, 'operator');
+  const optics = {projection: Array.from({length: 16}, (_, i) => i), viewInverse: Array.from({length: 16}, (_, i) => -i)};
+  assert.deepEqual(checkedCommand({command: 'pick', args: {at: [1, 0], optics}}).args.optics, optics, 'a picture camera travels as its matrices');
+  for (const at of [[1.2, 0.5], [0.5], ['a', 0.5], null]) assert.throws(() => checkedCommand({command: 'pick', args: {at}}), /fractions/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], from: 'moon'}}), /"sub" or "operator"/);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics: {projection: [1], viewInverse: []}}}), /matrices/);
+});

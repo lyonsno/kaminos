@@ -54,6 +54,20 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 `sketch` describes the scene without rendering it: each object's bounds, the simulation fields, your view with the matrices your viewport renders with (`operator.optics`, which include a camera frame's zoom and offset), and every sub. `map` paints that as a three-quarter orthographic map: boxes, a ground grid, red X and blue Z axes, your view cone in white and each sub's in teal. Your cone follows the effective projection, so in camera view it shows the framed view you see. Pictures carry a map unless `--no-map` is given. Neither command waits for the scene to draw; a run in a hidden tab has not been witnessed.
 
+## Pointing at things
+
+`pick X Y` says what lies under a point of the sub's view, with X and Y as fractions from its top left; `--from operator` uses your view. `pick X Y --picture RECORD.json` takes a pixel of a kept picture and the camera that took it (`--frame N` for a burst frame), so it names what that picture showed even after things have moved. Every picture's record carries that camera as `optics`.
+
+A pick answers with:
+- the first object the ray meets;
+- the point in world and in the object's own frame;
+- the surface normal;
+- the mesh path and face it struck;
+- the vertex and index counts of that mesh, so a saved reference can notice the geometry was replaced;
+- the fields the ray passes through.
+
+A pick renders nothing and never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same.
+
 ## Limits
 
 - A picture borrows the viewport, so the person's view switches to the sub for a couple of frames per snap and for the whole duration of a burst.

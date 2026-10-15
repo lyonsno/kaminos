@@ -180,6 +180,18 @@ try {
   report.effective.peek = {route: peek.result.route, colors: peekColors};
   check('peek shows the operator view of the blue box', peekColors.blue > 0.05 && peekColors.red < 0.005, peekColors);
 
+  report.phase = 'pick'; save();
+  // A pixel of a kept picture, picked later, names what that picture showed.
+  const middle = record => [String(record.result.image.width / 2), String(record.result.image.height / 2)];
+  const pickRed = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  check('a pick on the red snap names the red box under its centre', pickRed.result.from === 'picture' && pickRed.result.hit?.id === scene.red,
+    {hit: pickRed.result.hit});
+  const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
+  check('a pick at the centre of the operator view names the blue box, with a point on its surface',
+    pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.local.length === 3 && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
+  const pickNothing = await vantageOk('pick', '0.5', '0.02', '--from', 'operator');
+  check('a pick above everything hits nothing', pickNothing.result.hit === null, {hit: pickNothing.result.hit});
+
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
   check('a picture carries a map with both view cones', snapMap.teal > 50 && snapMap.white > 50, snapMap);

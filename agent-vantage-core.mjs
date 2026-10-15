@@ -168,6 +168,39 @@ export function objectsInView(view, aspect, objects, options = {}) {
     coordinateSystem: camera.coordinateSystem}, objects, options);
 }
 
+// The matrices a camera at `view` renders with on a viewport of this aspect.
+export function opticsOfView(view, aspect) {
+  const camera = viewCamera(view, aspect);
+  return {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: camera.near};
+}
+
+// The world ray through a point of a picture, from the matrices that drew it.
+// `at` is [x, y] as fractions of the picture from its top left. Any clip
+// depth inside the frustum gives the same ray, so the convention does not matter.
+export function rayThrough({projection, viewInverse}, [x, y]) {
+  const unproject = new Matrix4().fromArray(projection).invert(), world = new Matrix4().fromArray(viewInverse).invert();
+  const origin = new Vector3().setFromMatrixPosition(world);
+  const direction = new Vector3(2 * x - 1, 1 - 2 * y, 0.5).applyMatrix4(unproject).applyMatrix4(world).sub(origin).normalize();
+  return {origin: origin.toArray(), direction: direction.toArray()};
+}
+
+// Where a ray enters and leaves an axis-aligned box, as distances along it, or
+// null when it misses. A ray starting inside enters at 0.
+export function rayCrossesBox({origin, direction}, {min, max}) {
+  let enter = -Infinity, exit = Infinity;
+  for (let axis = 0; axis < 3; axis++) {
+    if (Math.abs(direction[axis]) < 1e-12) {
+      if (origin[axis] < min[axis] || origin[axis] > max[axis]) return null;
+      continue;
+    }
+    let a = (min[axis] - origin[axis]) / direction[axis], b = (max[axis] - origin[axis]) / direction[axis];
+    if (a > b) [a, b] = [b, a];
+    enter = Math.max(enter, a); exit = Math.min(exit, b);
+    if (enter > exit) return null;
+  }
+  return exit < 0 ? null : {enter: Math.max(enter, 0), exit};
+}
+
 const unit = values => { const v = new Vector3(...values); return v.lengthSq() > 1e-18 ? v.normalize() : v; };
 const angleBetween = (a, b) => Math.acos(Math.min(1, Math.max(-1, a.dot(b)))) / DEG;
 
@@ -250,6 +283,17 @@ const count = (value, name, fallback, min = 1) => {
   return result;
 };
 const flag = value => value === true;
+const fraction = at => {
+  if (!Array.isArray(at) || at.length !== 2 || !at.every(value => Number.isFinite(value) && value >= 0 && value <= 1)) {
+    throw new Error('Pick needs at: [x, y] as fractions of the picture from its top left, each 0 to 1');
+  }
+  return [...at];
+};
+const matrices = optics => {
+  const sixteen = value => Array.isArray(value) && value.length === 16 && value.every(Number.isFinite);
+  if (!optics || !sixteen(optics.projection) || !sixteen(optics.viewInverse)) throw new Error('Pick optics need projection and viewInverse matrices of 16 numbers');
+  return {projection: [...optics.projection], viewInverse: [...optics.viewInverse]};
+};
 
 const COMMANDS = {
   status: () => ({}),
@@ -274,6 +318,11 @@ const COMMANDS = {
     annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false}),
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),
+  pick: args => {
+    const from = args.from ?? 'sub';
+    if (!['sub', 'operator'].includes(from)) throw new Error('Pick from "sub" or "operator", or give the optics of a picture');
+    return {pilot: pilotArg(args), from, at: fraction(args.at), ...(args.optics != null ? {optics: matrices(args.optics)} : {})};
+  },
 };
 export const VANTAGE_COMMANDS = Object.freeze(Object.keys(COMMANDS));
 
