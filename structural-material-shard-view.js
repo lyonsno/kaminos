@@ -25,10 +25,14 @@ import {buildStoneGrains,packStoneGrainStrengths} from './structural-material-st
 import {createGpuExposedFaces} from './structural-material-exposed-gpu.js';
 import {createGpuCoherentTranslation,COHERENT_TRANSLATION_ROUTE} from './structural-material-coherent-chunks-gpu.js';
 
-export async function createStoneRuntime({host=null,ui=document,parameters=new URLSearchParams(location.search),onInput}={}){
-if(host)validateStoneViewportHost(host);
+export async function createStoneRuntime({host=null,ui=document,parameters=new URLSearchParams(location.search),onInput,participation='viewport'}={}){
+if(!['viewport','producer'].includes(participation))throw Error('Explicit Stone participation required');
+const producerMode=participation==='producer';
+if(producerMode&&!host)throw Error('Stone producer participation requires shared native GPU access');
+if(host)validateStoneViewportHost(host,{frameDriver:producerMode?'manual':'host'});
 const interiorSplit=parameters.get('interior')==='split';
 const bounded=parameters.get('fracture')==='bounded';
+if(producerMode&&!bounded)throw Error('Stone producer participation currently requires bounded fracture');
 const axialFixture=parameters.get('fixture')==='axial-chunks';
 if(parameters.has('fixture')&&(!axialFixture||!bounded))throw Error('Explicit bounded axial fixture required');
 const connectivity=parameters.get('connectivity')??'literal-edge';
@@ -50,8 +54,8 @@ const affineComparison=parameters.get('surface')==='affine';
 let device,resident,surface,body,manifest,arrays,observed,components,volumes,pieces=[],gesture=null,paused=false,busy=false,pendingPick=false,finishing=false,pickTask=null,gestureGeneration=0,failure=null,lastPick=null,latestSelection=null,frames=0;
 let initialBody,interiorState,materialRegime,grainProfile=null,surfaceObservation=null,lastPresentation=null,residentGrip=null,residentSupport=null,residentContact=null,pointerContact=null,interactionObservation=null,ownerExperiment=null,assets=[],closing=false,frameRequest=null,unsubscribeFrames=null,disposal=null;
 let createPlaneFractureSurface;
-let chunkMotion=null;
-const lifetime=new AbortController(),container=host?.scene??new THREE.Scene(),scene=new THREE.Group();scene.name='Stone fracture';container.add(scene);if(!host)container.background=new THREE.Color('#111718');
+let chunkMotion=null,quiescence=null;
+const lifetime=new AbortController(),container=host?.scene??new THREE.Scene(),scene=new THREE.Group();scene.name='Stone fracture';if(!producerMode)container.add(scene);if(!host)container.background=new THREE.Color('#111718');
 if(host?.position)scene.position.fromArray(host.position);
 const camera=host?.camera??new THREE.PerspectiveCamera(36,innerWidth/innerHeight,.01,100);if(!host)camera.position.set(2.3,1.25,3.6).multiplyScalar(Math.max(1,1.2/camera.aspect));
 const renderer=host?.renderer??new THREE.WebGPURenderer({antialias:true});if(!host){renderer.setPixelRatio(devicePixelRatio);renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;$('viewport').append(renderer.domElement);}
@@ -59,7 +63,7 @@ const controls=host?.controls??new OrbitControls(camera,renderer.domElement),pre
 if(!host){scene.add(new THREE.HemisphereLight('#eef5f1','#414644',2.5));const key=new THREE.DirectionalLight('#ffffff',3.2);key.position.set(1,3,4);scene.add(key);const rim=new THREE.DirectionalLight('#abc7d0',1.3);rim.position.set(-2,1,-3);scene.add(rim);}
 const support=new THREE.Mesh(new THREE.BoxGeometry(.12,.78,.72),new THREE.MeshStandardMaterial({color:'#657e89',roughness:.65,metalness:.35}));support.position.x=-1.26;scene.add(support);
 const ground=fallAndLand?new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshStandardMaterial({color:'#505956',roughness:1,metalness:0,side:THREE.DoubleSide})):null;
-if(ground){ground.name='Stone contact floor';ground.rotation.x=-Math.PI/2;ground.position.y=floorHeight;container.add(ground);}
+if(ground){ground.name='Stone contact floor';ground.rotation.x=-Math.PI/2;ground.position.y=floorHeight;if(!producerMode)container.add(ground);}
 const marker=new THREE.Mesh(new THREE.SphereGeometry(.026,16,12),new THREE.MeshBasicMaterial({color:'#ff805b'}));marker.visible=false;scene.add(marker);
 const arrow=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]),new THREE.LineBasicMaterial({color:'#e9bb63'}));arrow.visible=false;scene.add(arrow);
 const capMaterial=new THREE.MeshStandardMaterial({color:'#d3b999',roughness:1,side:THREE.DoubleSide});
@@ -117,7 +121,7 @@ function present(){if(!observed)return;const current=bounded?null:positions(obse
  $('stats').textContent=bounded&&observed.observation?.kind==='submitted'?`GPU-resident material | submitted step ${observed.steps}`:`${bounded?new Set(components).size:pieces.length} ${bounded?'components':'pieces'} | ${interiorSplit?`${interiorState.epoch} interior cuts`:observed.bonds.filter((v,i)=>i%4===2&&v===0).length+' released bonds'} | step ${interiorSplit?(interiorState.stepOffset??0)+observed.steps:observed.steps}`;
 }
 async function loadVerified(url,expected){const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error(`Input ${url}: HTTP ${r.status}`);const bytes=await r.arrayBuffer(),digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(v=>v.toString(16).padStart(2,'0')).join('');if(expected&&digest!==expected)throw new Error(`Input drift: ${url}`);return bytes;}
-async function reset(){pendingPick=true;pointerContact=null;gestureGeneration++;await settle();busy=true;try{
+async function reset(){pendingPick=true;pointerContact=null;gestureGeneration++;await settle();if(closing){pendingPick=false;return;}busy=true;try{
  gesture=null;controls.enabled=true;chunkMotion?.dispose();chunkMotion=null;residentContact?.dispose();residentContact=null;residentGrip?.dispose();residentGrip=null;residentSupport?.dispose();residentSupport=null;resident?.dispose();surface?.dispose();let initialArrays=arrays,initialModel=manifest.model;
  if(interiorSplit){body=initialBody;const configured=configureStoneRegime(manifest,arrays,new URLSearchParams(location.search).get('material')??'stiff-brittle-v1');materialRegime=configured.profile;configuration.volumeBarrier=materialRegime.volumeBarrier;initialArrays=configured.arrays;initialModel=configured.model;}
  if(bounded){const model=(axialFixture?prepareProceduralFixtureTopology:prepareSolidTopology)(axialFixture?body:{status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:body.positions,tetrahedra:body.tetrahedra,volume:manifest.model.volume},{...manifest.material,kind:'graph',young:100000,damageLaw:'event-frozen-isotropic-degradation-v1'});initialArrays=packSolidTopology(model);initialModel={kind:'graph',constitutiveLayout:model.constitutiveLayout,bufferLayout:model.bufferLayout,points:model.positions.length,elements:model.elements.length,bonds:model.bonds.length,colorCount:model.colorCount};materialRegime={name:'bounded-stiff-brittle-v1',material:model.material,threshold:180,volumeBarrier:0,claim:'Provisional homogeneous brittle stone, not calibrated material',...(axialFixture?{fixture:{route:body.route,provenance:body.provenance,claim:body.claim}}:{})};}
@@ -168,9 +172,11 @@ async function cutInterior(active,applied,selection){
    held.fractureDeclined=true;interiorState.lastFailedCut.disposition='retained-material-continue';stamp('interior-cut-declined',{generation:held.generation,pieceId:target.id,epoch:interiorState.epoch,error:error.message});$('failure').textContent='Cut declined: candidate interior has invalid elastic support';return false;
   }throw error;}
 }
-async function advance({fracture=true,evidence=true}={}){
+async function advance({fracture=true,evidence=!producerMode,publish=!producerMode}={}){
  if(closing)return;
- if(busy||failure)return;busy=true;try{if(bounded){await advanceBounded({fracture,evidence});return;}const active=gesture?.phase==='active'?gesture:null,applied=active&&[...active.displacement],select=Boolean(active&&fracture&&!active.fractureDeclined);if(active)await resident.movePatch(applied.map((v,k)=>v-active.baselineDisplacement[k]));const start=performance.now(),timing=await resident.step(configuration,{wait:evidence});observed=evidence?await resident.read():await resident.readFrame({stress:select});components=materialComponents(observed.model.points,observed.bonds);latestSelection=select&&gesture===active?selectStressRelease({rest:body.positions,elements:body.tetrahedra,samples:observed.stresses,components,bonds:observed.bonds,component:active.component,radius:configuration.stressRadius,threshold:Number($('threshold').value)}):null;
+ if(!publish&&evidence)throw Error('Surface evidence requires publication of the observed step');
+ if(!publish&&!bounded)throw Error('Deferred publication requires bounded fracture');
+ if(busy||failure)return;busy=true;try{if(bounded){await advanceBounded({fracture,evidence,publish});return;}const active=gesture?.phase==='active'?gesture:null,applied=active&&[...active.displacement],select=Boolean(active&&fracture&&!active.fractureDeclined);if(active)await resident.movePatch(applied.map((v,k)=>v-active.baselineDisplacement[k]));const start=performance.now(),timing=await resident.step(configuration,{wait:evidence});observed=evidence?await resident.read():await resident.readFrame({stress:select});components=materialComponents(observed.model.points,observed.bonds);latestSelection=select&&gesture===active?selectStressRelease({rest:body.positions,elements:body.tetrahedra,samples:observed.stresses,components,bonds:observed.bonds,component:active.component,radius:configuration.stressRadius,threshold:Number($('threshold').value)}):null;
   // Picking must use the pose published before asynchronous cut preparation.
   if(latestSelection)present();
   if(latestSelection&&interiorSplit)await cutInterior(active,applied,latestSelection);
@@ -178,17 +184,17 @@ async function advance({fracture=true,evidence=true}={}){
   present();surfaceObservation=null;if(evidence)await observeSurface();timings.push({...timing,totalConsumerMilliseconds:performance.now()-start});$('timing').textContent=`${timing.completion==='submitted'?'submit':'solve'} ${timing.totalMilliseconds.toFixed(1)} ms | frame ${(performance.now()-start).toFixed(1)} ms`;
  }catch(e){fail(e);throw e;}finally{busy=false;}
 }
-async function advanceBounded({fracture,evidence}){
+async function advanceBounded({fracture,evidence,publish=true}){
  if(!evidence||typeof residentGrip!=='undefined'&&residentGrip){
   const active=gesture?.phase==='active'?gesture:null,applied=active&&[...active.displacement],start=performance.now();
   if(active)await resident.movePatch(applied);
   if(chunkMotion){chunkMotion.prepare(configuration);chunkMotion.advance(configuration);}
   const timing=await resident.step(configuration,{wait:false});residentGrip.clearChanges?.();if(active&&fracture){const threshold=Number($('threshold').value);await resident.fractureStress(threshold);residentSupport?.update();residentGrip.update(applied,threshold);}
   chunkMotion?.prepare(configuration);
-  pieces[0]?.exposure?.update();
+  if(publish)pieces[0]?.exposure?.update();else pieces[0]?.exposure?.prepare();
   applyFloorContact();
   chunkMotion?.afterFloor();
-  observed={...observed,...resident.submittedState(),observation:{kind:'submitted',stressCurrent:false,readbackBytes:0}};surfaceObservation=null;present();
+  observed={...observed,...resident.submittedState(),observation:{kind:'submitted',stressCurrent:false,readbackBytes:0}};surfaceObservation=null;if(publish)present();
   if(evidence){observed=await resident.read();components=materialComponents(observed.model.points,acquiredConnections());present();await observeSurface();}
   timings.push({...timing,geometryMilliseconds:0,totalConsumerMilliseconds:performance.now()-start});$('timing').textContent=`submit ${timing.totalMilliseconds.toFixed(1)} ms`;return;
  }
@@ -220,10 +226,10 @@ function beginResidentPointer(event){
   plane.setFromNormalAndCoplanarPoint(held.normal,scene.localToWorld(new THREE.Vector3(...hit.point)));stamp('resident-ray-pick',hit);await beginPick(piece.id,hit.point,hit.faceIndex);if(pointerContact!==held)return;pointerContact=null;movePointer(held.latest);const captured=gesture;if(held.closed)queueMicrotask(()=>{if(gesture===captured)finishGesture().catch(fail);});
  })();pickTask.catch(error=>{if(pointerContact!==held)return;pointerContact=null;pendingPick=false;fail(error);});
 }
-renderer.domElement.addEventListener('pointerdown',event=>{if(event.stoneOrbitReplay||event.button!==0||failure)return;if(bounded){event.stopImmediatePropagation();renderer.domElement.setPointerCapture(event.pointerId);beginResidentPointer(event);return;}synchronizePicking();ray(event);const hit=raycaster.intersectObjects(pieces.map(p=>p.mesh),false)[0];if(!hit)return;event.stopImmediatePropagation();renderer.domElement.setPointerCapture(event.pointerId);camera.getWorldDirection(normal);plane.setFromNormalAndCoplanarPoint(normal,hit.point);pickTask=beginPick(hit.object.userData.pieceId,scene.worldToLocal(hit.point.clone()).toArray(),hit.faceIndex);pickTask.catch(fail);},{capture:true,signal:lifetime.signal});
+renderer.domElement.addEventListener('pointerdown',event=>{if(event.stoneOrbitReplay||event.button!==0||failure||closing||producerMode&&!scene.parent)return;if(bounded){event.stopImmediatePropagation();renderer.domElement.setPointerCapture(event.pointerId);beginResidentPointer(event);return;}synchronizePicking();ray(event);const hit=raycaster.intersectObjects(pieces.map(p=>p.mesh),false)[0];if(!hit)return;event.stopImmediatePropagation();renderer.domElement.setPointerCapture(event.pointerId);camera.getWorldDirection(normal);plane.setFromNormalAndCoplanarPoint(normal,hit.point);pickTask=beginPick(hit.object.userData.pieceId,scene.worldToLocal(hit.point.clone()).toArray(),hit.faceIndex);pickTask.catch(fail);},{capture:true,signal:lifetime.signal});
 renderer.domElement.addEventListener('pointermove',event=>{if(event.stoneOrbitReplay)return;if(pointerContact){event.stopImmediatePropagation();pointerContact.latest=pointerRecord(event);pointerContact.events.push(pointerRecord(event));return;}if(!gesture||gesture.inputClosed)return;event.stopImmediatePropagation();movePointer(event);},{capture:true,signal:lifetime.signal});
 renderer.domElement.addEventListener('pointerup',event=>{if(event.stoneOrbitReplay)return;if(pointerContact){event.stopImmediatePropagation();pointerContact.closed=true;pointerContact.latest=pointerRecord(event);pointerContact.events.push(pointerRecord(event));return;}if(gesture||pendingPick){event.stopImmediatePropagation();finishGesture().catch(fail);}},{capture:true,signal:lifetime.signal});renderer.domElement.addEventListener('pointercancel',()=>release().catch(fail),{signal:lifetime.signal});
-$('reset').onclick=()=>reset().catch(fail);$('release').onclick=()=>release().catch(fail);$('pause').onclick=()=>{paused=!paused;$('pause').setAttribute('aria-pressed',String(paused));icon('pause',paused?Play:Pause);};$('threshold').oninput=()=>{$('thresholdValue').value=$('threshold').value;stamp('threshold',Number($('threshold').value));};
+$('reset').onclick=()=>{if(!closing)reset().catch(fail);};$('release').onclick=()=>{if(!closing)release().catch(fail);};$('pause').onclick=()=>{if(closing)return;paused=!paused;$('pause').setAttribute('aria-pressed',String(paused));icon('pause',paused?Play:Pause);};$('threshold').oninput=()=>{if(closing)return;$('thresholdValue').value=$('threshold').value;stamp('threshold',Number($('threshold').value));};
 if(!host)window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);},{signal:lifetime.signal});
 function presented(){if(closing)return;frames++;lastPresentation={frame:frames,camera:cameraState(),materialBusy:busy};}
 function frame(){if(closing)return false;if(!paused&&resident&&!busy&&!pendingPick&&!finishing&&!failure)advance({evidence:false}).catch(()=>{});return !paused&&!failure||busy||pendingPick||finishing;}
@@ -270,13 +276,20 @@ try{
   window.__stoneExperiment=ownerExperiment;$('route').textContent+=` | ${ownerExperiment.id}`;
  }
  api.object=scene;
- api.viewport={ownership:host?'borrowed-native':'producer-native',threeRevision:THREE.REVISION,canvas:renderer.domElement.id||null,scene:container.uuid,object:scene.uuid,deviceMatches:!host||host.device===device};
+ api.roots=Object.freeze([scene,...(ground?[ground]:[])]);
+ api.placement={coordinates:'material-local',floorCoordinates:'world',gravityAxis:'local-y-upright-only',physicalScale:false,physicalRotation:false};
+ api.publish=()=>{if(closing)return{status:'closed'};if(busy||pendingPick||finishing)return{status:'pending'};if(failure)throw Error(failure.message);for(const p of pieces)p.exposure?.update();present();return{status:'published',runId:observed.runId,steps:observed.steps};};
+ api.quiesce=()=>{if(!quiescence){
+  closing=true;paused=true;lifetime.abort();unsubscribeFrames?.();if(frameRequest!==null)cancelAnimationFrame(frameRequest);gestureGeneration++;pointerContact=null;pendingPick=false;gesture=null;
+  quiescence=(async()=>{const errors=[],attempt=async action=>{try{await action();}catch(error){errors.push(error);}};await attempt(()=>pickTask);await attempt(()=>settle());await attempt(()=>resident?.release());await attempt(()=>device?.queue.onSubmittedWorkDone());controls.enabled=previousControlsEnabled;if(errors.length)throw new AggregateError(errors,`Stone quiescence: ${errors[0].message}`);return{status:'quiescent',resourcesRetained:true};})();
+ }return quiescence;};
+ api.viewport={ownership:host?'borrowed-native':'producer-native',participation,frameDriver:producerMode?'manual':host?'host':'producer',mount:producerMode?'caller-owned':'producer-owned',threeRevision:THREE.REVISION,canvas:renderer.domElement.id||null,scene:container.uuid,object:scene.uuid,deviceMatches:!host||host.device===device};
+ for(const name of ['reset','release','advance','pause','pick','move','threshold','fixtureGravity','coherentMotion','exposedFaceCounts','contacts','camera','rayPick','surfacePositions','settle','waitSubmitted','witness']){const operation=api[name];api[name]=(...args)=>{if(closing)throw Error('Stone runtime is closed');return operation(...args);};}
  api.dispose=()=>{if(!disposal){
   const status={complete:false,errors:[]};api.disposalStatus=()=>({...status,errors:status.errors.map(({phase,message})=>({phase,message}))});
-  closing=true;paused=true;lifetime.abort();unsubscribeFrames?.();if(frameRequest!==null)cancelAnimationFrame(frameRequest);gestureGeneration++;pointerContact=null;pendingPick=false;gesture=null;
   disposal=(async()=>{
    const errors=[],attempt=async(phase,action)=>{try{await action();}catch(error){errors.push(error);status.errors.push({phase,message:error.message});}};
-   await attempt('pending-pick',()=>pickTask);await attempt('settle',()=>settle());await attempt('release',()=>resident?.release());await attempt('completion',()=>device?.queue.onSubmittedWorkDone());
+   await attempt('quiesce',()=>api.quiesce());
    const drainErrors=errors.length,cleanup=[];
    for(const p of pieces)cleanup.push(()=>p.mesh.geometry.dispose(),()=>p.exposure?.dispose(),()=>p.gpu?.dispose());
    cleanup.push(()=>chunkMotion?.dispose(),()=>residentContact?.dispose(),()=>residentGrip?.dispose(),()=>residentSupport?.dispose(),()=>resident?.dispose(),()=>surface?.dispose());
@@ -289,7 +302,7 @@ try{
    if(errors.length)throw new AggregateError(errors,`Stone disposal: ${errors[0].message}`,{cause:errors[0]});
   })();
  }return disposal;};
- if(host){unsubscribeFrames=host.subscribeFrame({before:frame,after:presented});if(typeof unsubscribeFrames!=='function')throw Error('Host frame subscription must return an unsubscribe function');}else draw();
+ if(host){unsubscribeFrames=producerMode?null:host.subscribeFrame({before:frame,after:presented});if(!producerMode&&typeof unsubscribeFrames!=='function')throw Error('Host frame subscription must return an unsubscribe function');}else draw();
  return api;
 }catch(e){closing=true;lifetime.abort();unsubscribeFrames?.();fail(e);container.remove(scene);if(ground)container.remove(ground);chunkMotion?.dispose();residentContact?.dispose();for(const p of pieces){p.mesh.geometry.dispose();p.exposure?.dispose();p.gpu?.dispose();}residentGrip?.dispose();residentSupport?.dispose();resident?.dispose();surface?.dispose();for(const object of [support,marker,arrow,...(ground?[ground]:[])]){object.geometry.dispose();object.material.dispose();}capMaterial.dispose();disposeStoneAssets(assets);controls.enabled=previousControlsEnabled;if(!host){controls.dispose();renderer.dispose();device?.destroy();}throw e;}
 }

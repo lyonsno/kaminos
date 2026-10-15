@@ -18,7 +18,7 @@ async function exercise(candidateFault='support'){
   energyKernel:'auto',prepareSeparatedTopology:()=>({positions:[point],elements:[],bonds:[],constitutiveLayout:'fixture',bufferLayout:{},colorCount:1}),packSolidTopology:()=>({state:new Float32Array(16)}),createSolidResident:async(_device,_descriptor,_arrays,options)=>{assert.equal(options.energyKernel,'auto');return candidate;},
   surface:{interiorChildren:()=>[1,2],stageInteriorCut:()=>{throw new Error('Invalid candidate reached publication');}},
   stamp:(kind,data)=>log.push({kind,data}),fail:e=>{ctx.failure={message:e.message};ctx.gesture=null;ctx.controls.enabled=true;},present:()=>log.push('present'),observeSurface:async()=>log.push('surface-observation'),$:id=>id==='failure'?status:other,settle:async()=>{},controls:{enabled:false},marker:{position:{fromArray(){}},visible:true},arrow:{visible:true}};
- ctx.bounded=false;vm.runInNewContext(source,ctx);
+ ctx.producerMode=false;ctx.bounded=false;vm.runInNewContext(source,ctx);
  if(candidateFault==='device'){await assert.rejects(ctx.advance(),/GPU device lost/);assert.equal(ctx.failure.message,'GPU device lost');return;}
  await assert.doesNotReject(ctx.advance(),'A rejected candidate must not latch a failure of the retained material');
  assert.equal(ctx.failure,null);assert.equal(ctx.resident,retained);assert.equal(ctx.observed,live);assert.equal(ctx.interiorState.epoch,0);assert.equal(ctx.events.length,0);

@@ -2,7 +2,7 @@ import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:asser
 const text=fs.readFileSync(new URL('../structural-material-shard-view.js',import.meta.url),'utf8'),source=text.slice(text.indexOf('async function advance('),text.indexOf('function ray('));
 const calls=[],state={model:{points:4},state:Array(64).fill(0),bonds:[],stresses:[]};
 const ctx={busy:false,failure:null,gesture:null,resident:{step:async(...args)=>{calls.push(['step',...args]);return{totalMilliseconds:1};},read:async()=>{calls.push(['full']);return state;},readFrame:async request=>{calls.push(['frame',request]);return state;}},configuration:{iterations:12},observed:state,materialComponents:()=>[0,0,0,0],components:[],latestSelection:null,interiorSplit:true,present(){},observeSurface:async()=>calls.push(['surface']),timings:[],performance,$:()=>({value:18,textContent:''}),fail(e){throw e;}};
-ctx.bounded=false;ctx.closing=false;vm.runInNewContext(source,ctx);
+ctx.producerMode=false;ctx.bounded=false;ctx.closing=false;vm.runInNewContext(source,ctx);
 await ctx.advance({fracture:false,evidence:false});
 assert.equal(calls.filter(x=>x[0]==='full').length,0,'Normal frames must not request the full diagnostic readback');
 assert.equal(calls.filter(x=>x[0]==='frame').length,1);assert.equal(calls.find(x=>x[0]==='frame')[1].stress,false);
