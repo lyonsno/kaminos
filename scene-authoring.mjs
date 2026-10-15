@@ -1,4 +1,5 @@
 import { normalizeBurner } from './annular-burner.mjs';
+import { JOINED_ROUTE_KEYS } from './volume-joined-route.mjs';
 export const COMPOSITION_SCHEMA = 'kaminos.stationary-flame-composition.v1';
 const clone = value => JSON.parse(JSON.stringify(value));
 
@@ -11,7 +12,7 @@ export function normalizeComposition(value) {
   if (!value.route || typeof value.route !== 'object' || Array.isArray(value.route)) throw new Error('Composition route is required');
   if (value.route.volume_light_field !== '1') throw new Error('Stationary composition requires the ordinary light-field route');
   for (const [key, item] of Object.entries(value.route)) {
-    if (!(key.startsWith('volume_light_field') || key === 'composition_module_url' || key === 'volume_collision') || typeof item !== 'string') {
+    if (!(key.startsWith('volume_light_field') || JOINED_ROUTE_KEYS.includes(key) || key === 'composition_module_url' || key === 'volume_collision') || typeof item !== 'string') {
       throw new Error(`Unsupported composition route field: ${key}`);
     }
   }
@@ -55,7 +56,7 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
     if (['workspace', 'authoring', 'scene', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
-      || key.startsWith('volume_light_field')) forwarded.set(key, value);
+      || key.startsWith('volume_light_field') || JOINED_ROUTE_KEYS.includes(key)) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();
   return url.href;

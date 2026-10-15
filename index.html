@@ -3515,6 +3515,7 @@ import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { syncVolumeGridOptions } from './volume-grid-options.mjs';
+import { joinedRouteParams, writeJoinedRoute } from './volume-joined-route.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -18489,8 +18490,7 @@ function wireJoinedProvisionalControls(prototype) {
     if (measurementIdentity !== currentMeasurementIdentity()) invalidateMeasurement();
   };
   const remember = () => {
-    const u = new URL(location.href);
-    for (const [key, value] of Object.entries({volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'})) u.searchParams.set(key,value);
+    const u = writeJoinedRoute(location.href,{volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'});
     history.replaceState(history.state,'',u);
   };
   const applyExterior = () => {
@@ -18582,7 +18582,7 @@ function wireJoinedProvisionalControls(prototype) {
     }
     updateBoxes();
   }, 2000);
-  const params=new URLSearchParams(location.search);
+  const params=joinedRouteParams(location);
   for(const [el,key,fallback] of [[size,'volume_joined_size','2'],[ratio,'volume_joined_resolution','32'],[budget,'volume_joined_budget','32'],[wall,'volume_joined_wall','none']]) {
     const value=params.get(key)??fallback;
     if([...el.options].some(o=>o.value===value))el.value=value;
@@ -25531,6 +25531,7 @@ async function collectSceneComposition() {
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
     burnerRecipe, isAuthoredKilnCollisionRoute(),
+    [...joinedRouteParams(location)],
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -25549,6 +25550,7 @@ async function collectSceneComposition() {
     : (await saveVolumeSettingsPreset({ preset, sceneSnapshot:true, label:`${document.getElementById('composition-label').value.trim() || 'Scene'} · flame` })).effective;
   assertUnchanged();
   const route = {};
+  for(const [key,value] of joinedRouteParams(location))route[key]=value;
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
