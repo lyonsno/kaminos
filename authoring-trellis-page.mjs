@@ -163,7 +163,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     stop(){if(!active||!abort||abort.signal.aborted)return false;abort.abort(new DOMException('TRELLIS stopped','AbortError'));set({status:'stopping',canStop:false,progress:'Stopping at the next GPU step…'});return true;},
     async retryPersistence(){
       if(active)throw Error('Generation is already running');if(!state.pending)throw Error('No generated output needs saving');
-      active=true;try{return await storePending();}catch(error){set({status:'failed',error:`persistence: ${error.message}`});throw error;}finally{active=false;}
+      active=true;try{return await storePending();}catch(error){set({status:'failed',error:`persistence: ${error.message}`});throw error;}finally{active=false;publish();}
     },
     async run(input){
       if(active)throw Error('Generation is already running');
@@ -175,7 +175,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
       try{
         const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
-        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:source=>set({inputPreview:{source,input:input.source}}),onPhase:event=>{
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
         phase='persistence';return await storePending();
@@ -229,4 +229,18 @@ export async function prepareImageForTrellis({bytes,type,signal,ImageDecoderClas
   const prepared=await prepareTrellisAlphaRgba({pixels:rgba,width,height,signal});
   // The cutout itself is returned so the caller can keep and show the input it actually used.
   return {...prepared,cutout:hasAlpha?null:{rgba,width,height},provenance:{route:hasAlpha?'input-alpha':'browser-u2net',decoder:{nativeFormat,converted:!['RGBA','BGRA','RGBX','BGRX'].includes(nativeFormat)},segmentation,preparation:prepared.provenance}};
+}
+
+// What the page actually fed TRELLIS, for the drawer: an image that already had alpha is used
+// as it is; a browser U2Net cutout is saved to the image library so it can be seen and reused.
+// A cutout that could not be saved is reported as such, never replaced by the original photo.
+export async function describeTrellisInput({image,cutout,label,fetch=globalThis.fetch,encode}){
+  if(!cutout)return {kind:'original-alpha',source:image.source};
+  try{
+    const png=await encode(cutout),name=`${String(label).replace(/[^\w.-]+/g,'-')}-cutout.png`;
+    const response=await fetch('/api/ingest-image?'+new URLSearchParams({name}),{method:'POST',body:png});
+    const saved=await response.json().catch(()=>null);
+    if(!response.ok||!saved?.entry?.source)throw Error(saved?.error||`cutout storage HTTP ${response.status}`);
+    return {kind:'cutout',source:saved.entry.source};
+  }catch(error){return {kind:'cutout-unsaved',source:null,error:error?.message||String(error)};}
 }

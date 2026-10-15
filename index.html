@@ -3880,7 +3880,7 @@ import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
-import {createTrellisPageAuthoringGeneration,prepareImageForTrellis} from './authoring-trellis-page.mjs';
+import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
 import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
 import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
@@ -27165,17 +27165,12 @@ function setupAuthoringAssets(){
         runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
           return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
       pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
-      // Keep the cutout TRELLIS actually used in the image library, so it can be seen and reused.
-      if(prepared.cutout){
-        try{
-          const {rgba,width,height}=prepared.cutout,canvas=new OffscreenCanvas(width,height);
-          canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
-          const png=await canvas.convertToBlob({type:'image/png'}),name=`${label.replace(/[^\w.-]+/g,'-')}-cutout.png`;
-          const saved=await fetch('/api/ingest-image?'+new URLSearchParams({name}),{method:'POST',body:await png.arrayBuffer()}).then(r=>r.json());
-          if(saved?.entry?.source)preparation.cutoutSource=saved.entry.source;
-        }catch(error){preparation.cutoutSaveError=error.message;}
-      }
-      await onInput?.(preparation.cutoutSource||image.source);
+      // What TRELLIS actually used, kept and shown: the image itself, or the saved U2Net cutout.
+      const used=await describeTrellisInput({image,cutout:prepared.cutout,label,encode:async({rgba,width,height})=>{
+        const canvas=new OffscreenCanvas(width,height);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
+        return (await canvas.convertToBlob({type:'image/png'})).arrayBuffer();}});
+      preparation.used=used;if(used.kind==='cutout')preparation.cutoutSource=used.source;if(used.error)preparation.cutoutSaveError=used.error;
+      await onInput?.(used);
     }
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');

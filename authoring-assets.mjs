@@ -90,7 +90,15 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
 // A service's used-input preview names the image it was prepared from; the drawer shows it
 // only while that image is the selection.
 export function usedInputPreviewFor(preview,selectedSource){
-  return preview&&typeof preview==='object'&&preview.input&&preview.input===selectedSource?preview.source:null;
+  return preview&&typeof preview==='object'&&preview.input&&preview.input===selectedSource&&preview.source?preview.source:null;
+}
+// The status line for a self-preparing service: what it used for this selection, if known.
+export function usedInputStatusFor(preview,selectedSource){
+  const own=preview&&typeof preview==='object'&&preview.input===selectedSource?preview:null;
+  if(own?.kind==='cutout')return 'This is the cutout generation is using, prepared in this page.';
+  if(own?.kind==='original-alpha')return 'This image already has transparency; generation uses it as it is.';
+  if(own?.kind==='cutout-unsaved')return `The cutout generation is using could not be saved (${own.error}); the original is shown.`;
+  return 'This model prepares the image in this page; the cutout it uses appears here.';
 }
 
 export function installAuthoringAssets({document,controller,edits}) {
@@ -134,8 +142,9 @@ export function installAuthoringAssets({document,controller,edits}) {
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
     const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
-    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=usedInput||(mode==='generate'&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
-    byId('asset-preparation-status').textContent=preparation?.error||(controller.preparesInput?.()&&mode==='generate'&&preparation?.status!=='complete'?(usedInput?'This is the cutout generation is using, prepared in this page.':'This model prepares the image in this page; the cutout it uses appears here.'):preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
+    const selfPreparing=mode==='generate'&&controller.preparesInput?.();
+    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=usedInput||(mode==='generate'&&!selfPreparing&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
+    byId('asset-preparation-status').textContent=preparation?.error||(selfPreparing&&selected?.kind==='image'?usedInputStatusFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
     const generation=controller.generation();
     byId('asset-use-image').disabled=byId('asset-prepare').disabled=['input','loading','running','stopping','saving'].includes(generation.status);

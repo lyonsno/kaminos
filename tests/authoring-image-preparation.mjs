@@ -54,3 +54,11 @@ test('the drawer shows a used-input preview only for the image it was made from'
  assert.equal(usedInputPreviewFor(preview,'/api/read?root=image-inbox&path=b.jpg'),null,'another selected image never shows A\'s cutout');
  assert.equal(usedInputPreviewFor(null,image.source),null);assert.equal(usedInputPreviewFor('bare-string',image.source),null,'a preview without its input identity is not shown');
 });
+test('the used-input status names what the page used, and never calls the original photo a cutout',async()=>{
+ const {usedInputPreviewFor,usedInputStatusFor}=await import('../authoring-assets.mjs');
+ assert.equal(usedInputPreviewFor({kind:'cutout-unsaved',source:null,input:image.source,error:'disk full'},image.source),null);
+ assert.match(usedInputStatusFor({kind:'cutout-unsaved',source:null,input:image.source,error:'disk full'},image.source),/could not be saved.*disk full/);
+ assert.match(usedInputStatusFor({kind:'cutout',source:'/c.png',input:image.source},image.source),/cutout generation is using/);
+ assert.match(usedInputStatusFor({kind:'original-alpha',source:image.source,input:image.source},image.source),/already has transparency/);
+ assert.match(usedInputStatusFor(null,image.source),/prepares the image in this page/);
+});

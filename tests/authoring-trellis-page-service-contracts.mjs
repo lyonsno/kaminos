@@ -75,9 +75,9 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
 });
 
 test('the service prepares its own input and shows the cutout it used',async()=>{
-  const {s}=service({runPage:async({onInput})=>{await onInput('/api/read?root=image-inbox&path=a-cutout.png');return {glb,generation:{runId:'r'},label:'a'};}});
+  const {s}=service({runPage:async({onInput})=>{await onInput({kind:'cutout',source:'/api/read?root=image-inbox&path=a-cutout.png'});return {glb,generation:{runId:'r'},label:'a'};}});
   assert.equal(s.preparesInput,true);
-  await s.run(input);assert.deepEqual(s.read().inputPreview,{source:'/api/read?root=image-inbox&path=a-cutout.png',input:input.source},'the preview carries the image it came from');
+  await s.run(input);assert.deepEqual(s.read().inputPreview,{kind:'cutout',source:'/api/read?root=image-inbox&path=a-cutout.png',input:input.source},'the preview carries the image it came from');
 });
 
 test('the operation stays busy through saving and while a mesh waits to be saved again',async()=>{
@@ -85,4 +85,26 @@ test('the operation stays busy through saving and while a mesh waits to be saved
   const running=s.run(input);await new Promise(r=>setTimeout(r,0));
   assert.equal(s.busy(),true,'saving is still the operation');release();await assert.rejects(running,/disk full/);
   assert.equal(s.busy(),true,'a retained mesh keeps the choice bound to this service');
+});
+
+test('after a successful save retry the operation is released and the drawer is told (picker unlocks)',async()=>{
+  let fail=true;const seen=[];let s;
+  s=createTrellisPageAuthoringGeneration({availability:()=>({status:'available'}),changed:()=>seen.push(s?.busy()),
+    runPage:async()=>({glb,generation:{runId:'r'},label:'a'}),persist:async()=>{if(fail)throw Error('disk full');return {name:'a · TRELLIS.glb'};}});
+  await assert.rejects(s.run(input),/disk full/);fail=false;await s.retryPersistence();
+  assert.equal(seen.at(-1),false,'the last notification sees the operation released');
+});
+
+test('the used-input description says what the page actually used, including a cutout it could not save',async()=>{
+  const {describeTrellisInput}=await import('../authoring-trellis-page.mjs');
+  const ok=await describeTrellisInput({image:{source:'/a.png'},cutout:{rgba:new Uint8Array(4),width:1,height:1},label:'a',
+    encode:async()=>new ArrayBuffer(8),fetch:async()=>({ok:true,json:async()=>({entry:{source:'/a-cutout.png'}})})});
+  assert.deepEqual(ok,{kind:'cutout',source:'/a-cutout.png'});
+  const http=await describeTrellisInput({image:{source:'/a.png'},cutout:{rgba:new Uint8Array(4),width:1,height:1},label:'a',
+    encode:async()=>new ArrayBuffer(8),fetch:async()=>({ok:false,status:500,json:async()=>({error:'disk full'})})});
+  assert.equal(http.kind,'cutout-unsaved');assert.equal(http.source,null);assert.match(http.error,/disk full|500/);
+  const thrown=await describeTrellisInput({image:{source:'/a.png'},cutout:{rgba:new Uint8Array(4),width:1,height:1},label:'a',
+    encode:async()=>{throw Error('encode failed');},fetch:async()=>{throw Error('unreached');}});
+  assert.deepEqual({kind:thrown.kind,source:thrown.source,error:thrown.error},{kind:'cutout-unsaved',source:null,error:'encode failed'});
+  assert.deepEqual(await describeTrellisInput({image:{source:'/alpha.png'},cutout:null,label:'a'}),{kind:'original-alpha',source:'/alpha.png'});
 });
