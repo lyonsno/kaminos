@@ -40,7 +40,15 @@ try{
   },{points,pointSampling});
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));assert.deepEqual(report.errors,[]);
  };
- const observe=()=>page.evaluate(async()=>({lighting:window.__kaminosSceneRadiance.debugState(),volume:window.__kaminosVolumePrototype.debugState(),camera:window.kaminosCameraDebugState(),owner:await window.kaminosWorkbenchExperiments.read()}));
+ const observe=async()=>{
+  // Admission and observation belong to the same document, not two separate
+  // evaluations on opposite sides of the preset trampoline navigation.
+  const handle=await page.waitForFunction(async()=>{
+   const lighting=window.__kaminosSceneRadiance,volume=window.__kaminosVolumePrototype,owner=window.kaminosWorkbenchExperiments;
+   if(!lighting?.canRender()||!volume||owner?.state().id!=='fire-shadow-sampling')return false;
+   return {lighting:lighting.debugState(),volume:volume.debugState(),camera:window.kaminosCameraDebugState(),owner:await owner.read(),url:location.href};
+  });try{return await handle.jsonValue();}finally{await handle.dispose();}
+ };
  report.phase='workbench-open';report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile,workspace:'workbench',owner,out,exercise:async({retain})=>{
   await settle(2,'all');report.loaded=await observe();assert.equal(report.loaded.volume.backend,'WebGPU:apple');
   report.phase='hold-source';await write();
