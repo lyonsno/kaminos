@@ -67,8 +67,10 @@ try{
   const bar=page.locator('.scene-owner-playback:visible');assert.equal(await bar.count(),1,'selection exposes one common cohort bar');
   await bar.getByLabel('Playback speed',{exact:true}).selectOption('0.5');
   await bar.locator('.playback-play').click();await page.evaluate(async()=>{const before=(await window.kaminosWorkbenchExperiments.read()).seconds;while((await window.kaminosWorkbenchExperiments.read()).seconds<=before)await new Promise(r=>requestAnimationFrame(r));});await bar.locator('.playback-play').click();
-  const track=bar.getByLabel('Playback position',{exact:true});await track.focus();await page.keyboard.press('Home');for(let i=0;i<30;i++)await page.keyboard.press('ArrowRight');
-  await page.evaluate(async()=>{while((await window.kaminosWorkbenchExperiments.read()).seconds!==1)await new Promise(r=>requestAnimationFrame(r));});
+  report.phase='shared-keyboard-scrub';await save();
+  const track=bar.getByLabel('Playback position',{exact:true});await track.focus();await page.keyboard.press('Home');await page.keyboard.press('ArrowRight');
+  await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));report.keyboardScrub=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());await save();
+  assert.ok(Math.abs(report.keyboardScrub.seconds-1/30)<1e-6,'keyboard scrub must reach the next source sample');
   const id=(await read()).read.entries[0].id;await page.evaluate(id=>window.kaminosSetSceneObjectTransform(id,{position:[-2.5,0,6]}),id);
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:.5}));const placed=await read();assert.ok(Math.abs(placed.read.entries[0].rootMatrix[12]+2.5)<.1,'pose overwrote authored placement');
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:1}));
