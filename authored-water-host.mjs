@@ -13,7 +13,7 @@ export function authoredDropSetup(records,{densityIterations=2,materialControls=
  if(fixtures.some(f=>boxKey(f)!==boxKey(first)||Math.abs(f.particleVolume-first.particleVolume)>1e-12))throw Error('Finite sources in one allocation require the same world bounds and particle spacing');
  const data=new Float32Array(particleCount*16);let offset=0;for(const f of fixtures){data.set(f.population.particleData,offset);offset+=f.population.particleData.length;}
  const population={...first.population,particleData:data,particleCount,worldVolume:fixtures.reduce((n,f)=>n+f.worldVolume,0)};
- return {dt:1/240,playbackMode:'render_cadence',playbackRate:1,support:{kind:'invisible_box',box:first.box},sourceIds:finite.map(r=>r.id),
+ return {dt:1/240,playbackMode:'render_cadence',playbackRate:1,support:{kind:'invisible_box',box:first.box},sourceIds:finite.map(r=>r.id),sourceRecords:records.map(r=>[r.id,r.transform,r.localLiquidEmitter]),
   solver:{particleCount,diagnosticPopulation:population,diagnosticBox:first.box,diagnosticDynamics:'assembled',pressureSolver:'pbf',ipbfBoundaryMode:'collision_only',cohesionModel:'legacy',truthScene:'multi_regime_playground',rendererMode:'screen_space_refraction',colorMode:'phase',viscosityScaling:'nominal_diffusion',particleRepulsionStrength:.62,densityIterations,capillaryStrength:.48,freeFlightViscosityBoost:.30,...materialControls,substeps:1,adaptiveDensity:false,densityCellRejection:true,uniformVolumeDensityKernel:true,energyDiagnosticsMode:'disabled'}};
 }
 
@@ -30,6 +30,6 @@ export async function createAuthoredWaterHost(options) {
   get paused(){return finite.paused;},
   setEmitters(next){records=structuredClone(next);return false;},
   setSetup(){},
-  state:()=>({...finite.state(),mode:'finite_drop',registered:true,mounted:true,sourceIds:initial.sourceIds,sourceGeneration:finite.capability.read().clock.generation}),
+  state:()=>({...finite.state(),mode:'finite_drop',registered:true,mounted:true,sourceIds:initial.sourceIds,sourceGeneration:finite.capability.read().clock.generation,pendingSourceChanges:JSON.stringify(records.map(r=>[r.id,r.transform,r.localLiquidEmitter]))!==JSON.stringify(initial.sourceRecords??[])}),
  };
 }

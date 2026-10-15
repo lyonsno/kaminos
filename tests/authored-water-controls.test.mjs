@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
-function fixture(){
+function fixture({sourceRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[];
  const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
  for(const name of ['width','samples','rate','radius','strength'])numbers.push(input('[data-'+name+']'));
@@ -11,7 +11,7 @@ function fixture(){
  const source=(id,width)=>({id,label:id,settings:{mode:'finite_drop',rate:1200,baseRadius:.08,strength:1.15,drop:{width,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}});
  let selected=source('A',.5),runtime=null,hold=null;const edits=[];
  const api={read:()=>({selected,runtime}),edit:(id,settings)=>{edits.push({id,settings});return hold??Promise.resolve();},add(){},release(){},pause(){}};
- const controls=mountAuthoredWaterControls({document,root:{prepend(){}},controls:{installNumberDrag:()=>({stop(){}})},api});
+ const controls=mountAuthoredWaterControls({document,root:{prepend(){}},sourceRoot,controls:{installNumberDrag:()=>({stop(){}})},api});
  return {controls,input,edits,api,select(id,width){selected=source(id,width);controls.refresh();},draftWidth(width){input('[data-width]').value=width;input('[data-width]').listeners.input();},setRuntime(value){runtime=value;},hold(p){hold=p;}};
 }
 {
@@ -52,7 +52,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  const facadeBody=source.slice(source.indexOf(' return {...finite,'),source.lastIndexOf('\n}'));
  const facade=new Function('finite','initial','records',facadeBody)(finite,{sourceIds:['A']},[]);
  const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
- const c={structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
+ const c={authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
   selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
  vm.createContext(c);
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
@@ -78,3 +78,16 @@ for(const mode of ['continuous','finite_drop','failure']){
  facade.dispose();
 }
 console.log('Real finite facade, public source state, controls and footer agree through play/pause/advance/reset');
+
+{
+ const children=[],f=fixture({sourceRoot:{append(node){children.push(node);}}});
+ assert.ok(children.includes(f.input('[data-selected]')),'The existing inspector slot must own the one live source properties node');
+}
+
+for(const applied of ['finite_drop','continuous'])for(const action of ['pause','release']){
+ const f=fixture(),pending=applied==='finite_drop'?'continuous':'finite_drop';
+ const original=f.api.read;f.api.read=()=>{const s=original();return {...s,selected:{...s.selected,settings:{...s.selected.settings,mode:applied}}};};f.controls.refresh();
+ f.input('[data-mode]').value=pending;f.input('[data-mode]').onchange();f.draftWidth(.75);
+ const check=()=>{assert.equal(f.input('[data-mode]').value,pending);assert.equal(f.input('[data-drop]').hidden,pending!=='finite_drop','Visible fields must follow the retained pending mode');assert.equal(f.input('[data-flow]').hidden,pending!=='continuous');assert.equal(Number(f.input('[data-width]').value),.75);};
+ check();await f.input('[data-'+action+']').onclick();check();
+}

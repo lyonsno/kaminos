@@ -7,7 +7,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[]}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
-    <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Tools</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a tool…"><div class="experiment-browser-list"></div></div></details>
+    <div class="experiment-instruments-body"><label class="field" id="experiment-browser">Tool<select class="select-input" id="experiment-tool-choice" aria-label="Workbench tool"></select></label>
     <div id="experiment-owner-slot"></div><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
@@ -30,17 +30,10 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   const toolSlots=createControlSlots(document,toolPanels.map(node=>({node,destination:byId("experiment-tool-slot")})));
   const extras=createControlSlots(document,extraPanels);
   let selectedTool="finger-fluid-bench";
-  for(const {label,id} of tools){
-    const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.workbench=id;
-    button.onclick=()=>{byId('experiment-browser').open=false;openTool(id);};
-    left.querySelector('.experiment-browser-list').append(button);
-  }
-  left.querySelector('input').addEventListener('input',event=>{
-    const term=event.target.value.trim().toLowerCase();
-    left.querySelectorAll('[data-workbench]').forEach(button=>{button.hidden=!button.textContent.toLowerCase().includes(term);});
-  });
+  const chooser=byId('experiment-tool-choice');
+  for(const {label,id} of tools){const option=document.createElement('option');option.value=id;option.textContent=label;chooser.append(option);}
+  chooser.addEventListener('change',()=>openTool(chooser.value));
   byId('experiment-frame').onclick=frame;
-  document.addEventListener('pointerdown',event=>{if(!byId('experiment-browser').contains(event.target))byId('experiment-browser').open=false;},true);
   let active=false;
   const text=(id,value)=>{const node=byId(id);if(node.textContent!==value)node.textContent=value;};
   const investigationSlot=byId('experiment-investigation-slot');
@@ -62,12 +55,11 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
       const fluid=id==='finger-fluid-bench', label=tools.find(tool=>tool.id===id)?.label||id;
       left.querySelector('h2').textContent=label;left.querySelector('p').textContent=fluid?subtitle:'Workbench tools in the shared scene';
       toolbar.querySelector('strong').textContent=label;
-      byId('experiment-browser').querySelector('summary').textContent='Tools · '+label;
+      chooser.value=id;
       for(const name of ['setup-slot','tuning-title','tuning-help','instrument-slot','details'])byId('experiment-'+name).hidden=!(fluid&&controlsMounted);
       investigationSlot.hidden=selectedTool!==investigationTool||!investigationSlot.firstChild;
       byId('experiment-tool-slot').hidden=fluid&&controlsMounted;
       run.hidden=!active||!fluid;
-      left.querySelectorAll('[data-workbench]').forEach(button=>button.setAttribute('aria-current',String(button.dataset.workbench===id)));
     },
     setControls({instruments,setup,detailNodes=[],runNodes=[],instrumentTitle='',instrumentHelp=''}){
       // Entry-only presentation can acquire its actual live controls once.

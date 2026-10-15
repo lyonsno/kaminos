@@ -1549,55 +1549,82 @@ async function runLocalLiquidPerformanceScenario(ws) {
 }
 
 async function runAuthoredWaterDropScenario(ws) {
-  phase='authored-water-drop-preview';
+  phase='authored-water-ordinary-add';
   lastEvidence.authoredWater=await evaluate(ws,`(async()=>{
     const wait=ms=>new Promise(r=>setTimeout(r,ms));
     for(let i=0;i<240;i++){if(window.kaminosWaterSources&&document.querySelector('.authored-water-controls'))break;await wait(125);}
-    if(!window.kaminosWaterSources||!document.querySelector('.authored-water-controls'))throw Error('Authored water instruments did not mount');
-    document.querySelector('.tab[data-tab="finger-fluid-bench"]').click();
-    const legacy=document.getElementById('finger-fluid-bench-operator-panel');if(!legacy.hidden)throw Error('A competing standalone water viewport is covering the shared scene');
-    const id=await window.kaminosWaterSources.add();
+    if(!window.kaminosWaterSources)throw Error('Authored water instruments did not mount');
+    document.getElementById('scene-add-menu-trigger').click();
+    document.querySelector('[data-scene-add="water-emitter"]').click();
+    for(let i=0;i<240;i++){if(window.kaminosWaterSources.read().selected)break;await wait(125);}
+    const initial=window.kaminosWaterSources.read(),id=initial.selected?.id;
+    if(initial.selected?.settings.mode!=='finite_drop'||initial.runtime)throw Error('Ordinary Add did not create an editable finite preview');
+    const chooser=document.querySelector('[aria-label="Workbench tool"]');
+    if(chooser?.value!=='finger-fluid-bench')throw Error('Ordinary Add did not expose the Fluid tool chooser');
+    const properties=document.getElementById('selected-water-properties'),fields=document.getElementById('water-source-property-slot');
+    if(properties.hidden||!document.getElementById('authoring-inspector').contains(properties)||!fields.querySelector('[data-width]'))throw Error('Selected source properties are missing from the shared inspector');
     window.kaminosSetSceneObjectTransform(id,{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]});
-    window.kaminosWaterSources.edit(id,{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}});
-    window.kaminosFrameSelected();
+    const width=fields.querySelector('[data-width]'),samples=fields.querySelector('[data-samples]');
+    width.value='.6';width.dispatchEvent(new Event('input',{bubbles:true}));samples.value='24';samples.dispatchEvent(new Event('input',{bubbles:true}));
+    await fields.querySelector('[data-apply]').onclick();
+    const current=window.kaminosWaterSources.read();if(current.selected.settings.drop.width!==.6)throw Error('Source property edit was not applied');
+    if(current.runtime)throw Error('Editing the initial preview allocated a solver');
+    const mode=fields.querySelector('[data-mode]');mode.value='continuous';mode.onchange();
+    if(fields.querySelector('[data-flow]').hidden)throw Error('Continuous source properties did not appear');
+    mode.value='finite_drop';mode.onchange();await fields.querySelector('[data-apply]').onclick();
+    window.kaminosWaterSources.selectSimulation();
+    if(document.getElementById('selected-water-simulation-properties').hidden)throw Error('Water simulation selection has no properties');
+    window.selectSceneObject(id);window.kaminosFrameSelected();
     const before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
-    return {id,before,source:await(await fetch('/api/runtime-config')).json(),initial:window.kaminosWaterSources.read()};
+    return {id,before,source:await(await fetch('/api/runtime-config')).json(),initial:window.kaminosWaterSources.read(),propertiesParent:properties.parentElement.id,chooser:chooser.value};
   })()`,{timeoutMs:60000});
   await delay(600);await capturePngScreenshot(ws,siblingPngPath('-preview'));
   phase='authored-water-drop-release';
   const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;
   lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
-    await window.kaminosWaterSources.release(${JSON.stringify(id)});window.kaminosPauseLocalLiquid(true);
+    const fields=document.getElementById('water-source-property-slot'),run=document.querySelector('#tab-finger-fluid-bench .authored-water-controls');
+    await run.querySelector('[data-release]').onclick();window.kaminosPauseLocalLiquid(true);
+    if(!window.kaminosWaterSources.read().runtime)throw Error('Release button did not allocate water');
     const initialParticles=await window.kaminosWaterSources.requestParticleState();
+    const mode=fields.querySelector('[data-mode]');mode.value='continuous';mode.onchange();
+    await run.querySelector('[data-pause]').onclick();await run.querySelector('[data-pause]').onclick();
+    if(mode.value!=='continuous'||fields.querySelector('[data-flow]').hidden)throw Error('Playback lost the pending mode controls');
+    mode.value='finite_drop';mode.onchange();
     await window.kaminosWaterSources.advanceTo(12);
     const releasedParticles=await window.kaminosWaterSources.requestParticleState();
     await new Promise(r=>setTimeout(r,700));
     const water=window.kaminosLocalLiquidState();
-    if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on the actual shared WebGPU route: '+JSON.stringify(water));
-    const saved=await window.saveSceneAs({name:${JSON.stringify(fixtureName)},result:true});
-    if(!saved)throw Error('Native scene save failed');
-    return {water,saved,initialParticles,releasedParticles,scene:window.kaminosSceneObjectDebugState(),ui:document.querySelector('.authored-water-controls').textContent};
+    if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on shared WebGPU: '+JSON.stringify(water));
+    const saved=await window.saveSceneAs({name:${JSON.stringify(fixtureName)},result:true});if(!saved)throw Error('Native scene save failed');
+    return {water,saved,initialParticles,releasedParticles,scene:window.kaminosSceneObjectDebugState(),ui:run.textContent};
   })()`,{timeoutMs:90000});
   const e=lastEvidence.authoredWater;
-  assert.equal(e.released.water.solver.particleCount,4096);assert.equal(e.released.water.paused,true);
-  assert.match(e.released.ui,/Paused · tick 12/,'The source panel must display the effective host tick without reselection');
+  assert.equal(e.released.water.solver.particleCount,13824);assert.equal(e.released.water.paused,true);
+  assert.match(e.released.ui,/Paused · tick 12/);
   await capturePngScreenshot(ws,siblingPngPath('-released'));
   const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes(${JSON.stringify(fixtureName)})&&n.endsWith('.json'));})()`);
   assert.equal(files.length,1);
   const document=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
   e.savedDocument=document;e.savedFile=files[0];
-  const restoredUrl=compositionRestoreUrl(document.composition,files[0],new URL(url).origin);
+  const restoredUrl=compositionRestoreUrl(document.composition,files[0],new URL(url).origin,'workbench');
   phase='authored-water-drop-fresh-reopen';
   await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(300);await wsRequest(ws,'Page.navigate',{url:restoredUrl});
   for(let i=0;i<240;i++){
-    await delay(125);try{const current=await evaluate(ws,`({scene:window.kaminosSceneObjectDebugState?.(),water:window.kaminosLocalLiquidState?.(),info:document.getElementById('info-bar')?.textContent})`);
-      if(current.water?.lastFrame?.presentedByHost&&current.scene?.some(r=>r.id===id)){e.reopened=current;break;}
+    await delay(125);try{const current=await evaluate(ws,`({scene:window.kaminosSceneObjectDebugState?.(),water:window.kaminosWaterSources?.read(),info:document.getElementById('info-bar')?.textContent})`);
+      if(current.water?.selected?.id===id&&current.scene?.some(r=>r.id===id)&&!current.water.runtime){e.reopened=current;break;}
     }catch{}
   }
-  assert.ok(e.reopened,'Fresh document must restore the actual water source and native allocation');
-  assert.equal(e.reopened.water.solver.particleCount,4096);assert.equal(e.reopened.water.paused,true);
-  assert.deepEqual(e.reopened.water.emitters[0].transform,e.released.water.emitters[0].transform);
-  assert.deepEqual(e.reopened.water.emitters[0].localLiquidEmitter,e.released.water.emitters[0].localLiquidEmitter);
+  assert.ok(e.reopened,'Fresh document must restore editable initial water');
+  assert.equal(e.reopened.water.simulation.particleCount,13824);assert.equal(e.reopened.water.runtime,null);
+  assert.deepEqual(e.reopened.water.selected.settings,e.released.water.emitters[0].localLiquidEmitter);
+  phase='authored-water-reopened-placement';
+  e.reopenedPlacement=await evaluate(ws,`(()=>{
+    const id=${JSON.stringify(id)},before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
+    window.kaminosSetSceneObjectTransform(id,{position:[.6,1.1,0],rotation:[0,.2,0],scale:[1,1,1]});
+    const after=window.kaminosSceneObjectDebugState().find(r=>r.id===id),runtime=window.kaminosWaterSources.read().runtime;
+    if(runtime||Math.abs((after.worldBounds.min[0]+after.worldBounds.max[0])/2-.6)>1e-6)throw Error('Moving the restored initial source moved only its pivot');
+    window.kaminosFrameSelected();return {before,after,runtime};
+  })()`);
 }
 
 async function runLocalLiquidLiveHostScenario(ws) {
