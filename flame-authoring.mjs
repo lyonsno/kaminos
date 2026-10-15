@@ -181,7 +181,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readControlBounds = () => null, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readControlBounds = () => null, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -271,7 +271,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
         if(field.type==='checkbox'){if(source.type==='checkbox')source.checked=field.checked;else source.value=field.checked?'1':'0';}
-        else source.value=String(flameControlSourceValue(id,field.value));
+        else writeValue(source,flameControlSourceValue(id,field.value));
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
       });
       source.addEventListener('input',syncField);source.addEventListener('change',()=>{syncField();syncVisibility();});
