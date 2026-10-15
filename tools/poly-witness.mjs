@@ -49,6 +49,19 @@ export function decodePng(png) {
   return { width, height, channels, pixels };
 }
 
+// The page re-serializes its experiment address; compare meaning, never bytes or defaults.
+export function addressMismatch(requested, effective) {
+  const a = new URL(requested), b = new URL(effective);
+  if (a.origin !== b.origin || a.pathname !== b.pathname) return `page ${b.origin}${b.pathname} is not the requested ${a.origin}${a.pathname}`;
+  for (const [key, value] of a.searchParams) {
+    if (!b.searchParams.has(key)) return `effective address dropped ${key}`;
+    const actual = b.searchParams.get(key);
+    if (key === 'experiment_inputs') { if (JSON.stringify(JSON.parse(actual)) !== JSON.stringify(JSON.parse(value))) return `experiment inputs changed to ${actual}`; }
+    else if (actual !== value) return `${key} changed from ${value} to ${actual}`;
+  }
+  return null;
+}
+
 export function subsetMismatch(actual, expected, path = '') {
   if (expected === null || typeof expected !== 'object') return Object.is(actual, expected) ? null : `${path || 'result'}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`;
   for (const [key, value] of Object.entries(expected)) { const miss = subsetMismatch(actual?.[key], value, `${path}${path ? '.' : ''}${key}`); if (miss) return miss; }
@@ -123,7 +136,8 @@ async function main() {
     }
     report.effectiveUrl = await evaluate('location.href');
     report.experimentState = state;
-    if (report.effectiveUrl !== requestedUrl) throw new Error(`effective URL ${report.effectiveUrl} differs from requested ${requestedUrl}`);
+    const addressMiss = addressMismatch(requestedUrl, report.effectiveUrl);
+    if (addressMiss) throw new Error(`effective address differs from the requested one: ${addressMiss}`);
     if (state?.id !== experiment) throw new Error(`experiment ${experiment} did not open; last state ${JSON.stringify(state)}`);
     report.adapter = await evaluate(`(async()=>{const a=await navigator.gpu?.requestAdapter();return a?{vendor:a.info?.vendor,architecture:a.info?.architecture,description:a.info?.description}:null})()`);
     if (!report.adapter) throw new Error('page has no WebGPU adapter');

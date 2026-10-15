@@ -76,21 +76,26 @@ export function classifyEdges(mesh,{sharpAngle=30}={}) {
   const {edgeFaceOffsets:offsets,edgeCorners,edgeVertices,cornerVertex,cornerRenderVertex,uvs,normals}=mesh;
   const next=c=>c-c%3+(c%3+1)%3;
   const same=(values,width,r,s)=>{if(r===s)return true;for(let i=0;i<width;i++)if(values[width*r+i]!==values[width*s+i])return false;return true;};
+  // Render vertices at the edge's low and high welded endpoints, as one incident face sees them.
+  const ends=(c,e)=>cornerVertex[c]===edgeVertices[2*e]?[cornerRenderVertex[c],cornerRenderVertex[next(c)]]:[cornerRenderVertex[next(c)],cornerRenderVertex[c]];
   for(let e=0;e<mesh.edgeCount;e++){
     const k=offsets[e+1]-offsets[e];
     if(k===1){flags[e]=EDGE_BOUNDARY;continue;}
-    if(k>2){flags[e]=EDGE_NONMANIFOLD;continue;}
-    const c1=edgeCorners[offsets[e]],c2=edgeCorners[offsets[e]+1],f1=c1/3|0,f2=c2/3|0;
-    const forward1=cornerVertex[c1]===edgeVertices[2*e],forward2=cornerVertex[c2]===edgeVertices[2*e];
-    const flipped=forward1===forward2;
-    let flag=flipped?EDGE_FLIPPED:0;
-    const d=(normal[3*f1]*normal[3*f2]+normal[3*f1+1]*normal[3*f2+1]+normal[3*f1+2]*normal[3*f2+2])*(flipped?-1:1);
-    const valid=normal[3*f1]||normal[3*f1+1]||normal[3*f1+2],validOther=normal[3*f2]||normal[3*f2+1]||normal[3*f2+2];
-    if(valid&&validOther&&d<limit)flag|=EDGE_SHARP;
-    const [a1,b1]=forward1?[cornerRenderVertex[c1],cornerRenderVertex[next(c1)]]:[cornerRenderVertex[next(c1)],cornerRenderVertex[c1]];
-    const [a2,b2]=forward2?[cornerRenderVertex[c2],cornerRenderVertex[next(c2)]]:[cornerRenderVertex[next(c2)],cornerRenderVertex[c2]];
-    if(uvs&&!(same(uvs,2,a1,a2)&&same(uvs,2,b1,b2)))flag|=EDGE_UV_SEAM;
-    if(normals&&!(same(normals,3,a1,a2)&&same(normals,3,b1,b2)))flag|=EDGE_NORMAL_SEAM;
+    let flag=k>2?EDGE_NONMANIFOLD:0;
+    const [a1,b1]=ends(edgeCorners[offsets[e]],e);
+    for(let i=offsets[e]+1;i<offsets[e+1];i++){
+      const [a2,b2]=ends(edgeCorners[i],e);
+      if(uvs&&!(same(uvs,2,a1,a2)&&same(uvs,2,b1,b2)))flag|=EDGE_UV_SEAM;
+      if(normals&&!(same(normals,3,a1,a2)&&same(normals,3,b1,b2)))flag|=EDGE_NORMAL_SEAM;
+    }
+    if(k===2){
+      const c1=edgeCorners[offsets[e]],c2=edgeCorners[offsets[e]+1],f1=c1/3|0,f2=c2/3|0;
+      const flipped=(cornerVertex[c1]===edgeVertices[2*e])===(cornerVertex[c2]===edgeVertices[2*e]);
+      if(flipped)flag|=EDGE_FLIPPED;
+      const d=(normal[3*f1]*normal[3*f2]+normal[3*f1+1]*normal[3*f2+1]+normal[3*f1+2]*normal[3*f2+2])*(flipped?-1:1);
+      const valid=normal[3*f1]||normal[3*f1+1]||normal[3*f1+2],validOther=normal[3*f2]||normal[3*f2+1]||normal[3*f2+2];
+      if(valid&&validOther&&d<limit)flag|=EDGE_SHARP;
+    }
     flags[e]=flag;
   }
   return flags;
@@ -100,6 +105,26 @@ function checkedDelimit(mesh,delimit,flags){
   if(!delimit)return null;
   if(!flags||flags.length!==mesh.edgeCount)throw Error('Delimiting needs edge flags classified for this mesh');
   return flags;
+}
+// Seams separate pairs of faces, not whole edges: on a non-manifold edge two faces
+// can share a chart while a third leaves it. Group an edge's incidences by the
+// delimited attributes at both endpoints; only same-group faces are linked.
+const PAIRWISE=EDGE_UV_SEAM|EDGE_NORMAL_SEAM;
+function incidenceGroups(mesh,e,mask){
+  const {edgeFaceOffsets:offsets,edgeCorners,cornerVertex,cornerRenderVertex,edgeVertices,uvs,normals}=mesh,groups=new Map(),out=[];
+  for(let i=offsets[e];i<offsets[e+1];i++){
+    const c=edgeCorners[i],n=c-c%3+(c%3+1)%3,[a,b]=cornerVertex[c]===edgeVertices[2*e]?[cornerRenderVertex[c],cornerRenderVertex[n]]:[cornerRenderVertex[n],cornerRenderVertex[c]];
+    const key=[...(mask&EDGE_UV_SEAM&&uvs?[...uvs.subarray(2*a,2*a+2),...uvs.subarray(2*b,2*b+2)]:[]),...(mask&EDGE_NORMAL_SEAM&&normals?[...normals.subarray(3*a,3*a+3),...normals.subarray(3*b,3*b+3)]:[])].join(',');
+    if(!groups.has(key))groups.set(key,groups.size);out.push(groups.get(key));
+  }
+  return out;
+}
+// Calls visit(i,j) for incidences i,j of edge e that stay linked under the delimit mask.
+function forEachLinkedPair(mesh,e,delimit,flags,from,visit){
+  const o=mesh.edgeFaceOffsets[e],k=mesh.edgeFaceOffsets[e+1]-o,hit=flags?flags[e]&delimit:0;
+  if(hit&~PAIRWISE)return;
+  const groups=hit?incidenceGroups(mesh,e,hit):null;
+  for(let j=0;j<k;j++)if(j!==from&&(!groups||groups[j]===groups[from]))visit(o+from,o+j);
 }
 function checkedMask(mesh,mask){
   if(!mask||mask.length!==mesh.faceCount)throw Error('Face selection must have one entry per face');
@@ -119,11 +144,8 @@ function components(count,find,members){
 export function faceComponents(mesh,{delimit=0,flags=null}={}) {
   flags=checkedDelimit(mesh,delimit,flags);
   const {find,union}=unionFind(mesh.faceCount),{edgeFaceOffsets:offsets,edgeCorners}=mesh;
-  for(let e=0;e<mesh.edgeCount;e++){
-    if(flags&&flags[e]&delimit)continue;
-    const first=edgeCorners[offsets[e]]/3|0;
-    for(let i=offsets[e]+1;i<offsets[e+1];i++)union(first,edgeCorners[i]/3|0);
-  }
+  for(let e=0;e<mesh.edgeCount;e++)for(let i=0;i<offsets[e+1]-offsets[e];i++)
+    forEachLinkedPair(mesh,e,delimit,flags,i,(a,b)=>union(edgeCorners[a]/3|0,edgeCorners[b]/3|0));
   return components(mesh.faceCount,find,Array.from({length:mesh.faceCount},(_,f)=>f));
 }
 
@@ -135,8 +157,9 @@ export function selectLinkedFaces(mesh,seeds,{delimit=0,flags=null}={}) {
   while(stack.length){
     const f=stack.pop();
     for(let c=3*f;c<3*f+3;c++){
-      const e=cornerEdge[c];if(e===NO_EDGE||flags&&flags[e]&delimit)continue;
-      for(let i=offsets[e];i<offsets[e+1];i++){const g=edgeCorners[i]/3|0;if(!mask[g]){mask[g]=1;stack.push(g);}}
+      const e=cornerEdge[c];if(e===NO_EDGE)continue;
+      const from=edgeCorners.subarray(offsets[e],offsets[e+1]).indexOf(c);
+      forEachLinkedPair(mesh,e,delimit,flags,from,(_,j)=>{const g=edgeCorners[j]/3|0;if(!mask[g]){mask[g]=1;stack.push(g);}});
     }
   }
   return mask;

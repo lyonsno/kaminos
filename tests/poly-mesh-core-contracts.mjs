@@ -75,6 +75,13 @@ assert.equal(finFlags[finEdge],EDGE_NONMANIFOLD,'three faces on one edge is non-
 assert.equal(fin.edgeFaceOffsets[finEdge+1]-fin.edgeFaceOffsets[finEdge],3);
 assert.deepEqual(polyMeshCensus(fin).edgeFaceHistogram,{1:6,3:1});
 assert.equal(faceComponents(fin).count,1);
+// Atlas charts often meet along non-manifold edges in generated meshes; the seam must still read.
+const finUvs=Float32Array.of(0,0,1,0,1,1,0,1, 0,0, .2,.2,.8,.8, .5,.5);
+const finSplit=buildPolyMesh({positions:Float32Array.of(0,0,0,1,0,0,1,1,0,0,1,0,.5,.5,1, 0,0,0,1,1,0, .5,.5,1),uvs:finUvs,indices:Uint32Array.of(0,1,2,0,2,3,5,6,7)});
+const splitFlags=classifyEdges(finSplit),splitEdge=edgeBetween(finSplit,0,2);
+assert.equal(splitFlags[splitEdge],EDGE_NONMANIFOLD|EDGE_UV_SEAM,'the fin face sits in another chart across the shared edge');
+assert.equal(classifyEdges(fin)[finEdge],EDGE_NONMANIFOLD,'without attributes a non-manifold edge is only non-manifold');
+assert.equal(faceComponents(finSplit,{delimit:EDGE_UV_SEAM,flags:splitFlags}).count,2,'the quad chart and the fin chart');
 assert.equal(faceComponents(fin,{delimit:EDGE_NONMANIFOLD,flags:finFlags}).count,3,'delimiting non-manifold edges isolates each fan face here');
 
 // Inconsistent winding is reported as such and does not masquerade as a crease.

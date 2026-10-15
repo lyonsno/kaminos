@@ -8,6 +8,7 @@ import {EDGE_CLASSES,edgeClassSegments} from '../poly-edge-overlay.mjs';
 const VIEWS={'three-quarter':[1,.55,1.25],front:[0,0,1],back:[0,0,-1],left:[-1,0,0],right:[1,0,0],top:[0,1,.35],bottom:[0,-1,.35]};
 function angle(value){if(!Number.isFinite(value)||value<0||value>180)throw Error('Crease angle must be between 0 and 180 degrees');return value;}
 function className(name){if(!EDGE_CLASSES.some(c=>c.name===name))throw Error(`Unknown edge class ${name}`);return name;}
+function flag(value,label){if(typeof value!=='boolean')throw Error(`${label} must be true or false`);return value;}
 function compact(attribute,width){
   if(!attribute)return null;
   const out=new Float32Array(attribute.count*width),get=['getX','getY','getZ'];
@@ -57,8 +58,8 @@ export default {
       read,
       operations: {
         setSharpAngle(requested){sharpAngle=angle(requested);rebuild();return applied('crease-angle',requested);},
-        setVisible(name,on){visible[className(name)]=!!on;lines[name].visible=!!on;session.redraw();panelSync();return applied('visible',{name,on});},
-        setXray(on){xray=!!on;rebuild();return applied('xray',on);},
+        setVisible({name,on}={}){visible[className(name)]=flag(on,'Edge class visibility');lines[name].visible=on;session.redraw();panelSync();return applied('visible',{name,on});},
+        setXray(on){xray=flag(on,'X-ray');rebuild();return applied('xray',on);},
         frame({direction='three-quarter'}={}){
           const dir=VIEWS[direction];if(!dir)throw Error(`Unknown view direction ${direction}`);
           const box=new Box3().setFromObject(asset.root),center=box.getCenter(new Vector3()),radius=box.getSize(new Vector3()).length()/2;
@@ -74,7 +75,7 @@ export default {
         const rows=EDGE_CLASSES.map(c=>{
           const label=document.createElement('label'),box=document.createElement('input'),swatch=document.createElement('span'),text=document.createElement('span');
           box.type='checkbox';swatch.style.cssText=`display:inline-block;width:10px;height:10px;margin:0 6px;background:#${c.color.toString(16).padStart(6,'0')}`;
-          box.addEventListener('change',()=>invoke('setVisible',c.name,box.checked).catch(failed));
+          box.addEventListener('change',()=>invoke('setVisible',{name:c.name,on:box.checked}).catch(failed));
           label.append(box,swatch,text);return {c,box,text,label};
         });
         const angleLabel=document.createElement('label'),grip=document.createElement('span'),angleInput=document.createElement('input');

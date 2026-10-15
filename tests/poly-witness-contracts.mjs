@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync } from 'node:zlib';
-import { MIN_SAMPLED_COLOURS, decodePng, pngStats, subsetMismatch } from '../tools/poly-witness.mjs';
+import { MIN_SAMPLED_COLOURS, addressMismatch, decodePng, pngStats, subsetMismatch } from '../tools/poly-witness.mjs';
 
 // Rows cycle through all five PNG filters, as a browser's encoder chooses them per row.
 function png(width, height, pixel) {
@@ -41,6 +41,12 @@ assert.equal(subsetMismatch({ sharpAngle: 60, census: { vertices: 34125, faces: 
 assert.match(subsetMismatch({ sharpAngle: 30 }, { sharpAngle: 60 }), /sharpAngle: expected 60, got 30/, 'a defaulted setting is caught');
 assert.match(subsetMismatch({ census: { vertices: 138656 } }, { census: { vertices: 34125 } }), /census\.vertices/, 'an unwelded fallback is caught');
 assert.match(subsetMismatch(undefined, { source: '/api/read?root=greenroom' }), /source/);
+
+const page = 'http://127.0.0.1:8090/index.html?workspace=workbench&experiment=poly-edge-census&experiment_inputs=' + encodeURIComponent('{"url":"/a.glb","sharpAngle":60}');
+assert.equal(addressMismatch(page, 'http://127.0.0.1:8090/index.html?workspace=workbench&experiment=poly-edge-census&experiment_inputs=%7B%22url%22%3A%22%2Fa.glb%22%2C%22sharpAngle%22%3A60%7D'), null, 're-serialized but identical inputs pass');
+assert.match(addressMismatch(page, page.replace('60', '30')), /inputs changed/, 'a page that swaps its inputs is caught');
+assert.match(addressMismatch(page, 'http://127.0.0.1:8090/index.html?experiment=poly-edge-census&experiment_inputs=' + encodeURIComponent('{"url":"/a.glb","sharpAngle":60}')), /dropped workspace/);
+assert.match(addressMismatch(page, page.replace(':8090', ':8091')), /not the requested/, 'another server is not this route');
 
 const tool = join(dirname(fileURLToPath(import.meta.url)), '..', 'tools', 'poly-witness.mjs');
 const work = mkdtempSync(join(tmpdir(), 'poly-witness-contract-'));
