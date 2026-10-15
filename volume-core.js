@@ -12238,7 +12238,7 @@ export function createKaminosVolumePrototype({
     // Emitter previews can temporarily disable injection outside the box.
     // Keep the installed join allocation while the edit uses standalone fine
     // uniforms. Source admission remains truthful in the immersed config.
-    if (joinedExterior && getSceneEditing?.() && state.joinedBoundary?.admitted) {
+    if (joinedExterior && getSceneEditing?.() && (state.joinedBoundary?.requested || next.requested)) {
       state.joinedBoundary = { ...state.joinedBoundary, requested: next.requested, deferredAdmission: next };
       return state.joinedBoundary;
     }
@@ -13193,7 +13193,7 @@ export function createKaminosVolumePrototype({
     return immersedWallCache;
   }
   function joinedEditingHeld() {
-    const active = Boolean(joinedExterior && state.joinedBoundary?.admitted);
+    const active = Boolean(joinedExterior && (state.joinedBoundary?.requested || state.joinedBoundary?.admitted));
     const edit = active && getSceneEditing?.();
     const held = Boolean(edit);
     const prior = state.joinedEditing;
@@ -13201,7 +13201,7 @@ export function createKaminosVolumePrototype({
     state.joinedEditing = {
       held, target: edit?.id ?? null,
       pending,
-      fine: held ? 'standalone-last-committed-collision' : pending ? 'paused-awaiting-rejoin' : active ? 'joined' : 'standalone',
+      fine: held ? 'standalone-last-committed-collision' : pending ? 'paused-awaiting-rejoin' : state.joinedBoundary?.admitted ? 'joined' : 'standalone',
       reason: held ? 'scene-edit-in-progress' : pending ? prior?.reason ?? 'awaiting-current-exterior-snapshot' : null,
     };
     return held;
@@ -14137,6 +14137,7 @@ export function createKaminosVolumePrototype({
       }
       if (!state.joinedBoundary?.admitted) {
         joinedEditingHeld();
+        state.joinedEditing = { ...state.joinedEditing, pending: false, fine: 'standalone', reason: null };
         syncJoinedRender();
         return { admitted: false, reason: state.joinedBoundary?.reason };
       }

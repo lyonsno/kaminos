@@ -56,11 +56,12 @@ test('outside placement settles to standalone dispatch without preparing a rejec
  ctx.state.joinedBoundary.deferredAdmission={admitted:false};
  ctx.state.joinedEditing={held:false,pending:true};
  ctx.getSceneEditing=()=>null;
- ctx.refreshJoinedBoundary=()=>{ctx.state.joinedBoundary={admitted:false,reason:'source-disabled'};};
+ ctx.refreshJoinedBoundary=()=>{ctx.state.joinedBoundary={requested:true,admitted:false,reason:'source-disabled'};};
  vm.runInContext(body('joinedEditingHeld'),ctx);
  ctx.joinedExterior.prepare=()=>{throw Error('standalone lower-face placeholder cannot prepare exterior');};
  prepare();assert.equal(ctx.state.joinedEditing.pending,false);
  step();step();prepare();
+ vm.runInContext('joinedEditingHeld()',ctx);assert.equal(ctx.state.joinedEditing.fine,'standalone');
  assert.equal(calls.fine,2);assert.equal(calls.pressure,2);assert.equal(ctx.state.simStepCount,9);
  assert.equal(calls.outer,0);assert.equal(queued.length,0);
  // Re-admission must still wait for a current allocation, not reuse held ghosts.
@@ -102,4 +103,20 @@ test('outside-source preview keeps the allocated reactant sidecar instead of rep
  const ctx={device:{createTexture(){throw Error('preview must not allocate');}},reactantSidecarFull:true,reactantTextures:[{destroy(){throw Error('preview must not destroy');}},{destroy(){throw Error('preview must not destroy');}}],joinedExterior:{},getSceneEditing:()=>({id:'flame-emitter'})};
  vm.createContext(ctx);vm.runInContext(body('ensureReactantSidecar'),ctx);
  assert.equal(vm.runInContext('ensureReactantSidecar(false)',ctx),false);assert.equal(ctx.reactantSidecarFull,true);
+});
+
+test('new drag from settled outside defers readmission until placement and cancellation stays standalone',()=>{
+ let rebuilds=0,editing=false;
+ const ctx={state:{joinedBoundary:{requested:true,admitted:false},joinedEditing:{held:false,pending:false}},joinedExterior:{},device:{},gridSize:32,gridHeight:64,
+  controlsSnapshot:{pressureSolver:'converged-open-top',projection:1,emitterSourceLaw:'immersed-source',immersedSourceEnabled:false},
+  getSceneEditing:()=>editing?{id:'flame-emitter'}:null,
+  resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig,rebuildFluidState(){rebuilds++;}};
+ vm.createContext(ctx);vm.runInContext(body('refreshJoinedBoundary')+'\n'+body('joinedEditingHeld'),ctx);
+ const refresh=()=>vm.runInContext('refreshJoinedBoundary(); joinedEditingHeld()',ctx);
+ editing=true;refresh();assert.equal(ctx.state.joinedEditing.held,true);
+ ctx.controlsSnapshot.immersedSourceEnabled=true;refresh();assert.equal(rebuilds,0);assert.equal(ctx.state.joinedBoundary.admitted,false);
+ assert.equal(ctx.state.joinedBoundary.deferredAdmission.admitted,true);
+ ctx.controlsSnapshot.immersedSourceEnabled=false;refresh();editing=false;refresh();assert.equal(rebuilds,0);
+ editing=true;ctx.controlsSnapshot.immersedSourceEnabled=true;refresh();assert.equal(rebuilds,0);
+ editing=false;refresh();assert.equal(rebuilds,1);assert.equal(ctx.state.joinedBoundary.admitted,true);
 });
