@@ -352,6 +352,22 @@ try {
   const joinedLate = await notes(['register', '--as', 'joined-agent', '--about', 'registered while the drawer was open']);
   check('an agent registers while the drawer is open', joinedLate.code === 0, {stderr: joinedLate.stderr});
   await mentionable('joined-agent', 'an agent that registered');
+  // A note already on screen names someone who has not joined yet; when they
+  // join, that @name becomes a way to their avatar (review chat-avatars F1).
+  const lateAvatar = await page.evaluate(red => {
+    const edit = window.kaminosSceneAuthoring;
+    const id = edit.addMesh('box', {width: 0.4, height: 0.4, depth: 0.4});
+    window.kaminosSetSceneObjectTransform(id, {position: [1.2, 0.2, 0]});
+    window.renameSceneObject(id, 'Late avatar');
+    window.kaminosSelection.set([red], red);
+    return id;
+  }, red);
+  const askLate = await notes(['post', 'ask @late-agent about the rim', '--as', 'writer-agent', '--on', 'scene']);
+  const askId = askLate.stdout.match(/kn-[0-9a-f]{12}/)?.[0];
+  const askCard = `.kn-thread[data-thread="${askId}"]`;
+  await page.waitForSelector(`${askCard} .kn-text`, {timeout: 10000}).catch(() => {});
+  const plainBefore = await page.$$eval(`${askCard} .kn-mention`, nodes => nodes.length).catch(() => -1);
+  check('a note naming someone not here yet shows the @name as text', askLate.code === 0 && plainBefore === 0, {stderr: askLate.stderr, askId, plainBefore});
   const draftCard = `.kn-thread[data-thread="${noteId}"]`;
   await page.click(`${draftCard} .kn-actions .kn-btn:nth-child(1)`);
   await page.click(`${draftCard} .kn-replybox textarea`);
@@ -359,13 +375,28 @@ try {
   const replyReach = () => page.textContent(`${draftCard} .kn-replybox .kn-reach`);
   const unknownLine = await replyReach();
   check('a reply draft says an unknown @word stays text', /late-agent isn't anyone known here/.test(unknownLine), {unknownLine});
-  const lateJoin = await notes(['register', '--as', 'late-agent']);
+  const lateJoin = await notes(['register', '--as', 'late-agent', '--avatar', lateAvatar]);
   check('the unknown name registers while the draft waits', lateJoin.code === 0, {stderr: lateJoin.stderr});
   await page.waitForFunction(selector => /and @late-agent/.test(document.querySelector(selector)?.textContent ?? ''), `${draftCard} .kn-replybox .kn-reach`, {timeout: 8000}).catch(() => {});
   const knownLine = await replyReach();
   const draft = await page.evaluate(selector => { const box = document.querySelector(selector); return {value: box.value, focused: document.activeElement === box}; }, `${draftCard} .kn-replybox textarea`);
   check("the untouched draft's reach line follows the new participant", /and @late-agent/.test(knownLine) && draft.value === '@late-agent please check the rim' && draft.focused,
     {knownLine, draft});
+  await page.waitForSelector(`${askCard} .kn-mention`, {timeout: 8000}).catch(() => {});
+  const mentionNow = await page.evaluate(([card, selector]) => {
+    const box = document.querySelector(selector);
+    return {
+      mentions: [...document.querySelectorAll(`${card} .kn-mention`)].map(node => node.textContent),
+      draft: {value: box.value, focused: document.activeElement === box, caret: box.selectionStart},
+    };
+  }, [askCard, `${draftCard} .kn-replybox textarea`]);
+  check('the @name in a note already on screen becomes clickable when that agent joins',
+    JSON.stringify(mentionNow.mentions) === '["@late-agent"]' && mentionNow.draft.value === '@late-agent please check the rim' && mentionNow.draft.focused
+      && mentionNow.draft.caret === '@late-agent please check the rim'.length, mentionNow);
+  await page.click(`${askCard} .kn-mention`).catch(() => {});
+  const lateSelected = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent}));
+  check("clicking that @name selects the agent's avatar", lateSelected.ids.includes(lateAvatar) && lateSelected.status === "Selected @late-agent's avatar", lateSelected);
+  await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   const listener = notes(['wait', '--as', 'late-agent', '--timeout', '8'], {timeoutMs: 30000});
   await page.waitForFunction(selector => /@late-agent \(listening\)/.test(document.querySelector(selector)?.textContent ?? ''), `${draftCard} .kn-replybox .kn-reach`, {timeout: 8000}).catch(() => {});
   const draftListeningLine = await replyReach();

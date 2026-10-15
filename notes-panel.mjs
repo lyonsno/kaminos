@@ -596,8 +596,11 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   }
 
   const signatureOf = thread => {
+    const known = new Set(session.participants.map(person => person.name));
     const parts = [thread.resolved, thread.id === focusThread, session.author, listeningNames().join(','), pageAuthors().join(','), sceneFile() || ''];
-    walk(thread, note => parts.push(note.seq, Object.keys(note.receipts.seen).join(','), Object.keys(note.receipts.delivered).join(',')));
+    // An @name becomes a button once that someone is known here.
+    walk(thread, note => parts.push(note.seq, Object.keys(note.receipts.seen).join(','), Object.keys(note.receipts.delivered).join(','),
+      mentionsIn(note.text).filter(name => known.has(name)).join(',')));
     return parts.join('|');
   };
 
