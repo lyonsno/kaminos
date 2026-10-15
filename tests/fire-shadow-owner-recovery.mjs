@@ -10,8 +10,8 @@ class Element {
   querySelector(key){if(!this.nodes.has(key))this.nodes.set(key,new Element());return this.nodes.get(key);}
 }
 globalThis.Option=class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}};
-let frame,points=1,pointSampling='all',sampling='fixed',href='http://localhost/index.html#scene=kiln.json';
-const document={createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1})}}};
+let frame,points=1,pointSampling='all',sampling='fixed',quality={resolution:256,blockerSamples:9,filterSamples:16},href='http://localhost/index.html#scene=kiln.json';
+const document={createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}}};
 const host={controls:{document},scene:{open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}})}};
 const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
 await entry.open('fire-shadow-sampling',{sampling:'complementary',points:1,retained:'other input'});frame();
@@ -33,4 +33,17 @@ points=1;pointSampling='all';await entry.open('fire-shadow-sampling',pairedInput
 assert.equal(points,4);assert.equal(pointSampling,'paired');
 const pairedHref=href;await assert.rejects(entry.invoke('setQuadrature',{points:2,pointSampling:'paired'}),/four/);assert.equal(href,pairedHref);
 await entry.invoke('setPoints',2);assert.equal(JSON.parse(readOwnerExperimentAddress(new URL(href)).inputsText).pointSampling,'all');
+await entry.invoke('setShadowQuality',{resolution:128,blockerSamples:3,filterSamples:8});
+await entry.invoke('setSampling','complementary');
+const qualityInputs=JSON.parse(readOwnerExperimentAddress(new URL(href)).inputsText);
+assert.deepEqual(qualityInputs.shadowQuality,{resolution:128,blockerSamples:3,filterSamples:8});
+assert.equal(qualityInputs.points,2);assert.equal(qualityInputs.retained,'other input');
+quality={resolution:256,blockerSamples:9,filterSamples:16};
+await entry.open('fire-shadow-sampling',qualityInputs);frame();
+assert.deepEqual((await entry.read()).shadowQuality,{resolution:128,blockerSamples:3,filterSamples:8});
+const beforeInvalid=href;
+await assert.rejects(entry.invoke('setShadowQuality',{filterSamples:0}),/positive integer/);
+assert.equal(href,beforeInvalid);
+await entry.invoke('restoreShadowQuality');
+assert.deepEqual((await entry.read()).shadowQuality,{resolution:256,blockerSamples:9,filterSamples:16});
 await entry.close();console.log('PASS actual owner operation/address/recovery preserves edited source count and sampling');
