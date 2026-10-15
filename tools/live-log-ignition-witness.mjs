@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {checkColdLogEntryCollision} from './live-log-witness-contracts.mjs';
 
 const [origin,out]=process.argv.slice(2);
 if(!origin||!out)throw Error('Usage: live-log-ignition-witness.mjs <origin> <output>');
@@ -75,6 +76,7 @@ try{
   if(report.requested.entryOnly){
     report.entry=await read();report.collision=await page.evaluate(()=>window.kaminosSceneCollision.read());
     assert.equal(report.entry.burner,false);assert.equal(report.entry.gasSource.enabled,true);assert.equal(report.collision.enabled,true);
+    checkColdLogEntryCollision(report.entry,report.collision);
     await page.screenshot({path:path.join(out,'entry-cold.png')});report.frames.push({name:'entry-cold',state:report.entry});
   }else{
   for(const feed of [false,true]){
