@@ -12,6 +12,7 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  const cast=select('Cast',casts.map(c=>[c.cast,c.label]));cast.hidden=!casts.length;
  const motion=select('Motion',initial.motions.map(c=>[c.id,c.label]));motion.hidden=!initial.motions.length;
  const mode=select('Playback',[['source','One pass'],['cycle','Repeat · straight travel'],['path','Follow curved path']]);
+ const travel=el('p');travel.style.cssText='margin:0;color:#a5b7bd;font-size:11px';properties.append(travel);
  const advanced=el('details'),advancedBody=el('div');advanced.append(el('summary','Deformation & source'),advancedBody);properties.append(advanced);
  const attachment=select('Attachment',[],advancedBody),identity=el('p');identity.className='creature-identity';advancedBody.append(identity);
  const setup=el('details'),setupBody=el('div');setup.append(el('summary','Save / open creature'),setupBody);properties.append(setup,error);
@@ -38,6 +39,7 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
    if(key!==lastVariants){for(const child of [...attachment.children])child.remove();for(const c of variants){const o=el('option',c.attachmentLabel??c.attachment);o.value=c.attachment;attachment.append(o);}lastVariants=key;}attachment.value=s.current.attachment;
   }
   motion.value=r.motion?.id??'';mode.value=r.mode;
+  travel.hidden=r.mode!=='path';travel.textContent=r.pathGuide?`Radius ${r.pathGuide.radius} · ${r.pathGuide.sourceDistance.toFixed(3)} scene units per cycle · source-paced travel`:'';
   identity.textContent=`${r.source.prompt??'Retained motion'}\nMotion ${r.source.motionSha256}\nSkin ${r.source.caseSha256}`;
   playback.update();
  }

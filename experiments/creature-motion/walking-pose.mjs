@@ -9,6 +9,17 @@ export function createWalkingPoseAdapter({THREE,adapter,radius=10,blendFrames=6}
  const length=distance.at(-1);if(!(length>0))throw Error('Source has no horizontal travel to advance the route');
  const delta=points.at(-1).map((v,i)=>v-points[0][i]),net=Math.hypot(delta[0],delta[2]);if(!(net>0))throw Error('Source has no net forward direction');
  const forward=[delta[0]/net,delta[2]/net],right=[forward[1],-forward[0]];
+ function pathPoint(d){
+  if(!Number.isFinite(d)||d<0)throw Error('Path distance must be finite and nonnegative');
+  const angle=d/radius;
+  return [points[0][0]+forward[0]*radius*Math.sin(angle)+right[0]*radius*(1-Math.cos(angle)),points[0][1],points[0][2]+forward[1]*radius*Math.sin(angle)+right[1]*radius*(1-Math.cos(angle))];
+ }
+ function guidePoints(mode){
+  if(!['source','cycle','path'].includes(mode))throw Error('Unknown walking mode');
+  if(mode!=='path')return points.map(p=>[...p]);
+  // 128-segment editor circle; this tessellation does not sample or limit motion.
+  const guide=Array.from({length:128},(_,i)=>pathPoint(i/128*2*Math.PI*radius));guide.push([...guide[0]]);return guide;
+ }
  const matrix=a=>new THREE.Matrix4().fromArray(a);
  const blend=(a,b,t)=>{const ap=new THREE.Vector3(),aq=new THREE.Quaternion(),as=new THREE.Vector3(),bp=new THREE.Vector3(),bq=new THREE.Quaternion(),bs=new THREE.Vector3();matrix(a).decompose(ap,aq,as);matrix(b).decompose(bp,bq,bs);return new THREE.Matrix4().compose(ap.lerp(bp,t),aq.slerp(bq,t),as.lerp(bs,t)).toArray();};
  function frame(index,{mode='source',cycle=0}={}) {
@@ -27,12 +38,12 @@ export function createWalkingPoseAdapter({THREE,adapter,radius=10,blendFrames=6}
   if(mode==='cycle'){actor.elements[12]+=cycle*delta[0];actor.elements[14]+=cycle*delta[2];}
   else{
    const d=cycle*length+distance[index],angle=d/radius;
-   const desired=[points[0][0]+forward[0]*radius*Math.sin(angle)+right[0]*radius*(1-Math.cos(angle)),points[0][2]+forward[1]*radius*Math.sin(angle)+right[1]*radius*(1-Math.cos(angle))];
-   const warp=new THREE.Matrix4().makeTranslation(desired[0],0,desired[1]).multiply(new THREE.Matrix4().makeRotationY(angle)).multiply(new THREE.Matrix4().makeTranslation(-points[index][0],0,-points[index][2]));
+   const desired=pathPoint(d);
+   const warp=new THREE.Matrix4().makeTranslation(desired[0],0,desired[2]).multiply(new THREE.Matrix4().makeRotationY(angle)).multiply(new THREE.Matrix4().makeTranslation(-points[index][0],0,-points[index][2]));
    actor.premultiply(warp);
   }
   return {frame:index,time:index/adapter.fps,actorMatrix:actor.toArray(),bones,derived:true};
  }
- return Object.freeze({frames:adapter.frames,fps:adapter.fps,jointNames:adapter.jointNames,frame,
+ return Object.freeze({frames:adapter.frames,fps:adapter.fps,jointNames:adapter.jointNames,frame,pathPoint,guidePoints,
   identity:Object.freeze({sourceDistance:length,radius,seam:{kind:blendFrames?'derived-pose-crossfade':'unblended-repeat',frames:blendFrames},path:'flat-circular-rail',contactSolver:false})});
 }
