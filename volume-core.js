@@ -2211,8 +2211,8 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
   if (!immersedAdmitted) return { requested: true, admitted: false, reason: `joined-boundary-needs-admitted-immersed-source:${immersedReason ?? 'unknown'}` };
   return { requested: true, admitted: true, reason: null };
 }
-export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
-  return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
+export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, outerExtent = 0 }) {
+  return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, outerExtent, 0];
 }
 
 // The aperture pattern (slice 2): which coverage pattern the floor map is built
@@ -3604,13 +3604,15 @@ fn seatGridShape() {
   IRRADIANCE_GRID_Y = u32(u.grid_shape.w);
   SCENE_SOURCE_GRID = u32(u.grid_shape_b.x);
   SCENE_SOURCE_GRID_Y = u32(u.grid_shape_b.y);
+  OUTER_EXTENT = select(4.0, u.grid_shape_b.z, u.grid_shape_b.z > 0.0);
 }
 override TRANSPARENT_CANVAS: f32 = 0.0;
 override LEAN_STOCK_RAYMARCH: bool = false;
 override LEAN_EMISSIVE_RAYMARCH: bool = false;
 override OPTICAL_TRACE_CAPTURE: bool = false;
 const OUTER_SMOKE: bool = false;
-const OUTER_EXTENT: f32 = 4.0;
+// Seated from the grid-shape block (grid_shape_b.z) so the extent is live.
+var<private> OUTER_EXTENT: f32 = 4.0;
 fn joinedVelocityScale() -> f32 { return select(1.0, f32(GRID) / 32.0, OUTER_SMOKE); }
 // Appearance proxies use the authored core32 velocity reading, not a count of
 // the finer cells traversed by the same local motion. Transport stays in cells.
@@ -11442,8 +11444,7 @@ export function createKaminosVolumePrototype({
     pressureIterations:Number(outerRoute.get('volume_outer_pressure') || 24),
   }) : null;
   function activeVolumeShader() {
-    return WGSL.replace('const OUTER_SMOKE: bool = false;',`const OUTER_SMOKE: bool = ${outerRequested};`)
-      .replace('const OUTER_EXTENT: f32 = 4.0;',`const OUTER_EXTENT: f32 = ${(outerConfig?.extent || 4).toFixed(9)};`);
+    return WGSL.replace('const OUTER_SMOKE: bool = false;',`const OUTER_SMOKE: bool = ${outerRequested};`);
   }
   let volumePresentationModeRequestedRaw = 'beauty';
   let volumePresentationModeRequested = 'beauty';
@@ -16813,7 +16814,7 @@ export function createKaminosVolumePrototype({
     refreshSceneCollision();
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
-    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
+    uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID), outerExtent: outerConfig?.extent ?? 0 }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
       grid: gridSize,
@@ -27516,9 +27517,10 @@ export function createKaminosVolumePrototype({
     setControls(next) {
       if(next.collisionVoxelView !== undefined && !['off','fine','outer'].includes(next.collisionVoxelView)) throw new Error('Invalid collision voxel view');
       const requestedOuterGrid = Number(next.outerResolution ?? outerConfig?.grid ?? 32);
-      const outerGridChanged = outerRequested && requestedOuterGrid !== outerConfig.grid;
+      const requestedOuterExtent = Number(next.outerExtent ?? outerConfig?.extent ?? 4);
+      const outerGridChanged = outerRequested && (requestedOuterGrid !== outerConfig.grid || requestedOuterExtent !== outerConfig.extent);
       if(outerGridChanged){
-        const candidate=outerSmokeConfig({...outerConfig,grid:requestedOuterGrid});
+        const candidate=outerSmokeConfig({...outerConfig,grid:requestedOuterGrid,extent:requestedOuterExtent});
         if(device)validateOuterSmokeDevice(candidate,device.limits);
         outerConfig=candidate;
       }
@@ -28118,10 +28120,11 @@ export function createKaminosVolumePrototype({
       joinedExterior = null;
       state.joinedExterior = null;
       if (!config || config.enabled === false) return { enabled: false };
-      joinedExterior = createJoinedExterior(device, { extent: config.extent, ratio: config.ratio ?? 4, wall: config.wall ?? null, budget: config.budget ?? 32, tolerance: config.tolerance ?? 1e-3, outer: outerSmoke ? outerSmoke.config : null });
+      joinedExterior = createJoinedExterior(device, { extent: config.extent, ratio: config.ratio ?? 4, wall: config.wall ?? null, budget: config.budget ?? 32, tolerance: config.tolerance ?? 1e-3, outer: outerSmoke ? () => outerSmoke?.config ?? null : null, setOuterSolids: (cells, revision) => { if (!outerSmoke) return; if (!cells) { outerSmoke.clearSolids(); return; } const c = outerSmoke.config; outerSmoke.setSolids(packSolidTextureRows(cells, c.grid, c.shape[1]), revision); } });
       const prepared = prepareJoinedExterior();
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
+    outerSmokeConfig() { return outerSmoke ? { ...outerSmoke.config } : null; },
     async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
     // Volume-local coordinates -> clip space, as last used to render (for
     // overlays drawn above the volume canvas).

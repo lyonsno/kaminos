@@ -1194,8 +1194,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="64">64</option>
       </select>
       <span class="slider-val" id="volume-outer-resolution-val">off (open with volume_outer_smoke=1)</span>
+      <input type="hidden" id="volume-outer-extent" value="">
     </div>
-      <span class="slider-help">Sexy Fireman's exterior smoke grid (N×2N×N), around the fine box: it carries smoke and heat out of the box and the renderer draws it. Present only when the page is opened with volume_outer_smoke=1 (and volume_outer_extent, default 4); changing the resolution resets both grids. With the joined boundary on, the shared pressure solve projects this grid too.</span>
+      <span class="slider-help">Sexy Fireman's exterior smoke grid (N×2N×N) around the fine box: it carries smoke and heat out of the box and the renderer draws it. Present only when the page is opened with volume_outer_smoke=1. Its size and resolution are set by Exterior size and Exterior cell below; this row shows the result. Any change resets both grids. With the joined boundary on, the shared pressure solve projects this grid too.</span>
       <div class="slider-row">
       <span class="slider-label">Collision voxels (x-ray)</span>
       <select id="volume-collision-voxels" class="select-input" aria-label="Collision mask inspection replaces volume rendering, shows through mesh">
@@ -18320,17 +18321,38 @@ function wireJoinedProvisionalControls(prototype) {
   if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
   const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
   const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
+  const fire = (el, value) => { el.value = String(value); el.dispatchEvent(new Event('change', { bubbles: true })); };
+  const outerRes = $('volume-outer-resolution'), outerExt = $('volume-outer-extent');
+  if (prototype.outerSmokeConfig?.()) { outerRes.disabled = true; }
   const applyExterior = () => {
     const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
     if (!(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
-    const extent = dims.map(d => Math.max(Math.round(mult * d / r), d / r + 2));
     const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
-    const res = prototype.setJoinedExterior({ enabled: true, extent, ratio: r, wall: side, budget: parseInt(budget.value, 10) });
+    const outerCfg = prototype.outerSmokeConfig?.();
+    if (outerCfg) {
+      // Sexy's exterior: size sets her extent E (her width 2E = size × the fine
+      // width 2), cell sets her grid g = E × fine width ÷ cell. The fine box must
+      // land on her cell faces: (E − 1) × fine width ÷ (2 × cell) whole.
+      const n = dims[0], g = mult * n / r, faces = (mult - 1) * n / (2 * r);
+      const whole = v => Math.abs(v - Math.round(v)) < 1e-9;
+      if (!whole(g) || !whole(faces) || g < 8) { text('volume-joined-exterior-extent-val', `refused: size ${mult} × cell ${r} gives grid ${g.toFixed(2)} and box offset ${faces.toFixed(2)} cells; both must be whole (fine width ${n})`, true); return; }
+      if (![dims[0], 2 * dims[0]].includes(dims[1])) { text('volume-joined-exterior-extent-val', 'refused: the exterior smoke needs grid height 1 or 2', true); return; }
+      if (Number(outerRes.value) !== g || Number(outerExt.value || outerCfg.extent) !== mult) {
+        if (![...outerRes.options].some(o => Number(o.value) === g)) outerRes.add(new Option(String(g), String(g)));
+        outerExt.value = String(mult);
+        fire(outerRes, g);
+        text('volume-joined-exterior-extent-val', `rebuilding: extent ${mult}, grid ${g}×${2 * g}×${g} …`);
+        setTimeout(applyExterior, 600);
+        return;
+      }
+    }
+    const res = prototype.setJoinedExterior({ enabled: true, extent: dims.map(d => Math.max(Math.round(mult * d / r), d / r + 2)), ratio: r, wall: side, budget: parseInt(budget.value, 10) });
     const receipt = res?.receipt;
     const joinOn = prototype.debugState?.()?.joinedBoundary?.admitted;
     if (!receipt?.admitted) text('volume-joined-exterior-extent-val', joinOn ? `refused: ${receipt?.reason ?? 'unknown'}` : 'waiting: turn the joined boundary on (and admitted) first', true);
     text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
   };
+  $('volume-resolution')?.addEventListener('change', () => { if (size.value !== '0') setTimeout(applyExterior, 800); });
   boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); if (size.value !== '0') applyExterior(); });
   for (const el of [size, ratio, wall, budget]) el.addEventListener('change', applyExterior);
   $('volume-joined-make-admissible').addEventListener('click', () => {
@@ -18381,7 +18403,8 @@ function wireJoinedProvisionalControls(prototype) {
     const x = s.joinedExterior;
     if (x?.admitted && size.value !== '0') {
       const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted;
-      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${stepping ? `stepping (${x.steps})` : 'NOT STEPPING: the join is off or refused'}`, !stepping);
+      text('volume-joined-exterior-extent-val', `${x.lattice === 'outer-smoke' ? 'exterior smoke ' : ''}${x.shape.join('×')} (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${stepping ? `stepping (${x.steps})` : 'NOT STEPPING: the join is off or refused'}`, !stepping);
+      const oc = prototype.outerSmokeConfig?.(); if (oc) text('volume-outer-resolution-val', `${oc.shape.join('×')}, extent ${oc.extent} (set by Exterior size and cell)`);
       text('volume-joined-exterior-ratio-val', `${x.ratio} fine cells, ${x.cellWidth.toFixed(3)} local`);
       if (stepping && !probing) { probing = true; try { const p = await prototype.probeJoinedExterior(); if (p?.status === 'sampled') text('volume-joined-exterior-solve-val', `${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`, false); } finally { probing = false; } }
     } else {
@@ -18601,6 +18624,7 @@ function readVolumeControls() {
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     gridHeightRatio: parseFloat(volumeRebuildControlValue('volume-grid-height-ratio')) || 2,
     outerResolution: Number(document.getElementById('volume-outer-resolution').value),
+    ...(document.getElementById('volume-outer-extent').value ? { outerExtent: Number(document.getElementById('volume-outer-extent').value) } : {}),
     collisionVoxelView: document.getElementById('volume-collision-voxels').value,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',

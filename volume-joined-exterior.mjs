@@ -94,11 +94,15 @@ export function joinedExteriorSolids(shape, wall) {
   return { shape: shape.slice(), cells, revision: wall ? `wall:${wall.axis}:${wall.at}:${wall.thickness ?? 1}` : 'none' };
 }
 
-export function createJoinedExterior(device, { extent, ratio = 4, wall = null, budget = 32, tolerance = 1e-3, outer = null } = {}) {
+export function createJoinedExterior(device, { extent, ratio = 4, wall = null, budget = 32, tolerance = 1e-3, outer: outerSource = null, setOuterSolids = null } = {}) {
+  // `outer`: a getter for Sexy's current exterior config (it changes when her
+  // exterior is rebuilt), or null for this module's own quiescent lattice.
+  const outerNow = () => (typeof outerSource === 'function' ? outerSource() : outerSource);
+  const outer = outerSource ? true : null;
   if (!Number.isInteger(budget) || budget < 1) throw new Error('positive integer budget required');
   let built = null, destroyed = false, lastStep = null, paused = false;
   const destroyBuilt = () => { if (!built) return; for (const r of built.owned) r.destroy?.(); built = null; };
-  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall, outer: outer ? [outer.shape, outer.min, outer.cellWidth] : null });
+  const key = producer => JSON.stringify({ dims: producer.dims, pitch: producer.pitch, solid: producer.solidMask?.revision ?? 'disabled', allocation: producer.allocation ?? null, buffers: producer.fluidBuffers?.map(b => b.label ?? '?'), lower: producer.lowerFaceTexture?.label ?? null, extent, ratio, wall, outer: outer ? [outerNow()?.shape, outerNow()?.min, outerNow()?.cellWidth] : null });
 
   // Builds the composite around the producer's current grid. Runs outside
   // encoding (it allocates and uploads); the caller binds the ghost geometry
@@ -108,7 +112,9 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
     const k = key(producer);
     if (built && built.key === k) return { rebuilt: false, ...built.summary };
     destroyBuilt();
-    const g = outer ? resolveOuterLatticeGeometry({ fineDims: producer.dims, pitch: producer.pitch, outer }) : resolveJoinedExteriorGeometry({ fineDims: producer.dims, pitch: producer.pitch, ratio, extent });
+    const outerConfig = outer ? outerNow() : null;
+    if (outer && !outerConfig) { built = { key: k, owned: [], refused: 'outer-smoke-missing', summary: { admitted: false, reason: 'outer-smoke-missing' } }; return { rebuilt: true, admitted: false, reason: 'outer-smoke-missing' }; }
+    const g = outer ? resolveOuterLatticeGeometry({ fineDims: producer.dims, pitch: producer.pitch, outer: outerConfig }) : resolveJoinedExteriorGeometry({ fineDims: producer.dims, pitch: producer.pitch, ratio, extent });
     if (!g.admitted) { built = { key: k, owned: [], refused: g.reason, summary: { admitted: false, reason: g.reason } }; return { rebuilt: true, admitted: false, reason: g.reason }; }
     if (!producer.fluidBuffers || producer.fluidBuffers.length !== 2 || !producer.lowerFaceTexture || !producer.burnRateTexture) {
       built = { key: k, owned: [], refused: 'producer-resources-missing', summary: { admitted: false, reason: 'producer-resources-missing' } };
@@ -121,6 +127,8 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
     const slab = resolveJoinedExteriorWall(wall, g);
     if (slab?.outside) { built = { key: k, owned: [], refused: 'wall-outside-exterior', summary: { admitted: false, reason: `wall-outside-exterior:${JSON.stringify(slab)}` } }; return { rebuilt: true, admitted: false, reason: 'wall-outside-exterior' }; }
     const coarseSolids = joinedExteriorSolids(g.shape, slab);
+    // Sexy's advection reads its own solids texture: the same slab goes there.
+    if (outer && setOuterSolids) setOuterSolids(slab ? coarseSolids.cells : null, coarseSolids.revision);
     const owned = [];
     try {
       const layout = createCompositeProducerLayout({ geometry: g.geometry, fineSolids, coarseSolids });
@@ -133,7 +141,8 @@ export function createJoinedExterior(device, { extent, ratio = 4, wall = null, b
       const solver = createCompositePCGGPU(device, grid, { tolerance }); owned.push(solver);
       const intake = createCompositeProducerGPU(device, layout); owned.push(intake);
       const bridgeCache = new Map();
-      const bridgeFor = (fine, coarseBuffer) => { const k = `${producer.fluidBuffers.indexOf(fine)}:${coarseBuffer.label}`; let b = bridgeCache.get(k); if (!b) { b = createCompositeStorageGPU(device, storage, { fine, coarse: coarseBuffer, lower, flux: solver.fluxBuffer }); owned.push(b); bridgeCache.set(k, b); } return b; };
+      // Keyed by the buffer objects themselves: a rebuilt exterior reuses labels.
+      const bridgeFor = (fine, coarseBuffer) => { let byCoarse = bridgeCache.get(fine); if (!byCoarse) { byCoarse = new Map(); bridgeCache.set(fine, byCoarse); } let b = byCoarse.get(coarseBuffer); if (!b) { b = createCompositeStorageGPU(device, storage, { fine, coarse: coarseBuffer, lower, flux: solver.fluxBuffer }); owned.push(b); byCoarse.set(coarseBuffer, b); } return b; };
       if (coarse) producer.fluidBuffers.forEach(fine => bridgeFor(fine, coarse));
       const lowerExport = createCompositeLowerFaceGPU(device, { dims: producer.dims, lowerBuffer: lower, lowerFaceTexture: producer.lowerFaceTexture });
       // Ghost A from the coarse sites: her coarse storage is 8 floats per
