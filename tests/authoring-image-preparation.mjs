@@ -40,3 +40,17 @@ test('preparing another image cannot hide Stop for an active mesh generation',as
  let calls=0;const c=createAuthoringAssets({prepareImage:async()=>{calls++;return prepared;},generator:()=>({read:()=>({status:'running',canStop:true}),stop:()=>true})});c.select(image);
  await assert.rejects(c.prepare(),/Finish or stop/);assert.equal(calls,0);assert.equal(c.generation().status,'running');assert.equal(c.stop(),true);
 });
+test('a service that prepares its own input runs on the selected original, without the server preparation',async()=>{
+ let calls=0,consumed;const c=createAuthoringAssets({prepareImage:async()=>{calls++;return prepared;},
+  generator:()=>({preparesInput:true,read:()=>({status:'idle'}),run:async value=>{consumed=value;return null;}})});
+ c.select(image);assert.equal(c.preparesInput(),true);
+ await c.generate();assert.equal(calls,0,'no server preparation');assert.equal(consumed.source,image.source);assert.equal(consumed.preparation,null);
+ await c.prepare();assert.equal(calls,1,'the explicit preparation operation still exists');
+});
+test('the drawer shows a used-input preview only for the image it was made from',async()=>{
+ const {usedInputPreviewFor}=await import('../authoring-assets.mjs');
+ const preview={source:'/api/read?root=image-inbox&path=a-cutout.png',input:image.source};
+ assert.equal(usedInputPreviewFor(preview,image.source),preview.source);
+ assert.equal(usedInputPreviewFor(preview,'/api/read?root=image-inbox&path=b.jpg'),null,'another selected image never shows A\'s cutout');
+ assert.equal(usedInputPreviewFor(null,image.source),null);assert.equal(usedInputPreviewFor('bare-string',image.source),null,'a preview without its input identity is not shown');
+});

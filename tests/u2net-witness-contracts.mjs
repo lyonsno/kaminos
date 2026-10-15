@@ -9,7 +9,7 @@ import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {admitReferenceCases,admitReferenceBytes,compareCutouts} from '../models/u2net/witness-checks.js';
+import {admitReferenceCases,admitReferenceBytes,compareCutouts,admitForegroundHandback} from '../models/u2net/witness-checks.js';
 
 const sha=b=>createHash('sha256').update(b).digest('hex');
 assert.throws(()=>admitReferenceCases({}),/no reference cases/);
@@ -39,3 +39,9 @@ await new Promise(resolve=>execFile(process.execPath,[witness,'--package',dir,'-
 const report=JSON.parse(await fs.readFile(out,'utf8'));
 assert.equal(report.status,'error','failed browser launch must end in a terminal error report');
 assert.equal(report.phase,'browser');assert.match(report.error,/ENOENT|missing-chrome/);
+
+// Handback is admitted from queue order only: no activity, page work only before
+// or after inference (e.g. drained at finish), or an unsegmented run all refuse.
+for(const [queue,why] of [[[],'empty'],[['model','model'],'no page'],[['page','model','model','page'],'outside'],[['page','model','page'],'one segment']])
+  assert.throws(()=>admitForegroundHandback('t',queue),/foreground t:/,why);
+assert.deepEqual(admitForegroundHandback('t',['page','model','page','page','model','page']),{modelSegments:2,pageBetween:2,pageTotal:4});

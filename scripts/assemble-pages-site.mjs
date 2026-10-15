@@ -42,9 +42,6 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   for (const file of fs.readdirSync(unimate)) {
     if (file === "index.html" || /^unimate-[\w-]+\.js$/.test(file)) fs.copyFileSync(path.join(unimate, file), path.join(motion, file));
   }
-  // UniMate schedules its GPU work with Klein's duty scheduler, imported as ../flux2-klein/.
-  fs.mkdirSync(path.join(out, "inference-kit", "flux2-klein"));
-  fs.copyFileSync(path.join(klein, "klein-duties.js"), path.join(out, "inference-kit", "flux2-klein", "klein-duties.js"));
   for (const file of fs.readdirSync(path.join(unimate, "clips"))) {
     if (/^[\w-]+\.json$/.test(file)) fs.copyFileSync(path.join(unimate, "clips", file), path.join(motion, "clips", file));
   }

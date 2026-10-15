@@ -112,3 +112,47 @@ export const ASSET_ARRIVAL_SCREEN_MARGIN = 0.62;
 export function assetArrivalFramingWindow({ overlayTopNdc = 1, margin = ASSET_ARRIVAL_SCREEN_MARGIN, overlayGap = 0.05 } = {}) {
   return { left: -margin, right: margin, bottom: -margin, top: Math.min(margin, overlayTopNdc - overlayGap) };
 }
+
+// Where an appended asset lands on the floor: the orbit pivot when nothing is there,
+// otherwise the nearest spot clear of the scene's objects. Rings widen from the pivot;
+// on each ring, spots beside the view come first, then in front, then behind, so the
+// new object is seen next to what you are looking at rather than inside or behind it.
+// footprint: placed [width, depth]; obstacles: world boxes; viewDirection: scene to camera.
+export function chooseAppendAnchor({ footprint, pivot, obstacles = [], viewDirection = [0, 0, 1], margin = 0.15, maxRadius = 30 }) {
+  const [w, d] = footprint;
+  const clear = ([x, z]) => obstacles.every(o =>
+    x + w / 2 + margin <= o.min[0] || x - w / 2 - margin >= o.max[0] || z + d / 2 + margin <= o.min[2] || z - d / 2 - margin >= o.max[2]);
+  if (clear(pivot)) return { anchor: [...pivot], reason: 'pivot-clear' };
+  let vx = viewDirection[0], vz = viewDirection[2];
+  const length = Math.hypot(vx, vz) || 1; vx /= length; vz /= length;
+  const step = Math.max(0.1, Math.min(w, d) / 2);
+  const angles = Array.from({ length: 24 }, (_, i) => i * Math.PI / 12)
+    .map(a => ({ a, toward: Math.cos(a) * vx + Math.sin(a) * vz }))
+    .sort((p, q) => (Math.abs(p.toward) - Math.abs(q.toward)) || (q.toward - p.toward));
+  for (let r = step; r <= maxRadius; r += step) {
+    for (const { a } of angles) {
+      const spot = [pivot[0] + r * Math.cos(a), pivot[1] + r * Math.sin(a)];
+      if (clear(spot)) return { anchor: spot, reason: 'nearest-clear' };
+    }
+  }
+  return { anchor: [...pivot], reason: 'no-clear-spot' };
+}
+
+// The floor point appends start from: the centre of what is already in the scene, so a
+// new object lands beside it even when the orbit pivot has been moved away (for example
+// toward the camera). An empty scene keeps the pivot.
+export function appendArrivalPivot(obstacles, pivot) {
+  if (!obstacles.length) return [...pivot];
+  const min = [Infinity, Infinity], max = [-Infinity, -Infinity];
+  for (const o of obstacles) { min[0] = Math.min(min[0], o.min[0]); min[1] = Math.min(min[1], o.min[2]); max[0] = Math.max(max[0], o.max[0]); max[1] = Math.max(max[1], o.max[2]); }
+  return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2];
+}
+
+// Floor obstacles for an append: scene objects other than cameras and lights (hidden
+// objects excluded), plus the fire's simulation box whenever a simulation is active.
+// The box's outline is an editor helper; hiding it does not remove the fire.
+export function arrivalObstacleBoxes({ objects = [], domain = null }) {
+  const boxes = objects.filter(o => o.box && !['camera', 'light'].includes(o.type) && o.visible !== false).map(o => o.box);
+  if (domain?.active && domain.box) boxes.push(domain.box);
+  return boxes;
+}

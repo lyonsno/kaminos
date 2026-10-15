@@ -101,17 +101,22 @@ const ownerRoute = await session.registerRoute({
 });
 
 let packageLoads = 0;
+let requestedAcquisition;
 const resident = await createSam31ResidentModelResources({ packageRuntime, route: {
   ...ownerRoute,
   loadModelResources() { throw new Error('whole-model bundle assembly is forbidden on the SAM serving path'); },
   loadModelResourcePackageFromSources(input) {
     packageLoads += 1;
+    requestedAcquisition = input.acquisition;
     return ownerRoute.loadModelResourcePackageFromSources(input);
   },
 } });
-assert.equal(packageLoads, 1, 'SAM must load its artifacts through the shared sequential package consumer');
-assert.deepEqual(acquisitionTrace, ['load:static/a.bin', 'upload', 'load:static/b.bin', 'upload'],
-  'later artifact bytes must not be prefetched before the previous artifact reaches residency');
+assert.equal(packageLoads, 1, 'SAM must load its artifacts through the shared package consumer');
+assert.deepEqual(requestedAcquisition, { concurrency: 4, byteBudget: 512 * 1024 * 1024 },
+  'SAM must select the measured bounded loading policy through the shared kit');
+assert.deepEqual(acquisitionTrace.slice(0, 2), ['load:static/a.bin', 'load:static/b.bin'],
+  'both budget-fitting artifacts must begin before either upload completes');
+assert.equal(acquisitionTrace.filter(value => value === 'upload').length, 2);
 assert.equal(resident.schema, 'kaminos.sam31-resident-model-resources.v0');
 assert.equal(resident.packageId, packageRuntime.packageId);
 assert.equal(
@@ -154,6 +159,8 @@ const packageReport = resident.evidence().packageAcquisition;
 assert.equal(Object.hasOwn(packageReport, 'progress'), false,
   'routine serving evidence must not duplicate the full package progress journal');
 assert.equal(packageReport.status, 'loaded');
+assert.equal(packageReport.sourceMemoryBound.concurrency, 4);
+assert.equal(packageReport.sourceMemoryBound.declaredByteBudget, 512 * 1024 * 1024);
 assert.equal(packageReport.sourceMemoryBound.totalPackageByteLength, 28);
 assert.equal(packageReport.sourceMemoryBound.largestResourceByteLength, 20,
   'source acquisition must be bounded by the largest actual artifact, not the full model');
@@ -309,6 +316,21 @@ await assert.rejects(() => createSam31ResidentModelResources({ packageRuntime: c
 }, 'corrupted package child must not become resident or strand prior child leases');
 assert.equal(release.status, 'released');
 assert.equal(resident.release().status, 'already-released');
+assert.equal(session.snapshot().residency.activeLeaseCount, 0);
+const sequentialStart = acquisitionTrace.length;
+const sequentialResident = await createSam31ResidentModelResources({
+  packageRuntime: {
+    ...packageRuntime,
+    modelPackage: { ...packageRuntime.modelPackage, model: { id: 'facebook/sam3.1', revision: 'sequential-comparison' } },
+  },
+  route: ownerRoute,
+  acquisition: { concurrency: 1 },
+});
+assert.deepEqual(acquisitionTrace.slice(sequentialStart), ['load:static/a.bin', 'upload', 'load:static/b.bin', 'upload'],
+  'the explicit sequential control must preserve one-source acquisition');
+assert.notEqual(sequentialResident.evidence().packageAcquisition.sourceMemoryBound.authority,
+  'bounded-concurrent-resource-acquisition-declared-byte-length');
+sequentialResident.release();
 assert.equal(session.snapshot().residency.activeLeaseCount, 0);
 session.close();
 assert.ok(buffers.every(buffer => buffer.destroyCount === 1), 'session close must destroy managed resident buffers exactly once');

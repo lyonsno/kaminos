@@ -8,10 +8,15 @@ const workbench = readFileSync(new URL('../smokes/sam-semantic-mask-workbench.js
 const runner = readFileSync(new URL('../src/sam3-browser-image-runtime.js', import.meta.url), 'utf8');
 const wrapperSource = runner.slice(runner.indexOf('let activeResidentTensorResolver'), runner.indexOf('const SUPPORTED_ROUTE_IDS'));
 const foregroundYield = async () => {};
-const wrapperContext = { options: { yield: foregroundYield },
+const wrapperContext = { options: { yield: foregroundYield }, applicationForeground: null,
   runSam3MaskDecoderIslandRoute: input => input, runSam3MaskDecoderIslandRouteRaw: input => input };
 runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, wrapperContext);
 assert.equal(wrapperContext.islandInput.yield, foregroundYield, 'browser island caller must inject the foreground hook');
+const appYield = async () => {};
+wrapperContext.applicationForeground = { yield: appYield };
+const appWrapperContext = { ...wrapperContext, applicationForeground: { yield: appYield } };
+runInNewContext(`${wrapperSource}\nglobalThis.islandInput = runSam3MaskDecoderIslandRoute({});`, appWrapperContext);
+assert.equal(appWrapperContext.islandInput.yield, appYield, 'native application foreground must replace the phase hook');
 
 for (const id of [
   'sample-picker',

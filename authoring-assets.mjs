@@ -71,18 +71,26 @@ export function createAuthoringAssets({request, addMesh, uploadImage, prepareIma
       if(kind==='mesh')return this.add({kind,name:file.name,label:file.name,file});
       const entry=await uploadImage(file);this.select({...entry,root:entry.root_id,kind:'image',label:entry.name});return entry;
     },
+    preparesInput:()=>generator()?.preparesInput===true,
     generation:()=>state.preparation?.status==='preparing'?{status:'preparing',stage:'Preparing image',progress:'Removing background…',percent:null,canStop:true}:generator()?.read() || {status:'unavailable',error:'Generation host is initializing'},
     stop(){if(preparationAbort&&!preparationAbort.signal.aborted){preparationAbort.abort(new DOMException('Image preparation stopped','AbortError'));return true;}return generator()?.stop() || false;},
     async recover() {const result=await generator().retryPersistence();state.results.push({...result,kind:'mesh',label:result.name});publish();return result;},
     async generate() {
       if(state.selected?.kind!=='image')throw Error('Choose a source image first');
       const service=generator();if(!service)throw Error('Generation host is unavailable');
-      const selected=copy(state.selected),operation=prepare(),ticket=preparationTicket,preparation=await operation;
-      if(!preparation||ticket!==preparationTicket)return null;
+      // A service that prepares its own input (TRELLIS on this page) runs on the selected original.
+      const selected=copy(state.selected);let preparation=null;
+      if(service.preparesInput!==true){const operation=prepare(),ticket=preparationTicket;preparation=await operation;if(!preparation||ticket!==preparationTicket)return null;}
       const result=await service.run({...selected,source:selected.source || assetSource(selected.root,selected.path),preparation});
       if(result)state.results.push({...result,kind:'mesh',name:result.name,label:result.name});publish();return result;
     },
   };
+}
+
+// A service's used-input preview names the image it was prepared from; the drawer shows it
+// only while that image is the selection.
+export function usedInputPreviewFor(preview,selectedSource){
+  return preview&&typeof preview==='object'&&preview.input&&preview.input===selectedSource?preview.source:null;
 }
 
 export function installAuthoringAssets({document,controller,edits}) {
@@ -125,15 +133,16 @@ export function installAuthoringAssets({document,controller,edits}) {
     const selected=state.selected;byId('asset-detail').hidden=!selected;byId('asset-add').hidden=selected?.kind!=='mesh';byId('asset-use-image').hidden=selected?.kind!=='image';byId('asset-add').disabled=state.adding;
     if(selected){byId('asset-name').textContent=selected.label || selected.name;byId('asset-name').title=selected.label || selected.name;byId('asset-source').textContent=selected.root?(labels[selected.root]||selected.root):selected.generation?'Generated in this session':'Local file';byId('asset-source').title=selected.source || selected.path || '';}
     const preparation=state.preparation;
-    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=mode==='generate'&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path);if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
-    byId('asset-preparation-status').textContent=preparation?.error||(preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
+    const usedInput=mode==='generate'&&controller.preparesInput?.()&&selected?.kind==='image'?usedInputPreviewFor(controller.generation().inputPreview,selected.source || assetSource(selected.root,selected.path)):null;
+    byId('asset-image').hidden=selected?.kind!=='image';if(selected?.kind==='image'){const source=usedInput||(mode==='generate'&&preparation?.status==='complete'?preparation.value.prepared.source:selected.source || assetSource(selected.root,selected.path));if(byId('asset-image').getAttribute('src')!==source)byId('asset-image').src=source;byId('asset-image').alt=usedInput?'The input this generation is using (prepared in this page)':mode==='generate'&&preparation?.status==='complete'?'Prepared generation input':'Original source image';}
+    byId('asset-preparation-status').textContent=preparation?.error||(controller.preparesInput?.()&&mode==='generate'&&preparation?.status!=='complete'?(usedInput?'This is the cutout generation is using, prepared in this page.':'This model prepares the image in this page; the cutout it uses appears here.'):preparation?.status==='complete'?(preparation.value.route==='input-alpha'?'Existing transparency retained.':'Background removed.')+' This is the image generation will use.':preparation?.status==='preparing'?'Removing background…':preparation?.status==='stopped'?'Image preparation stopped.':selected?.kind==='image'?'Prepare this image to preview the generation input.':'');
     byId('asset-prepare').hidden=selected?.kind!=='image'||['preparing','complete'].includes(preparation?.status);
     const generation=controller.generation();
     byId('asset-use-image').disabled=byId('asset-prepare').disabled=['input','loading','running','stopping','saving'].includes(generation.status);
     const active=['preparing','input','loading','running','stopping','saving'].includes(generation.status);runHeader.hidden=!active||(document.body.dataset.workspace!=='workbench'&&!panel.hidden);
     runById('generation-header-status').textContent=generation.status==='stopping'?'Stopping…':`${generation.stage||'Generating'}${Number.isFinite(generation.percent)?' · '+Math.round(generation.percent)+'%':''}`;runById('generation-header-show').title=generation.error||generation.progress||'Show generation';
     runById('generation-header-stop').hidden=!generation.canStop&&generation.status!=='stopping';runById('generation-header-stop').disabled=!generation.canStop;
-    byId('asset-run').disabled=selected?.kind!=='image'||preparation?.status!=='complete'||!!generation.pending||['preparing','input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
+    byId('asset-run').disabled=selected?.kind!=='image'||(preparation?.status!=='complete'&&!controller.preparesInput?.())||!!generation.pending||['preparing','input','loading','running','stopping','saving','unavailable'].includes(generation.status);byId('asset-recover').hidden=!generation.pending;
     byId('asset-generation').hidden=mode!=='generate'&&!active;
     byId('asset-stop').hidden=!generation.canStop&&generation.status!=='stopping';byId('asset-stop').disabled=!generation.canStop;byId('asset-stop').textContent=generation.status==='stopping'?'Stopping…':'Stop';
     const bar=byId('asset-progress');if(Number.isFinite(generation.percent))bar.value=generation.percent;else bar.removeAttribute('value');
@@ -152,7 +161,7 @@ export function installAuthoringAssets({document,controller,edits}) {
   byId('asset-recover').onclick=()=>action(()=>controller.recover());
   byId('asset-file-open').onclick=()=>byId('asset-file').click();byId('asset-file').onchange=event=>action(async()=>{const file=event.target.files[0];if(file)await controller.upload(file);event.target.value='';});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!panel.hidden&&!edits.state().active){close();event.preventDefault();}});
-  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
+  return {render,close,open(next='browse'){panel.hidden=false;document.body.classList.add('has-assets-panel');setMode(next);return action(()=>controller.refresh());},state:()=>({open:!panel.hidden,mode})};
 }
 
 export function assetPaneHeight(value,height,narrow=false){return Math.max(160,Math.min(value,Math.max(160,height-42-180-(narrow?180:0))));}
