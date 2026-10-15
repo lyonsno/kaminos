@@ -37,3 +37,15 @@ export function compareCutouts(name,got,want){
   if(!Object.values(result).every(Number.isFinite))throw Error(`cutout ${name}: non-finite comparison`);
   return result;
 }
+
+// Foreground handback is admitted only from the observed queue order: at least
+// one page submission must land between two U2Net model submissions. Requested
+// frames, or frames drained after the last model segment, are not handback.
+export function admitForegroundHandback(name,queue){
+  const first=queue.indexOf('model'),last=queue.lastIndexOf('model');
+  const modelSegments=queue.filter(e=>e==='model').length;
+  const pageBetween=first<0?0:queue.slice(first,last).filter(e=>e==='page').length;
+  if(modelSegments<2)throw Error(`foreground ${name}: ${modelSegments} model submissions, segmented run expected`);
+  if(!pageBetween)throw Error(`foreground ${name}: no page submission between model segments`);
+  return {modelSegments,pageBetween,pageTotal:queue.filter(e=>e==='page').length};
+}
