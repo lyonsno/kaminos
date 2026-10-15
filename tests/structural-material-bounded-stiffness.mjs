@@ -16,12 +16,12 @@ test('bounded stone stiffens against weight without changing normalized grip and
  assert.equal(typeof regimes.configureBoundedStoneRegime,'function','Bounded Stone needs an explicit stiffness/grip/fracture profile');
  const source={young:1000,poisson:.25,density:1000},before=structuredClone(source),current=regimes.configureBoundedStoneRegime(source),legacy=regimes.configureBoundedStoneRegime(source,'stiff-brittle-v1');
  assert.deepEqual(source,before);
- assert.equal(current.name,'bounded-stiff-brittle-v2');assert.equal(current.material.young,10000000);
+ assert.equal(current.name,'bounded-stiff-brittle-v2');assert.equal(current.material.young,100000000);
  assert.equal(legacy.material.young,100000);assert.equal(legacy.threshold,180);assert.equal(legacy.gripStiffness,200000);
  assert.equal(current.material.density,legacy.material.density);assert.equal(current.material.poisson,legacy.material.poisson);
  assert.equal(current.threshold/current.material.young,legacy.threshold/legacy.material.young);
  assert.equal(current.gripStiffness/current.material.young,legacy.gripStiffness/legacy.material.young);
- assert.equal(current.threshold,18000);assert.equal(current.gripStiffness,20000000);
+ assert.equal(current.threshold,180000);assert.equal(current.gripStiffness,200000000);
  assert.throws(()=>regimes.configureBoundedStoneRegime(source,'typo'),/Unknown/);
  for(const patch of [{density:0},{density:Infinity},{poisson:.5},{poisson:NaN}])assert.throws(()=>regimes.configureBoundedStoneRegime({...source,...patch}),/material/i);
 });
@@ -32,5 +32,5 @@ test('the actual bounded reset consumes the effective profile for mechanics and 
  const context={bounded:true,axialFixture:false,body:{positions:[],tetrahedra:[]},manifest:{material:{young:1000,poisson:.25,density:1000},model:{volume:1}},parameters:new URLSearchParams(),configuration:{gripStiffness:200000},configureBoundedStoneRegime:regimes.configureBoundedStoneRegime,
   prepareSolidTopology(input,material){seen.push(material);return{material,positions:[],elements:[],bonds:[],colorCount:1};},packSolidTopology:()=>({}),initialArrays:null,initialModel:null,materialRegime:null};
  vm.runInNewContext(source.slice(start,end),context);
- assert.equal(seen[0].young,10000000);assert.equal(context.configuration.gripStiffness,20000000);assert.equal(context.materialRegime.threshold,18000);
+ assert.equal(seen[0].young,100000000);assert.equal(context.configuration.gripStiffness,200000000);assert.equal(context.materialRegime.threshold,180000);
 });
