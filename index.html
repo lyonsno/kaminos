@@ -3997,9 +3997,18 @@ function syncFireProxy() {
  const prototype=volumePrototype,display=viewportDisplay.fire==='proxy'&&!!prototype,wanted=!!prototype&&(display||proxyRequirements.has('fire'));
  camera?.layers[display?'enable':'disable'](FIRE_PROXY_LAYER);
  if(fireProxy&&fireProxy.prototype!==prototype){fireProxy.prototype?.setResidualPartialsConsumer?.(null);fireProxy.unsubscribe?.();fireProxy.layer?.dispose();proxySnapshots.clear('fire');fireProxy=null;}
- if(prototype&&!fireProxy)fireProxy={prototype,layer:null,unsubscribe:null,attached:false,decodeErrors:0};
+ if(prototype&&!fireProxy)fireProxy={prototype,layer:null,unsubscribe:null,attached:false,decodeErrors:0,fieldGeneration:prototype.getResidualFieldGeneration?.()??null};
+ // A recreated field (domain moved or scaled, grid rebuilt) invalidates every
+ // snapshot of the old one: nothing stale is drawn while the new one fills.
+ // Adopted here each frame, or by the consumer if the new field's first
+ // readback lands before this runs.
+ const adoptFireField=generation=>{if(!fireProxy||generation===fireProxy.fieldGeneration)return;fireProxy.fieldGeneration=generation;proxySnapshots.clear('fire');fireProxy.layer?.clear();};
+ adoptFireField(prototype?.getResidualFieldGeneration?.()??null);
  const produce=!!fireProxy&&(wanted||proxySnapshots.wanted('fire'));
  if(produce&&!fireProxy.attached)fireProxy.attached=prototype.setResidualPartialsConsumer?.(info=>{
+  const current=prototype.getResidualFieldGeneration?.()??null;
+  if(info.fieldGeneration!=null&&info.fieldGeneration!==current)return;
+  adoptFireField(current);
   const domain=window.kaminosFlameDomain?.read();if(!domain)return;
   try{proxySnapshots.publish('fire',decodeHeatBlocks(info,{domain,capturedAtMs:performance.now()}));}catch(error){fireProxy.decodeErrors++;fireProxy.lastError=String(error?.message||error);}
  })??false;
@@ -4009,12 +4018,19 @@ function syncFireProxy() {
   fireProxy.layer=layer;fireProxy.unsubscribe=proxySnapshots.subscribe('fire',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
  }
  if(fireProxy&&!wanted&&fireProxy.layer){fireProxy.unsubscribe();fireProxy.layer.dispose();fireProxy.layer=null;fireProxy.unsubscribe=null;}
- const canvas=document.getElementById('kaminos-volume-canvas'),visibility=display?'hidden':'';
+ // The full fire stays visible until a snapshot of the current field exists,
+ // so selecting Proxy never blanks the flame (a paused sim publishes nothing new).
+ const snapshot=proxySnapshots.latest('fire'),ready=display&&!!snapshot&&(snapshot.fieldGeneration==null||snapshot.fieldGeneration===fireProxy?.fieldGeneration);
+ const canvas=document.getElementById('kaminos-volume-canvas'),visibility=ready?'hidden':'';
  if(canvas&&canvas.style.visibility!==visibility)canvas.style.visibility=visibility;
+ if(fireProxy)fireProxy.awaitingSnapshot=display&&!ready;
+ // Routes that composite the fire through the canvas-texture bridge hide that
+ // plane too; animate() stops refreshing it while Proxy is effective.
+ if(ready&&volumeBridge?.mesh)volumeBridge.mesh.visible=false;
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
- attached:fireProxy?.attached??false,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
+ attached:fireProxy?.attached??false,awaitingSnapshot:fireProxy?.awaitingSnapshot??false,fieldGeneration:fireProxy?.fieldGeneration??null,bridgeVisible:volumeBridge?.mesh?.visible??null,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
  canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
 window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
@@ -12076,7 +12092,8 @@ async function initScene() {
     const fireLightFieldRouteActive = fireLightFieldPass !== null;
     // Kiln composition already overlays the depth-clipped native canvas. Do
     // not upload that canvas back into the scene rendered by its depth provider.
-    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && volumeBridge ? volumeBridge.update() === true : false;
+    const fireProxyEffective = viewportDisplay.fire === 'proxy' && fireProxy && !fireProxy.awaitingSnapshot;
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;

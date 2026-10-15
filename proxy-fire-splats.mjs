@@ -4,7 +4,7 @@
 // renders them, so an agent's second camera draws the fire from its own view.
 import * as THREE from './lib/three.webgpu.js';
 import { attribute, positionGeometry, vec3, float, cross, normalize, select, abs, mix, smoothstep, uniform, cameraPosition, exp, max, min } from './lib/three.tsl.js';
-import { HEAT_BLOCK_FLOATS } from './proxy-snapshot.mjs';
+import { HEAT_BLOCK_FLOATS, nextHeatReference } from './proxy-snapshot.mjs';
 
 function splatMesh({ name, blending, colorFor, opacityFor, sizeScale, stretch }) {
   const quad = new THREE.PlaneGeometry(2, 2);
@@ -34,8 +34,8 @@ function splatMesh({ name, blending, colorFor, opacityFor, sizeScale, stretch })
 }
 
 export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeScale = 1.15, stretch = 1.5 } = {}) {
-  // Heat is normalised by the snapshot's hottest block, so only the flame core
-  // glows; the warm plume around it reads through the smoke splats instead.
+  // Heat is normalised by the hottest block seen in this field (a peak hold),
+  // so only the flame core glows, and a fire that dims overall still dims.
   const exposure = uniform(heatExposure), density = uniform(smokeDensity), scale = uniform(sizeScale), stretchUniform = uniform(stretch), heatMax = uniform(1);
   // Blackbody-like ramp: deep red, orange, then pale yellow as heat rises.
   const ramp = t => mix(mix(vec3(0.55, 0.06, 0.01), vec3(1.0, 0.42, 0.06), smoothstep(float(0.08), float(0.45), t)),
@@ -51,7 +51,7 @@ export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeS
   const group = new THREE.Group();
   group.name = 'Fire splat proxy';
   group.add(smoke, glow);
-  let snapshot = null, uploads = 0, capacity = 0, buffer = null;
+  let snapshot = null, uploads = 0, capacity = 0, buffer = null, heatReference = 0;
   const allocate = count => {
     capacity = Math.max(1024, 2 ** Math.ceil(Math.log2(Math.max(1, count))));
     buffer = new THREE.InstancedInterleavedBuffer(new Float32Array(capacity * HEAT_BLOCK_FLOATS), HEAT_BLOCK_FLOATS);
@@ -82,9 +82,12 @@ export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeS
       buffer.addUpdateRange(0, next.count * HEAT_BLOCK_FLOATS);
       buffer.needsUpdate = true;
       for (const mesh of [smoke, glow]) mesh.geometry.instanceCount = next.count;
-      heatMax.value = Math.max(1e-6, next.summary?.heatMax ?? 1);
+      heatReference = nextHeatReference(heatReference, next.summary?.heatMax);
+      heatMax.value = Math.max(1e-6, heatReference);
       snapshot = next; uploads++;
     },
+    // A new fire field starts empty, with a fresh glow reference.
+    clear() { for (const mesh of [smoke, glow]) mesh.geometry.instanceCount = 0; snapshot = null; heatReference = 0; heatMax.value = 1; },
     setStyle({ heatExposure: h, smokeDensity: d, sizeScale: z, stretch: st, visible } = {}) {
       if (typeof visible === 'boolean') group.visible = visible;
       if (Number.isFinite(st) && st > 0) stretchUniform.value = st;
@@ -94,7 +97,7 @@ export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeS
       return { heatExposure: exposure.value, smokeDensity: density.value, sizeScale: scale.value, stretch: stretchUniform.value, visible: group.visible };
     },
     state: () => ({ visible: group.visible, count: smoke.geometry.instanceCount, capacity, uploads,
-      snapshotWriteTick: snapshot?.writeTick ?? null, summary: snapshot?.summary ?? null,
+      snapshotWriteTick: snapshot?.writeTick ?? null, snapshotFieldGeneration: snapshot?.fieldGeneration ?? null, summary: snapshot?.summary ?? null, heatReference,
       style: { heatExposure: exposure.value, smokeDensity: density.value, sizeScale: scale.value } }),
     dispose() { group.removeFromParent(); for (const mesh of [smoke, glow]) { mesh.geometry.dispose(); mesh.material.dispose(); } },
   };

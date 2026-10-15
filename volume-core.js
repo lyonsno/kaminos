@@ -12060,6 +12060,10 @@ export function createKaminosVolumePrototype({
   // Proxy consumers (heat-block snapshots) read the probe's per-block partials
   // after the readback the probe already performs; no extra GPU work.
   let residualPartialsConsumer = null;
+  // The latest readback's partials, kept so a consumer attaching while the sim
+  // is paused gets the held field without advancing it; cleared whenever the
+  // fluid state is recreated (field generation = state.fluidStateResetCount).
+  let lastResidualPartials = null;
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
@@ -14755,6 +14759,7 @@ export function createKaminosVolumePrototype({
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
+    lastResidualPartials = null;
     updateSimCostLedger();
     emitStatus({ phase: reason });
   }
@@ -17399,11 +17404,15 @@ export function createKaminosVolumePrototype({
       // typeof: source-extraction contract harnesses run this body without the
       // closure that declares the consumer.
       if (typeof residualPartialsConsumer === 'function') {
-        try {
-          residualPartialsConsumer({ partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
-            workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
-            floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step });
-        } catch (error) { console.warn('Residual partials consumer failed', error); }
+        const info = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
+          workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
+        lastResidualPartials = info;
+        try { residualPartialsConsumer(info); } catch (error) { console.warn('Residual partials consumer failed', error); }
+      } else if (typeof lastResidualPartials !== 'undefined') {
+        lastResidualPartials = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
+          workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
       }
       const reduceOperator = offset => {
         let sumBefore = 0;
@@ -27154,8 +27163,14 @@ export function createKaminosVolumePrototype({
     // readback's per-block partials. null detaches.
     setResidualPartialsConsumer(fn) {
       residualPartialsConsumer = typeof fn === 'function' ? fn : null;
+      // Replay the held field (current generation only) to a new consumer.
+      const held = lastResidualPartials;
+      if (residualPartialsConsumer && held && held.fieldGeneration === state.fluidStateResetCount) {
+        queueMicrotask(() => { if (residualPartialsConsumer === fn) { try { fn(held); } catch (error) { console.warn('Residual partials consumer failed', error); } } });
+      }
       return Boolean(residualPartialsConsumer);
     },
+    getResidualFieldGeneration() { return state.fluidStateResetCount; },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);
       if (next.mode !== 'current' && (!emissiveRaymarchAdmission().eligible || productFrameOwner !== 'prototype')) {

@@ -643,9 +643,12 @@ async function runWaterProxyCadenceScenario(ws) {
 
 
 // Fire proxy: heat-block splats drawn from the fire's residual probe snapshots
-// stand where the fire volume stands. Registration is judged above the empty
-// scene's horizon, where the flame and smoke body is (the fire's light on the
-// floor is present in both presentations and would inflate agreement).
+// stand where the fire volume stands. All captures share one frozen state and
+// camera; masks are taken against a same-state baseline (fire volume and splats
+// hidden, the fire's scene lighting kept). Also exercised: first selection of
+// Proxy on an already-paused flame (the held field is replayed, the flame is
+// never blanked), the canvas-texture bridge being hidden in Proxy, and a domain
+// move while paused clearing every snapshot of the retired field.
 async function runFireProxySplatsScenario(ws) {
   phase = 'scenario-fire-proxy-splats';
   const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
@@ -653,6 +656,14 @@ async function runFireProxySplatsScenario(ws) {
   const settleSteps = Number(args.get('--settle-steps') || 150);
   const evidence = lastEvidence.fireProxy = { presetId, settleSteps, failures };
   const readFire = () => evaluate(ws, 'window.kaminosFireProxyDebugState?.() ?? null');
+  const setFreeze = frozen => evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; if (${frozen}) r.setSimulationPaused(true);
+    const el = document.getElementById('volume-look-freeze'); el.value = '${frozen ? 1 : 0}'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+    if (!${frozen}) r.setSimulationPaused(false); return r.debugState().simStepCount; })()`);
+  const clickToggle = async value => {
+    const [toggle] = await evaluate(ws, `[...document.querySelectorAll('.viewport-fire')].filter(g => g.offsetParent !== null).map(g => { const r = g.querySelector('[data-fire="${value}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+    assert.ok(toggle, `Fire ${value} toggle is missing from the visible viewport toolbar`);
+    await dispatchMouseClick(ws, toggle);
+  };
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false })');
   await settleViewportFrames(ws, 1200);
   const backgroundShot = await capturePngScreenshot(ws, siblingPngPath('-fire-background'));
@@ -663,7 +674,6 @@ async function runFireProxySplatsScenario(ws) {
     return { canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
   })`, { timeoutMs: 180000 });
   for (let i = 0; i < 1200; i++) { const d = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (d >= settleSteps) break; await delay(250); }
-  // Frame the whole simulation domain, as the cost sweep does.
   evidence.camera = await evaluate(ws, `(() => {
     window.kaminosSelection?.clear?.();
     const domain = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
@@ -673,35 +683,60 @@ async function runFireProxySplatsScenario(ws) {
     window.kaminosSetCameraDebugPose({ position: [target[0] + distance * 0.35, target[1] + size[1] * 0.12, target[2] + distance], target });
     return { domain, target };
   })()`);
-  phase = 'scenario-fire-proxy-splats-snapshot';
-  await evaluate(ws, `(() => { window.__fireWitnessRelease = window.kaminosProxyPreview.require('fire'); return true; })()`);
-  let fire = null, firstTick = null;
-  for (let i = 0; i < 480; i++) { fire = await readFire(); if (fire?.snapshot?.writeTick != null) { firstTick = fire.snapshot.writeTick; break; } await delay(250); }
-  check(firstTick !== null, `no fire snapshot arrived after requiring fire: ${JSON.stringify(fire)}`);
-  // Freeze right after the next snapshot so splats and the held fire match within a few steps.
-  for (let i = 0; i < 480 && firstTick !== null; i++) { fire = await readFire(); if (fire.snapshot.writeTick !== firstTick) break; await delay(50); }
-  evidence.frozen = await evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; r.setSimulationPaused(true);
-    const el = document.getElementById('volume-look-freeze'); el.value = '1'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
-    return { simStepCount: r.debugState().simStepCount, snapshotWriteTick: window.kaminosFireProxyDebugState().snapshot?.writeTick ?? null }; })()`);
-  evidence.heldInFull = await readFire();
-  check(evidence.heldInFull?.layer?.count > 0 && evidence.heldInFull.viewportCameraSeesProxies === false && evidence.heldInFull.canvasVisibility === '', `fire proxy is not held off-screen under the full render: ${JSON.stringify(evidence.heldInFull)}`);
-  await settleViewportFrames(ws, 1000);
-  const fullShot = await capturePngScreenshot(ws, siblingPngPath('-fire-full'));
-  const [toggle] = await evaluate(ws, `[...document.querySelectorAll('.viewport-fire')].filter(g => g.offsetParent !== null).map(g => { const r = g.querySelector('[data-fire="proxy"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
-  assert.ok(toggle, 'Fire Proxy toggle is missing from the visible viewport toolbar');
-  await dispatchMouseClick(ws, toggle);
-  await settleViewportFrames(ws, 1000);
-  const proxy = evidence.proxyPaused = await readFire();
-  check(proxy?.display === 'proxy' && proxy.viewportCameraSeesProxies === true && proxy.canvasVisibility === 'hidden', `fire proxy display did not take effect: ${JSON.stringify(proxy)}`);
-  // Baseline at the same frozen state and camera: fire volume hidden, splats
-  // hidden, the fire's scene lighting still present. Masks then isolate the
-  // fire body itself in each presentation.
+
+  phase = 'scenario-fire-proxy-splats-paused-first-use';
+  // Pause with no fire subscriber, let any in-flight probe readback settle,
+  // then choose Proxy for the first time.
+  evidence.frozenStep = await setFreeze(true);
+  await delay(1500);
+  evidence.beforeFirstUse = await readFire();
+  check(evidence.beforeFirstUse?.attached === false, 'a fire snapshot consumer was attached before Proxy was chosen');
+  await clickToggle('proxy');
+  let firstUse = null;
+  for (let i = 0; i < 40; i++) { await settleViewportFrames(ws, 100); firstUse = await readFire(); if (firstUse?.layer?.count > 0) break; }
+  evidence.firstUse = firstUse;
+  check(firstUse?.layer?.count > 0 && firstUse.canvasVisibility === 'hidden' && firstUse.awaitingSnapshot === false,
+    `first Proxy on a paused flame did not replay the held field: ${JSON.stringify({ count: firstUse?.layer?.count, canvas: firstUse?.canvasVisibility, awaiting: firstUse?.awaitingSnapshot })}`);
+  check(firstUse?.layer?.count > 0 || firstUse?.canvasVisibility === '', 'paused first use blanked the flame: no splats and the fire canvas hidden');
+
+  phase = 'scenario-fire-proxy-splats-bridge';
+  // The canvas-texture bridge route: with the light field off, animate()
+  // refreshes the bridge plane (the full fire) every frame. Proxy must keep it
+  // hidden across frames, and Full must bring it back.
+  const bridgeVisible = () => evaluate(ws, 'window.__kaminosVolumeBridge?.mesh?.visible ?? null');
+  const bridgeSamples = async () => { const out = []; for (let i = 0; i < 6; i++) { await settleViewportFrames(ws, 100); out.push(await bridgeVisible()); } return out; };
+  const lightFieldRoute = enabled => evaluate(ws, `(() => { const hash = new URLSearchParams(location.hash.slice(1));
+    if (${enabled}) hash.set('volume_light_field', '1'); else hash.delete('volume_light_field');
+    history.replaceState(null, '', '#' + hash.toString()); window.kaminosRefreshSceneGIOutput(); window._kaminosDirty?.(); return location.hash; })()`);
+  await clickToggle('full');
+  evidence.bridge = { routeHash: await lightFieldRoute(false) };
+  evidence.bridge.full = await bridgeSamples();
+  await clickToggle('proxy');
+  evidence.bridge.proxy = await bridgeSamples();
+  evidence.bridge.proxyState = await readFire();
+  await clickToggle('full');
+  evidence.bridge.fullAgain = await bridgeSamples();
+  check(evidence.bridge.full.slice(-3).every(v => v === true), `the bridge route did not draw the full fire in Full, so it was not exercised: ${JSON.stringify(evidence.bridge.full)}`);
+  check(evidence.bridge.proxy.slice(-4).every(v => v === false) && evidence.bridge.proxyState?.layer?.count > 0, `the full fire stayed in the scene through the bridge plane in Proxy: ${JSON.stringify(evidence.bridge.proxy)}`);
+  check(evidence.bridge.fullAgain.slice(-3).every(v => v === true), `Full did not bring the bridge plane back: ${JSON.stringify(evidence.bridge.fullAgain)}`);
+  // Back to the authored light-field route; the light field route never
+  // refreshes the bridge, so the witness restores the plane it made visible.
+  await lightFieldRoute(true);
+  await evaluate(ws, 'window.__kaminosVolumeBridge && (window.__kaminosVolumeBridge.mesh.visible = false)');
+  await clickToggle('proxy');
+
+  phase = 'scenario-fire-proxy-splats-compare';
+  await settleViewportFrames(ws, 800);
+  const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy'));
   await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: false })');
   await settleViewportFrames(ws, 800);
   const baselineShot = await capturePngScreenshot(ws, siblingPngPath('-fire-baseline'));
   await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: true })');
-  await settleViewportFrames(ws, 800);
-  const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy'));
+  await clickToggle('full');
+  await settleViewportFrames(ws, 1000);
+  const fullState = await readFire();
+  check(fullState?.display === 'full' && fullState.canvasVisibility === '', `Full did not restore the fire canvas: ${JSON.stringify(fullState)}`);
+  const fullShot = await capturePngScreenshot(ws, siblingPngPath('-fire-full'));
   const baseline = decodeScreenshotPngRgb(readFileSync(baselineShot.path));
   const c = evidence.added.canvas, region = { x: c.x, y: c.y + 56, width: c.width, height: c.height - 56 - 120 };
   const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), baseline, region);
@@ -717,20 +752,53 @@ async function runFireProxySplatsScenario(ws) {
   check(full.area < 0.85 * regionPixels && proxied.area < 0.85 * regionPixels, `fire mask covers nearly the whole region, so registration would be trivial: full ${full.area}, proxy ${proxied.area} of ${regionPixels}`);
   check(evidence.masks.locationPrecision >= 0.6, `fire splats drawn away from the fire volume (location precision ${evidence.masks.locationPrecision.toFixed(3)})`);
   check(evidence.masks.coverageRecall >= 0.5, `fire splats cover too little of the fire volume (coverage recall ${evidence.masks.coverageRecall.toFixed(3)})`);
+
   phase = 'scenario-fire-proxy-splats-live';
+  await clickToggle('proxy');
+  await settleViewportFrames(ws, 300);
   const beforeLive = await readFire();
-  await evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; const el = document.getElementById('volume-look-freeze'); el.value = '0'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); r.setSimulationPaused(false); return true; })()`);
+  await setFreeze(false);
   let afterLive = beforeLive;
   for (let i = 0; i < 240; i++) { afterLive = await readFire(); if (afterLive.layer.uploads > beforeLive.layer.uploads + 1) break; await delay(250); }
   evidence.liveState = afterLive;
   check(afterLive.layer.uploads > beforeLive.layer.uploads && afterLive.layer.snapshotWriteTick > beforeLive.layer.snapshotWriteTick, `fire snapshots stopped refreshing while the sim ran: ${beforeLive.layer.uploads} -> ${afterLive.layer.uploads}`);
   const liveShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy-live'));
+
+  phase = 'scenario-fire-proxy-splats-domain-move';
+  // Move the domain while paused (the emitter stays put inside the box): the
+  // field restarts, the retired field's splats go, the full fire shows until
+  // the new field publishes, and the new splats come from the new field.
+  await setFreeze(true);
+  await delay(800);
+  const beforeMove = await readFire();
+  evidence.domainMove = await evaluate(ws, `(() => { const d = window.kaminosFlameDomain.read();
+    window.kaminosFlameDomain.set({ position: [d.translation[0] - 0.25, d.translation[1] + d.scale, d.translation[2]] });
+    return { before: d, after: window.kaminosFlameDomain.read() }; })()`);
+  await settleViewportFrames(ws, 600);
+  const afterMove = evidence.afterMove = await readFire();
+  check(Math.abs(evidence.domainMove.after.translation[0] - (evidence.domainMove.before.translation[0] - 0.25)) < 1e-9, `the domain did not move: ${JSON.stringify(evidence.domainMove)}`);
+  check(afterMove.fieldGeneration !== beforeMove.fieldGeneration, `moving the domain did not start a new fire field: ${beforeMove.fieldGeneration} -> ${afterMove.fieldGeneration}`);
+  check(afterMove.layer.count === 0 && afterMove.canvasVisibility === '' && afterMove.awaitingSnapshot === true,
+    `stale splats of the retired field remained after the domain move: ${JSON.stringify({ count: afterMove.layer.count, canvas: afterMove.canvasVisibility, awaiting: afterMove.awaitingSnapshot })}`);
+  await setFreeze(false);
+  let moved = afterMove;
+  for (let i = 0; i < 480; i++) { moved = await readFire(); if (moved.layer.count > 0) break; await delay(250); }
+  // The canvas follows on the next drawn frame after the snapshot lands.
+  await settleViewportFrames(ws, 300);
+  moved = await readFire();
+  evidence.newField = moved;
+  const box = evidence.domainMove.after, bounds = moved.layer.summary?.bounds, tolerance = 0.05;
+  check(moved.layer.count > 0 && moved.layer.snapshotFieldGeneration === afterMove.fieldGeneration && moved.canvasVisibility === 'hidden',
+    `the new field's splats did not take over: ${JSON.stringify({ count: moved.layer.count, field: moved.layer.snapshotFieldGeneration, expected: afterMove.fieldGeneration, canvas: moved.canvasVisibility })}`);
+  check(bounds && bounds[0][0] >= box.translation[0] - box.scale - tolerance && bounds[1][0] <= box.translation[0] + box.scale + tolerance,
+    `new-field splats fall outside the moved box: ${JSON.stringify({ bounds, box })}`);
+
   phase = 'scenario-fire-proxy-splats-restore';
-  await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ fire: 'full' }); window.__fireWitnessRelease?.(); return true; })()`);
+  await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ fire: 'full' }); return true; })()`);
   await settleViewportFrames(ws, 800);
   const restored = evidence.restored = await readFire();
   check(restored.display === 'full' && restored.canvasVisibility === '' && restored.layer?.visible === false && restored.attached === false, `fire did not return to the full render cleanly: ${JSON.stringify(restored)}`);
-  evidence.shots = [backgroundShot, fullShot, baselineShot, proxyShot, liveShot];
+  evidence.shots = [backgroundShot, proxyShot, baselineShot, fullShot, liveShot];
   assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
 

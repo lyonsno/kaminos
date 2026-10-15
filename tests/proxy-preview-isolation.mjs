@@ -122,3 +122,35 @@ test('fire display is a validated viewport preference and heat-block summaries c
  const snapshot=decodeHeatBlocks({partials,grid,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16},{domain:{translation:[0,0,0],scale:1}});
  assert.ok(Math.abs(snapshot.summary.heatMax-0.5)<1e-6&&Math.abs(snapshot.summary.smokeMax-0.1)<1e-6);
 });
+
+import {nextHeatReference} from '../proxy-snapshot.mjs';
+test('the glow reference holds the field peak, so an overall dimming shows instead of being renormalised',()=>{
+ let reference=nextHeatReference(0,0.8);
+ assert.equal(reference,0.8);
+ reference=nextHeatReference(reference,0.4);
+ assert.equal(reference,0.8,'a cooler snapshot keeps the held peak');
+ assert.equal(0.4/reference,0.5,'so the hottest block of the cooler snapshot glows at half');
+ assert.equal(nextHeatReference(reference,1.2),1.2,'a hotter snapshot raises it');
+ assert.equal(nextHeatReference(undefined,0.3),0.3);
+ const partials=new Float32Array(20);partials.set([0,32,0,0,32*1.5,32*1.5,0,0],12);
+ assert.equal(decodeHeatBlocks({partials,grid:4,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16,fieldGeneration:7},{domain:{translation:[0,0,0],scale:1}}).fieldGeneration,7);
+});
+
+import {createFireSplatLayer} from '../proxy-fire-splats.mjs';
+test('a fire that cools overall dims in the splat layer, and a new field starts a fresh glow reference',()=>{
+ const snapshotAt=(heat,fieldGeneration)=>{const partials=new Float32Array(20);partials.set([0,64*heat,0,0,64*heat*1.5,64*heat*1.5,0,0],12);
+  return decodeHeatBlocks({partials,grid:4,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16,fieldGeneration},{domain:{translation:[0,0,0],scale:1}});};
+ const near=(a,b)=>Math.abs(a-b)<1e-6;
+ const layer=createFireSplatLayer();
+ layer.setSnapshot(snapshotAt(0.8,3));
+ assert.ok(near(layer.state().heatReference,0.8));
+ layer.setSnapshot(snapshotAt(0.4,3));
+ assert.ok(near(layer.state().heatReference,0.8),`a proportionally cooled snapshot is not renormalised away (reference ${layer.state().heatReference})`);
+ assert.equal(layer.state().snapshotFieldGeneration,3);
+ layer.clear();
+ assert.equal(layer.state().count,0);
+ assert.equal(layer.state().snapshotFieldGeneration,null);
+ layer.setSnapshot(snapshotAt(0.4,4));
+ assert.ok(near(layer.state().heatReference,0.4),'a new field does not inherit the retired field\'s peak');
+ layer.dispose();
+});

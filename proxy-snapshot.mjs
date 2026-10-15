@@ -14,7 +14,14 @@ export const HEAT_BLOCK_FLOATS=7;
 // per 4x4x4 cell block, linear index x + y*wx + z*wx*wy) into a world-space
 // heat-block snapshot. The lateral centroid comes from the heat moments; height
 // is the block centre. Blocks below both thresholds (per-cell means) are dropped.
-export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,workgroupsZ,floatsPerWorkgroup=20,step=0},{domain,heatThreshold=1e-3,smokeThreshold=1e-2,capturedAtMs=0,stepSeconds=1/60}) {
+// Peak-hold glow reference for one fire field: it only rises, so a fire that
+// cools or dims overall shows it instead of being renormalised away. Reset it
+// when the field is recreated.
+export function nextHeatReference(previous,snapshotHeatMax) {
+ return Math.max(Number.isFinite(previous)?previous:0,Number.isFinite(snapshotHeatMax)?snapshotHeatMax:0);
+}
+
+export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,workgroupsZ,floatsPerWorkgroup=20,step=0,fieldGeneration=null},{domain,heatThreshold=1e-3,smokeThreshold=1e-2,capturedAtMs=0,stepSeconds=1/60}) {
  const blocks=workgroupsX*workgroupsY*workgroupsZ;
  if(!(partials instanceof Float32Array)||partials.length<blocks*floatsPerWorkgroup)throw Error('Residual partials do not cover the block grid');
  const cell=2/grid,scale=domain.scale,[tx,ty,tz]=domain.translation,toWorld=(c,t)=>t+scale*(-1+(c+0.5)*cell);
@@ -36,7 +43,7 @@ export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,wo
   heatTotal+=heatSum;if(heat>heatMax)heatMax=heat;if(smoke>smokeMax)smokeMax=smoke;
  }
  return {schema:PROXY_SNAPSHOT_SCHEMA,kind:'heat-blocks',source:'volume-pressure-residual-probe',writeTick:step,simTimeS:step*stepSeconds,capturedAtMs,
-  grid:[grid,gridY,grid],count,floatsPerBlock:HEAT_BLOCK_FLOATS,data:data.subarray(0,count*HEAT_BLOCK_FLOATS),
+  grid:[grid,gridY,grid],fieldGeneration,count,floatsPerBlock:HEAT_BLOCK_FLOATS,data:data.subarray(0,count*HEAT_BLOCK_FLOATS),
   summary:{count,bounds:count?[min,max]:null,heatCentroid:heatTotal>1e-9?heatMoment.map(v=>v/heatTotal):null,heatTotal,heatMax,smokeMax}};
 }
 
