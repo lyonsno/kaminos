@@ -51,6 +51,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!list.every(m=>m.isMeshStandardMaterial||m.isMeshStandardNodeMaterial||m.isMeshPhysicalMaterial||m.isMeshPhysicalNodeMaterial))return;
       const owned=list.map(original=>{
         const material=cloneSceneRadianceMaterial(renderer.library,original),setup=material.setupMaterialLightings;
+        const cacheKey=material.customProgramCacheKey;
+        // This injected graph is not one of NodeMaterial's enumerated node
+        // properties. A version bump alone can reuse its old texture bindings.
+        material.customProgramCacheKey=function(){return `${cacheKey.call(this)}:hybrid:${irradiance.uuid}`;};
         material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(irradiance)];};return material;
       });
       const installed=Array.isArray(source)?owned:owned[0];originals.set(mesh,{source,installed,owned});mesh.material=installed;
