@@ -49,12 +49,17 @@ The common `investigation.json`, observation directories and `recording.v8`
 layout are unchanged. Agents read captures with `readObservationSession()`.
 
 The adapter subscribes to ordinary source controls, authoring history and camera
-changes. It retains actual settings, scene poses, camera, effective runtime
-controls, route/backend and simulation clock. Agent operations use the same
+changes. It retains actual settings, serialized authored objects (including
+geometry and obstacle settings), the scene-collision gate, camera, effective
+runtime controls and grid admission, route/backend and simulation clock. Agent operations use the same
 source path, so an intervention is not recorded again at the wrapper. No
 animation-tick polling, second renderer or second recorder is introduced.
 Source events have phase `observed`: authored values can include a pending grid
 preview, while `effectiveRuntimeControls` identifies the renderer's actual state.
+Confirmation emits a `flame.runtime` observation even if authored values are
+unchanged; the observation includes actual grid shape/admission and clock.
+Cancelling a pending edit records the restored authored values, not a runtime
+application. Clock advances alone do not create operation rows.
 Capture observes the displayed frame passively; its before/after context can
 describe a moving interval. Finish stops recording without stopping the flame.
 
