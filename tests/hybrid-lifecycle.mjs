@@ -27,6 +27,17 @@ mount.setPointCount(1);assert.equal(mount.canRender(),false,'changed source layo
 assert.notEqual(mesh.material.customProgramCacheKey(),twoSourceMaterialKey,'replacement irradiance graph must invalidate Three shader cache, not only material version');
 assert.equal(mount.debugState().pointCount,1);assert.equal(mount.debugState().shadows.length,1);
 mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointCount,2);assert.equal(mount.debugState().shadows.length,2);
+mount.setPointCount(4);consume(field);
+assert.equal(mount.debugState().frame.pointRegions.partition,'energy','four regions must partition emission, not empty geometric bands');
+assert.equal(mount.debugState().shadows.length,4);
+mount.setPointSampling('paired');consume(field);
+assert.equal(mount.debugState().pointSampling,'paired');
+assert.equal(mount.debugState().evaluatedPointCount,2);
+assert.equal(mount.debugState().shadows.length,4,'budgeted receiver sampling must retain four current cube captures');
+assert.throws(()=>mount.setQuadrature(2,'paired'),/four/);
+assert.equal(mount.debugState().pointCount,4,'rejected mode must preserve current source resources');
+mount.setPointSampling('all');assert.equal(mount.debugState().evaluatedPointCount,4);
+mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointSampling,'all');
 assert.throws(()=>mount.setPointCount(0),/point count/);assert.equal(mount.canRender(),true);
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
 const first=mount.debugState();mount.setReceiverSpacing(.8);mount.setSurfaceReconstruction(8);field.source.generation++;field.source.frame++;consume(field);
