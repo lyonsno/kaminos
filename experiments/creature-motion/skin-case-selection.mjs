@@ -2,8 +2,7 @@ import {loadFullBodySkin} from './full-body-source.mjs';
 
 // Skin-owned control seam for the existing shared creature. It owns neither
 // scene attachment nor a frame clock, and never seeks/rebuilds the live rig.
-export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadCase=loadFullBodySkin,onApplied=()=>{}}) {
- if(typeof runtime?.replaceSkin!=='function'||typeof runtime?.read!=='function')throw Error('Skin selection requires the existing exchangeable body runtime');
+export function validateSkinCaseChoices({choices,currentCaseSha256}) {
  if(!Array.isArray(choices)||!choices.length)throw Error('Explicit skin choices required');
  const entries=structuredClone(choices),keys=new Set();
  for(const choice of entries){
@@ -14,7 +13,12 @@ export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadC
  }
  const initial=entries.filter(c=>c.case_sha256===currentCaseSha256?.toLowerCase());
  if(initial.length!==1)throw Error('Current skin identity must name exactly one explicit choice');
- let current=initial[0],pending=null,error=null,generation=0,disposed=false;
+ return {entries,current:initial[0]};
+}
+export function createSkinCaseSelection({runtime,choices,currentCaseSha256,loadCase=loadFullBodySkin,onApplied=()=>{}}) {
+ if(typeof runtime?.replaceSkin!=='function'||typeof runtime?.read!=='function')throw Error('Skin selection requires the existing exchangeable body runtime');
+ const validated=validateSkinCaseChoices({choices,currentCaseSha256}),entries=validated.entries;
+ let current=validated.current,pending=null,error=null,generation=0,disposed=false;
  const listeners=new Set(),notify=()=>{for(const listener of listeners)listener();};
  const read=()=>({current:structuredClone(current),pending:pending?structuredClone(pending):null,error,disposed,choices:structuredClone(entries)});
  async function select(input){
