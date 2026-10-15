@@ -1,0 +1,21 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+let mod={};try{mod=await import('../tools/marionette-motion-view.mjs');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
+assert.equal(typeof mod.publishMotionView,'function','successful motion batches must publish a caller-owned view recipe automatically');
+const root=await fs.mkdtemp(path.join(os.tmpdir(),'motion-view-')),out=path.join(root,'batch');await fs.mkdir(path.join(out,'00'),{recursive:true});
+const motion={status:'completed',route:'unimate.text-to-motion.webgpu-local.v0',textEncoder:'browser T5',assetCondSha256:'a'.repeat(64),prompt:'A cat walks forward.',seed:1,cfgScale:3,frames:3,joints:2,skeleton:{fps:30,parents:[-1,0],jointNames:['a','b']},positions:Array(18).fill(1)};
+const mp=path.join(out,'00/motion.json');await fs.writeFile(mp,JSON.stringify(motion));
+const rp=path.join(out,'report.json'),report={status:'completed',source:{rev:'test'},requestedCases:[{text:motion.prompt,seed:1,cfgScale:3}],bundle:{assetCondSha256:motion.assetCondSha256,skeleton:motion.skeleton},cases:[{validation:'accepted-schema',task:{text:motion.prompt,seed:1,cfgScale:3},path:mp}]};await fs.writeFile(rp,JSON.stringify(report));
+const files=await mod.publishMotionView({reportPath:rp});assert.equal(files.status,'files-only');assert.equal(files.url,null);assert.equal(JSON.parse(await fs.readFile(path.join(out,'view.json'))).entries.length,1);
+const fetchImpl=async url=>{const u=new URL(url);if(u.pathname==='/api/roots')return {ok:true,json:async()=>({caller:{path:root,exists:true}})};if(u.pathname==='/api/workbench-experiments')return {ok:true,json:async()=>({modules:['/experiments/creature-motion/skeleton.experiment.mjs']})};if(u.pathname==='/api/read'){const b=await fs.readFile(path.join(root,u.searchParams.get('path')));return {ok:true,arrayBuffer:async()=>b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength)};}return {ok:false,status:404};};
+const linked=await mod.publishMotionView({reportPath:rp,origin:'http://viewer',fetchImpl});assert.equal(linked.status,'link-verified',linked.error);assert.match(linked.url,/marionette%2Fskeleton-motion/);assert.equal(linked.visualInspection,'not-performed');
+const stale=await mod.publishMotionView({reportPath:rp,origin:'http://viewer',fetchImpl:async url=>new URL(url).pathname==='/api/read'?{ok:true,arrayBuffer:async()=>new Uint8Array([0]).buffer}:fetchImpl(url)});assert.equal(stale.status,'unavailable');assert.equal(stale.url,null);assert.match(stale.error,/digest/);
+const unmounted=await mod.publishMotionView({reportPath:rp,origin:'http://viewer',fetchImpl:async()=>({ok:true,json:async()=>({})})});assert.equal(unmounted.status,'unavailable');assert.equal(unmounted.url,null);
+await fs.writeFile(rp,JSON.stringify({...report,status:'failed'}));const failed=await mod.publishMotionView({reportPath:rp});assert.equal(failed.status,'unavailable');assert.match(failed.error,/completed/);assert.equal(failed.url,null);
+await fs.writeFile(rp,JSON.stringify({...report,cases:[]}));assert.equal((await mod.publishMotionView({reportPath:rp})).status,'unavailable');
+await fs.writeFile(rp,JSON.stringify(report));await fs.writeFile(mp,JSON.stringify({...motion,seed:2}));assert.match((await mod.publishMotionView({reportPath:rp})).error,/requested/);
+assert.equal(JSON.parse(await fs.readFile(path.join(out,'view-publication.json'))).status,'unavailable','failure must replace any stale success receipt');
+console.log('Batch view publication: automatic files, authenticated mounted link, stale/partial/rejected/unmounted failures stay explicit');
