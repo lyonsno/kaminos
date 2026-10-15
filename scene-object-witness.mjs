@@ -246,7 +246,9 @@ async function settleViewportFrames(ws, ms = 600) {
 
 async function visibleShadingToggle(ws) {
   return evaluate(ws, `(() => {
-    const visible = [...document.querySelectorAll('.viewport-shading')].filter(group => { const r = group.getBoundingClientRect(); return r.width > 0 && r.height > 0 && group.offsetParent !== null; });
+    // Water and Fire toggles share the toolbar group styling; only the group
+    // with shading buttons is the shading toggle.
+    const visible = [...document.querySelectorAll('.viewport-shading')].filter(group => { const r = group.getBoundingClientRect(); return group.querySelector('[data-shading]') && r.width > 0 && r.height > 0 && group.offsetParent !== null; });
     return visible.map(group => Object.fromEntries([...group.querySelectorAll('[data-shading]')].map(button => { const r = button.getBoundingClientRect(); return [button.dataset.shading, { x: r.left + r.width / 2, y: r.top + r.height / 2, pressed: button.getAttribute('aria-pressed') }]; })));
   })()`);
 }
@@ -800,6 +802,67 @@ async function runFireProxySplatsScenario(ws) {
   check(restored.display === 'full' && restored.canvasVisibility === '' && restored.layer?.visible === false && restored.attached === false, `fire did not return to the full render cleanly: ${JSON.stringify(restored)}`);
   evidence.shots = [backgroundShot, proxyShot, baselineShot, fullShot, liveShot];
   assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
+}
+
+// Wire on a GPU-deformed owner mesh: the wire-deformation fixture experiment
+// (served with KAMINOS_EXPERIMENTS_DIR=tests/fixtures/viewport-wire-experiments
+// and opened by ?experiment=wire-deformation) attaches a box through the owner
+// scene session and shifts it on the GPU with its material's positionNode.
+// Wire must draw where the shifted box is, not at its rest position.
+async function runViewportWireGpuDeformationScenario(ws) {
+  phase = 'scenario-viewport-wire-gpu-deformation';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const evidence = lastEvidence.viewportWireGpuDeformation = { failures };
+  let opened = null;
+  for (let i = 0; i < 240 && !opened; i++) { opened = await evaluate(ws, `(() => { const e = window.kaminosWorkbenchExperiments; return e?.state().id === 'wire-deformation' ? e.read() : null; })()`).catch(() => null); if (!opened) await delay(250); }
+  assert.ok(opened, 'the wire-deformation fixture experiment did not open (serve with KAMINOS_EXPERIMENTS_DIR=tests/fixtures/viewport-wire-experiments, load ?experiment=wire-deformation)');
+  evidence.opened = opened;
+  const invoke = (name, input) => evaluate(ws, `window.kaminosWorkbenchExperiments.invoke(${JSON.stringify(name)}, ${JSON.stringify(input ?? null)})`);
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  evidence.view = await invoke('frame');
+  const canvas = await evaluate(ws, `(() => { const r = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  const region = { x: canvas.x, y: canvas.y + 56, width: canvas.width, height: canvas.height - 56 - 120 };
+  const shot = async (suffix) => { await settleViewportFrames(ws, 700); const s = await capturePngScreenshot(ws, siblingPngPath(suffix)); return { shot: s, image: decodeScreenshotPngRgb(readFileSync(s.path)) }; };
+  await invoke('setVisible', false);
+  const baseline = await shot('-wire-deform-baseline');
+  await invoke('setVisible', true);
+  await invoke('setShift', 0);
+  const rest = await shot('-wire-deform-rest-solid');
+  await invoke('setShift', 1.0);
+  const deformed = await shot('-wire-deform-shifted-solid');
+  const [toggle] = await visibleShadingToggle(ws);
+  assert.ok(toggle?.wireframe, 'Wire toggle is missing from the visible viewport toolbar');
+  await dispatchMouseClick(ws, toggle.wireframe);
+  const wire = await shot('-wire-deform-shifted-wire');
+  const shading = evidence.shading = await viewportShadingRead(ws);
+  const restMask = waterMask(rest.image, baseline.image, region), shiftedMask = waterMask(deformed.image, baseline.image, region), wireMask = waterMask(wire.image, baseline.image, region, 24);
+  const width = baseline.image.width, height = baseline.image.height, near = 6;
+  const shiftedNear = dilateMask(shiftedMask.mask, width, height, near), restNear = dilateMask(restMask.mask, width, height, near);
+  let wireOnShifted = 0, wireOnRestOnly = 0;
+  for (let i = 0; i < wireMask.mask.length; i++) { if (!wireMask.mask[i]) continue; if (shiftedNear[i]) wireOnShifted++; else if (restNear[i]) wireOnRestOnly++; }
+  evidence.masks = { region, near, rest: { area: restMask.area, bbox: restMask.bbox }, shifted: { area: shiftedMask.area, bbox: shiftedMask.bbox }, wire: { area: wireMask.area, bbox: wireMask.bbox },
+    wireOnShifted: wireMask.area ? wireOnShifted / wireMask.area : 0, wireOnRestOnly: wireMask.area ? wireOnRestOnly / wireMask.area : 0 };
+  check(restMask.area > 800 && shiftedMask.area > 800, `the fixture box is not visible against the baseline: rest ${restMask.area}, shifted ${shiftedMask.area}`);
+  check(restMask.bbox && shiftedMask.bbox && shiftedMask.bbox[0] > restMask.bbox[2], `the GPU shift did not move the solid box clear of its rest position: ${JSON.stringify({ rest: restMask.bbox, shifted: shiftedMask.bbox })}`);
+  check(shading?.mode === 'wireframe' && shading.lastRender?.perObject?.[opened.objectId] > 0, `no wire frame drew the fixture mesh: ${JSON.stringify(shading?.lastRender)}`);
+  check(wireMask.area > 300, `wire drew too little to judge: ${wireMask.area} pixels`);
+  // Lines, not a fill: the box's wire covers well under its solid silhouette,
+  // and its pixels are darker than the background they cross.
+  let wireDarker = 0;
+  for (let i = 0; i < wireMask.mask.length; i++) if (wireMask.mask[i]) { const a = i * wire.image.channels, b = i * baseline.image.channels;
+    if (wire.image.pixels[a] + wire.image.pixels[a + 1] + wire.image.pixels[a + 2] < baseline.image.pixels[b] + baseline.image.pixels[b + 1] + baseline.image.pixels[b + 2]) wireDarker++; }
+  evidence.masks.wireToSolidArea = shiftedMask.area ? wireMask.area / shiftedMask.area : null;
+  evidence.masks.wireDarkerFraction = wireMask.area ? wireDarker / wireMask.area : 0;
+  check(evidence.masks.wireToSolidArea !== null && evidence.masks.wireToSolidArea < 0.6, `wire mode drew a filled shape, not lines (${evidence.masks.wireToSolidArea?.toFixed(3)} of the solid silhouette)`);
+  check(evidence.masks.wireDarkerFraction >= 0.8, `wire pixels are not the dark wire colour (${evidence.masks.wireDarkerFraction.toFixed(3)} darker than the background)`);
+  check(evidence.masks.wireOnShifted >= 0.8, `wire is not drawn on the GPU-deformed shape (${evidence.masks.wireOnShifted.toFixed(3)} of wire pixels on the shifted box)`);
+  check(evidence.masks.wireOnRestOnly <= 0.05, `wire is drawn at the rest shape (${evidence.masks.wireOnRestOnly.toFixed(3)} of wire pixels only near the rest box)`);
+  await dispatchMouseClick(ws, toggle.solid);
+  await settleViewportFrames(ws, 300);
+  evidence.restoredMode = (await viewportShadingRead(ws))?.mode;
+  check(evidence.restoredMode === 'solid', `Solid was not restored: ${evidence.restoredMode}`);
+  evidence.shots = [baseline.shot, rest.shot, deformed.shot, wire.shot];
+  assert.deepEqual(failures, [], `wire GPU deformation checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
@@ -6553,6 +6616,8 @@ try {
     await runWaterProxyCadenceScenario(ws);
   } else if (scenario === 'fire-proxy-splats') {
     await runFireProxySplatsScenario(ws);
+  } else if (scenario === 'viewport-wire-gpu-deformation') {
+    await runViewportWireGpuDeformationScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {

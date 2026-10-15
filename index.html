@@ -3938,10 +3938,10 @@ function syncViewportDisplayControls() {
 const VIEWPORT_SHADING_SKIPPED_TYPES=new Set(['splat','image','light',CAMERA_TYPE,FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,'simulation-domain']);
 let viewportShading=null,lastViewportShadingRender=null;
 function renderWithViewportShading(render) {
- viewportShading??=createViewportShading({wireMaterial:new THREE.MeshBasicMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
+ viewportShading??=createViewportShading({createWireMaterial:()=>new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
  const entries=viewportDisplay.shading==='wireframe'?sceneObjects.filter(entry=>!VIEWPORT_SHADING_SKIPPED_TYPES.has(entry.type)):[];
  const receipt=viewportShading.renderWith(entries.map(entry=>entry.object),viewportDisplay.shading,render);
- return {mode:receipt.mode,meshes:receipt.meshes,perObject:Object.fromEntries(entries.map((entry,index)=>[entry.id,receipt.perRoot[index]]))};
+ return {mode:receipt.mode,meshes:receipt.meshes,kept:receipt.kept,perObject:Object.fromEntries(entries.map((entry,index)=>[entry.id,receipt.perRoot[index]]))};
 }
 document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
  const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});
