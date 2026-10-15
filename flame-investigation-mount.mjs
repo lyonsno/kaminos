@@ -10,7 +10,10 @@ export function mountFlameInvestigation({page,out,source,guide={}}) {
       const flame=await window.kaminosFlameWorkbench.open();
       window[binding+'Adapter']=createFlameInvestigation({flame,document,id,source,guide,
         request:request=>window[binding](request),
-        mount:node=>window.kaminosWorkbenchSetInvestigation(node,{tool:'volume'})});
+        mount:node=>{
+          window.kaminosWorkbenchSetInvestigation(node,{tool:window.__kaminosActiveTab()});
+          node.scrollIntoView({block:'nearest'});
+        }});
     },{id,binding,source,guide});
     const call=(method,arg)=>page.evaluate(({binding,method,arg})=>{
       const adapter=window[binding+'Adapter'];
