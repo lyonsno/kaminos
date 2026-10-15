@@ -1,4 +1,5 @@
 import {skinTransport} from '../../hindquarter-live-core.mjs';
+import {registerExportGeometrySnapshot} from '../../scene-export-geometry.mjs';
 
 // The verified Mushfinger body/weights and same rigid DQ transport, with scene
 // attachment left to Hotwet's owner session. No renderer or frame loop here.
@@ -29,7 +30,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   const bone=bones.get(spec.name),matrix=new THREE.Matrix4().set(...spec.restMatrix.flat());
   if(spec.parent){matrix.premultiply(inverseRest.get(spec.parent));bones.get(spec.parent).add(bone);}else group.add(bone);
   matrix.decompose(bone.position,bone.quaternion,bone.scale);
-  const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;bone.add(marker);
+  const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;Object.assign(marker.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'bones'});bone.add(marker);
  }
  let cached='',updates=0,lastUpdateMs=0,deformations=0,cacheHits=0,cacheBytes=0;
  let deformer=null,cpuKey='',cpuGeometry=null;
@@ -73,6 +74,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,ret
   cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=cached;return mirror;
  }
  if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
+ registerExportGeometrySnapshot(mesh,syncCpuGeometry);
  function replaceSkin(candidate){
   active();validate(candidate);
   const begin=performance.now(),matrices=palette();let nextDeformer;

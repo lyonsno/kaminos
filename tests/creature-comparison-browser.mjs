@@ -4,6 +4,14 @@ import assert from 'node:assert/strict';
 import v8 from 'node:v8';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+function compareWorldPositions(actual,expected){
+ assert.equal(actual.length,expected.length,'export must retain every current-pose vertex');let max=0;
+ for(let i=0;i<actual.length;i++){assert.ok(Number.isFinite(actual[i])&&Number.isFinite(expected[i]));max=Math.max(max,Math.abs(actual[i]-expected[i]));}
+ assert.ok(max<.00002,'downloaded GLB differs from current posed world geometry: '+max);return max;
+}
 function check(state,setup){
  assert.equal(state.clock.rendererBackend,'webgpu');assert.equal(state.read.entries.length,setup.entries.length);
  assert.equal(state.clock.activeSubscriptions,1,'one actual app clock drives the comparison');
@@ -18,6 +26,7 @@ function check(state,setup){
  assert.equal(new Set(state.read.entries.map(e=>e.id)).size,setup.entries.length,'six sources need six actual objects');
 }
 if(process.argv.includes('--self-test')){
+ compareWorldPositions([1,2,3],[1,2,3]);assert.throws(()=>compareWorldPositions([0,0,0],[1,2,3]));assert.throws(()=>compareWorldPositions([1,2],[1,2,3]));assert.throws(()=>compareWorldPositions([NaN,2,3],[1,2,3]));
  const setup={entries:[{id:'a',source:{motion_sha256:'m',case_sha256:'c',frame_sha256:'f'}}]},entry={key:'a',id:'body',source:{motionSha256:'m',caseSha256:'c',frameSha256:'f'},skin:{route:'shared-owner-scene-full-body-dq',deformation:{backend:'webgpu-dense-dq',dispatches:1},poseCache:{bytes:0,enabled:false},vertices:50501,bones:28},vertices:Array(50501*3).fill(0)};entry.vertices[0]=1;
  const good={clock:{rendererBackend:'webgpu',activeSubscriptions:1},scene:[{id:'body'}],read:{presentation:'in-place',entries:[entry]}};check(good,setup);
  for(const edit of [s=>s.clock.rendererBackend='webgl',s=>s.clock.activeSubscriptions=6,s=>s.scene=[],s=>s.read.entries=[],s=>s.read.entries[0].source.motionSha256='stale',s=>s.read.entries[0].vertices.fill(0),s=>s.read.entries[0].skin.deformation.backend='cpu-reference',s=>s.read.entries[0].skin.deformation.dispatches=0,s=>s.read.entries[0].skin.poseCache.bytes=100]){const bad=structuredClone(good);edit(bad);assert.throws(()=>check(bad,setup));}
@@ -60,6 +69,21 @@ try{
    const positions=error(s.positions,s.cpuPositions),normals=error(s.normals,s.cpuNormals);report.parity.push({seconds,key:s.key,source:s.source,positions,normals});assert.ok(positions.max<.00002,'GPU vertex transport differs from CPU reference');assert.ok(normals.rms<.001,'GPU triangle-derived normals differ from CPU reference');
   }
   await save();
+ }
+ if(args['--export-pose']==='true'){
+  report.phase='posed-glb-download';await save();
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:1}));
+  const posed=(await read()).read.entries[0];await fs.writeFile(out+'/export-source.v8',v8.serialize(posed));
+  await page.evaluate(id=>window.selectSceneObject(id),posed.id);
+  const downloadPromise=page.waitForEvent('download');
+  assert.equal(await page.evaluate(()=>window.exportGLB({name:'posed-creature'})),true);
+  const download=await downloadPromise,path=out+'/posed-creature.glb';await download.saveAs(path);
+  const bytes=await fs.readFile(path),gltf=await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'');
+  gltf.scene.updateMatrixWorld(true);const meshes=[];gltf.scene.traverse(o=>{if(o.isMesh)meshes.push(o);});assert.equal(meshes.length,1,'export excludes bone markers and comparison helpers');
+  const mesh=meshes[0],p=mesh.geometry.attributes.position,actual=[],expected=[],v=new THREE.Vector3(),world=new THREE.Matrix4().fromArray(posed.rootMatrix);
+  for(let i=0;i<p.count;i++){v.fromBufferAttribute(p,i).applyMatrix4(mesh.matrixWorld);actual.push(...v);v.fromArray(posed.vertices,i*3).applyMatrix4(world);expected.push(...v);}
+  report.export={path,bytes:bytes.length,vertices:p.count,positionItemSize:p.itemSize,worldMaxError:compareWorldPositions(actual,expected),source:posed.source,rootMatrix:posed.rootMatrix};
+  await retain('exported-pose');await save();
  }
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('restart'));await page.evaluate(async()=>{while(window.kaminosCreatureComparison().seconds<.5)await new Promise(r=>requestAnimationFrame(r));});await retain('elapsed-motion',true);
  report.phase='raw-once';await save();await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'raw'}));await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('restart'));await page.evaluate(async()=>{while((await window.kaminosWorkbenchExperiments.read()).status!=='held')await new Promise(r=>requestAnimationFrame(r));});const held=await retain('raw-held');assert.ok(held.read.entries.every(e=>e.frame===59));assert.equal(held.clock.activeSubscriptions,0);
