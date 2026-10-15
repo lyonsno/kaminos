@@ -53,3 +53,13 @@ test('binary numerical sources become checkboxes without converting continuous a
   assert.equal(flame.flamePropertyInputType({type:'range',min:'0',max:'1.5',step:'.05'}),'number');
   assert.equal(flame.flamePropertyInputType({type:'color'}),'color');
 });
+
+test('physics material status cannot promote a requested or stale mode into effective rendering',()=>{
+  assert.equal(typeof flame.flameAppearanceStatus,'function');
+  assert.equal(flame.flameAppearanceStatus('1',null).state,'off');
+  assert.equal(flame.flameAppearanceStatus('2',null).state,'pending');
+  assert.equal(flame.flameAppearanceStatus('2',{requested:false,effective:{render:true}}).state,'pending');
+  const refused=flame.flameAppearanceStatus('2',{requested:true,effective:{render:false},reason:'physics-appearance-requires-the-reactant-law'});
+  assert.equal(refused.state,'inactive');assert.match(refused.text,/requires the reactant law/);
+  assert.equal(flame.flameAppearanceStatus('2',{requested:true,effective:{render:true}}).state,'active');
+});
