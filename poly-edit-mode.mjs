@@ -88,14 +88,14 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     enter(object,{objectId=null}={}){
       if(edit)this.exit();
       const mesh=triangleMesh(object);if(!mesh)throw Error('Edit Mode needs an object with a triangle mesh');
-      const g=mesh.geometry,kernel=buildPolyMesh({positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):null});
+      const g=mesh.geometry,arrays={positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):null},kernel=buildPolyMesh(arrays);
       const bvh=new MeshBVH(g,{indirect:true}),overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wirePositions=new Float32Array(kernel.edgeCount*6),q=kernel.vertexPositions;
       for(let e=0;e<kernel.edgeCount;e++){wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),6*e);wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3),6*e+3);}
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
       const m=mesh.material;
-      edit={object,mesh,objectId,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialState:{transparent:m.transparent,opacity:m.opacity,depthWrite:m.depthWrite}};
+      edit={object,mesh,objectId,arrays,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialState:{transparent:m.transparent,opacity:m.opacity,depthWrite:m.depthWrite}};
       rebuildOverlay();return result();
     },
     exit(){
@@ -131,6 +131,9 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     setThrough(on){need();if(typeof on!=='boolean')throw Error('X-ray must be true or false');edit.through=on;rebuildOverlay();return result();},
     selection:()=>need().selection,
     kernel:()=>need().kernel,
+    // What Separate needs: the selected faces, and the triangles they were selected on.
+    selectedFaceMask:()=>Uint8Array.from(need().selection.faces),
+    geometry(){const {positions,indices}=need().arrays;return {positions,indices};},
     selectedVertices(){const s=need().selection.vertices;return [...s.keys()].filter(i=>s[i]);},
     vertexPosition(v){const q=need().kernel.vertexPositions;return [q[3*v],q[3*v+1],q[3*v+2]];},
     screenOf(point){

@@ -69,6 +69,12 @@ edit.click(mx,my);state=edit.linked();assert.equal(state.counts.faces,12,'Ctrl+L
 state=edit.selectAll('deselect');state=edit.linked({at:{x:mx,y:my}});assert.equal(state.counts.faces,12,'L at the cursor');
 state=edit.selectAll('deselect');edit.click(mx,my);state=edit.linked({at:{x:mx,y:my}});assert.equal(state.counts.faces,12,'L over the active face grows from it instead of toggling it off');
 
+// Separate reads the selected faces and the exact triangles they were picked on.
+edit.selectAll('deselect');edit.click(mx,my);
+const faceMask=edit.selectedFaceMask();assert.equal(faceMask.length,12);assert.equal(faceMask.reduce((a,b)=>a+b,0),1);
+assert.ok(faceMask[8]||faceMask[9],'the clicked front face');
+const picked=edit.geometry();assert.deepEqual([...picked.indices],[...mesh.geometry.index.array]);assert.equal(picked.positions.length,mesh.geometry.attributes.position.count*3);
+
 // Exit removes everything Edit Mode added and leaves the object's material alone.
 state=edit.exit();
 assert.equal(state.editing,false);

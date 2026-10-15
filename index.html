@@ -3862,6 +3862,7 @@ import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
+import { separateSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -11886,7 +11887,7 @@ async function initScene() {
     objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
-    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.()});
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection});
   window.kaminosPolyEdit=polyEdit.api;
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
@@ -26046,6 +26047,50 @@ function removeSelectedSceneObjects(){
   clearActiveSceneObjectSelection();
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
   setInfo(`Removed ${ids.length} selected · Undo restores`);return true;
+}
+// Separate > Selection (P in Edit Mode). Both pieces are stored as content-addressed derived GLBs
+// first; then one membership edit swaps the original for them, so undo, redo, save and reopen
+// treat it like any other scene change. The original is retained for undo, not rewritten.
+async function storeDerivedMesh(bytes){
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
+  if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
+  return receipt;
+}
+async function separatePolySelection(){
+  assertSceneConstructionAvailable();
+  const editing=polyEdit?.api.read();if(!editing?.editing)throw Error('Separate works in Edit Mode: select a mesh and press Tab');
+  const id=editing.objectId,entry=sceneObjects.find(o=>o.id===id);
+  if(entry?.type!=='glb'||!entry.source)throw Error('Separate works on GLB meshes for now');
+  const mask=polyEdit.api.selectedFaceMask(),geometry=polyEdit.api.geometry(),token=sceneMutationToken;
+  if(!mask.some(Boolean))throw Error('Select faces to separate');
+  setInfo('Separating…');
+  const response=await fetch(entry.source);if(!response.ok)throw Error(`Could not read the mesh source (${response.status})`);
+  const sourceBytes=new Uint8Array(await response.arrayBuffer());
+  const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const label=entry.label||'Mesh',partLabel=`${label}.001`;
+  const {part,rest}=separateSelection(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});
+  const [partStored,restStored]=await Promise.all([storeDerivedMesh(part.bytes),storeDerivedMesh(rest.bytes)]);
+  if(token!==sceneMutationToken||polyEdit.api.read().objectId!==id)throw Error('The scene changed while separating; nothing was changed');
+  assertSceneConstructionAvailable();
+  polyEdit.api.exit();
+  const before=checkSelectionMembership(readSelectionMembership()),original=before.objects.find(o=>o.id===id);
+  const restId=makeSceneObjectId('mesh'),partId=makeSceneObjectId('mesh');
+  // Derivation ancestry rides in assetOrigin; the source's own origin and generation become its parent.
+  const record=(newId,stored,name,piece)=>{const {generation,...kept}=structuredClone(original);return {...kept,id:newId,source:stored.source,fileName:`${name}.glb`,label:name,createdAt:new Date().toISOString(),
+    assetOrigin:{...piece.receipt,sha256:stored.sha256,parent:{objectId:id,sha256,assetOrigin:original.assetOrigin??null,generation:generation??null}}};};
+  const after=structuredClone(before);
+  after.objects.splice(after.objects.findIndex(o=>o.id===id),1,record(restId,restStored,label,rest),record(partId,partStored,partLabel,part));
+  for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?[restId,partId]:[member]);
+  after.selection={...after.selection,ids:[partId,restId],activeId:restId};after.field=null;
+  for(const target of [id,restId,partId])compoundRetentionTargets.set(target,'@selection-membership');
+  await writeSelectionMembership(after);
+  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Separate ${part.faces} faces`);
+  // As in Blender, editing continues on what remains; the separated part is selected alongside it.
+  polyEdit.api.enter(restId);
+  setInfo(`Separated ${part.faces} faces into ${partLabel} · Undo restores`);
+  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partSource:partStored.source,restSource:restStored.source};
 }
 function duplicateSelectedSceneObjects({interactive=false}={}){
   assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);

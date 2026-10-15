@@ -10,8 +10,9 @@ const body={closest:()=>null},field={closest:selector=>selector.includes('input'
 const document=Object.assign(new EventTarget(),{body,activeElement:body});
 const viewport={contains:()=>false,matches:()=>false,getBoundingClientRect:()=>({left:0,top:0})};
 const canvas={getBoundingClientRect:()=>({left:0,top:0,right:400,bottom:400,width:400,height:400})};
-const helper={visible:true},gizmo={visible:true,enabled:true,getHelper:()=>helper},infos=[];let blocked=false,selected='mesh-1',present=true;
-const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo});
+const helper={visible:true},gizmo={visible:true,enabled:true,getHelper:()=>helper},infos=[];let blocked=false,selected='mesh-1',present=true,separations=0,finishSeparate=null,separateFails=false;
+const separate=()=>{separations++;if(separateFails)return Promise.reject(Error('Select faces to separate'));return new Promise(resolve=>{finishSeparate=resolve;});};
+const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate});
 const key=(code,init={})=>{
   const event=new Event('keydown',{cancelable:true}),fields={key:code==='Tab'?'Tab':code==='Escape'?'Escape':code.replace(/^(Key|Digit)/,'').toLowerCase(),code,target:body,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,...init};
   for(const [name,value] of Object.entries(fields))Object.defineProperty(event,name,{value});
@@ -52,6 +53,15 @@ drag(1,1,200,200,{ctrlKey:true});assert.equal(api.read().counts.vertices,1,'Ctrl
 drag(200,200,399,399,{metaKey:true});assert.equal(api.read().counts.vertices,0,'Cmd-drag removes too, since Ctrl-click is a right click on a Mac trackpad');
 pointer('pointerdown',100,100);pointer('pointermove',102,101);pointer('pointerup',102,101);
 assert.equal(api.read().counts.vertices,1,'a click that wobbles a few pixels still picks the nearest corner; a tiny box would pick nothing');
+key('Tab');
+
+// P separates the selection through the app, once per press, and reports failure in the status bar.
+event=key('KeyP');assert.ok(!event.defaultPrevented,'outside Edit Mode P is not ours');assert.equal(separations,0);
+key('Tab');event=key('KeyP');assert.ok(event.defaultPrevented);assert.equal(separations,1,'P separates');
+key('KeyP');assert.equal(separations,1,'a second P while one is running does nothing');
+finishSeparate();await new Promise(r=>setTimeout(r));
+key('KeyP');assert.equal(separations,2,'once it finishes, P works again');finishSeparate();await new Promise(r=>setTimeout(r));
+separateFails=true;key('KeyP');await new Promise(r=>setTimeout(r));assert.match(infos.at(-1),/Select faces to separate/,'a refusal is shown, not thrown away');separateFails=false;
 key('Tab');
 
 selected=null;key('Tab');assert.equal(active(),false);assert.match(infos.at(-1),/Select a mesh/);

@@ -7,11 +7,11 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
-export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{}}) {
-  let objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
+export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null}) {
+  let separating=false,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
-    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · Alt+Z x-ray`);
+    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · Alt+Z x-ray`);
   };
   const edit=createPolyEditMode({camera,canvas,onChange:()=>{hud();redraw();}});
   const rect=document.createElement?.('div');
@@ -53,6 +53,8 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(event.code==='KeyZ'&&event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setThrough(!edit.read().through));return;}
     if(event.altKey||event.shiftKey)return;
     if(event.code==='KeyB'){steal(event);armBox();return;}
+    // P: Separate > Selection. The app owns the scene change and its history; one runs at a time.
+    if(event.code==='KeyP'&&separate){steal(event);runSeparate();return;}
     if(event.code==='KeyL'){steal(event);if(hover)attempt(()=>edit.linked({at:hover}));return;}
   },true);
 
@@ -89,10 +91,18 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{if(edit.active()&&insideCanvas(event)&&!overlayHit(event))steal(event);},true);
 
+  function runSeparate(){
+    if(separating)return null;separating=true;
+    // Called now, so the app reads the selection as it was when P was pressed.
+    let running;try{running=Promise.resolve(separate());}catch(error){running=Promise.reject(error);}
+    return running.catch(error=>{setInfo(error.message);return null;}).finally(()=>{separating=false;});
+  }
+
   const api=Object.freeze({
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
-    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),
+    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runSeparate(),
+    selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),
     canvasRect:()=>{const r=canvas.getBoundingClientRect();return {left:r.left,top:r.top,width:r.width,height:r.height};},
