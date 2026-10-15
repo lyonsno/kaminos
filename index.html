@@ -3949,32 +3949,45 @@ document.addEventListener('click',event=>{const button=event.target.closest?.('.
 // subscriber listens.
 const proxySnapshots=createProxySnapshotRegistry();
 window.kaminosProxySnapshots={latest:proxySnapshots.latest,subscribe:proxySnapshots.subscribe,sources:proxySnapshots.sources,state:proxySnapshots.state};
+// Proxy meshes live on their own three.js layer. The viewport camera enables it
+// only in Proxy display; another camera (an agent's sub view, an inset) enables
+// it to draw the proxies from its own viewpoint. require(source) keeps a
+// source's proxy mesh alive while the viewport shows the full render.
+const PROXY_LAYER=3;
+const proxyRequirements=new Map();
+window.kaminosProxyPreview={layer:PROXY_LAYER,
+ require(source){proxyRequirements.set(source,(proxyRequirements.get(source)??0)+1);window._kaminosDirty?.();let released=false;
+  return ()=>{if(released)return;released=true;const n=(proxyRequirements.get(source)??1)-1;if(n>0)proxyRequirements.set(source,n);else proxyRequirements.delete(source);window._kaminosDirty?.();};},
+ required:()=>Object.fromEntries(proxyRequirements)};
 // Water proxy: in Proxy display the local liquid host skips its liquid passes
 // and a surfel layer drawn from the latest water snapshot stands in for the
 // water. Reconciled every frame against the current host, so host restarts and
 // disposal need no extra hooks.
 let waterProxy=null;
 function syncWaterProxy() {
- const host=localLiquidHost,display=viewportDisplay.water==='proxy'&&!!host;
+ const host=localLiquidHost,display=viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
+ camera?.layers[display?'enable':'disable'](PROXY_LAYER);
  if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
  if(host&&!waterProxy){
   const descriptor=()=>localLiquidHost===host?host.interfaceRecordDescriptor():null;
   waterProxy={host,layer:null,unsubscribe:null,
    producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
  }
- if(waterProxy&&display&&!waterProxy.layer){
+ if(waterProxy&&wanted&&!waterProxy.layer){
   const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.15});
+  layer.mesh.layers.set(PROXY_LAYER);
   scene.add(layer.mesh);
   waterProxy.layer=layer;
   // A snapshot can land while the scene is idle (paused water): redraw it.
   waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
  }
- if(waterProxy&&!display&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
+ if(waterProxy&&!wanted&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
  if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
+ proxyLayer:PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(PROXY_LAYER):null,meshLayerMask:waterProxy?.layer?.mesh.layers.mask??null,required:Object.fromEntries(proxyRequirements),
  hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
  layer:waterProxy?.layer?.state()??{visible:false},snapshots:proxySnapshots.sources(),registry:proxySnapshots.state()});
 // Witness view: authored materials as save/export see them, plus what the last

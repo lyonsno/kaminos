@@ -562,6 +562,21 @@ async function runWaterProxySurfelsScenario(ws) {
   check(evidence.externalSubscriber.received > 0, `an external subscriber received no water snapshots in the full render: ${JSON.stringify(evidence.externalSubscriber)}`);
   check(evidence.externalSubscriber.presentation === 'full' && evidence.externalSubscriber.layer?.visible === false, 'an external subscriber changed the viewport presentation');
   check(evidence.externalSubscriber.last?.summary?.count > 0 && Array.isArray(evidence.externalSubscriber.last.summary.bounds), `water snapshot summary is missing: ${JSON.stringify(evidence.externalSubscriber.last)}`);
+  // Another camera (an agent's sub view) can require the water proxy while the
+  // viewport shows the full render: the surfel mesh lives on the proxy layer,
+  // which the viewport camera leaves disabled outside Proxy display.
+  evidence.required = await evaluate(ws, `(async () => {
+    const release = window.kaminosProxyPreview.require('water');
+    let held = null;
+    for (let i = 0; i < 40; i++) { await new Promise(resolve => setTimeout(resolve, 100)); held = window.kaminosWaterProxyDebugState(); if (held.layer?.count > 0) break; }
+    release();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return { held, released: window.kaminosWaterProxyDebugState(), layer: window.kaminosProxyPreview.layer };
+  })()`, { timeoutMs: 20000 });
+  const held = evidence.required.held;
+  check(held?.layer?.count > 0 && held.hostPresentation === 'full', `require('water') did not keep a proxy mesh alive under the full render: ${JSON.stringify(held)}`);
+  check(held?.viewportCameraSeesProxies === false && held.meshLayerMask === (1 << evidence.required.layer), `proxy mesh is not isolated on the proxy layer: ${JSON.stringify({ mask: held?.meshLayerMask, viewport: held?.viewportCameraSeesProxies })}`);
+  check(evidence.required.released?.layer?.visible === false, 'releasing the requirement left the proxy mesh alive');
   evidence.shots = [backgroundShot, fullShot, proxyShot, proxyLiveShot];
   assert.deepEqual(failures, [], `water proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
