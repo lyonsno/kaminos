@@ -12072,6 +12072,38 @@ async function initScene() {
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
   }catch(error){console.error('Agent vantage unavailable',error);}
+  // ASSAY (marco-polio sub view without borrowing): render a view from its own camera into its own
+  // target and read it back, leaving the operator's camera, controls and canvas untouched.
+  window.__kaminosSecondViewAssay=async({position,target,up=[0,1,0],fov=50,near=0.05,far=1000,width=640,height=360,layers=[0,3],variant='hdr',hide=[]}={})=>{
+    const view=new THREE.PerspectiveCamera(fov,width/height,near,far);
+    view.position.fromArray(position);view.up.fromArray(up);view.lookAt(new THREE.Vector3(...target));view.updateMatrixWorld(true);
+    view.layers.disableAll();for(const layer of layers)view.layers.enable(layer);
+    const hdr=variant==='hdr';
+    const rt=new THREE.RenderTarget(width,height,hdr?{type:THREE.HalfFloatType}:{type:THREE.UnsignedByteType,colorSpace:THREE.SRGBColorSpace});
+    const operatorBefore=camera.matrixWorld.toArray(),framesBefore=sceneFrameCount,previous=renderer.getRenderTarget(),t0=performance.now();
+    // Hide editor drawing and the named objects, render, and restore within one synchronous step: no event or frame can interleave.
+    const restoreDrawing=suspendEditorDrawingForVantage({all:true,hide});
+    try{renderer.setRenderTarget(rt);renderer.render(scene,view);}finally{renderer.setRenderTarget(previous);restoreDrawing();}
+    const renderMs=performance.now()-t0,t1=performance.now();
+    const pixels=await renderer.readRenderTargetPixelsAsync(rt,0,0,width,height);
+    const readMs=performance.now()-t1;rt.dispose();
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const image=canvas.getContext('2d').createImageData(width,height);
+    let max=0;const aces=x=>{const a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return Math.min(1,Math.max(0,(x*(a*x+b))/(x*(c*x+d)+e)));};
+    const srgb=x=>x<=0.0031308?12.92*x:1.055*Math.pow(x,1/2.4)-0.055;
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const from=(y*width+x)*4,to=from;
+      for(let k=0;k<3;k++){
+        const value=hdr?THREE.DataUtils.fromHalfFloat(pixels[from+k]):pixels[from+k]/255;
+        if(value>max)max=value;
+        image.data[to+k]=Math.round(255*(hdr?srgb(aces(value*renderer.toneMappingExposure)):value));
+      }
+      image.data[to+3]=255;
+    }
+    canvas.getContext('2d').putImageData(image,0,0);
+    return {variant,width,height,renderMs,readMs,maxValue:max,pixelType:pixels.constructor.name,toneMapping:renderer.toneMapping,
+      operatorUnchanged:camera.matrixWorld.toArray().every((v,i)=>v===operatorBefore[i]),framesDuring:sceneFrameCount-framesBefore,dataUrl:canvas.toDataURL('image/png')};
+  };
   animate();
 }
 
