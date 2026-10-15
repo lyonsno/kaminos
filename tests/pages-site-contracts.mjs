@@ -2,13 +2,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { after } from "node:test";
 
 const repoRoot = process.env.KAMINOS_ROOT ?? path.resolve(import.meta.dirname, "..");
 
+// Each assembled site is a full copy of the published files; remove them when
+// the file's tests finish so repeated runs do not fill the temp directory.
+const assembledRoots = [];
+after(() => {
+  for (const root of assembledRoots) fs.rmSync(root, { recursive: true, force: true });
+});
+
 async function assembled(options) {
   const { assemblePagesSite } = await import(path.join(repoRoot, "scripts", "assemble-pages-site.mjs"));
-  const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "kaminos-pages-")), "_site");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "kaminos-pages-"));
+  assembledRoots.push(root);
+  const out = path.join(root, "_site");
   assemblePagesSite(out,options);
   return out;
 }
