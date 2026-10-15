@@ -3862,6 +3862,7 @@ let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null;
+let ownerVolumeReady=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -5763,6 +5764,7 @@ function writeAuthoredFlameEmitterPose(value) {
 window.kaminosFlameEmitterState = () => ({
   registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
   authoredPresent: authoredFlamePresent,
+  emissionEnabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false,
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
@@ -12610,7 +12612,16 @@ async function installOwnerWorkbenchEntry() {
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
-  }};
+    renderer:()=>renderer,objects:()=>sceneObjects,select:setActiveSceneObject,
+    frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
+    setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
+    enterWorkbench:()=>{authoringWorkspace.setMode('workbench');setActiveTab('assets',{reveal:false});},
+  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype},
+  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
+    setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
+    read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
+    select:()=>setActiveSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+  rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings})}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
     onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
@@ -20239,7 +20250,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -22103,6 +22114,15 @@ async function openFirstFlameFieldDialog() {
 
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
+  edits.register('@flame-source-enabled',{
+    read:()=>({enabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false}),
+    check:state=>{if(typeof state.enabled!=='boolean')throw Error('Flame source enabled must be boolean');return {enabled:state.enabled};},
+    write:({enabled})=>{
+      const entry=sceneObjects.find(row=>row.id===FLAME_EMITTER_ID);if(!entry)throw Error('Flame source is not registered');
+      entry.emissionEnabled=enabled;entry.object.userData.kaminosSceneObject.emissionEnabled=enabled;
+      writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
+    },
+  });
   authoringControlSessions.push(sceneControlHistory);
   edits.register('@first-flame-field',{read:firstFlameFieldState,write:writeFirstFlameFieldState,check:checkFirstFlameFieldState});
   // Finish a field before another control's pointerdown can begin a new target.
@@ -26865,6 +26885,7 @@ sceneInitialization.then(() => {
   });
 
   const volumeLoaded = initKaminosVolumeRoute();
+  ownerVolumeReady=volumeLoaded;
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
