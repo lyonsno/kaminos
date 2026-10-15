@@ -194,11 +194,13 @@ function summarize(command, record) {
     if (hit) {
       lines.push(`  hits      ${hit.label} [${hit.id}] ${fmt(hit.distance)} m away at ${point(hit.point)}${hit.pictured ? ' (where the picture showed it)' : ''}`);
       if (hit.pictured) lines.push(`  since     ${hit.moved ? 'it has moved' : 'it has not moved'}; geometry ${hit.geometry?.status}`);
-      const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null].filter(Boolean).join(', ');
+      const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null,
+        Number.isInteger(hit.surface?.instance) ? `instance ${hit.surface.instance}` : null].filter(Boolean).join(', ');
       lines.push(`  on it     ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
       if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
     } else lines.push('  hits      nothing along that ray');
     if (result.missing?.length) lines.push(`  missing   ${result.missing.join(', ')}: in the picture but no longer in the scene`);
+    for (const item of result.unresolved ?? []) lines.push(`  in front  ${item.label} (${item.type}) at ${fmt(item.distance)} m: ${item.reason}; it may be what the point shows`);
     for (const field of result.fields ?? []) lines.push(`  through   ${field.label} from ${fmt(field.enter)} to ${fmt(field.exit)} m`);
     if (result.beyond?.length) lines.push(`  behind    ${result.beyond.map(item => `${item.label} ${fmt(item.distance)} m`).join(' · ')}`);
   } else if (result.images) {
