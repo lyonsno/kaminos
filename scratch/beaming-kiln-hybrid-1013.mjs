@@ -41,6 +41,15 @@ try{
  report.phase='open';await write();
  const observe=()=>page.evaluate(()=>({url:location.href,lighting:window.__kaminosSceneRadiance?.debugState(),volume:window.__kaminosVolumePrototype?.debugState(),objects:window.kaminosSceneObjectDebugState?.(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,info:document.getElementById('info-bar')?.textContent}));
  const settle=async()=>{
+   if(owner){
+     await page.waitForFunction(()=>{
+       if(window.kaminosWorkbenchExperimentError||window.kaminosWorkbenchSceneFrameError)throw Error(window.kaminosWorkbenchExperimentError||window.kaminosWorkbenchSceneFrameError);
+       return window.kaminosWorkbenchExperiments?.state().id==='fire-shadow-sampling';
+     });
+     // Owner discovery is admitted after scene load and applies on its next
+     // host frame; a populated volume alone does not prove owner admission.
+     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   }
    await page.waitForFunction(()=>{
      const setup=window.__kaminosSceneRadianceSetup,l=window.__kaminosSceneRadiance?.debugState(),v=window.__kaminosVolumePrototype?.debugState();
      if(setup?.error||l?.error||v?.error)throw Error(setup?.error||l?.error||v?.error);
