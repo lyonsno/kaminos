@@ -929,6 +929,84 @@ async function runViewportWireCostScenario(ws) {
   await evaluate(ws, `window.kaminosViewportSettings.set({ shading: 'solid' }); true`);
 }
 
+// Preview cost breakdown: a live scene (the loaded mesh, a flame, optionally
+// water), rendered continuously, with ablation arms alternated against the
+// baseline in rotated rounds. Load the page with #volume_light_field_timing=1
+// so Three records GPU timestamps for its whole render. Each window reports
+// Three's render GPU ms (median of samples), presented app frames/s, and the
+// fire loop's frames and sim steps per second; the light field compute stages
+// are profiled once.
+async function runPreviewCostScenario(ws) {
+  if (!args.get('--no-mesh')) await runMeshAssetLinkScenario(ws);
+  phase = 'scenario-preview-cost';
+  const evidence = lastEvidence.previewCost = { windows: [], arms: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  if (args.get('--with-water')) await evaluate(ws, 'window.kaminosSceneAuthoring.addWaterEmitter()', { timeoutMs: 180000 });
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
+  evidence.trackTimestamp = (await evaluate(ws, 'window.kaminosFireLightFieldGpuProfile?.()'))?.trackTimestamp ?? null;
+  evidence.production = await evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { raySteps: Number(d.controls?.raySteps) || 24, renderScale: Number(d.controls?.renderScale) || 1 }; })()`);
+  const slider = (id, value) => `(() => { const el = document.getElementById(${JSON.stringify(id)}); el.value = String(${value}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return Number(el.value); })()`;
+  const march = (mode, steps, scale) => `(() => { const r = window.__kaminosVolumePrototype; try { r.setDebugOpticalStepping({ mode: ${JSON.stringify(mode)}, tolerance: 0.001 }); } catch (e) {} ${slider('volume-steps', steps)}; ${slider('volume-render-scale', scale)}; return true; })()`;
+  const setGi = mode => `(() => { const el = document.getElementById('scene-gi-mode'); el.value = '${mode}'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return el.value; })()`;
+  const setAo = on => `(() => { const t = document.getElementById('ao-toggle'); if (t.checked !== ${on}) t.click(); return t.checked; })()`;
+  const freeze = on => `(() => { const r = window.__kaminosVolumePrototype; r.setSimulationPaused(${on}); return r.debugState().simulationPaused; })()`;
+  const proxyOn = `window.kaminosViewportSettings.set({ fire: 'proxy' })`;
+  const base = `(() => { window.kaminosViewportSettings.set({ fire: 'full', water: 'full', shading: 'solid' }); window.kaminosFireProxyStepEvery?.(1); window.kaminosWaterProxyStepEvery?.(1); window.kaminosFireLightFieldSetShadowsEnabled?.(true); ${setGi('gtao')}; ${setAo(true)}; ${freeze(false)}; ${march('current', evidence.production.raySteps, evidence.production.renderScale)}; return true; })()`;
+  const arms = {
+    baseline: 'true',
+    'gi-combined': setGi('combined'),
+    'ao-off': setAo(false),
+    'fire-shadows-off': 'window.kaminosFireLightFieldSetShadowsEnabled?.(false) ?? null',
+    'fire-proxy': `window.kaminosViewportSettings.set({ fire: 'proxy' })`,
+    'fire-proxy-step4': `(window.kaminosViewportSettings.set({ fire: 'proxy' }), window.kaminosFireProxyStepEvery(4))`,
+    'fire-paused': freeze(true),
+    'march-12-half-numerical': march('numerical', 12, 0.5),
+    'march-6-quarter-numerical': march('numerical', 6, 0.25),
+    'proxy-gi-combined': `(${proxyOn}, ${setGi('combined')})`,
+    'proxy-ao-off': `(${proxyOn}, ${setAo(false)})`,
+    'proxy-fire-shadows-off': `(${proxyOn}, window.kaminosFireLightFieldSetShadowsEnabled?.(false))`,
+    'proxy-only': proxyOn,
+    ...(args.get('--with-water') ? { 'water-proxy': `window.kaminosViewportSettings.set({ water: 'proxy' })`,
+      'fire-proxy-water-proxy': `window.kaminosViewportSettings.set({ fire: 'proxy', water: 'proxy' })`,
+      'march-12-half-water-proxy': `(${march('numerical', 12, 0.5)}, window.kaminosViewportSettings.set({ water: 'proxy' }))`,
+      'fire-proxy-water-proxy-step4': `(window.kaminosViewportSettings.set({ fire: 'proxy', water: 'proxy' }), window.kaminosWaterProxyStepEvery?.(4))` } : {}),
+  };
+  if (args.get('--arms')) { const keep = new Set(['baseline', ...args.get('--arms').split(',')]); for (const k of Object.keys(arms)) if (!keep.has(k)) delete arms[k]; }
+  const windowMs = Number(args.get('--window-ms') || 3000);
+  const measure = async (name) => {
+    await evaluate(ws, base);
+    await evaluate(ws, arms[name]);
+    return evaluate(ws, `(async () => {
+      let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
+      await new Promise(r => setTimeout(r, 1800));
+      const v0 = window.__kaminosVolumePrototype.debugState(), app0 = window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0, t0 = performance.now();
+      const gpu = []; let sampling = true;
+      (async () => { while (sampling) { const p = await window.kaminosFireLightFieldGpuProfile(); if (typeof p?.renderTimestampMs === 'number' && p.renderTimestampMs > 0) gpu.push(p.renderTimestampMs); await new Promise(r => setTimeout(r, 150)); } })();
+      await new Promise(r => setTimeout(r, ${windowMs}));
+      sampling = false; stop = true;
+      const v1 = window.__kaminosVolumePrototype.debugState(), app1 = window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0, seconds = (performance.now() - t0) / 1000;
+      gpu.sort((a, b) => a - b);
+      return { name: ${JSON.stringify(name)}, appFps: (app1 - app0) / seconds, volumeFps: (v1.frameCount - v0.frameCount) / seconds, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / seconds,
+        renderGpuMsMedian: gpu.length ? gpu[Math.floor(gpu.length / 2)] : null, renderGpuSamples: gpu.length,
+        presentation: v1.volumePresentationReceipt?.application?.compositionEffective ?? null, giMode: window.kaminosSceneGIDebugState?.()?.effectiveMode ?? null,
+        aoIntensity: window.kaminosViewportShadingDebugState?.()?.aoIntensity ?? null, fire: window.kaminosFireProxyDebugState?.()?.display, pacing: v1.proxyPacing ?? null,
+        raySteps: v1.controls?.raySteps ?? null, renderScale: v1.controls?.renderScale ?? null, canvas: [v1.width ?? null, v1.height ?? null] };
+    })()`, { timeoutMs: windowMs + 40000 });
+  };
+  const names = Object.keys(arms).filter(n => n !== 'baseline');
+  for (let round = 0; round < Number(args.get('--rounds') || 2); round++) {
+    const order = round % 2 ? [...names].reverse() : names;
+    for (const name of order) {
+      const pair = round % 2 ? [name, 'baseline'] : ['baseline', name];
+      for (const arm of pair) evidence.windows.push({ round, ...(await measure(arm)) });
+    }
+  }
+  await evaluate(ws, base);
+  evidence.lightFieldProfile = (await evaluate(ws, 'window.kaminosFireLightFieldGpuProfile?.()'))?.compute ?? null;
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -6789,6 +6867,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'preview-cost') {
+    await runPreviewCostScenario(ws);
   } else if (scenario === 'viewport-wire-cost') {
     await runViewportWireCostScenario(ws);
   } else if (scenario === 'viewport-wire-gpu-deformation') {
