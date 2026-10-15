@@ -17,7 +17,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');
   // The input and action share a row so neither is buried by model help text.
   const actions=document.createElement('div');actions.className='asset-step-actions';
-  actions.append(...[byId('asset-prepare'),byId('asset-run'),byId('asset-recover')].filter(Boolean));
+  actions.append(...[byId('asset-run'),byId('asset-prepare'),byId('asset-recover')].filter(Boolean));
   const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
   masks.onclick=()=>{const image=selected();if(image?.kind==='image')openMasks?.(image);};actions.append(masks);
   const controls=document.createElement('div');controls.className='asset-mesh-controls';
