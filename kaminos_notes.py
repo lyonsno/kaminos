@@ -434,6 +434,17 @@ class NotesLog:
         partial.replace(path)
         return record
 
+    def participants_version(self):
+        """Changes whenever an agent registers or updates its registration, so
+        an open page knows to fetch who can be addressed again."""
+        entries = []
+        for path in sorted((self.root / "participants").glob("*.json")):
+            try:
+                entries.append([path.name, path.stat().st_mtime_ns])
+            except OSError:
+                continue
+        return hashlib.sha256(json.dumps(entries).encode()).hexdigest()[:16]
+
     def participants(self, directory=()):
         """Everyone a note could be addressed to: the page's person, agents that
         registered, listened or wrote, and any names a `directory` supplies.
@@ -674,7 +685,7 @@ class NotesHttp:
             quiet_since = time.monotonic()
             while True:
                 events = self.log.wait_events(after, 1.0)
-                presence = {**self.log.presence(), "pages": self._pages_now()}
+                presence = {**self.log.presence(), "pages": self._pages_now(), "participantsVersion": self.log.participants_version()}
                 if events:
                     after = events[-1]["seq"]
                     handler.wfile.write(self._event("events", {"events": events}, event_id=after))
