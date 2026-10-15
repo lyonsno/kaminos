@@ -32,7 +32,7 @@ export async function installOwnerExperimentEntry({document,root,host,discover,o
   open(id,inputs={}){return serial(async()=>{
    const definition=definitions.find(d=>d.id===id);if(!definition)throw Error('Unknown experiment: '+id);
    await close();status.textContent='Opening '+definition.title+'…';await onOpen(definition,inputs);
-   try{current=await openExperiment(definition,{host,inputs});selected=id;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
+   try{current=await openExperiment(definition,{host,inputs,onInputsChange:value=>onChange({id,inputs:value,moduleUrl:definition.moduleUrl})});selected=id;await current.mount({root:content,document});select.value=id;status.textContent=definition.title;onChange({id,inputs,moduleUrl:definition.moduleUrl});return current.read();}
    catch(error){await close();fail(error);throw error;}
   });},
   read:()=>{if(!current)throw Error('No experiment open');return current.read();},

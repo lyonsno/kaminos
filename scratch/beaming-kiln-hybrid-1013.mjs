@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork,assertMountedScene} from '../visual-work.mjs';
-const [out,store,origin='http://127.0.0.1:18588',softnessInput='0',sceneInput='dj-with-a-kiln-pretty.kaminos.json',sampling='fixed',pointsInput='1']=process.argv.slice(2);
+const [out,store,origin='http://127.0.0.1:18588',softnessInput='0',sceneInput='dj-with-a-kiln-pretty.kaminos.json',sampling='fixed',pointsInput='1',openingPointsInput=pointsInput]=process.argv.slice(2);
 const pointCount=Number(pointsInput);
+const openingPointCount=Number(openingPointsInput);
 let owner=null,workspace='authoring';
 const shadowSoftness=Number(softnessInput);
 if(!out||!store)throw Error('explicit output and copied store required');
@@ -13,9 +14,10 @@ const report={status:'running',phase:'arguments',requested:{sampling,softnessInp
 const write=()=>fs.writeFile(out+'/kiln.json',JSON.stringify(report,null,2));await write();let browser;
 try{
  if(![1,2].includes(pointCount))throw Error('surface point count must be 1 or 2');report.requested.points=pointCount;
+ if(![1,2].includes(openingPointCount))throw Error('opening surface point count must be 1 or 2');report.requested.openingPoints=openingPointCount;
  if(!['fixed','complementary'].includes(sampling))throw Error('valid shadow sampling required');
  if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('finite nonnegative shadow softness required');
- owner=sampling==='complementary'?{id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling,points:pointCount})}:null;
+ owner=sampling==='complementary'?{id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling,points:openingPointCount})}:null;
  workspace=owner?'workbench':'authoring';report.phase='source-identity';
  report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
  report.phase='browser-dependency';report.playwrightModule=process.env.KAMINOS_PLAYWRIGHT_MODULE||'playwright';await write();
@@ -23,7 +25,7 @@ try{
  report.phase='prepare';await write();
  const bytes=await fs.readFile(store+'/scenes/'+sceneInput);
  const doc=JSON.parse(bytes);report.input={file:sceneInput,sha256:createHash('sha256').update(bytes).digest('hex'),preset:doc.composition.flame.presetId};
- Object.assign(doc.composition.route,{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:String(pointCount),volume_light_field_hybrid_smoke_refinement:'1'});
+ Object.assign(doc.composition.route,{volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',volume_light_field_hybrid_points:String(openingPointCount),volume_light_field_hybrid_smoke_refinement:'1'});
  if(shadowSoftness>0)doc.composition.route.volume_light_field_hybrid_shadow_softness=String(shadowSoftness);
  doc.composition.route.volume_light_field_hybrid_shadow_sampling=sampling;
  await fs.writeFile(store+'/scenes/kiln-hybrid-preview.kaminos.json',JSON.stringify(doc,null,2));
@@ -53,7 +55,7 @@ try{
      window.setGizmoMode(null);
    });
    await page.waitForFunction(()=>window.__kaminosSceneRadiance.debugState().frame?.directions===8);
-   const state=await observe();assert.equal(state.lighting.surfaceReceivers,0);assert.equal(state.lighting.pointCount,pointCount);assert.equal(state.lighting.frame.smokeReconstruction.refinement,1);assert.equal(state.volume.backend,'WebGPU:apple');
+   const state=await observe();assert.equal(state.lighting.surfaceReceivers,0);assert.equal(state.lighting.pointCount,openingPointCount);assert.equal(state.lighting.frame.smokeReconstruction.refinement,1);assert.equal(state.volume.backend,'WebGPU:apple');
    assertMountedScene(document,state.objects,state);report.effective=state;
    if(shadowSoftness>0){
      report.phase='held-shadow-comparison';await write();
