@@ -12074,7 +12074,8 @@ async function initScene() {
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
       redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
-    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
+    // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera.
+    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,idle:agentVantage.idle};
   }catch(error){console.error('Agent vantage unavailable',error);}
   // Notes: say something on the thing you mean and get answers where you look
   // (notes-panel.mjs, tools/notes.mjs, docs/notes.md). ?notes=0 leaves them off.

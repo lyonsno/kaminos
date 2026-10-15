@@ -86,6 +86,7 @@ function fakeApp({mode = 'user', activeId = null, cameras = []} = {}) {
         layers: [HOST, ...(state.volume ? [VOLUME] : []), ...(state.extraLayer ? ['mystery-canvas'] : [])]};
     },
     cameraMatrices: () => state.optics ?? opticsOf(state.view),
+    pose: () => state.objectPose ?? null,
     encode: canvas => ({mime: 'image/png', dataUrl: `data:image/png;base64,${Buffer.from(JSON.stringify(canvas)).toString('base64')}`, width: 1280, height: 720}),
     annotate: canvas => ({...canvas, annotated: true}),
     sheet: frames => ({sheet: frames.length}),
@@ -660,7 +661,7 @@ function installedPage({subs = []} = {}) {
     writeView() {}, viewport, hostCanvas: element('canvas'), busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false});
   const refresh = intervals.find(item => item.ms === 400).fn;
-  return {vantage, refresh, painted, map: viewport.children[0].querySelector('canvas'),
+  return {vantage, refresh, painted, entries, map: viewport.children[0].querySelector('canvas'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
     set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
 }
@@ -861,4 +862,77 @@ test('a pick from the operator view waits while a picture has borrowed the camer
   };
   await pilot.run('snap', {map: false});
   assert.equal(await during, 'busy', 'mid-picture the viewport camera is the sub\'s, not the operator\'s');
+});
+
+test('a page reader can ask whether a picture holds the camera, and wait for it to finish', async () => {
+  const {state, pilot} = await launched();
+  assert.equal(pilot.isCapturing(), false);
+  await pilot.idle();
+  let seen = null, waited = null;
+  state.duringFrames = () => {
+    if (seen !== null) return;
+    seen = pilot.isCapturing();
+    waited = pilot.idle().then(() => pilot.isCapturing());
+  };
+  await pilot.run('snap', {map: false});
+  assert.equal(seen, true, 'mid-picture the page reports the hold');
+  assert.equal(await waited, false, 'idle settles once the picture is done');
+});
+
+// --- picks on kept pictures --------------------------------------------------
+
+// How a picture records an object it showed: where each mesh stood, and how to
+// tell later whether the geometry under it is the same.
+function poseRecord(entry) {
+  entry.object.updateWorldMatrix(true, true);
+  const meshes = [];
+  entry.object.traverse(node => {
+    if (!node.isMesh) return;
+    const path = [];
+    for (let at = node; at && at !== entry.object; at = at.parent) path.unshift(at.parent.children.indexOf(at));
+    meshes.push({path, matrixWorld: node.matrixWorld.toArray(), geometry: {uuid: node.geometry.uuid,
+      version: node.geometry.attributes.position.version, vertices: node.geometry.attributes.position.count, indices: node.geometry.index?.count ?? null}});
+  });
+  return {id: entry.id, root: entry.object.matrixWorld.toArray(), meshes};
+}
+
+test('a pick on a kept picture finds what the picture showed, and says what has changed since', async () => {
+  const page = installedPage();
+  const view = {position: [2, 1, 6], target: [2, 0, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000};
+  const camera = new PerspectiveCamera(view.fov, 16 / 9, view.near, view.far);
+  camera.position.fromArray(view.position); camera.lookAt(new Vector3(...view.target)); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
+  const at = pictureFraction(view, 16 / 9, [2, 0.1, 0.5]);
+  const box = page.entries[1];
+  const pose = [poseRecord(box)];
+  box.object.position.x += 3;   // the box moves away after the picture
+  const later = await page.vantage.run('pick', {optics, at, pose});
+  assert.equal(later.hit?.id, 'box-1', 'the box the picture showed, where it stood then');
+  closeTo(later.hit.local, [0, 0.1, 0.5], 'the same spot on the box');
+  assert.equal(later.hit.pictured, true);
+  assert.equal(later.hit.moved, true, 'and it says the box has moved since');
+  assert.equal(later.hit.geometry.status, 'same');
+  const now = await page.vantage.run('pick', {optics, at});
+  assert.notEqual(now.hit?.id, 'box-1', 'without the picture\'s record the ray meets today\'s scene');
+  const mesh = box.object.children[0];
+  mesh.geometry.attributes.position.needsUpdate = true;
+  assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'edited');
+  mesh.geometry = new THREE.BoxGeometry(1, 1, 1);
+  assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'unverified',
+    'same shape counts but another geometry object: replaced, or the page reloaded');
+  mesh.geometry = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2);
+  assert.equal((await page.vantage.run('pick', {optics, at, pose})).hit.geometry.status, 'replaced');
+  page.entries.splice(1, 1);
+  const gone = await page.vantage.run('pick', {optics, at, pose});
+  assert.deepEqual(gone.missing, ['box-1'], 'an object the picture showed that is gone is named as missing');
+});
+
+test('pictures record where the objects they show stood', async () => {
+  const {state, pilot} = await launched();
+  state.objectPose = [{id: 'centre', root: Array(16).fill(1), meshes: []}, {id: 'side', root: Array(16).fill(2), meshes: []}];
+  const shot = await pilot.run('snap', {map: false});
+  assert.deepEqual(shot.scenePose.map(entry => entry.id), shot.objects.inView.map(object => object.id),
+    'only what the picture shows is recorded');
+  const burst = await pilot.run('burst', {count: 2, map: false});
+  for (const frame of burst.frames) assert.ok(Array.isArray(frame.scenePose), 'every burst frame records its objects');
 });

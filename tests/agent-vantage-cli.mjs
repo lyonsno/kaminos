@@ -159,14 +159,18 @@ test('pick on a kept picture converts its pixels and sends the camera that took 
   t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
   const optics = {projection: Array.from({length: 16}, (_, i) => i / 10), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1) / 10)};
   const frameOptics = {projection: Array.from({length: 16}, () => 2), viewInverse: Array.from({length: 16}, () => 3)};
+  const pose = [{id: 'kiln', root: Array.from({length: 16}, (_, i) => (i % 5 === 0 ? 1 : 0)), meshes: []}];
+  const framePose = [{id: 'beam', root: Array.from({length: 16}, (_, i) => (i % 5 === 0 ? 2 : 0)), meshes: []}];
   const recordPath = path.join(out, 'snap.json');
-  writeFileSync(recordPath, JSON.stringify({result: {kind: 'burst', image: {width: 1280, height: 720}, optics,
-    frames: [{index: 0, optics}, {index: 1, optics: frameOptics}]}}));
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'burst', image: {width: 1280, height: 720}, optics, scenePose: pose,
+    frames: [{index: 0, optics, scenePose: pose}, {index: 1, optics: frameOptics, scenePose: framePose}]}}));
   const first = await run(['--server', url, 'pick', '640', '180', '--picture', recordPath]);
   assert.equal(first.code, 0, first.stderr);
-  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.25], optics});
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.25], optics, pose},
+    'the camera and the objects the picture showed travel with the pick');
   const second = await run(['--server', url, 'pick', '0', '720', '--picture', recordPath, '--frame', '2']);
   assert.equal(second.code, 0, second.stderr);
   assert.deepEqual(received[1].body.args.at, [0, 1]);
   assert.deepEqual(received[1].body.args.optics, frameOptics, '--frame picks from that frame of a burst');
+  assert.deepEqual(received[1].body.args.pose, framePose);
 });

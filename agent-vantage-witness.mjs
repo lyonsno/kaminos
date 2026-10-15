@@ -191,6 +191,15 @@ try {
     pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.local.length === 3 && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
   const pickNothing = await vantageOk('pick', '0.5', '0.02', '--from', 'operator');
   check('a pick above everything hits nothing', pickNothing.result.hit === null, {hit: pickNothing.result.hit});
+  // The red box moves after the picture; a pick on that picture still finds it where it stood, and says it moved.
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, -3]}), scene.red);
+  const pickMoved = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
+  check('after the red box moves, a pick on the old picture still names it and says it moved',
+    pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.pictured === true && pickMoved.result.hit.moved === true
+    && pickMoved.result.hit.geometry?.status === 'same', {hit: pickMoved.result.hit});
+  const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
+  check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
 
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
