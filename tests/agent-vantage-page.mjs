@@ -1382,12 +1382,48 @@ test('a glance finishes its picture with the page\'s own tone mapping and colour
   const source = new W.PerspectiveCamera(50, 1, 0.1, 100); source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
   const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), coordinateSystem: W.WebGPUCoordinateSystem};
   const QuadRender = W.QuadMesh.prototype.render;
-  W.QuadMesh.prototype.render = function () { finishes.push([this.material.colorNode.toneMapping, this.material.colorNode.outputColorSpace]); };
+  // What the output node consumes: its effective tone mapping and the stages its setup builds.
+  const stages = node => { const names = []; node.setup({context: {toneMapping: W.NoToneMapping, outputColorSpace: W.NoColorSpace}}).traverse(item => names.push(item.constructor.name)); return names; };
+  W.QuadMesh.prototype.render = function () {
+    const finish = this.material.colorNode, built = stages(finish);
+    finishes.push([finish.getToneMapping(), finish.outputColorSpace, built.includes('ToneMappingNode'), built.includes('ColorSpaceNode')]);
+  };
   try {
     await glance.draw({optics, width: 4, height: 4}).ready;
     renderer.toneMapping = W.ACESFilmicToneMapping;
     await glance.draw({optics, width: 4, height: 4}).ready;
   } finally { W.QuadMesh.prototype.render = QuadRender; }
-  assert.deepEqual(finishes, [[W.AgXToneMapping, W.SRGBColorSpace], [W.ACESFilmicToneMapping, W.SRGBColorSpace]],
+  assert.deepEqual(finishes, [[W.AgXToneMapping, W.SRGBColorSpace, true, true], [W.ACESFilmicToneMapping, W.SRGBColorSpace, true, true]],
     'drawn into a target, the output stage would otherwise apply neither');
+});
+
+test('a glance and its pick map leave out the fire billboard drawn for the operator\'s camera', () => {
+  const scene = new THREE.Scene(), bridge = new THREE.Mesh(), kiln = new THREE.Object3D();
+  bridge.userData.kaminosVolumeBridge = {composition: 'main-renderer-plane'};
+  scene.add(bridge, kiln);
+  const hide = fromIndex('hideEditorObjectsForIdPass', {scene, sceneObjects: [{id: 'kiln', type: 'glb', object: kiln}], FLAME_EMITTER_TYPE: 'flame-emitter',
+    LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter', RIM_LIGHT_ID: 'rim-light', transformControls: null, selectionBoxes: new Map()});
+  const plain = hide({hide: []});
+  assert.equal(bridge.visible, true, 'a borrowed snap shows it, so its own pick map keeps it');
+  plain();
+  const restore = hide({hide: [], bridges: true});
+  assert.equal(bridge.visible, false, 'a glance draws from its own camera, so the billboard aimed at the operator is left out');
+  restore();
+  assert.equal(bridge.visible, true);
+});
+
+test('a glance names what it drew from the scene as it stood when drawn, not after readback', async () => {
+  const {state, host} = await launched();
+  let resolve;
+  host.renderView = options => ({ready: new Promise(done => { resolve = () => done({canvas: {glance: true}, width: options.width, height: options.height}); })});
+  const pending = createVantagePilot(host).run('glance', {map: false, maxSize: 640});
+  await new Promise(done => setTimeout(done, 0));
+  const drawnFov = cameraViewFromRecord(state.cameras[0], 1600 / 900, 3).fov;
+  state.objects = [];                       // the objects go, and the viewport turns, before readback completes
+  state.size = {width: 900, height: 1600};
+  resolve();
+  const shot = await pending;
+  assert.deepEqual(shot.objects.inView.map(object => object.id), ['centre'], 'named from the scene as it was drawn');
+  assert.equal(shot.view.fov, drawnFov, 'the view reported is the one drawn');
+  assert.equal(shot.aspect, 1600 / 900);
 });

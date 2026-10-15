@@ -21,8 +21,8 @@ export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = (
   // colour space from the target, which has neither, so it is given the
   // page's own, as they stand at each glance.
   const matchPage = stage => {
-    if (stage.finish.toneMapping !== renderer.toneMapping || stage.finish.outputColorSpace !== renderer.outputColorSpace) {
-      stage.finish.toneMapping = renderer.toneMapping;
+    if (stage.finish.getToneMapping() !== renderer.toneMapping || stage.finish.outputColorSpace !== renderer.outputColorSpace) {
+      stage.finish.setToneMapping(renderer.toneMapping);
       stage.finish.outputColorSpace = renderer.outputColorSpace;
       stage.material.needsUpdate = true;
     }
@@ -38,7 +38,8 @@ export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = (
     const stage = outputStage(), {source, quad} = stage;
     matchPage(stage);
     const saved = {target: renderer.getRenderTarget(), mrt: renderer.getMRT(), autoClear: renderer.autoClear};
-    const restoreScene = hideEditorObjects({hide});
+    // The fire billboard is aimed at the operator's camera, so a glance leaves it out with editor drawing.
+    const restoreScene = hideEditorObjects({hide, bridges: true});
     let ready;
     try {
       renderer.setMRT(null);

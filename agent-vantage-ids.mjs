@@ -101,7 +101,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
   // depth when `depth` is set. Everything up to the GPU submission happens in
   // this call, so the map shows the scene as it is at this call. `drawn` lists
   // every object drawn, with its number, and marks those drawn with a stand-in.
-  function draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false}) {
+  function draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false, bridges = false}) {
     const camera = cameraFor(optics);
     const target = new THREE.RenderTarget(width, height, {count: 2, type: THREE.UnsignedByteType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace,
       depthBuffer: true, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
@@ -111,7 +111,7 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
     const saved = {target: renderer.getRenderTarget(), mrt: renderer.getMRT(), clearColor: renderer.getClearColor(new THREE.Color()),
       clearAlpha: renderer.getClearAlpha(), autoClear: renderer.autoClear, objectFunction: renderer.getRenderObjectFunction(),
       background: scene.background, backgroundNode: scene.backgroundNode};
-    const restoreScene = hideEditorObjects({hide});
+    const restoreScene = hideEditorObjects({hide, bridges});
     let ready;
     try {
       scene.background = null;

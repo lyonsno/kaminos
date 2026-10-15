@@ -305,12 +305,14 @@ export function createVantagePilot(host) {
       const record = requireSub(pilot);
       if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
       const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
-      const optics = opticsOfView(viewOf(record), ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
+      // Everything the record says about the view is taken now, as it is drawn: a later edit or resize changes none of it.
+      const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
+      const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
       let drawn, drawing = null, drawError = null;
       try { drawn = host.renderView({optics, width, height, hide}); }
       catch (error) { fail('glance', `The sub's view could not be drawn: ${error?.message || error}`); }
       if (host.drawIds) {
-        try { drawing = host.drawIds({optics, width, height, hide, depth: true}); }
+        try { drawing = host.drawIds({optics, width, height, hide, depth: true, bridges: true}); }
         catch (error) { drawError = error?.message || String(error); }
       }
       let shot;
@@ -318,10 +320,9 @@ export function createVantagePilot(host) {
       catch (error) { fail('glance', `The sub's view could not be read back: ${error?.message || error}`); }
       const item = {drawing, drawError};
       await withPickMaps({shots: [item]});
-      const seen = objectsInProjection(optics, targets().filter(object => !(object.type === CAMERA_TYPE)), {excludeIds: subIds()});
       const images = withMap(picture('glance', shot, annotate, seen), map);
       host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
-      return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub: describe(record), view: viewOf(record),
+      return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub, view,
         aspect: ratio, naming: 'effective-camera', optics, layers: ['scene'], omitted: [...GLANCE_OMITS],
         image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },

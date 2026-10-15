@@ -12062,9 +12062,10 @@ async function initScene() {
   };
   // A pick map draws only the scene: editor drawing and the named objects are hidden for that one
   // synchronous draw and put back exactly, without touching selection feedback.
-  const hideEditorObjectsForIdPass=({hide=[]}={})=>{
+  // `bridges` also hides the fire billboard the volume bridge aims at the operator's camera, for draws from another camera.
+  const hideEditorObjectsForIdPass=({hide=[],bridges=false}={})=>{
     const hidden=[],keep=object=>{if(object?.visible)hidden.push(object);};
-    scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});
+    scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly||(bridges&&object.userData.kaminosVolumeBridge))keep(object);});
     for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);
     for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
     keep(transformControls?.getHelper());for(const box of selectionBoxes.values())keep(box);
