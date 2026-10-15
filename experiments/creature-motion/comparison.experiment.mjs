@@ -24,7 +24,7 @@ export async function loadComparisonRecipe(input,{fetchImpl=globalThis.fetch}={}
 
 // A caller-owned list of authenticated bodies and clips, composed in the ordinary
 // scene. Placement is a base transform, not a rewrite of the model output.
-export async function createCreatureComparison({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,makeLabel=labelSprite,fetchImpl=globalThis.fetch}={}){
+export async function createCreatureComparison({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,makeLabel=labelSprite,fetchImpl=globalThis.fetch,yieldWork=()=>new Promise(resolve=>setTimeout(resolve,0))}={}){
  const recipe=await loadComparisonRecipe(inputs,{fetchImpl});inputs=recipe.inputs;
  const specs=inputs.entries,document=host?.controls?.document;
  if(!host?.scene?.open||!document)throw Error('Comparison requires the actual Workbench scene and controls');
@@ -72,7 +72,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
  try{
   session=await host.scene.open();
   for(let i=0;i<specs.length;i++){
-   const spec=specs[i],runtime=createFullBodyRuntime({THREE,...data[i]});unattached.push(runtime);runtime.group.position.fromArray(spec.position);runtime.group.name=spec.label;
+   const spec=specs[i],runtime=createFullBodyRuntime({THREE,...data[i],retainPoses:mode!=='travel'});unattached.push(runtime);runtime.group.position.fromArray(spec.position);runtime.group.name=spec.label;
    const adapter=createGivenPaletteMotion({THREE,motion:data[i].motion,rigFrame:data[i].frame});
    const walking=createWalkingPoseAdapter({THREE,adapter,blendFrames:inputs.blend_frames??6});
    const source={...data[i].source,prompt:data[i].motion.prompt,seed:data[i].motion.seed,cfgScale:data[i].motion.cfgScale,presentation:'caller-positioned simultaneous comparison'};
@@ -98,8 +98,15 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
    pause(){active();unsubscribe();status='paused';present();refresh();return read();},
    restart(){active();seconds=0;status='playing';apply();start();present();return read();},
    seek({seconds:next}={}){active();if(!Number.isFinite(next)||next<0||next>duration)throw Error('Comparison seek outside source duration');unsubscribe();seconds=next;status='paused';apply();present();return read();},
-   presentation({mode:next}={}){active();if(!['in-place','travel','raw'].includes(next))throw Error('Unknown comparison presentation');unsubscribe();mode=next;seconds=0;status='paused';apply();present();return read();},
+   presentation({mode:next}={}){active();if(!['in-place','travel','raw'].includes(next))throw Error('Unknown comparison presentation');unsubscribe();mode=next;for(const row of rows)row.runtime.setPoseRetention(mode!=='travel');seconds=0;status='paused';apply();present();return read();},
   };
+  // The default comparison repeats a finite set of exact source-derived poses.
+  // Compute them once, yielding to the app between poses, rather than repeating
+  // six dense CPU skin solves on every live frame. Traveling remains uncached.
+  if(mode==='in-place')for(const row of rows){
+   for(let index=0;index<row.adapter.frames;index++){row.player.seek(index);await yieldWork();}
+   row.player.seek(0);record({kind:'creature.comparison.pose-retention',phase:'prepared',entry:row.spec.id,...row.runtime.read().poseCache});
+  }
   apply();if(inputs.play!==false)operations.play();if(globalThis.window)window.kaminosCreatureComparison=inspect;
   return {read,operations,dispose,mount({root,invoke}){
    const panel=document.createElement('section'),title=document.createElement('h3'),note=document.createElement('p'),output=document.createElement('output');title.textContent='Creature motion · paired parade';

@@ -2,7 +2,8 @@ import {skinTransport} from '../../hindquarter-live-core.mjs';
 
 // The verified Mushfinger body/weights and same rigid DQ transport, with scene
 // attachment left to Hotwet's owner session. No renderer or frame loop here.
-export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
+export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,retainPoses=false}) {
+ if(typeof retainPoses!=='boolean')throw Error('Pose retention must be boolean');
  const rig=manifest.bones.map(b=>({name:b.name,parent:b.parent,restMatrix:b.restMatrix.flat()})),channels=[...manifest.channels];
  let skin={manifest,rest,triangles,weights},disposed=false,skinRevision=0;
  const cleanupFailures=[];
@@ -30,7 +31,9 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
   matrix.decompose(bone.position,bone.quaternion,bone.scale);
   const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;bone.add(marker);
  }
- let cached='',updates=0,lastUpdateMs=0;
+ let cached='',updates=0,lastUpdateMs=0,deformations=0,cacheHits=0,cacheBytes=0;
+ const poses=new Map();
+ const clearPoses=()=>{poses.clear();cacheBytes=0;};
  function active(){if(disposed)throw Error('Full-body runtime is disposed');}
  function palette(){
   group.updateMatrixWorld(true);const inverseGroup=group.matrixWorld.clone().invert();
@@ -39,13 +42,21 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
  function update(){
   active();const matrices=palette();
   const key=matrices.flat().join(',');if(key===cached)return;
-  const begin=performance.now(),result=skinTransport(skin.rest,skin.weights,matrices);
-  geometry.attributes.position.array.set(result);geometry.attributes.position.needsUpdate=true;geometry.computeVertexNormals();geometry.computeBoundingSphere();geometry.computeBoundingBox();
+  const begin=performance.now(),retained=retainPoses?poses.get(key):null;
+  if(retained){
+   geometry.attributes.position.array.set(retained.positions);geometry.attributes.normal.array.set(retained.normals);geometry.attributes.normal.needsUpdate=true;
+   geometry.boundingSphere.copy(retained.sphere);geometry.boundingBox.copy(retained.box);cacheHits++;
+  }else{
+   const result=skinTransport(skin.rest,skin.weights,matrices);deformations++;
+   geometry.attributes.position.array.set(result);geometry.computeVertexNormals();geometry.computeBoundingSphere();geometry.computeBoundingBox();
+   if(retainPoses){const positions=geometry.attributes.position.array.slice(),normals=geometry.attributes.normal.array.slice();poses.set(key,{positions,normals,sphere:geometry.boundingSphere.clone(),box:geometry.boundingBox.clone()});cacheBytes+=positions.byteLength+normals.byteLength;}
+  }
+  geometry.attributes.position.needsUpdate=true;
   cached=key;updates++;lastUpdateMs=performance.now()-begin;
  }
  function replaceSkin(candidate){
   active();validate(candidate);
-  const begin=performance.now(),matrices=palette(),result=skinTransport(candidate.rest,candidate.weights,matrices);
+  const begin=performance.now(),matrices=palette(),result=skinTransport(candidate.rest,candidate.weights,matrices);deformations++;
   if(!result.every(Number.isFinite))throw Error('Exchanged skin deformation must be finite');
   const next=new THREE.BufferGeometry();
   try{
@@ -54,10 +65,10 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
   }catch(error){next.dispose();throw error;}
   // Commit only skin state. Actual Bone/mesh/group handles, material, placement
   // and the attached player's update function stay intact at their current pose.
-  const previous=geometry;geometry=next;mesh.geometry=next;skin=candidate;cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
+  const previous=geometry;geometry=next;mesh.geometry=next;skin=candidate;clearPoses();cached=matrices.flat().join(',');skinRevision++;updates++;lastUpdateMs=performance.now()-begin;
   try{previous.dispose();}catch(error){cleanupFailures.push({geometry:previous.uuid,message:error.message});}
   return runtime.read();
  }
- const runtime={group,bones,mesh,update,replaceSkin,read:()=>({route:'shared-owner-scene-full-body-dq',vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
+ const runtime={group,bones,mesh,update,replaceSkin,setPoseRetention(enabled){active();if(typeof enabled!=='boolean')throw Error('Pose retention must be boolean');retainPoses=enabled;if(!enabled)clearPoses();},read:()=>({route:'shared-owner-scene-full-body-dq',vertices:skin.manifest.vertices,bones:bones.size,skinRevision,updates,lastUpdateMs,poseCache:{enabled:retainPoses,entries:poses.size,hits:cacheHits,bytes:cacheBytes,deformations},cleanupFailure:cleanupFailures.at(-1)??null,cleanupFailures:structuredClone(cleanupFailures)}),dispose(){if(disposed)return;disposed=true;clearPoses();group.traverse(object=>{object.geometry?.dispose();for(const material of [object.material].flat().filter(Boolean))material.dispose();});}};
  update();return runtime;
 }

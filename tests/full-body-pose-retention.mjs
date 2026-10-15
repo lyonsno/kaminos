@@ -1,0 +1,21 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {createFullBodyRuntime} from '../experiments/creature-motion/full-body-runtime.mjs';
+const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
+const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1])};
+const r=createFullBodyRuntime({THREE,...data,retainPoses:true});
+assert.equal(r.read().poseCache?.enabled,true,'finite repeated-pose consumers must opt into geometry reuse');
+const bone=r.bones.get('pelvis'),capture=()=>({positions:[...r.mesh.geometry.attributes.position.array],normals:[...r.mesh.geometry.attributes.normal.array],box:r.mesh.geometry.boundingBox.clone(),sphere:r.mesh.geometry.boundingSphere.clone()});
+bone.position.x=1;r.update();const pose=capture(),deformations=r.read().poseCache.deformations;
+bone.position.x=2;r.update();bone.position.x=1;r.update();
+assert.deepEqual(capture(),pose,'positions, normals and bounds must replay the exact computed pose');
+assert.equal(r.read().poseCache.deformations,deformations+1,'returning to an existing pose must not recompute skinning');
+assert.equal(r.read().poseCache.hits,1);assert.equal(r.read().poseCache.entries,3);
+bone.position.x=3;r.update();assert.equal(r.read().poseCache.deformations,deformations+2,'new articulation cannot reuse a stale pose');
+r.replaceSkin({...data,rest:new Float32Array([0,0,0,2,0,0,0,2,0])});assert.equal(r.read().poseCache.entries,0,'skin exchange invalidates all retained geometry');
+bone.position.x=1;r.update();assert.notDeepEqual(capture().positions,pose.positions);
+r.setPoseRetention(false);assert.equal(r.read().poseCache.entries,0);bone.position.x=2;r.update();bone.position.x=1;r.update();assert.equal(r.read().poseCache.entries,0,'unbounded traveling poses are not retained');
+assert.throws(()=>r.setPoseRetention('yes'),/boolean/);r.dispose();assert.equal(r.read().poseCache.bytes,0);assert.throws(()=>r.setPoseRetention(true),/disposed/);
+const uncached=createFullBodyRuntime({THREE,...data});assert.equal(uncached.read().poseCache.enabled,false,'ordinary authoring remains uncached by default');uncached.dispose();
+console.log('Opt-in finite pose retention preserves exact geometry/normals/bounds, rejects stale skin/articulation and releases all retained bytes');
