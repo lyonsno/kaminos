@@ -70,7 +70,11 @@ try{
   const savedOwner=await page.evaluate(async()=>{const {readOwnerExperimentAddress}=await import('/owner-experiment-entry.mjs');return readOwnerExperimentAddress(location);});
   assert.equal(JSON.parse(savedOwner.inputsText).pointSampling,'paired');
   const saved=await retain({name:'quadrature-paired',owner:savedOwner,observe});report.saved={filename:saved.filename,url:saved.url};await write();
-  report.phase='cold-reopen';await page.goto('about:blank');await page.goto(saved.url);await settle(4,'paired');report.reopened=await observe();await page.screenshot({path:out+'/reopened.png'});
+  report.phase='cold-reopen';await page.goto('about:blank');await page.goto(saved.url);
+  // The preset trampoline can briefly expose a valid old mount before its
+  // scene navigation. Wait for actual scene admission before owner admission.
+  await page.waitForFunction(()=>/^(Scene loaded|Volume scene loaded)/.test(document.getElementById('info-bar')?.textContent||''));
+  await settle(4,'paired');report.reopened=await observe();await page.screenshot({path:out+'/reopened.png'});
   return report.saved;
  }});
  report.status='passed';report.phase='complete';
