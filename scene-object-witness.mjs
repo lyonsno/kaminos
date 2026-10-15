@@ -1574,10 +1574,33 @@ async function runAuthoredWaterDropScenario(ws) {
     mode.value='finite_drop';mode.onchange();await fields.querySelector('[data-apply]').onclick();
     window.kaminosWaterSources.selectSimulation();
     if(document.getElementById('selected-water-simulation-properties').hidden)throw Error('Water simulation selection has no properties');
+    const simulationFields=document.getElementById('water-simulation-property-slot');
+    if(!simulationFields?.querySelector('[data-passes]')||!document.getElementById('authoring-inspector').contains(simulationFields))throw Error('Editable simulation settings are missing from right inspector');
+    simulationFields.querySelector('[data-passes]').value='2';simulationFields.querySelector('[data-passes]').dispatchEvent(new Event('input',{bubbles:true}));await simulationFields.querySelector('[data-simulation-apply]').onclick();
+    if(window.kaminosWaterSources.read().simulation.settings.densityIterations!==2)throw Error('Right simulation Apply did not edit accepted passes');
     window.selectSceneObject(id);window.kaminosFrameSelected();
     const before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
     return {id,before,source:await(await fetch('/api/runtime-config')).json(),initial:window.kaminosWaterSources.read(),propertiesParent:properties.parentElement.id,chooser:chooser.value};
   })()`,{timeoutMs:60000});
+  lastEvidence.authoredWater.rejections=[];
+  for(const context of ['assets','authoring']){
+    phase='authored-water-rejected-properties-'+context;
+    const rejection=await evaluate(ws,`(async()=>{
+      window.__kaminosSetActiveTab('assets');
+      if(${JSON.stringify(context)}==='authoring')document.querySelector('[data-workspace-mode="authoring"]').click();
+      const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]'),before=window.kaminosWaterSources.read().selected.settings;
+      bound.value='4';bound.dispatchEvent(new Event('input',{bubbles:true}));await fields.querySelector('[data-apply]').onclick();
+      const alert=fields.querySelector('[data-source-error]');
+      if(!alert?.textContent.includes('positive extents')||!alert.getClientRects().length)throw Error('Source rejection explanation is not visible beside properties');
+      if(JSON.stringify(window.kaminosWaterSources.read().selected.settings)!==JSON.stringify(before))throw Error('Rejected source changed accepted settings');
+      alert.scrollIntoView({block:'center'});return {context:${JSON.stringify(context)},error:alert.textContent,visible:true,accepted:before};
+    })()`);lastEvidence.authoredWater.rejections.push(rejection);
+    await capturePngScreenshot(ws,siblingPngPath('-error-'+context));
+    await evaluate(ws,`(async()=>{const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]');bound.value='-1';bound.dispatchEvent(new Event('input',{bubbles:true}));await fields.querySelector('[data-apply]').onclick();if(fields.querySelector('[data-source-error]').textContent)throw Error('Valid source Apply did not clear rejection');})()`);
+  }
+  await evaluate(ws,`window.kaminosWaterSources.selectSimulation()`);
+  await capturePngScreenshot(ws,siblingPngPath('-simulation'));
+  await evaluate(ws,`window.selectSceneObject(${JSON.stringify(lastEvidence.authoredWater.id)});window.__kaminosSetActiveTab('finger-fluid-bench')`);
   await delay(600);await capturePngScreenshot(ws,siblingPngPath('-preview'));
   phase='authored-water-drop-release';
   const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;

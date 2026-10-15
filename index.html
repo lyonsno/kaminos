@@ -12721,7 +12721,7 @@ function installSharedWorkbench() {
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
   });
-  import('./authored-water-controls.mjs').then(({mountAuthoredWaterControls})=>{authoredWaterControls=mountAuthoredWaterControls({document,root:byId('tab-finger-fluid-bench'),sourceRoot:byId('water-source-property-slot'),controls:{installNumberDrag:installRelativeNumberDrag},api:window.kaminosWaterSources});}).catch(error=>setInfo(error.message));
+  import('./authored-water-controls.mjs').then(({mountAuthoredWaterControls})=>{authoredWaterControls=mountAuthoredWaterControls({document,root:byId('tab-finger-fluid-bench'),sourceRoot:byId('water-source-property-slot'),simulationRoot:byId('water-simulation-property-slot'),controls:{installNumberDrag:installRelativeNumberDrag},api:window.kaminosWaterSources});}).catch(error=>setInfo(error.message));
   byId('water-open-controls').onclick=()=>{if(authoringWorkspace.state().mode!=='workbench')authoringWorkspace.setMode('workbench');setActiveTab('finger-fluid-bench');};
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
