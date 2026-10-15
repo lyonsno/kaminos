@@ -3985,6 +3985,7 @@ function syncWaterProxy() {
  if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
+window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
  proxyLayer:PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(PROXY_LAYER):null,meshLayerMask:waterProxy?.layer?.mesh.layers.mask??null,required:Object.fromEntries(proxyRequirements),

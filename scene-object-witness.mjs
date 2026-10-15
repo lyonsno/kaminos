@@ -581,6 +581,62 @@ async function runWaterProxySurfelsScenario(ws) {
   assert.deepEqual(failures, [], `water proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
 
+
+// Water proxy cadence: presented host frames and sim steps per second for the
+// full render, the proxy stepping every frame, and the proxy stepping every
+// fourth frame. Rounds rotate the order so drifting ambient GPU load (sampled
+// per window) falls on every configuration alike. A measurement: it fails only
+// when a configuration does not take effect.
+async function runWaterProxyCadenceScenario(ws) {
+  phase = 'scenario-water-proxy-cadence';
+  const rounds = Number(args.get('--rounds') || 4), windowMs = Number(args.get('--window-ms') || 2000);
+  const evidence = lastEvidence.waterProxyCadence = { rounds, windowMs, windows: [] };
+  await evaluate(ws, `(async () => {
+    const trigger = document.getElementById('scene-add-menu-trigger'); trigger.click();
+    document.querySelector('#scene-add-menu-popup [data-scene-add="water-emitter"]').click();
+    for (let i = 0; i < 240; i++) { await new Promise(r => setTimeout(r, 125)); if (window.kaminosLocalLiquidState?.()?.lastFrame?.frameId) return true; }
+    throw new Error('Kaminos local-water host did not produce its first frame');
+  })()`, { timeoutMs: 90000 });
+  await delay(6000);
+  const utilization = () => new Promise(resolve => {
+    const child = spawn('/usr/sbin/ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator']);
+    let out = ''; child.stdout.on('data', d => { out += d; });
+    child.on('close', () => { const m = /"Device Utilization %"=(\d+)/.exec(out); resolve(m ? Number(m[1]) : null); });
+    child.on('error', () => resolve(null));
+  });
+  const configs = [{ label: 'full', water: 'full', stepEvery: 1 }, { label: 'proxy-step1', water: 'proxy', stepEvery: 1 }, { label: 'proxy-step4', water: 'proxy', stepEvery: 4 }];
+  for (let round = 0; round < rounds; round++) {
+    for (let k = 0; k < configs.length; k++) {
+      const config = configs[(k + round) % configs.length];
+      const applied = await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ water: '${config.water}' }); window.kaminosWaterProxyStepEvery(${config.stepEvery}); return window.kaminosWaterProxyDebugState(); })()`);
+      await delay(600);
+      const samples = [];
+      const sampler = setInterval(async () => { const u = await utilization(); if (u !== null) samples.push(u); }, 400);
+      const measured = await evaluate(ws, `(async () => {
+        const read = () => window.kaminosLocalLiquidState?.() || {};
+        const a = read(), t0 = performance.now();
+        await new Promise(resolve => setTimeout(resolve, ${windowMs}));
+        const b = read(), seconds = (performance.now() - t0) / 1000, proxy = window.kaminosWaterProxyDebugState();
+        return { hostFramesPerSecond: ((b.frameCount ?? 0) - (a.frameCount ?? 0)) / seconds, stepsPerSecond: ((b.solver?.stepCount ?? 0) - (a.solver?.stepCount ?? 0)) / seconds,
+          presentation: proxy.hostPresentation, timePolicy: b.lastFrame?.simulationTimePolicy ?? null, surfels: proxy.layer?.count ?? null };
+      })()`, { timeoutMs: windowMs + 20000 });
+      clearInterval(sampler);
+      const window = { round, ...config, ...measured, gpuUtilization: samples };
+      evidence.windows.push(window);
+      assert.equal(measured.presentation, config.water, `configuration ${config.label} did not take effect: ${JSON.stringify(applied)}`);
+    }
+  }
+  const summary = {};
+  for (const config of configs) {
+    const ws_ = evidence.windows.filter(w => w.label === config.label);
+    const fps = ws_.map(w => w.hostFramesPerSecond).sort((a, b) => a - b), steps = ws_.map(w => w.stepsPerSecond).sort((a, b) => a - b);
+    const util = ws_.flatMap(w => w.gpuUtilization).sort((a, b) => a - b);
+    summary[config.label] = { hostFpsMedian: fps[fps.length >> 1], hostFpsMin: fps[0], hostFpsMax: fps.at(-1), stepsPerSecondMedian: steps[steps.length >> 1], gpuUtilizationMedian: util[util.length >> 1] ?? null };
+  }
+  evidence.summary = summary;
+  await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ water: 'full' }); window.kaminosWaterProxyStepEvery(1); return true; })()`);
+}
+
 // Arrival contract for a fresh viewer link: the asset rests on the live ground
 // plane and the camera frames all of it at a readable size.
 async function runMeshAssetArrivalScenario(ws) {
@@ -6328,6 +6384,8 @@ try {
     await runViewportWireframeFireShadowScenario(ws);
   } else if (scenario === 'water-proxy-surfels') {
     await runWaterProxySurfelsScenario(ws);
+  } else if (scenario === 'water-proxy-cadence') {
+    await runWaterProxyCadenceScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
     await runMeshAssetArrivalScenario(ws);
   } else if (scenario === 'snap-ground-level') {
