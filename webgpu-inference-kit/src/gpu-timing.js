@@ -43,6 +43,7 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
     pendingKernels: 0,
     invalidKernels: 0,
     untimedKernels: 0,
+    listenerErrors: 0,
     totalGpuMs: 0,
   };
   if (summary.status !== 'active') {
@@ -75,7 +76,11 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
       token.status = 'invalid';
       summary.invalidKernels += 1;
     }
-    for (const listener of token.listeners) listener(token);
+    // Observers report timing; they must not interrupt batch settlement or kernel admission.
+    for (const listener of token.listeners) {
+      try { listener(token); }
+      catch { summary.listenerErrors += 1; }
+    }
   }
 
   function begin() {
