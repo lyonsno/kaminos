@@ -22424,6 +22424,7 @@ function createFlameQuickFields() {
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
+    writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
