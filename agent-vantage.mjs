@@ -3,11 +3,13 @@
 // operator selects and moves like any other object. A picture from the sub
 // borrows the viewport camera for a few frames, so every layer the page draws
 // (scene, fire volume, water) renders from the sub through its own loop, then
-// the operator's view is restored.
+// the operator's view is restored. Each picture also keeps a pick map, the
+// renderer's own record of which object it drew at each pixel.
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
-  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, rayThrough, rayCrossesBox, insideClipDepth,
+  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, opticsInConvention, rayThrough, rayCrossesBox, insideClipDepth,
+  finishPickMap, NOTHING_DRAWN, UNIDENTIFIED,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -36,6 +38,10 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * input for the whole capture, so nothing saves or acts through the
  * borrowed view; it returns a release function. `frameState().layers` maps canvas ids to frame counters
  * and `cameraMatrices()` returns the matrices the page is rendering with.
+ * `drawIds({optics, width, height, hide, region})` draws a pick map now and
+ * returns the rows describing what it drew, the clouds, fields and water
+ * drawn outside it, and a promise of the numbers read back. `surfaceOf`
+ * casts a pick's ray at the mesh a pick map named.
  */
 export function createVantagePilot(host) {
   // `released` resolves when the current picture releases the camera.
@@ -118,7 +124,7 @@ export function createVantagePilot(host) {
         if (check && deviation.changed) {
           fail('view-changed', `The viewport camera changed during the capture (${deviation.position.toFixed(3)} m, ${deviation.angle.toFixed(2)}° heading, ${deviation.roll.toFixed(2)}° roll, ${deviation.fov.toFixed(2)}° lens); nothing was kept`);
         }
-        const optics = host.cameraMatrices?.() ?? null, rows = targets(), pose = host.pose?.() ?? null, shot = host.compose({maxSize}), stale = [], unverified = [];
+        const optics = host.cameraMatrices?.() ?? null, rows = targets(), shot = host.compose({maxSize}), stale = [], unverified = [];
         // Every pictured canvas must have drawn since the view was requested.
         for (const layer of shot.layers) {
           const now = frame.layers?.[layer], then = since.layers?.[layer];
@@ -128,7 +134,13 @@ export function createVantagePilot(host) {
         if (stale.length) fail('stale-frame', `Kaminos did not draw a new frame from the requested view in ${stale.join(', ')}, so nothing was kept. The page may still be loading or paused.`);
         if (host.blank?.(shot.canvas)) fail('blank-frame', 'The picture came back as one flat color, which usually means the page has not drawn its scene yet. Try again in a moment; if the sub faces a blank surface, point it elsewhere.');
         since = frame;
-        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, pose, frame, shot, unverified});
+        // The pick map is drawn in the task that composed the picture, with the matrices it recorded.
+        let drawing = null, drawError = null;
+        if (host.drawIds && optics) {
+          try { drawing = host.drawIds({optics, width: shot.width, height: shot.height, hide: record ? [record.id] : []}); }
+          catch (error) { drawError = error?.message || String(error); }
+        }
+        shots.push({index, atMs: host.now() - started, view, deviation, optics, rows, frame, shot, unverified, drawing, drawError});
       }
       return {requested, shots, before, after: host.frameState()};
     } finally {
@@ -143,16 +155,27 @@ export function createVantagePilot(host) {
     }
   }
 
-  // The recorded pose of the objects a picture shows, for picks on it later.
-  const shownPose = (shot, names) => shot.pose ? shot.pose.filter(entry => names.inView.some(object => object.id === entry.id)) : null;
+  // Pick maps are read back once the camera is released. A picture whose map
+  // failed is still a picture; it says why it has no map.
+  async function withPickMaps(taken) {
+    for (const item of taken.shots) {
+      item.pickMap = null;
+      if (!item.drawing) continue;
+      try { item.pickMap = finishPickMap(await item.drawing.ready, item.drawing.rows, item.drawing.context); }
+      catch (error) { item.drawError = error?.message || String(error); }
+      delete item.drawing;
+    }
+    return taken;
+  }
+  const pickMapOf = item => ({pickMap: item.pickMap ?? null, ...(item.drawError ? {pickMapError: item.drawError} : {})});
 
   function pictureResult({kind, routeName, record, taken, settle, hideHelpers, images, seen, extra = {}}) {
     const first = taken.shots[0];
     return {schema: VANTAGE_SCHEMA, kind, route: routeName, ...(record ? {pilot: pilotOf(record), sub: describe(record)} : {}),
       requestedView: taken.requested, view: first.view, viewDeviation: first.deviation, aspect: aspect(),
       layers: first.shot.layers, unverifiedLayers: [...new Set(taken.shots.flatMap(item => item.unverified))],
-      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, scenePose: shownPose(first, seen), settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
-      image: {width: first.shot.width, height: first.shot.height}, images, objects: seen,
+      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
+      image: {width: first.shot.width, height: first.shot.height}, images, objects: seen, ...(kind === 'burst' ? {} : pickMapOf(first)),
       frame: {before: taken.before, after: taken.after}, capturedAt: new Date(host.now()).toISOString(), ...extra};
   }
 
@@ -258,7 +281,7 @@ export function createVantagePilot(host) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record), hideHelpers = !helpers;
-      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers});
+      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers}));
       const seen = namesFor(taken.shots[0], hideHelpers);
       const images = withMap(picture('snap', taken.shots[0].shot, annotate, seen), map);
       host.shutter?.({kind: 'snap', label: record.label, image: images[0]});
@@ -267,7 +290,7 @@ export function createVantagePilot(host) {
 
     async peek({maxSize, annotate, clean, map}) {
       admitCapture();
-      const taken = await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean});
+      const taken = await withPickMaps(await capture({borrow: false, check: false, settle: 1, maxSize, hideHelpers: clean}));
       const seen = namesFor(taken.shots[0], clean);
       const images = withMap(picture('peek', taken.shots[0].shot, annotate, seen), map);
       return pictureResult({kind: 'peek', routeName: 'operator-view', taken, settle: 1, hideHelpers: clean, images, seen});
@@ -277,7 +300,7 @@ export function createVantagePilot(host) {
       const record = requireSub(pilot);
       admitCapture();
       const {route: routeName, borrow} = route(record);
-      const taken = await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval});
+      const taken = await withPickMaps(await capture({record, borrow, check: true, settle, maxSize, hideHelpers: true, frames: count, interval}));
       const seen = namesFor(taken.shots[0], true);
       const sheet = host.sheet(taken.shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
@@ -289,17 +312,18 @@ export function createVantagePilot(host) {
         extra: {interval, frames: taken.shots.map(item => {
           const names = namesFor(item, true);
           return {index: item.index, atMs: item.atMs, frame: item.frame, view: item.view, viewDeviation: item.deviation,
-            optics: item.optics ?? null, scenePose: shownPose(item, names), objects: names};
+            optics: item.optics ?? null, ...pickMapOf(item), objects: names};
         })}});
     },
 
-    // What lies under a point of a view or of a kept picture: the first object
-    // the ray meets, where on it, and the fields it passes through. Picks read
-    // the scene's geometry and render nothing, so they never borrow the camera.
-    pick({pilot, from, at, optics, pose}) {
+    // What lies under a point of a view or of a kept picture. The answer is
+    // the renderer's: a kept picture's pick map was drawn with the picture,
+    // and a live pick draws one pixel of a pick map now. The point on the
+    // object comes from casting the ray at that mesh where it was drawn.
+    async pick({pilot, from, at, optics, pictured, scene}) {
       let source, camera;
-      // A camera without the objects its picture showed is cast into the scene as it is now.
-      if (optics) { source = pose ? 'picture' : 'camera'; camera = optics; }
+      if (pictured) { source = 'picture'; camera = optics; }
+      else if (optics) { source = 'camera'; camera = optics; }
       else if (from === 'operator') {
         // During a picture the viewport camera is the sub's, not the operator's.
         if (capturing) fail('busy', 'The sub is taking a picture; pick from the operator view after it');
@@ -311,15 +335,55 @@ export function createVantagePilot(host) {
         const record = requireSub(pilot), state = host.cameras.state(), through = state.mode === 'camera' && state.activeId === record.id;
         if (through && capturing) fail('busy', 'The sub is taking a picture; pick after it');
         source = record.id;
-        camera = through ? host.cameraMatrices() : opticsOfView(viewOf(record), aspect());
+        camera = through ? host.cameraMatrices() : opticsOfView(viewOf(record), aspect(), {coordinateSystem: host.coordinateSystem});
       }
-      if (!host.raycast) fail('pick', 'This page cannot cast rays into its scene');
-      const ray = rayThrough(camera, at), {hits, missing = [], unresolved = [], reconstruction = null} = host.raycast(ray, {exclude: subIds(), pose: pose ?? null, optics: camera});
-      const fields = host.extraTargets().filter(field => field.bounds).map(field => ({field, crossing: rayCrossesBox(ray, field.bounds)}))
-        .filter(item => item.crossing).map(({field, crossing}) => ({id: field.id, label: field.label, type: field.type, enter: crossing.enter, exit: crossing.exit}));
-      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, hit: hits[0] ?? null,
-        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields, missing, unresolved, reconstruction,
-        pickedAt: new Date(host.now()).toISOString()};
+      const ray = rayThrough(camera, at);
+      let row, instance = 0, instanceMatrix = null, context;
+      if (pictured) {
+        ({instance = 0, instanceMatrix = null, ...row} = pictured);
+        context = scene ?? {clouds: [], fields: [], water: false};
+      } else {
+        if (!host.drawIds) fail('pick', 'This page cannot draw a pick map, so it cannot say what is drawn at a point');
+        const {width, height} = host.viewportSize(), w = Math.max(1, Math.round(width)), h = Math.max(1, Math.round(height));
+        const pixel = [Math.min(w - 1, Math.floor(at[0] * w)), Math.min(h - 1, Math.floor(at[1] * h))];
+        let drawing, ids;
+        try {
+          drawing = host.drawIds({optics: host.coordinateSystem ? opticsInConvention(camera, host.coordinateSystem) : camera,
+            width: w, height: h, hide: subIds(), region: [...pixel, 1, 1]});
+          ids = await drawing.ready;
+        } catch (error) { fail('pick', `The pick map could not be drawn: ${error?.message || error}`); }
+        instance = ids.instances[0];
+        row = ids.objects[0] === NOTHING_DRAWN ? {n: NOTHING_DRAWN} : drawing.rows.find(item => item.n === ids.objects[0]) ?? {n: ids.objects[0], unnumbered: true};
+        if (row.instanceArray && (instance + 1) * 16 <= row.instanceArray.length) instanceMatrix = Array.from(row.instanceArray.slice(instance * 16, instance * 16 + 16));
+        context = drawing.context;
+      }
+      let hit = null, drawn = null;
+      if (row.id != null) {
+        const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera}), instanced = !!(instanceMatrix || row.instanceArray);
+        hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
+          distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
+          pointBasis: found.basis ?? null, geometry: found.geometry ?? null,
+          surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
+          ...(row.coverage ? {coverage: row.coverage} : {})};
+      } else {
+        drawn = row.n === NOTHING_DRAWN ? {kind: 'nothing'} : row.n === UNIDENTIFIED || row.unnumbered ? {kind: 'unidentified', n: row.n}
+          : {kind: 'not-a-scene-object', name: row.name ?? null, type: row.type ?? null};
+      }
+      // What the pick map cannot see: point clouds and simulation fields along the ray in front of
+      // the hit (anywhere along it when the depth is unknown), and water from the local water host.
+      const depth = hit?.distance ?? Infinity, crossing = item => ({item, crossing: rayCrossesBox(ray, item.bounds)});
+      const fields = context.fields.map(crossing).filter(item => item.crossing)
+        .map(({item, crossing: {enter, exit}}) => ({id: item.id, label: item.label, type: item.type, enter, exit})).sort((a, b) => a.enter - b.enter);
+      const unresolved = [
+        ...context.clouds.map(crossing).filter(({item, crossing: c}) => c && c.enter < depth && item.id !== row.id)
+          .map(({item, crossing: c}) => ({id: item.id, label: item.label, type: item.type, distance: c.enter, reason: 'point clouds are drawn outside the pick map'})),
+        ...fields.filter(field => field.enter < depth)
+          .map(field => ({id: field.id, label: field.label, type: field.type, distance: field.enter, reason: 'simulation fields are drawn outside the pick map'})),
+      ].sort((a, b) => a.distance - b.distance);
+      if (context.water) unresolved.push({id: 'local-water', label: 'Water', type: 'local-water', distance: null, reason: 'the local water host draws water outside the pick map'});
+      if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
+      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, referent: pictured ? 'pictured' : 'rendered', hit,
+        ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
     },
   };
 
@@ -687,7 +751,6 @@ const animationFrames = (window, count) => new Promise(resolve => {
   window.requestAnimationFrame(tick);
 });
 
-const isPickable = entry => entry.object && entry.type !== CAMERA_TYPE && entry.type !== 'light';
 const meshPath = (root, node) => {
   const path = [];
   for (let at = node; at && at !== root; at = at.parent) path.unshift(at.parent ? at.parent.children.indexOf(at) : -1);
@@ -700,18 +763,18 @@ const shownChain = object => {
   }
   return true;
 };
-const materialDrawn = material => !!material && material.visible !== false && !(material.transparent && material.opacity <= 0);
-const anyMaterialDrawn = mesh => (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).some(materialDrawn);
-// FNV-1a over up to 512 evenly spaced values of an array-like, quantized, so the
-// same content can be recognised after a page reload. It is a sample: an edit
-// between sampled values can escape it.
-function sampled(count, valueAt) {
+// FNV-1a over every component of up to 512 evenly spaced items, quantized, so
+// the same content can be recognised after a page reload. It is a sample: an
+// edit to an item between the sampled ones can escape it.
+function sampled(count, itemSize, valueAt) {
   let hash = 0x811c9dc5;
   const mix = value => { hash ^= value & 0xff; hash = Math.imul(hash, 0x01000193) >>> 0; };
   const step = Math.max(1, Math.floor(count / 512));
   for (let i = 0; i < count; i += step) {
-    const q = Math.round(valueAt(i) * 1e5);
-    mix(q); mix(q >> 8); mix(q >> 16); mix(q >> 24);
+    for (let c = 0; c < itemSize; c++) {
+      const q = Math.round(valueAt(i, c) * 1e5);
+      mix(q); mix(q >> 8); mix(q >> 16); mix(q >> 24);
+    }
   }
   return hash.toString(16).padStart(8, '0');
 }
@@ -724,163 +787,130 @@ const attributeId = attribute => {
   if (!attributeIds.has(attribute)) attributeIds.set(attribute, nextAttributeId++);
   return attributeIds.get(attribute);
 };
+// An interleaved attribute's data and edit count live on its shared buffer.
+const storeOf = attribute => (attribute?.isInterleavedBufferAttribute ? attribute.data : attribute);
 // How to recognise the geometry under a mesh later: the geometry object, its
-// position and index attributes and their edit counts, sampled content, and
-// for an instanced mesh a fingerprint of its instance matrices.
-function geometryIdentity(mesh, session = null) {
-  const geometry = mesh?.geometry, position = geometry?.attributes?.position, index = geometry?.index;
+// position and index attributes, their stores and edit counts, sampled content,
+// and for an instanced mesh its instance matrices.
+export function geometryIdentity(mesh, session = null) {
+  const geometry = mesh?.geometry, position = geometry?.attributes?.position, index = geometry?.index, store = storeOf(position);
+  const instances = mesh?.isInstancedMesh ? mesh.instanceMatrix : null;
   return {uuid: geometry?.uuid ?? null, session,
-    position: attributeId(position), version: position?.version ?? null, vertices: position?.count ?? null,
+    position: attributeId(position), positionStore: attributeId(store), version: store?.version ?? null, vertices: position?.count ?? null,
     index: attributeId(index), indexVersion: index?.version ?? null, indices: index?.count ?? null,
-    sample: position ? sampled(position.count * 3, i => position.getComponent(Math.floor(i / 3), i % 3)) : null,
-    indexSample: index ? sampled(index.count, i => index.getX(i)) : null,
-    ...(mesh?.isInstancedMesh ? {instances: `${mesh.count}:${sampled(mesh.instanceMatrix.array.length, i => mesh.instanceMatrix.array[i])}`} : {})};
+    sample: position ? sampled(position.count, position.itemSize, (i, c) => position.getComponent(i, c)) : null,
+    indexSample: index ? sampled(index.count, 1, i => index.getX(i)) : null,
+    ...(instances ? {instanceMatrix: attributeId(instances), instanceVersion: instances.version, instanceCount: mesh.count,
+      instanceSample: sampled(mesh.count, 16, (i, c) => instances.array[i * 16 + c])} : {})};
 }
 // Whether the geometry under a mesh is the one a picture recorded. Within one
 // page session a different geometry object is a replacement, and any change to
-// its attributes, edit counts or sampled content is an edit. Across sessions
-// identities differ, so counts and samples decide likely-same or replaced.
-function geometryStatus(recorded, current, session) {
+// its attributes, stores, edit counts or sampled content is an edit. Across
+// sessions identities differ, so counts and samples decide likely-same or replaced.
+export function geometryStatus(recorded, current, session) {
   if (!current) return 'replaced';
+  if (!recorded) return 'unverified';
   if (session && recorded.session === session) {
     if (recorded.uuid !== current.uuid) return 'replaced';
-    const keys = ['position', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample'];
+    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample',
+      'instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
     return keys.every(key => recorded[key] === undefined || recorded[key] === current[key]) ? 'same' : 'edited';
   }
-  if (recorded.vertices !== current.vertices || recorded.indices !== current.indices) return 'replaced';
+  if (recorded.vertices !== current.vertices || recorded.indices !== current.indices || (recorded.instanceCount ?? null) !== (current.instanceCount ?? null)) return 'replaced';
   if (recorded.sample && current.sample) {
-    return recorded.sample === current.sample && (recorded.indexSample ?? null) === (current.indexSample ?? null) ? 'likely-same' : 'replaced';
+    return ['sample', 'indexSample', 'instanceSample'].every(key => (recorded[key] ?? null) === (current[key] ?? null)) ? 'likely-same' : 'replaced';
   }
   return 'unverified';
 }
-const sameMatrix = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(value)));
 const worldBounds = (THREE, object) => {
   const box = new THREE.Box3().setFromObject(object);
   return box.isEmpty() ? null : {min: box.min.toArray(), max: box.max.toArray()};
 };
 
-// What a picture records about each object it could show: where its visible
-// meshes stood, how to recognise their geometry, its world bounds, and the
-// bounds of any point cloud in it. Hidden meshes and meshes whose materials
-// draw nothing are left out, as the picture did not show them. `session` names
-// the page session whose identities these are.
-export function poseOfEntries(entries, {session = null, THREE = null} = {}) {
-  const poses = [];
-  for (const entry of entries) {
-    if (!isPickable(entry) || !shownChain(entry.object)) continue;
-    entry.object.updateWorldMatrix(true, true);
-    const meshes = [], clouds = [];
-    entry.object.traverse(node => {
-      if (!shownChain(node)) return;
-      if (node.isMesh && anyMaterialDrawn(node)) meshes.push({path: meshPath(entry.object, node), matrixWorld: node.matrixWorld.toArray(), geometry: geometryIdentity(node, session)});
-      if (node.isPoints && THREE) { const bounds = worldBounds(THREE, node); if (bounds) clouds.push({path: meshPath(entry.object, node), bounds}); }
-    });
-    poses.push({id: entry.id, root: entry.object.matrixWorld.toArray(), ...(THREE ? {bounds: worldBounds(THREE, entry.object)} : {}), meshes, clouds});
-  }
-  return poses;
+// What a pick map says about each object its ID pass drew: the scene entry it
+// belongs to and its mesh path and, as they stood when it was drawn, its world
+// matrix, its entry's, its geometry and its instance matrices. A drawing that
+// belongs to no entry (the ground, a proxy) keeps its name and type.
+export function drawnRows(entries, drawn, session) {
+  const owners = new Map(entries.filter(entry => entry.object).map(entry => [entry.object, entry]));
+  const ownerOf = object => {
+    for (let node = object; node; node = node.parent) { const entry = owners.get(node); if (entry) return entry; }
+    return null;
+  };
+  return drawn.map(({n, object, custom}) => {
+    const entry = ownerOf(object);
+    if (!entry) return {n, id: null, name: object.name || null, type: object.type ?? null};
+    return {n, id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, path: meshPath(entry.object, object),
+      mesh: object.name || null, matrixWorld: object.matrixWorld.toArray(), root: entry.object.matrixWorld.toArray(),
+      geometry: geometryIdentity(object, session), ...(custom ? {coverage: 'custom-shader'} : {}),
+      ...(object.isInstancedMesh ? {instanceArray: object.instanceMatrix.array.slice(0, object.count * 16)} : {})};
+  });
 }
 
-// The nearest visible mesh hit of a ray in each scene entry, nearest first.
-// Cameras, lights, editor helpers, hidden objects and invisible materials are
-// skipped; with `optics`, so is anything outside the camera's near and far
-// planes. A hit names the entry, the point in world and in the entry's own
-// frame, the surface normal, and which mesh, face and instance it struck.
-// Point clouds such as splats are not picked: one lying along the ray in front
-// of the hit is listed in `unresolved`, since it may be what the point shows.
-//
-// With `pose`, the objects a kept picture recorded are put back where they
-// stood, and only they are candidates. `reconstruction` says how far that can
-// be vouched for: `exact` when every recorded object the ray crosses is
-// verifiably unchanged in this session, `sampled` when unchanged by sampled
-// content after a reload, `approximate` otherwise, with what changed. Hits carry
-// that as their `authority`.
-export function raycastEntries(THREE, entries, ray, {exclude = [], pose = null, optics = null, session = null} = {}) {
+// What a pick map cannot see, as the scene stands: point clouds (splats),
+// simulation fields and water drawn by the local water host.
+export function sceneOutsideMap(THREE, entries, fields, water) {
+  const clouds = [];
+  for (const entry of entries) {
+    if (!entry.object || !shownChain(entry.object)) continue;
+    let cloud = entry.type === 'splat';
+    entry.object.traverse(node => { if (node.isPoints && shownChain(node)) cloud = true; });
+    const bounds = cloud ? worldBounds(THREE, entry.object) : null;
+    if (bounds) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, bounds});
+  }
+  return {clouds, fields: fields.filter(field => field.bounds).map(({id, label, type, bounds}) => ({id, label, type, bounds})), water: !!water};
+}
+
+// Where a ray meets one mesh placed with the given matrices: the nearest
+// intersection inside the camera's depth range. A stand-in mesh shares the
+// mesh's geometry, material and morph weights, so nothing in the scene moves.
+// A skinned mesh is cast as it is posed now.
+function recastSurface(THREE, node, ray, {matrixWorld, instanceMatrix = null, root, optics = null}) {
   const caster = new THREE.Raycaster(new THREE.Vector3(...ray.origin), new THREE.Vector3(...ray.direction).normalize());
-  const drawn = hit => materialDrawn(Array.isArray(hit.object.material) ? hit.object.material[hit.face?.materialIndex ?? 0] : hit.object.material);
-  const inDepth = hit => !optics || insideClipDepth(optics, hit.point.toArray());
-  const describe = (entry, hit, frame, extra) => {
-    let surfaceMatrix = hit.object.matrixWorld;
-    if (hit.instanceId !== undefined && hit.object.isInstancedMesh) {
-      const instance = new THREE.Matrix4();
-      hit.object.getMatrixAt(hit.instanceId, instance);
-      surfaceMatrix = hit.object.matrixWorld.clone().multiply(instance);
-    }
-    const normal = hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(surfaceMatrix)).normalize() : null;
-    const geometry = hit.object.geometry;
-    return {id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, distance: hit.distance,
-      point: hit.point.toArray(), local: hit.point.clone().applyMatrix4(frame.clone().invert()).toArray(), normal: normal?.toArray() ?? null,
-      surface: {path: meshPath(entry.object, hit.object), mesh: hit.object.name || null, face: hit.faceIndex ?? null,
-        ...(hit.instanceId !== undefined ? {instance: hit.instanceId} : {})},
-      geometry: {vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null},
-      source: entry.object.userData?.kaminosSceneObject?.source ?? null, ...extra};
-  };
-  const hits = [], clouds = [];
-  if (!pose) {
-    for (const entry of entries) {
-      if (!isPickable(entry) || exclude.includes(entry.id) || !shownChain(entry.object)) continue;
-      entry.object.updateWorldMatrix(true, true);
-      let cloud = false;
-      entry.object.traverse(node => { if (node.isPoints && shownChain(node)) cloud = true; });
-      if (cloud || entry.type === 'splat') {
-        const bounds = worldBounds(THREE, entry.object), crossing = bounds && rayCrossesBox(ray, bounds);
-        if (crossing) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, distance: crossing.enter, reason: 'point clouds are not picked'});
-      }
-      const hit = caster.intersectObject(entry.object, true).find(item => item.object.isMesh && shownChain(item.object) && drawn(item) && inDepth(item));
-      if (hit) hits.push(describe(entry, hit, entry.object.matrixWorld, {pictured: false}));
-    }
-    hits.sort((a, b) => a.distance - b.distance);
-    const nearest = hits[0]?.distance ?? Infinity;
-    return {hits, missing: [], unresolved: clouds.filter(cloud => cloud.distance < nearest).sort((a, b) => a.distance - b.distance), reconstruction: null};
+  const world = new THREE.Matrix4().fromArray(matrixWorld);
+  if (instanceMatrix) world.multiply(new THREE.Matrix4().fromArray(instanceMatrix));
+  let probe = node;
+  if (!node.isSkinnedMesh) {
+    probe = new THREE.Mesh(node.geometry, node.material);
+    probe.matrixAutoUpdate = false;
+    probe.matrixWorldAutoUpdate = false;
+    probe.matrixWorld.copy(world);
+    if (node.morphTargetInfluences) { probe.morphTargetInfluences = node.morphTargetInfluences; probe.morphTargetDictionary = node.morphTargetDictionary; }
   }
-  const byId = new Map(entries.filter(entry => isPickable(entry) && !exclude.includes(entry.id)).map(entry => [entry.id, entry]));
-  const changed = [], statuses = [], missing = [];
-  for (const recorded of pose) {
-    // Only objects whose recorded bounds the ray crosses could have shown at this point.
-    if (recorded.bounds && !rayCrossesBox(ray, recorded.bounds)) continue;
-    const entry = byId.get(recorded.id);
-    if (!entry) { missing.push(recorded.id); changed.push({id: recorded.id, what: 'missing'}); continue; }
-    for (const cloud of recorded.clouds ?? []) {
-      const crossing = rayCrossesBox(ray, cloud.bounds);
-      if (crossing) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, distance: crossing.enter, reason: 'point clouds are not picked'});
-    }
-    entry.object.updateWorldMatrix(true, true);
-    const moved = !sameMatrix(entry.object.matrixWorld.toArray(), recorded.root), frame = new THREE.Matrix4().fromArray(recorded.root);
-    const saved = [];
-    let best = null;
-    try {
-      for (const mesh of recorded.meshes) {
-        const node = nodeAt(entry.object, mesh.path);
-        if (!node?.isMesh) { changed.push({id: entry.id, what: 'mesh', path: mesh.path}); continue; }
-        const current = geometryIdentity(node, session), status = geometryStatus(mesh.geometry, current, session);
-        statuses.push(status);
-        if (status !== 'same' && status !== 'likely-same') changed.push({id: entry.id, what: 'geometry', path: mesh.path, status});
-        if ((mesh.geometry.instances ?? null) !== (current.instances ?? null)) changed.push({id: entry.id, what: 'instances', path: mesh.path});
-        saved.push([node, node.matrixWorld.clone()]);
-        node.matrixWorld.fromArray(mesh.matrixWorld);
-        const hit = caster.intersectObject(node, false).find(item => drawn(item) && inDepth(item));
-        // Described now, while the pictured matrix is in place, so point and normal share one pose.
-        if (hit && (!best || hit.distance < best.distance)) best = describe(entry, hit, frame, {pictured: true, moved, geometry: {...current, status}});
-      }
-    } finally {
-      for (const [node, matrix] of saved) node.matrixWorld.copy(matrix);
-    }
-    if (best) hits.push(best);
-  }
-  hits.sort((a, b) => a.distance - b.distance);
-  const nearest = hits[0]?.distance ?? Infinity, unresolved = clouds.filter(cloud => cloud.distance < nearest).sort((a, b) => a.distance - b.distance);
-  const status = changed.length || unresolved.length ? 'approximate' : statuses.some(item => item === 'likely-same') ? 'sampled' : 'exact';
-  for (const hit of hits) hit.authority = status;
-  return {hits, missing, unresolved, reconstruction: {status, changed}};
+  const hit = caster.intersectObject(probe, false).find(item => !optics || insideClipDepth(optics, item.point.toArray()));
+  if (!hit) return null;
+  const surface = node.isSkinnedMesh ? node.matrixWorld : world;
+  return {distance: hit.distance, point: hit.point.toArray(),
+    local: hit.point.clone().applyMatrix4(new THREE.Matrix4().fromArray(root).invert()).toArray(),
+    normal: hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(surface)).normalize().toArray() : null,
+    face: hit.faceIndex ?? null, basis: node.isSkinnedMesh ? 'recast-now' : 'recast'};
+}
+
+// The mesh a pick map named, as the scene holds it now: whether it is still
+// there, how its geometry compares with the map's record, and where the
+// pick's ray meets it placed as the map drew it.
+export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, optics = null}, session = null) {
+  const entry = entries.find(item => item.id === row.id);
+  if (!entry?.object) return {now: 'missing'};
+  const node = nodeAt(entry.object, row.path);
+  if (!node?.isMesh) return {now: 'mesh-missing'};
+  const geometry = row.geometry ? {status: geometryStatus(row.geometry, geometryIdentity(node, session), session)} : null;
+  if (node.isInstancedMesh && !instanceMatrix) return {now: 'present', geometry, point: null, basis: 'instance-unknown'};
+  const hit = recastSurface(THREE, node, ray, {matrixWorld: row.matrixWorld, instanceMatrix, root: row.root, optics});
+  return {now: 'present', geometry, ...(hit ?? {point: null, basis: 'missed'})};
 }
 
 /**
  * Join the vantage to the running application. `entries()` returns live
  * scene entries `{id,label,fileName,type,object}`; `suspendEditorDrawing`
  * hides editor-only drawing for a clean picture and returns a restore function.
+ * `idPass` (agent-vantage-ids.mjs) draws pick maps; without it pictures carry
+ * none and picks are refused. `water()` says whether the local water host is
+ * drawing, and `coordinateSystem` is the renderer's clip convention.
  */
 export function installAgentVantage({THREE, document, window, edits, cameras, entries, selection, readView, writeView,
   viewport, hostCanvas, busy, hold, cameraMatrices, suspendEditorDrawing, redraw, frameState, extraTargets = () => [],
-  endpoint = '/api/vantage', link = true}) {
+  idPass = null, water = () => false, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
   const hud = installVantageHud({document, viewport});
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
@@ -910,8 +940,13 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
-    raycast: (ray, options) => raycastEntries(THREE, entries(), ray, {...options, session: pageId}),
-    pose: () => poseOfEntries(entries(), {session: pageId, THREE}),
+    // The rows are written down in the same task as the map is drawn, so they hold the matrices it was drawn with.
+    drawIds: idPass ? options => {
+      const pass = idPass.draw(options), list = entries();
+      return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
+    } : null,
+    surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
+    coordinateSystem,
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });
