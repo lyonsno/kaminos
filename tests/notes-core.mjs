@@ -175,3 +175,12 @@ test('only known names in the text address anyone; other @words stay text', () =
     {recognized: ['notes-agent'], unknown: ['mentions']});
   assert.deepEqual(addresseesIn('no one at all', ['noah']), {recognized: [], unknown: []});
 });
+
+test("given who is reading and through which server, the reply line is a command to run as is", () => {
+  const state = foldNotes(conversation());
+  const text = describeNote(state, ROOT_ID, {root: '/tmp/n', as: 'water-agent', server: 'http://127.0.0.1:8090'});
+  assert.match(text, new RegExp(`reply: node tools/notes\\.mjs --server http://127\\.0\\.0\\.1:8090 reply ${ROOT_ID} "<your reply>" --as water-agent`));
+  assert.doesNotMatch(text, /<your name>/);
+  const bare = describeNote(state, ROOT_ID, {root: '/tmp/n'});
+  assert.match(bare, /--as <your name>/, 'without a reader the line still says what to fill in');
+});

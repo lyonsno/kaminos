@@ -102,7 +102,10 @@ test('an agent waits, wakes with the note and its context, and answers into the 
   const woke = await waiting;
   assert.equal(woke.code, 0, woke.stderr);
   for (const expected of [id, 'from noah (page)', 'object "Cube" (cube)', 'scene bench.kaminos.json', 'selection: cube',
-    `picture: ${realpathSync(root)}/pictures/${id}.png (1x1)`, '> why is the rim clipped here?', `reply: node tools/notes.mjs reply ${id} `]) {
+    `picture: ${realpathSync(root)}/pictures/${id}.png (1x1)`, '> why is the rim clipped here?',
+    // What to run next is spelled out with this server and name, nothing to fill in but the words.
+    `reply: node tools/notes.mjs --server ${base} reply ${id} "<your reply>" --as notes-agent`,
+    `keep listening: node tools/notes.mjs --server ${base} wait --as notes-agent`]) {
     assert.ok(woke.stdout.includes(expected), `wait output names ${expected}:\n${woke.stdout}`);
   }
   assert.deepEqual(readFileSync(path.join(root, 'pictures', `${id}.png`)), PNG);

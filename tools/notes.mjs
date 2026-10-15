@@ -131,7 +131,7 @@ async function main(argv) {
       const {state, root} = await api.state();
       if (!state.notes.has(id)) throw new Refused(`note: no note ${id} in the log at ${root}`);
       const note = state.notes.get(id);
-      print(describeNote(state, id, {root}), {note: jsonNote(state.notes.get(note.thread) ?? note), target: id, root});
+      print(describeNote(state, id, {root, as: flags.as || process.env.KAMINOS_NOTES_AS || null, server: base}), {note: jsonNote(state.notes.get(note.thread) ?? note), target: id, root});
       return 0;
     }
     case 'ref': {
@@ -158,7 +158,7 @@ async function main(argv) {
       const as = who(flags);
       const {state, root} = await api.state();
       const notes = notesFor(state, as, {unseen: !flags.all});
-      print(notes.length ? notes.map(note => describeNote(state, note.id, {root})).join('\n\n')
+      print(notes.length ? notes.map(note => describeNote(state, note.id, {root, as, server: base})).join('\n\n')
         : `Nothing ${flags.all ? '' : 'unseen '}for ${as}.`, notes.map(jsonNote));
       return 0;
     }
@@ -185,8 +185,8 @@ async function main(argv) {
         }
         if (!answer.notes.length) continue;
         const {state, root} = await api.state();
-        const text = answer.notes.map(note => describeNote(state, note.id, {root})).join('\n\n');
-        print(`${answer.notes.length} Kaminos note${answer.notes.length === 1 ? '' : 's'} for ${as}\n\n${text}\n\nRun wait again to keep listening.`,
+        const text = answer.notes.map(note => describeNote(state, note.id, {root, as, server: base})).join('\n\n');
+        print(`${answer.notes.length} Kaminos note${answer.notes.length === 1 ? '' : 's'} for ${as}\n\n${text}\n\nkeep listening: node tools/notes.mjs --server ${base} wait --as ${as}`,
           {for: as, root, notes: answer.notes.map(note => jsonNote(state.notes.get(note.id)))});
         return 0;
       }
