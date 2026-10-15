@@ -52,6 +52,12 @@ try {
   await invoke('flameView',{visible:false});
   await invoke('view',{mode:'char'});assert.equal(await page.locator('#live-log-heat [name=burn-view]:checked').inputValue(),'char');await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
+  report.inspectionLighting=await page.evaluate(()=>{
+    const gain=document.getElementById('scene-gi-gain'),before=Number(gain.value);
+    gain.value='0';gain.dispatchEvent(new Event('change',{bubbles:true}));
+    return {priorGain:before,fireMute:window.kaminosFireLightFieldSetWitnessMute(true)};
+  });
+  await invoke('view',{mode:'char'});await shot('char-light-muted');
   report.phase='end-exposure';await save();
   await invoke('move',{position:[-.4,0,0]});await invoke('pause');
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=1200);
