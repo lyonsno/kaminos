@@ -21,6 +21,13 @@ const geometry=new THREE.BoxGeometry(),material=new THREE.MeshStandardMaterial({
 const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;scene.add(mesh);
 const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({fixture:true}),dispose(){}})});
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
+assert.equal(mount.debugState().frame.pointRegions.partition,'energy');
+const twoSourceMaterialKey=mesh.material.customProgramCacheKey();
+mount.setPointCount(1);assert.equal(mount.canRender(),false,'changed source layout must await current reduction');consume(field);
+assert.notEqual(mesh.material.customProgramCacheKey(),twoSourceMaterialKey,'replacement irradiance graph must invalidate Three shader cache, not only material version');
+assert.equal(mount.debugState().pointCount,1);assert.equal(mount.debugState().shadows.length,1);
+mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointCount,2);assert.equal(mount.debugState().shadows.length,2);
+assert.throws(()=>mount.setPointCount(0),/point count/);assert.equal(mount.canRender(),true);
 assert.equal(geometry.hasAttribute('sceneReceiverIndex'),false);assert.equal(mount.debugState().surfaceReceivers,0);assert.equal(hostFrame.volumeReceivers,16);
 const first=mount.debugState();mount.setReceiverSpacing(.8);mount.setSurfaceReconstruction(8);field.source.generation++;field.source.frame++;consume(field);
 assert.deepEqual(first.frame.smokeReconstruction.dimensions,[2,4,2],'explicit cheap smoke reconstruction must be effective');

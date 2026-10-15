@@ -12,7 +12,7 @@ const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end
 function mounted() {
   let status = '';
   const context = vm.createContext({
-    window: {}, authoringWorkspace:null,readOwnerExperimentAddress, authoringBusy: false, currentSceneFile: 'input.kaminos.json',
+    window: {}, authoringWorkspace:null,readOwnerExperimentAddress, authoringBusy: false, vantageCaptureHeld: false, currentSceneFile: 'input.kaminos.json',
     document: { getElementById: () => ({ value: 'Comparison', disabled: false }) },
     compositionStatus: text => { status = text; }, setInfo: text => { status = text; },
     grBrowseScenes() {}, compositionRestoreUrl,savedSceneLocation:authoring.savedSceneLocation,URL,URLSearchParams,location: { origin: 'http://localhost:9000',href:'http://localhost:9000/?mesh_root=generated-meshes#authoring=1&scene=input.kaminos.json' },history:{replaceState(_state,_title,url){context.location.href=url;}},
@@ -79,6 +79,11 @@ test('busy and blocked actions return their own refusal', async () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /busy/i);
   context.authoringBusy = false;
+  context.vantageCaptureHeld = true;
+  result = await run('window.saveSceneAs({result:true})');
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'The agent sub is taking a picture', 'a vantage picture holds Save As with its own reason');
+  context.vantageCaptureHeld = false;
   context.sceneSaveIsBlocked = () => true;
   result = await run('window.saveSceneAs({result:true})');
   assert.equal(result.ok, false);

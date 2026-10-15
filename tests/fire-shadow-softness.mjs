@@ -1,0 +1,25 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.webgpu.js';
+import {createFireLightFieldShadow} from '../fire-light-field-shadow.mjs';
+import {penumbraAngularRadius,receiverPlaneDistance} from '../fire-shadow-filter.mjs';
+const {vec3}=THREE.TSL;
+const options={renderer:{},scene:{},sourceNode:vec3(0),receiverNode:vec3(0,0,4),normalNode:vec3(0,0,-1)};
+for(const shadowSoftness of [-1,NaN,Infinity])assert.throws(()=>createFireLightFieldShadow({...options,shadowSoftness}),/softness/);
+const hard=createFireLightFieldShadow(options);
+assert.equal(hard.debugState().filter,'hard');
+hard.dispose();
+assert.throws(()=>createFireLightFieldShadow({...options,shadowSoftness:1}),/source size/);
+const soft=createFireLightFieldShadow({...options,sourceSizeNode:THREE.TSL.float(.5),shadowSoftness:1});
+assert.equal(soft.debugState().filter,'radial-pcss');
+assert.throws(()=>soft.setSoftness(-1),/softness/);assert.equal(soft.debugState().shadowSoftness,1);
+soft.setSoftness(0);assert.equal(soft.debugState().filter,'hard');assert.equal(soft.debugState().renderCount,0);soft.dispose();
+assert.equal(penumbraAngularRadius(.5,4,2),.125);
+assert.equal(penumbraAngularRadius(.5,2,2),0,'contact shadow must remain sharp');
+assert.equal(penumbraAngularRadius(0,4,2),0);
+assert.equal(penumbraAngularRadius(.5,4,8),0);
+assert.equal(receiverPlaneDistance([0,0,4],[0,0,-1],[0,0,1]),4);
+assert.equal(receiverPlaneDistance([0,0,4],[0,0,-1],[.6,0,.8]),5,'off-axis taps intersect the receiver plane farther away');
+assert.equal(receiverPlaneDistance([0,0,4],[0,0,-1],[1,0,0]),null);
+assert.equal(receiverPlaneDistance([0,0,4],[0,0,-1],[0,0,-1]),null);
+console.log('PASS shadow softness rejects invalid values and preserves default hard visibility');
