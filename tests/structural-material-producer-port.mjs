@@ -77,13 +77,17 @@ test('quiescence drains pending input and GPU work without destroying or removin
 });
 test('native producer witness rejects substituted participation, missing roots and wrong mounts',()=>{
  const requireProducer=evidence.requireStoneProducerParticipation??(()=>{throw Error('Native producer participation admission absent');});
- const proof={participation:'producer',frameDriver:'manual',mount:'caller-owned',deviceMatches:true,callbacks:0,scene:'shared',roots:[{id:'material',parentBefore:null,parentAfter:'shared'},{id:'floor',parentBefore:null,parentAfter:'shared'}]};
- requireProducer(proof);
- for(const patch of [{participation:'viewport'},{deviceMatches:false},{callbacks:1},{roots:[]},{roots:[{id:'material',parentBefore:'already-mounted',parentAfter:'shared'}]},{roots:[{id:'material',parentBefore:null,parentAfter:'other-scene'}]}])assert.throws(()=>requireProducer({...proof,...patch}));
+ const expectedRoles=['Stone fracture','Stone contact floor'],proof={participation:'producer',frameDriver:'manual',mount:'caller-owned',deviceMatches:true,callbacks:0,scene:'shared',roots:[{id:'material',role:expectedRoles[0],parentBefore:null,parentAfter:'shared'},{id:'floor',role:expectedRoles[1],parentBefore:null,parentAfter:'shared'}]};
+ requireProducer(proof,expectedRoles);
+ for(const patch of [{participation:'viewport'},{deviceMatches:false},{callbacks:1},{roots:[]},{roots:[proof.roots[0]]},{roots:[proof.roots[1]]},{roots:[proof.roots[0],proof.roots[0]]},{roots:[{...proof.roots[0],role:'other'},proof.roots[1]]},{roots:[{...proof.roots[0],parentBefore:'already-mounted'},proof.roots[1]]},{roots:[{...proof.roots[0],parentAfter:'other-scene'},proof.roots[1]]}])assert.throws(()=>requireProducer({...proof,...patch},expectedRoles));
+ assert.throws(()=>requireProducer(proof));
 });
 test('published surface admission rejects stale, blank, partial, displaced and wrong-count evidence',()=>{
- const requireSurface=evidence.requirePublishedStoneSurface??(()=>{throw Error('Published surface admission absent');}),state={runId:'r',steps:2},surface=[{runId:'r',step:2,route:'kaminos.deformable-surface.resident-four-split.webgpu.v0',gpu:[[0,0,0],[1,0,0]],reference:[0,0,0,1,0,0]}],counts={route:'kaminos.stone.exposed-cell-faces.webgpu.v1',totalTriangles:4};
- requireSurface(surface,counts,state,4);
- for(const mutate of [s=>s.splice(0),s=>s[0].step=1,s=>s[0].gpu.pop(),s=>s[0].gpu[1][0]=1.1,s=>s[0].route='fallback']){const value=structuredClone(surface);mutate(value);assert.throws(()=>requireSurface(value,counts,state,4));}
- assert.throws(()=>requireSurface(surface,{...counts,totalTriangles:3},state,4));
+ const requireSurface=evidence.requirePublishedStoneSurface??(()=>{throw Error('Published surface admission absent');}),state={runId:'r',steps:2},surface=[{pieceId:0,runId:'r',step:2,route:'kaminos.deformable-surface.resident-four-split.webgpu.v0',gpu:[[0,0,0],[1,0,0]],reference:[0,0,0,1,0,0]}],counts={route:'kaminos.stone.exposed-cell-faces.webgpu.v1',totalTriangles:4},inventory=[{pieceId:0,vertices:2}];
+ requireSurface(surface,counts,state,4,inventory);
+ for(const mutate of [s=>s.splice(0),s=>s[0].step=1,s=>s[0].gpu.pop(),s=>{s[0].gpu.pop();s[0].reference.splice(3);},s=>s.push(structuredClone(s[0])),s=>s[0].pieceId=9,s=>s[0].gpu[1][0]=1.1,s=>s[0].route='fallback']){const value=structuredClone(surface);mutate(value);assert.throws(()=>requireSurface(value,counts,state,4,inventory));}
+ assert.throws(()=>requireSurface(surface,{...counts,totalTriangles:3},state,4,inventory));
+ assert.throws(()=>requireSurface(surface,counts,state,4));
+ assert.throws(()=>requireSurface(surface,counts,state,4,[...inventory,{pieceId:1,vertices:2}]));
+ assert.throws(()=>requireSurface(surface,counts,state,4,[...inventory,...inventory]));
 });

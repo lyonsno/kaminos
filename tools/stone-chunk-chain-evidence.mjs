@@ -21,13 +21,16 @@ export function requireMovedPieceFracture(before,after,nodes){
  return{inside,outside};
 }
 
-export function requireStoneProducerParticipation(proof){
+export function requireStoneProducerParticipation(proof,expectedRoles){
  if(proof?.participation!=='producer'||proof.frameDriver!=='manual'||proof.mount!=='caller-owned'||proof.deviceMatches!==true||proof.callbacks!==0||typeof proof.scene!=='string'||!proof.scene||!Array.isArray(proof.roots)||!proof.roots.length)throw Error('Effective native manual producer participation required');
- const ids=new Set();for(const root of proof.roots){if(typeof root.id!=='string'||!root.id||ids.has(root.id)||root.parentBefore!==null||root.parentAfter!==proof.scene)throw Error('Distinct initially unparented roots mounted in the effective shared scene required');ids.add(root.id);}
+ if(!Array.isArray(expectedRoles)||!expectedRoles.length||!expectedRoles.every(role=>typeof role==='string'&&role)||new Set(expectedRoles).size!==expectedRoles.length||proof.roots.length!==expectedRoles.length)throw Error('Complete configured producer root inventory required');
+ const ids=new Set(),roles=new Set();for(const root of proof.roots){if(typeof root.id!=='string'||!root.id||ids.has(root.id)||!expectedRoles.includes(root.role)||roles.has(root.role)||root.parentBefore!==null||root.parentAfter!==proof.scene)throw Error('Distinct configured initially unparented roots mounted in the effective shared scene required');ids.add(root.id);roles.add(root.role);}
 }
 
-export function requirePublishedStoneSurface(surface,counts,state,expectedTriangles){
+export function requirePublishedStoneSurface(surface,counts,state,expectedTriangles,expectedPieces){
  if(!Array.isArray(surface)||!surface.length||counts?.route!=='kaminos.stone.exposed-cell-faces.webgpu.v1'||!Number.isSafeInteger(expectedTriangles)||expectedTriangles<=0||counts.totalTriangles!==expectedTriangles)throw Error('Complete published exposed-face evidence required');
- let error=0;for(const piece of surface){if(piece.runId!==state.runId||piece.step!==state.steps||piece.route!=='kaminos.deformable-surface.resident-four-split.webgpu.v0'||!Array.isArray(piece.gpu)||!piece.gpu.length||!Array.isArray(piece.reference)||piece.reference.length!==piece.gpu.length*3||!piece.reference.every(Number.isFinite))throw Error('Current complete native published surface required');for(let i=0;i<piece.gpu.length;i++){const point=piece.gpu[i];if(!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite))throw Error('Finite published positions required');for(let k=0;k<3;k++)error=Math.max(error,Math.abs(point[k]-piece.reference[i*3+k]));}}
+ if(!Array.isArray(expectedPieces)||!expectedPieces.length||!expectedPieces.every(piece=>Number.isSafeInteger(piece.pieceId)&&piece.pieceId>=0&&Number.isSafeInteger(piece.vertices)&&piece.vertices>0)||new Set(expectedPieces.map(piece=>piece.pieceId)).size!==expectedPieces.length||surface.length!==expectedPieces.length)throw Error('Complete fixture-derived published piece inventory required');
+ const expected=new Map(expectedPieces.map(piece=>[piece.pieceId,piece.vertices])),seen=new Set();
+ let error=0;for(const piece of surface){const vertices=expected.get(piece.pieceId);if(!vertices||seen.has(piece.pieceId)||piece.runId!==state.runId||piece.step!==state.steps||piece.route!=='kaminos.deformable-surface.resident-four-split.webgpu.v0'||!Array.isArray(piece.gpu)||piece.gpu.length!==vertices||!Array.isArray(piece.reference)||piece.reference.length!==vertices*3||!piece.reference.every(Number.isFinite))throw Error('Current complete native published surface required');seen.add(piece.pieceId);for(let i=0;i<piece.gpu.length;i++){const point=piece.gpu[i];if(!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite))throw Error('Finite published positions required');for(let k=0;k<3;k++)error=Math.max(error,Math.abs(point[k]-piece.reference[i*3+k]));}}
  if(error>3e-5)throw Error(`Published pose disagrees with acquired material ownership: ${error}`);return{maximumError:error,triangles:expectedTriangles};
 }
