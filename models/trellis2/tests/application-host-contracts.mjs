@@ -38,6 +38,32 @@ const submit=async run=>{
   return job.completion;
 };
 
+test('caller GPU timing options reach the real Kit runtime without changing the omitted default',async()=>{
+  for(const option of [undefined,false,{enabled:false},'off']){
+    const f=await fixture(),registered=[],register=f.session.registerRoute.bind(f.session),
+      budget=createWebGpuModelBufferBudget({device:f.device,maxBytes:32});
+    // Observe the bridge boundary, then delegate to the real Kit registration.
+    const appGpu={...f.appGpu,session:{device:f.device,queue:f.device.queue,
+      unregisterRoute:id=>f.session.unregisterRoute(id),
+      snapshot:()=>f.session.snapshot(),registerRoute:input=>{
+        registered.push(input);return register(input);
+      }}};
+    const bridge=await createTrellisSharedHost({appGpu,bufferBudget:budget,...(option===undefined?{}:{gpuTiming:option})});
+    try{
+      for(const runId of ['timing-first','timing-second']){
+        const run=await bridge.beginRun({runId});
+        try{
+          const actual=registered.at(-1).runtimeOptions;
+          assert.equal(Object.hasOwn(actual,'gpuTiming'),option!==undefined);
+          assert.equal(actual.gpuTiming,option,'forward the exact caller value, including false and object identity');
+          assert.equal(actual.bufferBudget,budget,'timing and buffer allowances compose on the same route');
+          assert.equal(run.route.runtime.profile.gpuTiming.status,option===undefined?'unavailable':'disabled');
+        }finally{await run.finish();}
+      }
+    }finally{await bridge.dispose();await f.close();}
+  }
+});
+
 test('app-owned device/session/frame service runs TRELLIS without a volume prototype',async()=>{
   const f=await fixture();
   const bridge=await createTrellisSharedHost({appGpu:f.appGpu});
