@@ -13,6 +13,7 @@ function collision(){
  const ctx={device:{},gridSize:32,gridHeight:64,state:{},controlsSnapshot:{...base},productTransform:{translate:[0,0,0],scale:1},sceneSolidRevisionKey:null,sceneSolidCellsCpu:null,sceneSolidSupportCache:null,sceneSolidGeometryCache:null,immersedWallCache:null,analyticEmitterDescriptor:null,analyticEmitterDescriptorSignature:'',analyticEmitterDispatch:{active:false,cellMin:[0,0,0],cellExtent:[0,0,0],cellCount:0},PRESSURE_SOLVER_CONVERGED:'converged',...solid,immersedBackWallCells:core.immersedBackWallCells,composeSolidField:core.composeSolidField,resolvePressureSolverConfig:core.resolvePressureSolverConfig,resolveTransportConfig:core.resolveTransportConfig,performance};
  const counts={geometry:0,walls:0,uploads:0,bindings:0};
  ctx.getSceneCollision=()=>({requested:true,id:'kiln',object:mesh});
+ ctx.joinedExterior=null;ctx.getSceneEditing=()=>null;ctx.state.joinedBoundary={admitted:true};
  ctx.voxelizeTriangleSolid=(...args)=>{counts.geometry++;return solid.voxelizeTriangleSolid(...args);};
  ctx.immersedBackWallCells=(...args)=>{counts.walls++;return core.immersedBackWallCells(...args);};
  ctx.installSceneSolidTexture=(field=null)=>{counts.uploads++;ctx.sceneSolidCellsCpu=field?.cells??null;return true;};
@@ -28,6 +29,25 @@ test('moving/resizing/aiming a back wall reuses the unchanged kiln voxels',()=>{
  assert.equal(counts.geometry,1,'source/wall edits must not revoxelize the kiln');
  assert.notDeepEqual(ctx.sceneSolidCellsCpu,first,'moving wall must still update the physical mask');assert.equal(counts.uploads,4);
  const wallCount=counts.walls;refresh();refresh();assert.equal(counts.walls,wallCount,'unchanged wall must not enumerate its cells again');
+});
+
+test('joined geometry edit holds collision through previews and reconciles once at placement',()=>{
+ const {ctx,counts,mesh,refresh}=collision();refresh({immersedBackWall:0});
+ const committed=ctx.sceneSolidCellsCpu;ctx.joinedExterior={};ctx.getSceneEditing=()=>({id:'kiln'});
+ for(let i=0;i<4;i++){mesh.position.x-=.04;refresh();}
+ assert.equal(counts.geometry,1,'drag must not enter geometry voxelization');
+ assert.equal(ctx.sceneSolidCellsCpu,committed,'fine uses the committed mask during editing');
+ assert.equal(ctx.state.joinedEditing.held,true);
+ ctx.getSceneEditing=()=>null;refresh();refresh();
+ assert.equal(counts.geometry,2,'placement rebuilds only the final pose');
+ assert.equal(ctx.state.joinedEditing.pending,true,'shared projection must reconcile before resuming');
+ assert.equal(ctx.state.joinedEditing.held,false);
+});
+test('cancelled joined geometry edit reuses the original mask',()=>{
+ const {ctx,counts,mesh,refresh}=collision();refresh({immersedBackWall:0});const x=mesh.position.x;
+ ctx.joinedExterior={};ctx.getSceneEditing=()=>({id:'kiln'});mesh.position.x-=.2;refresh();
+ mesh.position.x=x;ctx.getSceneEditing=()=>null;refresh();
+ assert.equal(counts.geometry,1);assert.equal(counts.uploads,1);
 });
 test('moving one authored obstacle reuses the other object and unions their independent solids',()=>{
  const {ctx,counts,mesh,refresh}=collision();const other=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,.3));other.position.set(-.55,.5,.55);

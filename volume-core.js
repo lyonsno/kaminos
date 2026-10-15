@@ -11232,6 +11232,7 @@ export function createKaminosVolumePrototype({
   sharedGpuContext = null,
   getSceneDepth = null,
   getSceneCollision = null,
+  getSceneEditing = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
   externalDevice = null,
@@ -13181,7 +13182,25 @@ export function createKaminosVolumePrototype({
     state.immersedWallBuilds = (state.immersedWallBuilds || 0) + 1;
     return immersedWallCache;
   }
+  function joinedEditingHeld() {
+    const active = Boolean(joinedExterior && state.joinedBoundary?.admitted);
+    const edit = active && getSceneEditing?.();
+    const held = Boolean(edit);
+    const prior = state.joinedEditing;
+    const pending = Boolean(active && (prior?.pending || (prior?.held && !held)));
+    state.joinedEditing = {
+      held, target: edit?.id ?? null,
+      pending,
+      fine: held ? 'standalone-last-committed-collision' : pending ? 'paused-awaiting-rejoin' : active ? 'joined' : 'standalone',
+      reason: held ? 'scene-edit-in-progress' : pending ? prior?.reason ?? 'awaiting-current-exterior-snapshot' : null,
+    };
+    return held;
+  }
+
   function refreshSceneCollision() {
+    // Hold before collecting/translating triangles, not merely before upload.
+    // Fine continues against the last committed mask until placement/cancel.
+    if (joinedEditingHeld()) return;
     if (!device || typeof getSceneCollision !== 'function') return;
     const backWall = immersedBackWallForState();
     const source = getSceneCollision();
@@ -14100,7 +14119,7 @@ export function createKaminosVolumePrototype({
     }
 
   function prepareJoinedExterior() {
-    if (!joinedExterior || preparingJoinedExterior) return null;
+    if (!joinedExterior || preparingJoinedExterior || joinedEditingHeld()) return null;
     preparingJoinedExterior = true;
     try {
       let result = null;
@@ -14111,10 +14130,15 @@ export function createKaminosVolumePrototype({
         const g = joinedExterior.ghosts;
         const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal && joinedGhostGeometry.oxidizer === g.oxidizer;
         if (!same) { applyJoinedGhostGeometry(g); continue; }
-        if (joinedExterior.seedGhosts(joinedProducerSnapshot())) { joinedGhostSynthetic = null; state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount }; }
+        if (joinedExterior.seedGhosts(joinedProducerSnapshot())) {
+          joinedGhostSynthetic = null;
+          state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount };
+          state.joinedEditing = { ...state.joinedEditing, pending: false, reason: null };
+        }
         break;
       }
       state.joinedExterior = joinedExterior.receipt();
+      if (state.joinedEditing?.pending) state.joinedEditing.reason = result?.reason ?? 'awaiting-current-exterior-snapshot';
       syncJoinedRender();
       return result;
     } finally { preparingJoinedExterior = false; }
@@ -16672,7 +16696,9 @@ export function createKaminosVolumePrototype({
       ...resolveJoinedGhosts({ geometry: joinedGhostGeometry, reactantOn: reactantCombustionConfig.effective.admitted === true }),
       generation: state.joinedGhosts?.generation ?? -1,
     };
-    uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
+    // Keep allocation/admission and visible exterior intact; only the fine
+    // transport and pressure boundary law become standalone during an edit.
+    uniforms.set(joinedBoundaryUniformValues(state.joinedEditing?.held ? null : state.joinedBoundary, !state.joinedEditing?.held && state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -17338,13 +17364,18 @@ export function createKaminosVolumePrototype({
     // Install current collider occupancy before admitting either predictor.
     // A changed pressure topology cannot be discovered after fine advances.
     refreshSceneCollision();
-    // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
-    // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
-    if (joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
+    const editingHeld = Boolean(state.joinedEditing?.held);
+    if (!editingHeld && state.joinedEditing?.pending) {
       if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
     }
-    if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
+    // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
+    // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
+    if (!editingHeld && joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
+      if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+      return false;
+    }
+    if (!editingHeld && state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
       // A rebuild invalidated the stamp: the exterior re-prepares outside encoding.
       if (joinedExterior && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
@@ -17392,7 +17423,7 @@ export function createKaminosVolumePrototype({
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
     encodeAnalyticEmitterInjection(encoder);
-    if (state.joinedBoundary?.admitted) {
+    if (!editingHeld && state.joinedBoundary?.admitted) {
       if (joinedExterior) {
         const result = joinedExterior.step(encoder, joinedProducerSnapshot());
         state.joinedExterior = joinedExterior.receipt();

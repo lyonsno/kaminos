@@ -1,0 +1,67 @@
+// kaminos-test: node
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+import {joinedBoundaryUniformValues} from '../volume-core.js';
+import {fireCollisionEdit} from '../scene-collider.mjs';
+const source=readFileSync(process.env.KAMINOS_EDIT_SOURCE||new URL('../volume-core.js',import.meta.url),'utf8');
+const body=name=>{const start=source.indexOf(`  function ${name}(`);assert(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4);};
+
+function fixture(){
+ const calls={fine:0,outer:0,pressure:0,prepare:0,seed:0,render:0}, queued=[];
+ const geometry={dims:[4,8,4],originFine:[-2,-2,-2],cellWidthFine:2,finePitchLocal:.5};
+ const ctx={state:{simStepCount:7,joinedBoundary:{admitted:true},joinedGhosts:{bound:true,generation:7},joinedEditing:{held:true,pending:false}},
+  currentFluid:0,currentFront:0,currentQuench:0,gridSize:4,gridHeight:8,preparingJoinedExterior:false,
+  joinedGhostSynthetic:null,joinedGhostGeometry:geometry,controlsSnapshot:{},computePipeline:{},transportPredictBindGroup:{},
+  queueMicrotask:fn=>queued.push(fn),refreshSceneCollision(){},joinedEditingHeld(){return ctx.state.joinedEditing.held;},
+  joinedProducerSnapshot:()=>({}),resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
+  fluidBindGroup:()=>({}),encodeAnalyticEmitterInjection(){},updateSimCostLedger(){},
+  encodePressureProjection(){calls.pressure++;return false;},syncJoinedRender(){calls.render++;},applyJoinedGhostGeometry(){throw Error('unexpected allocation');},
+  joinedExterior:{paused:false,matches:()=>false,ghosts:geometry,
+   step(){calls.outer++;return {stepped:true};},receipt:()=>({admitted:true}),
+   prepare(){calls.prepare++;return {admitted:true};},seedGhosts(){calls.seed++;return true;}},
+  encoder:{beginComputePass(){calls.fine++;return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};}}
+ };
+ vm.createContext(ctx);vm.runInContext(body('prepareJoinedExterior')+'\n'+body('encodeSim'),ctx);
+ return {ctx,calls,queued,step:()=>vm.runInContext('encodeSim(encoder)',ctx),prepare:()=>vm.runInContext('prepareJoinedExterior()',ctx)};
+}
+test('actual fine dispatch advances standalone through a hold without touching shared pressure or stale ghosts',()=>{
+ const {ctx,calls,queued,step,prepare}=fixture();
+ ctx.state.joinedGhosts.generation=-1;
+ step();step();prepare();
+ assert.equal(calls.fine,2);assert.equal(calls.pressure,2);assert.equal(ctx.state.simStepCount,9);
+ assert.equal(calls.outer,0);assert.equal(calls.prepare,0);assert.equal(calls.seed,0);assert.equal(queued.length,0);
+});
+test('placement waits for a current exterior snapshot before either predictor advances',()=>{
+ const {ctx,calls,queued,step}=fixture();ctx.state.joinedEditing={held:false,pending:true};
+ step();assert.equal(calls.fine,0);assert.equal(calls.outer,0);assert.equal(queued.length,1);
+ queued.shift()();assert.equal(calls.prepare,1);assert.equal(calls.seed,1);assert.equal(ctx.state.joinedEditing.pending,false);
+ assert.equal(ctx.state.joinedGhosts.generation,7);
+ ctx.joinedExterior.matches=()=>true;step();assert.equal(calls.fine,1);assert.equal(calls.outer,1);assert.equal(calls.pressure,0);
+ assert.equal(ctx.state.joinedGhosts.generation,8);
+});
+test('late queued preparation cannot rebuild into a newly started drag; refusal cannot resume stale state',()=>{
+ const {ctx,calls,queued,step,prepare}=fixture();ctx.state.joinedEditing={held:false,pending:true};step();
+ ctx.state.joinedEditing.held=true;queued.shift()();assert.equal(calls.prepare,0);
+ ctx.state.joinedEditing.held=false;ctx.joinedExterior.prepare=()=>({admitted:false,reason:'unsupported-layout'});
+ prepare();assert.equal(ctx.state.joinedEditing.pending,true);assert.equal(ctx.state.joinedEditing.reason,'unsupported-layout');
+ step();assert.equal(calls.fine,0);assert.equal(calls.outer,0);
+});
+test('diagnostic readback pause still prevents fine stepping during a drag',()=>{
+ const {ctx,calls,step}=fixture();ctx.joinedExterior.paused=true;step();assert.equal(calls.fine,0);
+});
+test('actual uniform write disables joined boundary and ghost reads, without revoking visible admission',()=>{
+ const statement=source.split('\n').find(line=>line.includes('uniforms.set(joinedBoundaryUniformValues('));assert(statement);
+ const ctx={state:{joinedBoundary:{admitted:true},joinedGhosts:{bound:true,generation:7},joinedEditing:{held:true}},joinedGhostGeometry:{originFine:[1,2,3],dims:[4,8,4],cellWidthFine:2,finePitchLocal:.5},joinedBoundaryUniformValues,JOINED_BOUNDARY_UNIFORM_OFFSET:0,uniforms:new Float32Array(12)};
+ vm.createContext(ctx);vm.runInContext(statement,ctx);assert.deepEqual([...ctx.uniforms.slice(0,2)],[0,0]);assert.equal(ctx.state.joinedBoundary.admitted,true);
+ ctx.state.joinedEditing.held=false;vm.runInContext(statement,ctx);assert.deepEqual([...ctx.uniforms.slice(0,2)],[1,1]);
+});
+test('edit adapter selects collision objects, grouped transforms, domain and source, not cameras or unmarked meshes',()=>{
+ const records=[{id:'cube',type:'procedural-mesh',collision:{enabled:true}},{id:'decor',type:'glb'},{id:'camera',type:'camera'},{id:'light',type:'light'}];
+ const groups=[{id:'group',objectIds:['decor','cube']},{id:'lights',objectIds:['light']}];
+ for(const id of ['cube','@mesh-data:cube','@object-collision:decor','@group:group','@assembly:group','@flame-domain','flame-emitter','@burner-controls'])assert.deepEqual(fireCollisionEdit({id},records,groups),{id});
+ for(const id of ['camera','@viewport-lens','@mesh-data:light','decor','@group:lights'])assert.equal(fireCollisionEdit({id},records,groups),null);
+ assert.equal(fireCollisionEdit(null,records),null);
+ assert.deepEqual(fireCollisionEdit({id:'@selection-transform',before:{roots:{'@group:group':{}}}},records,groups),{id:'@selection-transform'});
+});

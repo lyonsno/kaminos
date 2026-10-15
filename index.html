@@ -3690,6 +3690,7 @@ function writeKilnCollisionState({enabled}) {
 
 let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
 const sceneColliderCollection=createSceneColliderCollection(THREE);
+let volumeSceneEditing=null;
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
@@ -3787,7 +3788,7 @@ import {
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
-import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
+import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection,fireCollisionEdit} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -11871,6 +11872,7 @@ async function initScene() {
     onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
+  scenePlacementTools.edits.subscribe(edit=>{volumeSceneEditing=fireCollisionEdit(edit.active,sceneObjects,sceneGroups);});
   installAuthoringParameterEditing();
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
@@ -18607,13 +18609,16 @@ function wireJoinedProvisionalControls(prototype) {
     const s = prototype.debugState?.(); if (!s) return;
     refreshMeasurementIdentity();
     if (boundary.value === 'on') {
-      if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
+      if (s.joinedEditing?.held) text('volume-joined-boundary-val', 'Editing: fine standalone · last committed collision · exterior frozen');
+      else if (s.joinedEditing?.pending) text('volume-joined-boundary-val', `Rejoining: ${s.joinedEditing.reason ?? 'rebuilding collision and pressure'}`, true);
+      else if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
       else text('volume-joined-boundary-val', `REFUSED: ${s.joinedBoundary?.reason ?? 'unknown'} (the sim is running standalone)`, true);
     } else text('volume-joined-boundary-val', 'off');
     const x = s.joinedExterior;
     if (x?.admitted && size.value !== '0') {
-      const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted;
-      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${stepping ? `stepping (${x.steps})` : 'NOT STEPPING: the join is off or refused'}`, !stepping);
+      const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted && !s.joinedEditing?.held && !s.joinedEditing?.pending;
+      const status=s.joinedEditing?.held?'FROZEN during edit':s.joinedEditing?.pending?'waiting for placement rebuild':stepping?`stepping (${x.steps})`:'NOT STEPPING: the join is off or refused';
+      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${status}`, !stepping && !s.joinedEditing?.held);
       text('volume-joined-exterior-ratio-val', `${x.ratio.toFixed(2)} fine cells, ${x.cellWidth.toFixed(3)} local · ${s.joinedRendering?.enabled ? 'rendered' : 'NOT RENDERED'}`, !s.joinedRendering?.enabled);
     } else {
       const after = s.pressureSolver?.residual?.compact?.after?.maxAbs;
@@ -20444,6 +20449,7 @@ async function initKaminosVolumeRoute() {
       if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
       return sceneColliderCollection.update(sceneObjects);
     },
+    getSceneEditing: () => volumeSceneEditing,
   });
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
     // Composition routes need the live Three scene visible under the flame:
