@@ -266,8 +266,8 @@ try {
   const completed = await page.inputValue('.kn-compose textarea');
   check('Tab completes the mention', completed === `@${AGENT} ` && await page.isHidden('.kn-suggest'), {completed});
   await page.keyboard.type('the cup glows; can we also get @mentions in replies?');
-  await page.waitForFunction(() => /isn't anyone known here/.test(document.querySelector('.kn-reach')?.textContent ?? ''), null, {timeout: 5000});
-  const reachLine = await page.textContent('.kn-reach');
+  await page.waitForFunction(() => /isn't anyone known here/.test(document.querySelector('.kn-compose .kn-reach')?.textContent ?? ''), null, {timeout: 5000});
+  const reachLine = await page.textContent('.kn-compose .kn-reach');
   check('the reach line names who a note reaches and which @words stay text',
     reachLine.startsWith(`Reaches @${AGENT}`) && reachLine.includes('@mentions'), {reachLine});
   await page.click('.kn-compose .kn-btn.primary');
@@ -281,6 +281,34 @@ try {
   try { takenIds = JSON.parse(taken.stdout).notes.map(note => note.id); } catch {}
   check('the mentioned agent receives it', taken.code === 0 && takenIds.includes(mentionNoteId), {code: taken.code, takenIds});
 
+  report.phase = 'chat-and-avatars'; save();
+  // Threads read like a chat (oldest first, composer underneath, newest in
+  // view), and clicking a name selects that agent's avatar when it has one.
+  const avatarJoin = await notes(['register', '--as', AGENT, '--about', 'the witness agent', '--avatar', red]);
+  check('an agent registers its avatar', avatarJoin.code === 0, {stderr: avatarJoin.stderr});
+  await page.click('.kn-close');
+  await page.evaluate(() => window.kaminosSelection.clear());
+  await page.click('.kn-toggle');
+  await page.waitForFunction(() => document.querySelectorAll('.kn-thread').length >= 2, null, {timeout: 10000});
+  const layout = await page.evaluate(() => {
+    const drawer = document.querySelector('.kn-drawer'), threads = drawer.querySelector('.kn-threads');
+    return {order: [...drawer.children].map(child => child.className.split(' ')[0]),
+      shown: [...document.querySelectorAll('.kn-thread')].map(card => card.dataset.thread),
+      atBottom: threads.scrollHeight - threads.scrollTop - threads.clientHeight < 2};
+  });
+  const roots = (await log()).filter(event => event.type === 'note' && !event.parent && event.kind !== 'ref').map(event => event.id);
+  check('threads run oldest to newest, like a chat', JSON.stringify(layout.shown) === JSON.stringify(roots.filter(id => layout.shown.includes(id))), {shown: layout.shown});
+  check('the composer sits under the conversation, and the newest is in view',
+    layout.order.indexOf('kn-threads') < layout.order.indexOf('kn-compose') && layout.atBottom, layout);
+  await page.click(`.kn-thread[data-thread="${noteId}"] .kn-replies .kn-name.kn-agent`);
+  const picked = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent}));
+  check("clicking an agent's name selects its avatar", picked.ids.includes(red) && picked.status === `Selected @${AGENT}'s avatar`, picked);
+  await page.evaluate(() => window.kaminosSelection.clear());
+  await page.click(`.kn-thread[data-thread="${noteId}"] > div > .kn-note > .kn-meta .kn-name`);
+  const nobody = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent}));
+  check('a name with no avatar here says so and selects nothing', nobody.ids.length === 0 && nobody.status === `@${PERSON} has no avatar in this scene`, nobody);
+  await page.evaluate(id => window.kaminosSelection.set([id], id), red);
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});
@@ -290,7 +318,7 @@ try {
   const notForMe = notes(['wait', '--as', AGENT, '--timeout', '4'], {timeoutMs: 30000});
   await sleep(600);
   await page.fill('.kn-compose textarea', '@someone-else the floor is too glossy');
-  await page.waitForFunction(() => (document.querySelector('.kn-reach')?.textContent ?? '').startsWith('Reaches @someone-else'), null, {timeout: 8000});
+  await page.waitForFunction(() => (document.querySelector('.kn-compose .kn-reach')?.textContent ?? '').startsWith('Reaches @someone-else'), null, {timeout: 8000});
   await page.click('.kn-compose .kn-btn.primary');
   await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 20000});
   const quiet = await notForMe;
