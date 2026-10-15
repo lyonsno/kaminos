@@ -16,8 +16,8 @@ async function fixture(){
  const session={async attach(root){scene.add(root);return {id:'animal',root,owned:true};},onFrame(){throw Error('Paused property updates cannot rely on a frame callback');},redraw(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),async dispose(){scene.clear();}};
  const host={controls:{document,mountObject:x=>(seating=x,{dispose(){},update(){}})},scene:{open:async()=>session}};
  const api=await openExperiment({id:'fixture/creature',title:'Creature',create:args=>createWalkingCreature(args,{loadSources:async()=>data,loadSkin:input=>input.case==='lean'?pending:Promise.resolve(skin(input.case_sha256))})},{host,inputs:{case:'heavy',case_sha256:heavy,choices,blend_frames:0},record(){}});
- const mount=await api.mount({root:new Element()});const all=nodes(seating.properties),cast=all.find(n=>n['aria-label']==='Creature cast'),error=all.find(n=>n.role==='alert');
- return {api,mount,cast,error,rejectLean,heavy,startLean(){cast.value='lean';return cast.onchange();}};
+ const mount=await api.mount({root:new Element(),reopen:async()=>{}});const all=nodes(seating.properties),cast=all.find(n=>n['aria-label']==='Creature cast'),error=all.find(n=>n.role==='alert');
+ return {api,mount,cast,file:all.find(n=>n['aria-label']==='Open creature setup'),update:seating.onSelected,mode:all.find(n=>n['aria-label']==='Creature playback'),error,rejectLean,heavy,startLean(){cast.value='lean';return cast.onchange();}};
 }
 test('paused cast loading disables its controls immediately through the actual experiment mount',async()=>{
  const f=await fixture();try{const old=f.startLean();assert.equal(f.cast.disabled,true,'Paused cast selector did not present its pending load');f.rejectLean(Error('current refusal'));await old;assert.equal(f.cast.disabled,false);assert.equal(f.error.textContent,'current refusal');}finally{await f.api.dispose();}
@@ -27,4 +27,10 @@ test('obsolete refusal cannot overwrite a newer successful cast source, recipe o
 });
 test('disposing the properties mount prevents late refusal publication',async()=>{
  const f=await fixture();try{const old=f.startLean();f.mount.dispose();f.rejectLean(Error('late refusal'));await old;assert.equal(f.error.textContent,'');}finally{await f.api.dispose();}
+});
+test('an unrelated mode change cannot hide the still-current cast failure',async()=>{
+ const f=await fixture();try{const old=f.startLean();f.mode.value='cycle';await f.mode.onchange();f.rejectLean(Error('current cast fetch refused'));await old;let r=await f.api.read();assert.equal(r.mode,'cycle');assert.equal(r.currentSkin.current.cast,'heavy');assert.equal(r.source.caseSha256,f.heavy);assert.equal(r.recipe.case_sha256,f.heavy);assert.equal(f.error.textContent,'current cast fetch refused','A successful mode change hid the still-current cast failure');f.mode.value='source';await f.mode.onchange();assert.equal(f.error.textContent,'current cast fetch refused','Changing playback cannot clear an unresolved cast warning');await f.api.invoke('skin',{cast:'heavy',attachment:'distributed'});assert.equal(f.error.textContent,'','A successful cast operation through the shared invoker clears the cast-owned warning');}finally{await f.api.dispose();}
+});
+test('setup-open warnings survive ordinary presentation refresh and clear on a successful open',async()=>{
+ const f=await fixture();try{f.file.files=[{text:async()=>'{'}];await f.file.onchange();const warning=f.error.textContent;assert.ok(warning);f.update();assert.equal(f.error.textContent,warning,'Presentation refresh erased the current setup-open error');f.file.files=[{text:async()=>JSON.stringify((await f.api.read()).recipe)}];await f.file.onchange();assert.equal(f.error.textContent,'');}finally{await f.api.dispose();}
 });

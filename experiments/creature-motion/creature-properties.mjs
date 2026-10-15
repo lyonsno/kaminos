@@ -18,12 +18,13 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  const setup=el('details'),setupBody=el('div');setup.append(el('summary','Save / open creature'),setupBody);properties.append(setup,error);
  const saveButton=el('button','Save creature setup');saveButton.type='button';saveButton.onclick=()=>save(read().recipe);setupBody.append(saveButton);
  const fileLabel=el('label','Open creature setup'),file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','Open creature setup');fileLabel.append(file);setupBody.append(fileLabel);
- let disposed=false,lastVariants='',request=0;
- const call=async(name,input)=>{if(disposed)return;const current=++request;try{error.textContent='';const pending=invoke(name,input);update();await pending;}catch(e){if(!disposed&&current===request)error.textContent=e.message;}finally{if(!disposed)update();}};
+ let disposed=false,lastVariants='';const requests=new Map(),failures=new Map();
+ const perform=async(name,action)=>{if(disposed)return;const current=(requests.get(name)??0)+1;requests.set(name,current);failures.delete(name);try{const pending=action();update();await pending;}catch(e){if(!disposed&&requests.get(name)===current&&name!=='skin')failures.set(name,e.message);}finally{if(!disposed)update();}};
+ const call=(name,input)=>perform(name,()=>invoke(name,input));
  cast.onchange=()=>{const current=read().currentSkin.current,variants=skins.filter(c=>c.cast===cast.value),choice=variants.find(c=>c.attachment===current.attachment)??variants.find(c=>c.attachment==='distributed')??variants[0];return call('skin',{cast:choice.cast,attachment:choice.attachment});};
  attachment.onchange=()=>call('skin',{cast:read().currentSkin.current.cast,attachment:attachment.value});
  motion.onchange=()=>call('motion',{id:motion.value});mode.onchange=()=>call('mode',{mode:mode.value});
- file.onchange=async()=>{const chosen=file.files?.[0];if(!chosen||disposed)return;try{error.textContent='';await open(JSON.parse(await chosen.text()));}catch(e){if(!disposed)error.textContent=e.message;}finally{file.value='';}};
+ file.onchange=async()=>{const chosen=file.files?.[0];if(!chosen||disposed)return;await perform('open',async()=>open(JSON.parse(await chosen.text())));file.value='';};
  const playbackRoot=el('div');
  const playback=mountPlaybackControls({document,root:playbackRoot,label:'Creature playback',
   read(){const r=read(),p=r.playback;return {playing:p.status==='playing',time:p.time??0,duration:(p.frames-1)/p.fps,stepSeconds:1/p.fps,rate:r.rate};},
@@ -34,6 +35,9 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
   }});
  function update(){
   if(disposed)return;const r=read(),s=r.currentSkin;
+  // The selector owns Cast/Attachment errors, including requests made through
+  // the agent invoker. Other properties cannot supersede that domain state.
+  error.textContent=[s?.error,...failures.values()].filter(Boolean).join('\n');
   if(s){cast.value=s.current.cast;cast.disabled=Boolean(s.pending);attachment.disabled=Boolean(s.pending);
    const variants=skins.filter(c=>c.cast===s.current.cast),key=variants.map(c=>c.attachment).join('|');
    if(key!==lastVariants){for(const child of [...attachment.children])child.remove();for(const c of variants){const o=el('option',c.attachmentLabel??c.attachment);o.value=c.attachment;attachment.append(o);}lastVariants=key;}attachment.value=s.current.attachment;
