@@ -73,3 +73,16 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   release();assert.equal(await first,'done');assert.equal(meshRunning.trellisPage,false);
   fail=true;const second=ctx.run({});release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
 });
+
+test('the service prepares its own input and shows the cutout it used',async()=>{
+  const {s}=service({runPage:async({onInput})=>{await onInput('/api/read?root=image-inbox&path=a-cutout.png');return {glb,generation:{runId:'r'},label:'a'};}});
+  assert.equal(s.preparesInput,true);
+  await s.run(input);assert.equal(s.read().inputPreview,'/api/read?root=image-inbox&path=a-cutout.png');
+});
+
+test('the operation stays busy through saving and while a mesh waits to be saved again',async()=>{
+  let release;const {s}=service({persist:()=>new Promise((_,reject)=>{release=()=>reject(Error('disk full'));})});
+  const running=s.run(input);await new Promise(r=>setTimeout(r,0));
+  assert.equal(s.busy(),true,'saving is still the operation');release();await assert.rejects(running,/disk full/);
+  assert.equal(s.busy(),true,'a retained mesh keeps the choice bound to this service');
+});

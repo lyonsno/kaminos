@@ -151,6 +151,10 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     return saved;
   }
   return {
+    preparesInput:true,
+    // The drawer keeps the model choice bound to this service while it runs, saves, or
+    // holds a generated mesh that still needs saving.
+    busy:()=>active||!!state.pending,
     read(){
       const view={...structuredClone({...state,pending:null}),pending:state.pending?{label:state.pending.label}:null};
       if(state.status==='idle'||state.status==='unavailable'){const reason=unavailable();return reason?{...view,status:'unavailable',error:reason}:{...view,status:'idle'};}
@@ -168,10 +172,10 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       const cutout=input?.source;if(!cutout)throw Error('Choose a source image');
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
-      set({status:'running',error:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
+      set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
       try{
         const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
-        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onPhase:event=>{
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:source=>set({inputPreview:source}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
         phase='persistence';return await storePending();
