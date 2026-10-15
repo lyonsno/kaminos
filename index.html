@@ -3482,7 +3482,7 @@ import { createSceneGI } from './scene-gi.mjs';
 import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import {collisionVoxelInstances} from './scene-collision-debug.mjs';
+import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -3652,8 +3652,11 @@ function syncCollisionVoxelView() {
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
   if(snapshot) {
     collisionVoxelRevision=snapshot.revision;
-    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
-    if(snapshot.cells) {
+    const retainGpuView=snapshot.backend==='gpu'&&collisionVoxelMesh?.userData.gpuSolidTexture===snapshot.texture&&collisionVoxelMesh.userData.gpuSolidFrame===JSON.stringify([snapshot.dimensions,snapshot.transform]);
+    if(!retainGpuView&&collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(snapshot.backend==='gpu'&&!retainGpuView){
+      collisionVoxelMesh=createGpuCollisionVoxelMesh(THREE,renderer,snapshot);scene.add(collisionVoxelMesh);
+    } else if(snapshot.cells) {
       const {centres,size}=collisionVoxelInstances(snapshot);
       collisionVoxelMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size*.94,size*.94,size*.94),new THREE.MeshBasicMaterial({color:0x46d7dd,transparent:true,opacity:.35,depthWrite:false,depthTest:false}),centres.length);
       const matrix=new THREE.Matrix4();centres.forEach((p,i)=>collisionVoxelMesh.setMatrixAt(i,matrix.makeTranslation(...p)));
@@ -3672,7 +3675,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const text=!enabled?'Scene collisions off'
     : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
-    : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
+    : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?'Active · GPU solid field':`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');

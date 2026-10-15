@@ -11,6 +11,7 @@ const base={pressureSolver:'converged-open-top',projection:1,advectionScheme:'ma
 function collision(){
  const mesh=new THREE.Mesh(new THREE.BoxGeometry(.25,.25,.25));mesh.position.set(.55,.5,.55);
  const ctx={device:{},gridSize:32,gridHeight:64,state:{},controlsSnapshot:{...base},productTransform:{translate:[0,0,0],scale:1},sceneSolidRevisionKey:null,sceneSolidCellsCpu:null,sceneSolidSupportCache:null,sceneSolidGeometryCache:null,immersedWallCache:null,analyticEmitterDescriptor:null,analyticEmitterDescriptorSignature:'',analyticEmitterDispatch:{active:false,cellMin:[0,0,0],cellExtent:[0,0,0],cellCount:0},PRESSURE_SOLVER_CONVERGED:'converged',...solid,immersedBackWallCells:core.immersedBackWallCells,composeSolidField:core.composeSolidField,resolvePressureSolverConfig:core.resolvePressureSolverConfig,resolveTransportConfig:core.resolveTransportConfig,performance};
+ ctx.sceneSolidGpu=null;
  const counts={geometry:0,walls:0,uploads:0,bindings:0};
  ctx.getSceneCollision=()=>({requested:true,id:'kiln',object:mesh});
  ctx.voxelizeTriangleSolid=(...args)=>{counts.geometry++;return solid.voxelizeTriangleSolid(...args);};

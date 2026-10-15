@@ -62,7 +62,8 @@ fn count()->u32{return p.dims.x*p.dims.y*p.dims.z;}
 fn point(v:vec4<f32>)->vec3<f32>{return (((p.matrix*v).xyz-p.domain.xyz)/p.domain.w+vec3<f32>(1))*f32(p.dims.x)*0.5;}
 fn separated(a:vec3<f32>,b:vec3<f32>,c:vec3<f32>,axis:vec3<f32>)->bool{
  let r=0.5*dot(abs(axis),vec3<f32>(1));let d=vec3<f32>(dot(a,axis),dot(b,axis),dot(c,axis));
- return min(min(d.x,d.y),d.z)>r+1e-7||max(max(d.x,d.y),d.z)< -r-1e-7;
+ let epsilon=1e-6*max(1.0,r);
+ return min(min(d.x,d.y),d.z)>r+epsilon||max(max(d.x,d.y),d.z)< -r-epsilon;
 }
 fn touches(a0:vec3<f32>,b0:vec3<f32>,c0:vec3<f32>,cell:vec3<i32>)->bool{
  let center=vec3<f32>(cell)+vec3<f32>(0.5);let a=a0-center;let b=b0-center;let c=c0-center;

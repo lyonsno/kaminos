@@ -13225,7 +13225,7 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
-      if (typeof device.createComputePipeline === 'function') {
+      if (typeof device.createComputePipeline === 'function' && !state.joinedBoundary?.admitted) {
         sceneSolidGpu ||= createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});
         const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
         const maskKey=JSON.stringify([geometry.key,backWall.maskKey]);
@@ -13245,6 +13245,10 @@ export function createKaminosVolumePrototype({
           sourceSupport:null,validation:'gpu-resident-unread',emitterBackWallCells:backWall.cells.length,
           residentBytes:gridSize*gridHeight*gridSize*4,rebuildSubmitMs:performance.now()-started,rebuildStep:state.simStepCount};
         return;
+      }
+      if(sceneSolidGpu){
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;sceneSolidTexture=null;
+        sceneSolidRevisionKey=null;installSceneSolidTexture();rebuildSceneSolidBindingViews();
       }
       sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
       const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
@@ -13280,7 +13284,7 @@ export function createKaminosVolumePrototype({
       if (installSceneSolidTexture({...field, cells: composedWall.cells})) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = maskKey;
       state.sceneCollision = {
-        requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
+        requested: true, effective: 'mesh-voxel-solid', backend:state.joinedBoundary?.admitted?'cpu-joined-compatibility':'cpu-reference',sourceId, reason: null,
         emitterBackWallCells: composedWall.addedCells, geometryRevision: revision, grid: gridSize,
         triangleCount: geometry.triangleCount, members:geometry.members,
         surfaceCellCount: field.surfaceCellCount, interiorCellCount: field.interiorCellCount,
@@ -27215,7 +27219,7 @@ export function createKaminosVolumePrototype({
       if(knownRevision === revision)return null;
       return {revision,cells:sceneSolidCellsCpu?.slice()??null,
         dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
-        runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',snapshotStatus:sceneSolidGpu?'explicit-snapshot-required':'available'};
+        runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',texture:sceneSolidGpu?.texture??null,snapshotStatus:sceneSolidGpu?'gpu-resident':'available'};
     },
     async sampleSceneCollisionMask() {
       const producer=sceneSolidGpu,revision=sceneSolidRevisionKey;
