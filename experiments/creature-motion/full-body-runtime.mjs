@@ -21,14 +21,14 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights}) {
  validate(skin);
  const group=new THREE.Group();group.name='Creature · generated walking';
  let geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(rest,3));geometry.setIndex(new THREE.BufferAttribute(triangles,1));geometry.computeVertexNormals();
- const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.userData.kaminosDynamicGeometry=true;group.add(mesh);
+ const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.kaminosDynamicGeometry=true;group.add(mesh);
  const bones=new Map(),inverseRest=new Map();
  for(const spec of manifest.bones){const bone=new THREE.Bone();bone.name=spec.name;bones.set(spec.name,bone);inverseRest.set(spec.name,new THREE.Matrix4().set(...spec.restMatrix.flat()).invert());}
  for(const spec of manifest.bones){
   const bone=bones.get(spec.name),matrix=new THREE.Matrix4().set(...spec.restMatrix.flat());
   if(spec.parent){matrix.premultiply(inverseRest.get(spec.parent));bones.get(spec.parent).add(bone);}else group.add(bone);
   matrix.decompose(bone.position,bone.quaternion,bone.scale);
-  const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;bone.add(marker);
+  const marker=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:0x37d7eb,depthTest:false}));marker.renderOrder=100;Object.assign(marker.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'bones'});bone.add(marker);
  }
  let cached='',updates=0,lastUpdateMs=0;
  function active(){if(disposed)throw Error('Full-body runtime is disposed');}
