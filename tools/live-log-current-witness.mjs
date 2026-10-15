@@ -78,7 +78,10 @@ try {
   hash.delete('experiment');hash.delete('experiment_inputs');restoredUrl.hash=hash.toString();
   report.phase='saved-scene-restore';report.restoredRequestedUrl=restoredUrl.href;await save();
   await page.goto(restoredUrl.href);
-  await page.waitForFunction(()=>window.kaminosFlameEmitterState?.().authoredPresent||document.querySelector('#status.failed')||document.getElementById('info-bar')?.textContent.startsWith('Scene load failed'));
+  await page.waitForFunction(()=>{
+    const state=window.kaminosFlameEmitterState?.(),info=document.getElementById('info-bar')?.textContent||'';
+    return (state?.registered&&info.startsWith('Scene loaded:'))||document.querySelector('#status.failed')||info.startsWith('Scene load failed');
+  });
   report.restoredSource=await page.evaluate(()=>window.kaminosFlameEmitterState());
   assert.equal(report.restoredSource.authoredPresent,true);assert.equal(report.restoredSource.emissionEnabled,false);
   report.restoredEffectiveUrl=page.url();
