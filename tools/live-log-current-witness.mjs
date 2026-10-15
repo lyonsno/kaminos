@@ -72,11 +72,17 @@ try {
   await invoke('run');await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>0);await invoke('reset');
   report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.equal(report.saved.ok,true);
   assert.equal(report.saved.document.objects.find(object=>object.id==='flame-emitter').emissionEnabled,false);
-  await page.locator('#scene-file-input').setInputFiles({name:report.saved.filename,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(report.saved.document))});
-  await page.waitForFunction(()=>!new URLSearchParams(location.hash.slice(1)).has('scene'));
+  const active=await read();assert.equal(active.burnStatusAuthority,'resident-gpu-peak-reaction');assert.equal(active.selfEmission,false);
+  // Reopen the ordinary saved scene without the experiment's cold-start setup.
+  const restoredUrl=new URL(report.saved.url),hash=new URLSearchParams(restoredUrl.hash.slice(1));
+  hash.delete('experiment');hash.delete('experiment_inputs');restoredUrl.hash=hash.toString();
+  report.phase='saved-scene-restore';report.restoredRequestedUrl=restoredUrl.href;await save();
+  await page.goto(restoredUrl.href);
+  await page.waitForFunction(()=>window.kaminosFlameEmitterState?.().authoredPresent||document.querySelector('#status.failed')||document.getElementById('info-bar')?.textContent.startsWith('Scene load failed'));
   report.restoredSource=await page.evaluate(()=>window.kaminosFlameEmitterState());
   assert.equal(report.restoredSource.authoredPresent,true);assert.equal(report.restoredSource.emissionEnabled,false);
-  const active=await read();assert.equal(active.burnStatusAuthority,'resident-gpu-peak-reaction');assert.equal(active.selfEmission,false);
+  report.restoredEffectiveUrl=page.url();
+  await page.screenshot({path:path.join(out,'restored.png')});
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}
