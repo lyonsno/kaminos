@@ -1,27 +1,70 @@
-// Separate > Selection, as Blender's P: the selected faces of one mesh become a new mesh
-// and the rest stays behind. It works on the GLB's own triangles, checked corner by
-// corner against the geometry the selection was made on, so a selection can never land
-// on different faces. Both pieces keep the source material, atlas and node placement.
-import {readTrianglePrimitives,writeDerivedGlb} from './poly-glb-io.mjs';
-import {extractFaces} from './poly-mesh-edit.mjs';
+// Separate and Slice on a GLB, for Edit Mode. Both work on the GLB's own triangles,
+// checked corner by corner against the geometry the selection was made on, so a
+// selection can never land on different faces. Both pieces keep the source material,
+// atlas and node placement, and carry a receipt of what was done.
+//   Separate > Selection, as Blender's P: the selected faces become a new mesh.
+//   Slice: a plane cuts the selected faces, the mesh splits where the cut separates it,
+//   and both openings are capped: Bisect, Fill and Separate in one step.
+import {parseGlb,readTrianglePrimitives,writeDerivedGlb} from './poly-glb-io.mjs';
+import {buildPolyMesh,selectLinkedFaces} from './poly-mesh-core.mjs';
+import {bisectFaces,cutBarrier,extractFaces,sectionCap} from './poly-mesh-edit.mjs';
+
+// The mesh's primitives edit as one face set, in order, each with its own vertex block, as
+// Edit Mode merges them. A derived part's second material is its cut cap, and stays one.
+function editedPrimitive(sourceBytes,faceMask,geometry) {
+  const primitives=readTrianglePrimitives(sourceBytes);
+  if(!primitives.length)throw Error('Edit Mode needs a GLB with a triangle mesh');
+  if(primitives.some(p=>p.mesh!==primitives[0].mesh))throw Error('Edit Mode needs a GLB with one mesh; this one has several');
+  const [first]=primitives;
+  if(first.nodes.length!==1)throw Error('Edit Mode needs the mesh placed by exactly one node');
+  const materials=[...new Set(primitives.map(p=>p.material??0))];
+  if(materials.length>2)throw Error('Edit Mode supports one material plus cut caps for now');
+  const blocks=primitives.map(p=>({...p,indices:p.indices??Uint32Array.from({length:p.positions.length/3},(_,i)=>i)}));
+  const join=key=>blocks.every(p=>p[key])?Float32Array.from(blocks.flatMap(p=>[...p[key]])):null;
+  let base=0;const indices=Uint32Array.from(blocks.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.positions.length/3;return out;}));
+  const faceMaterial=Uint8Array.from(blocks.flatMap(p=>Array(p.indices.length/3).fill(materials.indexOf(p.material??0))));
+  const arrays={positions:join('positions'),normals:join('normals'),uvs:join('uvs'),indices,faceMaterial},faces=indices.length/3;
+  if(faceMask.length!==faces)throw Error(`The selection covers ${faceMask.length} faces but the GLB has ${faces}`);
+  if(geometry)checkSameTriangles(arrays.positions,indices,geometry);
+  let selected=0;for(const s of faceMask)if(s)selected++;
+  return {primitive:{node:first.worldMatrices[0],materials},arrays,faces,selected};
+}
+function derived(sourceBytes,{node,materials},arrays,label,receipt) {
+  const capMaterial=materials.length>1?parseGlb(sourceBytes).json.materials?.[materials[1]]:undefined;
+  return writeDerivedGlb(sourceBytes,arrays,{name:label,receipt,nodeMatrix:node,sourceMaterial:materials[0],...(capMaterial?{capMaterial}:{})});
+}
 
 export function separateSelection(sourceBytes,faceMask,{geometry=null,name='Part',restName=`${name} remainder`,source=null}={}) {
-  const primitives=readTrianglePrimitives(sourceBytes);
-  if(primitives.length!==1)throw Error(`Separate needs a GLB with one triangle mesh; this one has ${primitives.length}`);
-  const [primitive]=primitives;
-  if(primitive.nodes.length!==1)throw Error('Separate needs the mesh placed by exactly one node');
-  const indices=primitive.indices??Uint32Array.from({length:primitive.positions.length/3},(_,i)=>i),faces=indices.length/3;
-  if(faceMask.length!==faces)throw Error(`The selection covers ${faceMask.length} faces but the GLB has ${faces}`);
-  if(geometry)checkSameTriangles(primitive.positions,indices,geometry);
-  let selected=0;for(const s of faceMask)if(s)selected++;
+  const {primitive,arrays,faces,selected}=editedPrimitive(sourceBytes,faceMask,geometry);
   if(!selected)throw Error('Select faces to separate');
   if(selected===faces)throw Error('Every face is selected, so nothing would remain');
-  const {part,rest}=extractFaces({positions:primitive.positions,normals:primitive.normals,uvs:primitive.uvs,indices},faceMask);
-  const piece=(arrays,keep,label,count)=>{
+  const {part,rest}=extractFaces(arrays,faceMask);
+  const piece=(piece,keep,label,count)=>{
     const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[{op:'separate',keep,selectedFaces:selected,sourceFaces:faces}]};
-    return {bytes:writeDerivedGlb(sourceBytes,arrays,{name:label,receipt,nodeMatrix:primitive.worldMatrices[0],sourceMaterial:primitive.material??0}),faces:count,receipt};
+    return {bytes:derived(sourceBytes,primitive,piece,label,receipt),faces:count,receipt};
   };
   return {part:piece(part,'selection',name,selected),rest:piece(rest,'remainder',restName,faces-selected)};
+}
+
+// The plane is in the mesh's own frame. Only selected faces are cut; the selection must
+// span the junction, so that the cut leaves no path from one side to the other.
+export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='Part',restName=`${name} remainder`,source=null,fill='outline'}={}) {
+  const {primitive,arrays,faces,selected}=editedPrimitive(sourceBytes,faceMask,geometry);
+  if(!selected)throw Error('Select the faces to slice, around where the cut goes');
+  const cut=bisectFaces(arrays,faceMask,plane);
+  if(!cut.cutVertices)throw Error('The line does not cross the selected faces');
+  const mesh=buildPolyMesh(cut.arrays),barrier=cutBarrier(mesh,cut.side),seeds=[];
+  for(let f=0;f<mesh.faceCount;f++)if(cut.side[f]>0)seeds.push(f);
+  const above=selectLinkedFaces(mesh,seeds,{barrier});
+  let aboveFaces=0;for(let f=0;f<mesh.faceCount;f++){if(above[f]&&cut.side[f]<0)throw Error('The cut does not separate the mesh: the two sides still join elsewhere. Select the whole junction, or move the line');aboveFaces+=above[f];}
+  const partAbove=aboveFaces<=mesh.faceCount-aboveFaces,partMask=partAbove?above:above.map(x=>1-x);
+  const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',plane:{point:[...plane.point],normal:[...plane.normal]},selectedFaces:selected,sourceFaces:faces,cutVertices:cut.cutVertices};
+  const piece=(pieceArrays,keep,label,side)=>{
+    const cap=sectionCap(pieceArrays,arrays,faceMask,plane,{side,fill});
+    const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains}]};
+    return {bytes:derived(sourceBytes,primitive,cap.arrays,label,receipt),faces:cap.arrays.indices.length/3,capFaces:cap.capFaces,openChains:cap.openChains,receipt};
+  };
+  return {part:piece(pieces.part,'selection',name,partAbove?1:-1),rest:piece(pieces.rest,'remainder',restName,partAbove?-1:1),cutVertices:cut.cutVertices};
 }
 
 function checkSameTriangles(P,I,{positions:Q,indices:J}) {
