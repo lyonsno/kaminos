@@ -8,8 +8,8 @@ const [origin,out]=process.argv.slice(2);
 if(!origin||!out)throw Error('Usage: live-log-ignition-witness.mjs <origin> <output>');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],frames:[],arms:[],
-  requested:{grid:[32,32,32],rays:28,emitterRadius:.1,gi:{steps:4,slices:3},heatSteps:600,offSteps:900},
-  claim:'One solid log supplying real gas after authored burner off; uncalibrated wood, not propagation or benchmark'};
+  requested:{grid:[32,32,32],rays:28,emitterRadius:.1,gi:{steps:4,slices:3},heatSteps:600,offSteps:900,entryOnly:process.env.SINTER_ENTRY_ONLY==='1'},
+  claim:process.env.SINTER_ENTRY_ONLY==='1'?'Cold operator entry and effective collision setup only; no combustion claim':'One solid log supplying real gas after authored burner off; uncalibrated wood, not propagation or benchmark'};
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));let browser;
 try{
   await save();report.sourceCommit=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
@@ -72,6 +72,11 @@ try{
     await invoke('pause');
   };
   report.phase='cold';await save();assert.equal((await read()).paused,true);assert.equal((await read()).fields[0].steps,0);
+  if(report.requested.entryOnly){
+    report.entry=await read();report.collision=await page.evaluate(()=>window.kaminosSceneCollision.read());
+    assert.equal(report.entry.burner,false);assert.equal(report.entry.gasSource.enabled,true);assert.equal(report.collision.enabled,true);
+    await page.screenshot({path:path.join(out,'entry-cold.png')});report.frames.push({name:'entry-cold',state:report.entry});
+  }else{
   for(const feed of [false,true]){
     const name=feed?'wood-feed':'no-feed';report.phase=name;await save();
     await invoke('reset');await invoke('view',{mode:'beauty'});await invoke('move',{position:[0,0,0]});
@@ -93,6 +98,7 @@ try{
   assert.equal(report.withdrawn.state.burner,false);assert.equal(report.withdrawn.state.gasSource.enabled,false);
   assert.ok(report.withdrawn.stats.gas.freshBurn<on.after.stats.gas.freshBurn*.01,'Withdrawing wood fuel must extinguish continuing gas combustion');
   assert.equal(report.withdrawn.stats.wood.peakReaction,0,'Wood must stop releasing gas after it cools without flame feedback');
+  }
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}
