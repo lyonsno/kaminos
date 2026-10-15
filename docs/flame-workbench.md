@@ -53,6 +53,8 @@ changes. It retains actual settings, scene poses, camera, effective runtime
 controls, route/backend and simulation clock. Agent operations use the same
 source path, so an intervention is not recorded again at the wrapper. No
 animation-tick polling, second renderer or second recorder is introduced.
+Source events have phase `observed`: authored values can include a pending grid
+preview, while `effectiveRuntimeControls` identifies the renderer's actual state.
 Capture observes the displayed frame passively; its before/after context can
 describe a moving interval. Finish stops recording without stopping the flame.
 
