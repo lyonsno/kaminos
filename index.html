@@ -6769,6 +6769,7 @@ function refreshWorkbenchAssetPresentation(handle) {
   row.object.updateMatrixWorld(true);
   const selected=selectedPlacementEntry(),selectionMatched=selected?.id===row.id&&selected.object===row.object;
   if(selectionMatched)updateTransformInspector();
+  updateSelectionFeedback();
   window._kaminosDirty?.();
   return {id:row.id,transform:sceneObjectTransformState(row.object),selectionMatched};
 }

@@ -22,7 +22,7 @@ export function createSelectionFeedback(camera) {
       });
     }
     for(const root of roots)root.updateWorldMatrix(true,true);
-    for(const pair of pairs){pair.proxy.matrix.copy(pair.source.matrixWorld);pair.proxy.visible=pair.root.visible&&pair.source.visible;pair.proxy.material=activeSet.has(pair.id)?active:selected;}
+    for(const pair of pairs){pair.proxy.geometry=pair.source.geometry;pair.proxy.matrix.copy(pair.source.matrixWorld);pair.proxy.visible=pair.root.visible&&pair.source.visible;pair.proxy.material=activeSet.has(pair.id)?active:selected;}
   }
   return{update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.proxy.material===active).length,suspended:enabled.value===0})};
 }
