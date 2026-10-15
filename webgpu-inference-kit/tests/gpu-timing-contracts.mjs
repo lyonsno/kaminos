@@ -203,6 +203,16 @@ console.log('gpu timing contracts passed');
 
 console.log('gpu timing program contracts passed');
 
+// Used physical indices do not count as unread results: retain batched copies after a partial flush.
+{
+  const sim = createSimulatedDevice();
+  const runtime = await runKernels(sim, 4, { gpuTiming: { capacity: 4 } });
+  assert.equal(sim.log.submits.filter(ops => ops.includes('copy')).length, 1,
+    'partial flush must not turn the rest of an epoch into one readback per kernel');
+  await runtime.settleGpuTiming();
+  runtime.dispose();
+}
+
 // Reading a result does not make its physical timestamp pair eligible for immediate reuse.
 {
   const sim = createSimulatedDevice();

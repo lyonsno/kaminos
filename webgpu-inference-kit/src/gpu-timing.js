@@ -80,7 +80,7 @@ export function createWebGpuGpuTimer({ device, queue, options } = {}) {
 
   function begin() {
     if (destroyed) throw new Error('GPU timer is destroyed');
-    if (nextSlot >= capacity / 2) flush();
+    if (outstanding.length >= capacity / 2) flush();
     if (nextSlot === capacity && summary.pendingKernels === 0 && inflight.size === 0) {
       querySet?.destroy?.();
       querySet = null;
