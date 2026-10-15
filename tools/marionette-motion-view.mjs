@@ -14,12 +14,14 @@ export async function publishMotionView({reportPath,out=path.dirname(reportPath)
  const receipt={schema:'kaminos.motion-view-publication.v1',status:'unavailable',phase:'read-report',report:path.resolve(reportPath),recipe:path.join(out,'view.json'),url:null,origin,visualInspection:'not-performed',sources:[]};
  try{
   const report=JSON.parse(await fs.readFile(reportPath,'utf8'));
+  if(report.status==='failed'){receipt.phase='generation-failed';receipt.generationFailure={phase:report.phase,error:report.error};throw Error(`Motion generation failed at ${report.phase}: ${report.error}`);}
   if(report.status!=='completed'||!report.cases?.length||report.cases.length!==report.requestedCases?.length||report.cases.some(c=>c.validation!=='accepted-schema'))throw Error('View requires every requested case in a completed batch');
-  receipt.phase='authenticate-motion';const entries=[];
+  receipt.phase='authenticate-motion';const entries=[],snapshots=[];
   for(let i=0;i<report.cases.length;i++){
    const c=report.cases[i],task=report.requestedCases[i],file=await fs.realpath(c.path),bytes=await fs.readFile(file),m=validateSkeletonMotion(JSON.parse(bytes));
    if(m.prompt!==task.text||m.seed!==task.seed||m.cfgScale!==(task.cfgScale??3)||m.assetCondSha256!==report.bundle.assetCondSha256)throw Error('Motion differs from requested batch source');
    const digest=sha(bytes),relative=path.relative(out,file).split(path.sep).join('/');
+   snapshots.push(m);
    entries.push({id:'motion-'+i,label:`${m.skeleton.name??'Skeleton'} · ${m.prompt}`,motion:relative,motion_sha256:digest,file_sha256:digest});receipt.sources.push({path:file,sha256:digest,prompt:m.prompt,seed:m.seed,cfgScale:m.cfgScale,joints:m.joints,frames:m.frames});
   }
   const recipe={schema:'kaminos.skeleton-motion-view.v1',entries,presentation:'in-place',play:true,rate:1};
@@ -35,7 +37,7 @@ export async function publishMotionView({reportPath,out=path.dirname(reportPath)
    // Preserve file identity, require all decoded values to match, and separately
    // authenticate the effective HTTP representation consumed by the browser.
    async function served(file,expected){const response=await fetchImpl(readURL(file),{cache:'no-store'});if(!response.ok)throw Error('View source HTTP '+response.status);const bytes=Buffer.from(await response.arrayBuffer());let value;try{value=JSON.parse(bytes);}catch{throw Error('View HTTP source content mismatch');}if(!isDeepStrictEqual(value,expected))throw Error('View HTTP source content mismatch');return sha(bytes);}
-   for(let i=0;i<receipt.sources.length;i++){const source=receipt.sources[i];if(!inside(mount.base,source.path))throw Error('Motion source outside selected mount');source.httpSha256=await served(source.path,JSON.parse(await fs.readFile(source.path,'utf8')));entries[i].motion_sha256=source.httpSha256;}
+   for(let i=0;i<receipt.sources.length;i++){const source=receipt.sources[i];if(!inside(mount.base,source.path))throw Error('Motion source outside selected mount');source.httpSha256=await served(source.path,snapshots[i]);entries[i].motion_sha256=source.httpSha256;}
    const mountedBytes=Buffer.from(JSON.stringify(recipe,null,2)+'\n');await fs.writeFile(receipt.recipe,mountedBytes);receipt.recipeSha256=sha(mountedBytes);receipt.recipeHttpSha256=await served(actual,recipe);
    const discoveryResponse=await fetchImpl(new URL('/api/workbench-experiments',server));if(!discoveryResponse.ok)throw Error('View discovery unavailable');const discovery=await discoveryResponse.json();
    if(!discovery.modules?.includes('/experiments/creature-motion/skeleton.experiment.mjs'))throw Error('Source motion viewer not registered in this Workbench');receipt.serverSource=discovery.source??null;
