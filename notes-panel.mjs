@@ -60,15 +60,19 @@ export function createNotesSession({transport, selection, entries, readView, wri
   async function post({text = '', to = '', parent = null, kind = 'note', attachPicture = parent === null} = {}) {
     // The view and picture are the person's own: while something else has the
     // viewport camera, such as a sub taking a picture, they wait for it back.
-    const own = await ownView();
+    const kept = {issue: 'Something else kept the viewport camera, so no view or picture is attached'};
+    let own = await ownView();
     let now = situation(), shot = {};
-    if (!own) shot = {issue: 'Something else kept the viewport camera, so no view or picture is attached'};
+    if (!own) shot = kept;
     else if (attachPicture) {
       // The picture is taken over a few frames. If the person moves, selects or
       // changes scene meanwhile, it is taken again so the note and its picture
       // describe one moment; a view that keeps moving is refused, not mixed.
+      // Something can also take the camera during the picture: then neither
+      // the view nor the picture is the person's.
       for (let attempt = 1; ; attempt++) {
         shot = await picture();
+        if (!(await ownView())) { own = false; shot = kept; break; }
         const after = situation();
         if (close(now, after)) break;
         if (attempt === 3) throw new Error('The view kept changing while the picture was taken, so nothing was posted. Your note is still here; post again once the view is still.');

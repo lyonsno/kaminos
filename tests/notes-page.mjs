@@ -255,3 +255,18 @@ test("while something else has the viewport camera, a note waits for the person'
   assert.equal(body.picture, null);
   assert.match(body.context.pictureIssue, /kept the viewport camera/);
 });
+
+test('a sub that takes the camera during the picture and keeps it never becomes the recorded view', async () => {
+  const SUB = {...structuredClone(VIEW), position: [9, 9, 9]};
+  let held = false;
+  const {app, session} = fakePage({
+    ownView: async () => !held,
+    capture: async () => { held = true; app.view = structuredClone(SUB); throw new Error('a sub kept the viewport camera'); },
+  });
+  session.hello({author: 'noah', lastSeq: 0});
+  await session.post({text: 'look at this'});
+  const body = app.posted[0];
+  assert.ok(!('view' in body.context), 'the borrowed view is not recorded as the person\'s');
+  assert.equal(body.picture, null);
+  assert.match(body.context.pictureIssue, /kept the viewport camera/);
+});
