@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {createAuthoringAssets} from '../authoring-assets.mjs';
 import test from'node:test';import assert from'node:assert/strict';import{readFileSync}from'node:fs';
 class Element{
  constructor(tag,doc){this.tagName=tag;this.doc=doc;this.children=[];this.dataset={};this.attributes={};this.value='';this.title='';this.hidden=false;this.connected=true;this.style={};}
@@ -12,12 +13,12 @@ class Element{
  setAttribute(key,value){this.attributes[key]=value;}getAttribute(key){return this.attributes[key]??null;}removeAttribute(key){delete this.attributes[key];}
  addEventListener(){}contains(){return false;}get isConnected(){return this.connected;}getBoundingClientRect(){return{height:300};}
 }
-function fixture(thumbnails){
+function fixture(thumbnails,providedController=null){
  const ids=new Map();let observer;
  const doc={ids,createElement:tag=>new Element(tag,doc),getElementById:id=>ids.get(id),activeElement:null,addEventListener(){},defaultView:{innerWidth:1500,addEventListener(){},IntersectionObserver:class{constructor(fn){this.fn=fn;this.watched=new Set();observer=this;}observe(e){this.watched.add(e);}unobserve(e){this.watched.delete(e);}disconnect(){this.watched.clear();}fire(e){if(this.watched.has(e))this.fn([{target:e,isIntersecting:true}]);}}}};doc.body=new Element('body',doc);doc.body.clientHeight=1050;doc.body.classList={add(){},remove(){}};doc.body.style={setProperty(){},removeProperty(){}};ids.set('authoring-header',new Element('header',doc));
  const source=readFileSync(new URL('../authoring-assets.mjs',import.meta.url),'utf8').replaceAll('export ','').replace("import('./authoring-asset-previews.mjs')","getPreview()");const install=new Function('getPreview',source+'\nreturn installAuthoringAssets;')(()=>Promise.resolve({meshThumbnail:thumbnails}));
  const state={roots:[{id:'greenroom'}],root:'greenroom',path:'',catalog:true,listRevision:1,entries:[],results:[],warnings:[],unavailableCount:0};
- const generation={status:'idle'};let stops=0;const controller={read:()=>state,generation:()=>generation,refresh:async()=>{},select(){},stop(){stops++;}};const ui=install({document:doc,controller,edits:{state:()=>({active:null})}});
+ const generation={status:'idle'};let stops=0;const controller=providedController||{read:()=>state,generation:()=>generation,refresh:async()=>{},select(){},stop(){stops++;}};const ui=install({document:doc,controller,edits:{state:()=>({active:null})}});
  return{doc,state,ui,generation,stops:()=>stops,observer:()=>observer,mode:mode=>doc.body.children[0].modes.find(e=>e.dataset.assetsMode===mode).onclick()};
 }
 const tick=()=>new Promise(r=>setImmediate(r));
@@ -37,4 +38,31 @@ test('catalog loading has a visible subtle indicator and ends its busy state',()
 });
 test('generation remains controllable in the header when the authoring pane is outside Workbench',()=>{
  const f=fixture(async()=>null);Object.assign(f.generation,{status:'running',stage:'Two-stream',percent:40,canStop:true,progress:'Two-stream duties 1156/2922 (40%)'});f.doc.body.dataset.workspace='workbench';f.ui.render(f.state);const header=f.doc.getElementById('authoring-generation-header');assert.ok(header,'active inference needs a workspace-independent control');assert.equal(header.hidden,false);f.doc.getElementById('generation-header-stop').onclick();assert.equal(f.stops(),1);
+});
+
+const selectedImage={kind:'image',name:'subject.png',source:'/api/read?root=image-inbox&path=subject.png'};
+function imageController({selfPrepares=false}={}){
+ let preparations=0,requests=0;
+ const prepared={route:'input-alpha',original:{source:selectedImage.source},prepared:{source:selectedImage.source}};
+ const controller=createAuthoringAssets({request:async url=>{requests++;return url==='/api/roots'?{'generated-meshes':{exists:true},'image-inbox':{exists:true}}:{schema:'kaminos.authoring-assets.v1',collection:'generated-meshes',entries:[]};},prepareImage:async()=>{preparations++;return prepared;},generator:()=>({preparesInput:selfPrepares,read:()=>({status:'idle',results:[]})})});
+ controller.select(selectedImage);return{controller,prepared,preparations:()=>preparations,requests:()=>requests};
+}
+test('opening Generate carries the selected image and accepted preparation without catalog navigation',async()=>{
+ const f=imageController();await f.controller.prepare();const ui=fixture(async()=>null,f.controller);
+ await ui.ui.open('generate');
+ assert.deepEqual(f.controller.read().selected,selectedImage,'opening Generate must keep the image chosen in Browse');
+ assert.deepEqual(f.controller.read().preparation.value,f.prepared,'opening the same input does not discard its accepted preparation');
+ assert.equal(f.requests(),0,'changing presentation does not navigate the catalog');
+});
+test('Use for generation lets a self-preparing model use the selected original while explicit Prepare still works',async()=>{
+ const f=imageController({selfPrepares:true}),ui=fixture(async()=>null,f.controller);
+ ui.doc.getElementById('asset-use-image').onclick();await tick();
+ assert.equal(ui.ui.state().mode,'generate');assert.deepEqual(f.controller.read().selected,selectedImage);
+ assert.equal(f.preparations(),0,'a self-preparing model needs no unused server preparation');
+ ui.doc.getElementById('asset-prepare').onclick();await tick();assert.equal(f.preparations(),1,'explicit Prepare remains an operation');
+});
+test('Use for generation retains preparation for services that require it',async()=>{
+ const f=imageController(),ui=fixture(async()=>null,f.controller);
+ ui.doc.getElementById('asset-use-image').onclick();await tick();
+ assert.equal(f.preparations(),1);assert.deepEqual(f.controller.read().preparation.value,f.prepared);
 });
