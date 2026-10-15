@@ -14,6 +14,11 @@ assert.equal(typeof creature.operations.skin,'function','Ordinary creature has n
 creature.operations.seek({frame:1});const held=creature.read();await creature.operations.skin({cast:'lean',attachment:'distributed'});
 assert.equal(creature.read().playback.frame,1);assert.deepEqual(creature.read().transform,held.transform);assert.equal(creature.read().recipe.case,'lean');assert.equal(creature.read().source.caseSha256,'d'.repeat(64));
 creature.operations.rate({rate:.5});creature.operations.replay();frame({deltaSeconds:1/30});assert.equal(creature.read().playback.frame,0);frame({deltaSeconds:1/30});assert.equal(creature.read().playback.frame,1);
-await creature.mount({root:new Element(),invoke:(name,input)=>creature.operations[name](input)});assert.ok(seating.properties&&seating.playback,'Properties and playback must seat through the shared selected-object API');
-assert.equal(creature.read().recipe.rate,.5);await creature.dispose();assert.equal(frame,null);
+let reopened=0;
+await creature.mount({root:new Element(),invoke:(name,input)=>creature.operations[name](input),reopen:async()=>{reopened++;}});assert.ok(seating.properties&&seating.playback,'Properties and playback must seat through the shared selected-object API');
+const nodes=n=>[n,...n.children.flatMap(nodes)],file=nodes(seating.properties).find(n=>n['aria-label']==='Open creature setup');
+const actualRoot=scene.children[0];scene.remove(actualRoot);assert.equal(creature.read().host.id,null,'Removed creature cannot continue advertising a live scene registration');scene.add(actualRoot);
+file.files=[{text:async()=>JSON.stringify({...creature.read().recipe,choices:[...choices,choices[0]]})}];await file.onchange();
+assert.equal(reopened,0,'Invalid skin choices must be rejected before replacing the current creature');
+assert.equal(creature.read().recipe.rate,.5);scene.remove(scene.children[0]);assert.equal(creature.read().host.id,null,'Removed creature cannot continue advertising a live scene registration');await creature.dispose();assert.equal(frame,null);
 console.log('Ordinary creature cast swap preserves held pose and placement, saved identity/rate, shared selection properties and clock');
