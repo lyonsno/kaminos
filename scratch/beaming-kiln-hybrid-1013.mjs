@@ -120,7 +120,12 @@ try{
    }
    report.phase='capture';await write();
    await page.screenshot({path:out+'/authoring.png'});
-   const saved=await retain({name:'kiln-hybrid',observe});
+   const savedOwner=owner?await page.evaluate(async()=>{
+     const {readOwnerExperimentAddress}=await import('/owner-experiment-entry.mjs');
+     return readOwnerExperimentAddress(location);
+   }):null;
+   if(savedOwner)assert.equal(JSON.parse(savedOwner.inputsText).points,pointCount,'edited source count must reach saved owner address');
+   const saved=await retain({name:'kiln-hybrid',observe,owner:savedOwner});
    const url=new URL(saved.url),hash=new URLSearchParams(url.hash.slice(1));hash.set('rendering_directions','8');hash.set('rendering_angular_pattern','guided');url.hash=hash.toString();
    report.saved={filename:saved.filename,url:url.href,documentUrl:saved.url};await write();
    report.phase='reopen';await write();await page.goto('about:blank');await page.goto(url.href);

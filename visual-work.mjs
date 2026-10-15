@@ -95,7 +95,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       await write();
       return document;
     };
-    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null }) => {
+    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null, owner: expectedOwner = owner }) => {
       assert.ok(/^[a-z0-9][a-z0-9_-]*$/i.test(name), 'Observation name must be a path-safe filename');
       report.phase = `observe:${name}`; await write();
       await settle(page);
@@ -104,7 +104,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture);
       if (!result?.ok) throw Error(`Save failed: ${result?.error || 'no result'}`);
       const persisted = await readScene(result.filename);
-      assertSavedResult(result, persisted, {workspace,owner});
+      assertSavedResult(result, persisted, {workspace,owner:expectedOwner});
       assert.deepEqual(report.errors, [], 'Uncaught browser error');
       await fs.writeFile(path.join(out, `${name}.kaminos.json`), JSON.stringify(persisted, null, 2));
       if (capture) {
