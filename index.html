@@ -3885,12 +3885,13 @@ import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from '
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
+import {createSceneOwnerControls} from './scene-owner-controls.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
-let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -6718,6 +6719,7 @@ function updateTransformInspector() {
   const fields = document.getElementById('transform-inspector-fields');
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
+  sceneOwnerControls?.update();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
   inspector.dataset.selectionCount=String(sceneSelection.ids.length);
@@ -12664,6 +12666,7 @@ function installSharedWorkbench() {
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
     inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
@@ -12674,7 +12677,8 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
+  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
   }};
