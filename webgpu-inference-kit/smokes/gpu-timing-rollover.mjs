@@ -36,8 +36,9 @@ try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   report.origin = `http://127.0.0.1:${server.address().port}`;
   report.phase = 'browser-launch'; await persist();
-  report.chromeArgs = ['--enable-unsafe-webgpu', '--use-angle=metal', '--use-mock-keychain', '--no-first-run'];
-  browser = await puppeteer.launch({ executablePath: chrome, headless: true, args: report.chromeArgs,
+  report.chromeArgs = ['--enable-unsafe-webgpu', '--use-angle=metal', '--use-mock-keychain', '--password-store=basic', '--no-first-run'];
+  report.browserProfile = path.join(out, 'profile');
+  browser = await puppeteer.launch({ executablePath: chrome, headless: true, userDataDir: report.browserProfile, args: report.chromeArgs,
     timeout: 0, protocolTimeout: 0 });
   report.browserVersion = await browser.version(); report.browserPid = browser.process().pid;
   const page = await browser.newPage();
