@@ -31,7 +31,7 @@ try{
   await fs.writeFile(out+'/instrumented-'+name,body);await route.fulfill({status:200,contentType:'text/javascript',body});
  });
  await rewrite('scene-hybrid-radiance.mjs',s=>"import {installCaptureProfiler} from './scratch/beaming-capture-profiler.mjs';\n"+s.replace('  validateShadowQuality(', '  installCaptureProfiler(device);\n  validateShadowQuality(').replace('    // Source coefficients',"    const originalRender=shadow.render.bind(shadow);shadow.render=(...args)=>globalThis.__captureProfile.measure('shadow',()=>originalRender(...args));\n    // Source coefficients"));
- await rewrite('fire-light-field-shadow.mjs',s=>s.replace('cubeCamera.update(renderer,scene);',"globalThis.__captureProfile.measure('cube',()=>cubeCamera.update(renderer,scene));"));
+ await rewrite('fire-light-field-shadow.mjs',s=>s.replace('cubeCamera.update(renderer,scene);',"globalThis.__captureProfile.measure(globalThis.__captureProfile.scope==='shadow'?'cube':'other-cube',()=>cubeCamera.update(renderer,scene));"));
  const owner={id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling:'complementary',points:4,pointSampling:'paired',shadowQuality:{resolution:36,blockerSamples:4,filterSamples:2}})};
  report.phase='load';
  report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile,workspace:'workbench',owner,out,exercise:async()=>{

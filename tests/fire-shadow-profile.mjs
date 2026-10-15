@@ -1,6 +1,14 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {validateCaptureProfile} from '../scratch/beaming-capture-profiler.mjs';
+import {installCaptureProfiler,validateCaptureProfile} from '../scratch/beaming-capture-profiler.mjs';
+// The live Three compute path calls beginComputePass() without a descriptor.
+let received;
+const device={features:new Set(['timestamp-query']),queue:{submit(){}},createQuerySet(){return {};},createCommandEncoder(){return {beginComputePass(spec){received=spec;return {};},beginRenderPass(){},finish(){return {};}};}};
+installCaptureProfiler(device);
+globalThis.__captureProfile.active={timestamps:true};
+assert.doesNotThrow(()=>device.createCommandEncoder().beginComputePass());
+assert.equal(received.timestampWrites.beginningOfPassWriteIndex,0);
+delete globalThis.__captureProfile;
 const frame={current:true,points:4,quality:{resolution:36,blockerSamples:4,filterSamples:2},timestamps:true,cpu:Array.from({length:4},()=>({scope:'shadow'})),gpu:[...Array.from({length:24},()=>({scope:'cube',kind:'beginRenderPass',ms:1})),{scope:'other',kind:'beginRenderPass',ms:1}]};
 const row={backend:'WebGPU:apple',errors:[],points:4,requestedFrames:1,frames:[frame]};
 validateCaptureProfile(row);
