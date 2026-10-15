@@ -68,7 +68,7 @@ The map draws no editor drawing, and nothing that is drawn outside the scene ren
 - the named object is the one the picture drew there, whatever has happened to the scene since;
 - the page then casts the ray at that mesh, placed where the picture drew it, for the point, the point in the object's own frame, the normal and the face.
 
-`pick X Y` (fractions of the sub's view, or of the framed view you see while looking through the sub) and `--from operator` draw one pixel of a pick map now. The answer's `referent` is `pictured` for a kept picture and `rendered` for a live pick.
+`pick X Y` (fractions of the sub's view, or of the framed view you see while looking through the sub) and `--from operator` draw a pick map now, at the size the viewport is drawn at, and read back the one pixel. The answer's `referent` is `pictured` for a kept picture and `rendered` for a live pick.
 
 A hit carries:
 
@@ -76,7 +76,7 @@ A hit carries:
 | --- | --- |
 | `authority` | `exact` when the renderer drew this object at that pixel and nothing drawn outside the map lies along the ray in front of it. Otherwise `approximate`, with `unresolved` saying what may cover it. |
 | `now` | `present`, `missing` (the object is gone) or `mesh-missing`. A missing object is still named, as the picture drew it. |
-| `point`, `local`, `normal`, `surface` | From casting the ray at the named mesh where it was drawn. A skinned mesh is cast as it is posed now (`pointBasis: recast-now`). When the ray does not meet the mesh as it is now, these are empty (`pointBasis: missed`). |
+| `point`, `local`, `normal`, `surface` | From casting the ray at the named mesh where it was drawn. A skinned mesh is cast as it is posed now (`pointBasis: recast-now`). These are empty when the ray does not meet the mesh as it is now (`missed`), when the drawing is a sprite, line or point cloud rather than a mesh (`not-a-mesh`), or when the instance is not known (`instance-unknown`). |
 | `geometry.status` | How the mesh's geometry compares with the picture: `same`, `edited` (an attribute, buffer, edit count, content or instance matrix changed), `replaced`, or after a reload `likely-same` or `unverified`. |
 
 When no scene object was drawn at the pixel, `hit` is empty and `drawn` says what was there: `nothing`, a drawing that is not a scene object (the ground, a proxy), or `unidentified`.
@@ -86,7 +86,7 @@ The map covers what the scene renderer draws into the scene canvas. Three things
 - simulation fields such as fire and smoke;
 - water from the local water host.
 
-A cloud or field whose bounds the ray crosses in front of the hit, and water whenever that host is drawing, go under `unresolved` and make the hit `approximate`, because any of them may be what the point shows. `fields` lists every field the ray crosses. A translucent surface in front is what a pick names, though the picture also shows what lies behind it. A material with its own fragment shader is traced with a stand-in, and its hits are `approximate`.
+A cloud or field whose bounds the ray crosses in front of the hit, and water whenever that host is drawing, go under `unresolved` and make the hit `approximate`, because any of them may be what the point shows. `fields` lists every field the ray crosses. A translucent surface in front is what a pick names, though the picture also shows what lies behind it. A material with its own fragment shader is traced with a stand-in, and its hits are `approximate`. A pick map numbers up to 65,534 objects in a page and 65,536 instances of a mesh. Past that, an object is `unidentified`, and a mesh with more instances names no instance. The map is drawn in the task that composes the picture: a change another callback makes to the scene between the scene canvas's last draw and that task would be in the map but not in the picture.
 
 Pictures kept without a pick map are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 
