@@ -79,3 +79,21 @@ test('wire mode keeps GPU deformation and leaves GPU-published topology to its o
  assert.deepEqual(receipt,{mode:'wireframe',meshes:3,perRoot:[3],kept:2});
  assert.equal(bent.material,deformed);assert.deepEqual(owned.material,[deformed,plain]);assert.equal(published.material,plain);
 });
+
+test('a replaced deformation graph reaches the cached wire material',()=>{
+ const shading=createViewportShading({createWireMaterial:()=>({name:'wire',wireframe:true,positionNode:null,needsUpdate:false})});
+ const first={isNode:true},second={isNode:true},source={name:'owner',positionNode:first},mesh=node({isMesh:true,material:source}),root=node({},[mesh]);
+ const seen=[];
+ shading.renderWith([root],'wireframe',()=>seen.push({material:mesh.material,positionNode:mesh.material.positionNode}));
+ seen[0].material.needsUpdate=false;
+ source.positionNode=second;
+ shading.renderWith([root],'wireframe',()=>seen.push({material:mesh.material,positionNode:mesh.material.positionNode}));
+ assert.equal(seen[0].positionNode,first);
+ assert.equal(seen[1].positionNode,second,"Wire follows the owner's current deformation graph");
+ assert.equal(seen[1].material,seen[0].material,'the cached wire material is refreshed, not replaced');
+ assert.equal(seen[1].material.needsUpdate,true,'and recompiled for the new graph');
+ assert.equal(mesh.material,source);
+ seen[1].material.needsUpdate=false;
+ shading.renderWith([root],'wireframe',()=>{});
+ assert.equal(seen[1].material.needsUpdate,false,'an unchanged graph is reused without recompiling');
+});

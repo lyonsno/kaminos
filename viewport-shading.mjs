@@ -17,7 +17,9 @@ export function createViewportShading({createWireMaterial}) {
  const wireFor=source=>{
   if(!source?.positionNode?.isNode)return wireMaterial;
   let wire=deformedWire.get(source);
-  if(!wire){wire=createWireMaterial();wire.positionNode=source.positionNode;deformedWire.set(source,wire);}
+  if(!wire){wire=createWireMaterial();deformedWire.set(source,wire);}
+  // An owner may replace its deformation graph on the same material.
+  if(wire.positionNode!==source.positionNode){wire.positionNode=source.positionNode;wire.needsUpdate=true;}
   return wire;
  };
  return {

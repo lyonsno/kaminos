@@ -28,6 +28,9 @@ export default {
       read: () => ({objectId: asset.id, shift: shift.value, visible: mesh.visible}),
       operations: {
         setShift(value) { shift.value = Number(value); session.redraw(); return {shift: shift.value}; },
+        // Replaces the deformation graph on the same material, as an owner
+        // does when its deformation law changes.
+        replaceGraph(x) { material.positionNode = positionLocal.add(vec3(Number(x), 0, 0)); material.needsUpdate = true; session.redraw(); return {graph: 'constant', x: Number(x)}; },
         setVisible(visible) { mesh.visible = visible === true; session.redraw(); return {visible: mesh.visible}; },
         frame() { return session.setView({position: [0.45, 1.1, 4.4], target: [0.45, 0.6, 0]}); },
       },

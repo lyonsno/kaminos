@@ -812,11 +812,30 @@ async function runFireProxySplatsScenario(ws) {
   assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
 
-// Wire on a GPU-deformed owner mesh: the wire-deformation fixture experiment
-// (served with KAMINOS_EXPERIMENTS_DIR=tests/fixtures/viewport-wire-experiments
-// and opened by ?experiment=wire-deformation) attaches a box through the owner
-// scene session and shifts it on the GPU with its material's positionNode.
-// Wire must draw where the shifted box is, not at its rest position.
+// The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
+// not enter this mask.
+function orangeMask(png, bounds) {
+  const mask = new Uint8Array(png.width * png.height);
+  let area = 0, minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
+  for (let y = Math.max(0, Math.floor(bounds.y)); y < Math.min(png.height, Math.floor(bounds.y + bounds.height)); y++) {
+    for (let x = Math.max(0, Math.floor(bounds.x)); x < Math.min(png.width, Math.floor(bounds.x + bounds.width)); x++) {
+      const a = (y * png.width + x) * png.channels;
+      if (png.pixels[a] - png.pixels[a + 2] > 40) { mask[y * png.width + x] = 1; area++; minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+    }
+  }
+  return { mask, area, bbox: area ? [minX, minY, maxX, maxY] : null };
+}
+
+// Ground darkening along a band, per column bucket, against a baseline.
+function groundDarkening(png, background, { y0, y1, x0, x1, step = 40 }) {
+  const out = [];
+  for (let x = x0; x < x1; x += step) { let sum = 0, n = 0;
+    for (let y = y0; y < y1; y++) for (let xx = x; xx < Math.min(x + step, x1); xx++) { const i = y * png.width + xx, a = i * png.channels, b = i * background.channels;
+      sum += (background.pixels[b] + background.pixels[b + 1] + background.pixels[b + 2]) - (png.pixels[a] + png.pixels[a + 1] + png.pixels[a + 2]); n++; }
+    out.push({ x, darkening: Math.round(sum / n) }); }
+  return out;
+}
+
 async function runViewportWireGpuDeformationScenario(ws) {
   phase = 'scenario-viewport-wire-gpu-deformation';
   const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
@@ -843,7 +862,7 @@ async function runViewportWireGpuDeformationScenario(ws) {
   await dispatchMouseClick(ws, toggle.wireframe);
   const wire = await shot('-wire-deform-shifted-wire');
   const shading = evidence.shading = await viewportShadingRead(ws);
-  const restMask = waterMask(rest.image, baseline.image, region), shiftedMask = waterMask(deformed.image, baseline.image, region), wireMask = waterMask(wire.image, baseline.image, region, 24);
+  const restMask = orangeMask(rest.image, region), shiftedMask = orangeMask(deformed.image, region), wireMask = waterMask(wire.image, baseline.image, region, 24);
   const width = baseline.image.width, height = baseline.image.height, near = 6;
   const shiftedNear = dilateMask(shiftedMask.mask, width, height, near), restNear = dilateMask(restMask.mask, width, height, near);
   let wireOnShifted = 0, wireOnRestOnly = 0;
@@ -865,11 +884,38 @@ async function runViewportWireGpuDeformationScenario(ws) {
   check(evidence.masks.wireDarkerFraction >= 0.8, `wire pixels are not the dark wire colour (${evidence.masks.wireDarkerFraction.toFixed(3)} darker than the background)`);
   check(evidence.masks.wireOnShifted >= 0.8, `wire is not drawn on the GPU-deformed shape (${evidence.masks.wireOnShifted.toFixed(3)} of wire pixels on the shifted box)`);
   check(evidence.masks.wireOnRestOnly <= 0.05, `wire is drawn at the rest shape (${evidence.masks.wireOnRestOnly.toFixed(3)} of wire pixels only near the rest box)`);
+  // The owner replaces its deformation graph on the same material; Wire must
+  // follow the new graph, not the one it first saw.
   await dispatchMouseClick(ws, toggle.solid);
+  evidence.replaced = await invoke('replaceGraph', -0.5);
+  const replacedSolid = await shot('-wire-deform-replaced-solid');
+  await dispatchMouseClick(ws, toggle.wireframe);
+  const replacedWire = await shot('-wire-deform-replaced-wire');
+  const replacedMask = orangeMask(replacedSolid.image, region), replacedWireMask = waterMask(replacedWire.image, baseline.image, region, 24);
+  const replacedNear = dilateMask(replacedMask.mask, width, height, near);
+  let onReplaced = 0, onPreviousOnly = 0;
+  for (let i = 0; i < replacedWireMask.mask.length; i++) { if (!replacedWireMask.mask[i]) continue; if (replacedNear[i]) onReplaced++; else if (shiftedNear[i]) onPreviousOnly++; }
+  evidence.replacedMasks = { solid: { area: replacedMask.area, bbox: replacedMask.bbox }, wire: { area: replacedWireMask.area, bbox: replacedWireMask.bbox },
+    wireOnReplaced: replacedWireMask.area ? onReplaced / replacedWireMask.area : 0, wireOnPreviousOnly: replacedWireMask.area ? onPreviousOnly / replacedWireMask.area : 0,
+    wireToSolidArea: replacedMask.area ? replacedWireMask.area / replacedMask.area : null };
+  check(replacedMask.bbox && shiftedMask.bbox && replacedMask.bbox[2] < shiftedMask.bbox[0], `the replaced graph did not move the solid box clear of the previous shape: ${JSON.stringify({ previous: shiftedMask.bbox, replaced: replacedMask.bbox })}`);
+  check(evidence.replacedMasks.wireOnReplaced >= 0.8 && evidence.replacedMasks.wireOnPreviousOnly <= 0.05, `Wire kept the previous deformation graph after the owner replaced it: ${JSON.stringify(evidence.replacedMasks)}`);
+  check(evidence.replacedMasks.wireToSolidArea !== null && evidence.replacedMasks.wireToSolidArea < 0.6, `Wire drew the replaced shape as a fill: ${evidence.replacedMasks.wireToSolidArea}`);
+  await dispatchMouseClick(ws, toggle.solid);
+  // Observation, not a check on Wire: does any solid-mode pass keep the
+  // previous graph after the replacement? Ground darkening below the box,
+  // with AO on and then off.
+  const band = { y0: Math.round(shiftedMask.bbox?.[3] ?? 530) - 14, y1: Math.round(shiftedMask.bbox?.[3] ?? 530) + 4, x0: Math.round(region.x), x1: Math.round(region.x + region.width) };
+  const aoOn = await shot('-wire-deform-replaced-solid-ao-on');
+  await evaluate(ws, `(() => { const t = document.getElementById('ao-toggle'); if (t && t.checked) t.click(); return t?.checked ?? null; })()`);
+  const aoOff = await shot('-wire-deform-replaced-solid-ao-off');
+  await evaluate(ws, `(() => { const t = document.getElementById('ao-toggle'); if (t && !t.checked) t.click(); return t?.checked ?? null; })()`);
+  evidence.replacedGroundObservation = { band, previousBox: shiftedMask.bbox, replacedBox: replacedMask.bbox,
+    aoOn: groundDarkening(aoOn.image, baseline.image, band), aoOff: groundDarkening(aoOff.image, baseline.image, band) };
   await settleViewportFrames(ws, 300);
   evidence.restoredMode = (await viewportShadingRead(ws))?.mode;
   check(evidence.restoredMode === 'solid', `Solid was not restored: ${evidence.restoredMode}`);
-  evidence.shots = [baseline.shot, rest.shot, deformed.shot, wire.shot];
+  evidence.shots = [baseline.shot, rest.shot, deformed.shot, wire.shot, replacedSolid.shot, replacedWire.shot, aoOn.shot, aoOff.shot];
   assert.deepEqual(failures, [], `wire GPU deformation checks failed:\n- ${failures.join('\n- ')}`);
 }
 
