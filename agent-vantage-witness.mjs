@@ -197,7 +197,8 @@ try {
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
   check('after the red box moves, a pick on the old picture still names it and says it moved',
     pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.pictured === true && pickMoved.result.hit.moved === true
-    && pickMoved.result.hit.geometry?.status === 'same', {hit: pickMoved.result.hit});
+    && pickMoved.result.hit.geometry?.status === 'same' && pickMoved.result.reconstruction?.status === 'exact',
+    {hit: pickMoved.result.hit, reconstruction: pickMoved.result.reconstruction});
   const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
   check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
 
