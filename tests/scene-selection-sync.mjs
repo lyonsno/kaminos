@@ -29,3 +29,13 @@ test('an emitter symbol wins over a simulation edge crossing the same pixel',()=
  const c=pointerContext();c.FLAME_EMITTER_TYPE='flame-emitter';c.LOCAL_LIQUID_EMITTER_TYPE='local-liquid-emitter';c.pickSceneObjectFromViewportPointer=()=>({id:'source',type:'flame-emitter'});c.pickFlameDomainFromViewportPointer=()=>true;c.window.selectSceneField=()=>{c.fieldPicked=true;};
  c.handleViewportSelectionClick({button:0,type:'click',clientX:50,clientY:20});assert.equal(c.selection,true);assert.equal(c.fieldPicked,undefined);
 });
+
+import * as framing from '../scene-frame-selected.mjs';
+test('Frame selected fits the simulation bounds rather than an ignored helper origin',()=>{
+ for(const field of ['flame-field','water-field']){
+  const guide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(-3,-1,-3),new THREE.Vector3(3,3,3)));guide.userData.kaminosEditorHelper=true;
+  const camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.set(4,3,6);const controls={target:new THREE.Vector3(),update(){camera.lookAt(this.target);camera.updateMatrixWorld(true);}};
+  const c={THREE,activeSceneFieldId:field,flameDomainGuide:guide,localLiquidDomainGuide:guide,frameObjects:framing.frameObjects,frameBox:framing.frameBox,camera,controls,sceneSelection:{ids:[]},selectedSceneGroupEntry:()=>null,selectedSceneObjectEntry:()=>null,frameSceneObjectRecord:()=>false};
+  vm.createContext(c);vm.runInContext(grab('frameAuthoredSelection'),c);assert.equal(c.frameAuthoredSelection(),true,field+' must frame its full solver box');assert.deepEqual(controls.target.toArray(),[0,1,0]);
+ }
+});
