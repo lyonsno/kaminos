@@ -3727,7 +3727,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
 }
 
 function installKilnCollisionControl(host) {
-  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
+  const panel=document.createElement('section');panel.className='flame-collision-controls';panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label>';
   host.append(panel);
   document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
   const edits=scenePlacementTools.edits;
@@ -22398,7 +22398,7 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
-  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
+  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
   host.append(panel);
   const inputs=[...panel.querySelectorAll('input')];
   for(const input of inputs)input.addEventListener('input',()=>{
@@ -22413,7 +22413,7 @@ function installFlameDomainControls(host) {
   refreshFlameDomainPreview();
 }
 function createFlameQuickFields() {
-  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
   installFlameDomainControls(shared);
   installKilnCollisionControl(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
@@ -22423,6 +22423,7 @@ function createFlameQuickFields() {
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
+    readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
