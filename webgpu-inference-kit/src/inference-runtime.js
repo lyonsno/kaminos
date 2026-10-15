@@ -575,7 +575,8 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     requiredStages: input.requiredStages || [],
     timestampQueryValidatedAgainstStaged: Boolean(input.timestampQueryValidatedAgainstStaged),
   });
-  const gpuTimer = createWebGpuGpuTimer({ device, queue, options: input.gpuTiming });
+  const gpuTimer = createWebGpuGpuTimer({ device, queue, options: input.gpuTiming,
+    createBuffer: descriptor => createBuffer(device, descriptor, bufferBudget) });
   stagedProfile.gpuTiming = gpuTimer.summary;
   const now = input.now || defaultNow;
   const configuredYield = input.yield || null;
