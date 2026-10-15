@@ -3514,6 +3514,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
+import { syncVolumeGridOptions } from './volume-grid-options.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -19453,6 +19454,9 @@ document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
 });
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
+  syncVolumeGridOptions(document.getElementById('volume-resolution'),
+    request => volumePrototype.previewGridShape(request),
+    Number(document.getElementById('volume-grid-height-ratio').value));
   const s = volumePrototype.debugState();
   syncKilnCollisionControl(s.sceneCollision);
   flameInspector?.sync();
@@ -20812,6 +20816,8 @@ async function initKaminosVolumeRoute() {
     const preview = () => {
       holdVolumeRebuildControl(id);
       publishVolumeGridPreview(volumePrototype?.previewGridShape?.({ gridHeightRatio: parseFloat(control.value) || 2 }) ?? null);
+      syncVolumeGridOptions(document.getElementById('volume-resolution'),
+        request => volumePrototype.previewGridShape(request), Number(control.value));
       updateVolumeRebuildControlLabel(id);
       refreshFlameDomainGuideBox();
     };

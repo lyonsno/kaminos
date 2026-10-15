@@ -27992,7 +27992,7 @@ export function createKaminosVolumePrototype({
       const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);
       const admission = device ? gridShapeAdmission(shape, device.limits) : { admitted: true, reason: null };
       const box = raymarchDomainBox(shape.widthCells, shape.heightCells);
-      return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
+      return { ...shape, limitsChecked: Boolean(device), admitted: admission.admitted, admissionReason: admission.reason,
         dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
     },
     debugState() {
