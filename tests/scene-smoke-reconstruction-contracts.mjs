@@ -49,7 +49,7 @@ const capacityGeometry=buildTriangleVisibility([
   {a:[-1,-1,-1],b:[1,3,-1],c:[1,3,1]},
   {a:[-1,-1,-1],b:[1,3,1],c:[-1,-1,1]},
 ]).packGpu();
-globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2};
+globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4};
 const allocated=[];
 const capacityDevice={limits:{maxStorageBufferBindingSize:128},queue:{writeBuffer(){}},
   createBuffer(){const b={destroyed:false,destroy(){this.destroyed=true;}};allocated.push(b);return b;}};
@@ -59,7 +59,8 @@ assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity fail
 
 globalThis.GPUShaderStage={FRAGMENT:2};
 let groups=0;
-const device={createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
+let uploadedBounds, destroyed=false;
+const device={createBuffer:()=>({destroy(){destroyed=true;}}),queue:{writeBuffer(_b,_o,data){uploadedBounds=Array.from(data);}},createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
 const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
@@ -72,4 +73,11 @@ assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPrep
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,updates:0}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({texture}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'old'}}),/reconstruction resources/);
+const outer={...r,texture:{createView:()=>({})},masks:{},localMin:[-3,-2,-3],localMax:[3,10,3]};
+const joined=bindings.update({...frame,exteriorSmokeReconstruction:outer});
+assert.equal(joined.entries.length,5);
+assert.deepEqual(uploadedBounds,[-1,-1,-1,0,1,3,1,1,-3,-2,-3,0,3,10,3,0]);
+assert.throws(()=>bindings.update({...frame,exteriorSmokeReconstruction:{...outer,updates:0}}),/exterior reconstruction/);
+bindings.update(frame);assert.equal(uploadedBounds[7],0,'disabled exterior must not remain selectable');
+bindings.destroy();assert.equal(destroyed,true);
 console.log(`smoke reconstruction bins preserve ${segmentCount} reference segments, uncapped candidates and binding lifetime`);

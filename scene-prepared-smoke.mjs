@@ -14,7 +14,7 @@ export function preparedSmokePlan(coarseDimensions, factor, limits) {
   return {dimensions,bins,sampleCount,binCount,weightBytes,maskBytes,factor,cameraTriangleTests:0};
 }
 
-export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coarseDimensions,factor=4}) {
+export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coarseDimensions,factor=4,domain={lo:[-1,-1,-1],hi:coarseDimensions.map(n=>-1+2*n/coarseDimensions[0])}}) {
   const plan=preparedSmokePlan(coarseDimensions,factor,device.limits), owned=[];
   try {
     const storage=(label,size)=>{const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});owned.push(b);return b;};
@@ -26,7 +26,9 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
       const COARSE:vec3<u32>=vec3<u32>(${coarseDimensions.map(n=>n+'u').join(',')});
       const FINE_COUNT:u32=${plan.sampleCount}u; const BIN_COUNT:u32=${plan.binCount}u;
       const NODE_COUNT:u32=${nodeCount}u; const DISPATCH_WIDTH:u32=${width}u;
-      const FINE_PITCH:f32=${2/grid}; const COARSE_PITCH:f32=${2/coarse};`;
+      const DOMAIN_LO=vec3<f32>(${domain.lo.join(',')});
+      const FINE_PITCH=vec3<f32>(${domain.lo.map((v,a)=>(domain.hi[a]-v)/plan.dimensions[a]).join(',')});
+      const COARSE_PITCH=vec3<f32>(${domain.lo.map((v,a)=>(domain.hi[a]-v)/coarseDimensions[a]).join(',')});`;
     const module=device.createShaderModule({label:'prepare and update smoke lighting',code:constants+PREPARED_SMOKE_WGSL});
     const prepare=device.createComputePipeline({label:'static smoke stencil and boundary preparation',layout:'auto',compute:{module,entryPoint:'prepareSmoke'}});
     const update=device.createComputePipeline({label:'update prepared smoke lighting from live receivers',layout:'auto',compute:{module,entryPoint:'updateSmoke'}});
@@ -37,6 +39,7 @@ export function createPreparedSmoke(device,{nodes,triangles,nodeCount,source,coa
       return [Math.min(groups,limit),Math.ceil(groups/limit)];};
     let prepared=false,updates=0;
     const metadata={identity:'prepared-geometry-visible-v1',texture,masks,dimensions:plan.dimensions,
+      localMin:domain.lo.slice(),localMax:domain.hi.slice(),
       coarseDimensions:coarseDimensions.slice(),refinement:factor,weightBytes:plan.weightBytes,maskBytes:plan.maskBytes,
       cameraTriangleTests:0,boundaryPolicy:'zero-solid-cell-nearest-clear-cell-trilinear-clear-stencil',
       staticPreparations:0,updates:0};
@@ -115,19 +118,19 @@ fn prepareSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
   let id=gid.x+gid.y*DISPATCH_WIDTH;
   if(id<BIN_COUNT){
     let b=vec3<f32>(smokeCell(id,FINE+vec3<u32>(1)));
-    let lo=max(vec3<f32>(-1),vec3<f32>(-1)+(b-vec3<f32>(0.5))*FINE_PITCH);
-    let hi=min(vec3<f32>(-1)+vec3<f32>(FINE)*FINE_PITCH,vec3<f32>(-1)+(b+vec3<f32>(0.5))*FINE_PITCH);
+    let lo=max(DOMAIN_LO,DOMAIN_LO+(b-vec3<f32>(0.5))*FINE_PITCH);
+    let hi=min(DOMAIN_LO+vec3<f32>(FINE)*FINE_PITCH,DOMAIN_LO+(b+vec3<f32>(0.5))*FINE_PITCH);
     masks[FINE_COUNT+id]=select(0u,1u,occupiedBox(lo,hi));
   }
   if(id>=FINE_COUNT){return;}
-  let cell=smokeCell(id,FINE);let lo=vec3<f32>(-1)+vec3<f32>(cell)*FINE_PITCH;
+  let cell=smokeCell(id,FINE);let lo=DOMAIN_LO+vec3<f32>(cell)*FINE_PITCH;
   let blocked=occupiedBox(lo,lo+vec3<f32>(FINE_PITCH));masks[id]=select(0u,1u,blocked);
-  let p=lo+vec3<f32>(FINE_PITCH*0.5);let q=(p+vec3<f32>(1))/COARSE_PITCH-vec3<f32>(0.5);
+  let p=lo+FINE_PITCH*0.5;let q=(p-DOMAIN_LO)/COARSE_PITCH-vec3<f32>(0.5);
   let base=vec3<i32>(floor(q));let w=fract(q);var total=0.0;
   for(var i=0u;i<8u;i++){
     let offset=vec3<u32>(i&1u,(i>>1u)&1u,(i>>2u)&1u);
     let c=clamp(base+vec3<i32>(offset),vec3<i32>(0),vec3<i32>(COARSE)-vec3<i32>(1));
-    let receiver=vec3<f32>(-1)+(vec3<f32>(c)+vec3<f32>(0.5))*COARSE_PITCH;
+    let receiver=DOMAIN_LO+(vec3<f32>(c)+vec3<f32>(0.5))*COARSE_PITCH;
     var weight=0.0;
     if(!blocked&&visibleReceiver(p,receiver)){let v=select(vec3<f32>(1)-w,w,offset==vec3<u32>(1));weight=v.x*v.y*v.z;}
     weights[id].values[i]=weight;total+=weight;
@@ -137,8 +140,8 @@ fn prepareSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
 @compute @workgroup_size(64)
 fn updateSmoke(@builtin(global_invocation_id) gid:vec3<u32>){
   let id=gid.x+gid.y*DISPATCH_WIDTH;if(id>=FINE_COUNT){return;}
-  let cell=smokeCell(id,FINE);let p=vec3<f32>(-1)+(vec3<f32>(cell)+vec3<f32>(0.5))*FINE_PITCH;
-  let base=vec3<i32>(floor((p+vec3<f32>(1))/COARSE_PITCH-vec3<f32>(0.5)));var sum=vec3<f32>(0);
+  let cell=smokeCell(id,FINE);let p=DOMAIN_LO+(vec3<f32>(cell)+vec3<f32>(0.5))*FINE_PITCH;
+  let base=vec3<i32>(floor((p-DOMAIN_LO)/COARSE_PITCH-vec3<f32>(0.5)));var sum=vec3<f32>(0);
   for(var i=0u;i<8u;i++){
     let weight=weights[id].values[i];if(weight==0.0){continue;}
     let offset=vec3<i32>(i32(i&1u),i32((i>>1u)&1u),i32((i>>2u)&1u));

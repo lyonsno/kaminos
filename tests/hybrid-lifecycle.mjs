@@ -66,5 +66,13 @@ assert.throws(()=>consume(field),/injected source binding failure/);assert.equal
 failSource=null;consume(field);
 assert.equal(consumedSources.at(-1),'B','retry must consume the replacement source, not merely publish its generation');
 assert.equal(mount.canRender(),true);
+field.source.exterior={texture:{createView(){return {source:'exterior'};}},dimensions:[4,8,4],localMin:[-3,-2,-3],localMax:[3,10,3],generation:field.source.generation};
+consume(field);
+assert.deepEqual(hostFrame.exteriorSmokeReconstruction?.localMax,[3,10,3],'joined smoke must get a separate full exterior lighting receiver field');
+assert.deepEqual(hostFrame.smokeReconstruction.dimensions,[2,4,2],'retain fine lighting receiver density');
+assert.equal(hostFrame.exteriorSourceGeneration,field.source.generation);
+field.source.exterior.generation--;
+assert.throws(()=>consume(field),/stale/);assert.equal(mount.canRender(),false);
+field.source.exterior=null;consume(field);assert.equal(hostFrame.exteriorSmokeReconstruction,null);
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 console.log('hybrid lifecycle and honest rebuild boundaries passed');

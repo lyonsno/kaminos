@@ -19,7 +19,7 @@ import { createJoinedExterior } from './volume-joined-exterior.mjs';
 import { JOINED_OPTICS_WGSL } from './volume-joined-optics.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, SCENE_JOINED_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
@@ -6187,6 +6187,7 @@ ${EMISSIVE_TRANSPORT_WGSL}
 ${JOINED_OPTICS_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
+${SCENE_JOINED_SOURCE_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -20552,6 +20553,9 @@ export function createKaminosVolumePrototype({
       return null;
     }
     sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
+      getJoinedOptics:()=>{const r=joinedExterior?.receipt();return {enabled:Boolean(r?.admitted&&state.joinedBoundary?.admitted),
+        texture:joinedExterior?.optical,uniformBuffer:joinedRenderUniform,dimensions:r?.shape,
+        localMin:r?.bounds?.min,localMax:r?.bounds?.max};},
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
@@ -28333,6 +28337,7 @@ export function createKaminosVolumePrototype({
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
     dispose() {
+      distributedBindings?.destroy(); distributedBindings=null; distributedGroup=null;
       this.setActive(false);
       joinedExterior?.destroy(); joinedExterior=null;
       scenePointBindings?.dispose();
