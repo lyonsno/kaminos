@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
+import {isDeepStrictEqual} from 'node:util';
 import {validateSkeletonMotion} from '../experiments/creature-motion/skeleton.experiment.mjs';
 
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -19,7 +20,7 @@ export async function publishMotionView({reportPath,out=path.dirname(reportPath)
    const c=report.cases[i],task=report.requestedCases[i],file=await fs.realpath(c.path),bytes=await fs.readFile(file),m=validateSkeletonMotion(JSON.parse(bytes));
    if(m.prompt!==task.text||m.seed!==task.seed||m.cfgScale!==(task.cfgScale??3)||m.assetCondSha256!==report.bundle.assetCondSha256)throw Error('Motion differs from requested batch source');
    const digest=sha(bytes),relative=path.relative(out,file).split(path.sep).join('/');
-   entries.push({id:'motion-'+i,label:`${m.skeleton.name??'Skeleton'} · ${m.prompt}`,motion:relative,motion_sha256:digest});receipt.sources.push({path:file,sha256:digest,prompt:m.prompt,seed:m.seed,cfgScale:m.cfgScale,joints:m.joints,frames:m.frames});
+   entries.push({id:'motion-'+i,label:`${m.skeleton.name??'Skeleton'} · ${m.prompt}`,motion:relative,motion_sha256:digest,file_sha256:digest});receipt.sources.push({path:file,sha256:digest,prompt:m.prompt,seed:m.seed,cfgScale:m.cfgScale,joints:m.joints,frames:m.frames});
   }
   const recipe={schema:'kaminos.skeleton-motion-view.v1',entries,presentation:'in-place',play:true,rate:1};
   const bytes=Buffer.from(JSON.stringify(recipe,null,2)+'\n');await fs.writeFile(receipt.recipe,bytes);receipt.recipeSha256=sha(bytes);receipt.status='files-only';receipt.phase='files-written';
@@ -30,10 +31,15 @@ export async function publishMotionView({reportPath,out=path.dirname(reportPath)
    matches.sort((a,b)=>b.base.length-a.base.length);if(!matches.length)throw Error('Batch output is not mounted in this Workbench');const mount=matches[0];receipt.mount=mount;
    const readURL=file=>{const u=new URL('/api/read',server);u.searchParams.set('root',mount.id);u.searchParams.set('path',path.relative(mount.base,file).split(path.sep).join('/'));return u;};
    receipt.phase='http-conformance';
-   for(const [file,digest] of [[actual,receipt.recipeSha256],...receipt.sources.map(s=>[s.path,s.sha256])]){if(!inside(mount.base,file))throw Error('Motion source outside selected mount');const response=await fetchImpl(readURL(file),{cache:'no-store'});if(!response.ok)throw Error('View source HTTP '+response.status);if(sha(Buffer.from(await response.arrayBuffer()))!==digest)throw Error('View HTTP source digest mismatch');}
+   // /api/read serializes JSON rather than returning the file's exact bytes.
+   // Preserve file identity, require all decoded values to match, and separately
+   // authenticate the effective HTTP representation consumed by the browser.
+   async function served(file,expected){const response=await fetchImpl(readURL(file),{cache:'no-store'});if(!response.ok)throw Error('View source HTTP '+response.status);const bytes=Buffer.from(await response.arrayBuffer());let value;try{value=JSON.parse(bytes);}catch{throw Error('View HTTP source content mismatch');}if(!isDeepStrictEqual(value,expected))throw Error('View HTTP source content mismatch');return sha(bytes);}
+   for(let i=0;i<receipt.sources.length;i++){const source=receipt.sources[i];if(!inside(mount.base,source.path))throw Error('Motion source outside selected mount');source.httpSha256=await served(source.path,JSON.parse(await fs.readFile(source.path,'utf8')));entries[i].motion_sha256=source.httpSha256;}
+   const mountedBytes=Buffer.from(JSON.stringify(recipe,null,2)+'\n');await fs.writeFile(receipt.recipe,mountedBytes);receipt.recipeSha256=sha(mountedBytes);receipt.recipeHttpSha256=await served(actual,recipe);
    const discoveryResponse=await fetchImpl(new URL('/api/workbench-experiments',server));if(!discoveryResponse.ok)throw Error('View discovery unavailable');const discovery=await discoveryResponse.json();
    if(!discovery.modules?.includes('/experiments/creature-motion/skeleton.experiment.mjs'))throw Error('Source motion viewer not registered in this Workbench');receipt.serverSource=discovery.source??null;
-   const url=new URL('/index.html',server);url.searchParams.set('experiment','marionette/skeleton-motion');url.searchParams.set('experiment_inputs',JSON.stringify({recipe:readURL(actual).pathname+readURL(actual).search,recipe_sha256:receipt.recipeSha256}));receipt.url=url.href;receipt.status='link-verified';receipt.phase='complete';
+   const url=new URL('/index.html',server);url.searchParams.set('experiment','marionette/skeleton-motion');url.searchParams.set('experiment_inputs',JSON.stringify({recipe:readURL(actual).pathname+readURL(actual).search,recipe_sha256:receipt.recipeHttpSha256}));receipt.url=url.href;receipt.status='link-verified';receipt.phase='complete';
   }
  }catch(e){receipt.status='unavailable';receipt.url=null;receipt.error=String(e.message??e);}
  receipt.finishedAt=new Date().toISOString();await fs.writeFile(path.join(out,'view-publication.json'),JSON.stringify(receipt,null,2)+'\n');return receipt;

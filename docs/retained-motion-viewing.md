@@ -19,7 +19,9 @@ the Workbench is running with the batch output under an advertised `/api/roots`
 mount. The publisher locates that mount, checks the recipe and every motion
 over the actual `/api/read` route, checks discovery of the viewer module, and
 records a normal experiment URL. It does not open or navigate operator tabs.
-HTTP link verification is distinct from visual browser inspection.
+HTTP link verification is distinct from visual browser inspection. The browse
+route reserializes JSON: every served value must equal the retained source,
+while separate file and observed HTTP hashes preserve both identities.
 
 Without a running origin the recipe remains usable and status is `files-only`.
 With an unavailable server, missing mount/viewer, wrong digest, rejected or
