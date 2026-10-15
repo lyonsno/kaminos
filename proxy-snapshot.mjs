@@ -85,17 +85,31 @@ export function createInterfaceSurfelProducer({descriptor,everyFrames=4,maxInsta
    encoder.copyBufferToBuffer(d.recordsBuffer,0,s.records,0,d.capacity*d.recordBytes);
    d.device.queue.submit([encoder.finish()]);copiesSubmitted++;
    pending=true;
-   const mapRead=globalThis.GPUMapMode?.READ??1;
-   Promise.all([s.counters.mapAsync(mapRead),s.records.mapAsync(mapRead)]).then(()=>{
-    if(disposed)return;
-    const snapshot=decodeInterfaceSurfels(new Uint32Array(s.counters.getMappedRange()),new Float32Array(s.records.getMappedRange()),
-     {recordFloats:d.recordFloats,capacity:d.capacity,activeCountCounterIndex:d.activeCountCounterIndex,fields:d.fields,maxInstances,writeTick,stepSeconds,capturedAtMs});
-    s.counters.unmap();s.records.unmap();
-    snapshotsPublished++;onSnapshot?.(snapshot);
-   }).catch(error=>{lastError=String(error?.message||error);}).finally(()=>{pending=false;});
+   // The pair stays owned by this readback until both maps settle: mapped
+   // buffers are always unmapped, and a failed or retired pair is destroyed
+   // rather than reused.
+   const pair=s,mapRead=globalThis.GPUMapMode?.READ??1;
+   Promise.allSettled([pair.counters.mapAsync(mapRead),pair.records.mapAsync(mapRead)]).then(([counters,records])=>{
+    const mapped=counters.status==='fulfilled'&&records.status==='fulfilled';
+    try {
+     if(!mapped)lastError=String((counters.reason??records.reason)?.message||counters.reason||records.reason);
+     else if(!disposed&&staging===pair){
+      const snapshot=decodeInterfaceSurfels(new Uint32Array(pair.counters.getMappedRange()),new Float32Array(pair.records.getMappedRange()),
+       {recordFloats:d.recordFloats,capacity:d.capacity,activeCountCounterIndex:d.activeCountCounterIndex,fields:d.fields,maxInstances,writeTick,stepSeconds,capturedAtMs});
+      snapshotsPublished++;onSnapshot?.(snapshot);
+     }
+    } catch(error) { lastError=String(error?.message||error); }
+    finally {
+     if(counters.status==='fulfilled')pair.counters.unmap();
+     if(records.status==='fulfilled')pair.records.unmap();
+     if(!mapped||disposed||staging!==pair){pair.counters.destroy();pair.records.destroy();if(staging===pair)staging=null;}
+     pending=false;
+    }
+   });
    return true;
   },
   state:()=>({ticks,copiesSubmitted,snapshotsPublished,pending,everyFrames,maxInstances,lastError}),
+  // A pending readback releases its own pair when its maps settle.
   dispose() {disposed=true;if(!pending){staging?.records.destroy();staging?.counters.destroy();}staging=null;},
  };
 }

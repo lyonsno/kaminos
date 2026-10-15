@@ -16,6 +16,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync, realpathSync } from 'no
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fireSweepArmAdmission } from './fire-proxy-sweep-admission.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
@@ -196,7 +197,8 @@ try {
     if (result.png) writeFileSync(resolve(out, `${arm.label}.png`), Buffer.from(result.png.split(',')[1], 'base64'));
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(resolve(out, `${arm.label}-page.png`), Buffer.from(shot.data, 'base64'));
-    const entry = { ...arm, ...result, png: undefined, file: `${arm.label}.png`, page: `${arm.label}-page.png`, gpuUtilization: utilizationBetween(armStartedAt, Date.now()) };
+    const admission = fireSweepArmAdmission({ steps: arm.steps, scale: arm.scale, mode: arm.mode }, result.effective, result.steppingError);
+    const entry = { ...arm, ...result, admission, png: undefined, file: `${arm.label}.png`, page: `${arm.label}-page.png`, gpuUtilization: utilizationBetween(armStartedAt, Date.now()) };
     report.arms.push(entry); save();
     return entry;
   };
@@ -220,7 +222,10 @@ try {
 
   const first = report.arms.find(a => a.label === (smoke ? 'production' : 'production-a')), again = report.arms.find(a => a.label === (smoke ? 'production-again' : 'production-b'));
   report.heldStateReproduced = !!first?.sha256 && first.sha256 === again?.sha256;
-  report.status = smoke ? 'harness-smoke' : report.heldStateReproduced ? 'observed' : 'observed-with-unreproduced-held-state';
+  report.excludedArms = report.arms.filter(a => !a.admission.admitted).map(a => ({ label: a.label, reasons: a.admission.reasons }));
+  report.status = smoke ? 'harness-smoke'
+    : !report.heldStateReproduced ? 'observed-with-unreproduced-held-state'
+    : report.excludedArms.length ? 'observed-with-excluded-arms' : 'observed';
   report.phase = 'complete';
 } catch (error) {
   report.status = 'failed';
