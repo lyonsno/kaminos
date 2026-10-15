@@ -177,10 +177,10 @@ async function main() {
         await mouse('mouseMoved', p, 'none', step.click.modifiers); await mouse('mousePressed', p, 'left', step.click.modifiers); await mouse('mouseReleased', p, 'left', step.click.modifiers);
         await settle(); record.result = { clicked: p };
       } else if (step.drag) {
-        const from = point(step.drag.from), to = point(step.drag.to), button = step.drag.button ?? 'left';
-        await mouse('mouseMoved', from, 'none'); await mouse('mousePressed', from, button);
-        for (let i = 1; i <= 8; i++) await mouse('mouseMoved', { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }, button);
-        await mouse('mouseReleased', to, button); await settle(); record.result = { dragged: { from, to, button } };
+        const from = point(step.drag.from), to = point(step.drag.to), button = step.drag.button ?? 'left', mods = step.drag.modifiers ?? 0;
+        await mouse('mouseMoved', from, 'none', mods); await mouse('mousePressed', from, button, mods);
+        for (let i = 1; i <= 8; i++) await mouse('mouseMoved', { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }, button, mods);
+        await mouse('mouseReleased', to, button, mods); await settle(); record.result = { dragged: { from, to, button } };
       } else if (step.invoke) record.result = await evaluate(`window.kaminosWorkbenchExperiments.invoke(...${JSON.stringify(step.invoke)})`, 120000);
       else if (step.read) record.result = await evaluate('window.kaminosWorkbenchExperiments.read()', 120000);
       else if (step.evaluate) { record.result = await evaluate(step.evaluate, 120000); if (step.name) named.set(step.name, record.result); }

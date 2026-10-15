@@ -37,6 +37,23 @@ assert.equal(active(),false,'Tab again leaves Edit Mode');
 assert.deepEqual([gizmo.visible,gizmo.enabled,helper.visible],[true,true,true],'and gives the gizmo back as it was');
 event=key('KeyA');assert.ok(!event.defaultPrevented,'outside Edit Mode the object tools keep A');
 
+// Click-drag box selects, as Blender's Select Box tool: plain replaces, Shift adds, Ctrl or Cmd removes.
+const pointer=(type,x,y,init={})=>{
+  const event=new Event(type,{cancelable:true}),fields={clientX:x,clientY:y,button:0,pointerId:1,target:body,shiftKey:false,ctrlKey:false,metaKey:false,altKey:false,...init};
+  for(const [name,value] of Object.entries(fields))Object.defineProperty(event,name,{value});
+  document.dispatchEvent(event);return event;
+};
+const drag=(x0,y0,x1,y1,init={})=>{pointer('pointerdown',x0,y0,init);pointer('pointermove',(x0+x1)/2,(y0+y1)/2,init);pointer('pointermove',x1,y1,init);return pointer('pointerup',x1,y1,init);};
+key('Tab');assert.equal(active(),true);key('Digit1');
+drag(1,1,399,399);assert.equal(api.read().counts.vertices,4,'a drag over the view selects the visible corners');
+drag(1,1,200,200);assert.equal(api.read().counts.vertices,1,'a plain drag replaces the selection');
+drag(200,200,399,399,{shiftKey:true});assert.equal(api.read().counts.vertices,2,'Shift-drag adds');
+drag(1,1,200,200,{ctrlKey:true});assert.equal(api.read().counts.vertices,1,'Ctrl-drag removes');
+drag(200,200,399,399,{metaKey:true});assert.equal(api.read().counts.vertices,0,'Cmd-drag removes too, since Ctrl-click is a right click on a Mac trackpad');
+pointer('pointerdown',100,100);pointer('pointermove',102,101);pointer('pointerup',102,101);
+assert.equal(api.read().counts.vertices,1,'a click that wobbles a few pixels still picks the nearest corner; a tiny box would pick nothing');
+key('Tab');
+
 selected=null;key('Tab');assert.equal(active(),false);assert.match(infos.at(-1),/Select a mesh/);
 selected='mesh-1';key('Tab');assert.equal(active(),true);
 present=false;assert.equal(api.active(),false,'removing the object ends Edit Mode');

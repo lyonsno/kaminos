@@ -5,13 +5,13 @@
 // does not decide which mode owns a key.
 import {createPolyEditMode} from './poly-edit-mode.mjs';
 
-const MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
+const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
 export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{}}) {
   let objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
-    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · B box · L linked · Alt+Z x-ray`);
+    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · Alt+Z x-ray`);
   };
   const edit=createPolyEditMode({camera,canvas,onChange:()=>{hud();redraw();}});
   const rect=document.createElement?.('div');
@@ -33,7 +33,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // The edited object can leave the scene (undo of its insertion, scene load); leave Edit Mode with it.
   const live=()=>{if(edit.active()&&!objectFor(objectId))exit();return edit.active();};
   function armBox(){box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
-  function cancelBox(){box=null;if(rect)rect.hidden=true;}
+  function cancelBox(){box=null;pointer=null;if(rect)rect.hidden=true;}
   const insideCanvas=event=>{const r=canvas.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;};
   const isText=target=>target?.closest?.('input,textarea,select,[contenteditable="true"]');
   const scoped=()=>document.activeElement===document.body||viewport.contains?.(document.activeElement)||viewport.matches?.(':hover');
@@ -59,9 +59,12 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   document.addEventListener('pointermove',event=>{
     if(!edit.active())return;
     if(insideCanvas(event))hover={x:event.clientX,y:event.clientY};
-    if(box?.start&&rect){
+    // A left drag past the click tolerance becomes a box, as Blender's Select Box tool.
+    if(pointer&&!pointer.dragging&&event.pointerId===pointer.id&&Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>CLICK_DRIFT)pointer.dragging=true;
+    const start=box?.start??(pointer?.dragging?pointer:null);
+    if(start&&rect){
       const v=viewport.getBoundingClientRect();
-      Object.assign(rect.style,{left:Math.min(box.start.x,event.clientX)-v.left+'px',top:Math.min(box.start.y,event.clientY)-v.top+'px',width:Math.abs(event.clientX-box.start.x)+'px',height:Math.abs(event.clientY-box.start.y)+'px'});
+      Object.assign(rect.style,{left:Math.min(start.x,event.clientX)-v.left+'px',top:Math.min(start.y,event.clientY)-v.top+'px',width:Math.abs(event.clientX-start.x)+'px',height:Math.abs(event.clientY-start.y)+'px'});
       rect.hidden=false;
     }
   },true);
@@ -74,8 +77,14 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(!live())return;
     if(box?.start){steal(event);const r={x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},mode=box.mode;cancelBox();attempt(()=>edit.box(r,{mode}));return;}
     if(!pointer||event.button!==0||event.pointerId!==pointer.id)return;
-    const drift=Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y);pointer=null;
-    if(drift<=5&&insideCanvas(event)&&!overlayHit(event))attempt(()=>edit.click(event.clientX,event.clientY,{extend:event.shiftKey}));
+    const down=pointer;pointer=null;
+    if(down.dragging){
+      steal(event);if(rect)rect.hidden=true;
+      // Plain replaces, Shift adds, Ctrl or Cmd removes (Ctrl-click is a right click on a Mac trackpad).
+      const mode=event.ctrlKey||event.metaKey?'subtract':event.shiftKey?'extend':'set';
+      attempt(()=>edit.box({x0:down.x,y0:down.y,x1:event.clientX,y1:event.clientY},{mode}));return;
+    }
+    if(insideCanvas(event)&&!overlayHit(event))attempt(()=>edit.click(event.clientX,event.clientY,{extend:event.shiftKey}));
   },true);
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{if(edit.active()&&insideCanvas(event)&&!overlayHit(event))steal(event);},true);
