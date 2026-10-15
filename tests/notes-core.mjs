@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
 import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor,
   parseRef, formatRef, noteLink, describeNote, mentionQueryAt, rankParticipants, completeMention, addresseesIn} from '../notes-core.mjs';
 
@@ -183,4 +184,15 @@ test("given who is reading and through which server, the reply line is a command
   assert.doesNotMatch(text, /<your name>/);
   const bare = describeNote(state, ROOT_ID, {root: '/tmp/n'});
   assert.match(bare, /--as <your name>/, 'without a reader the line still says what to fill in');
+});
+
+test('the printed reply command survives the shell with the server intact, even an IPv6 one', () => {
+  const state = foldNotes(conversation());
+  for (const server of ['http://127.0.0.1:8090', 'http://[::1]:8090']) {
+    const line = describeNote(state, ROOT_ID, {root: '/tmp/n', as: 'water-agent', server}).split('\n').find(text => text.startsWith('reply: '));
+    const command = line.slice('reply: '.length).replace('"<your reply>"', '"answer"').replace(' [--picture <png>]', '');
+    // A stand-in node records the arguments the shell would hand it.
+    const args = execFileSync('/bin/zsh', ['-f', '-c', `node() { printf '%s\\n' "$@"; }; ${command}`], {encoding: 'utf8'}).trim().split('\n');
+    assert.deepEqual(args, ['tools/notes.mjs', '--server', server, 'reply', ROOT_ID, 'answer', '--as', 'water-agent']);
+  }
 });

@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
-import {execFile, spawn} from 'node:child_process';
+import {execFile, execFileSync, spawn} from 'node:child_process';
 import {mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -109,6 +109,10 @@ test('an agent waits, wakes with the note and its context, and answers into the 
     assert.ok(woke.stdout.includes(expected), `wait output names ${expected}:\n${woke.stdout}`);
   }
   assert.deepEqual(readFileSync(path.join(root, 'pictures', `${id}.png`)), PNG);
+  // The keep-listening line runs as printed: a stand-in node records what the shell hands it.
+  const keep = woke.stdout.split('\n').find(line => line.startsWith('keep listening: ')).slice('keep listening: '.length);
+  const handed = execFileSync('/bin/zsh', ['-f', '-c', `node() { printf '%s\\n' "$@"; }; ${keep}`], {encoding: 'utf8'}).trim().split('\n');
+  assert.deepEqual(handed, ['tools/notes.mjs', '--server', base, 'wait', '--as', 'notes-agent']);
 
   const answer = path.join(tmp, 'answer.png');
   writeFileSync(answer, PNG);

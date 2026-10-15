@@ -3,7 +3,7 @@
 // scene, read them with their context, and answer into the same thread.
 // `node tools/notes.mjs --help`; docs/notes.md describes the whole flow.
 import {readFileSync} from 'node:fs';
-import {checkedPost, describeNote, foldNotes, formatRef, normalizeName, notesFor, parseRef} from '../notes-core.mjs';
+import {checkedPost, describeNote, foldNotes, formatRef, normalizeName, notesFor, parseRef, shellArg} from '../notes-core.mjs';
 
 const USAGE = `Kaminos notes from a terminal.
 
@@ -186,7 +186,7 @@ async function main(argv) {
         if (!answer.notes.length) continue;
         const {state, root} = await api.state();
         const text = answer.notes.map(note => describeNote(state, note.id, {root, as, server: base})).join('\n\n');
-        print(`${answer.notes.length} Kaminos note${answer.notes.length === 1 ? '' : 's'} for ${as}\n\n${text}\n\nkeep listening: node tools/notes.mjs --server ${base} wait --as ${as}`,
+        print(`${answer.notes.length} Kaminos note${answer.notes.length === 1 ? '' : 's'} for ${as}\n\n${text}\n\nkeep listening: node tools/notes.mjs --server ${shellArg(base)} wait --as ${as}`,
           {for: as, root, notes: answer.notes.map(note => jsonNote(state.notes.get(note.id)))});
         return 0;
       }
