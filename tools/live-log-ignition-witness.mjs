@@ -36,7 +36,7 @@ try{
   const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));
   assert.equal(startup.error,undefined,JSON.stringify(startup));assert.equal(startup.state.id,'live-log-heat');
   report.effectiveUrl=page.url();report.sources=[];
-  for(const name of ['volume-core.js','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-gas-source.mjs']){
+  for(const name of ['volume-core.js','scene-solid-gpu.mjs','scene-collision-debug.mjs','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-gas-source.mjs']){
     const actual=await(await page.request.get(origin+'/'+name)).body(),expected=await fs.readFile(path.join(report.repoRoot,name));
     const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(actual),sha(expected),name);report.sources.push({name,sha256:sha(actual)});
   }
@@ -55,7 +55,8 @@ try{
       const device=context.device,staging=device.createBuffer({size:buffer.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
       let wood;
       try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(buffer,0,staging,0,buffer.size);device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);wood=Array.from(new Float32Array(staging.getMappedRange()));staging.unmap();}finally{staging.destroy();}
-      return {state,wood,gas:await runtime.sampleReactantFields(),chemistry:runtime.debugState().reactantCombustion,source:runtime.debugState().residentGasSource,collision:window.kaminosSceneCollision.read()};
+      const sampled=await runtime.sampleSceneCollisionMask();if(sampled.status!=='sampled')throw Error('Stale collision sample');
+      return {state,wood,gas:await runtime.sampleReactantFields(),chemistry:runtime.debugState().reactantCombustion,source:runtime.debugState().residentGasSource,collision:{...window.kaminosSceneCollision.read(),runtime:sampled.runtime}};
     });
     await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify(raw));
     assert.equal(raw.gas.ok,true);assert.equal(raw.chemistry.effective.admitted,true);assert.equal(raw.source.admitted,true);
@@ -74,7 +75,7 @@ try{
   };
   report.phase='cold';await save();assert.equal((await read()).paused,true);assert.equal((await read()).fields[0].steps,0);
   if(report.requested.entryOnly){
-    report.entry=await read();report.collision=await page.evaluate(()=>window.kaminosSceneCollision.read());
+    report.entry=await read();report.collision=await page.evaluate(async()=>{const sample=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();if(sample.status!=='sampled')throw Error('Stale collision entry');return {...window.kaminosSceneCollision.read(),runtime:sample.runtime};});
     assert.equal(report.entry.burner,false);assert.equal(report.entry.gasSource.enabled,true);assert.equal(report.collision.enabled,true);
     checkColdLogEntryCollision(report.entry,report.collision);
     await page.screenshot({path:path.join(out,'entry-cold.png')});report.frames.push({name:'entry-cold',state:report.entry});
@@ -93,9 +94,20 @@ try{
   const off=report.arms.find(a=>!a.feed),on=report.arms.find(a=>a.feed);
   assert.ok(on.after.stats.gas.freshBurn>off.after.stats.gas.freshBurn*2 && on.after.stats.gas.freshBurn>.001,'Wood feed must sustain fresh gas burning beyond residual control');
   assert.ok(on.after.stats.wood.fuelLost>on.hot.stats.wood.fuelLost,'Continuing flame must consume finite wood fuel');
+  if(process.env.SINTER_GPU_COLLISION==='1'){
+    report.phase='move-burning-log';await save();
+    await invoke('move',{position:[.4,0,0]});await invoke('pause');
+    await advance(report.requested.heatSteps+report.requested.offSteps+180);
+    report.moved=await sample('wood-feed-moved');
+    assert.ok(report.moved.stats.gas.freshBurn>.001,'Moving solid log must retain gas combustion');
+    report.gpuCollision=await page.evaluate(async()=>{const runtime=window.__kaminosVolumePrototype,s=await runtime.sampleSceneCollisionMask();window.kaminosSceneCollision.showVoxels(true);return {runtime:s.runtime,debug:runtime.debugState().sceneCollision};});
+    assert.equal(report.gpuCollision.runtime.backend,'gpu');
+    await page.screenshot({path:path.join(out,'gpu-collision-overlay.png')});
+    await page.evaluate(()=>window.kaminosSceneCollision.showVoxels(false));
+  }
   report.phase='withdraw-wood-feed';await save();
   await invoke('fuelFeed',{enabled:false});await invoke('pause');
-  await advance(report.requested.heatSteps+2*report.requested.offSteps);
+  await advance(report.requested.heatSteps+2*report.requested.offSteps+(process.env.SINTER_GPU_COLLISION==='1'?180:0));
   report.withdrawn=await sample('wood-feed-withdrawn');
   assert.equal(report.withdrawn.state.burner,false);assert.equal(report.withdrawn.state.gasSource.enabled,false);
   assert.ok(report.withdrawn.stats.gas.freshBurn<on.after.stats.gas.freshBurn*.01,'Withdrawing wood fuel must extinguish continuing gas combustion');
