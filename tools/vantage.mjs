@@ -28,7 +28,8 @@ Commands
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
   pick X Y [--from sub|operator]      what lies under a point of the view; X and Y are fractions from the top left
-  pick X Y --picture RECORD.json [--frame N]   the same for a pixel of a kept picture, from the camera that took it
+  pick X Y --picture RECORD.json [--frame N] [--now]   a pixel of a kept picture, where its objects stood;
+                             --now casts that picture's camera into the scene as it is now
 
 Pictures carry the map unless --no-map is given. A pick renders nothing.
 
@@ -42,7 +43,7 @@ Options
   --timeout S      seconds to wait for the page (default 30; bursts add their duration)
   --json           print the full JSON record instead of a summary`;
 
-const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map']);
+const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map', 'now']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
   'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
   'from', 'picture', 'frame']);
@@ -117,7 +118,10 @@ function pickArgs(rest, options, pilot) {
   const {width, height} = result.image ?? {};
   if (!(width > 0 && height > 0)) throw new Exit(2, `${options.picture} records no picture size`);
   const pose = frame === null ? result.scenePose : result.frames?.[frame - 1]?.scenePose;
-  return {pilot, from: 'sub', at: [x / width, y / height], optics, ...(pose ? {pose} : {})};
+  if (!pose && !options.now) {
+    throw new Exit(2, `${options.picture} predates object records, so a pick cannot find what it showed. Take a new picture, or add --now to cast its camera into the scene as it is now.`);
+  }
+  return {pilot, from: 'sub', at: [x / width, y / height], optics, ...(pose && !options.now ? {pose} : {})};
 }
 
 async function request(server, method, route, body) {
@@ -188,7 +192,8 @@ function summarize(command, record) {
       lines.push(`  ${object.label} [${object.id}] ${object.type}${object.bounds ? ` ${point(object.bounds.min)}..${point(object.bounds.max)}` : ''}`);
     }
   } else if (command === 'pick') {
-    const who = result.from === 'picture' ? 'the picture camera' : result.from === 'operator' ? 'your view' : result.from;
+    const who = result.from === 'picture' ? 'the picture, where its objects stood' : result.from === 'camera' ? 'the picture camera, into the scene as it is now'
+      : result.from === 'operator' ? 'your view' : result.from;
     lines.push(`ray from ${who} through (${fmt(result.at[0])}, ${fmt(result.at[1])}) of the frame`);
     const hit = result.hit;
     if (hit) {
@@ -199,6 +204,11 @@ function summarize(command, record) {
       lines.push(`  on it     ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
       if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
     } else lines.push('  hits      nothing along that ray');
+    if (result.reconstruction) {
+      const changed = result.reconstruction.changed.map(item => `${item.id} ${item.what}${item.status ? ` (${item.status})` : ''}`).join(', ');
+      lines.push(`  vouched   ${{exact: 'exact: nothing the ray crosses has changed', sampled: 'sampled: unchanged by sampled content after a reload',
+        approximate: `approximate: the picture may have shown something else here${changed ? `; changed: ${changed}` : ''}`}[result.reconstruction.status]}`);
+    }
     if (result.missing?.length) lines.push(`  missing   ${result.missing.join(', ')}: in the picture but no longer in the scene`);
     for (const item of result.unresolved ?? []) lines.push(`  in front  ${item.label} (${item.type}) at ${fmt(item.distance)} m: ${item.reason}; it may be what the point shows`);
     for (const field of result.fields ?? []) lines.push(`  through   ${field.label} from ${fmt(field.enter)} to ${fmt(field.exit)} m`);

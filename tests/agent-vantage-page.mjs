@@ -834,13 +834,13 @@ test('pick from the sub uses the sub camera, and a picture camera names what tha
   assert.equal(fromSub.from, 'vantage-bebop');
   assert.equal(fromSub.hit?.id, 'box-0');
   closeTo(fromSub.hit.local, [0, 0.1, 0.5], 'box 0 sits at the origin');
-  // A picture taken looking at box 2 keeps naming box 2 after everyone has moved on.
+  // A camera given without its picture's objects is cast into the scene as it is now.
   const view = {position: [4, 1, 5], target: [4, 0, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000};
   const camera = new PerspectiveCamera(view.fov, 16 / 9, view.near, view.far);
   camera.position.fromArray(view.position); camera.lookAt(new Vector3(...view.target)); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
   const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
   const fromPicture = await page.vantage.run('pick', {optics, at: pictureFraction(view, 16 / 9, [4, -0.2, 0.5])});
-  assert.equal(fromPicture.from, 'picture');
+  assert.equal(fromPicture.from, 'camera', 'without the picture\'s objects this is today\'s scene, and says so');
   assert.equal(fromPicture.hit?.id, 'box-2');
   closeTo(fromPicture.hit.local, [0, -0.2, 0.5], 'box 2 sits at x = 4');
 });
@@ -904,7 +904,7 @@ test('a pick on a kept picture finds what the picture showed, and says what has 
   const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
   const at = pictureFraction(view, 16 / 9, [2, 0.1, 0.5]);
   const box = page.entries[1];
-  const pose = poseOfEntries([box], {session: page.vantage.pageId});
+  const pose = poseOfEntries([box], {session: page.vantage.pageId, THREE});
   box.object.position.x += 3;   // the box moves away after the picture
   const later = await page.vantage.run('pick', {optics, at, pose});
   assert.equal(later.hit?.id, 'box-1', 'the box the picture showed, where it stood then');
@@ -961,14 +961,14 @@ test('while the operator looks through the sub, a sub pick uses the framed view 
 
 test('geometry replaced in the same page session is called replaced, even with the same counts', () => {
   const entry = boxEntry('kiln', [0, 0, 0]);
-  const pose = poseOfEntries([entry], {session: 'page-a'});
+  const pose = poseOfEntries([entry], {session: 'page-a', THREE});
   entry.object.geometry = new THREE.BoxGeometry(2, 1, 1);
   const same = raycastEntries(THREE, [entry], towardMinusZ, {pose, session: 'page-a'});
   assert.equal(same.hits[0]?.geometry.status, 'replaced', 'a new geometry object in the same session is a replacement');
   const later = raycastEntries(THREE, [entry], towardMinusZ, {pose, session: 'page-b'});
   assert.equal(later.hits[0]?.geometry.status, 'replaced', 'after a reload, a sampled content check still tells them apart');
   const untouched = boxEntry('kiln', [0, 0, 0]);
-  const reloaded = raycastEntries(THREE, [untouched], towardMinusZ, {pose: poseOfEntries([untouched], {session: 'page-a'}), session: 'page-b'});
+  const reloaded = raycastEntries(THREE, [untouched], towardMinusZ, {pose: poseOfEntries([untouched], {session: 'page-a', THREE}), session: 'page-b'});
   assert.equal(reloaded.hits[0]?.geometry.status, 'likely-same', 'the same content after a reload matches by sample, not by identity');
 });
 
@@ -1009,4 +1009,84 @@ test('a splat along the ray is reported, not silently looked through', () => {
   const result = raycastEntries(THREE, [{id: 'plume', label: 'Plume', type: 'splat', object: splat}, boxEntry('wall', [0, 0, 0])], towardMinusZ);
   assert.deepEqual(result.unresolved.map(item => item.id), ['plume'], 'the splat in front is named as something the pick cannot resolve');
   assert.equal(result.hits[0]?.id, 'wall');
+});
+
+// --- how much a picture pick can vouch for --------------------------------------
+
+const pictureOf = entries => ({pose: poseOfEntries(entries, {session: 'page-a', THREE}), session: 'page-a'});
+const castPicture = (entries, record, ray = towardMinusZ, extra = {}) =>
+  raycastEntries(THREE, entries, ray, {pose: record.pose, session: record.session, ...extra});
+
+test('a picture pick vouches for what it finds only when nothing it could have shown has changed', () => {
+  const front = boxEntry('front', [0, 0, 5]), back = boxEntry('back', [0, 0, 0]);
+  const record = pictureOf([front, back]);
+  const exact = castPicture([front, back], record);
+  assert.equal(exact.hits[0].id, 'front');
+  assert.equal(exact.reconstruction.status, 'exact');
+  front.object.geometry = new THREE.BoxGeometry(1, 1, 1).translate(5, 0, 0);   // the front surface leaves the ray
+  const after = castPicture([front, back], record);
+  assert.equal(after.reconstruction.status, 'approximate', 'the picture may have shown the front box here');
+  assert.deepEqual(after.reconstruction.changed.map(item => [item.id, item.what]), [['front', 'geometry']]);
+  assert.equal(after.hits[0]?.authority, 'approximate', 'the back box is offered, but not as what the picture showed');
+});
+
+test('moved instances, hidden meshes and point clouds are judged as the picture saw them', () => {
+  const rocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial(), 2);
+  rocks.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, 0, 5));
+  rocks.setMatrixAt(1, new THREE.Matrix4().makeTranslation(0, 0, 0));
+  const rockEntry = {id: 'rocks', label: 'rocks', type: 'glb', object: rocks};
+  const record = pictureOf([rockEntry]);
+  rocks.setMatrixAt(0, new THREE.Matrix4().makeTranslation(4, 0, 5)); rocks.instanceMatrix.needsUpdate = true;
+  const moved = castPicture([rockEntry], record);
+  assert.deepEqual(moved.reconstruction.changed.map(item => [item.id, item.what]), [['rocks', 'instances']]);
+
+  const group = new THREE.Group();
+  const hidden = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial()); hidden.position.z = 5; hidden.visible = false;
+  const shownMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+  group.add(hidden, shownMesh);
+  const grouped = {id: 'kiln', label: 'kiln', type: 'glb', object: group};
+  const grouping = castPicture([grouped], pictureOf([grouped]));
+  assert.deepEqual(grouping.hits[0]?.surface.path, [1], 'a mesh hidden when the picture was taken is not what it showed');
+
+  const positions = new Float32Array([0, 0, 5, 0.1, 0, 5]);
+  const cloud = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(positions, 3)), new THREE.PointsMaterial());
+  const scan = {id: 'scan', label: 'scan', type: 'ply', object: cloud}, wall = boxEntry('wall', [0, 0, 0]);
+  const clouded = castPicture([scan, wall], pictureOf([scan, wall]));
+  assert.deepEqual(clouded.unresolved.map(item => item.id), ['scan'], 'a point cloud the picture showed in front is reported');
+  assert.equal(clouded.reconstruction.status, 'approximate');
+});
+
+test('a picture pick reports normals in the pictured pose and restores exactly what it moved', () => {
+  const box = boxEntry('box', [0, 0, 0]);
+  const record = pictureOf([box]);
+  box.object.rotation.y = Math.PI / 2;
+  const turned = castPicture([box], record);
+  closeTo(turned.hits[0].normal, [0, 0, 1], 'the normal of the surface the picture showed', 1e-9);
+  const manual = boxEntry('manual', [0, 0, 0]);
+  const manualRecord = pictureOf([manual]);
+  manual.object.matrixWorldAutoUpdate = false;
+  manual.object.matrixWorld.makeTranslation(5, 0, 0);
+  castPicture([manual], manualRecord);
+  assert.equal(manual.object.matrixWorld.elements[12], 5, 'a hand-managed world matrix is put back as it was');
+});
+
+test('geometry edits that keep the same object are not called same', () => {
+  const box = boxEntry('box', [0, 0, 0]);
+  const record = pictureOf([box]);
+  box.object.geometry.setAttribute('position', new THREE.BoxGeometry(2, 1, 1).attributes.position);
+  assert.equal(castPicture([box], record).hits[0]?.geometry.status, 'edited', 'a replaced position attribute is an edit');
+  const other = boxEntry('other', [0, 0, 0]);
+  const otherRecord = pictureOf([other]);
+  other.object.geometry.index.array[0] = other.object.geometry.index.array[1]; other.object.geometry.index.needsUpdate = true;
+  assert.equal(castPicture([other], otherRecord).hits[0]?.geometry.status, 'edited', 'a topology edit is an edit');
+});
+
+test('reversed WebGL depth clips at its own far plane', () => {
+  const camera = new PerspectiveCamera(50, 1, 1, 20);
+  camera._reversedDepth = true;   // the renderer sets this; the getter is read-only
+  camera.position.set(0, 0, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 1,
+    coordinateSystem: camera.coordinateSystem, reversedDepth: true};
+  const result = raycastEntries(THREE, [boxEntry('past-far', [0, 0, -15])], rayThrough(optics, [0.5, 0.5]), {optics});
+  assert.equal(result.hits.length, 0, 'beyond the far plane is not in the picture');
 });
