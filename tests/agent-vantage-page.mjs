@@ -499,7 +499,7 @@ test('a transform overlapping a picture leaves navigation as the operator had it
   assert.equal(controls.enabled, true);
 });
 
-const HELD_TYPES = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick'];
+const HELD_TYPES = ['pointerdown', 'mousedown', 'click', 'dblclick'];
 test('while a picture holds the viewport, presses on its canvases wait before page-level handlers see them', () => {
   // Window capture listeners run before the page's document-level handlers
   // (box selection, the lighting probe) and before the viewport's own.
@@ -521,6 +521,7 @@ test('while a picture holds the viewport, presses on its canvases wait before pa
   for (const type of HELD_TYPES) window.addEventListener(type, () => reached.push(type), {capture: true});
   for (const type of HELD_TYPES) assert.equal(press(type, node()).defaultPrevented, true, `a ${type} on the borrowed canvas waits`);
   assert.deepEqual(reached, [], 'no later handler sees a held press');
+  for (const type of ['pointerup', 'mouseup']) assert.equal(press(type, node()).defaultPrevented, false, `a ${type} still ends its gesture`);
   assert.equal(press('click', node({tagName: 'BUTTON'})).defaultPrevented, false, 'a dialog button over the canvas keeps working');
   assert.equal(press('pointerdown', node({ignored: true})).defaultPrevented, false, 'the sub panel keeps working');
   assert.equal(press('pointerdown', node({inViewport: false})).defaultPrevented, false, 'canvases elsewhere on the page keep working');
@@ -694,4 +695,100 @@ test('a change to the operator projection alone repaints the panel map', () => {
   page.projection = zoomed;
   page.refresh();
   assert.equal(page.painted.length, before + 1, 'a frame zoom changes what the operator sees, so the map follows');
+});
+
+// --- gestures spanning a picture -------------------------------------------
+
+// The page's OrbitControls (three 0.171.0, as pinned) on a fake canvas, with
+// events delivered in DOM order: the window capture listener first, then the
+// canvas unless the window stopped them.
+async function orbitFixture() {
+  const {OrbitControls} = await import('three/examples/jsm/controls/OrbitControls.js');
+  const NPM = await import('three');
+  const root = new FakeElement(), canvas = new FakeElement('canvas'), window = new FakeElement(), viewportEl = new FakeElement();
+  Object.assign(canvas, {ownerDocument: root, getRootNode: () => root, clientWidth: 800, clientHeight: 600, closest: () => null});
+  viewportEl.contains = node => node === canvas;
+  const controls = new OrbitControls(new NPM.PerspectiveCamera(50, 4 / 3, 0.1, 1000), canvas);
+  controls.mouseButtons = {LEFT: null, MIDDLE: null, RIGHT: null};
+  controls.touches = {ONE: NPM.TOUCH.ROTATE, TWO: NPM.TOUCH.DOLLY_PAN};
+  const deliver = (type, values) => {
+    const make = () => { const event = new Event(type, {cancelable: true}); Object.defineProperty(event, 'target', {value: canvas}); Object.assign(event, values); return event; };
+    const first = make();
+    window.dispatchEvent(first);
+    if (!first.cancelBubble) canvas.dispatchEvent(make());
+  };
+  const touch = (type, id, x = 400) => deliver(type, {pointerId: id, pointerType: 'touch', button: 0, clientX: x, clientY: 300, pageX: x, pageY: 300});
+  const button = {disabled: false};
+  const hold = fromIndex('holdViewportForVantage', {authoringBusy: false, vantageCaptureHeld: false, viewportEl, window,
+    document: {getElementById: id => (id === 'composition-capture' ? button : null)}});
+  const busy = fromIndexLive('vantageBusy', {authoringBusy: false, scenePlacementTools: {edits: {state: () => ({active: null, replaying: false})}},
+    sceneNavigation: {state: () => ({gesture: null})}, transformGizmoDragging: false, transformControls: {dragging: false}, splatCorrectionMode: null,
+    greenroomPreviewIsActive: () => false, window: {kaminosSelection: {boxing: () => false}}, controls});
+  return {controls, deliver, touch, hold, busy};
+}
+
+test('a gesture that began before a picture still ends, so navigation is whole afterwards', async () => {
+  const left = await orbitFixture();
+  left.deliver('pointerdown', {pointerId: 1, pointerType: 'mouse', button: 0, clientX: 400, clientY: 300});
+  assert.equal(left.busy(), null, 'a plain left press does not move the view');
+  let release = left.hold();
+  left.deliver('pointerup', {pointerId: 1, pointerType: 'mouse', button: 0, clientX: 400, clientY: 300});
+  release();
+  assert.deepEqual(left.controls._pointers, [], 'the press ended even though it ended during the picture');
+  left.touch('pointerdown', 2);
+  assert.equal(left.controls.state, 3, 'the next touch rotates as usual');
+
+  const three = await orbitFixture();
+  three.touch('pointerdown', 41, 400);
+  three.touch('pointerdown', 42, 420);
+  assert.equal(three.busy(), 'A touch gesture is moving the view');
+  three.touch('pointerdown', 43, 440);
+  release = three.hold();
+  for (const id of [41, 42, 43]) three.touch('pointerup', id);
+  release();
+  assert.deepEqual(three.controls._pointers, [], 'every touch lifted during the picture is let go');
+  three.touch('pointerdown', 44);
+  assert.equal(three.controls.state, 3);
+});
+
+test('the lighting probe never picks through the sub panel or a borrowed camera', async () => {
+  const {mountLightingDebugView} = await import('../scene-light-debug-view.mjs');
+  const document = new FakeElement(), elements = new Map();
+  document.getElementById = id => {
+    if (!elements.has(id)) elements.set(id, Object.assign(new FakeElement(), {id, checked: false, value: '', textContent: '', replaceChildren() {}}));
+    return elements.get(id);
+  };
+  document.createElement = tag => Object.assign(new FakeElement(tag), {replaceChildren() {}, getContext: () => new Proxy({}, {get: () => () => {}, set: () => true})});
+  const viewport = new FakeElement();
+  viewport.contains = node => node?.inViewport === true;
+  const camera = new PerspectiveCamera(50, 4 / 3, 0.1, 1000); camera.position.z = 5; camera.updateMatrixWorld(true);
+  const renderer = {domElement: {parentElement: viewport, width: 800, height: 600, getBoundingClientRect: () => ({left: 0, top: 0, width: 800, height: 600})}};
+  let held = true;
+  // The probe warns before unload through the global object, which Node lacks.
+  globalThis.addEventListener ??= () => {};
+  globalThis.location ??= {href: 'http://127.0.0.1/index.html'};
+  mountLightingDebugView({document, renderer, camera, held: () => held, drawFrame() {}, beginSceneInspection: () => () => {},
+    getLighting: () => ({inspectSurface: async () => ({}), inspectionMeshes: () => [], debugState: () => ({})}),
+    getPrototype: () => ({debugState: () => ({}), setSelectiveHeadLiveCapturePaused() {}})});
+  document.getElementById('rendering-light-debug-pick').onclick();
+  const status = () => document.getElementById('rendering-light-debug-status').textContent;
+  const armedText = status();
+  const press = target => {
+    const event = new Event('pointerdown', {cancelable: true});
+    Object.defineProperty(event, 'target', {value: target});
+    Object.assign(event, {clientX: 400, clientY: 300});
+    document.dispatchEvent(event);
+  };
+  const scene = {inViewport: true, closest: () => null};
+  const panel = {inViewport: true, closest: selector => (selector.includes('[data-vantage-ignore]') ? {} : null)};
+  held = false;
+  press(panel);
+  assert.equal(status(), armedText, 'a click on the sub panel is not a surface');
+  held = true;
+  press(scene);
+  assert.equal(status(), armedText, 'during a picture the probe waits rather than read the borrowed camera');
+  held = false;
+  press(scene);
+  assert.notEqual(status(), armedText, 'afterwards the same click inspects');
+  await new Promise(resolve => setTimeout(resolve, 20)); // let the inspection settle inside the test
 });
