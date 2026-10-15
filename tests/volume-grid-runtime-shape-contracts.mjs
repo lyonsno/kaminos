@@ -65,8 +65,9 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   assert.equal(core.REACTANT_COMBUSTION_UNIFORM_OFFSET, core.GRID_SHAPE_UNIFORM_OFFSET + core.GRID_SHAPE_UNIFORM_FLOATS, 'the reactant combustion block follows the grid shape');
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_OFFSET, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + core.REACTANT_COMBUSTION_UNIFORM_FLOATS, 'the joined-boundary block follows the reactant block');
   assert.deepEqual(core.gridShapeUniformValues({ grid: 48, gridHeight: 144, irradianceGrid: 32, irradianceGridHeight: 96, sceneSourceGrid: 32, sceneSourceGridHeight: 96 }), [48, 144, 32, 96, 32, 96, 0, 0]);
+  assert.deepEqual(core.gridShapeUniformValues({ grid: 48, gridHeight: 144, irradianceGrid: 32, irradianceGridHeight: 96, sceneSourceGrid: 32, sceneSourceGridHeight: 96, outerExtent: 3 }), [48, 144, 32, 96, 32, 96, 3, 0], 'the exterior smoke extent rides in the spare slot');
   assert.match(moduleText('WGSL'), /  immersed_source_f: vec4<f32>,\n(  \/\/[^\n]*\n)*  grid_shape: vec4<f32>,\n  grid_shape_b: vec4<f32>,\n(  \/\/[^\n]*\n)*  reactant_combustion_a: vec4<f32>,/);
-  assert.match(source, /uniforms\.set\(gridShapeUniformValues\(\{ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize\(irradianceGridSize\), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize\(EMISSIVE_LIGHT_GRID\) \}\), GRID_SHAPE_UNIFORM_OFFSET\);/);
+  assert.match(source, /uniforms\.set\(gridShapeUniformValues\(\{ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize\(irradianceGridSize\), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize\(EMISSIVE_LIGHT_GRID\), outerExtent: outerConfig\?\.extent \?\? 0 \}\), GRID_SHAPE_UNIFORM_OFFSET\);/);
   // The emitter's cell_extent.w carries the height (cell_min_grid.w already carried the width).
   const floats = new Float32Array(36), words = new Uint32Array(floats.buffer);
   const descriptor = {

@@ -214,39 +214,41 @@ const SITES: u32 = ${sites}u; const SX: u32 = ${g.shape[0] + 1}u; const SY: u32 
     // and the fine box's lower boundary faces (side/bottom inflow), in the
     // producers' units (coarse local units; fine cells per reference tick).
     async stats() {
-      if (!built?.solver) return { status: 'unprepared' };
-      if (!built.steps) return { status: 'no-step-yet' };
+      const b = built; // a rebuild during an await must not become a null dereference
+      if (!b?.solver) return { status: 'unprepared' };
+      if (!b.steps) return { status: 'no-step-yet' };
       paused = true;
       try {
         await device.queue.onSubmittedWorkDone();
         const read = async (buffer, length) => { const dst = device.createBuffer({ size: length * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }); try { const e = device.createCommandEncoder(); e.copyBufferToBuffer(buffer, 0, dst, 0, length * 4); device.queue.submit([e.finish()]); await dst.mapAsync(GPUMapMode.READ); return new Float32Array(dst.getMappedRange().slice(0)); } finally { dst.destroy(); } };
-        const coarseBuf = built.coarse ?? built.lastCoarse;
-        const lowerBuf = built.owned.find(b => b.label === 'joined exterior lower sidecar');
-        const coarse = await read(coarseBuf, built.storage.coarseLength), lower = await read(lowerBuf, built.storage.lowerLength);
+        const coarseBuf = b.coarse ?? b.lastCoarse;
+        const lowerBuf = b.owned.find(b => b.label === 'joined exterior lower sidecar');
+        const coarse = await read(coarseBuf, b.storage.coarseLength), lower = await read(lowerBuf, b.storage.lowerLength);
         const summarize = values => { let max = 0, sum = 0, n = 0, nonzero = 0; for (const v of values) { const a = Math.abs(v); if (!Number.isFinite(a)) return { nonfinite: true }; max = Math.max(max, a); sum += a; n++; if (a > 1e-7) nonzero++; } return { max, mean: n ? sum / n : 0, nonzero, of: n }; };
         const coarseFaces = []; for (let i = 0; i < coarse.length; i += 8) coarseFaces.push(coarse[i], coarse[i + 1], coarse[i + 2]);
-        const offs = built.storage.lowerOffsets;
+        const offs = b.storage.lowerOffsets;
         const planes = ['x', 'y', 'z'].map((axis, a) => ({ axis, ...summarize(lower.subarray(offs[a], offs[a + 1])) }));
         const smoke = [], heat = [], outside = [];
-        const S = built.summary.shape.map(n => n + 1), o = built.summary.origin, f = built.summary.fineCoarse;
+        const S = b.summary.shape.map(n => n + 1), o = b.summary.origin, f = b.summary.fineCoarse;
         for (let i = 0, site = 0; i < coarse.length; i += 8, site++) {
           smoke.push(coarse[i + 4]); heat.push(coarse[i + 5]);
           const q = [site % S[0], Math.floor(site / S[0]) % S[1], Math.floor(site / (S[0] * S[1]))];
           if (q.every((v, a) => v < S[a] - 1) && q.some((v, a) => v < o[a] || v >= o[a] + f[a])) outside.push(coarse[i + 4]);
         }
-        return { status: 'sampled', steps: built.steps, coarse: summarize(coarseFaces), lowerPlanes: planes, exteriorSmoke: summarize(smoke), exteriorHeat: summarize(heat), smokeOutsideFineBox: summarize(outside) };
+        return { status: 'sampled', steps: b.steps, coarse: summarize(coarseFaces), lowerPlanes: planes, exteriorSmoke: summarize(smoke), exteriorHeat: summarize(heat), smokeOutsideFineBox: summarize(outside) };
       } finally { paused = false; }
     },
     // Pauses the joined step (the core skips the whole sim step while paused)
     // so the readback sees one encoded solve, then resumes.
     async probe() {
-      if (!built?.solver) return { status: 'unprepared' };
-      if (!built.steps) return { status: 'no-step-yet' };
+      const b = built; // a rebuild during an await must not become a null dereference
+      if (!b?.solver) return { status: 'unprepared' };
+      if (!b.steps) return { status: 'no-step-yet' };
       paused = true;
       try {
         await device.queue.onSubmittedWorkDone();
-        const r = await built.solver.readback();
-        return { status: 'sampled', converged: r.converged, iterations: r.receipt.iterations, budget, maxDivergenceError: r.receipt.maxDivergenceError, cells: r.receipt.cells, faces: r.receipt.faces, warm: r.receipt.warmStartRequested, steps: built.steps };
+        const r = await b.solver.readback();
+        return { status: 'sampled', converged: r.converged, iterations: r.receipt.iterations, budget, maxDivergenceError: r.receipt.maxDivergenceError, cells: r.receipt.cells, faces: r.receipt.faces, warm: r.receipt.warmStartRequested, steps: b.steps };
       } finally { paused = false; }
     },
     destroy() { if (!destroyed) { destroyBuilt(); destroyed = true; } },
