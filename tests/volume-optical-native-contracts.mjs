@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
-import {opticalSteppingConfig,validateOpticalPreviewArm} from '../volume-optical-native.mjs';
+import {opticalSteppingConfig,resolveOpticalStepping,validateOpticalPreviewArm,installOpticalSteppingPreview} from '../volume-optical-native.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 test('main composition retains fresh burn and separates ray-noise binding from reactants', () => {
@@ -30,7 +30,7 @@ test('six authored ray steps survive the slider, gamut, route and GPU clamp', ()
   assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 6, 160, 96\)/);
   assert.match(core,/clamp\(u\.viewport_steps_density\.z, 6\.0, 192\.0\)/);
 });
-test('native numerical comparison is opt-in and does not inherit sample-budget tail truncation', () => {
+test('native numerical stepping does not inherit sample-budget tail truncation', () => {
   assert.match(core, /setDebugOpticalStepping\(/, 'native camera must expose an explicit comparison switch');
   assert.match(core, /!opticalStepping && \(expensiveSamples >= expensiveSampleBudget/);
   assert.match(core, /if \(opticalStepping\) \{[\s\S]*?opticalStepObserve/);
@@ -54,9 +54,41 @@ test('visual witness rejects wrong route, stale tolerance, changed state and abs
   assert.throws(()=>validateOpticalPreviewArm({...sample,ok:false},state,requested),/wrong effective/);
 });
 test('comparison configuration fails closed and retains explicit non-bound semantics', () => {
-  assert.equal(opticalSteppingConfig().mode, 'current');
-  for (const mode of ['fixed','numerical','fixed-dense']) assert.equal(opticalSteppingConfig({mode}).mode, mode);
+  assert.equal(opticalSteppingConfig().mode, 'numerical');
+  assert.equal(opticalSteppingConfig().value, 2);
+  assert.equal(opticalSteppingConfig().tolerance, 0.001);
+  for (const mode of ['current','fixed','numerical','fixed-dense']) assert.equal(opticalSteppingConfig({mode}).mode, mode);
   assert.throws(() => opticalSteppingConfig({mode:'regional'}), /unknown optical/);
   for (const tolerance of [0,-1,NaN,Infinity,'0.01']) assert.throws(() => opticalSteppingConfig({tolerance}), /finite/);
   assert.match(opticalSteppingConfig({mode:'numerical'}).authority, /not a continuous-field bound/);
+});
+
+test('preview initially shows the numerical default or an explicitly active comparison', () => {
+  function mount(active) {
+    const nodes=[];
+    const document={getElementById:()=>({closest:()=>({after:()=>{}})}),createElement:()=>{
+      const node={style:{},append:()=>{},addEventListener:()=>{}};nodes.push(node);return node;
+    }};
+    installOpticalSteppingPreview({debugState:()=>({opticalStepping:active})},document);
+    return nodes.find(node=>node.id==='optical-stepping-preview');
+  }
+  assert.equal(mount(null).value,'numerical:0.001');
+  assert.equal(mount({mode:'current',effective:'current',tolerance:0.001}).value,'current');
+  assert.equal(mount({mode:'numerical',effective:'numerical',tolerance:0.01}).value,'numerical:0.01');
+});
+
+test('numerical default preserves stock and diagnostic paths with an explicit effective receipt', () => {
+  const config=opticalSteppingConfig();
+  assert.equal(resolveOpticalStepping(config,{emissive:true}).value,2);
+  for(const options of [{emissive:false},{emissive:true,trace:true}]) {
+    const effective=resolveOpticalStepping(config,options);
+    assert.equal(effective.requested,'numerical');
+    assert.equal(effective.mode,'current');
+    assert.equal(effective.value,0);
+    assert.ok(effective.reason);
+    assert.throws(()=>resolveOpticalStepping(config,{...options,explicit:true}),/requires lean emissive beauty/);
+  }
+  assert.equal(resolveOpticalStepping(opticalSteppingConfig({mode:'current'}),{emissive:false,explicit:true}).value,0);
+  assert.match(core,/resolveOpticalStepping\(debugOpticalStepping/);
+  assert.match(core,/OPTICAL_STEP_MODE:optical.value/);
 });
