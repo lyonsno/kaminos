@@ -47,6 +47,14 @@ The generation demos run inference locally on your GPU.
 | Generative and vision model ports | Image generation, depth and normals, Gaussian reconstruction, textured meshes, skeletal motion, segmentation, and material maps | [Inspect the port family](webgpu-inference-kit/README.md#one-runtime-different-models) |
 | Spatial Asset Kiln | The workbench architecture for generated assets, live routes, World Chambers, Preview Benches, and Smoke Offers | [Read the architecture](docs/spatial-asset-kiln.md) |
 
+## Build An Experiment
+
+Develop visual features inside the shared workbench: contribute your objects,
+domain operations and controls while reusing the scene, camera, lighting and
+inspector. Human controls and agent calls operate the same experiment. Start
+with the [runnable material study and contributor guide](docs/workbench-common-main.md),
+then compose the capture and recording tools your investigation needs.
+
 ## One Browser, One GPU
 
 The architectural center of Kaminos is a simple product requirement: local AI
@@ -203,7 +211,14 @@ Serve the checkout:
 python3 serve.py 8095
 ```
 
-Open the current volume route in a WebGPU-capable Chromium browser:
+Open the workbench in a WebGPU-capable Chromium browser:
+
+```text
+http://127.0.0.1:8095/
+```
+
+The [experiment guide](docs/workbench-common-main.md) starts from a shared-scene
+material comparison. To explore the current volume route:
 
 ```text
 http://127.0.0.1:8095/?kaminos_volume_smoke=1&volume_scene=tall_plume
