@@ -25,6 +25,7 @@ import {followUpsDelivered} from './notes-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/notes.mjs');
+const vantageCli = path.join(repo, 'tools/vantage.mjs');
 const AGENT = 'notes-witness-agent', PERSON = 'noah';
 const options = Object.fromEntries(process.argv.slice(2).reduce((pairs, token, i, all) => {
   if (token.startsWith('--')) pairs.push([token.slice(2), all[i + 1] && !all[i + 1].startsWith('--') ? all[i + 1] : true]);
@@ -39,7 +40,7 @@ const reportPath = path.join(out, 'report.json');
 const report = {schema: 'kaminos.notes-witness.v1', startedAt: new Date().toISOString(), notesRoot,
   requested: {browser: options.browser, playwright: options.playwright, headless: options.headed !== true, port: options.port ?? null,
     negativeNoPicture: !!options['negative-no-picture']},
-  effective: {}, phase: null, status: 'running', checks: [], pageErrors: [], artifacts: []};
+  effective: {}, phase: null, status: 'running', checks: [], notExercised: [], pageErrors: [], artifacts: []};
 const save = () => writeFileSync(reportPath, JSON.stringify(report, null, 2));
 const check = (name, ok, detail = {}) => {
   report.checks.push({name, ok: !!ok, ...detail});
@@ -414,6 +415,33 @@ try {
   check('the reply also reaches the agent whose message it answers', lateReply?.recipients?.includes(AGENT) && answeredIds.includes(lateReply.id),
     {recipients: lateReply?.recipients, answeredIds});
 
+  report.phase = 'real-sub'; save();
+  // With the agent vantage on the page, an agent's sub is its avatar: clicking
+  // the name of an agent that pilots a sub under that name selects the sub.
+  const vantagePage = await page.evaluate(() => window.kaminosAgentVantage?.pageId ?? null);
+  if (!vantagePage) {
+    report.notExercised.push({phase: 'real-sub', reason: 'this page has no agent vantage'});
+  } else {
+    const PILOT = 'sub-pilot';
+    const launched = await new Promise(resolve => execFile(process.execPath,
+      [vantageCli, '--server', origin, '--out', path.join(out, 'vantage'), '--json', '--page', vantagePage, '--pilot', PILOT, 'launch'],
+      {timeout: 60000, maxBuffer: 16 * 1024 * 1024}, (error, stdout, stderr) => {
+        let record = null;
+        try { record = JSON.parse(stdout); } catch {}
+        resolve({code: error ? (error.code ?? 1) : 0, record, stderr: stderr.trim()});
+      }));
+    const subId = launched.record?.result?.sub?.id ?? null;
+    check('an agent launches a sub under its own name', launched.code === 0 && subId === `vantage-${PILOT}`, {subId, stderr: launched.stderr});
+    const said = await notes(['post', 'my sub is parked by the box', '--as', PILOT, '--on', 'scene']);
+    const saidId = said.stdout.match(/kn-[0-9a-f]{12}/)?.[0];
+    await page.waitForSelector(`.kn-thread[data-thread="${saidId}"] .kn-name.kn-agent`, {timeout: 10000}).catch(() => {});
+    await page.evaluate(() => window.kaminosSelection.clear());
+    await page.click(`.kn-thread[data-thread="${saidId}"] .kn-name.kn-agent`).catch(() => {});
+    const toSub = await page.evaluate(() => ({ids: window.kaminosSelection.read().ids, status: document.querySelector('.kn-status')?.textContent}));
+    check("clicking that agent's name selects its sub", said.code === 0 && toSub.ids.includes(subId) && toSub.status === `Selected @${PILOT}'s avatar`, {...toSub, saidId});
+    await page.evaluate(id => window.kaminosSelection.set([id], id), red);
+  }
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});
@@ -590,5 +618,5 @@ try {
   await browser?.close().catch(() => {});
   server?.kill();
 }
-console.log(`${report.status}: ${report.checks.filter(item => item.ok).length}/${report.checks.length} checks; report ${reportPath}`);
+console.log(`${report.status}: ${report.checks.filter(item => item.ok).length}/${report.checks.length} checks${report.notExercised.length ? `; not exercised: ${report.notExercised.map(item => `${item.phase} (${item.reason})`).join(', ')}` : ''}; report ${reportPath}`);
 process.exitCode = report.status === 'passed' ? 0 : 1;
