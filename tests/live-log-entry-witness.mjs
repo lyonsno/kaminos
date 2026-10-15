@@ -24,4 +24,5 @@ for(const [name,collision] of [
   ['unavailable runtime',{enabled:true,runtime:{effective:'unavailable',solidCellCount:0}}],
   ['empty mask',{enabled:true,runtime:{...observed.runtime,solidCellCount:0,members:[]}}],
   ['another object mask',{enabled:true,runtime:{...observed.runtime,members:[{id:'other',solidCellCount:264}]}}],
+  ['retyped solid count',{enabled:true,runtime:{...observed.runtime,solidCellCount:'264'}}],
 ])test('cold-entry report rejects '+name,async()=>assert.rejects(()=>run(collision),/collision|mask|mounted log/i));
