@@ -7423,7 +7423,7 @@ window.selectSceneField=function(id) {
 
 window.selectSceneObject = function(id,options={}) {
   setActiveSceneObject(id,options);
-  if (currentMesh) {
+  if (currentMesh && !activeSceneFieldId) {
     const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
     window._kaminosDirty?.();

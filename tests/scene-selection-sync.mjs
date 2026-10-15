@@ -41,3 +41,9 @@ test('Frame selected fits the simulation bounds rather than an ignored helper or
 });
 
 test('an orbit drag and its click cannot clear or replace the existing selection',()=>{const c=pointerContext();c.selection=true;const event={button:0,clientX:50,clientY:20,pointerId:1};c.handleViewportPointerDown(event);c.handleViewportSelectionClick({...event,type:'pointerup',clientX:80});c.handleViewportSelectionClick({...event,type:'click',clientX:80});assert.equal(c.selection,true);assert.equal(c.cleared,false);});
+
+test('ordinary selection keeps the field status label rather than overwriting it with a null mesh ID',()=>{
+ const a=html.indexOf('window.selectSceneObject = function'),b=html.indexOf('\n};',a)+3;
+ const c={window:{},sceneObjects:[],activeSceneObjectId:null,activeSceneFieldId:null,currentMesh:null,setActiveSceneObject(id){c.activeSceneFieldId=id;c.currentMesh={};c.status='Selected: Fire & smoke domain';},setInfo(value){c.status=value;}};
+ vm.createContext(c);vm.runInContext(html.slice(a,b),c);c.window.selectSceneObject('flame-field');assert.equal(c.status,'Selected: Fire & smoke domain');
+});
