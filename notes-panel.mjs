@@ -494,7 +494,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     .then(response => response.ok ? response.json() : null)
     .then(data => { if (data) session.setParticipants(data.participants ?? []); })
     .catch(() => {});
-  const refreshParticipantsSoon = () => { window.clearTimeout(participantsTimer); participantsTimer = window.setTimeout(refreshParticipants, 400); };
+  const refreshParticipantsSoon = () => { window.clearTimeout(participantsTimer); participantsTimer = window.setTimeout(refreshParticipants, 150); };
 
   const latestNoteIn = note => { let latest = note; walk(note, item => { if (item.seq > latest.seq) latest = item; }); return latest; };
   const threadOf = id => session.state.notes.get(id) ?? null;
@@ -521,11 +521,14 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     reply.setAttribute('aria-label', 'Reply');
     const replyReach = element(document, 'div', 'kn-reach');
     attachMentions(reply);
-    reply.addEventListener('input', () => {
+    // Recomputed on typing and whenever who is known or listening changes, so
+    // the line always matches what Send would address.
+    const updateReplyReach = () => {
       const preview = session.preview({text: reply.value});
       replyReach.textContent = preview.recipients.length || preview.unknown.length ? reachText(preview, {reply: true}) : '';
       replyReach.dataset.unknown = String(preview.unknown.length > 0);
-    });
+    };
+    reply.addEventListener('input', updateReplyReach);
     const replyRow = element(document, 'div', 'kn-row');
     const replyAttachLabel = element(document, 'label');
     const replyAttach = element(document, 'input');
@@ -558,7 +561,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     replyRow.append(replyAttachLabel, send);
     box.append(reply, replyReach, replyRow);
     card.append(on, body, actions, box);
-    const entry = {card, on, body, actions, box, reply, signature: null};
+    const entry = {card, on, body, actions, box, reply, updateReplyReach, signature: null};
     cards.set(threadId, entry);
     return entry;
   }
@@ -645,6 +648,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     updateReach();
     refreshAnchor();
     if (!drawer.hidden) renderThreads();
+    for (const entry of cards.values()) if (entry.reply.value) entry.updateReplyReach();
   }
 
   function openDrawer({thread = null, composeFocus = false} = {}) {
@@ -791,7 +795,10 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
   });
   source.addEventListener('events', event => {
-    const notices = session.receive(JSON.parse(event.data).events);
+    const batch = JSON.parse(event.data).events;
+    const known = new Set(session.participants.map(person => person.name));
+    const notices = session.receive(batch);
+    if (batch.some(item => item.type === 'note' && item.author && !known.has(item.author))) refreshParticipantsSoon();
     for (const note of notices) toast(note);
     applyLink();
   });

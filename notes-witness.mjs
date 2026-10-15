@@ -309,6 +309,80 @@ try {
   check('a name with no avatar here says so and selects nothing', nobody.ids.length === 0 && nobody.status === `@${PERSON} has no avatar in this scene`, nobody);
   await page.evaluate(id => window.kaminosSelection.set([id], id), red);
 
+  report.phase = 'live-participants'; save();
+  // With the drawer open throughout, people who join by writing or by
+  // registering become mentionable, and a reply draft's reach line follows
+  // changes it did not type (review mentions F1, F2).
+  if (await page.isHidden('.kn-drawer')) await page.click('.kn-toggle');
+  // Let listener presence from earlier phases settle, so no unrelated presence
+  // change refreshes the page's participants during these checks.
+  const settled = async () => {
+    for (const deadline = Date.now() + 20000; Date.now() < deadline; await sleep(500)) {
+      const {listeners} = await (await fetch(`${origin}/api/notes/presence`)).json();
+      if (!listeners.length) break;
+    }
+    await sleep(1500);
+  };
+  const mentionable = async (name, label) => {
+    await page.fill('.kn-compose textarea', '');
+    await page.click('.kn-compose textarea');
+    let offered = [];
+    for (const deadline = Date.now() + 3000; Date.now() < deadline && !offered.includes(`@${name}`); await sleep(300)) {
+      await page.fill('.kn-compose textarea', '');
+      await page.keyboard.type(`@${name.slice(0, 7)}`);
+      offered = await page.$$eval('.kn-suggest:not([hidden]) .kn-suggest-item b', items => items.map(item => item.textContent)).catch(() => []);
+    }
+    check(`${label} becomes mentionable without reopening the drawer`, offered.includes(`@${name}`), {offered: offered.slice(0, 6)});
+    const index = offered.indexOf(`@${name}`);
+    for (let step = 0; step < index; step++) await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('are you seeing this?');
+    await page.click('.kn-compose .kn-btn.primary');
+    await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 30000});
+    const postedId = (await page.textContent('.kn-status')).match(/Posted (kn-[0-9a-z]+)/)[1];
+    const stored = (await log()).find(event => event.id === postedId);
+    check(`mentioning ${label} addresses it`, JSON.stringify(stored?.to) === JSON.stringify([name]), {to: stored?.to});
+  };
+  await settled();
+  const wrote = await notes(['post', 'first words from the writer', '--as', 'writer-agent', '--on', 'scene']);
+  check('an agent writes a note without listening', wrote.code === 0, {stderr: wrote.stderr});
+  await page.waitForFunction(() => [...document.querySelectorAll('.kn-thread .kn-text')].some(node => node.textContent === 'first words from the writer'), null, {timeout: 10000});
+  await mentionable('writer-agent', 'an agent that wrote');
+  await settled();
+  const joinedLate = await notes(['register', '--as', 'joined-agent', '--about', 'registered while the drawer was open']);
+  check('an agent registers while the drawer is open', joinedLate.code === 0, {stderr: joinedLate.stderr});
+  await mentionable('joined-agent', 'an agent that registered');
+  const draftCard = `.kn-thread[data-thread="${noteId}"]`;
+  await page.click(`${draftCard} .kn-actions .kn-btn:nth-child(1)`);
+  await page.click(`${draftCard} .kn-replybox textarea`);
+  await page.keyboard.type('@late-agent please check the rim');
+  const replyReach = () => page.textContent(`${draftCard} .kn-replybox .kn-reach`);
+  const unknownLine = await replyReach();
+  check('a reply draft says an unknown @word stays text', /late-agent isn't anyone known here/.test(unknownLine), {unknownLine});
+  const lateJoin = await notes(['register', '--as', 'late-agent']);
+  check('the unknown name registers while the draft waits', lateJoin.code === 0, {stderr: lateJoin.stderr});
+  await page.waitForFunction(selector => /and @late-agent/.test(document.querySelector(selector)?.textContent ?? ''), `${draftCard} .kn-replybox .kn-reach`, {timeout: 8000}).catch(() => {});
+  const knownLine = await replyReach();
+  const draft = await page.evaluate(selector => { const box = document.querySelector(selector); return {value: box.value, focused: document.activeElement === box}; }, `${draftCard} .kn-replybox textarea`);
+  check("the untouched draft's reach line follows the new participant", /and @late-agent/.test(knownLine) && draft.value === '@late-agent please check the rim' && draft.focused,
+    {knownLine, draft});
+  const listener = notes(['wait', '--as', 'late-agent', '--timeout', '8'], {timeoutMs: 30000});
+  await page.waitForFunction(selector => /@late-agent \(listening\)/.test(document.querySelector(selector)?.textContent ?? ''), `${draftCard} .kn-replybox .kn-reach`, {timeout: 8000}).catch(() => {});
+  const draftListeningLine = await replyReach();
+  check('the draft shows when a known agent starts listening', /@late-agent \(listening\)/.test(draftListeningLine), {draftListeningLine});
+  await page.click(`${draftCard} .kn-replybox .kn-btn.primary`);
+  await page.waitForSelector(`${draftCard} .kn-replybox[hidden]`, {state: 'attached', timeout: 15000});
+  const lateReply = (await log()).filter(event => event.type === 'note' && event.text === '@late-agent please check the rim').at(-1);
+  check('Send addresses who the reach line said', lateReply?.to?.includes('late-agent'), {to: lateReply?.to});
+  await listener;
+  // The reply answers the agent's earlier message, so it reaches that agent too;
+  // collect it now so the next phase starts with nothing pending.
+  const answered = await notes(['--json', 'wait', '--as', AGENT, '--timeout', '5'], {timeoutMs: 30000});
+  let answeredIds = [];
+  try { answeredIds = JSON.parse(answered.stdout).notes.map(note => note.id); } catch {}
+  check('the reply also reaches the agent whose message it answers', lateReply?.recipients?.includes(AGENT) && answeredIds.includes(lateReply.id),
+    {recipients: lateReply?.recipients, answeredIds});
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});

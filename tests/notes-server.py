@@ -391,6 +391,13 @@ def presence_stream_contracts():
             with stream.lock:
                 churn = [payload for event, payload in stream.events if event == "presence"]
             assert churn == [], ("presence repeated while nothing changed", len(churn))
+            # A registration changes who can be addressed; an open page is told (review mentions F1).
+            version = arrived.get("participantsVersion")
+            assert version, ("presence carries a participants version", arrived)
+            status, joined = call(port, "POST", "/api/notes/participants", {"author": "late-agent", "about": "joined late"})
+            assert status == 200, (status, joined)
+            changed = stream.next("presence", lambda payload: payload.get("participantsVersion") not in (None, version), seconds=6)
+            assert changed["participantsVersion"] != version, changed
         finally:
             if stream:
                 stream.close()
