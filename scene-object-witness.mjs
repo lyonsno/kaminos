@@ -1700,6 +1700,7 @@ async function runAuthoredWaterObjectsScenario(ws) {
   assert.equal(files.length,1);objects.savedFile=files[0];
   const doc=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
   phase='authored-water-multiple-reopen';
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(300);
   await wsRequest(ws,'Page.navigate',{url:compositionRestoreUrl(doc.composition,files[0],new URL(url).origin,'workbench')});
   for(let i=0;i<240;i++){
     await delay(125);try{const state=await evaluate(ws,'window.kaminosWaterSources?.read()');if(state?.sources.length===3&&!state.runtime){objects.reopened=state;break;}}catch{}
