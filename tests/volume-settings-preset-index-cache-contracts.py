@@ -131,10 +131,59 @@ def main():
         listing(layers, changed_schema)
         assert len(normalize_calls) >= 4, f"schema change should re-read presets, read {len(normalize_calls)}"
 
-        # Returned lists are copies: a caller mutating one cannot alter the next listing.
-        fresh = listing(layers)
-        fresh["entries"][0]["carriedControls"].append("mutated-by-caller")
-        assert "mutated-by-caller" not in listing(layers)["entries"][0]["carriedControls"]
+        # Returned projections are independent copies, items included: a caller
+        # mutating a carried control cannot alter the next listing. Listing
+        # under a schema without one control makes every preset carry it.
+        carried_key = next(d["key"] for d in schema["controls"] if d["key"] != numeric_key and d["key"] in payload["domControls"])
+        narrow_schema = json.loads(json.dumps(schema))
+        narrow_schema["controls"] = [d for d in narrow_schema["controls"] if d["key"] != carried_key]
+        narrow_schema["controlCount"] = len(narrow_schema["controls"])
+        fresh = listing(layers, narrow_schema)
+        carried = next(entry for entry in fresh["entries"] if entry["carriedControls"])
+        assert isinstance(carried["carriedControls"][0], dict), carried["carriedControls"]
+        carried["carriedControls"][0]["value"] = "mutated-by-caller"
+        carried["carriedControls"].append("appended-by-caller")
+        again = next(entry for entry in listing(layers, narrow_schema)["entries"] if entry["alias"] == carried["alias"])
+        assert again["carriedControls"][0]["value"] != "mutated-by-caller", again["carriedControls"][0]
+        assert "appended-by-caller" not in again["carriedControls"]
+
+        # An alias label rewritten in place, same target preset, is listed with
+        # the new label.
+        bowl_path = shared / "aliases" / "bowl-wisp.json"
+        bowl = json.loads(bowl_path.read_text())
+        bowl["label"] = "Bowl Wisp Renamed"
+        bowl_path.write_text(json.dumps(bowl))
+        renamed = {entry["alias"]: entry for entry in listing(layers)["entries"]}
+        assert renamed["bowl-wisp"]["label"] == "Bowl Wisp Renamed", renamed["bowl-wisp"]
+
+        # A same-inode, same-size edit told apart only by mtime is re-read: the
+        # edited content no longer matches its id, so it is unavailable.
+        arch_id = renamed["arch-plume"]["presetId"]
+        arch_path = shared / "presets" / f"{arch_id}.json"
+        listing(layers)  # warm the cache for this file
+        before = arch_path.stat()
+        text = arch_path.read_text()
+        old_value = f'"value": {12}'
+        assert old_value in text or '"value":12' in text, "fixture must carry the arch plume value 12"
+        edited = text.replace(old_value, f'"value": {13}', 1) if old_value in text else text.replace('"value":12', '"value":13', 1)
+        assert len(edited) == len(text)
+        arch_path.write_text(edited)
+        os.utime(arch_path, ns=(before.st_atime_ns, before.st_mtime_ns + 5_000_000_000))
+        after = arch_path.stat()
+        assert (after.st_ino, after.st_size) == (before.st_ino, before.st_size)
+        edited_listing = listing(layers)
+        unavailable = {entry["presetId"]: entry for entry in edited_listing["unavailableEntries"]}
+        assert arch_id in unavailable, "an mtime-only change must be re-read"
+
+        # The unavailable entry reports the same error an uncached read raises.
+        try:
+            serve.read_volume_settings_preset(shared, "arch-plume", schema)
+        except ValueError as error:
+            expected_error = str(error)
+        else:
+            raise AssertionError("edited preset should fail its content hash")
+        assert unavailable[arch_id]["error"] == expected_error, (unavailable[arch_id]["error"], expected_error)
+        assert unavailable[arch_id]["reason"] == "invalid-artifact"
 
     print("volume settings preset index cache contracts passed")
 
