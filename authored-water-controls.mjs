@@ -25,7 +25,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  $('[data-release]').onclick=()=>call(()=>api.release(selected?.id??api.read().sources?.[0]?.id));
  $('[data-pause]').onclick=()=>call(()=>api.pause());
  function refresh(){const s=api.read();if(s.selected?.id!==selected?.id){dirty=false;revision++;sourceError.textContent='';}selected=s.selected;sourcePanel.hidden=!selected;
-  const simulation=s.simulation;$('[data-simulation]').hidden=!simulation?.present;$('[data-select-simulation]').disabled=!simulation?.present;
+  const simulation=s.simulation;simulationPanel.hidden=!simulation?.present;$('[data-select-simulation]').disabled=!simulation?.present;
   if(simulation?.settings&&!simulationDirty)$('[data-passes]').value=simulation.settings.densityIterations;
   $('[data-release]').disabled=!(s.sources?.length||selected);
   if(selected){$('[data-label]').textContent=selected.label;
