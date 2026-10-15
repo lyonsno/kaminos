@@ -6,7 +6,8 @@ assert.ok(start>0&&end>start,'the composition host foreground frame must be pres
 const method=html.slice(start,end).trim().replace(/,$/,'');
 function host({draws}){
   const context={foregroundServiceActive:true,insideForegroundFrame:false,sceneRenderedForVolume:false,sceneFrameCount:7,
-    syncViewportRendererSize(){},camera:{updateMatrixWorld(){}},fireLightFieldPass:null,
+    syncViewportRendererSize(){},camera:{updateMatrixWorld(){}},fireLightFieldPass:null,foregroundFrameParts:{sync:true,camera:true,light:true,render:true,calls:0,resizes:0},
+    renderer:{getSize:v=>v},THREE:{Vector2:class{constructor(){this.x=1;this.y=1;}}},
     renderSceneFrame(){if(!draws)return false;context.sceneFrameCount++;}};
   return {context,frame:vm.runInNewContext(`({${method}})`,context)};
 }

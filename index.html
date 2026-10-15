@@ -11895,6 +11895,8 @@ async function initScene() {
   let sceneRenderedForVolume = false;
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
+  const foregroundFrameParts = { sync: true, camera: true, light: true, render: true, calls: 0, resizes: 0 };
+  window.__kaminosForegroundFrameParts = foregroundFrameParts;
   let sceneFrameCount = 0;
   ordinarySceneDepthProvider = () => {
     if (!ordinaryDepthEnabled) return null;
@@ -12005,12 +12007,16 @@ async function initScene() {
         // The ordinary depth provider runs after the volume updates controls
         // and camera, preserving identical camera state for prepass/raymarch.
         const result = run();
+        // Diagnostic switches (window.__kaminosForegroundFrameParts) for bisecting what this
+        // wrapper does to model work on the shared device; all parts run by default.
+        const parts = foregroundFrameParts;
         if (!sceneRenderedForVolume) {
-          syncViewportRendererSize();
-          camera.updateMatrixWorld();
-          fireLightFieldPass?.update();
-          renderSceneFrame();
+          if (parts.sync) { const before = renderer.getSize(new THREE.Vector2()); syncViewportRendererSize(); const after = renderer.getSize(new THREE.Vector2()); if (before.x !== after.x || before.y !== after.y) parts.resizes++; }
+          if (parts.camera) camera.updateMatrixWorld();
+          if (parts.light) fireLightFieldPass?.update();
+          if (parts.render) renderSceneFrame();
         }
+        parts.calls++;
         const sceneDrawn = sceneFrameCount > sceneFrameCountBefore;
         return {...result, sceneFrameCount, sceneFrameCountBefore, sceneFrameCountAfter: sceneFrameCount, sceneDrawn,
           sceneAuthority: sceneDrawn ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'};
