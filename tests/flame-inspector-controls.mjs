@@ -45,3 +45,11 @@ test('applicability respects source law, AgX and effective physics without chang
   assert.equal(flame.flamePropertyApplies('volume-wind-gust-period',mode),true);
   assert.deepEqual(mode,{sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false,materialLaw:'1'});
 });
+
+test('binary numerical sources become checkboxes without converting continuous amounts into switches',()=>{
+  assert.equal(typeof flame.flamePropertyInputType,'function');
+  assert.equal(flame.flamePropertyInputType({type:'range',min:'0',max:'1',step:'1'}),'checkbox');
+  assert.equal(flame.flamePropertyInputType({type:'range',min:'0',max:'1',step:'.05'}),'number');
+  assert.equal(flame.flamePropertyInputType({type:'range',min:'0',max:'1.5',step:'.05'}),'number');
+  assert.equal(flame.flamePropertyInputType({type:'color'}),'color');
+});
