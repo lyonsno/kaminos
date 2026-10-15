@@ -37,10 +37,3 @@ export {
   createSf3dImageToMeshRouteDefinition,
   createSf3dImageToMeshRouteReceipt,
 } from './sf3d-route.js';
-export {
-  WEBGPU_GPU_TIMING_AUTHORITY,
-  WEBGPU_GPU_TIMING_SCHEMA,
-  attachWebGpuStageGpuTiming,
-  createWebGpuGpuTimer,
-  normalizeWebGpuGpuTimingOptions,
-} from './gpu-timing.js';

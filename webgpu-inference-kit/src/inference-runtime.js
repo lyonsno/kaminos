@@ -20,7 +20,6 @@ import {
   createStagedSubmitProfile,
   finishStagedSubmitProfile,
 } from './staged-profile.js';
-import { attachWebGpuStageGpuTiming, createWebGpuGpuTimer } from './gpu-timing.js';
 import {
   defineWebGpuPhaseProgram,
   runWebGpuPhaseProgram,
@@ -458,8 +457,6 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
     throw error;
   }
   runtime.settleCommandDuty(preparedCommandDuty, { status: 'encoded' });
-  // Copy outstanding kernel timings out ahead of the readback so they resolve alongside it.
-  runtime.gpuTimer?.flush();
   await runOptionalHostPhase(
     runtime,
     WEBGPU_HOST_PHASE.queueSubmission,
@@ -522,9 +519,6 @@ function createStageFacade(runtime, stageState, stageName, stageMetadata) {
     runProgram: runtime.runProgram,
     hostPhases: runtime.hostPhases,
     runHostPhase: runtime.runHostPhase,
-    recordGpuTiming(token) {
-      stageState.gpuTimings.push(token);
-    },
     async yieldToBrowser(metadata = {}, options = {}) {
       const event = await runtime.yieldToBrowser(metadata, options.schedulerInvocation || null);
       stageState.yields.push(event);
@@ -567,8 +561,6 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     requiredStages: input.requiredStages || [],
     timestampQueryValidatedAgainstStaged: Boolean(input.timestampQueryValidatedAgainstStaged),
   });
-  const gpuTimer = createWebGpuGpuTimer({ device, queue, options: input.gpuTiming });
-  stagedProfile.gpuTiming = gpuTimer.summary;
   const now = input.now || defaultNow;
   const configuredYield = input.yield || null;
   const baselineYield = createCooperativeYield({
@@ -851,7 +843,6 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     backendIdentity,
     kernel,
     profile: stagedProfile,
-    gpuTimer,
     caches: resourceCaches,
     hostPhases,
     commandDuties,
@@ -1189,8 +1180,6 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
       return runtime.runStage(stageName, async stage => {
         let commandBuffer;
-        // An unsubmitted command buffer may never run, so only submitted kernels take a timing slot.
-        const gpuTiming = options.submit === false ? null : gpuTimer.begin();
         try {
           commandBuffer = await runOptionalHostPhase(
             runtime,
@@ -1201,19 +1190,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
               });
               const pass = encoder.beginComputePass({
                 label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
-                ...(gpuTiming ? { timestampWrites: gpuTiming.timestampWrites } : {}),
               });
               pass.setPipeline(kernelDefinition.pipeline);
               pass.setBindGroup(0, kernelDefinition.bindGroup);
               pass.dispatchWorkgroups(...dispatch);
               pass.end();
-              if (gpuTiming) gpuTimer.encodeResolve(encoder, gpuTiming);
               return encoder.finish();
             },
             { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name, dispatch } },
           );
         } catch (error) {
-          gpuTimer.abandon(gpuTiming);
           if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
             status: 'failed-before-encode',
             phase: 'command-encoding',
@@ -1227,22 +1213,12 @@ export async function createWebGpuInferenceRuntime(input = {}) {
             ...metadata,
           };
           runtime.settleCommandDuty(preparedCommandDuty, { status: 'encoded' });
-          try {
-            await runOptionalHostPhase(
-              runtime,
-              WEBGPU_HOST_PHASE.queueSubmission,
-              () => runOptionalCommandDuty(runtime, preparedCommandDuty, () => {
-                const submitted = queue.submit([commandBuffer]);
-                gpuTimer.markSubmitted(gpuTiming);
-                return submitted;
-              }),
-              { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name } },
-            );
-          } catch (error) {
-            gpuTimer.abandon(gpuTiming);
-            throw error;
-          }
-          if (gpuTiming) stage.recordGpuTiming(gpuTiming);
+          await runOptionalHostPhase(
+            runtime,
+            WEBGPU_HOST_PHASE.queueSubmission,
+            () => runOptionalCommandDuty(runtime, preparedCommandDuty, () => queue.submit([commandBuffer])),
+            { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name } },
+          );
         }
         if (options.yieldAfter === true) {
           await stage.yieldToBrowser({
@@ -1261,7 +1237,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       if (!isNonEmptyString(name)) throw new Error('stage name must be a non-empty string');
       if (typeof fn !== 'function') throw new Error('stage function must be a function');
 
-      const stageState = { yields: [], gpuTimings: [] };
+      const stageState = { yields: [] };
       const startMs = now();
       const result = await fn(createStageFacade(runtime, stageState, name, metadata));
       const endMs = now();
@@ -1273,13 +1249,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
           yields: stageState.yields,
         },
       });
-      attachWebGpuStageGpuTiming(stagedProfile.stages[stagedProfile.stages.length - 1], stageState.gpuTimings);
       return result;
-    },
-
-    // Resolve every outstanding kernel timing into its stage record and the profile summary.
-    settleGpuTiming() {
-      return gpuTimer.settle();
     },
 
     finishProfile(options = {}) {
@@ -1315,7 +1285,6 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       };
       ownedBuffers.clear();
       resourceCaches.clear();
-      gpuTimer.destroy();
       return disposalReport;
     },
   };
