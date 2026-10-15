@@ -1,0 +1,49 @@
+// kaminos-test: browser — exact caller recipe, actual shared scene and independent CFT
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import v8 from 'node:v8';
+import {createHash} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
+function check(state,setup){
+ assert.equal(state.clock.rendererBackend,'webgpu');assert.equal(state.read.entries.length,setup.entries.length);
+ assert.equal(state.clock.activeSubscriptions,1,'one actual app clock drives the comparison');
+ assert.equal(state.read.presentation,'in-place');
+ for(let i=0;i<setup.entries.length;i++){
+  const e=state.read.entries[i],s=setup.entries[i];assert.equal(e.key,s.id);assert.ok(e.id&&state.scene.some(r=>r.id===e.id));
+  assert.equal(e.source.motionSha256,s.source.motion_sha256);assert.equal(e.source.caseSha256,s.source.case_sha256);assert.equal(e.source.frameSha256,s.source.frame_sha256);
+  assert.equal(e.skin.route,'shared-owner-scene-full-body-dq');assert.equal(e.skin.vertices,50501);assert.equal(e.skin.bones,28);
+  assert.equal(e.vertices.length,50501*3);assert.ok(e.vertices.every(Number.isFinite));assert.ok(e.vertices.some(v=>v!==e.vertices[0]),'blank output');
+ }
+ assert.equal(new Set(state.read.entries.map(e=>e.id)).size,setup.entries.length,'six sources need six actual objects');
+}
+if(process.argv.includes('--self-test')){
+ const setup={entries:[{id:'a',source:{motion_sha256:'m',case_sha256:'c',frame_sha256:'f'}}]},entry={key:'a',id:'body',source:{motionSha256:'m',caseSha256:'c',frameSha256:'f'},skin:{route:'shared-owner-scene-full-body-dq',vertices:50501,bones:28},vertices:Array(50501*3).fill(0)};entry.vertices[0]=1;
+ const good={clock:{rendererBackend:'webgpu',activeSubscriptions:1},scene:[{id:'body'}],read:{presentation:'in-place',entries:[entry]}};check(good,setup);
+ for(const edit of [s=>s.clock.rendererBackend='webgl',s=>s.clock.activeSubscriptions=6,s=>s.scene=[],s=>s.read.entries=[],s=>s.read.entries[0].source.motionSha256='stale',s=>s.read.entries[0].vertices.fill(0)]){const bad=structuredClone(good);edit(bad);assert.throws(()=>check(bad,setup));}
+ console.log('Comparison witness refuses fallback renderer, private clocks, missing registration, partial cohort, stale source and blank body');process.exit(0);
+}
+const args=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,l)=>i%2?a:[...a,[v,l[i+1]]],[]));
+const out=args['--out'],root=args['--repo-root'],origin=args['--origin'];if(!out||!root||!origin||!args['--setup']||!args['--recipe-url']||!args['--chrome']||!args['--playwright'])throw Error('Explicit source, setup, recipe route, browser and output required');
+await fs.mkdir(out,{recursive:true});await assert.rejects(fs.access(out+'/report.json'),'Preserve existing evidence');
+const report={status:'failed',phase:'inputs',requested:args,images:[],errors:[]};let browser,context,page;
+const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await save();
+try{
+ const bytes=await fs.readFile(args['--setup']),setup=JSON.parse(bytes),sha=createHash('sha256').update(bytes).digest('hex');report.recipeSha256=sha;report.setup=setup;
+ report.runtime=await (await fetch(origin+'/api/runtime-config')).json();assert.equal(report.runtime.source.repoRoot,root);assert.equal(report.runtime.source.dirty,false);
+ const url=new URL(origin+'/index.html');url.searchParams.set('experiment','marionette/motion-comparison');url.searchParams.set('experiment_inputs',JSON.stringify({recipe:args['--recipe-url'],recipe_sha256:sha}));report.url=url.href;
+ const {chromium}=await import(pathToFileURL(args['--playwright']));browser=await chromium.launch({executablePath:args['--chrome'],headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});report.browserVersion=browser.version();
+ context=await browser.newContext({viewport:{width:1800,height:1200},recordVideo:{dir:out+'/video',size:{width:1800,height:1200}}});page=await context.newPage();page.on('pageerror',e=>report.errors.push(String(e)));
+ report.phase='mount';await page.goto(url.href,{timeout:0});await page.evaluate(async()=>{for(;;){if(window.kaminosWorkbenchExperimentError)throw Error(window.kaminosWorkbenchExperimentError);if(window.kaminosCreatureComparison)return;await new Promise(r=>requestAnimationFrame(r));}});
+ const read=()=>page.evaluate(()=>({read:window.kaminosCreatureComparison(),scene:window.kaminosSceneObjectDebugState(),clock:window.kaminosWorkbenchSceneState()}));
+ async function retain(label,validate=false){await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const state=await read();if(validate)check(state,setup);await fs.writeFile(out+'/'+label+'.state.v8',v8.serialize(state));await page.screenshot({path:out+'/'+label+'.png'});report.images.push(label+'.png');await save();return state;}
+ report.phase='simultaneous-play';const moving=await retain('all-playing',true);assert.equal(moving.read.status,'playing');
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('pause'));await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:1}));const middle=await retain('paired-middle');assert.ok(middle.read.entries.every(e=>e.frame===30));assert.equal(middle.clock.activeSubscriptions,0);
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('restart'));await page.evaluate(async()=>{while(window.kaminosCreatureComparison().seconds<.5)await new Promise(r=>requestAnimationFrame(r));});await retain('elapsed-motion',true);
+ report.phase='raw-once';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'raw'}));await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('restart'));await page.evaluate(async()=>{while(window.kaminosCreatureComparison().status!=='held')await new Promise(r=>requestAnimationFrame(r));});const held=await retain('raw-held');assert.ok(held.read.entries.every(e=>e.frame===59));assert.equal(held.clock.activeSubscriptions,0);
+ report.phase='travel';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'travel'}));await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{seconds:1}));await retain('travel-middle');
+ report.phase='removal';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('presentation',{mode:'in-place'}));const first=(await read()).read.entries[0];await page.evaluate(id=>window.removeSceneObject(id),first.id);await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('play'));await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));const removed=await retain('one-removed');assert.equal(removed.read.entries[0].status,'removed');assert.equal(removed.read.entries[0].id,null);assert.equal(removed.read.entries.filter(e=>e.id).length,setup.entries.length-1);
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());report.closed=await page.evaluate(()=>({clock:window.kaminosWorkbenchSceneState(),scene:window.kaminosSceneObjectDebugState()}));assert.equal(report.closed.clock.activeSubscriptions,0);assert.equal(report.closed.scene.length,0);assert.deepEqual(report.errors,[]);
+ report.phase='negative-recipe';const wrong=new URL(url);wrong.searchParams.set('experiment_inputs',JSON.stringify({recipe:args['--recipe-url'],recipe_sha256:'0'.repeat(64)}));await page.goto(wrong.href,{timeout:0});await page.evaluate(async()=>{while(!window.kaminosWorkbenchExperimentError)await new Promise(r=>requestAnimationFrame(r));});report.negative=await page.evaluate(()=>({error:window.kaminosWorkbenchExperimentError,scene:window.kaminosSceneObjectDebugState(),clock:window.kaminosWorkbenchSceneState()}));assert.match(report.negative.error,/digest mismatch/);assert.equal(report.negative.scene.length,0);assert.equal(report.negative.clock.activeSubscriptions,0);
+ report.status='inspection-passed';report.limit='Live simultaneous composition and source identity; in-place and seam are derived presentation, no gait acceptance or contact solver';
+}catch(e){report.failure=String(e.stack??e);process.exitCode=1;if(page)try{await fs.writeFile(out+'/failure.state.v8',v8.serialize(await page.evaluate(()=>window.kaminosCreatureComparison?.()??{error:window.kaminosWorkbenchExperimentError})));await page.screenshot({path:out+'/failure.png'});report.images.push('failure.png');}catch{}}
+finally{try{if(page)report.videoPath=await page.video()?.path();await context?.close();await browser?.close();report.browserClosed=true;}catch(e){report.cleanupError=String(e);process.exitCode=1;}await save();console.log(JSON.stringify({status:report.status,phase:report.phase,failure:report.failure,images:report.images}));}
