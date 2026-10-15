@@ -18,7 +18,7 @@ export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,wo
  const blocks=workgroupsX*workgroupsY*workgroupsZ;
  if(!(partials instanceof Float32Array)||partials.length<blocks*floatsPerWorkgroup)throw Error('Residual partials do not cover the block grid');
  const cell=2/grid,scale=domain.scale,[tx,ty,tz]=domain.translation,toWorld=(c,t)=>t+scale*(-1+(c+0.5)*cell);
- const data=new Float32Array(blocks*HEAT_BLOCK_FLOATS);let count=0,heatTotal=0;const heatMoment=[0,0,0];
+ const data=new Float32Array(blocks*HEAT_BLOCK_FLOATS);let count=0,heatTotal=0,heatMax=0,smokeMax=0;const heatMoment=[0,0,0];
  const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
  for(let i=0;i<blocks;i++){
   const at=i*floatsPerWorkgroup,heatSum=partials[at+13],smokeSum=partials[at+14];
@@ -33,11 +33,11 @@ export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,wo
   if(!values.every(Number.isFinite))continue;
   data.set(values,count*HEAT_BLOCK_FLOATS);count++;
   for(const [k,v] of [x,y,z].entries()){if(v<min[k])min[k]=v;if(v>max[k])max[k]=v;heatMoment[k]+=v*heatSum;}
-  heatTotal+=heatSum;
+  heatTotal+=heatSum;if(heat>heatMax)heatMax=heat;if(smoke>smokeMax)smokeMax=smoke;
  }
  return {schema:PROXY_SNAPSHOT_SCHEMA,kind:'heat-blocks',source:'volume-pressure-residual-probe',writeTick:step,simTimeS:step*stepSeconds,capturedAtMs,
   grid:[grid,gridY,grid],count,floatsPerBlock:HEAT_BLOCK_FLOATS,data:data.subarray(0,count*HEAT_BLOCK_FLOATS),
-  summary:{count,bounds:count?[min,max]:null,heatCentroid:heatTotal>1e-9?heatMoment.map(v=>v/heatTotal):null,heatTotal}};
+  summary:{count,bounds:count?[min,max]:null,heatCentroid:heatTotal>1e-9?heatMoment.map(v=>v/heatTotal):null,heatTotal,heatMax,smokeMax}};
 }
 
 // Where the surfels are, without iterating them: world bounds, centroid and

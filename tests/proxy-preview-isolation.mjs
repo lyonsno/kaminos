@@ -111,3 +111,14 @@ test('a water cadence window is admitted only with the requested workload in eff
  assert.equal(waterCadenceWindowAdmission({label:'full',water:'full',stepEvery:1},{presentation:'full',timePolicy:'one-fixed-1/60-step-per-rendered-frame',surfels:null,producerError:null}).admitted,true,'full needs no proxy');
  assert.equal(waterCadenceWindowAdmission({label:'full',water:'full',stepEvery:1},{presentation:'proxy',timePolicy:'one-fixed-1/60-step-per-rendered-frame'}).admitted,false);
 });
+
+import {checkedViewportDisplay as checkedDisplay,VIEWPORT_FIRE_TOGGLE_HTML} from '../viewport-display-settings.mjs';
+test('fire display is a validated viewport preference and heat-block summaries carry the peak',()=>{
+ assert.equal(checkedDisplay().fire,'full');
+ assert.equal(checkedDisplay({fire:'proxy'}).fire,'proxy');
+ assert.throws(()=>checkedDisplay({fire:'wire'}),/fire/);
+ assert.match(VIEWPORT_FIRE_TOGGLE_HTML,/data-fire="proxy"/);
+ const grid=4,partials=new Float32Array(20);partials.set([0,32,6.4,0,32*1.5,32*1.5,0,0],12);
+ const snapshot=decodeHeatBlocks({partials,grid,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16},{domain:{translation:[0,0,0],scale:1}});
+ assert.ok(Math.abs(snapshot.summary.heatMax-0.5)<1e-6&&Math.abs(snapshot.summary.smokeMax-0.1)<1e-6);
+});

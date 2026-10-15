@@ -3856,7 +3856,8 @@ import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from '
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
 import {createViewportShading} from './viewport-shading.mjs';
 import {createSurfelProxyLayer} from './proxy-surfels.mjs';
-import {createInterfaceSurfelProducer,createProxySnapshotRegistry} from './proxy-snapshot.mjs';
+import {createInterfaceSurfelProducer,createProxySnapshotRegistry,decodeHeatBlocks} from './proxy-snapshot.mjs';
+import {createFireSplatLayer} from './proxy-fire-splats.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
@@ -3926,6 +3927,7 @@ function syncViewportDisplayControls() {
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
  for(const button of document.querySelectorAll('.viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
  for(const button of document.querySelectorAll('.viewport-water [data-water]'))button.setAttribute('aria-pressed',String(button.dataset.water===viewportDisplay.water));
+ for(const button of document.querySelectorAll('.viewport-fire [data-fire]'))button.setAttribute('aria-pressed',String(button.dataset.fire===viewportDisplay.fire));
 }
 // Wireframe is a view preference over mesh content, applied only around the
 // viewport render (see renderSceneFrame). Like Blender's default it is
@@ -3942,7 +3944,8 @@ function renderWithViewportShading(render) {
  return {mode:receipt.mode,meshes:receipt.meshes,perObject:Object.fromEntries(entries.map((entry,index)=>[entry.id,receipt.perRoot[index]]))};
 }
 document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
- const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});});
+ const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});
+ const fire=event.target.closest?.('.viewport-fire [data-fire]');if(fire)window.kaminosViewportSettings.set({fire:fire.dataset.fire});});
 // Proxy snapshots: CPU-resident, camera-independent payloads published per
 // source. The viewport proxy layer is one subscriber; maps, sketches and agents
 // can subscribe through window.kaminosProxySnapshots. A producer runs while any
@@ -3953,9 +3956,9 @@ window.kaminosProxySnapshots={latest:proxySnapshots.latest,subscribe:proxySnapsh
 // only in Proxy display; another camera (an agent's sub view, an inset) enables
 // it to draw the proxies from its own viewpoint. require(source) keeps a
 // source's proxy mesh alive while the viewport shows the full render.
-const PROXY_LAYER=3;
+const PROXY_LAYER=3,FIRE_PROXY_LAYER=4;
 const proxyRequirements=new Map();
-window.kaminosProxyPreview={layer:PROXY_LAYER,
+window.kaminosProxyPreview={layer:PROXY_LAYER,layers:{water:PROXY_LAYER,fire:FIRE_PROXY_LAYER},
  require(source){proxyRequirements.set(source,(proxyRequirements.get(source)??0)+1);window._kaminosDirty?.();let released=false;
   return ()=>{if(released)return;released=true;const n=(proxyRequirements.get(source)??1)-1;if(n>0)proxyRequirements.set(source,n);else proxyRequirements.delete(source);window._kaminosDirty?.();};},
  required:()=>Object.fromEntries(proxyRequirements)};
@@ -3985,6 +3988,34 @@ function syncWaterProxy() {
  if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
+// Fire proxy: heat-block splats drawn from snapshots of the fire's residual
+// probe readback. In Proxy display the fire canvas is hidden and the splats,
+// on their own layer, stand in for the flame. Prototype pending the probe
+// owner's answer on the readback seam.
+let fireProxy=null;
+function syncFireProxy() {
+ const prototype=volumePrototype,display=viewportDisplay.fire==='proxy'&&!!prototype,wanted=!!prototype&&(display||proxyRequirements.has('fire'));
+ camera?.layers[display?'enable':'disable'](FIRE_PROXY_LAYER);
+ if(fireProxy&&fireProxy.prototype!==prototype){fireProxy.prototype?.setResidualPartialsConsumer?.(null);fireProxy.unsubscribe?.();fireProxy.layer?.dispose();proxySnapshots.clear('fire');fireProxy=null;}
+ if(prototype&&!fireProxy)fireProxy={prototype,layer:null,unsubscribe:null,attached:false,decodeErrors:0};
+ const produce=!!fireProxy&&(wanted||proxySnapshots.wanted('fire'));
+ if(produce&&!fireProxy.attached)fireProxy.attached=prototype.setResidualPartialsConsumer?.(info=>{
+  const domain=window.kaminosFlameDomain?.read();if(!domain)return;
+  try{proxySnapshots.publish('fire',decodeHeatBlocks(info,{domain,capturedAtMs:performance.now()}));}catch(error){fireProxy.decodeErrors++;fireProxy.lastError=String(error?.message||error);}
+ })??false;
+ if(fireProxy&&!produce&&fireProxy.attached){prototype.setResidualPartialsConsumer?.(null);fireProxy.attached=false;}
+ if(fireProxy&&wanted&&!fireProxy.layer){
+  const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);
+  fireProxy.layer=layer;fireProxy.unsubscribe=proxySnapshots.subscribe('fire',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
+ }
+ if(fireProxy&&!wanted&&fireProxy.layer){fireProxy.unsubscribe();fireProxy.layer.dispose();fireProxy.layer=null;fireProxy.unsubscribe=null;}
+ const canvas=document.getElementById('kaminos-volume-canvas'),visibility=display?'hidden':'';
+ if(canvas&&canvas.style.visibility!==visibility)canvas.style.visibility=visibility;
+}
+window.kaminosFireProxyStyle=patch=>{const style=fireProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
+window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
+ attached:fireProxy?.attached??false,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
+ canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
 window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
@@ -11995,6 +12026,7 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
     syncWaterProxy();
+    syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
     const shadingReceipt = renderWithViewportShading(() => {

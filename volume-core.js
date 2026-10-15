@@ -12057,6 +12057,9 @@ export function createKaminosVolumePrototype({
   let pressureResidualPartialsBuffer = null;
   let pressureResidualReadbackBuffer = null;
   let pressureResidualWorkgroupCount = 0;
+  // Proxy consumers (heat-block snapshots) read the probe's per-block partials
+  // after the readback the probe already performs; no extra GPU work.
+  let residualPartialsConsumer = null;
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
@@ -17393,6 +17396,13 @@ export function createKaminosVolumePrototype({
       }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
+      if (residualPartialsConsumer) {
+        try {
+          residualPartialsConsumer({ partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
+            workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
+            floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step });
+        } catch (error) { console.warn('Residual partials consumer failed', error); }
+      }
       const reduceOperator = offset => {
         let sumBefore = 0;
         let maxBefore = 0;
@@ -27137,6 +27147,12 @@ export function createKaminosVolumePrototype({
         identity: 'debug-raymarch-shader-specialization-override-v0',
         effective: debugRaymarchShaderSpecialization,
       };
+    },
+    // Additive read-only seam for proxy previews: receives each residual probe
+    // readback's per-block partials. null detaches.
+    setResidualPartialsConsumer(fn) {
+      residualPartialsConsumer = typeof fn === 'function' ? fn : null;
+      return Boolean(residualPartialsConsumer);
     },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);

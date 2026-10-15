@@ -663,7 +663,16 @@ async function runFireProxySplatsScenario(ws) {
     return { canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
   })`, { timeoutMs: 180000 });
   for (let i = 0; i < 1200; i++) { const d = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (d >= settleSteps) break; await delay(250); }
-  await evaluate(ws, 'window.kaminosSelection?.clear?.()');
+  // Frame the whole simulation domain, as the cost sweep does.
+  evidence.camera = await evaluate(ws, `(() => {
+    window.kaminosSelection?.clear?.();
+    const domain = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
+    const topY = Array.isArray(dims) && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3, t = domain.translation, k = domain.scale;
+    const min = [t[0] - k, t[1] - k, t[2] - k], max = [t[0] + k, t[1] + topY * k, t[2] + k];
+    const target = min.map((v, i) => (v + max[i]) / 2), size = max.map((v, i) => v - min[i]), distance = Math.max(size[1], size[0]) * 1.55;
+    window.kaminosSetCameraDebugPose({ position: [target[0] + distance * 0.35, target[1] + size[1] * 0.12, target[2] + distance], target });
+    return { domain, target };
+  })()`);
   phase = 'scenario-fire-proxy-splats-snapshot';
   await evaluate(ws, `(() => { window.__fireWitnessRelease = window.kaminosProxyPreview.require('fire'); return true; })()`);
   let fire = null, firstTick = null;
@@ -684,24 +693,28 @@ async function runFireProxySplatsScenario(ws) {
   await settleViewportFrames(ws, 1000);
   const proxy = evidence.proxyPaused = await readFire();
   check(proxy?.display === 'proxy' && proxy.viewportCameraSeesProxies === true && proxy.canvasVisibility === 'hidden', `fire proxy display did not take effect: ${JSON.stringify(proxy)}`);
+  // Baseline at the same frozen state and camera: fire volume hidden, splats
+  // hidden, the fire's scene lighting still present. Masks then isolate the
+  // fire body itself in each presentation.
+  await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: false })');
+  await settleViewportFrames(ws, 800);
+  const baselineShot = await capturePngScreenshot(ws, siblingPngPath('-fire-baseline'));
+  await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: true })');
+  await settleViewportFrames(ws, 800);
   const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-fire-proxy'));
-  const background = decodeScreenshotPngRgb(readFileSync(backgroundShot.path));
+  const baseline = decodeScreenshotPngRgb(readFileSync(baselineShot.path));
   const c = evidence.added.canvas, region = { x: c.x, y: c.y + 56, width: c.width, height: c.height - 56 - 120 };
-  const centerColumn = Math.floor(c.x + c.width / 2);
-  const luminance = y => { const i = (y * background.width + centerColumn) * background.channels; return background.pixels[i] + background.pixels[i + 1] + background.pixels[i + 2]; };
-  let horizon = null;
-  for (let y = Math.floor(region.y) + 3; y < Math.floor(region.y + region.height) - 3; y++) if (luminance(y - 3) - luminance(y + 3) > 60) { horizon = y; break; }
-  assert.ok(horizon !== null, 'could not find the horizon in the empty scene');
-  const above = { ...region, height: horizon - region.y };
-  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, above);
-  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, above);
-  const width = background.width, height = background.height, dilation = 10;
+  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), baseline, region);
+  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), baseline, region);
+  const width = baseline.width, height = baseline.height, dilation = 10;
   const fullNear = dilateMask(full.mask, width, height, dilation), proxyNear = dilateMask(proxied.mask, width, height, dilation);
   let proxyNearFire = 0, fireNearProxy = 0;
   for (let i = 0; i < full.mask.length; i++) { if (proxied.mask[i] && fullNear[i]) proxyNearFire++; if (full.mask[i] && proxyNear[i]) fireNearProxy++; }
-  evidence.masks = { region: above, horizon, dilation, full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox },
+  const regionPixels = Math.floor(region.width) * Math.floor(region.height);
+  evidence.masks = { region, dilation, regionPixels, full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox },
     locationPrecision: proxied.area ? proxyNearFire / proxied.area : 0, coverageRecall: full.area ? fireNearProxy / full.area : 0 };
-  check(full.area > 500 && proxied.area > 500, `fire not visible against the empty scene above the horizon: full ${full.area}, proxy ${proxied.area}`);
+  check(full.area > 500 && proxied.area > 500, `fire not visible against the baseline: full ${full.area}, proxy ${proxied.area}`);
+  check(full.area < 0.85 * regionPixels && proxied.area < 0.85 * regionPixels, `fire mask covers nearly the whole region, so registration would be trivial: full ${full.area}, proxy ${proxied.area} of ${regionPixels}`);
   check(evidence.masks.locationPrecision >= 0.6, `fire splats drawn away from the fire volume (location precision ${evidence.masks.locationPrecision.toFixed(3)})`);
   check(evidence.masks.coverageRecall >= 0.5, `fire splats cover too little of the fire volume (coverage recall ${evidence.masks.coverageRecall.toFixed(3)})`);
   phase = 'scenario-fire-proxy-splats-live';
@@ -717,7 +730,7 @@ async function runFireProxySplatsScenario(ws) {
   await settleViewportFrames(ws, 800);
   const restored = evidence.restored = await readFire();
   check(restored.display === 'full' && restored.canvasVisibility === '' && restored.layer?.visible === false && restored.attached === false, `fire did not return to the full render cleanly: ${JSON.stringify(restored)}`);
-  evidence.shots = [backgroundShot, fullShot, proxyShot, liveShot];
+  evidence.shots = [backgroundShot, fullShot, baselineShot, proxyShot, liveShot];
   assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
 
