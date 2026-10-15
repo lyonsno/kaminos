@@ -18,8 +18,8 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  const setup=el('details'),setupBody=el('div');setup.append(el('summary','Save / open creature'),setupBody);properties.append(setup,error);
  const saveButton=el('button','Save creature setup');saveButton.type='button';saveButton.onclick=()=>save(read().recipe);setupBody.append(saveButton);
  const fileLabel=el('label','Open creature setup'),file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','Open creature setup');fileLabel.append(file);setupBody.append(fileLabel);
- let disposed=false,lastVariants='';
- const call=async(name,input)=>{if(disposed)return;try{error.textContent='';await invoke(name,input);}catch(e){if(!disposed)error.textContent=e.message;}finally{if(!disposed)update();}};
+ let disposed=false,lastVariants='',request=0;
+ const call=async(name,input)=>{if(disposed)return;const current=++request;try{error.textContent='';const pending=invoke(name,input);update();await pending;}catch(e){if(!disposed&&current===request)error.textContent=e.message;}finally{if(!disposed)update();}};
  cast.onchange=()=>{const current=read().currentSkin.current,variants=skins.filter(c=>c.cast===cast.value),choice=variants.find(c=>c.attachment===current.attachment)??variants.find(c=>c.attachment==='distributed')??variants[0];return call('skin',{cast:choice.cast,attachment:choice.attachment});};
  attachment.onchange=()=>call('skin',{cast:read().currentSkin.current.cast,attachment:attachment.value});
  motion.onchange=()=>call('motion',{id:motion.value});mode.onchange=()=>call('mode',{mode:mode.value});

@@ -3,6 +3,7 @@ import {readFileSync,writeFileSync,mkdirSync,realpathSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
+import * as THREE from '../lib/three.core.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
 export function validateCreatureControlRead(r,setup){
  assert.equal(r.host.route,'shared-owner-scene');assert.equal(r.host.scene.rendererBackend,'webgpu');
@@ -21,6 +22,14 @@ export function validateCreatureDisplayRead(r,{helpers=true,bones=true,paths=fal
  assert.ok(r.pathGuide.points>=2);if(mode==='path'){assert.equal(r.pathGuide.kind,'complete-circular-rail');assert.equal(r.pathGuide.points,129);}
  if(motionId!==undefined)assert.equal(r.motion?.id,motionId,'Effective motion differs from requested switch');
  if(minimumCycle!==undefined)assert.ok(r.cycle>=minimumCycle,'Requested repeat cycle has not completed');
+}
+export function validateCreatureFrameRead(r,camera){
+ assert.ok(r.vertices?.length>=6&&r.vertices.every(Number.isFinite));assert.equal(r.rootMatrix?.length,16);
+ const box=new THREE.Box3().setFromArray(r.vertices).applyMatrix4(new THREE.Matrix4().fromArray(r.rootMatrix)),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());
+ const expectedDistance=size.length()/2*Math.sqrt(1+Math.max(camera.projectionMatrix[0],camera.projectionMatrix[5])**2)*1.12;
+ assert.ok(new THREE.Vector3().fromArray(camera.target).distanceTo(center)<1e-5,'Frame target is not the current body center');
+ const actualDistance=new THREE.Vector3().fromArray(camera.position).distanceTo(center);assert.ok(Math.abs(actualDistance-expectedDistance)<1e-5,'Frame distance includes empty travel or helper bounds');
+ return {bodyCenter:center.toArray(),bodySize:size.toArray(),expectedDistance,actualDistance,camera};
 }
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});
@@ -83,6 +92,9 @@ export async function witness(args){
     const enabled=document.getElementById('rim-enabled');enabled.checked=true;enabled.dispatchEvent(new Event('change',{bubbles:true}));window.kaminosViewportSettings.set({helpers:false});return {requested:values,effective:window.kaminosSceneLightState()};
    });report.shadowRead=await read();validateCreatureDisplayRead(report.shadowRead,{helpers:false,bones:false,paths:true,mode:'source'});assert.equal(report.shadowRead.referenceFloor.visible,true);await capture('shadow-start');
    await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:20}));await page.getByRole('button',{name:'Frame',exact:true}).click();await capture('shadow-frame20');
+   report.phase='travelled-frame';await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('seek',{frame:259}));
+   const travelled=await read({geometry:true});assert.equal(travelled.playback.frame,259);report.travelledFrames=[];
+   for(const helpers of [true,false]){await page.evaluate(helpers=>window.kaminosViewportSettings.set({helpers,paths:true}),helpers);await page.getByRole('button',{name:'Frame',exact:true}).click();const camera=await page.evaluate(()=>window.kaminosCameraDebugState());report.travelledFrames.push({helpers,frame:259,...validateCreatureFrameRead(travelled,camera)});await capture('travelled-frame-'+(helpers?'path-visible':'path-hidden'));}
   }
   report.phase='close';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.equal(await page.locator('.scene-owner-playback').count(),0);assert.equal(await page.locator('.creature-properties').count(),0);
   assert.deepEqual(report.errors,[]);report.status='complete';report.phase='complete';

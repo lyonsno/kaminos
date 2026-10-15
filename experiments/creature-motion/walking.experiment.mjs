@@ -46,7 +46,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
  const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
  let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs};
- const placement=new THREE.Group();placement.name='Creature · authored placement';
+ const placement=new THREE.Group();placement.name='Creature · authored placement';placement.userData.kaminosFrameContentOnly=true;
  if(inputs.transform!==undefined){
   const t=inputs.transform;
   checkAuthoredTransform(t);

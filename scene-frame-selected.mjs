@@ -28,8 +28,11 @@ export function frameObjects(objects,camera,controls) {
   for(const object of objects) {
     if(!object?.visible)continue;
     object.updateWorldMatrix(true,true);
-    box.union(sceneContentBounds(object));
-    box.expandByPoint(object.getWorldPosition(new THREE.Vector3()));
+    const content=sceneContentBounds(object);
+    box.union(content);
+    // Ordinary authored objects keep their editable pivot in view. Animated
+    // placement owners may explicitly frame current content instead of origin.
+    if(content.isEmpty()||object.userData.kaminosFrameContentOnly!==true)box.expandByPoint(object.getWorldPosition(new THREE.Vector3()));
   }
   if(box.isEmpty())return false;
   return frameBox(box,camera,controls);
