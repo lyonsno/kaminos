@@ -40,3 +40,28 @@ test('over-limit options stay selectable and recover when another dimension chan
   assert.equal(large.dataset.gridAdmission,'unchecked');
   assert.equal(large.disabled,false);
 });
+test('authored inspector receives later admission changes without losing its active selection',()=>{
+  const text=readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+  const start=text.indexOf('      function syncField(force=false) {');
+  const end=text.indexOf("      if(id==='emitter-assay-family')field.title",start);
+  const source={value:'32',options:[32,160].map(value=>({value:String(value),style:{},dataset:{}}))};
+  const field={value:'160',options:source.options.map(o=>({...o,style:{},dataset:{}}))};
+  const id='volume-resolution',document={activeElement:field};
+  const readControlBounds=()=>null,flameControlDisplayValue=(_id,value)=>value;
+  const syncField=eval('('+text.slice(start,end).trim()+')');
+  syncVolumeGridOptions(source,preview(null),2);syncField();
+  assert.equal(field.options[1].dataset.gridAdmission,'unchecked');
+  const checked=preview({limits:{maxStorageBufferBindingSize:268435456,maxBufferSize:268435456,maxTextureDimension3D:2048}});
+  syncVolumeGridOptions(source,checked,2);syncField();
+  assert.equal(field.value,'160');
+  assert.equal(field.options[1].dataset.gridAdmission,'refused');
+  assert.equal(field.options[1].style.color,'#777');
+  assert.equal(field.options[1].disabled,false);
+  assert.match(field.options[1].textContent,/exceeds GPU limits/);
+  assert.match(field.options[1].title,/storage-binding/);
+  syncVolumeGridOptions(source,checked,1);syncField();
+  assert.equal(field.options[1].dataset.gridAdmission,'within-limits');
+  assert.equal(field.options[1].style.color,'');
+  assert.equal(field.options[1].textContent,'160');
+  syncField(true);assert.equal(field.value,'32');
+});
