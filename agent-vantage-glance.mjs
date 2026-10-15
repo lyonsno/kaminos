@@ -12,11 +12,21 @@ export const GLANCE_OMITS = Object.freeze(['the fire and smoke volume', 'water d
 export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = () => () => {}, cameraLayers = () => null}) {
   let output = null;
   const outputStage = () => output ??= (() => {
-    const source = TSL.texture(new THREE.Texture());
+    const source = TSL.texture(new THREE.Texture()), finish = TSL.renderOutput(source);
     const material = new THREE.MeshBasicNodeMaterial();
-    material.colorNode = TSL.renderOutput(source);
-    return {source, quad: new THREE.QuadMesh(material)};
+    material.colorNode = finish;
+    return {source, finish, material, quad: new THREE.QuadMesh(material)};
   })();
+  // Drawing into a target, the output stage would take its tone mapping and
+  // colour space from the target, which has neither, so it is given the
+  // page's own, as they stand at each glance.
+  const matchPage = stage => {
+    if (stage.finish.toneMapping !== renderer.toneMapping || stage.finish.outputColorSpace !== renderer.outputColorSpace) {
+      stage.finish.toneMapping = renderer.toneMapping;
+      stage.finish.outputColorSpace = renderer.outputColorSpace;
+      stage.material.needsUpdate = true;
+    }
+  };
 
   // Draw the view from `optics` at width×height, with editor drawing and the
   // `hide` entries left out. The drawing happens in this call; `ready` resolves
@@ -25,7 +35,8 @@ export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = (
     const camera = cameraFromOptics({THREE, renderer, optics, layers: cameraLayers()});
     const hdr = new THREE.RenderTarget(width, height, {type: THREE.HalfFloatType, depthBuffer: true});
     const picture = new THREE.RenderTarget(width, height, {type: THREE.UnsignedByteType, colorSpace: THREE.NoColorSpace, depthBuffer: false});
-    const {source, quad} = outputStage();
+    const stage = outputStage(), {source, quad} = stage;
+    matchPage(stage);
     const saved = {target: renderer.getRenderTarget(), mrt: renderer.getMRT(), autoClear: renderer.autoClear};
     const restoreScene = hideEditorObjects({hide});
     let ready;

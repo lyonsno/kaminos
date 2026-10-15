@@ -1370,3 +1370,24 @@ test('a page that cannot draw a second view refuses a glance', async () => {
   const {pilot} = await launched();
   await assert.rejects(() => pilot.run('glance', {}), error => error.phase === 'glance');
 });
+
+test('a glance finishes its picture with the page\'s own tone mapping and colour space, as they stand', async () => {
+  const W = await import('../lib/three.webgpu.js');
+  const {createGlance} = await import('../agent-vantage-glance.mjs');
+  const finishes = [];
+  const renderer = {coordinateSystem: W.WebGPUCoordinateSystem, reversedDepthBuffer: false, autoClear: false, toneMapping: W.AgXToneMapping, outputColorSpace: W.SRGBColorSpace,
+    getRenderTarget: () => null, setRenderTarget() {}, getMRT: () => null, setMRT() {}, render() {},
+    async readRenderTargetPixelsAsync(target, x, y, w, h) { return new Uint8Array(Math.ceil(w * 4 / 256) * 256 * (h - 1) + w * 4); }};
+  const glance = createGlance({THREE: W, TSL: W.TSL, renderer, scene: new W.Scene()});
+  const source = new W.PerspectiveCamera(50, 1, 0.1, 100); source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
+  const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), coordinateSystem: W.WebGPUCoordinateSystem};
+  const QuadRender = W.QuadMesh.prototype.render;
+  W.QuadMesh.prototype.render = function () { finishes.push([this.material.colorNode.toneMapping, this.material.colorNode.outputColorSpace]); };
+  try {
+    await glance.draw({optics, width: 4, height: 4}).ready;
+    renderer.toneMapping = W.ACESFilmicToneMapping;
+    await glance.draw({optics, width: 4, height: 4}).ready;
+  } finally { W.QuadMesh.prototype.render = QuadRender; }
+  assert.deepEqual(finishes, [[W.AgXToneMapping, W.SRGBColorSpace], [W.ACESFilmicToneMapping, W.SRGBColorSpace]],
+    'drawn into a target, the output stage would otherwise apply neither');
+});
