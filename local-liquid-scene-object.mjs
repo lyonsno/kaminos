@@ -76,6 +76,8 @@ export function createLocalLiquidEmitterObject(THREE, input) {
     const preview=new THREE.Mesh(new THREE.BoxGeometry(record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width),new THREE.MeshStandardMaterial({color:0x68d4e3,transparent:true,opacity:.32,roughness:.3,metalness:0,depthWrite:false}));
     preview.name='Initial water preview';preview.userData.kaminosWaterPreview=true;
     object.add(preview);
+    const guide=new THREE.Mesh(new THREE.BoxGeometry(record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width),new THREE.MeshBasicMaterial({color:0xe4bd76,wireframe:true,transparent:true,opacity:.7,depthWrite:false}));
+    guide.name='Water initial volume';guide.userData.kaminosWaterSourceGuide=true;guide.visible=false;object.add(guide);
     object.userData.kaminosSceneObject={...record,localLiquidEmitter:clone(record.localLiquidEmitter)};
     return {object,record};
   }

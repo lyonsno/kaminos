@@ -1650,6 +1650,64 @@ async function runAuthoredWaterDropScenario(ws) {
   })()`);
 }
 
+async function runAuthoredWaterObjectsScenario(ws) {
+  await runAuthoredWaterDropScenario(ws);
+  phase='authored-water-second-object';
+  const first=lastEvidence.authoredWater.id;
+  lastEvidence.waterObjects=await evaluate(ws,`(async()=>{
+    const first=${JSON.stringify(first)},api=window.kaminosWaterSources;
+    window.kaminosSetSceneObjectTransform(first,{position:[.3,1,0],scale:[1.2,1.2,1.2]});
+    const firstSettings=api.read().selected.settings;
+    await document.querySelector('#tab-finger-fluid-bench [data-add]').onclick();
+    const added=api.read().selected;
+    if(!added||added.id===first||JSON.stringify(added.settings)!==JSON.stringify(firstSettings))throw Error('Add another did not retain the edited water settings');
+    if(document.querySelector('[data-scene-field-id="water-field"]'))throw Error('Finite water objects still appear beneath a simulation field row');
+    if(document.getElementById('selected-water-properties').hidden||document.getElementById('selected-water-simulation-properties').hidden)throw Error('Selected water is missing its contextual properties');
+    const duplicate=document.getElementById('object-duplicate');if(duplicate.disabled)throw Error('Ordinary Duplicate is disabled for water');
+    duplicate.click();
+    return {first,second:added.id,duplicate:api.read().selected?.id,settings:firstSettings};
+  })()`);
+  await wsRequest(ws,'Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+  await wsRequest(ws,'Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+  await delay(400);
+  const objects=lastEvidence.waterObjects;
+  objects.placed=await evaluate(ws,`(()=>{
+    const id=${JSON.stringify(objects.duplicate)};
+    if(!id||id===${JSON.stringify(objects.second)})throw Error('Duplicate did not create a third water object');
+    window.kaminosSetSceneObjectTransform(id,{position:[-1,1,1.1]});
+    window.kaminosSetCameraDebugPose({position:[4,3.5,5],target:[0,.8,0]});
+    return {water:window.kaminosWaterSources.read(),scene:window.kaminosSceneObjectDebugState()};
+  })()`);
+  assert.equal(objects.placed.water.sources.length,3);
+  await capturePngScreenshot(ws,siblingPngPath('-three-previews'));
+  phase='authored-water-multiple-release';
+  objects.released=await evaluate(ws,`(async()=>{
+    const api=window.kaminosWaterSources,run=document.querySelector('#tab-finger-fluid-bench .authored-water-controls');
+    await run.querySelector('[data-release]').onclick();window.kaminosPauseLocalLiquid(true);
+    if(run.querySelector('[data-run-error]').textContent)throw Error(run.querySelector('[data-run-error]').textContent);
+    const state=api.read();if(state.runtime?.particleCount!==41472)throw Error('All three accepted drops were not allocated');
+    await api.advanceTo(12);
+    return {water:api.read(),host:window.kaminosLocalLiquidState(),scene:window.kaminosSceneObjectDebugState(),saved:await window.saveSceneAs({name:'hotwet-water-objects-'+${JSON.stringify(port)},result:true})};
+  })()`,{timeoutMs:90000});
+  assert.equal(objects.released.water.runtime.particleCount,41472);
+  assert.equal(objects.released.host.emitters.length,3);
+  assert.equal(objects.released.host.solver.particleCount,41472);
+  assert.equal(objects.released.host.solver.solver_backend,'webgpu_compute');
+  assert.equal(objects.released.host.failure,null);
+  assert.equal(objects.released.host.lastFrame.presentedByHost,true);
+  await capturePngScreenshot(ws,siblingPngPath('-three-released'));
+  const files=await evaluate(ws,`fetch('/api/browse?root=scenes&path=').then(r=>r.json()).then(r=>r.entries.map(e=>e.name).filter(n=>n.includes('hotwet-water-objects-'+${JSON.stringify(port)})&&n.endsWith('.json')))`);
+  assert.equal(files.length,1);objects.savedFile=files[0];
+  const doc=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
+  phase='authored-water-multiple-reopen';
+  await wsRequest(ws,'Page.navigate',{url:compositionRestoreUrl(doc.composition,files[0],new URL(url).origin,'workbench')});
+  for(let i=0;i<240;i++){
+    await delay(125);try{const state=await evaluate(ws,'window.kaminosWaterSources?.read()');if(state?.sources.length===3&&!state.runtime){objects.reopened=state;break;}}catch{}
+  }
+  assert.ok(objects.reopened,'Fresh reopen must retain three independently editable initial water objects');
+  assert.equal(objects.reopened.simulation.particleCount,41472);
+}
+
 async function runLocalLiquidLiveHostScenario(ws) {
   phase = 'scenario-local-liquid-live-host';
   const first = await evaluate(ws, `
@@ -6068,7 +6126,7 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  if(scenario==='authored-water-drop'&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
+  if(['authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
   else assertExpectedServerRoot(effectiveServerRoots);
 
   if (scenario === 'startup-empty') {
@@ -6119,6 +6177,8 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'local-liquid-performance') {
     await runLocalLiquidPerformanceScenario(ws);
+  } else if (scenario === 'authored-water-objects') {
+    await runAuthoredWaterObjectsScenario(ws);
   } else if (scenario === 'authored-water-drop') {
     await runAuthoredWaterDropScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
