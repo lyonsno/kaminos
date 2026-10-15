@@ -10,7 +10,10 @@ function labelSprite(document,text){
  const canvas=document.createElement('canvas');canvas.width=768;canvas.height=112;
  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Comparison label canvas unavailable');
  ctx.fillStyle='rgba(12,17,23,.88)';ctx.fillRect(0,0,768,112);ctx.font='bold 38px system-ui';ctx.fillStyle='#ffffff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,384,56);
- const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:false}));sprite.scale.set(3.3,.48,1);sprite.renderOrder=101;return sprite;
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas),depthTest:false}));
+ // Sprite normally borrows one global geometry. A removable owned scene tree
+ // must not dispose that buffer while the other five labels still draw it.
+ sprite.geometry=sprite.geometry.clone();sprite.scale.set(3.3,.48,1);sprite.renderOrder=101;return sprite;
 }
 
 export async function loadComparisonRecipe(input,{fetchImpl=globalThis.fetch}={}){

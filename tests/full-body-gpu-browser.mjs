@@ -27,7 +27,9 @@ try{
    runtime.mesh.raycast(new THREE.Raycaster(center.clone().addScaledVector(normal,2),normal.clone().negate()),hits);
    results.push({angle,gpu:{positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),packedPositions:Array.from(gpu.packedPositions),packedNormals:Array.from(gpu.packedNormals),layout:gpu.layout},cpu:{positions:Array.from(p.array),normals:Array.from(cpu.attributes.normal.array)},picking:{hits:hits.length,expected:center.toArray(),actual:hits[0]?.point.toArray(),geometryRestored:runtime.mesh.geometry===visible},state:runtime.read()});
   }
-  second=createFullBodyRuntime({THREE,...data,deformerFactory:createGpuSkinDeformer});second.group.position.x=2;scene.add(second.group);renderer.render(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
+  second=createFullBodyRuntime({THREE,...data,deformerFactory:createGpuSkinDeformer});second.group.position.x=2;
+  for(const r of [runtime,second]){const label=new THREE.Sprite(new THREE.SpriteMaterial());label.geometry=label.geometry.clone();r.group.add(label);}
+  scene.add(second.group);renderer.render(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
   scene.remove(runtime.group);runtime.dispose();renderer.render(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
   if(gpuErrors.length)throw Error(gpuErrors.join('\n'));return {backend:'webgpu',results,gpuErrors,shaders,removedBodyDraws:second.read()};
   }finally{runtime.dispose();second?.dispose();renderer.dispose();}

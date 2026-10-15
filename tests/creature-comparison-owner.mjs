@@ -12,7 +12,7 @@ await assert.rejects(module.loadComparisonRecipe({recipe:'/caller/scene.json',re
 await assert.rejects(module.loadComparisonRecipe({entries:[],recipe:'/caller/scene.json',recipe_sha256:recipeHash},{fetchImpl:recipeFetch}),/one input/);
 const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
 const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[0,.2,0,0,.3,1,0,.2,2],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
-class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){this.removed=true;}}
+class Element{constructor(){this.children=[];this.style={};}getContext(){return {fillRect(){},fillText(){}};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){this.removed=true;}}
 const document={createElement:()=>new Element(),getElementById:()=>null};
 function fixture(){const scene=new THREE.Scene();let callback=null,closed=0,refreshes=0;
  const session={async attach(root){scene.add(root);return {id:root.uuid,root,owned:true};},onFrame(fn){assert.equal(callback,null,'comparison borrows one app clock, not six private clocks');callback=fn;return ()=>callback=null;},redraw(){},setView(){},readView:()=>({}),async dispose(){closed++;scene.clear();callback=null;}};
@@ -43,6 +43,10 @@ articulated.motion={frames:3,joints:2,skeleton:{fps:30,jointNames:['pelvis','lim
 const labelled=fixture(),labels=[];const annotated=await module.createCreatureComparison({host:labelled.host,inputs},{loadSources:async()=>structuredClone(articulated),makeLabel:()=>{const label=new THREE.Group();labels.push(label);return label;}});
 assert.ok(labels.every(label=>Math.abs(label.position.y-4.3)<1e-6),'labels must use current posed CPU bounds, never GPU output attributes containing the initial rest mirror');
 await annotated.dispose();
+const actualLabels=fixture(),labelledEntry=await module.createCreatureComparison({host:actualLabels.host,inputs},{loadSources:async()=>structuredClone(data)});
+const spriteGeometries=actualLabels.scene.children.map(root=>root.children.find(o=>o.isSprite).geometry);
+assert.equal(new Set(spriteGeometries).size,6,'each removable comparison body must own its label geometry; disposing one cannot retire a shared Sprite buffer');
+await labelledEntry.dispose();
 const bad=fixture();await assert.rejects(module.createCreatureComparison({host:bad.host,inputs},{loadSources:async source=>{throw Error('source digest mismatch');},makeLabel:()=>new THREE.Group()}),/digest mismatch/);assert.equal(bad.scene.children.length,0);assert.equal(bad.state().active,false);
 await assert.rejects(module.createCreatureComparison({host:bad.host,inputs:{...inputs,entries:[inputs.entries[0],inputs.entries[0]]}},{loadSources:async()=>data}),/unique/);
 assert.throws(()=>entry.operations.play(),/disposed/);
