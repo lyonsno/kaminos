@@ -180,3 +180,15 @@ test('arguments are checked before anything is sent', {timeout: 60000}, async ()
     assert.equal(result.code, 2, `${args.join(' ')} -> ${result.code} ${result.stderr}`);
   }
 });
+
+test('an agent registers itself and is listed among who can be addressed', {timeout: 60000}, async t => {
+  const {base} = await startServer(t);
+  const joined = await run(['--server', base, 'register', '--as', 'helper-agent', '--about', 'reads fluid notes']);
+  assert.equal(joined.code, 0, joined.stderr);
+  const listed = await run(['--server', base, 'participants']);
+  assert.equal(listed.code, 0, listed.stderr);
+  assert.ok(listed.stdout.includes('helper-agent') && listed.stdout.includes('reads fluid notes'), listed.stdout);
+  assert.ok(listed.stdout.includes('noah (person)'), listed.stdout);
+  const nameless = await run(['--server', base, 'register']);
+  assert.equal(nameless.code, 2, nameless.stderr);
+});

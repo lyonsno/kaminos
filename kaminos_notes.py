@@ -104,6 +104,7 @@ class NotesLog:
         self.root = Path(root).expanduser().resolve()
         (self.root / "pictures").mkdir(parents=True, exist_ok=True)
         (self.root / "listeners").mkdir(parents=True, exist_ok=True)
+        (self.root / "participants").mkdir(parents=True, exist_ok=True)
         self.path = self.root / "notes.jsonl"
         self.path.touch(exist_ok=True)
         self.lock_path = self.root / "notes.lock"
@@ -405,6 +406,69 @@ class NotesLog:
                 listeners.append(row)
         return {"listeners": listeners}
 
+    # --- who can be addressed ----------------------------------------------
+    def register(self, body, *, origin):
+        """An agent says who it is and what it does, so people can address it."""
+        if origin["via"] == "page":
+            raise NotesError(400, "request", "Agents register themselves with tools/notes.mjs register")
+        if not isinstance(body, dict) or set(body) - {"author", "about"}:
+            raise NotesError(400, "request", "A registration is {author, about}")
+        name = self._author(body, origin)
+        about = body.get("about") or ""
+        if not isinstance(about, str):
+            raise NotesError(400, "request", "about is text")
+        path = self.root / "participants" / f"{name}.json"
+        try:
+            previous = json.loads(path.read_text())
+        except (OSError, ValueError):
+            previous = {}
+        now = iso(self._clock())
+        record = {"name": name, "kind": "agent", "about": about.strip(), "registeredAt": previous.get("registeredAt") or now, "updatedAt": now}
+        partial = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.partial")
+        partial.write_text(json.dumps(record))
+        partial.replace(path)
+        return record
+
+    def participants(self, directory=()):
+        """Everyone a note could be addressed to: the page's person, agents that
+        registered, listened or wrote, and any names a `directory` supplies.
+        Only names that can actually receive a note belong here."""
+        people = {}
+
+        def add(name, source, **fields):
+            try:
+                name = checked_name(name, "Participant")
+            except NotesError:
+                return
+            row = people.setdefault(name, {"name": name, "kind": "agent", "about": "", "sources": [], "listening": False})
+            if source not in row["sources"]:
+                row["sources"].append(source)
+            row.update({key: value for key, value in fields.items() if value not in (None, "")})
+
+        add(self.page_author, "page")
+        for folder, source in (("participants", "registered"), ("listeners", "listened")):
+            for path in sorted((self.root / folder).glob("*.json")):
+                try:
+                    record = json.loads(path.read_text())
+                except (OSError, ValueError):
+                    continue
+                if source == "registered":
+                    add(record.get("name"), source, about=record.get("about"), kind=record.get("kind"))
+                else:
+                    add(record.get("name"), source, lastListened=iso(record["lastSeen"]) if record.get("lastSeen") else None)
+        with self._cond:
+            self._sync()
+            authors = sorted({event.get("author") for event in self._events if event.get("type") == "note" and event.get("author")})
+        for author in authors:
+            add(author, "wrote")
+        for name in directory or ():
+            add(name, "directory")
+        listening = {row["name"] for row in self.presence()["listeners"]}
+        for row in people.values():
+            row["listening"] = row["name"] in listening
+        people[self.page_author]["kind"] = "person"
+        return sorted(people.values(), key=lambda row: row["name"])
+
     def picture_path(self, note_id):
         note = self.note(note_id)
         if not note or not note.get("picture"):
@@ -417,8 +481,8 @@ class NotesHttp:
     """The /api/notes routes. They answer only this machine at the server's own
     address: local tools without an Origin, or this server's own pages."""
 
-    def __init__(self, log, *, source):
-        self.log, self.source = log, source
+    def __init__(self, log, *, source, directory=lambda: []):
+        self.log, self.source, self.directory = log, source, directory
         self._pages, self._lock = {}, threading.Lock()
 
     def handle(self, handler, method, path):
@@ -431,6 +495,8 @@ class NotesHttp:
             ("GET", "/api/notes/picture"): self.picture,
             ("POST", "/api/notes"): self.post,
             ("POST", "/api/notes/receipt"): self.receipt,
+            ("GET", "/api/notes/participants"): self.participants,
+            ("POST", "/api/notes/participants"): self.register,
         }
         route = routes.get((method, parsed.path))
         if route is None:
@@ -527,6 +593,20 @@ class NotesHttp:
     def receipt(self, handler, query):
         body = self._body(handler)
         self._json(handler, self.log.receipt(body, origin=self._origin(handler)))
+
+    def participants(self, handler, query):
+        try:
+            directory = list(self.directory() or [])
+        except Exception as error:  # a broken directory must not hide everyone else
+            directory, problem = [], f"directory unavailable: {error}"
+        else:
+            problem = None
+        self._json(handler, {"schema": NOTES_SCHEMA, "participants": self.log.participants(directory=directory),
+                             **({"directoryProblem": problem} if problem else {})})
+
+    def register(self, handler, query):
+        body = self._body(handler)
+        self._json(handler, self.log.register(body, origin=self._origin(handler)))
 
     def wait(self, handler, query):
         name = self._first(query, "as")

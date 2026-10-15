@@ -50,6 +50,7 @@ test('mentions in the text address the note too', () => {
 test('a note goes on the selected object and carries what the person saw', async () => {
   const {app, session} = fakePage({selected: {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'}});
   session.hello({author: 'noah', lastSeq: 0});
+  session.setParticipants([{name: 'water-agent', listening: false}]);
   const posted = await session.post({text: 'why is the rim clipped? @water-agent', to: '@sub-pilot'});
   const body = app.posted[0];
   assert.deepEqual(body.anchor, {kind: 'object', id: 'cube', label: 'Cube'});
@@ -157,4 +158,18 @@ test('the thread list shows this scene and anything involving you, open first', 
   assert.deepEqual(session.threads().map(item => item.id), [here.id, forYou.id]);
   app.scene = 'kiln.kaminos.json';
   assert.deepEqual(session.threads().map(item => item.id), [elsewhere.id, forYou.id]);
+});
+
+test('a mention of someone unknown stays text; the preview says who a note will reach', async () => {
+  const {app, session} = fakePage();
+  session.hello({author: 'noah', lastSeq: 0});
+  session.setParticipants([{name: 'notes-agent', listening: true}, {name: 'noah', kind: 'person'}, {name: 'idle-agent', listening: false}]);
+  assert.deepEqual(session.preview({text: '@notes-agent can we add @mentions? @idle-agent', to: ''}),
+    {recipients: ['notes-agent', 'idle-agent'], listening: ['notes-agent'], unknown: ['mentions']});
+  await session.post({text: '@notes-agent can we add @mentions?', attachPicture: false});
+  assert.deepEqual(app.posted[0].to, ['notes-agent']);
+  await session.post({text: 'for you', to: 'brand-new-agent', attachPicture: false});
+  assert.deepEqual(app.posted[1].to, ['brand-new-agent'], 'the To field addresses any name on purpose');
+  assert.deepEqual(session.suggestions('not').map(person => person.name), ['notes-agent']);
+  assert.ok(!session.suggestions('').some(person => person.name === 'noah'), 'you are not suggested to yourself');
 });

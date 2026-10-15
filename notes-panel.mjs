@@ -2,10 +2,10 @@
 // agent by name, and read the answers where you are looking. The session
 // (createNotesSession) is separate from the DOM (installNotes) so it can be
 // tested without a browser. See docs/notes.md.
-import {checkedPost, foldNotes, formatRef, notesFor, parseAddressees} from './notes-core.mjs';
+import {addresseesIn, checkedPost, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
+  rankParticipants} from './notes-core.mjs';
 
-const MENTION = /(^|[\s(,;])@([a-z0-9][a-z0-9._-]{0,63})/gi;
-export const mentionsIn = text => [...new Set([...String(text ?? '').matchAll(MENTION)].map(match => match[2].toLowerCase()))];
+export {mentionsIn};
 
 const walk = (note, visit) => { visit(note); for (const reply of note.replies) walk(reply, visit); };
 const latestSeq = note => { let seq = note.seq; walk(note, item => { seq = Math.max(seq, item.seq); }); return seq; };
@@ -14,6 +14,11 @@ const involves = (note, name) => { let found = false; walk(note, item => { if (i
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
   href = () => '', title = () => ''}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
+  let participants = [];
+  const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
+    ...participants.filter(person => person.listening).map(person => person.name)]);
+  // Who a note reaches: names in the To field, and @mentions of people known here.
+  const addressees = (text, to) => [...new Set([...parseAddressees(to), ...addresseesIn(text, participants.map(person => person.name)).recognized])];
   const known = new Set(), subscribers = new Set();
   const changed = () => { for (const subscriber of subscribers) subscriber(); };
   const entryOf = id => entries().find(entry => entry.id === id) ?? null;
@@ -46,7 +51,7 @@ export function createNotesSession({transport, selection, entries, readView, wri
     const context = {view: readView(), selection: {ids: selectedIds(), activeId: current.activeId ?? null}, page: {href: href(), title: title()}};
     const shot = attachPicture ? await picture() : {};
     if (shot.issue) context.pictureIssue = shot.issue;
-    const content = checkedPost({kind, text, to: [...new Set([...parseAddressees(to), ...mentionsIn(text)])], parent,
+    const content = checkedPost({kind, text, to: addressees(text, to), parent,
       anchor: parent ? undefined : anchorFromSelection(), subject: {scene: sceneFile() || null}, context, picture: shot.picture ?? null});
     return transport.post(content);
   }
@@ -82,6 +87,22 @@ export function createNotesSession({transport, selection, entries, readView, wri
       return notices;
     },
     setPresence(next) { presence = next; changed(); },
+    setParticipants(list) { participants = Array.isArray(list) ? list : []; changed(); },
+    get participants() { return participants; },
+    // Who a note being written would reach, and which @words reach no one.
+    preview({text = '', to = ''} = {}) {
+      let explicit = [];
+      try { explicit = parseAddressees(to); } catch { explicit = []; }
+      const {recognized, unknown} = addresseesIn(text, participants.map(person => person.name));
+      const recipients = [...new Set([...explicit, ...recognized])].filter(name => name !== author);
+      const listening = listeningNow();
+      return {recipients, listening: recipients.filter(name => listening.has(name)), unknown};
+    },
+    suggestions(query) {
+      const listening = listeningNow();
+      return rankParticipants(participants.filter(person => person.name !== author)
+        .map(person => ({...person, listening: listening.has(person.name)})), query);
+    },
     unread() { return author ? notesFor(folded, author, {unseen: true}) : []; },
     threads() {
       const scene = sceneFile() || null;
@@ -156,6 +177,14 @@ const STYLE = `
 .kn-pins{position:absolute;inset:0;overflow:hidden}
 .kn-pin{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;min-width:18px;height:18px;padding:0 5px;border:1px solid #5fd3c8;border-radius:9px 9px 9px 2px;background:rgba(16,20,22,.92);color:#bff3e4;font-size:10px;line-height:16px;cursor:pointer;box-shadow:0 2px 8px #000a}
 .kn-pin[data-unread="true"]{border-color:#f0d28a;color:#f0d28a}
+.kn-reach{font-size:10px;color:#8fa3a8;min-height:12px;line-height:1.35}
+.kn-reach[data-unknown="true"]{color:#f0d28a}
+.kn-suggest{position:absolute;z-index:5;max-height:200px;overflow-y:auto;box-sizing:border-box;background:#151a1c;border:1px solid #3e7f73;border-radius:6px;box-shadow:0 8px 22px #000c;padding:3px 0}
+.kn-suggest[hidden]{display:none}
+.kn-suggest-item{padding:4px 8px;font-size:11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kn-suggest-item b{color:#bff3e4;font-weight:600}
+.kn-suggest-item[aria-selected="true"]{background:#1d3a35}
+.kn-suggest-about{color:#8fa3a8}
 .kn-toasts{position:absolute;top:52px;left:12px;max-width:max(220px,calc(100% - 430px));display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .kn-toast{pointer-events:auto;max-width:100%;box-sizing:border-box;padding:8px 12px;border:1px solid #f0d28a;border-radius:6px;background:rgba(16,20,22,.97);color:#f3e2b3;cursor:pointer;box-shadow:0 6px 22px #000b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 `;
@@ -236,15 +265,14 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   head.append(element(document, 'strong', '', 'Notes'), listening, close);
   const compose = element(document, 'div', 'kn-compose');
   const anchorLine = element(document, 'div', 'kn-anchor');
-  const to = element(document, 'input');
-  to.placeholder = 'To: @name (agents listening are named above)';
-  to.setAttribute('aria-label', 'Address to');
-  to.setAttribute('list', `kn-names-${pageId}`);
-  const names = element(document, 'datalist');
-  names.id = `kn-names-${pageId}`;
   const text = element(document, 'textarea');
-  text.placeholder = 'Say what you see. @name reaches an agent.';
+  text.placeholder = 'Say what you see. Type @ to reach an agent.';
   text.setAttribute('aria-label', 'Note');
+  const reach = element(document, 'div', 'kn-reach');
+  reach.setAttribute('aria-live', 'polite');
+  const to = element(document, 'input');
+  to.placeholder = 'Also to @name, even one not listed yet';
+  to.setAttribute('aria-label', 'Also address to');
   const row = element(document, 'div', 'kn-row');
   const attachLabel = element(document, 'label');
   const attach = element(document, 'input');
@@ -259,7 +287,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   row.append(attachLabel, refButton, postButton);
   const status = element(document, 'div', 'kn-status');
   status.setAttribute('role', 'status');
-  compose.append(anchorLine, to, names, text, row, status);
+  compose.append(anchorLine, text, reach, to, row, status);
   const threads = element(document, 'div', 'kn-threads');
   drawer.append(head, compose, threads);
   root.append(pins, toasts, toggle, drawer);
@@ -320,6 +348,109 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     return node;
   }
 
+  // @ suggestions in the note, reply and To fields: names known here, the ones
+  // listening now first. Arrows move, Tab or Enter completes, Escape closes.
+  const suggest = element(document, 'div', 'kn-suggest');
+  suggest.id = `kn-suggest-${pageId}`;
+  suggest.hidden = true;
+  suggest.setAttribute('role', 'listbox');
+  suggest.setAttribute('aria-label', 'People to mention');
+  drawer.append(suggest);
+  let suggesting = null;
+  const markSuggestion = () => {
+    [...suggest.children].forEach((item, index) => item.setAttribute('aria-selected', String(index === suggesting.index)));
+    suggest.children[suggesting.index]?.scrollIntoView({block: 'nearest'});
+    suggesting.field.setAttribute('aria-activedescendant', `${suggest.id}-${suggesting.index}`);
+  };
+  function hideSuggestions() {
+    suggest.hidden = true;
+    suggesting?.field.removeAttribute('aria-activedescendant');
+    suggesting = null;
+  }
+  function acceptSuggestion(index = suggesting?.index ?? 0) {
+    if (!suggesting) return;
+    const {field, items} = suggesting;
+    const done = completeMention(field.value, field.selectionStart, items[index].name);
+    hideSuggestions();
+    if (!done) return;
+    field.value = done.text;
+    field.focus();
+    field.setSelectionRange(done.caret, done.caret);
+    field.dispatchEvent(new window.Event('input', {bubbles: true}));
+    hideSuggestions();
+  }
+  function showSuggestions(field) {
+    const found = field.selectionStart === field.selectionEnd ? mentionQueryAt(field.value, field.selectionStart) : null;
+    const items = found ? session.suggestions(found.query) : [];
+    if (!items.length) { if (suggesting?.field === field) hideSuggestions(); return; }
+    const index = suggesting?.field === field ? Math.min(suggesting.index, items.length - 1) : 0;
+    suggesting = {field, items, index};
+    suggest.replaceChildren(...items.map((person, position) => {
+      const item = element(document, 'div', 'kn-suggest-item');
+      item.id = `${suggest.id}-${position}`;
+      item.setAttribute('role', 'option');
+      item.append(element(document, 'b', '', `@${person.name}`));
+      const tags = [person.listening ? 'listening' : '', person.kind === 'person' ? 'person' : '', person.about || ''].filter(Boolean).join(' \u00b7 ');
+      if (tags) item.append(element(document, 'span', 'kn-suggest-about', `  ${tags}`));
+      item.addEventListener('mousedown', event => { event.preventDefault(); acceptSuggestion(position); });
+      return item;
+    }));
+    suggest.hidden = false;
+    const box = field.getBoundingClientRect(), frame = drawer.getBoundingClientRect();
+    suggest.style.left = `${box.left - frame.left}px`;
+    suggest.style.width = `${box.width}px`;
+    const below = frame.bottom - box.bottom;
+    suggest.style.top = below > suggest.offsetHeight + 8 ? `${box.bottom - frame.top + 2}px` : `${box.top - frame.top - suggest.offsetHeight - 2}px`;
+    markSuggestion();
+  }
+  function attachMentions(field) {
+    field.setAttribute('aria-autocomplete', 'list');
+    field.setAttribute('aria-controls', suggest.id);
+    field.addEventListener('input', () => showSuggestions(field));
+    field.addEventListener('click', () => showSuggestions(field));
+    field.addEventListener('keyup', event => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) showSuggestions(field); });
+    field.addEventListener('blur', () => { if (suggesting?.field === field) hideSuggestions(); });
+    field.addEventListener('keydown', event => {
+      if (suggesting?.field !== field || suggest.hidden) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        suggesting.index = (suggesting.index + (event.key === 'ArrowDown' ? 1 : -1) + suggesting.items.length) % suggesting.items.length;
+        markSuggestion();
+      } else if (event.key === 'Tab' || (event.key === 'Enter' && !event.metaKey && !event.ctrlKey)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        acceptSuggestion();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        hideSuggestions();
+      }
+    });
+  }
+  const reachText = ({recipients, listening, unknown}, {reply = false} = {}) => {
+    const parts = [];
+    const named = recipients.map(name => `@${name}${listening.includes(name) ? ' (listening)' : ''}`).join(', ');
+    if (reply) parts.push(named ? `Goes to this conversation and ${named}` : '');
+    else parts.push(named ? `Reaches ${named}` : 'Reaches no one in particular: anyone reading this scene will see it');
+    if (unknown.length) parts.push(`${unknown.map(name => `@${name}`).join(', ')} ${unknown.length === 1 ? "isn't anyone known here, so it stays" : "aren't anyone known here, so they stay"} text`);
+    return parts.filter(Boolean).join(' \u00b7 ');
+  };
+  function updateReach() {
+    const preview = session.preview({text: text.value, to: to.value});
+    reach.textContent = text.value.trim() || to.value.trim() ? reachText(preview) : '';
+    reach.dataset.unknown = String(preview.unknown.length > 0);
+  }
+  attachMentions(text);
+  attachMentions(to);
+  text.addEventListener('input', updateReach);
+  to.addEventListener('input', updateReach);
+  let participantsTimer = 0;
+  const refreshParticipants = () => window.fetch(`${endpoint}/participants`, {cache: 'no-store'})
+    .then(response => response.ok ? response.json() : null)
+    .then(data => { if (data) session.setParticipants(data.participants ?? []); })
+    .catch(() => {});
+  const refreshParticipantsSoon = () => { window.clearTimeout(participantsTimer); participantsTimer = window.setTimeout(refreshParticipants, 400); };
+
   const latestNoteIn = note => { let latest = note; walk(note, item => { if (item.seq > latest.seq) latest = item; }); return latest; };
   const threadOf = id => session.state.notes.get(id) ?? null;
 
@@ -341,8 +472,15 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     box.dataset.replyFor = threadId;
     box.hidden = true;
     const reply = element(document, 'textarea');
-    reply.placeholder = 'Reply. @name brings someone else in.';
+    reply.placeholder = 'Reply. Type @ to bring someone else in.';
     reply.setAttribute('aria-label', 'Reply');
+    const replyReach = element(document, 'div', 'kn-reach');
+    attachMentions(reply);
+    reply.addEventListener('input', () => {
+      const preview = session.preview({text: reply.value});
+      replyReach.textContent = preview.recipients.length || preview.unknown.length ? reachText(preview, {reply: true}) : '';
+      replyReach.dataset.unknown = String(preview.unknown.length > 0);
+    });
     const replyRow = element(document, 'div', 'kn-row');
     const replyAttachLabel = element(document, 'label');
     const replyAttach = element(document, 'input');
@@ -360,6 +498,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
         // addressed to whoever the conversation was with.
         await session.post({text: reply.value, parent: latestNoteIn(thread).id, attachPicture: replyAttach.checked});
         reply.value = '';
+        replyReach.textContent = '';
         replyAttach.checked = false;
         box.hidden = true;
         say('Reply sent');
@@ -372,7 +511,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     send.addEventListener('click', submit);
     reply.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } });
     replyRow.append(replyAttachLabel, send);
-    box.append(reply, replyRow);
+    box.append(reply, replyReach, replyRow);
     card.append(on, body, actions, box);
     const entry = {card, on, body, actions, box, reply, signature: null};
     cards.set(threadId, entry);
@@ -440,19 +579,13 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     threads.scrollTop = scroll;
   }
 
-  let knownNames = '';
   function render() {
     const unread = session.unread().length;
     toggle.textContent = unread ? `Notes \u00b7 ${unread} new` : 'Notes';
     toggle.dataset.unread = String(unread);
     const waiting = listeningNames();
     listening.textContent = waiting.length ? `listening: ${waiting.join(', ')}` : 'no agent is listening right now';
-    const suggestions = [...new Set([...waiting, ...[...session.state.notes.values()].flatMap(note => [note.author, ...(note.recipients ?? [])])])]
-      .filter(name => name !== session.author);
-    if (suggestions.join(',') !== knownNames) {
-      knownNames = suggestions.join(',');
-      names.replaceChildren(...suggestions.map(name => { const option = element(document, 'option'); option.value = `@${name}`; return option; }));
-    }
+    updateReach();
     refreshAnchor();
     if (!drawer.hidden) renderThreads();
   }
@@ -461,6 +594,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     drawer.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (thread) focusThread = thread;
+    refreshParticipants();
     for (const entry of cards.values()) entry.signature = null;
     render();
     if (thread) {
@@ -480,6 +614,9 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     try {
       const note = await session.post({text: text.value, to: to.value, attachPicture: attach.checked});
       text.value = '';
+      to.value = '';
+      updateReach();
+      refreshParticipantsSoon();
       focusThread = note.id;
       const waiting = listeningNames();
       const reach = note.recipients.length
@@ -592,6 +729,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     const hello = JSON.parse(event.data);
     transport.token = hello.token;
     session.hello(hello);
+    refreshParticipants();
     if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
   });
   source.addEventListener('events', event => {
@@ -599,7 +737,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     for (const note of notices) toast(note);
     applyLink();
   });
-  source.addEventListener('presence', event => session.setPresence(JSON.parse(event.data)));
+  source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
   source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
   const unsubscribe = session.onChange(render);
   const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) refreshAnchor(); }, 500);
@@ -615,6 +753,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       unsubscribe();
       window.cancelAnimationFrame(frame);
       window.clearInterval(refreshOnSelection);
+      window.clearTimeout(participantsTimer);
       document.removeEventListener('keydown', onKey);
       root.remove();
     },
