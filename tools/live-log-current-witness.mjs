@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {checkRestoredLogSource} from './live-log-witness-contracts.mjs';
 const [origin,out]=process.argv.slice(2);
 if(!origin||!out)throw Error('Usage: live-log-current-witness.mjs <origin> <output>');
 await fs.mkdir(out,{recursive:true});
@@ -83,7 +84,8 @@ try {
     return (state?.registered&&info.startsWith('Scene loaded:'))||document.querySelector('#status.failed')||info.startsWith('Scene load failed');
   });
   report.restoredSource=await page.evaluate(()=>window.kaminosFlameEmitterState());
-  assert.equal(report.restoredSource.authoredPresent,true);assert.equal(report.restoredSource.emissionEnabled,false);
+  report.restoredObservation=await page.evaluate(()=>({source:window.kaminosFlameEmitterState(),experiment:window.kaminosWorkbenchExperiments?.state(),info:document.getElementById('info-bar')?.textContent}));
+  checkRestoredLogSource(report.restoredObservation);
   report.restoredEffectiveUrl=page.url();
   await page.screenshot({path:path.join(out,'restored.png')});
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';

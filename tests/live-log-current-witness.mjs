@@ -6,6 +6,17 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {checkRestoredLogSource} from '../tools/live-log-witness-contracts.mjs';
+
+test('restoration evidence rejects early registration, reenabled state and experiment masking',()=>{
+  const observed={source:{registered:true,authoredPresent:true,emissionEnabled:false},experiment:{id:null},info:'Scene loaded: 2 objects'};
+  assert.doesNotThrow(()=>checkRestoredLogSource(observed));
+  assert.throws(()=>checkRestoredLogSource({...observed,source:{...observed.source,registered:false}}),/registered/);
+  for(const emissionEnabled of [true,undefined])assert.throws(()=>checkRestoredLogSource({...observed,source:{...observed.source,emissionEnabled}}),/remain disabled/);
+  assert.throws(()=>checkRestoredLogSource({...observed,experiment:{id:'live-log-heat'}}),/mask/);
+  assert.throws(()=>checkRestoredLogSource({...observed,experiment:undefined}),/mask/);
+  assert.throws(()=>checkRestoredLogSource({...observed,info:'Loading'}),/finish loading/);
+});
 
 test('witness launch refusal leaves a durable failure and no implied browser/backend',async()=>{
   const out=await fs.mkdtemp(path.join(os.tmpdir(),'sinter-witness-refusal-'));
