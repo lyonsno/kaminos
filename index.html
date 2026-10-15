@@ -12038,9 +12038,10 @@ async function initScene() {
         const result = run();
         // Diagnostic switches (window.__kaminosForegroundFrameParts) for bisecting what this
         // wrapper does to model work on the shared device; all parts run by default.
-        const parts = foregroundFrameParts;
+        // Executed standalone by contract tests, so the switches are optional here.
+        const parts = typeof foregroundFrameParts === 'undefined' ? { sync: true, camera: true, light: true, render: true, calls: 0, resizes: 0 } : foregroundFrameParts;
         if (!sceneRenderedForVolume) {
-          if (parts.sync) { const before = renderer.getSize(new THREE.Vector2()); syncViewportRendererSize(); const after = renderer.getSize(new THREE.Vector2()); if (before.x !== after.x || before.y !== after.y) parts.resizes++; }
+          if (parts.sync) { const before = renderer.getSize?.(new THREE.Vector2()); syncViewportRendererSize(); const after = renderer.getSize?.(new THREE.Vector2()); if (before && after && (before.x !== after.x || before.y !== after.y)) parts.resizes++; }
           if (parts.camera) camera.updateMatrixWorld();
           if (parts.light) fireLightFieldPass?.update();
           if (parts.render) renderSceneFrame();
