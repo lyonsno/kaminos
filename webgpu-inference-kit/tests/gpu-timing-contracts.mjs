@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { createWebGpuInferenceRuntime } from '../src/index.js';
+import { createWebGpuInferenceRuntime, createWebGpuGpuTimer } from '../src/index.js';
 
 // Minimal GPU simulator: buffers have byte backing, query sets hold u64 nanoseconds, and submitted
 // command buffers replay their recorded commands in queue order. Each timed pass advances the clock by
@@ -202,3 +202,90 @@ console.log('gpu timing contracts passed');
 }
 
 console.log('gpu timing program contracts passed');
+
+// Reading a result does not make its physical timestamp pair eligible for immediate reuse.
+{
+  const sim = createSimulatedDevice();
+  const timer = createWebGpuGpuTimer({ device: sim.device, queue: sim.queue, options: { capacity: 4 } });
+  const writes = [];
+  for (let i = 0; i < 13; i++) {
+    const token = timer.begin();
+    assert.ok(token, 'settled epochs must permit further measurements');
+    writes.push(token.timestampWrites);
+    const encoder = sim.device.createCommandEncoder();
+    encoder.beginComputePass({ timestampWrites: token.timestampWrites }).end();
+    timer.encodeResolve(encoder, token);
+    sim.queue.submit([encoder.finish()]);
+    timer.markSubmitted(token);
+    await timer.settle();
+    assert.equal(token.ms, 1);
+  }
+  for (const querySet of sim.log.querySets) {
+    const indices = writes.filter(write => write.querySet === querySet).map(write => write.beginningOfPassWriteIndex);
+    assert.equal(new Set(indices).size, indices.length, 'physical query indices are single-use within a query set');
+  }
+  assert.equal(sim.log.querySets.length, 4, 'rollover creates one query set per full epoch, not per kernel');
+  assert.ok(sim.log.querySets.slice(0, -1).every(set => set.destroyed), 'old query sets retire before replacement');
+  timer.destroy();
+  assert.ok(sim.log.querySets.every(set => set.destroyed));
+}
+
+// Runtime rollover waits for outstanding timing maps rather than omitting kernels or growing a pool.
+{
+  const durations = Array.from({ length: 100 }, (_, i) => (i + 1) / 4);
+  const sim = createSimulatedDevice({ durationsMs: durations, lateTimingMaps: true });
+  const create = sim.device.createQuerySet.bind(sim.device);
+  let peakLive = 0;
+  sim.device.createQuerySet = descriptor => {
+    const set = create(descriptor);
+    peakLive = Math.max(peakLive, sim.log.querySets.filter(candidate => !candidate.destroyed).length);
+    return set;
+  };
+  const runtime = await runKernels(sim, durations.length, { gpuTiming: { capacity: 2 } });
+  await runtime.settleGpuTiming();
+  assert.deepEqual(runtime.profile.stages.map(stage => stage.gpuMs), durations);
+  assert.equal(runtime.profile.gpuTiming.untimedKernels, 0);
+  assert.equal(runtime.profile.gpuTiming.invalidKernels, 0);
+  assert.equal(peakLive, 1, 'at most one native query set is live');
+  runtime.dispose();
+}
+
+// A reserved but unsubmitted token prevents epoch retirement; abandonment never reuses its indices.
+{
+  const sim = createSimulatedDevice();
+  const timer = createWebGpuGpuTimer({ device: sim.device, queue: sim.queue, options: { capacity: 2 } });
+  const first = timer.begin();
+  const second = timer.begin();
+  await timer.prepare();
+  assert.equal(sim.log.querySets[0].destroyed, false, 'unsubmitted encoders still own their query set');
+  assert.equal(timer.begin(), null, 'full unsubmitted epoch cannot rotate');
+  timer.abandon(first);
+  timer.abandon(first);
+  assert.equal(timer.summary.pendingKernels, 1, 'abandonment is idempotent');
+  timer.abandon(second);
+  const next = timer.begin();
+  assert.notEqual(next.timestampWrites.querySet, first.timestampWrites.querySet);
+  assert.equal(sim.log.querySets[0].destroyed, true);
+  timer.abandon(next);
+  timer.destroy();
+  timer.destroy();
+  assert.throws(() => timer.begin(), /destroyed/);
+  assert.throws(() => timer.prepare(), /destroyed/);
+}
+
+// Disposal during a delayed rollover cannot resurrect a new native query set.
+{
+  const sim = createSimulatedDevice({ lateTimingMaps: true });
+  const timer = createWebGpuGpuTimer({ device: sim.device, queue: sim.queue, options: { capacity: 1 } });
+  const token = timer.begin();
+  const encoder = sim.device.createCommandEncoder();
+  encoder.beginComputePass({ timestampWrites: token.timestampWrites }).end();
+  timer.encodeResolve(encoder, token);
+  sim.queue.submit([encoder.finish()]);
+  timer.markSubmitted(token);
+  const pending = timer.prepare();
+  timer.destroy();
+  await pending;
+  assert.throws(() => timer.begin(), /destroyed/);
+  assert.equal(sim.log.querySets.length, 1);
+}
