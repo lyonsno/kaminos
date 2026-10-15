@@ -15,12 +15,14 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('shadow softness must be finite and nonnegative');
   validateShadowSampling(shadowSampling);
   const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
-  const points=createPointRegions(device,{count:pointCount});
-  const external=new THREE.ExternalTexture(points.texture);
-  external.image={width:pointCount,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
-  external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
-  const lights=Array.from({length:pointCount},(_,i)=>{
+  let points,external,lights,irradiance;
+  function buildPoints(count){
+  points=createPointRegions(device,{count,partition:count===2?'energy':'vertical'});
+  external=new THREE.ExternalTexture(points.texture);
+  external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
+  external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
+  lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
     const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
@@ -30,7 +32,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const direction=delta.div(distance2.sqrt().max(1e-6));
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility)};
   });
-  let irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
+  irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
+  }
+  function releasePoints(){for(const light of lights)light.shadow.dispose();delete renderer.backend.get(external).texture;external.dispose();points.destroy();}
+  buildPoints(pointCount);
   const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   let sourceTransform=validateSceneSourceTransform();
@@ -92,12 +97,22 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
     setShadowSampling(value){validateShadowSampling(value);for(const light of lights)light.shadow.setSampling(value);shadowSampling=value;status.shadowSampling=value;},
+    setPointCount(value){
+      if(![1,2].includes(value))throw Error('live surface point count must be 1 or 2');
+      if(disposed)throw Error('hybrid lighting disposed');
+      if(value===pointCount)return;
+      valid=false;releasePoints();buildPoints(value);pointCount=value;status.pointCount=value;status.status='awaiting-source';
+      // Material setup closes over the current irradiance graph. Mark all
+      // clones for recompilation so no draw retains the retired texture.
+      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+    },
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
     debugState(){return {...status,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(){if(!gather)throw new Error('hybrid not encoded');return gather.readback();},
+    readPointRegions(){if(!valid)throw Error('hybrid source not current');return points.readback();},
     dispose(){
       valid=false;disposed=true;prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
       for(const [mesh,row] of originals){
@@ -111,8 +126,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned)material.dispose();
       }
-      originals.clear();for(const light of lights)light.shadow.dispose();
-      delete renderer.backend.get(external).texture;external.dispose();points.destroy();gather?.destroy();
+      originals.clear();releasePoints();gather?.destroy();
     },
   };
 }
