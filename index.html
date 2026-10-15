@@ -3861,6 +3861,7 @@ import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
+import { installPolyEditMode } from './poly-edit-host.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -3969,6 +3970,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
+let polyEdit = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
 const authoringParameterTargets = new Map();
@@ -7042,7 +7044,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -7051,7 +7053,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -7104,7 +7106,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -10708,6 +10710,7 @@ window.removeSceneObject = function(id) {
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
+  if (polyEdit?.active()) return true;
   const target = e.target;
   const tagName = target?.tagName;
   if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
@@ -11788,7 +11791,7 @@ async function initScene() {
     write: applyAuthoredScenePose,
     object: id => id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
-    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
+    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
     busy: () => authoringBusy,
     viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
@@ -11878,6 +11881,13 @@ async function initScene() {
   window.kaminosSceneCameras=sceneCameras;
   const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
+  polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,
+    objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible?record.object:null;},
+    selectedId:()=>selectedSceneObjectEntry()?.id??null,
+    blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.()});
+  window.kaminosPolyEdit=polyEdit.api;
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
@@ -25903,7 +25913,7 @@ function installSceneConstruction() {
   document.getElementById('object-ungroup').onclick=()=>{try{window.kaminosSceneAuthoring.ungroup(activeSceneGroupId);}catch(error){setInfo(error.message);}};
   edits.subscribe(syncSceneDataInspector);
   document.addEventListener('keydown',event=>{
-    if(event.shiftKey&&event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest?.('input,textarea,select,[contenteditable=true]')){
+    if(!polyEdit?.active()&&event.shiftKey&&event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest?.('input,textarea,select,[contenteditable=true]')){
       event.preventDefault();try{duplicateSceneSelection(activeSceneObjectId||activeSceneGroupId,{interactive:true});}catch(error){setInfo(error.message);}
     }
   },true);
@@ -26079,7 +26089,7 @@ function installSelectionInput(){
   function beginBox(){if(vantageCaptureHeld){setInfo('The agent sub is taking a picture');return;}if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
   window.kaminosSelection.box=beginBox;window.kaminosSelection.boxing=()=>!!box;
   document.addEventListener('keydown',event=>{
-    if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
+    if(polyEdit?.active()||viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
     if(event.key.toLowerCase()==='b'){event.preventDefault();beginBox();}
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}

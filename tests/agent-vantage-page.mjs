@@ -559,7 +559,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
   document.createElement = tag => new FakeElement(tag);
   document.getElementById = id => (id === 'viewport' ? viewport : null);
   let selection = [];
-  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, vantageCaptureHeld: true, controls: {enabled: true},
+  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, vantageCaptureHeld: true, controls: {enabled: true},
     scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
     greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, setSceneSelection: ids => { selection = ids; },
@@ -587,7 +587,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
 
 test('click selection waits while a picture holds the viewport', () => {
   const calls = [];
-  const scope = {vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
+  const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
@@ -600,6 +600,12 @@ test('click selection waits while a picture holds the viewport', () => {
   scope.vantageCaptureHeld = false;
   fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
   assert.ok(calls.includes('object'), 'the same click picks once the picture is done');
+  calls.length = 0;
+  scope.polyEdit = {active: () => true};
+  fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
+  fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
+  fromIndexLive('handleViewportDoubleClick', scope)(event('dblclick'));
+  assert.deepEqual(calls, [], 'in Edit Mode a click picks components, never objects');
 });
 
 test('a picture waits for a touch gesture already moving the view', () => {

@@ -5,6 +5,10 @@
 //   KAMINOS_CHROME=<independent chrome> node tools/poly-witness.mjs --url <page> --out <dir> --steps <steps.json> [--experiment <id>]
 // Steps: {"invoke":["name",...args]} | {"capture":"name"} | {"read":"name"} | {"evaluate":"expression","name":"label"}
 // A read, invoke or evaluate step may carry "expect": a subset its result must match exactly.
+// Real input goes through the browser's input pipeline: {"key":"Tab"|{code,key,modifiers}},
+// {"click":{x,y}|{at:"name"},"modifiers"?}, {"drag":{from:[x,y]|"name",to:[x,y]|"name",button?}}.
+// An evaluate step with "name" keeps its result for later click or drag coordinates.
+// Modifiers: Alt 1, Ctrl 2, Meta 4, Shift 8. Pages that are not experiments pass --ready <expression>.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -88,7 +92,7 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const out = resolve(args.get('--out')), requestedUrl = args.get('--url');
-  const experiment = args.get('--experiment') ?? new URL(requestedUrl).searchParams.get('experiment');
+  const ready = args.get('--ready') ?? null, experiment = ready ? null : args.get('--experiment') ?? new URL(requestedUrl).searchParams.get('experiment');
   const port = Number(args.get('--debug-port') ?? 9400 + Math.floor(Math.random() * 400));
   const report = { schema: 'kaminos.poly-witness.v0', requestedUrl, experiment, startedAt: new Date().toISOString(), phase: 'reading-steps',
     browser: null, effectiveUrl: null, adapter: null, steps: [], captures: [], pageErrors: [], consoleErrors: [], failure: null };
@@ -133,29 +137,53 @@ async function main() {
     await request('Runtime.enable'); await request('Page.enable');
     await request('Page.navigate', { url: requestedUrl }, 60000);
 
-    report.phase = 'waiting-for-experiment';
+    report.phase = ready ? 'waiting-for-ready' : 'waiting-for-experiment';
     let state = null;
     for (let i = 0; i < 600; i++) {
-      state = await evaluate(`(()=>{const e=window.kaminosWorkbenchExperiments;if(!e)return null;try{return e.state();}catch(error){return {error:String(error)}}})()`).catch(() => null);
-      if (state?.id === experiment && state.status !== 'opening') break;
+      state = ready ? await evaluate(`(()=>{try{return !!(${ready})}catch{return false}})()`).catch(() => false)
+        : await evaluate(`(()=>{const e=window.kaminosWorkbenchExperiments;if(!e)return null;try{return e.state();}catch(error){return {error:String(error)}}})()`).catch(() => null);
+      if (ready ? state === true : state?.id === experiment && state.status !== 'opening') break;
       await delay(250);
     }
     report.effectiveUrl = await evaluate('location.href');
-    report.experimentState = state;
+    report.experimentState = ready ? { ready, met: state === true } : state;
     const addressMiss = addressMismatch(requestedUrl, report.effectiveUrl);
     if (addressMiss) throw new Error(`effective address differs from the requested one: ${addressMiss}`);
-    if (state?.id !== experiment) throw new Error(`experiment ${experiment} did not open; last state ${JSON.stringify(state)}`);
+    if (ready ? state !== true : state?.id !== experiment) throw new Error(ready ? `page never became ready: ${ready}` : `experiment ${experiment} did not open; last state ${JSON.stringify(state)}`);
     report.servedSource = await evaluate(`fetch('/api/workbench-experiments',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>j?.source??null).catch(()=>null)`);
     report.adapter = await evaluate(`(async()=>{const a=await navigator.gpu?.requestAdapter();return a?{vendor:a.info?.vendor,architecture:a.info?.architecture,description:a.info?.description}:null})()`);
     if (!report.adapter) throw new Error('page has no WebGPU adapter');
 
+    const named = new Map();
+    const point = at => { const p = typeof at === 'string' ? named.get(at) : Array.isArray(at) ? { x: at[0], y: at[1] } : at; if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) throw new Error(`no screen point for ${JSON.stringify(at)}`); return p; };
+    const mouse = (type, p, button, modifiers = 0, clickCount = 1) => request('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button, buttons: type === 'mouseReleased' ? 0 : { left: 1, middle: 4, right: 2 }[button], clickCount, modifiers });
+    // Headless Chrome hides the page on some keys (Escape, Delete), which stops animation frames.
+    // Show it again before waiting on frames, and fail loud if frames still do not come.
+    const settle = async () => {
+      if (await evaluate('document.visibilityState') !== 'visible') { await request('Page.bringToFront'); report.reshown = (report.reshown ?? 0) + 1; }
+      const outcome = await evaluate(`Promise.race([new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>r('settled'),120)))),new Promise(r=>setTimeout(()=>r('no-frames:'+document.visibilityState),5000))])`);
+      if (outcome !== 'settled') throw new Error(`page stopped drawing frames (${outcome})`);
+    };
     for (const [index, step] of steps.entries()) {
       report.phase = `step-${index}`;
       const record = { index, step };
       report.steps.push(record);
-      if (step.invoke) record.result = await evaluate(`window.kaminosWorkbenchExperiments.invoke(...${JSON.stringify(step.invoke)})`, 120000);
+      if (step.key) {
+        const k = typeof step.key === 'string' ? { key: step.key, code: step.key } : step.key, vk = { Tab: 9, Escape: 27, Delete: 46, Backspace: 8 }[k.key] ?? (k.code?.match(/^(Key|Digit)(.)$/)?.[2].toUpperCase().charCodeAt(0) ?? 0);
+        for (const type of ['rawKeyDown', 'keyUp']) await request('Input.dispatchKeyEvent', { type, key: k.key, code: k.code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers: k.modifiers ?? 0 });
+        if (step.settle !== false) await settle(); record.result = { delivered: true };
+      } else if (step.click) {
+        const p = point(step.click.at ?? step.click);
+        await mouse('mouseMoved', p, 'none', step.click.modifiers); await mouse('mousePressed', p, 'left', step.click.modifiers); await mouse('mouseReleased', p, 'left', step.click.modifiers);
+        await settle(); record.result = { clicked: p };
+      } else if (step.drag) {
+        const from = point(step.drag.from), to = point(step.drag.to), button = step.drag.button ?? 'left';
+        await mouse('mouseMoved', from, 'none'); await mouse('mousePressed', from, button);
+        for (let i = 1; i <= 8; i++) await mouse('mouseMoved', { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }, button);
+        await mouse('mouseReleased', to, button); await settle(); record.result = { dragged: { from, to, button } };
+      } else if (step.invoke) record.result = await evaluate(`window.kaminosWorkbenchExperiments.invoke(...${JSON.stringify(step.invoke)})`, 120000);
       else if (step.read) record.result = await evaluate('window.kaminosWorkbenchExperiments.read()', 120000);
-      else if (step.evaluate) record.result = await evaluate(step.evaluate, 120000);
+      else if (step.evaluate) { record.result = await evaluate(step.evaluate, 120000); if (step.name) named.set(step.name, record.result); }
       else if (step.capture) {
         await evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(r,250))))');
         const png = Buffer.from((await request('Page.captureScreenshot', { format: 'png', fromSurface: true })).data, 'base64');
