@@ -170,7 +170,10 @@ def participant_contracts(notes):
         assert set(rows["helper-agent"]["sources"]) == {"registered", "directory"}, rows["helper-agent"]
         assert "listened" in rows["listener-agent"]["sources"] and "wrote" in rows["writer-agent"]["sources"], rows
         assert rows["shop-agent"]["sources"] == ["directory"], rows["shop-agent"]
-        again = log.register({"author": "helper-agent", "about": "reads fluid and fire notes"}, origin=CLI)
+        again = log.register({"author": "helper-agent", "about": "reads fluid and fire notes", "avatar": "vantage-helper"}, origin=CLI)
+        assert again["avatar"] == "vantage-helper", again
+        assert {row["name"]: row for row in log.participants()}["helper-agent"]["avatar"] == "vantage-helper"
+        expect_error(notes, 400, "request", lambda: log.register({"author": "helper-agent", "avatar": "  "}, origin=CLI))
         assert again["about"] == "reads fluid and fire notes"
         expect_error(notes, 403, "reserved-author", lambda: log.register({"author": "noah"}, origin=CLI))
         expect_error(notes, 400, "request", lambda: log.register({"author": "helper-agent", "about": 5}, origin=CLI))

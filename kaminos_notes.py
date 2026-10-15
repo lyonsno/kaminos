@@ -411,12 +411,15 @@ class NotesLog:
         """An agent says who it is and what it does, so people can address it."""
         if origin["via"] == "page":
             raise NotesError(400, "request", "Agents register themselves with tools/notes.mjs register")
-        if not isinstance(body, dict) or set(body) - {"author", "about"}:
-            raise NotesError(400, "request", "A registration is {author, about}")
+        if not isinstance(body, dict) or set(body) - {"author", "about", "avatar"}:
+            raise NotesError(400, "request", "A registration is {author, about, avatar}")
         name = self._author(body, origin)
         about = body.get("about") or ""
         if not isinstance(about, str):
             raise NotesError(400, "request", "about is text")
+        avatar = body.get("avatar")
+        if avatar is not None and (not isinstance(avatar, str) or not avatar.strip()):
+            raise NotesError(400, "request", "avatar is the id of a scene object")
         path = self.root / "participants" / f"{name}.json"
         try:
             previous = json.loads(path.read_text())
@@ -424,6 +427,8 @@ class NotesLog:
             previous = {}
         now = iso(self._clock())
         record = {"name": name, "kind": "agent", "about": about.strip(), "registeredAt": previous.get("registeredAt") or now, "updatedAt": now}
+        if avatar is not None or previous.get("avatar"):
+            record["avatar"] = avatar.strip() if avatar is not None else previous["avatar"]
         partial = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.partial")
         partial.write_text(json.dumps(record))
         partial.replace(path)
@@ -453,7 +458,7 @@ class NotesLog:
                 except (OSError, ValueError):
                     continue
                 if source == "registered":
-                    add(record.get("name"), source, about=record.get("about"), kind=record.get("kind"))
+                    add(record.get("name"), source, about=record.get("about"), kind=record.get("kind"), avatar=record.get("avatar"))
                 else:
                     add(record.get("name"), source, lastListened=iso(record["lastSeen"]) if record.get("lastSeen") else None)
         with self._cond:

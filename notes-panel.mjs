@@ -8,11 +8,10 @@ import {addresseesIn, checkedPost, completeMention, foldNotes, formatRef, mentio
 export {mentionsIn};
 
 const walk = (note, visit) => { visit(note); for (const reply of note.replies) walk(reply, visit); };
-const latestSeq = note => { let seq = note.seq; walk(note, item => { seq = Math.max(seq, item.seq); }); return seq; };
 const involves = (note, name) => { let found = false; walk(note, item => { if (item.author === name || (item.recipients ?? []).includes(name)) found = true; }); return found; };
 
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
-  href = () => '', title = () => ''}) {
+  href = () => '', title = () => '', avatarOf = null}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
   let participants = [];
   const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
@@ -88,6 +87,19 @@ export function createNotesSession({transport, selection, entries, readView, wri
     },
     setPresence(next) { presence = next; changed(); },
     setParticipants(list) { participants = Array.isArray(list) ? list : []; changed(); },
+    // The scene object that stands for an agent: the avatar it registered, else
+    // what the vantage says, else the sub piloted under its name. Null when
+    // none of these is in the scene.
+    avatarFor(name) {
+      const registered = participants.find(person => person.name === name)?.avatar;
+      for (const id of [registered, avatarOf?.(name), `vantage-${name}`]) if (id && entryOf(id)) return id;
+      return null;
+    },
+    selectAvatar(name) {
+      const object = this.avatarFor(name);
+      if (object) select(object);
+      return {name, object};
+    },
     get participants() { return participants; },
     // Who a note being written would reach, and which @words reach no one.
     preview({text = '', to = ''} = {}) {
@@ -108,7 +120,7 @@ export function createNotesSession({transport, selection, entries, readView, wri
       const scene = sceneFile() || null;
       return folded.threads
         .filter(note => note.kind !== 'ref' && ((note.subject?.scene ?? null) === scene || (author && involves(note, author))))
-        .sort((a, b) => Number(a.resolved) - Number(b.resolved) || latestSeq(b) - latestSeq(a));
+        .sort((a, b) => a.seq - b.seq);
     },
     async markSeen(threadId) {
       const root = folded.notes.get(threadId);
@@ -145,7 +157,12 @@ const STYLE = `
 .kn-head strong{font-size:12px}
 .kn-listening{flex:1;min-width:0;color:#8fa3a8;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kn-close{border:0;background:none;color:#8fa3a8;cursor:pointer;font-size:14px}
-.kn-compose{display:flex;flex-direction:column;gap:6px;padding:10px;border-bottom:1px solid #2a3033}
+.kn-compose{display:flex;flex-direction:column;gap:6px;padding:10px;border-top:1px solid #2a3033}
+.kn-name{border:0;background:none;padding:0;font:inherit;font-weight:600;color:#cfd8dc;cursor:pointer}
+.kn-name.kn-agent{color:#5fd3c8}
+.kn-name:hover,.kn-name:focus-visible{text-decoration:underline}
+.kn-mention{border:0;background:none;padding:0;font:inherit;color:#9fe6bd;cursor:pointer}
+.kn-mention:hover,.kn-mention:focus-visible{text-decoration:underline}
 .kn-anchor{font-size:11px;color:#9fe6bd}
 .kn-compose input,.kn-compose textarea,.kn-replybox textarea{box-sizing:border-box;width:100%;padding:6px 8px;border:1px solid #333;border-radius:5px;background:#151a1c;color:#e0e0e0;font:inherit}
 .kn-compose textarea{min-height:56px;resize:vertical}
@@ -165,8 +182,6 @@ const STYLE = `
 .kn-note{margin:4px 0}
 .kn-replies{margin-left:10px;padding-left:8px;border-left:2px solid #2f3a3d}
 .kn-meta{font-size:10px;color:#8fa3a8}
-.kn-meta b{color:#cfd8dc;font-weight:600}
-.kn-meta .kn-agent{color:#5fd3c8}
 .kn-text{white-space:pre-wrap;word-break:break-word;margin:2px 0;font-size:12px;line-height:1.35}
 .kn-pic{display:block;max-width:100%;max-height:150px;margin:4px 0;border:1px solid #2a3033;border-radius:4px;cursor:zoom-in}
 .kn-receipts{font-size:10px;color:#7c878a}
@@ -223,7 +238,7 @@ export async function capturePicture({capture, document}) {
  * of what the viewport shows.
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
-  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null}) {
+  sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -242,7 +257,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   transport.post = body => send(endpoint, body);
   transport.receipt = body => send(`${endpoint}/receipt`, body);
   const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
-    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title});
+    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf});
 
   // --- structure ---
   const root = element(document, 'div', 'kn-root');
@@ -289,7 +304,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   status.setAttribute('role', 'status');
   compose.append(anchorLine, text, reach, to, row, status);
   const threads = element(document, 'div', 'kn-threads');
-  drawer.append(head, compose, threads);
+  drawer.append(head, threads, compose);
   root.append(pins, toasts, toggle, drawer);
   viewport.append(root);
   // The notes sit inside the viewport: a click, drag or scroll on them is not a
@@ -320,16 +335,46 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     return `${name}: not seen yet`;
   }).join(' \u00b7 ');
 
+  // A name selects that agent's avatar in the scene, when it has one there.
+  function selectAvatarOf(name) {
+    const {object} = session.selectAvatar(name);
+    if (object) { redraw(); say(`Selected @${name}'s avatar`); }
+    else say(`@${name} has no avatar in this scene`);
+  }
+  function nameButton(name, className) {
+    const button = element(document, 'button', className, name);
+    button.type = 'button';
+    button.title = `Select @${name}'s avatar`;
+    button.addEventListener('click', () => selectAvatarOf(name));
+    return button;
+  }
+  // Note text with each @mention of someone known here as a name to click.
+  function textWithMentions(value) {
+    const node = element(document, 'div', 'kn-text');
+    const known = new Set(session.participants.map(person => person.name));
+    let last = 0;
+    for (const match of value.matchAll(/(^|[\s(,;])@([a-z0-9][a-z0-9._-]{0,63})/gi)) {
+      const name = match[2].toLowerCase(), at = match.index + match[1].length;
+      if (!known.has(name)) continue;
+      const button = nameButton(name, 'kn-mention');
+      button.textContent = `@${match[2]}`;
+      node.append(document.createTextNode(value.slice(last, at)), button);
+      last = at + 1 + match[2].length;
+    }
+    node.append(document.createTextNode(value.slice(last)));
+    return node;
+  }
+
   function noteNode(note, depth) {
     const node = element(document, 'div', 'kn-note');
     const meta = element(document, 'div', 'kn-meta');
-    const who = element(document, 'b', note.via === 'page' ? '' : 'kn-agent', note.author);
-    meta.append(who, document.createTextNode(` · ${new Date(note.at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`));
+    meta.append(nameButton(note.author, note.via === 'page' ? 'kn-name' : 'kn-name kn-agent'),
+      document.createTextNode(` \u00b7 ${new Date(note.at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`));
     if (session.author && (note.recipients ?? []).includes(session.author) && !note.receipts.seen[session.author]) {
       meta.append(element(document, 'span', 'kn-unread', ' · new'));
     }
     node.append(meta);
-    if (note.text) node.append(element(document, 'div', 'kn-text', note.text));
+    if (note.text) node.append(textWithMentions(note.text));
     if (note.picture) {
       const picture = element(document, 'img', 'kn-pic');
       picture.alt = `Picture with ${note.author}'s note`;
@@ -562,6 +607,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       if (!wanted.has(id) && !entry.card.contains(active)) { entry.card.remove(); cards.delete(id); }
     }
     const scroll = threads.scrollTop;
+    const following = threads.scrollHeight - threads.scrollTop - threads.clientHeight < 32;
     const ordered = list.map(thread => {
       const entry = cards.get(thread.id) ?? makeCard(thread.id);
       const signature = signatureOf(thread);
@@ -576,15 +622,26 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     } else {
       ordered.forEach((card, index) => { if (cardsHost.children[index] !== card) cardsHost.insertBefore(card, cardsHost.children[index] ?? null); });
     }
-    threads.scrollTop = scroll;
+    // Like a chat: newest at the bottom, followed while you are there.
+    threads.scrollTop = following || forceBottom ? threads.scrollHeight : scroll;
+    forceBottom = false;
   }
+  let forceBottom = false;
 
   function render() {
     const unread = session.unread().length;
     toggle.textContent = unread ? `Notes \u00b7 ${unread} new` : 'Notes';
     toggle.dataset.unread = String(unread);
     const waiting = listeningNames();
-    listening.textContent = waiting.length ? `listening: ${waiting.join(', ')}` : 'no agent is listening right now';
+    if (waiting.join(',') !== listening.dataset.names) {
+      listening.dataset.names = waiting.join(',');
+      if (waiting.length) {
+        listening.replaceChildren(document.createTextNode('listening: '));
+        waiting.forEach((name, index) => listening.append(...(index ? [document.createTextNode(', ')] : []), nameButton(name, 'kn-name kn-agent')));
+      } else {
+        listening.textContent = 'no agent is listening right now';
+      }
+    }
     updateReach();
     refreshAnchor();
     if (!drawer.hidden) renderThreads();
@@ -594,6 +651,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     drawer.hidden = false;
     toggle.setAttribute('aria-expanded', 'true');
     if (thread) focusThread = thread;
+    else forceBottom = true;
     refreshParticipants();
     for (const entry of cards.values()) entry.signature = null;
     render();

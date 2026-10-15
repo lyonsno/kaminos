@@ -28,8 +28,9 @@ Writing
            [--to NAMES] [--picture PNG] [--urgent]
   seen REF... --as NAME      resolve REF --as NAME      reopen REF --as NAME
   ref REF              Print the text to paste into a conversation.
-  register --as NAME [--about TEXT]
-                       Say who you are, so people can @mention you from the page.
+  register --as NAME [--about TEXT] [--avatar OBJECT-ID]
+                       Say who you are, so people can @mention you from the page;
+                       --avatar names the scene object clicking your name selects.
 
 NAME may also come from KAMINOS_NOTES_AS. The server is --server, else
 KAMINOS_NOTES_SERVER, else KAMINOS_VANTAGE_SERVER, else http://127.0.0.1:8090.
@@ -202,14 +203,15 @@ async function main(argv) {
     }
     case 'register': {
       const as = who(flags);
-      const record = await api.call('/api/notes/participants', {method: 'POST', body: {author: as, about: flags.about ?? ''}});
+      const record = await api.call('/api/notes/participants', {method: 'POST',
+        body: {author: as, about: flags.about ?? '', ...(flags.avatar ? {avatar: flags.avatar} : {})}});
       print(`registered @${record.name}${record.about ? ` \u00b7 ${record.about}` : ''}`, record);
       return 0;
     }
     case 'participants': {
       const {participants, directoryProblem} = await api.call('/api/notes/participants');
       if (directoryProblem) console.error(directoryProblem);
-      const line = row => `@${row.name} (${row.kind})${row.listening ? ' \u00b7 listening' : ''}${row.about ? ` \u00b7 ${row.about}` : ''} \u00b7 ${row.sources.join(', ')}`;
+      const line = row => `@${row.name} (${row.kind})${row.listening ? ' \u00b7 listening' : ''}${row.about ? ` \u00b7 ${row.about}` : ''}${row.avatar ? ` \u00b7 avatar ${row.avatar}` : ''} \u00b7 ${row.sources.join(', ')}`;
       print(participants.length ? participants.map(line).join('\n') : 'No one yet.', participants);
       return 0;
     }

@@ -8,10 +8,11 @@ import {NOTES_SCHEMA} from '../notes-core.mjs';
 
 const VIEW = {position: [0, 1, 4], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000};
 
-function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture} = {}) {
+function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture, avatarOf} = {}) {
   const app = {
     posted: [], receipts: [], view: structuredClone(VIEW), writes: [], selections: [], scene: 'bench.kaminos.json',
-    entries: [{id: 'cube', label: 'Cube', type: 'procedural-mesh'}, {id: 'lamp', label: 'Lamp', type: 'light'}],
+    entries: [{id: 'cube', label: 'Cube', type: 'procedural-mesh'}, {id: 'lamp', label: 'Lamp', type: 'light'},
+      {id: 'vantage-sub-pilot', label: 'Sub', type: 'camera'}, {id: 'ship', label: 'Ship', type: 'camera'}],
     selected, seq: 0,
   };
   const stamp = (body, extra) => ({schema: NOTES_SCHEMA, seq: ++app.seq, at: `2026-10-14T19:00:0${app.seq}.000Z`, author: 'noah', via: 'page', ...body, ...extra});
@@ -35,6 +36,7 @@ function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture}
     capture: capture ?? (async () => ({image: 'data:image/png;base64,iVBORw0KGgo=', width: 4, height: 3})),
     href: () => 'http://127.0.0.1:8325/index.html',
     title: () => 'Kaminos',
+    avatarOf,
   });
   return {app, session};
 }
@@ -172,4 +174,31 @@ test('a mention of someone unknown stays text; the preview says who a note will 
   assert.deepEqual(app.posted[1].to, ['brand-new-agent'], 'the To field addresses any name on purpose');
   assert.deepEqual(session.suggestions('not').map(person => person.name), ['notes-agent']);
   assert.ok(!session.suggestions('').some(person => person.name === 'noah'), 'you are not suggested to yourself');
+});
+
+test('threads read like a chat: oldest first, and resolving one does not move it', () => {
+  const {session} = fakePage();
+  session.hello({author: 'noah', lastSeq: 0});
+  const first = note(1, {author: 'sub-pilot', text: 'first', anchor: {kind: 'scene'}});
+  const second = note(2, {author: 'sub-pilot', text: 'second', anchor: {kind: 'scene'}});
+  const third = note(3, {author: 'sub-pilot', text: 'third', anchor: {kind: 'scene'}});
+  for (const item of [first, second, third]) item.thread = item.id;
+  const lateReply = note(4, {author: 'noah', via: 'page', text: 'back to the first', parent: first.id, thread: first.id, recipients: ['sub-pilot']});
+  session.receive([first, second, third, lateReply, {schema: NOTES_SCHEMA, seq: 5, type: 'resolved', notes: [second.id], author: 'noah', via: 'page'}]);
+  assert.deepEqual(session.threads().map(item => item.id), [first.id, second.id, third.id]);
+});
+
+test("a name leads to that agent's avatar: registered, then the vantage, then the sub named after it", () => {
+  const {app, session} = fakePage({avatarOf: name => (name === 'pilot-by-api' ? 'ship' : null)});
+  session.setParticipants([{name: 'registered-agent', avatar: 'lamp'}, {name: 'stale-agent', avatar: 'gone-object'},
+    {name: 'pilot-by-api'}, {name: 'sub-pilot'}, {name: 'no-avatar'}]);
+  assert.equal(session.avatarFor('registered-agent'), 'lamp');
+  assert.equal(session.avatarFor('pilot-by-api'), 'ship');
+  assert.equal(session.avatarFor('sub-pilot'), 'vantage-sub-pilot');
+  assert.equal(session.avatarFor('stale-agent'), null, 'an avatar that is no longer in the scene is not selected');
+  assert.equal(session.avatarFor('no-avatar'), null);
+  assert.deepEqual(session.selectAvatar('sub-pilot'), {name: 'sub-pilot', object: 'vantage-sub-pilot'});
+  assert.deepEqual(app.selections, ['vantage-sub-pilot']);
+  assert.deepEqual(session.selectAvatar('no-avatar'), {name: 'no-avatar', object: null});
+  assert.deepEqual(app.selections, ['vantage-sub-pilot'], 'nothing is selected when there is no avatar');
 });
