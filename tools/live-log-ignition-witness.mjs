@@ -35,6 +35,7 @@ try{
   const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));
   assert.equal(startup.error,undefined,JSON.stringify(startup));assert.equal(startup.state.id,'live-log-heat');
   report.effectiveUrl=page.url();report.sources=[];
+  await page.evaluate(()=>window.kaminosSceneCollision.set(true));
   for(const name of ['volume-core.js','live-log-experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-gas-source.mjs']){
     const actual=await(await page.request.get(origin+'/'+name)).body(),expected=await fs.readFile(path.join(report.repoRoot,name));
     const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(actual),sha(expected),name);report.sources.push({name,sha256:sha(actual)});
@@ -47,7 +48,7 @@ try{
   assert.equal(Number(report.effective.controls['volume-grid-height-ratio']),1);assert.equal(Number(report.effective.controls['volume-steps']),28);assert.equal(Number(report.effective.controls['volume-immersed-radius']),.1);
   async function sample(name){
     const raw=await page.evaluate(async()=>{
-      const runtime=window.__kaminosVolumePrototype,state=window.kaminosWorkbenchExperiments.read(),context=await runtime.borrowThermalGpuContext();
+      const runtime=window.__kaminosVolumePrototype,state=await window.kaminosWorkbenchExperiments.read(),context=await runtime.borrowThermalGpuContext();
       const buffer=window.__woodEvidenceBuffers.get('live log resident state '+state.fields[0].steps%2);
       if(!buffer)throw Error('Missing evidence buffer');
       const device=context.device,staging=device.createBuffer({size:buffer.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
