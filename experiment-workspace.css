@@ -99,3 +99,5 @@ body.experiment-workspace #authored-mix-panel-content { display:block; }
 .owner-experiment-entry button { background:#292b30; color:#ddd; border:1px solid #43464e; border-radius:4px; padding:6px; margin-top:8px; }
 .owner-experiment-status { font-size:10px; color:#a9cdd0; margin-top:8px; overflow-wrap:anywhere; }
 .owner-experiment-content { margin-top:12px; }
+#experiment-scene-slot .scene-object-tools { display:none; }
+#experiment-scene-slot .panel { border:0;padding:0; }
