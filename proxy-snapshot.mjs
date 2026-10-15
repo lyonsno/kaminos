@@ -6,6 +6,40 @@ export const PROXY_SNAPSHOT_SCHEMA='kaminos.proxy-snapshot.v0';
 // Surfel packing: position xyz, normal xyz, velocity xyz, thickness, curvature.
 export const SURFEL_FLOATS=11;
 
+// Heat-block packing: world centroid xyz, mean heat, mean smoke, heat-weighted
+// rise speed, block world size.
+export const HEAT_BLOCK_FLOATS=7;
+
+// Decode the fire's pressure-residual probe partials (one record of 20 floats
+// per 4x4x4 cell block, linear index x + y*wx + z*wx*wy) into a world-space
+// heat-block snapshot. The lateral centroid comes from the heat moments; height
+// is the block centre. Blocks below both thresholds (per-cell means) are dropped.
+export function decodeHeatBlocks({partials,grid,gridY,workgroupsX,workgroupsY,workgroupsZ,floatsPerWorkgroup=20,step=0},{domain,heatThreshold=1e-3,smokeThreshold=1e-2,capturedAtMs=0,stepSeconds=1/60}) {
+ const blocks=workgroupsX*workgroupsY*workgroupsZ;
+ if(!(partials instanceof Float32Array)||partials.length<blocks*floatsPerWorkgroup)throw Error('Residual partials do not cover the block grid');
+ const cell=2/grid,scale=domain.scale,[tx,ty,tz]=domain.translation,toWorld=(c,t)=>t+scale*(-1+(c+0.5)*cell);
+ const data=new Float32Array(blocks*HEAT_BLOCK_FLOATS);let count=0,heatTotal=0;const heatMoment=[0,0,0];
+ const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
+ for(let i=0;i<blocks;i++){
+  const at=i*floatsPerWorkgroup,heatSum=partials[at+13],smokeSum=partials[at+14];
+  const bx=i%workgroupsX,by=Math.floor(i/workgroupsX)%workgroupsY,bz=Math.floor(i/(workgroupsX*workgroupsY));
+  const cellsInBlock=Math.min(4,grid-bx*4)*Math.min(4,gridY-by*4)*Math.min(4,grid-bz*4);
+  const heat=heatSum/cellsInBlock,smoke=smokeSum/cellsInBlock;
+  if(!(heat>=heatThreshold||smoke>=smokeThreshold))continue;
+  const centreX=bx*4+1.5,centreY=by*4+1.5,centreZ=bz*4+1.5;
+  const cx=heatSum>1e-9?partials[at+16]/heatSum:centreX,cz=heatSum>1e-9?partials[at+17]/heatSum:centreZ;
+  const x=toWorld(cx,tx),y=toWorld(centreY,ty),z=toWorld(cz,tz);
+  const values=[x,y,z,heat,smoke,heatSum>1e-9?partials[at+15]/heatSum:0,scale*4*cell];
+  if(!values.every(Number.isFinite))continue;
+  data.set(values,count*HEAT_BLOCK_FLOATS);count++;
+  for(const [k,v] of [x,y,z].entries()){if(v<min[k])min[k]=v;if(v>max[k])max[k]=v;heatMoment[k]+=v*heatSum;}
+  heatTotal+=heatSum;
+ }
+ return {schema:PROXY_SNAPSHOT_SCHEMA,kind:'heat-blocks',source:'volume-pressure-residual-probe',writeTick:step,simTimeS:step*stepSeconds,capturedAtMs,
+  grid:[grid,gridY,grid],count,floatsPerBlock:HEAT_BLOCK_FLOATS,data:data.subarray(0,count*HEAT_BLOCK_FLOATS),
+  summary:{count,bounds:count?[min,max]:null,heatCentroid:heatTotal>1e-9?heatMoment.map(v=>v/heatTotal):null,heatTotal}};
+}
+
 // Where the surfels are, without iterating them: world bounds, centroid and
 // mean thickness, for maps, sketches and agents that need no drawing.
 export function surfelSummary(data,count) {
