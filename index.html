@@ -12073,6 +12073,58 @@ async function initScene() {
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera.
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,idle:agentVantage.idle};
   }catch(error){console.error('Agent vantage unavailable',error);}
+  // ASSAY (marco-polio pick from the pictured surface): for one view, which scene object the
+  // renderer drew at each pixel. Every material keeps its own shader (side, alpha test, discards,
+  // vertex deformation, depth and colour-write state); only what it writes is replaced by an object
+  // number (red, green) and instance number (blue, alpha). Experiment only.
+  let idPassNodes=null;
+  const idPassState={numbers:new Map(),numbered:[]};
+  window.__kaminosIdPassAssay=async({width=480,height=270,hide=[],discardClear=true,points=[]}={})=>{
+    if(!idPassNodes){
+      const {mrt,uniform,vec4,instanceIndex,vertexStage,If,Discard,output,Fn,floor,mod,round}=await import('three/tsl');
+      const id=uniform(new THREE.Vector4()).onObjectUpdate(({object})=>{let n=idPassState.numbers.get(object);if(!n){n=idPassState.numbered.length+1;idPassState.numbers.set(object,n);idPassState.numbered.push(object);}return new THREE.Vector4((n&255)/255,((n>>8)&255)/255,0,0);});
+      const blended=uniform(0).onObjectUpdate(({material})=>material?.transparent?1:0);
+      const instance=round(vertexStage(instanceIndex.toFloat()));
+      const build=discard=>mrt({output:Fn(()=>{
+        if(discard)If(blended.greaterThan(0.5).and(output.a.lessThan(0.004)),()=>{Discard();});
+        return vec4(id.x,id.y,mod(instance,256).div(255),mod(floor(instance.div(256)),256).div(255));
+      })()}).setBlendMode('output',new THREE.BlendMode(THREE.NoBlending));
+      idPassNodes={withDiscard:build(true),plain:build(false)};
+    }
+    idPassState.numbers=new Map();idPassState.numbered=[];
+    const rt=new THREE.RenderTarget(width,height,{type:THREE.UnsignedByteType,format:THREE.RGBAFormat,colorSpace:THREE.NoColorSpace,depthBuffer:true,generateMipmaps:false,minFilter:THREE.NearestFilter,magFilter:THREE.NearestFilter});
+    rt.texture.name='output';
+    const previous={target:renderer.getRenderTarget(),mrt:renderer.getMRT(),clearColor:renderer.getClearColor(new THREE.Color()),clearAlpha:renderer.getClearAlpha(),background:scene.background,backgroundNode:scene.backgroundNode};
+    const t0=performance.now();
+    const restoreDrawing=suspendEditorDrawingForVantage({all:true,hide});
+    const t1=performance.now();
+    try{
+      scene.background=null;scene.backgroundNode=null;
+      renderer.setClearColor(0x000000,0);renderer.setMRT(discardClear?idPassNodes.withDiscard:idPassNodes.plain);renderer.setRenderTarget(rt);
+      renderer.render(scene,camera);
+    }finally{
+      renderer.setRenderTarget(previous.target);renderer.setMRT(previous.mrt);renderer.setClearColor(previous.clearColor,previous.clearAlpha);
+      scene.background=previous.background;scene.backgroundNode=previous.backgroundNode;restoreDrawing();
+    }
+    const renderMs=performance.now()-t1,hideMs=t1-t0,t2=performance.now();
+    const pixels=await renderer.readRenderTargetPixelsAsync(rt,0,0,width,height);
+    const readMs=performance.now()-t2;rt.dispose();
+    // WebGPU pads each copied row but the last to a multiple of 256 bytes.
+    const stride=Math.ceil(width*4/256)*256;
+    const numbered=idPassState.numbered;
+    const entryOf=object=>{for(let node=object;node;node=node.parent){const entry=sceneObjects.find(item=>item.object===node);if(entry)return entry.id;}return null;};
+    const table=numbered.map((object,i)=>({n:i+1,entry:entryOf(object),name:object.name||null,type:object.type}));
+    const lookup=([x,y])=>{if(!(x>=0&&x<=1&&y>=0&&y<=1))return {at:[x,y],outside:true};const px=Math.min(width-1,Math.floor(x*width)),py=Math.min(height-1,Math.floor(y*height)),i=py*stride+px*4,n=pixels[i]+256*pixels[i+1];
+      return {at:[x,y],pixel:[px,py],n,instance:pixels[i+2]+256*pixels[i+3],entry:n?table[n-1]?.entry??null:null,raw:[pixels[i],pixels[i+1],pixels[i+2],pixels[i+3]]};};
+    const counts={};
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const image=canvas.getContext('2d').createImageData(width,height),hue=n=>[(n*97)%256,(n*57+80)%256,(n*151+40)%256];
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=y*stride+x*4,o=(y*width+x)*4,n=pixels[i]+256*pixels[i+1];counts[n]=(counts[n]??0)+1;const [r,g,b]=n?hue(n):[0,0,0],shade=n?1-0.25*Math.min(3,pixels[i+2]):1;image.data[o]=r*shade;image.data[o+1]=g*shade;image.data[o+2]=b*shade;image.data[o+3]=255;}
+    canvas.getContext('2d').putImageData(image,0,0);
+    return {width,height,stride,renderMs,hideMs,readMs,pixelType:pixels.constructor.name,bytes:pixels.length,table,counts,points:points.map(lookup),dataUrl:canvas.toDataURL('image/png')};
+  };
+  window.__kaminosIdPassAssay.objectOf=id=>sceneObjects.find(entry=>entry.id===id)?.object??null;
+  window.__kaminosIdPassAssay.THREE=THREE;
   animate();
 }
 
