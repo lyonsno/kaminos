@@ -8,12 +8,27 @@ export function frameSceneObjectRecord(record,camera,controls) {
 export function frameObject(object,camera,controls) {
   return frameObjects(object ? [object] : [],camera,controls);
 }
+export function sceneContentBounds(object,box=new THREE.Box3()) {
+  object.updateWorldMatrix(true,true);
+  function visit(node){
+    if(node.userData.kaminosEditorHelper||node.userData.kaminosEditorOnly)return;
+    if(node.boundingBox!==undefined){
+      if(node.boundingBox===null)node.computeBoundingBox();
+      if(node.boundingBox)box.union(node.boundingBox.clone().applyMatrix4(node.matrixWorld));
+    }else if(node.geometry){
+      if(!node.geometry.boundingBox)node.geometry.computeBoundingBox();
+      if(node.geometry.boundingBox)box.union(node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld));
+    }
+    for(const child of node.children)visit(child);
+  }
+  visit(object);return box;
+}
 export function frameObjects(objects,camera,controls) {
   const box=new THREE.Box3();
   for(const object of objects) {
     if(!object?.visible)continue;
     object.updateWorldMatrix(true,true);
-    box.union(new THREE.Box3().setFromObject(object));
+    box.union(sceneContentBounds(object));
     box.expandByPoint(object.getWorldPosition(new THREE.Vector3()));
   }
   if(box.isEmpty())return false;

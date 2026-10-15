@@ -3882,7 +3882,7 @@ import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.m
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
-import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
+import {checkedViewportDisplay,viewportShortcut,syncSceneHelperVisibility} from './viewport-display-settings.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
@@ -3949,7 +3949,7 @@ function attachViewportGizmo(target) {
   transformControls.enabled=viewportGizmosVisible;
 }
 function syncViewportDisplayControls() {
- for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
+ for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
 }
 window.kaminosViewportSettings={
@@ -25921,6 +25921,7 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
 function updateSelectionFeedback(){
+  syncSceneHelperVisibility(sceneObjects.map(entry=>entry.object),viewportDisplay,selectionCaptureSuspended);
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
   const ids=new Set(sceneSelectionMembers());

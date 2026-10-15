@@ -52,7 +52,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,pathGuide,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
@@ -60,7 +60,16 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   skin:runtime.read(),playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
   transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
   recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView()},
+  display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
+  pathGuide:pathGuide?{mode,kind:mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
+ function refreshGuide(){
+  const y=(floor?.position.y??runtime.mesh.geometry.boundingBox?.min.y??0)+.025;
+  const geometry=new THREE.BufferGeometry().setFromPoints(walking.guidePoints(mode).map(p=>new THREE.Vector3(p[0],y,p[2])));
+  geometry.computeBoundingBox();
+  if(!pathGuide){pathGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x55cbd7,depthTest:true}));pathGuide.name='Creature motion path';Object.assign(pathGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.visible=false;placement.add(pathGuide);}
+  else{const old=pathGuide.geometry;pathGuide.geometry=geometry;old.dispose();}
+ }
  function startClock(){
   if(stop)return;
   stop=session.onFrame(({deltaSeconds})=>{
@@ -113,6 +122,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
+  refreshGuide();
   if(inputs.gizmos!==undefined){
    if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
    const toggle=document.getElementById('viewport-show-gizmos');if(!toggle)throw Error('Shared viewport gizmo control is unavailable');
@@ -134,7 +144,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    pause:operation('pause',()=>{unsubscribe();player.pause();host.scene.refreshPresentation?.(asset);return read();}),
    replay:operation('replay',()=>{unsubscribe();cycle=0;source.presentation.cycle=0;player.replay();host.scene.refreshPresentation?.(asset);startClock();return read();}),
    seek:operation('seek',input=>{unsubscribe();player.seek(input?.frame);host.scene.refreshPresentation?.(asset);return read();}),
-   mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);host.scene.refreshPresentation?.(asset);return read();}),
+   mode:operation('mode',input=>{if(!['source','cycle','path'].includes(input?.mode))throw Error('Unknown walking mode');unsubscribe();player.pause();mode=input.mode;cycle=0;source.presentation.mode=mode;source.presentation.cycle=0;player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}),
    motion:operation('motion',async input=>{
     const requestId=++motionRequest;
     const next=choices.find(c=>c.id===input?.id);if(!next)throw Error('Unknown retained motion');
@@ -149,10 +159,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
-     player=makePlayer();chosen=next;chosenInputs=request;if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
+     player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
     }
     catch(error){
-     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
@@ -164,6 +174,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(inputs.sample!==undefined)operations.seek({frame:inputs.sample});
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
+  host.scene.refreshPresentation?.(asset);
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
   return {read,operations,dispose,mount({root,invoke,reopen=recipe=>{
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
