@@ -3911,6 +3911,7 @@ import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
+import {installAgentVantage} from './agent-vantage.mjs';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
@@ -4033,6 +4034,8 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let activeSceneComposition = null;
 let authoringBusy = false;
+// Set while the agent vantage borrows the viewport camera for a picture.
+let vantageCaptureHeld = false;
 let volumePrototype = null;
 let annularBurner = null;
 let burnerRecipe = null;
@@ -7075,7 +7078,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -7084,7 +7087,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -7137,7 +7140,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -8099,6 +8102,7 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
 }
 
 function frameForgeHostCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.05, 1.85, 4.35);
   controls.target.set(0, -0.18, 0.16);
@@ -8282,6 +8286,7 @@ function disposeMotionTemporalScene() {
 }
 
 function frameMotionAgencyCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
   controls.target.set(0.05, 0.15, 0.15);
@@ -11780,7 +11785,7 @@ async function initScene() {
     navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => !!viewPie?.state() || authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => !!viewPie?.state() || authoringBusy || vantageCaptureHeld || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11794,6 +11799,7 @@ async function initScene() {
   window.kaminosNavigationState = navigation.state;
   window.kaminosNavigationIndexState = navigation.indexState;
   window.kaminosFrameSelected = () => {
+    if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return false; }
     const changed = frameAuthoredSelection(); if (changed) markDirty(); return changed;
   };
   scenePlacementTools = installScenePlacementTools({
@@ -11820,6 +11826,7 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
+    viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
@@ -11892,13 +11899,13 @@ async function initScene() {
     edits:scenePlacementTools.edits,
     readCamera:readAuthoredCameraView,
     readLens:()=>({fov:sceneCameras?.readNavigationView().fov??camera.fov}),
-    writeLens:value=>sceneCameras.setNavigationLens(value.fov),
+    writeLens:value=>{if(vantageCaptureHeld)throw Error('The agent sub is taking a picture');sceneCameras.setNavigationLens(value.fov);},
     writeCamera:view=>{sceneCameras?.leave();sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
-    admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
+    admit:()=>{assertSceneConstructionAvailable();if(vantageCaptureHeld)throw Error('The agent sub is taking a picture');if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
     changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
     capture:item=>window.captureComposition({result:true,cameraView:item}),
   });
-  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
   cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
@@ -11906,8 +11913,8 @@ async function initScene() {
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
   const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
-  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
-  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
+  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
@@ -12076,6 +12083,38 @@ async function initScene() {
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
   };
+  // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
+  // ?vantage=0 leaves the terminal link closed.
+  const vantageBusy=()=>authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':(controls?.state??-1)!==-1?'A touch gesture is moving the view':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
+  // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
+  // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
+  const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
+    const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,keep=object=>{if(object)hidden.push([object,object.visible]);};
+    if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);}
+    for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
+    if(all){if(helper)helper.visible=false;selectionCaptureSuspended=true;selectionFeedback?.suspend(true);for(const box of selectionBoxes.values())box.visible=false;}
+    for(const [object] of hidden)object.visible=false;
+    return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}window._kaminosDirty?.();};
+  };
+  // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
+  const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
+  // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
+  // flag rather than authoringBusy, which in-flight imports read as a stale document. Presses on the
+  // viewport canvases wait too, since they would resolve through the borrowed camera; the window capture
+  // listener runs before document-level handlers. Releases are delivered, so a gesture begun before the
+  // picture still ends. Dialogs, toolbars and the sub panel keep working. Selection, box selection and
+  // framing also check the flag themselves.
+  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','mousedown','click','dblclick'],wait=event=>{const target=event.target;if(target?.tagName==='CANVAS'&&viewportEl.contains(target)&&!target.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)window.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)window.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
+  const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
+  const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
+  try{
+    const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>sceneObjects,
+      selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
+      viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
+      redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
+      link:new URLSearchParams(location.search).get('vantage')!=='0'});
+    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
+  }catch(error){console.error('Agent vantage unavailable',error);}
   animate();
 }
 
@@ -19587,6 +19626,7 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   const joined=volumePrototype?.joinedWorldBounds?.();
   if(joined){
     frameBox(new THREE.Box3(new THREE.Vector3(...joined.min),new THREE.Vector3(...joined.max)),camera,controls);
@@ -20445,7 +20485,7 @@ async function initKaminosVolumeRoute() {
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
@@ -25569,7 +25609,7 @@ async function collectSceneComposition() {
 }
 
 async function withAuthoringAction(action, { result = false } = {}) {
-  if (authoringBusy) return result ? { ok: false, error: 'Another authoring action is busy' } : false;
+  if (authoringBusy || vantageCaptureHeld) return result ? { ok: false, error: vantageCaptureHeld ? 'The agent sub is taking a picture' : 'Another authoring action is busy' } : false;
   authoringBusy = true;
   document.getElementById('composition-capture').disabled = true;
   try {
@@ -26172,8 +26212,8 @@ function syncSelectionInspector(){
 function installSelectionInput(){
   let box=null,suppressBoxClick=false;const rect=document.createElement('div');rect.id='scene-selection-box';rect.hidden=true;document.getElementById('viewport').append(rect);
   function stopBox(){if(!box)return;controls.enabled=box.prior;box=null;rect.hidden=true;}
-  function beginBox(){if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
-  window.kaminosSelection.box=beginBox;
+  function beginBox(){if(vantageCaptureHeld){setInfo('The agent sub is taking a picture');return;}if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
+  window.kaminosSelection.box=beginBox;window.kaminosSelection.boxing=()=>!!box;
   document.addEventListener('keydown',event=>{
     if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
@@ -26181,7 +26221,7 @@ function installSelectionInput(){
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
   },true);
   document.addEventListener('pointerdown',event=>{
-    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event))return;
+    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event)||event.target.closest?.('[data-vantage-ignore]'))return;
     event.preventDefault();event.stopImmediatePropagation();if(event.button===2){stopBox();return;}controls.enabled=false;box.start={x:event.clientX,y:event.clientY};box.subtract=event.button===1;rect.hidden=false;
   },true);
   document.addEventListener('pointermove',event=>{
@@ -26713,7 +26753,7 @@ function claimLoadedSceneFile(file, sceneFile = null) {
 }
 
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
-  if (authoringBusy) {
+  if (authoringBusy || vantageCaptureHeld) {
     setInfo('Wait for the current capture or save');
     return;
   }

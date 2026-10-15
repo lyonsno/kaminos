@@ -1,4 +1,4 @@
-export function opticalSteppingConfig({mode = 'current', tolerance = 0.001} = {}) {
+export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = {}) {
   const modes = ['current', 'fixed', 'numerical', 'fixed-dense'];
   if (!modes.includes(mode)) throw new Error(`unknown optical stepping mode: ${mode}`);
   if (!Number.isFinite(tolerance) || tolerance <= 0) throw new Error('positive finite optical tolerance required');
@@ -6,6 +6,15 @@ export function opticalSteppingConfig({mode = 'current', tolerance = 0.001} = {}
     authority: 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
     floor: 'four integration panels per authored base step',
     jitter: 'off in both comparison arms; current renderer unchanged'};
+}
+
+export function resolveOpticalStepping(config, {emissive, trace = false, explicit = false}) {
+  if (config.mode !== 'current' && (!emissive || trace)) {
+    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture');
+    return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
+      reason:trace?'diagnostic-trace-capture':'non-emissive-renderer'};
+  }
+  return {...config,requested:config.mode,reason:null};
 }
 
 export function validateOpticalPreviewArm(sample, state, {mode, tolerance, step, raySteps}) {
@@ -119,7 +128,9 @@ export function installOpticalSteppingPreview(renderer, document) {
   }
   select.style.minWidth = '0';
   select.style.flex = '1';
-  let previous = 'current';
+  const initial = renderer.debugState?.().opticalStepping || opticalSteppingConfig();
+  select.value = initial.mode === 'numerical' ? `numerical:${initial.tolerance}` : initial.mode;
+  let previous = select.value;
   select.addEventListener('change', () => {
     const [mode, tolerance] = select.value.split(':');
     try {

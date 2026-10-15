@@ -22,7 +22,7 @@ export function getPivotViewState(camera, point, width, height) {
 
 export function installScenePlacementTools({
   viewport, historyScope = null, camera, controls, gizmo, selected, read, write, object, refresh,
-  allowed = () => true, busy = () => false, frameSelected = () => {},
+  allowed = () => true, busy = () => false, viewHeld = () => null, frameSelected = () => {},
   viewReference = () => null, overlaysVisible = () => true,
   settled = () => {}, captureContext = () => null, historyScopes = [], prepare=()=>{}, transformSettings=()=>({orientation:'world'}),localOrientation=()=>read(selected())?.rotation||[0,0,0],
 }) {
@@ -108,7 +108,9 @@ export function installScenePlacementTools({
     catch (error) { hud.textContent = error.message; return false; }
   }
   function start(operation,completed=null) {
-    if (!allowed() || busy() || !selected()) return false;
+    // viewHeld() names another actor holding the viewport camera; a transform
+    // started now would measure against a camera that is about to be restored.
+    if (!allowed() || busy() || viewHeld() || !selected()) return false;
     if (field) finish(true);
     if (!modal) {
       if (!begin(selected(), 'Transform')) return false;
@@ -329,6 +331,8 @@ export function installScenePlacementTools({
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    const held = viewHeld();
+    if (held && (key === 'f' || event.code === 'NumpadDecimal' || ['g', 'r', 's'].includes(key))) { steal(event); hud.textContent = held; return; }
     if (key === 'f' || event.code === 'NumpadDecimal') { steal(event); frameSelected(); draw(); return; }
     if (['g', 'r', 's'].includes(key)) { steal(event); start({ g: 'translate', r: 'rotate', s: 'scale' }[key]); }
   }, true);
