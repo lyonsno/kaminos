@@ -7,7 +7,7 @@
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
-  SKETCH_SCHEMA, sketchMapLayout,
+  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, rayThrough, rayCrossesBox,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -146,7 +146,7 @@ export function createVantagePilot(host) {
     return {schema: VANTAGE_SCHEMA, kind, route: routeName, ...(record ? {pilot: pilotOf(record), sub: describe(record)} : {}),
       requestedView: taken.requested, view: first.view, viewDeviation: first.deviation, aspect: aspect(),
       layers: first.shot.layers, unverifiedLayers: [...new Set(taken.shots.flatMap(item => item.unverified))],
-      naming: first.optics ? 'effective-camera' : 'nominal-view', settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
+      naming: first.optics ? 'effective-camera' : 'nominal-view', optics: first.optics ?? null, settleFrames: settle, helpers: hideHelpers ? 'hidden' : 'shown',
       image: {width: first.shot.width, height: first.shot.height}, images, objects: seen,
       frame: {before: taken.before, after: taken.after}, capturedAt: new Date(host.now()).toISOString(), ...extra};
   }
@@ -282,7 +282,28 @@ export function createVantagePilot(host) {
       host.shutter?.({kind: 'burst', label: record.label, image: images[0]});
       return pictureResult({kind: 'burst', routeName, record, taken, settle, hideHelpers: true, images, seen,
         extra: {interval, frames: taken.shots.map(item => ({index: item.index, atMs: item.atMs, frame: item.frame, view: item.view,
-          viewDeviation: item.deviation, objects: namesFor(item, true)}))}});
+          viewDeviation: item.deviation, optics: item.optics ?? null, objects: namesFor(item, true)}))}});
+    },
+
+    // What lies under a point of a view or of a kept picture: the first object
+    // the ray meets, where on it, and the fields it passes through. Picks read
+    // the scene's geometry and render nothing, so they never borrow the camera.
+    pick({pilot, from, at, optics}) {
+      let source, camera;
+      if (optics) { source = 'picture'; camera = optics; }
+      else if (from === 'operator') {
+        // During a picture the viewport camera is the sub's, not the operator's.
+        if (capturing) fail('busy', 'The sub is taking a picture; pick from the operator view after it');
+        source = 'operator'; camera = host.cameraMatrices();
+      }
+      else { const record = requireSub(pilot); source = record.id; camera = opticsOfView(viewOf(record), aspect()); }
+      if (!host.raycast) fail('pick', 'This page cannot cast rays into its scene');
+      const ray = rayThrough(camera, at), hits = host.raycast(ray, {exclude: subIds()});
+      const fields = host.extraTargets().filter(field => field.bounds).map(field => ({field, crossing: rayCrossesBox(ray, field.bounds)}))
+        .filter(item => item.crossing).map(({field, crossing}) => ({id: field.id, label: field.label, type: field.type, enter: crossing.enter, exit: crossing.exit}));
+      return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, hit: hits[0] ?? null,
+        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields,
+        pickedAt: new Date(host.now()).toISOString()};
     },
   };
 
@@ -648,6 +669,38 @@ const animationFrames = (window, count) => new Promise(resolve => {
   window.requestAnimationFrame(tick);
 });
 
+// The nearest visible mesh hit of a ray in each scene entry, nearest first.
+// Cameras, lights, editor helpers and hidden objects are skipped. A hit names
+// the entry, the point in world and in the entry's own frame, the surface
+// normal, and which mesh and face it struck, so a reference can find the same
+// spot again and notice when the geometry under it was replaced.
+export function raycastEntries(THREE, entries, {origin, direction}, {exclude = []} = {}) {
+  const caster = new THREE.Raycaster(new THREE.Vector3(...origin), new THREE.Vector3(...direction).normalize());
+  const shown = object => {
+    for (let node = object; node; node = node.parent) {
+      if (!node.visible || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly) return false;
+    }
+    return true;
+  };
+  const hits = [];
+  for (const entry of entries) {
+    if (!entry.object || exclude.includes(entry.id) || entry.type === CAMERA_TYPE || entry.type === 'light' || !shown(entry.object)) continue;
+    entry.object.updateWorldMatrix(true, true);
+    const hit = caster.intersectObject(entry.object, true).find(item => item.object.isMesh && shown(item.object));
+    if (!hit) continue;
+    const path = [];
+    for (let node = hit.object; node && node !== entry.object; node = node.parent) path.unshift(node.parent ? node.parent.children.indexOf(node) : -1);
+    const normal = hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize() : null;
+    const geometry = hit.object.geometry;
+    hits.push({id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, distance: hit.distance,
+      point: hit.point.toArray(), local: entry.object.worldToLocal(hit.point.clone()).toArray(), normal: normal?.toArray() ?? null,
+      surface: {path, mesh: hit.object.name || null, face: hit.faceIndex ?? null},
+      geometry: {vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null},
+      source: entry.object.userData?.kaminosSceneObject?.source ?? null});
+  }
+  return hits.sort((a, b) => a.distance - b.distance);
+}
+
 /**
  * Join the vantage to the running application. `entries()` returns live
  * scene entries `{id,label,fileName,type,object}`; `suspendEditorDrawing`
@@ -685,6 +738,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
+    raycast: (ray, options) => raycastEntries(THREE, entries(), ray, options),
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
 import {poseAxes, poseLookingAt} from '../agent-vantage-core.mjs';
-import {createSceneCameras} from '../scene-camera.mjs';
+import {createSceneCameras, cameraViewFromRecord} from '../scene-camera.mjs';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {installScenePlacementTools} from '../scene-placement-tools.mjs';
 import * as THREE from '../lib/three.core.js';
@@ -791,4 +791,74 @@ test('the lighting probe never picks through the sub panel or a borrowed camera'
   press(scene);
   assert.notEqual(status(), armedText, 'afterwards the same click inspects');
   await new Promise(resolve => setTimeout(resolve, 20)); // let the inspection settle inside the test
+});
+
+// --- pick -------------------------------------------------------------------
+
+const closeTo = (actual, expected, message, epsilon = 1e-6) => {
+  assert.equal(actual?.length, expected.length, message);
+  actual.forEach((value, i) => assert.ok(Math.abs(value - expected[i]) <= epsilon, `${message}: [${i}] ${value} != ${expected[i]}`));
+};
+// Where a world point lands in a picture taken from `view`, as fractions from the top left.
+function pictureFraction(view, aspect, point) {
+  const camera = new PerspectiveCamera(view.fov, aspect, view.near, view.far);
+  camera.position.fromArray(view.position); camera.up.fromArray(view.up); camera.lookAt(new Vector3(...view.target));
+  camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const ndc = new Vector3(...point).project(camera);
+  return [(ndc.x + 1) / 2, (1 - ndc.y) / 2];
+}
+const OPERATOR = {position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000};
+
+test('pick from the operator view names the object, the point on it and its surface', async () => {
+  const page = installedPage();
+  // Box 1 is a unit box centred at (2, 0, 0); its front face is at z = 0.5.
+  const picked = await page.vantage.run('pick', {from: 'operator', at: pictureFraction(OPERATOR, 1600 / 900, [2, 0.1, 0.5])});
+  assert.equal(picked.kind, 'pick');
+  assert.equal(picked.from, 'operator');
+  assert.equal(picked.hit?.id, 'box-1');
+  closeTo(picked.hit.point, [2, 0.1, 0.5], 'world point');
+  closeTo(picked.hit.local, [0, 0.1, 0.5], 'the same point in the object\'s own frame');
+  closeTo(picked.hit.normal, [0, 0, 1], 'the surface faces the camera');
+  assert.deepEqual(picked.hit.surface.path, [0], 'the mesh is the first child of the object');
+  assert.ok(Number.isInteger(picked.hit.surface.face));
+  assert.equal(picked.hit.geometry.vertices, 24);
+  const past = await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.02]});
+  assert.equal(past.hit, null, 'a ray past every object hits nothing');
+});
+
+test('pick from the sub uses the sub camera, and a picture camera names what that picture showed', async () => {
+  const page = installedPage({subs: [BEBOP]});
+  const subView = cameraViewFromRecord(BEBOP, 800 / 600, 3);
+  const fromSub = await page.vantage.run('pick', {at: pictureFraction(subView, 800 / 600, [0, 0.1, 0.5])});
+  assert.equal(fromSub.from, 'vantage-bebop');
+  assert.equal(fromSub.hit?.id, 'box-0');
+  closeTo(fromSub.hit.local, [0, 0.1, 0.5], 'box 0 sits at the origin');
+  // A picture taken looking at box 2 keeps naming box 2 after everyone has moved on.
+  const view = {position: [4, 1, 5], target: [4, 0, 0], up: [0, 1, 0], fov: 40, near: 0.1, far: 1000};
+  const camera = new PerspectiveCamera(view.fov, 16 / 9, view.near, view.far);
+  camera.position.fromArray(view.position); camera.lookAt(new Vector3(...view.target)); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray()};
+  const fromPicture = await page.vantage.run('pick', {optics, at: pictureFraction(view, 16 / 9, [4, -0.2, 0.5])});
+  assert.equal(fromPicture.from, 'picture');
+  assert.equal(fromPicture.hit?.id, 'box-2');
+  closeTo(fromPicture.hit.local, [0, -0.2, 0.5], 'box 2 sits at x = 4');
+});
+
+test('pictures carry the matrices they were rendered with, so a pixel can be picked later', async () => {
+  const {state, pilot} = await launched();
+  const shot = await pilot.run('snap', {map: false});
+  assert.deepEqual(shot.optics, opticsOf(state.writes[0]), 'the snap records the sub camera it rendered with');
+  const burst = await pilot.run('burst', {count: 2, map: false});
+  assert.equal(burst.frames.length, 2);
+  for (const frame of burst.frames) assert.equal(frame.optics?.projection?.length, 16, 'every burst frame records its camera');
+});
+
+test('a pick from the operator view waits while a picture has borrowed the camera', async () => {
+  const {state, pilot} = await launched();
+  let during = null;
+  state.duringFrames = () => {
+    if (during === null) during = pilot.run('pick', {from: 'operator', at: [0.5, 0.5]}).then(() => 'picked', error => error.phase);
+  };
+  await pilot.run('snap', {map: false});
+  assert.equal(await during, 'busy', 'mid-picture the viewport camera is the sub\'s, not the operator\'s');
 });
