@@ -85,7 +85,7 @@ try{
  const held=await acquire('second-down');check('contact belongs to moved lobe',nodes.includes(held.witness.lastPick?.cellAnchor),held.witness.lastPick);
  check('grip begins without rest pose snap',nodes.every(i=>point(held.witness.state,i).every((v,k)=>Math.abs(v-point(ls,i)[k])<3e-5)));
  await invoke('step',1);const awake=await acquire('awake');check('gripped component resumes material solve',nodes.every(i=>awake.motion.ownership[i*4+3]===0));
- await invoke('tension',180);await invoke('move',[0,.5,0]);await invoke('step',20);await invoke('release');await invoke('step',1);
+ await invoke('tension',intact.witness.materialRegime.threshold);await invoke('move',[0,.5,0]);await invoke('step',20);await invoke('release');await invoke('step',1);
  const repeated=await acquire('refractured'),rs=repeated.witness.state;
  check('prior damage retained',s.bonds.every((v,i)=>i%4!==2||v!==0||rs.bonds[i]===0));
  const {inside:additional,outside}=requireMovedPieceFracture(awake.witness.state,rs,nodes);report.secondaryFracture={inside:additional.length,outside:outside.length};
