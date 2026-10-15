@@ -413,6 +413,19 @@ async function runViewportWireframeFireShadowScenario(ws) {
 // while the sim runs, holds still while it is paused, and the host returns to
 // the full render when asked. Water masks against the empty scene give the
 // overlap between the two presentations at one paused sim state.
+// Square dilation by r pixels (two running-window passes), so a disc and a bead
+// at the same place count as agreeing even where their outlines differ.
+function dilateMask(mask, width, height, r) {
+  const horizontal = new Uint8Array(mask.length), out = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y++) { let run = 0; for (let x = -r; x < width + r; x++) {
+    if (x + r < width && mask[y * width + x + r]) run++; if (x - r - 1 >= 0 && mask[y * width + x - r - 1]) run--;
+    if (x >= 0 && x < width && run > 0) horizontal[y * width + x] = 1; } }
+  for (let x = 0; x < width; x++) { let run = 0; for (let y = -r; y < height + r; y++) {
+    if (y + r < height && horizontal[(y + r) * width + x]) run++; if (y - r - 1 >= 0 && horizontal[(y - r - 1) * width + x]) run--;
+    if (y >= 0 && y < height && run > 0) out[y * width + x] = 1; } }
+  return out;
+}
+
 function waterMask(png, background, bounds, threshold = 40) {
   const mask = new Uint8Array(png.width * png.height);
   let area = 0, minX = Infinity, minY = Infinity, maxX = -1, maxY = -1;
@@ -486,14 +499,39 @@ async function runWaterProxySurfelsScenario(ws) {
   await settleViewportFrames(ws, 800);
   const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-water-proxy'));
   const background = decodeScreenshotPngRgb(readFileSync(backgroundShot.path));
-  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, evidence.added.canvas);
-  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, evidence.added.canvas);
-  let intersection = 0, union = 0;
-  for (let i = 0; i < full.mask.length; i++) { if (full.mask[i] && proxied.mask[i]) intersection++; if (full.mask[i] || proxied.mask[i]) union++; }
-  evidence.masks = { full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox }, intersection, union, iou: union ? intersection / union : 0 };
+  // Scene region only: the viewport canvas minus the toolbar band and the info
+  // and hint text along the bottom, which change between captures.
+  const c = evidence.added.canvas, region = { x: c.x, y: c.y + 56, width: c.width, height: c.height - 56 - 120 };
+  // The full render draws no water in front of the sky in this scene (it is
+  // cut at the ground silhouette), so registration is judged below the
+  // horizon of the empty scene, where the reference can show water. The
+  // above-horizon counts are recorded as evidence of that defect.
+  const centerColumn = Math.floor(c.x + c.width / 2);
+  const luminance = y => { const i = (y * background.width + centerColumn) * background.channels; return background.pixels[i] + background.pixels[i + 1] + background.pixels[i + 2]; };
+  let horizon = null;
+  for (let y = Math.floor(region.y) + 3; y < Math.floor(region.y + region.height) - 3; y++) if (luminance(y - 3) - luminance(y + 3) > 60) { horizon = y; break; }
+  assert.ok(horizon !== null, 'could not find the horizon in the empty scene');
+  const above = { ...region, height: horizon - region.y }, below = { ...region, y: horizon, height: region.y + region.height - horizon };
+  const fullAbove = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, above);
+  const proxyAbove = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, above);
+  evidence.aboveHorizon = { horizon, fullWaterPixels: fullAbove.area, proxyWaterPixels: proxyAbove.area };
+  const full = waterMask(decodeScreenshotPngRgb(readFileSync(fullShot.path)), background, below);
+  const proxied = waterMask(decodeScreenshotPngRgb(readFileSync(proxyShot.path)), background, below);
+  const width = background.width, height = background.height, dilation = 6;
+  const fullNear = dilateMask(full.mask, width, height, dilation), proxyNear = dilateMask(proxied.mask, width, height, dilation);
+  let intersection = 0, union = 0, proxyNearWater = 0, waterNearProxy = 0;
+  for (let i = 0; i < full.mask.length; i++) {
+    if (full.mask[i] && proxied.mask[i]) intersection++; if (full.mask[i] || proxied.mask[i]) union++;
+    if (proxied.mask[i] && fullNear[i]) proxyNearWater++; if (full.mask[i] && proxyNear[i]) waterNearProxy++;
+  }
+  evidence.masks = { region: below, dilation, full: { area: full.area, bbox: full.bbox }, proxy: { area: proxied.area, bbox: proxied.bbox }, intersection, union,
+    iou: union ? intersection / union : 0,
+    // Location: proxy pixels that sit near real water. Coverage: real water that has proxy nearby.
+    locationPrecision: proxied.area ? proxyNearWater / proxied.area : 0, coverageRecall: full.area ? waterNearProxy / full.area : 0 };
   check(full.area > 500, `full water render is not visible against the empty scene (${full.area} px)`);
   check(proxied.area > 500, `proxy water is not visible against the empty scene (${proxied.area} px)`);
-  check(evidence.masks.iou > 0.25, `proxy water does not overlap the full water render (IoU ${evidence.masks.iou.toFixed(3)})`);
+  check(evidence.masks.locationPrecision >= 0.6, `proxy water is drawn away from the full water render (location precision ${evidence.masks.locationPrecision.toFixed(3)})`);
+  check(evidence.masks.coverageRecall >= 0.35, `proxy water covers too little of the full water render (coverage recall ${evidence.masks.coverageRecall.toFixed(3)})`);
 
   phase = 'scenario-water-proxy-surfels-live';
   const beforeLive = await readProxy();

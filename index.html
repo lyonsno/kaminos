@@ -3963,15 +3963,17 @@ function syncWaterProxy() {
    producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
  }
  if(waterProxy&&display&&!waterProxy.layer){
-  const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.6});
+  const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.15});
   scene.add(layer.mesh);
   waterProxy.layer=layer;
-  waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>layer.setSnapshot(snapshot),{replayLatest:true});
+  // A snapshot can land while the scene is idle (paused water): redraw it.
+  waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
  }
  if(waterProxy&&!display&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
  if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
+window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
  hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
  layer:waterProxy?.layer?.state()??{visible:false},snapshots:proxySnapshots.sources(),registry:proxySnapshots.state()});
