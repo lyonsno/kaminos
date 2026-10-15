@@ -20,7 +20,8 @@ try{
  report.browser={executable:fs.realpathSync(executable)};
  check('independent browser',!report.browser.executable.includes('/Google Chrome.app/'));
  const {chromium}=await import(pathToFileURL(playwrightPath));
- browser=await chromium.launch({executablePath:report.browser.executable,headless:true,args:['--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal']});
+ report.browser.profile=path.resolve(out,'browser-profile');report.browser.args=['--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal','--use-mock-keychain','--password-store=basic'];save();
+ browser=await chromium.launchPersistentContext(report.browser.profile,{executablePath:report.browser.executable,headless:true,args:report.browser.args});
  page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(0);
  let rejectLoad;const failure=new Promise((_,reject)=>{rejectLoad=reject;});failure.catch(()=>{});
  page.on('pageerror',e=>{report.errors.push(e.message);save();rejectLoad(e);});
