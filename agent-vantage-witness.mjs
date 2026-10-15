@@ -8,7 +8,7 @@
 //   node agent-vantage-witness.mjs --origin http://127.0.0.1:8317 --out DIR \
 //     --playwright /path/to/playwright-core/index.mjs --browser /path/to/chrome-for-testing
 import {execFile} from 'node:child_process';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
@@ -205,6 +205,10 @@ try {
   const redRow = snapRed.result.pickMap?.objects?.find(row => row.id === scene.red);
   check('the red snap keeps a pick map that names the red box', !!redRow, {pickMapError: snapRed.result.pickMapError ?? null,
     objects: snapRed.result.pickMap?.objects?.map(row => row.id ?? row.name)});
+  const depthFile = snapRed.result.pickMap?.depth?.path, depthBytes = depthFile ? statSync(depthFile).size : 0;
+  check('the red snap keeps its depth beside it, one float per pixel, and records the camera\'s far plane',
+    depthBytes === snapRed.result.pickMap.width * snapRed.result.pickMap.height * 4 && Number.isFinite(snapRed.result.optics?.far),
+    {depthFile, depthBytes, far: snapRed.result.optics?.far});
   const agreement = mapAgreement(imageOf(snapRed, 'snap'), snapRed.result.pickMap, redRow?.n);
   report.effective.pickMapAgreement = agreement;
   check('the pick map lies over the picture: its red box is where the picture is red', agreement.sized && agreement.redInMap > 0.97
@@ -215,19 +219,25 @@ try {
   check('a pick on the red snap names the red box the picture drew under its centre', pickRed.result.from === 'picture'
     && pickRed.result.referent === 'pictured' && pickRed.result.hit?.id === scene.red && pickRed.result.hit.authority === 'exact'
     && pickRed.result.hit.point?.length === 3, {hit: pickRed.result.hit});
+  // The red box is a unit box at (0, 0.5, 0): the sub sees its front face, z = 0.5.
+  const onRedFace = point => !!point && Math.abs(point[2] - 0.5) < 2e-3 && Math.abs(point[0]) < 0.5 && point[1] > 0 && point[1] < 1;
+  check('its point is the one the picture drew, from its depth, on the red box\'s front face, and the mesh agrees with it',
+    pickRed.result.hit?.pointBasis === 'depth' && pickRed.result.hit.surfaceBasis === 'recast-agrees' && onRedFace(pickRed.result.hit.point),
+    {point: pickRed.result.hit?.point, pointBasis: pickRed.result.hit?.pointBasis, surfaceBasis: pickRed.result.hit?.surfaceBasis});
   const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
-  check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it',
-    pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.local?.length === 3
-    && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
+  check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it from its depth',
+    pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.pointBasis === 'depth'
+    && Math.abs((pickBlue.result.hit.point?.[2] ?? 0) - 0.5) < 2e-3 && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
   const pickNothing = await vantageOk('pick', '0.5', '0.02', '--from', 'operator');
   check('a pick above everything names no scene object', pickNothing.result.hit === null, {hit: pickNothing.result.hit, drawn: pickNothing.result.drawn});
   // The red box moves after the picture; a pick on that picture still names it, cast where the picture drew it.
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, -3]}), scene.red);
   const pickMoved = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
-  check('after the red box moves, a pick on the old picture still names it, with the point where the picture drew it',
+  const samePoint = (a, b) => !!a && !!b && a.every((value, i) => Math.abs(value - b[i]) < 1e-6);
+  check('after the red box moves, a pick on the old picture still names it, with the point the picture drew',
     pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.authority === 'exact' && pickMoved.result.hit.now === 'present'
-    && pickMoved.result.hit.geometry?.status === 'same' && Math.abs((pickMoved.result.hit.point?.[2] ?? 0) - pickRed.result.hit.point[2]) < 1e-6,
+    && pickMoved.result.hit.geometry?.status === 'same' && samePoint(pickMoved.result.hit.point, pickRed.result.hit.point),
     {hit: pickMoved.result.hit, before: pickRed.result.hit.point});
   const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
   check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
@@ -435,8 +445,9 @@ try {
   await page.waitForTimeout(300);
   const pickGone = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
   const liveGone = await vantageOk('pick', '0.5', '0.5');
-  check('after the red box is removed, the old picture still names it and says it is gone',
-    pickGone.result.hit?.id === scene.red && pickGone.result.hit.now === 'missing' && pickGone.result.hit.point === null, {hit: pickGone.result.hit});
+  check('after the red box is removed, the old picture still names it, says it is gone, and keeps the point it drew',
+    pickGone.result.hit?.id === scene.red && pickGone.result.hit.now === 'missing' && pickGone.result.hit.pointBasis === 'depth'
+    && samePoint(pickGone.result.hit.point, pickRed.result.hit.point), {hit: pickGone.result.hit});
   check('and a live pick through the same sub view no longer names it', liveGone.result.referent === 'rendered' && liveGone.result.hit?.id !== scene.red,
     {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
 

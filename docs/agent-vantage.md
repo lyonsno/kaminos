@@ -56,19 +56,24 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 ## Pointing at things
 
-A pick says what the renderer drew at a point of a picture or a view. Every picture keeps a pick map for that. In the same task that composes the picture, the page draws the scene once more with the picture's matrices into its own target, and every material keeps its own shader. What decides coverage is therefore the renderer's own logic: face side, alpha test and cut-outs, discards, vertex nodes, morphs, depth and colour-write state, and clipping. The only change is what each fragment writes: the drawing object's number, and its instance. The record keeps the map as runs, beside a row for each object it shows:
+A pick says what the renderer drew at a point of a picture or a view. Every picture keeps a pick map for that. In the same task that composes the picture, the page draws the scene once more with the picture's matrices into its own target, and every material keeps its own shader. What decides coverage is therefore the renderer's own logic: face side, alpha test and cut-outs, discards, vertex nodes, morphs, depth and colour-write state, and clipping. The only change is what each fragment writes: the drawing object's number and instance, and in a second target its view depth. The camera that draws the map has the picture camera's matrices, near and far planes. A material's own extra outputs are set aside for this draw, because they would take precedence over the map's. The record keeps the map as runs, beside a row for each object it shows:
 - its scene entry, mesh path and name;
 - the world matrices it was drawn with;
 - its geometry identity;
 - for an instanced mesh, the matrices of the instances it shows.
 
+The depth is kept as a file beside the picture (`…-depth.f32`), and the record keeps its path. It holds one little-endian float32 per pixel, in rows from the top: the view depth of what was drawn there (its distance along the camera's viewing axis), or 0 where nothing was. That is about 3.7 MB for a 1280×720 picture. A burst keeps depth for its frames only with `--depth`.
+
 The map draws no editor drawing, and nothing that is drawn outside the scene renderer (see below). It costs one more render per picture, and the first one in a page also compiles its shaders.
 
 `pick X Y --picture RECORD.json` (with `--frame N` for a burst frame) reads the picture's own map at pixel X Y:
 - the named object is the one the picture drew there, whatever has happened to the scene since;
-- the page then casts the ray at that mesh, placed where the picture drew it, for the point, the point in the object's own frame, the normal and the face.
+- the point is the one the picture drew there, from its depth: in the world, and in the object's own frame as the object stood;
+- the face and normal come from the mesh, placed where the picture drew it, when it still passes through that point.
 
-`pick X Y` (fractions of the sub's view, or of the framed view you see while looking through the sub) and `--from operator` draw a pick map now, at the size the viewport is drawn at, and read back the one pixel. The answer's `referent` is `pictured` for a kept picture and `rendered` for a live pick.
+`pick X Y` (fractions of the sub's view, or of the framed view you see while looking through the sub) and `--from operator` draw a pick map now, at the size the viewport is drawn at, and read back the one pixel and its depth. The answer's `referent` is `pictured` for a kept picture and `rendered` for a live pick.
+
+A pick names the pixel its point falls in, and its ray goes through that pixel's centre (`pixel`, `pixelCentre`), where the depth was drawn.
 
 A hit carries:
 
@@ -76,7 +81,8 @@ A hit carries:
 | --- | --- |
 | `authority` | `exact` when the renderer drew this object at that pixel and nothing drawn outside the map lies along the ray in front of it. Otherwise `approximate`, with `unresolved` saying what may cover it. |
 | `now` | `present`, `missing` (the object is gone) or `mesh-missing`. A missing object is still named, as the picture drew it. |
-| `point`, `local`, `normal`, `surface` | From casting the ray at the named mesh where it was drawn. A skinned mesh is cast as it is posed now (`pointBasis: recast-now`). These are empty when the ray does not meet the mesh as it is now (`missed`), when the drawing is a sprite, line or point cloud rather than a mesh (`not-a-mesh`), or when the instance is not known (`instance-unknown`). |
+| `point`, `local` | With depth (`pointBasis: depth`), the point drawn at that pixel, which later edits, moves or removal cannot change. Without depth (older pictures, burst frames kept without `--depth`), it comes from casting the ray at the named mesh where it was drawn (`recast`); a skinned mesh is cast as it is posed now (`recast-now`). Without depth, it is empty when the ray does not meet the mesh as it is now (`missed`), when the drawing is a sprite, line or point cloud rather than a mesh (`not-a-mesh`), or when the instance is not known (`instance-unknown`). |
+| `normal`, `surface.face` | From the mesh placed where it was drawn. With depth, they are given only when that mesh still passes through the drawn point (`surfaceBasis: recast-agrees`); otherwise they are empty (`recast-differs`). |
 | `geometry.status` | How the mesh's geometry compares with the picture: `same`, `edited` (an attribute, buffer, edit count, content or instance matrix changed), `replaced`, or after a reload `likely-same` or `unverified`. |
 
 When no scene object was drawn at the pixel, `hit` is empty and `drawn` says what was there: `nothing`, a drawing that is not a scene object (the ground, a proxy), or `unidentified`.
@@ -86,7 +92,7 @@ The map covers what the scene renderer draws into the scene canvas. Three things
 - simulation fields such as fire and smoke;
 - water from the local water host.
 
-A cloud or field whose bounds the ray crosses in front of the hit, and water whenever that host is drawing, go under `unresolved` and make the hit `approximate`, because any of them may be what the point shows. `fields` lists every field the ray crosses. A translucent surface in front is what a pick names, though the picture also shows what lies behind it. A material with its own fragment shader is traced with a stand-in, and its hits are `approximate`. A pick map numbers up to 65,534 objects in a page and 65,536 instances of a mesh. Past that, an object is `unidentified`, and a mesh with more instances names no instance. The map is drawn in the task that composes the picture: a change another callback makes to the scene between the scene canvas's last draw and that task would be in the map but not in the picture.
+A cloud or field whose bounds the ray crosses in front of the drawn depth, and water whenever that host is drawing, go under `unresolved` and make the hit `approximate`, because any of them may be what the point shows. Without depth, every crossing goes under `unresolved`: today's geometry cannot say what lay in front when the picture was taken. `fields` lists every field the ray crosses. A translucent surface in front is what a pick names, though the picture also shows what lies behind it. A material with its own fragment shader is traced with a stand-in, and its hits are `approximate`. A pick map numbers up to 65,534 objects in a page and 65,536 instances of a mesh. Past that, an object is `unidentified`, and a mesh with more instances names no instance. The map is drawn in the task that composes the picture: a change another callback makes to the scene between the scene canvas's last draw and that task would be in the map but not in the picture.
 
 Pictures kept without a pick map are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 

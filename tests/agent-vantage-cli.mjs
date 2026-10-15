@@ -177,9 +177,9 @@ test('pick on a kept picture looks the pixel up in its pick map and sends what t
   const first = await run(['--server', url, 'pick', '960', '180', '--picture', recordPath]);
   assert.equal(first.code, 0, first.stderr);
   const {geometry, ...kiln} = kilnRow;
-  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.75, 0.25], optics,
-    pictured: {...kiln, geometry, instance: 0}, scene: {clouds: pickMap([], '').clouds, fields: [], water: false}},
-    'a burst without --frame is its first frame; the kiln drew that pixel');
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.875, 0.25], optics,
+    pictured: {...kiln, geometry, instance: 0, pixel: [3, 0]}, scene: {clouds: pickMap([], '').clouds, fields: [], water: false}},
+    'a burst without --frame is its first frame; the kiln drew that pixel, picked through its centre');
   assert.match(first.stdout, /Kiln/);
   assert.match(first.stdout, /the picture drew/);
   const second = await run(['--server', url, 'pick', '0', '720', '--picture', recordPath, '--frame', '2']);
@@ -192,7 +192,7 @@ test('pick on a kept picture looks the pixel up in its pick map and sends what t
   assert.equal(sent.pictured.instances, undefined, 'not the whole table');
   const empty = await run(['--server', url, 'pick', '10', '10', '--picture', recordPath]);
   assert.equal(empty.code, 0, empty.stderr);
-  assert.deepEqual(received[2].body.args.pictured, {n: 0, instance: 0}, 'where the picture drew nothing, that is the answer');
+  assert.deepEqual(received[2].body.args.pictured, {n: 0, instance: 0, pixel: [0, 0]}, 'where the picture drew nothing, that is the answer');
   assert.match(empty.stdout, /drew nothing/);
 });
 
@@ -213,4 +213,43 @@ test('a picture kept without a pick map is refused unless today\'s scene is aske
   assert.equal(now.code, 0, now.stderr);
   assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.5], optics});
   assert.match(now.stdout, /draws there now/);
+});
+
+test('a picture\'s depth is kept as a file beside it, and a pick reads the depth at its pixel', async t => {
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  // Depth for a 4x2 map: 9.5 where the kiln was drawn, nothing elsewhere.
+  const depths = new Float32Array(8); depths[2] = 9.5; depths[3] = 9.75;
+  const bytes = Buffer.alloc(32); depths.forEach((value, i) => bytes.writeFloatLE(value, i * 4));
+  const map = {...pickMap([kilnRow], '0 0 2 3 0 2 0 0 4'), depth: {encoding: 'float32le-base64', unit: 'view-depth', width: 4, height: 2, data: bytes.toString('base64')}};
+  const {server, received, url} = await fakeServer((request, body) => [200, body.command === 'pick' ? pickReply(body.args)
+    : {...snapReply(body.command, body.args), result: {...snapReply(body.command, body.args).result, image: {width: 1280, height: 640},
+      optics: {projection: Array(16).fill(1), viewInverse: Array(16).fill(2)}, pickMap: map}}]);
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const snap = await run(['--server', url, '--out', out, 'snap', '--name', 'kiln']);
+  assert.equal(snap.code, 0, snap.stderr);
+  const depthFile = readdirSync(out).find(name => name.endsWith('-depth.f32'));
+  assert.ok(depthFile, 'the depth is written as its own file');
+  assert.deepEqual(readFileSync(path.join(out, depthFile)), bytes);
+  const recordPath = path.join(out, readdirSync(out).find(name => name.endsWith('.json')));
+  const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+  assert.equal(record.result.pickMap.depth.data, undefined, 'the record keeps a path, not the data');
+  assert.equal(record.result.pickMap.depth.path, path.join(out, depthFile));
+  const picked = await run(['--server', url, 'pick', '1000', '100', '--picture', recordPath]);
+  assert.equal(picked.code, 0, picked.stderr);
+  const sent = received.at(-1).body.args;
+  assert.equal(sent.pictured.depth, 9.75, 'the depth the picture drew at pixel 3, 0');
+  assert.deepEqual(sent.pictured.pixel, [3, 0]);
+  rmSync(path.join(out, depthFile));
+  const lost = await run(['--server', url, 'pick', '1000', '100', '--picture', recordPath]);
+  assert.equal(lost.code, 2, 'a picture whose depth file is gone is not picked as if it had none');
+  assert.match(lost.stderr, /depth/);
+});
+
+test('a burst keeps depth only when asked', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  t.after(() => server.close());
+  await run(['--server', url, 'burst', '--count', '2']);
+  assert.equal(received.at(-1).body.args.depth, false);
+  await run(['--server', url, 'burst', '--count', '2', '--depth']);
+  assert.equal(received.at(-1).body.args.depth, true);
 });
