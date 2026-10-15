@@ -35,7 +35,14 @@ try{
    return !!(l?.canRender()&&s.pointCount===4&&s.pointSampling==='paired'&&s.shadows.length===4&&s.shadows.every(x=>x.effective&&x.resolution===q.resolution&&x.blockerSamples===q.blockerSamples&&x.filterSamples===q.filterSamples));
   },quality);
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  const row=await page.evaluate(async()=>({lighting:window.__kaminosSceneRadiance.debugState(),owner:await window.kaminosWorkbenchExperiments.read(),volume:window.__kaminosVolumePrototype.debugState(),url:location.href,canvas:[document.querySelector('canvas').width,document.querySelector('canvas').height]}));
+  const row=await page.evaluate(async()=>{
+   const canvas=document.getElementById('kaminos-host-renderer-canvas');
+   if(!canvas||!(canvas.width>0&&canvas.height>0))throw Error('missing scene renderer surface');
+   const rect=canvas.getBoundingClientRect(),volume=window.__kaminosVolumePrototype.debugState();
+   for(const key of ['width','height','displayWidth','displayHeight','renderScale'])if(!(Number.isFinite(volume[key])&&volume[key]>0))throw Error('missing volume dimensions: '+key);
+   if(!(rect.width>0&&rect.height>0))throw Error('missing scene renderer display');
+   return {lighting:window.__kaminosSceneRadiance.debugState(),owner:await window.kaminosWorkbenchExperiments.read(),volume,url:location.href,canvas:[canvas.width,canvas.height],sceneDisplay:[rect.width,rect.height]};
+  });
   assert(row&&row.lighting&&row.owner,'missing observation');
   assert.deepEqual(row.owner.shadowQuality,quality);assert.equal(row.volume.backend,'WebGPU:apple');
   assert.equal(row.lighting.evaluatedPointCount,2);assert.equal(row.lighting.capturedPointCount,4);
@@ -53,6 +60,14 @@ try{
   report.rows=[];
   const capture=async(name,quality)=>{
    const row=await observe(quality),png=await page.screenshot({path:out+'/'+name+'.png'});
+   // viewport-preservation:start
+   if(report.rows.length){
+    const baseline=report.rows[0];
+    assert.deepEqual(row.canvas,baseline.canvas,'scene dimensions changed');
+    assert.deepEqual(row.sceneDisplay,baseline.sceneDisplay,'scene display dimensions changed');
+    for(const key of ['width','height','displayWidth','displayHeight','renderScale'])assert.equal(row.volume[key],baseline.volume[key],'volume dimensions changed: '+key);
+   }
+   // viewport-preservation:end
    const decoded=decodeScreenshotPngRgb(png);assertCapturePixels(decoded,{width:decoded.width,height:decoded.height});
    row.image=name+'.png';report.rows.push(row);await write();
   };
@@ -73,7 +88,6 @@ try{
   await capture('owner-reopen',{resolution:192,blockerSamples:7,filterSamples:12});
   report.phase='restore';await page.getByRole('button',{name:'Restore 256 / 9 / 16',exact:true}).click();
   await capture('restored',baseline);
-  assert.deepEqual(report.rows[0].canvas,report.rows.at(-1).canvas);
   const after=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
   assert.deepEqual(after.values,before.values);report.sourceUnchanged=true;
   report.handoff=report.rows.at(-1).url;return {url:report.handoff};
