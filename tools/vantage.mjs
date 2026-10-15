@@ -2,7 +2,7 @@
 // Pilot the agent vantage (the sub) in a live Kaminos page from the terminal.
 // Pictures are written as PNG files beside a JSON record of what was asked,
 // which page answered, the view, and the objects in frame.
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import path from 'node:path';
 import {checkedCommand, poseAxes, DEFAULT_PILOT} from '../agent-vantage-core.mjs';
@@ -27,8 +27,10 @@ Commands
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--name NAME]
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
+  pick X Y [--from sub|operator]      what lies under a point of the view; X and Y are fractions from the top left
+  pick X Y --picture RECORD.json [--frame N]   the same for a pixel of a kept picture, from the camera that took it
 
-Pictures carry the map unless --no-map is given.
+Pictures carry the map unless --no-map is given. A pick renders nothing.
 
 TARGET is an object id, a label or a unique part of one, "selection", or X Y Z.
 
@@ -42,7 +44,8 @@ Options
 
 const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
-  'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size']);
+  'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
+  'from', 'picture', 'frame']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -90,8 +93,30 @@ function commandArgs(command, rest, options, pilot) {
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined});
     case 'map': return defined({size: number(options.size)});
     case 'sketch': return {};
+    case 'pick': return pickArgs(rest, options, pilot);
     default: return {};
   }
+}
+
+// A pick names a point as fractions of the view from its top left, or as a
+// pixel of a kept picture, whose record holds the camera that took it.
+function pickArgs(rest, options, pilot) {
+  if (rest.length !== 2 || !rest.every(token => token.trim() !== '' && Number.isFinite(Number(token)))) throw new Exit(2, 'pick needs X Y');
+  const [x, y] = rest.map(Number);
+  if (!options.picture) {
+    if (x > 1 || y > 1) throw new Exit(2, 'Without --picture, X and Y are fractions of the view from its top left (0 to 1). For pixels of a picture, add --picture RECORD.json.');
+    return defined({pilot, from: options.from, at: [x, y]});
+  }
+  let record;
+  try { record = JSON.parse(readFileSync(options.picture, 'utf8')); }
+  catch (error) { throw new Exit(2, `Cannot read the picture record ${options.picture}: ${error.message}`); }
+  const result = record.result ?? record, frame = options.frame === undefined ? null : Number(options.frame);
+  if (frame !== null && !(Number.isInteger(frame) && frame >= 1)) throw new Exit(2, '--frame counts burst frames from 1');
+  const optics = frame === null ? result.optics : result.frames?.[frame - 1]?.optics;
+  if (!optics) throw new Exit(2, frame === null ? `${options.picture} records no camera; take the picture again with this version` : `${options.picture} has no frame ${frame} with a camera`);
+  const {width, height} = result.image ?? {};
+  if (!(width > 0 && height > 0)) throw new Exit(2, `${options.picture} records no picture size`);
+  return {pilot, from: 'sub', at: [x / width, y / height], optics};
 }
 
 async function request(server, method, route, body) {
@@ -161,6 +186,18 @@ function summarize(command, record) {
     for (const object of [...list(result.objects), ...list(result.fields)]) {
       lines.push(`  ${object.label} [${object.id}] ${object.type}${object.bounds ? ` ${point(object.bounds.min)}..${point(object.bounds.max)}` : ''}`);
     }
+  } else if (command === 'pick') {
+    const who = result.from === 'picture' ? 'the picture camera' : result.from === 'operator' ? 'your view' : result.from;
+    lines.push(`ray from ${who} through (${fmt(result.at[0])}, ${fmt(result.at[1])}) of the frame`);
+    const hit = result.hit;
+    if (hit) {
+      lines.push(`  hits      ${hit.label} [${hit.id}] ${fmt(hit.distance)} m away at ${point(hit.point)}`);
+      const surface = [hit.surface?.mesh ? `mesh ${hit.surface.mesh}` : null, Number.isInteger(hit.surface?.face) ? `face ${hit.surface.face}` : null].filter(Boolean).join(', ');
+      lines.push(`  on it     ${point(hit.local)} in its own frame${surface ? `, ${surface}` : ''}`);
+      if (hit.normal) lines.push(`  facing    ${point(hit.normal)}`);
+    } else lines.push('  hits      nothing along that ray');
+    for (const field of result.fields ?? []) lines.push(`  through   ${field.label} from ${fmt(field.enter)} to ${fmt(field.exit)} m`);
+    if (result.beyond?.length) lines.push(`  behind    ${result.beyond.map(item => `${item.label} ${fmt(item.distance)} m`).join(' · ')}`);
   } else if (result.images) {
     lines.push(`${result.kind} · ${result.pilot ?? 'operator'} · ${result.route} · ${result.image?.width}×${result.image?.height} · layers: ${(result.layers || []).join(', ')}`);
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
