@@ -3,6 +3,16 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {getSceneObjectRecords} from '../scene-persistence-core.js';
+import {FLAME_EMITTER_ID,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from '../scene-flame-emitter.mjs';
+
+test('canonical scene normalization preserves disabled source state and refuses retyped state',()=>{
+  const record={id:FLAME_EMITTER_ID,type:FLAME_EMITTER_TYPE,source:FLAME_EMITTER_SOURCE,emissionEnabled:false};
+  const restore=object=>getSceneObjectRecords({version:10,objects:[object]})[0];
+  assert.equal(restore(record).emissionEnabled,false);
+  assert.throws(()=>restore({...record,emissionEnabled:'false'}),/emission enabled/);
+  const old={...record};delete old.emissionEnabled;assert.equal(restore(old).emissionEnabled,true);
+});
 
 test('disabled authored emission survives serialization and source registration',()=>{
   const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
