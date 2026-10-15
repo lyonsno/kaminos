@@ -33,7 +33,7 @@ export async function witness(args){
   report.phase='ordinary-area-edit';await page.getByRole('button',{name:'Edit wander area',exact:true}).click();
   assert.equal(await page.locator('.scene-owner-playback').isVisible(),true,'Area selection hides the creature transport');
   const input=page.locator('input[data-transform-field="position.x"]');assert.equal(await input.isVisible(),true);assert.equal(await input.isEnabled(),true);
-  const nextX=report.held.action.area.transform.position[0]+6;await input.fill(String(nextX));await input.dispatchEvent('change');await settle();
+  const nextX=report.held.action.area.transform.position[0]+6;await input.click();await input.fill(String(nextX));await input.press('Enter');await settle();
   report.areaEdited=await read();assert.equal(report.areaEdited.action.area.transform.position[0],nextX);assert.deepEqual(report.areaEdited.action.motion.path.position,report.held.action.motion.path.position,'Editing area teleports the creature');
   // A zero-time invocation applies the edited footprint through the same owner
   // operation as playback, without inventing a second rendering clock.
