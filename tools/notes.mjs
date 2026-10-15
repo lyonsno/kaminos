@@ -16,10 +16,11 @@ Waiting and reading
   inbox --as NAME [--all]
                        Notes for NAME not yet marked seen (--all: every note for NAME).
   show REF             A note and its thread. REF is a note id, the text copied from
-                       the page, or a ?note= link.
+                       the page, or a note link.
   list [--scene FILE] [--all]
                        Open threads (--all: resolved ones too).
   presence             Who is listening, and which pages are open.
+  participants         Everyone a note can be addressed to, and who is listening.
 
 Writing
   reply REF TEXT --as NAME [--to NAMES] [--picture PNG] [--urgent]
@@ -27,6 +28,8 @@ Writing
            [--to NAMES] [--picture PNG] [--urgent]
   seen REF... --as NAME      resolve REF --as NAME      reopen REF --as NAME
   ref REF              Print the text to paste into a conversation.
+  register --as NAME [--about TEXT]
+                       Say who you are, so people can @mention you from the page.
 
 NAME may also come from KAMINOS_NOTES_AS. The server is --server, else
 KAMINOS_NOTES_SERVER, else KAMINOS_VANTAGE_SERVER, else http://127.0.0.1:8090.
@@ -195,6 +198,19 @@ async function main(argv) {
       const type = {seen: 'seen', resolve: 'resolved', reopen: 'reopened'}[command];
       const receipt = await api.call('/api/notes/receipt', {method: 'POST', body: {type, notes: args.map(refOf), author: as}});
       print(`${type} ${receipt.notes.join(', ')}`, receipt);
+      return 0;
+    }
+    case 'register': {
+      const as = who(flags);
+      const record = await api.call('/api/notes/participants', {method: 'POST', body: {author: as, about: flags.about ?? ''}});
+      print(`registered @${record.name}${record.about ? ` \u00b7 ${record.about}` : ''}`, record);
+      return 0;
+    }
+    case 'participants': {
+      const {participants, directoryProblem} = await api.call('/api/notes/participants');
+      if (directoryProblem) console.error(directoryProblem);
+      const line = row => `@${row.name} (${row.kind})${row.listening ? ' \u00b7 listening' : ''}${row.about ? ` \u00b7 ${row.about}` : ''} \u00b7 ${row.sources.join(', ')}`;
+      print(participants.length ? participants.map(line).join('\n') : 'No one yet.', participants);
       return 0;
     }
     case 'presence': {

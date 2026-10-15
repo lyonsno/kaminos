@@ -249,10 +249,48 @@ try {
   check('the pasted ref resolves in the terminal with its picture', shown.code === 0 && shown.stdout.includes('object "Witness red"') && /^picture: /m.test(shown.stdout),
     {code: shown.code, stderr: shown.stderr});
 
+  report.phase = 'mentions'; save();
+  // Typing @ suggests people known here; Tab completes; only known names
+  // address anyone, and the reach line says so before posting.
+  if (await page.isHidden('.kn-drawer')) await page.click('.kn-toggle');
+  await page.fill('.kn-compose textarea', '');
+  await page.click('.kn-compose textarea');
+  await page.keyboard.type('@notes-wit');
+  await page.waitForSelector('.kn-suggest:not([hidden]) .kn-suggest-item', {timeout: 8000});
+  const offered = await page.$$eval('.kn-suggest .kn-suggest-item b', items => items.map(item => item.textContent));
+  check('typing @ offers the people known here', offered[0] === `@${AGENT}`, {offered: offered.slice(0, 5)});
+  const mentionsShot = path.join(out, 'mentions.png');
+  await page.screenshot({path: mentionsShot});
+  report.artifacts.push(mentionsShot);
+  await page.keyboard.press('Tab');
+  const completed = await page.inputValue('.kn-compose textarea');
+  check('Tab completes the mention', completed === `@${AGENT} ` && await page.isHidden('.kn-suggest'), {completed});
+  await page.keyboard.type('the cup glows; can we also get @mentions in replies?');
+  await page.waitForFunction(() => /isn't anyone known here/.test(document.querySelector('.kn-reach')?.textContent ?? ''), null, {timeout: 5000});
+  const reachLine = await page.textContent('.kn-reach');
+  check('the reach line names who a note reaches and which @words stay text',
+    reachLine.startsWith(`Reaches @${AGENT}`) && reachLine.includes('@mentions'), {reachLine});
+  await page.click('.kn-compose .kn-btn.primary');
+  await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 30000});
+  const mentionNoteId = (await page.textContent('.kn-status')).match(/Posted (kn-[0-9a-z]+)/)[1];
+  const mentionNote = (await log()).find(event => event.id === mentionNoteId);
+  check('only the known name is addressed', JSON.stringify(mentionNote?.to) === JSON.stringify([AGENT]) && !mentionNote.recipients.includes('mentions'),
+    {to: mentionNote?.to, recipients: mentionNote?.recipients});
+  const taken = await notes(['--json', 'wait', '--as', AGENT, '--timeout', '10'], {timeoutMs: 40000});
+  let takenIds = [];
+  try { takenIds = JSON.parse(taken.stdout).notes.map(note => note.id); } catch {}
+  check('the mentioned agent receives it', taken.code === 0 && takenIds.includes(mentionNoteId), {code: taken.code, takenIds});
+
   report.phase = 'negative-controls'; save();
+  const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
+  check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});
+  // Reopening the drawer refreshes who is known here.
+  await page.click('.kn-close');
+  await page.click('.kn-toggle');
   const notForMe = notes(['wait', '--as', AGENT, '--timeout', '4'], {timeoutMs: 30000});
   await sleep(600);
   await page.fill('.kn-compose textarea', '@someone-else the floor is too glossy');
+  await page.waitForFunction(() => (document.querySelector('.kn-reach')?.textContent ?? '').startsWith('Reaches @someone-else'), null, {timeout: 8000});
   await page.click('.kn-compose .kn-btn.primary');
   await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 20000});
   const quiet = await notForMe;

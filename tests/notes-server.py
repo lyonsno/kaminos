@@ -154,6 +154,29 @@ def follow_up_contracts(notes):
         assert addressed["recipients"] == ["other", "agent"], addressed["recipients"]
 
 
+def participant_contracts(notes):
+    """Who can be addressed: agents that listened, registered or wrote, the
+    page's person, and a directory the server is given."""
+    with tempfile.TemporaryDirectory() as tmp:
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        log.claim("listener-agent", timeout=0)
+        registered = log.register({"author": "helper-agent", "about": "reads fluid notes"}, origin=CLI)
+        assert registered["name"] == "helper-agent" and registered["about"] == "reads fluid notes", registered
+        log.post({"kind": "note", "text": "hi", "anchor": {"kind": "scene"}, "author": "writer-agent"}, origin=CLI)
+        rows = {row["name"]: row for row in log.participants(directory=["Shop-Agent", "bad name", "helper-agent"])}
+        assert set(rows) == {"noah", "listener-agent", "helper-agent", "writer-agent", "shop-agent"}, sorted(rows)
+        assert rows["noah"]["kind"] == "person" and rows["helper-agent"]["kind"] == "agent", rows
+        assert rows["helper-agent"]["about"] == "reads fluid notes", rows["helper-agent"]
+        assert set(rows["helper-agent"]["sources"]) == {"registered", "directory"}, rows["helper-agent"]
+        assert "listened" in rows["listener-agent"]["sources"] and "wrote" in rows["writer-agent"]["sources"], rows
+        assert rows["shop-agent"]["sources"] == ["directory"], rows["shop-agent"]
+        again = log.register({"author": "helper-agent", "about": "reads fluid and fire notes"}, origin=CLI)
+        assert again["about"] == "reads fluid and fire notes"
+        expect_error(notes, 403, "reserved-author", lambda: log.register({"author": "noah"}, origin=CLI))
+        expect_error(notes, 400, "request", lambda: log.register({"author": "helper-agent", "about": 5}, origin=CLI))
+        expect_error(notes, 400, "request", lambda: log.register({"about": "x"}, origin=PAGE))
+
+
 # --- HTTP, through a real serve.py ------------------------------------------
 
 def free_port():
@@ -304,6 +327,11 @@ def http_contracts():
             assert status == 200 and [event["id"] for event in answer["notes"]] == [other["id"]], answer
             assert stream.next("events", lambda payload: any(event.get("id") == reply["id"] for event in payload["events"]))
 
+            status, people = call(port, "GET", "/api/notes/participants")
+            names = {row["name"]: row for row in people["participants"]}
+            assert status == 200 and names["noah"]["kind"] == "person" and "listened" in names["notes-agent"]["sources"], people
+            status, joined = call(port, "POST", "/api/notes/participants", {"author": "helper-agent", "about": "reads notes"})
+            assert status == 200 and joined["name"] == "helper-agent", (status, joined)
             status, image = call(port, "GET", f"/api/notes/picture?note={note['id']}")
             assert status == 200 and image == PNG, status
             status, missing = call(port, "GET", f"/api/notes/picture?note={reply['id']}")
@@ -374,6 +402,7 @@ if __name__ == "__main__":
     notes = load_notes()
     log_contracts(notes)
     follow_up_contracts(notes)
+    participant_contracts(notes)
     http_contracts()
     presence_stream_contracts()
     print("notes server contracts passed")

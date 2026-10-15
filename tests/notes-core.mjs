@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor,
-  parseRef, formatRef, noteLink, describeNote} from '../notes-core.mjs';
+  parseRef, formatRef, noteLink, describeNote, mentionQueryAt, rankParticipants, completeMention, addresseesIn} from '../notes-core.mjs';
 
 const at = seq => `2026-10-14T18:${String(seq).padStart(2, '0')}:00.000Z`;
 const ev = (seq, fields) => ({schema: NOTES_SCHEMA, seq, at: at(seq), ...fields});
@@ -145,4 +145,33 @@ test("a reply is described with its own view; the thread's opening view is kept 
   assert.match(opening, /camera: position \[0, 1, 3\]/);
   const bare = describeNote(state, REPLY_ID, {root: '/tmp/n'});
   assert.match(bare, /no view was recorded with this note/);
+});
+
+test('an @ being typed is found at the caret, and only there', () => {
+  assert.deepEqual(mentionQueryAt('hey @kom', 8), {start: 4, end: 8, query: 'kom'});
+  assert.deepEqual(mentionQueryAt('@', 1), {start: 0, end: 1, query: ''});
+  assert.deepEqual(mentionQueryAt('(@Pilot', 7), {start: 1, end: 7, query: 'pilot'});
+  assert.equal(mentionQueryAt('mail a@b.c', 10), null, 'an @ inside a word is not a mention');
+  assert.equal(mentionQueryAt('hey @kom done', 13), null, 'a finished word is not being typed');
+  assert.equal(mentionQueryAt('hey @kom', 3), null, 'the caret must be at the end of the @word');
+});
+
+test('suggestions put names that start with what was typed first, and listening agents first within each group', () => {
+  const people = [{name: 'kiln-notes-agent', listening: false}, {name: 'sub-pilot', listening: true},
+    {name: 'notes-helper', listening: true}, {name: 'other', listening: false}];
+  assert.deepEqual(rankParticipants(people, 'no').map(person => person.name), ['notes-helper', 'kiln-notes-agent']);
+  assert.deepEqual(rankParticipants(people, '').map(person => person.name), ['notes-helper', 'sub-pilot', 'kiln-notes-agent', 'other']);
+  assert.deepEqual(rankParticipants(people, 'zz'), []);
+});
+
+test('completing a mention replaces what was typed and leaves the caret after it', () => {
+  assert.deepEqual(completeMention('hey @not', 8, 'notes-agent'), {text: 'hey @notes-agent ', caret: 17});
+  assert.deepEqual(completeMention('hey @not there', 8, 'notes-agent'), {text: 'hey @notes-agent there', caret: 16});
+  assert.equal(completeMention('no mention here', 4, 'x'), null);
+});
+
+test('only known names in the text address anyone; other @words stay text', () => {
+  assert.deepEqual(addresseesIn('@notes-agent can we add @mentions here? @Notes-Agent', ['notes-agent', 'noah']),
+    {recognized: ['notes-agent'], unknown: ['mentions']});
+  assert.deepEqual(addresseesIn('no one at all', ['noah']), {recognized: [], unknown: []});
 });

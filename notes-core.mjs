@@ -204,3 +204,45 @@ export function describeNote(state, id, {root}) {
   if (link) lines.push(`open: ${link}`);
   return lines.join('\n');
 }
+
+
+// --- @mentions --------------------------------------------------------------
+
+const MENTION = /(^|[\s(,;])@([a-z0-9][a-z0-9._-]{0,63})/gi;
+const MENTION_AT_CARET = /(^|[\s(,;])@([a-z0-9._-]{0,64})$/i;
+
+// Every @name written in a text, lowercased, first occurrence first.
+export const mentionsIn = text => [...new Set([...String(text ?? '').matchAll(MENTION)].map(match => match[2].toLowerCase()))];
+
+// The @word being typed where the caret is, or null.
+export function mentionQueryAt(text, caret) {
+  const value = String(text ?? '');
+  const match = value.slice(0, caret).match(MENTION_AT_CARET);
+  if (!match || /^[a-z0-9._-]/i.test(value.slice(caret))) return null;
+  return {start: caret - match[2].length - 1, end: caret, query: match[2].toLowerCase()};
+}
+
+// Names that start with what was typed come before names that contain it;
+// within each, agents listening now come first.
+export function rankParticipants(participants, query) {
+  const typed = String(query ?? '').toLowerCase();
+  const score = person => person.name.startsWith(typed) ? 0 : person.name.includes(typed) ? 1 : 2;
+  return participants.filter(person => score(person) < 2)
+    .sort((a, b) => score(a) - score(b) || Number(!!b.listening) - Number(!!a.listening) || a.name.localeCompare(b.name));
+}
+
+// Replace the @word being typed with @name, and put the caret after it.
+export function completeMention(text, caret, name) {
+  const found = mentionQueryAt(text, caret);
+  if (!found) return null;
+  const value = String(text), after = value.slice(caret), space = after.startsWith(' ') ? '' : ' ';
+  return {text: `${value.slice(0, found.start)}@${name}${space}${after}`, caret: found.start + 1 + name.length + space.length};
+}
+
+// Only @names someone could answer to address anyone; other @words stay text.
+export function addresseesIn(text, known) {
+  const names = new Set([...known].map(name => String(name).toLowerCase()));
+  const recognized = [], unknown = [];
+  for (const name of mentionsIn(text)) (names.has(name) ? recognized : unknown).push(name);
+  return {recognized, unknown};
+}
