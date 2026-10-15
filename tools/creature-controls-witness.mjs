@@ -31,6 +31,25 @@ export function validateCreatureFrameRead(r,camera){
  const actualDistance=new THREE.Vector3().fromArray(camera.position).distanceTo(center);assert.ok(Math.abs(actualDistance-expectedDistance)<1e-5,'Frame distance includes empty travel or helper bounds');
  return {bodyCenter:center.toArray(),bodySize:size.toArray(),expectedDistance,actualDistance,camera};
 }
+export function validateWanderObservation(r){
+ const a=r.action,m=a?.motion,p=m?.path;
+ assert.equal(a?.kind,'wander');assert.equal(a.error,null);assert.equal(a.area?.mounted,true);
+ assert.ok(r.registration.some(row=>row.id===a.area.id&&row.objectVisible),'Wander area is not actually registered and visible');
+ assert.equal(m.sourceKey,r.source.motionSha256+':'+r.source.frameSha256,'Wander uses a stale motion/bind source');
+ assert.ok(Number.isFinite(m.elapsed)&&m.elapsed>=0);assert.ok(Number.isInteger(m.cycle)&&m.cycle>=0);
+ assert.ok(Number.isFinite(p.distance)&&p.distance>=0);assert.ok(p.position.length===2&&p.position.every(Number.isFinite));
+ const root=r.boneWorld.find(b=>b.name==='pelvis');assert.ok(root,'Observed rig has no actual pelvis root');
+ const position=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(root.matrix)).applyMatrix4(new THREE.Matrix4().fromArray(r.placementMatrix).invert());
+ assert.ok(Math.hypot(position.x-p.position[0],position.z-p.position[1])<1e-5,'Reported path does not drive the actual root Bone');
+ return {rootInPlacement:position.toArray(),elapsed:m.elapsed,cycle:m.cycle,distance:p.distance,position:p.position};
+}
+export function validateWanderProgress(before,after,{minimumCycles=0}={}){
+ const a=validateWanderObservation(before),b=validateWanderObservation(after);
+ assert.ok(b.elapsed>a.elapsed,'Action clock did not advance');assert.ok(b.distance>a.distance,'Source-paced travel did not advance');
+ assert.ok(b.cycle-a.cycle>=minimumCycles,'Wander did not cross the requested source-clip boundary');
+ assert.ok(Math.hypot(...b.rootInPlacement.map((v,i)=>v-a.rootInPlacement[i]))>1e-5,'Only a reported path advanced; actual root did not move');
+ return {before:a,after:b};
+}
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});
  const report={schema:'kaminos.creature-controls-witness.v1',status:'running',phase:'inputs',requested:args,captures:[],errors:[],actions:[]};
