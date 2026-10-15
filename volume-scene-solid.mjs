@@ -305,7 +305,8 @@ export function voxelizeTriangleSolid(triangles, grid, height = 2 * grid) {
 // Fill each authored object independently, then union occupancy. This preserves
 // object interiors without treating a space between separate meshes as solid.
 // Mesh edits invalidate only their own field; domain/grid edits invalidate all.
-export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid}={}) {
+export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid,gpuProducer=null}={}) {
+  if (gpuProducer) return gpuProducer;
   const members=new Map();let combined=null;
   return {update(objects,transform,{grid,gridHeight=2*grid}) {
     const ids=new Set(),fields=[];let builds=0;

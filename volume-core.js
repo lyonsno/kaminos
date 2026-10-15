@@ -15,6 +15,7 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
+import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
@@ -11953,6 +11954,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidRevisionKey = null;
   let sceneSolidCellsCpu = null;
   let sceneSolidGeometryCache = null;
+  let sceneSolidGpu = null;
   let sceneSolidSupportCache = null;
   let immersedWallCache = null;
   const immersedSourceWeightCache = createImmersedSourceWeightCache();
@@ -12853,6 +12855,9 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    sceneSolidGpu?.destroy();
+    sceneSolidGpu = null;
+    sceneSolidGeometryCache = null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
     sceneSolidTextureView = null;
@@ -13195,6 +13200,11 @@ export function createKaminosVolumePrototype({
       : !transport.commonCharacteristic ? `unsupported-transport-regime:${transport.scheme}`
       : null;
     if (reason || !requested) {
+      if (sceneSolidGpu) {
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;
+        sceneSolidTexture=null;sceneSolidCellsCpu=null;sceneSolidRevisionKey=null;
+        installSceneSolidTexture();rebuildSceneSolidBindingViews();
+      }
       if (backWall.cells.length) {
         const key = `wall:${backWall.maskKey}`;
         if (sceneSolidRevisionKey !== key) {
@@ -13215,6 +13225,27 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
+      if (typeof device.createComputePipeline === 'function') {
+        sceneSolidGpu ||= createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});
+        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
+        const maskKey=JSON.stringify([geometry.key,backWall.maskKey]);
+        if(sceneSolidTexture!==sceneSolidGpu.texture){
+          sceneSolidTexture?.destroy();sceneSolidTexture=sceneSolidGpu.texture;sceneSolidTextureView=sceneSolidGpu.view;
+          sceneSolidTextureSizeKey=[gridSize,gridHeight,gridSize].join('x');sceneSolidTextureDevice=device;
+          sceneSolidCellsCpu=null;rebuildSceneSolidBindingViews();
+        }
+        if(sceneSolidRevisionKey===maskKey)return;
+        const encoder=device.createCommandEncoder({label:'scene solid GPU rebuild'});
+        sceneSolidGpu.encode(encoder);device.queue.submit([encoder.finish()]);
+        sceneSolidRevisionKey=maskKey;
+        state.sceneSolidGeometryBuilds=(state.sceneSolidGeometryBuilds||0)+geometry.builds;
+        state.sceneCollision={requested:true,effective:'mesh-voxel-solid',backend:'gpu',sourceId,reason:null,
+          geometryRevision:geometry.revision,grid:gridSize,triangleCount:geometry.triangleCount,members:geometry.members,
+          solidCellCount:null,blockedFaceCount:null,surfaceCellCount:null,interiorCellCount:null,
+          sourceSupport:null,validation:'gpu-resident-unread',emitterBackWallCells:backWall.cells.length,
+          residentBytes:gridSize*gridHeight*gridSize*4,rebuildSubmitMs:performance.now()-started,rebuildStep:state.simStepCount};
+        return;
+      }
       sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
       const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
       const {revision,field}=geometry;
@@ -13260,6 +13291,10 @@ export function createKaminosVolumePrototype({
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
+      if (sceneSolidGpu) {
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;sceneSolidRevisionKey=null;
+        installSceneSolidTexture();rebuildSceneSolidBindingViews();
+      }
       if (sceneSolidCellsCpu && installSceneSolidTexture()) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = null;
       state.sceneCollision = { requested: true, effective: 'off', sourceId,
@@ -16582,6 +16617,12 @@ export function createKaminosVolumePrototype({
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
+    if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
+      // Q/normaliser is unchanged by the solid-mask fraction; the shader still
+      // skips solid cells. Host-only totals are predictions without a snapshot.
+      state.immersedSource.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';
+      state.immersedSource.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};
+    }
     const gasPressure = resolvePressureSolverConfig(controlsSnapshot).effective;
     const residentGasAdmitted = !!gpuThermalConsumer?.gasSource && gasPressure.solver === PRESSURE_SOLVER_CONVERGED && gasPressure.dispatch === PRESSURE_SOLVER_CONVERGED && gasPressure.openTop;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
@@ -27174,7 +27215,23 @@ export function createKaminosVolumePrototype({
       if(knownRevision === revision)return null;
       return {revision,cells:sceneSolidCellsCpu?.slice()??null,
         dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
-        runtime:structuredClone(state.sceneCollision)};
+        runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',snapshotStatus:sceneSolidGpu?'explicit-snapshot-required':'available'};
+    },
+    async sampleSceneCollisionMask() {
+      const producer=sceneSolidGpu,revision=sceneSolidRevisionKey;
+      if(!producer)return {status:'sampled',cells:sceneSolidCellsCpu?.slice()??null,runtime:structuredClone(state.sceneCollision)};
+      const snapshot=await producer.snapshot();
+      if(producer!==sceneSolidGpu||revision!==sceneSolidRevisionKey)return {status:'stale',revision};
+      let solidCellCount=0,blockedFaceCount=0;const cells=snapshot.cells,plane=gridSize*gridHeight;
+      for(let z=0;z<gridSize;z++)for(let y=0;y<gridHeight;y++)for(let x=0;x<gridSize;x++){
+        const i=x+gridSize*(y+gridHeight*z);if(!cells[i])continue;solidCellCount++;
+        if(x>0&&!cells[i-1])blockedFaceCount++;if(x+1<gridSize&&!cells[i+1])blockedFaceCount++;
+        if(y>0&&!cells[i-gridSize])blockedFaceCount++;if(y+1<gridHeight&&!cells[i+gridSize])blockedFaceCount++;
+        if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<gridSize&&!cells[i+plane])blockedFaceCount++;
+      }
+      const sourceSupport=countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,cells,gridSize,gridHeight);
+      const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,validation:'explicit-gpu-snapshot'};
+      return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
@@ -27922,7 +27979,8 @@ export function createKaminosVolumePrototype({
         fluidReadIndex: currentFluid,
         frontBuffer: frontBuffers?.[currentFront] ?? null,
         burnRateTexture,
-        solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
+        solidMask: sceneSolidGpu ? {backend:'gpu',texture:sceneSolidTexture,cells:null,revision:sceneSolidRevisionKey,dims:[gridSize,gridHeight,gridSize]}
+          : sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
         lowerFaceTexture: joinedLowerFaceTexture,
         prescribedInlet: null,
         ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
