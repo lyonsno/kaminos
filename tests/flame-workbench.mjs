@@ -5,6 +5,9 @@ import {createFlameWorkbench,observeFlameInvestigation,createFlameInvestigation}
 import {createInvestigationRecording,investigationOperations} from '../investigation-recording.mjs';
 import definition from '../experiments/flame.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import {createSceneEdits} from '../scene-edit-session.mjs';
 
 function fixture() {
   let settings={domControls:{'volume-flow-rate':{value:1,rawValue:'1'},'volume-look-freeze':{value:0}},
@@ -87,6 +90,52 @@ test('source observations retain effective renderer controls alongside authored 
   assert.equal(row.phase,'observed','an observation must not label a pending DOM preview as applied GPU state');
   assert.equal(row.effectiveRuntimeControls.flowRate,2);
   assert.equal(row.effective.domControls['volume-flow-rate'].value,3);
+});
+
+test('deferred controls record confirmation separately from preview and cancellation',()=>{
+  const f=fixture(),api=createFlameWorkbench(f.options);
+  const rows=[],stop=observeFlameInvestigation({read:api.read,subscribe:f.options.subscribe,channel:{emit:row=>rows.push(structuredClone(row))}});
+  f.draftInput(3);
+  assert.equal(rows.length,1);assert.equal(rows[0].effectiveRuntimeControls.flowRate,1);
+  f.runtime.controls.flowRate=3;f.runtime.simStepCount=0;f.notify();
+  assert.equal(rows.length,2,'the same authored value becoming effective is a distinct observation');
+  assert.equal(rows[1].kind,'flame.runtime');assert.equal(rows[1].effectiveRuntimeControls.flowRate,3);
+  assert.equal(rows[1].clock.simStepCount,0);
+  f.draftInput(4);f.draftInput(3);
+  assert.equal(rows.filter(row=>row.kind==='flame.runtime').length,1,'cancellation cannot claim another application');
+  f.runtime.simStepCount=30;f.runtime.frameCount=70;f.notify();
+  assert.equal(rows.length,4,'ordinary clock advances are not interventions');stop();
+});
+
+test('the real host retains geometry, collision and confirmed-source notifications',()=>{
+  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const functionSource=source.slice(source.indexOf('function openFlameWorkbench() {'),source.indexOf('window.kaminosFlameWorkbench='));
+  const f=fixture(),document=new EventTarget(),window=new EventTarget(),controls=new EventTarget();
+  let objects=[{id:'box',type:'mesh',geometry:{kind:'box',parameters:{width:1}},collision:{enabled:false},transform:{position:[0,0,0]}}],collisionEnabled=false;
+  const edits=createSceneEdits({read:()=>null,write:()=>{}});
+  edits.register('@box',{read:()=>objects[0],write:next=>{objects=[next];},check:next=>next});
+  edits.register('@collision',{read:()=>({enabled:collisionEnabled}),write:next=>{collisionEnabled=next.enabled;},check:next=>next});
+  Object.assign(window,{kaminosFlameAuthoring:{read:f.options.readSettings,apply:f.options.applySettings},
+    kaminosSelection:{read:()=>({ids:['box']})},kaminosFlameDomain:{read:()=>({position:[0,0,0]})},
+    kaminosSceneCollision:{read:()=>({enabled:collisionEnabled,runtime:{movingDiagnostic:1}})}});
+  const api=runInNewContext(functionSource+'\nopenFlameWorkbench()',{
+    window,document,controls,createFlameWorkbench,scenePlacementTools:{edits},
+    volumePrototype:{debugState:f.options.readRuntime},readAuthoredCameraView:f.options.readView,
+    readAuthoredFireObjects:()=>structuredClone(objects),serializeSceneGroups:()=>[],activeSceneFieldId:'flame-field',
+  });
+  const initial=api.read(),rows=[];
+  const stop=observeFlameInvestigation({read:api.read,subscribe:api.subscribe,channel:{emit:row=>rows.push(structuredClone(row))}});
+  edits.apply('@box',{...objects[0],geometry:{kind:'box',parameters:{width:2}}},'Resize box');
+  edits.apply('@box',{...objects[0],collision:{enabled:true}},'Set obstacle');
+  edits.apply('@collision',{enabled:true},'Scene collisions');
+  assert.equal(initial.scene.objects[0].geometry.parameters.width,1);
+  assert.equal(initial.scene.objects[0].collision.enabled,false);assert.equal(initial.scene.collisionEnabled,false);
+  assert.equal(rows.length,3);assert.equal(rows[0].effective.objects[0].geometry.parameters.width,2);
+  assert.equal(rows[1].effective.objects[0].collision.enabled,true);assert.equal(rows[2].effective.collisionEnabled,true);
+  f.runtime.controls.flowRate=2;window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
+  assert.equal(rows.length,4);assert.equal(rows[3].effectiveRuntimeControls.flowRate,2);
+  stop();f.runtime.controls.flowRate=3;window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
+  assert.equal(rows.length,4,'disposal removes source notifications');
 });
 
 test('discovered Flame contribution borrows the authored runtime across close and reopen',async()=>{

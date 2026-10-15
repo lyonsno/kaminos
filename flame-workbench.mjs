@@ -27,14 +27,27 @@ export function createFlameWorkbench({readSettings,applySettings,readRuntime,rea
 // Subscribe to source operations, not animation ticks. Aliased inspector fields
 // and agent edits reach this same channel without recording their wrappers twice.
 export function observeFlameInvestigation({read,subscribe,channel}) {
-  let previous=read();
+  const runtimeState=runtime=>({active:runtime?.active,backend:runtime?.backend,effectiveRoute:runtime?.effectiveRoute,
+    controls:runtime?.controls,simGridDimensions:runtime?.simGridDimensions,gridHeight:runtime?.gridHeight});
+  const signatures=current=>Object.fromEntries(['settings','view','scene'].map(key=>[key,JSON.stringify(current[key])])
+    .concat([['runtime',JSON.stringify(runtimeState(current.runtime))]]));
+  let previous=signatures(read());
   return subscribe(()=>{
-    const current=read();
-    for(const [key,kind,target] of [['settings','flame.settings','flame'],['view','camera.pose','camera'],['scene','scene.edit','scene']]) {
-      if(JSON.stringify(current[key])!==JSON.stringify(previous[key]))channel.emit({kind,phase:'observed',target,
-        effective:current[key],effectiveRuntimeControls:current.runtime?.controls??null,clock:current.clock});
+    const current=read(),next=signatures(current);
+    const changed=key=>next[key]!==previous[key];
+    const emit=(kind,target,effective)=>channel.emit({kind,phase:'observed',target,effective,
+      effectiveRuntimeControls:current.runtime?.controls??null,effectiveRuntime:runtimeState(current.runtime),clock:current.clock});
+    // Settings also occur in authored Flame scene records. Keep their context
+    // together so one source intervention is not emitted again as a scene edit.
+    if(changed('settings')||changed('runtime')) {
+      channel.emit({kind:changed('settings')?'flame.settings':'flame.runtime',phase:'observed',target:'flame',
+        effective:changed('settings')?current.settings:runtimeState(current.runtime),authoredScene:current.scene,
+        effectiveRuntimeControls:current.runtime?.controls??null,effectiveRuntime:runtimeState(current.runtime),clock:current.clock});
+    } else if(changed('scene')) {
+      emit('scene.edit','scene',current.scene);
     }
-    previous=current;
+    if(changed('view'))emit('camera.pose','camera',current.view);
+    previous=next;
   });
 }
 import {createInvestigationRecording,investigationOperations} from './investigation-recording.mjs';
