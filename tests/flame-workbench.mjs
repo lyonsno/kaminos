@@ -8,6 +8,8 @@ import {openExperiment} from '../workbench-experiments.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
+import * as THREE from '../lib/three.core.js';
+import * as framing from '../scene-frame-selected.mjs';
 
 function fixture() {
   let settings={domControls:{'volume-flow-rate':{value:1,rawValue:'1'},'volume-look-freeze':{value:0}},
@@ -136,6 +138,28 @@ test('the real host retains geometry, collision and confirmed-source notificatio
   assert.equal(rows.length,4);assert.equal(rows[3].effectiveRuntimeControls.flowRate,2);
   stop();f.runtime.controls.flowRate=3;window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
   assert.equal(rows.length,4,'disposal removes source notifications');
+});
+
+test('explicit domain framing uses its actual bounds without admitting editor helpers as content',()=>{
+  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const functionSource=source.slice(source.indexOf('function frameAuthoredSelection() {'),source.indexOf('function groupEditState('));
+  const box=new THREE.Box3(new THREE.Vector3(1,-1,-2),new THREE.Vector3(3,3,0));
+  const guide=new THREE.Box3Helper(box);guide.userData.kaminosEditorHelper=true;
+  const camera=new THREE.PerspectiveCamera(40,1.3,.01,100);camera.position.set(0,.6,3);
+  const controls={target:new THREE.Vector3(),update(){camera.lookAt(this.target);camera.updateMatrixWorld();}};
+  controls.update();const before=camera.position.toArray();
+  assert.equal(framing.frameObjects([guide],camera,controls),false,'ordinary content framing must still exclude helpers');
+  assert.deepEqual(camera.position.toArray(),before);
+  guide.visible=false;
+  assert.equal(runInNewContext(functionSource+'\nframeAuthoredSelection()',{
+    activeSceneFieldId:'flame-field',flameDomainGuide:guide,camera,controls,...framing,
+  }),true,'explicit domain framing must not be filtered as helper content');
+  assert.notDeepEqual(camera.position.toArray(),before);
+  assert.deepEqual(controls.target.toArray(),box.getCenter(new THREE.Vector3()).toArray());
+  for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){
+    const projected=new THREE.Vector3(x,y,z).project(camera);
+    assert.ok(Math.abs(projected.x)<=1&&Math.abs(projected.y)<=1&&Math.abs(projected.z)<=1,'every domain corner fits in the camera');
+  }
 });
 
 test('discovered Flame contribution borrows the authored runtime across close and reopen',async()=>{
