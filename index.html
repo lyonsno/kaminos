@@ -13024,9 +13024,10 @@ function openFlameWorkbench() {
     listeners.add(listener);
     const stopped=scenePlacementTools.edits.subscribe(listener);
     controls.addEventListener('change',listener);
+    window.addEventListener('kaminos-flame-controls-changed',listener);
     const changed=event=>{if(event.target?.matches?.('#tab-volume input,#tab-volume select,[data-authoring-alias],#burner-controls input,#volume-authored-mix-panel input'))listener();};
     document.addEventListener('input',changed);document.addEventListener('change',changed);
-    return()=>{listeners.delete(listener);stopped();controls.removeEventListener('change',listener);document.removeEventListener('input',changed);document.removeEventListener('change',changed);};
+    return()=>{listeners.delete(listener);stopped();controls.removeEventListener('change',listener);window.removeEventListener('kaminos-flame-controls-changed',listener);document.removeEventListener('input',changed);document.removeEventListener('change',changed);};
   };
   const select=target=>{
     if(target==='emitter'){if(!authoredFlamePresent)throw Error('No authored flame emitter');setActiveSceneObject(FLAME_EMITTER_ID);}
@@ -13038,7 +13039,7 @@ function openFlameWorkbench() {
   return createFlameWorkbench({
     readSettings:()=>window.kaminosFlameAuthoring.read(),applySettings:(next,label)=>window.kaminosFlameAuthoring.apply(next,label),
     readRuntime:()=>volumePrototype?.debugState()??{active:false},readView:readAuthoredCameraView,
-    readScene:()=>({objects:readAuthoredFireObjects().map(({id,type,source,transform})=>({id,type,source,transform})),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read()}),
+    readScene:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read(),collisionEnabled:window.kaminosSceneCollision.read().enabled}),
     async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
     async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
@@ -20997,6 +20998,7 @@ async function initKaminosVolumeRoute() {
       volumePrototype.setControls(controlsSnapshot);
     }
     refreshVolumeReadout();
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
   };
   await volumeCockpitLayoutReady;
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
@@ -21091,6 +21093,7 @@ async function initKaminosVolumeRoute() {
       publishVolumeGridPreview(null);
       updateVolumeRebuildControlLabel(id);
       refreshFlameDomainGuideBox();
+      window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
     };
     control.addEventListener('input', preview);
     control.addEventListener('change', preview);
