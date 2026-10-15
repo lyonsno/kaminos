@@ -84,7 +84,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
    const derived={...adapter,frame:index=>{const p=walking.frame(index,{mode:mode==='raw'?'source':'cycle',cycle:mode==='travel'?row.cycle:0});
     if(mode!=='in-place')return p;const actorMatrix=[...p.actorMatrix];actorMatrix[12]=first[12];actorMatrix[14]=first[14];return {...p,actorMatrix};}};
    row.player=attachGivenPalettePlayback({THREE,runtime,adapter:derived,source,document,mountRoot:document.createElement('div'),dirty:()=>{}});rows.push(row);
-   const label=makeLabel(document,spec.label);if(label){runtime.syncCpuGeometry();runtime.mesh.geometry.computeBoundingBox();const box=runtime.mesh.geometry.boundingBox;label.position.set((box.min.x+box.max.x)/2,box.max.y+.5,(box.min.z+box.max.z)/2);runtime.group.add(label);}
+   const label=makeLabel(document,spec.label);if(label){const box=runtime.syncCpuGeometry().boundingBox;label.position.set((box.min.x+box.max.x)/2,box.max.y+.5,(box.min.z+box.max.z)/2);runtime.group.add(label);}
   }
   if(inputs.ground!==false){
    const height=document.getElementById('composition-ground-height'),visible=document.getElementById('composition-ground-visible');if(!height||!visible)throw Error('Shared comparison ground controls unavailable');

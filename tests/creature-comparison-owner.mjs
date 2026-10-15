@@ -38,6 +38,11 @@ assert.equal(Number(seekControl.value),2/30,'loop display must use the actual fr
 entry.operations.presentation({mode:'in-place'});entry.operations.restart();const removed=f.scene.children[0];f.scene.remove(removed);f.tick(1/30);
 assert.equal(entry.read().entries[0].status,'removed');assert.equal(entry.read().entries[0].id,null);assert.ok(entry.read().entries.slice(1).every(e=>e.frame===1));
 await entry.dispose();assert.equal(f.state().active,false);assert.equal(f.state().closed,1);assert.equal(f.scene.children.length,0);
+const articulated=structuredClone(data);articulated.manifest.bones.push({name:'limb',parent:'pelvis',restMatrix:I,tail:[0,1,0]});articulated.manifest.channels.push('limb');articulated.weights=new Float32Array([0,0,1,0,0,1,0,0,1]);articulated.frame.bones=articulated.manifest.bones;
+articulated.motion={frames:3,joints:2,skeleton:{fps:30,jointNames:['pelvis','limb'],parents:[-1,0]},positions:Array.from({length:3},(_,i)=>[0,.2,i,0,3,i]).flat(),localRotations:Array.from({length:6},()=>[1,0,0,0]).flat()};
+const labelled=fixture(),labels=[];const annotated=await module.createCreatureComparison({host:labelled.host,inputs},{loadSources:async()=>structuredClone(articulated),makeLabel:()=>{const label=new THREE.Group();labels.push(label);return label;}});
+assert.ok(labels.every(label=>Math.abs(label.position.y-4.3)<1e-6),'labels must use current posed CPU bounds, never GPU output attributes containing the initial rest mirror');
+await annotated.dispose();
 const bad=fixture();await assert.rejects(module.createCreatureComparison({host:bad.host,inputs},{loadSources:async source=>{throw Error('source digest mismatch');},makeLabel:()=>new THREE.Group()}),/digest mismatch/);assert.equal(bad.scene.children.length,0);assert.equal(bad.state().active,false);
 await assert.rejects(module.createCreatureComparison({host:bad.host,inputs:{...inputs,entries:[inputs.entries[0],inputs.entries[0]]}},{loadSources:async()=>data}),/unique/);
 assert.throws(()=>entry.operations.play(),/disposed/);

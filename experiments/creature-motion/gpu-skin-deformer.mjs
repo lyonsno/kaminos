@@ -39,16 +39,17 @@ const normals=wgslFn(`fn dense_normals(v:u32,
 export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels}){
  const payload=prepareGpuSkin({rest,triangles,weights,channels});
  const attributes=[],computes=[];
- const input=(array,type)=>{const attr=new StorageBufferAttribute(array,1);attributes.push(attr);return storage(attr,type,array.length).toReadOnly();};
+ const input=(array,type)=>{const attr=new StorageBufferAttribute(array,1);attr.name='creature-'+geometry.uuid+'-input-'+attributes.length;attributes.push(attr);return storage(attr,type,array.length).toReadOnly();};
  const restNode=input(payload.rest,'float'),weightNode=input(payload.weights,'float'),dominant=input(payload.dominant,'uint');
  const triangleNode=input(payload.triangles,'uint'),offsets=input(payload.offsets,'uint'),faces=input(payload.faces,'uint');
- const paletteAttribute=new StorageBufferAttribute(new Float32Array(channels*8),4);attributes.push(paletteAttribute);
+ const paletteAttribute=new StorageBufferAttribute(new Float32Array(channels*8),4);paletteAttribute.name='creature-'+geometry.uuid+'-palette';attributes.push(paletteAttribute);
  const palette=storage(paletteAttribute,'vec4',channels*2).toReadOnly();
  // Three pads itemSize=3 storage attributes in place. Explicit vec4 buffers
  // retain one shared, stable layout from compute bindings through vertex fetch.
  const pack=(array,w)=>{const out=new Float32Array(payload.vertices*4);for(let v=0;v<payload.vertices;v++){out.set(array.subarray(v*3,v*3+3),v*4);out[v*4+3]=w;}return out;};
  const unpack=array=>{const out=new Float32Array(payload.vertices*3);for(let v=0;v<payload.vertices;v++)out.set(array.subarray(v*4,v*4+3),v*3);return out;};
  const positionAttribute=new StorageBufferAttribute(pack(rest,1),4),normalAttribute=new StorageBufferAttribute(pack(geometry.attributes.normal.array,0),4);
+ positionAttribute.name='creature-'+geometry.uuid+'-positions';normalAttribute.name='creature-'+geometry.uuid+'-normals';
  const positions=storage(positionAttribute,'vec4',payload.vertices),normalOutput=storage(normalAttribute,'vec4',payload.vertices);
  geometry.setAttribute('position',positionAttribute);geometry.setAttribute('normal',normalAttribute);
  computes.push(Fn(()=>{positions.element(instanceIndex).assign(deform({v:instanceIndex,channels:uint(channels),rest:restNode,weights:weightNode,dominant,palette}));})().compute(payload.vertices));

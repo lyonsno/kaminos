@@ -19,15 +19,18 @@ try{
   const compute=renderer.compute.bind(renderer);renderer.compute=(nodes,...args)=>{const result=compute(nodes,...args);if(!shaders.length)for(const node of nodes)shaders.push(renderer._nodes.getForCompute(node).computeShader);return result;};
   const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],data={manifest:{bones:[{name:'pelvis',parent:null,restMatrix:I}],channels:['fixed','pelvis'],vertices:4,triangles:2},rest:new Float32Array([0,0,0,1,0,0,0,1,0,1,1,.2]),triangles:new Uint32Array([0,1,2,1,3,2]),weights:new Float32Array([.5,.5,.2,.8,.9,.1,.4,.6])};
   const runtime=createFullBodyRuntime({THREE,...data,deformerFactory:createGpuSkinDeformer}),scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(50,800/600,.01,100);scene.add(runtime.group,new THREE.HemisphereLight(0xffffff,0x444444,3));camera.position.set(2,2,5);camera.lookAt(1,.5,0);
-  const results=[];
+  const results=[];let second;
   try{for(const angle of [0,.7,3.3,-3.3]){
    runtime.bones.get('pelvis').position.set(1,.2,-.1);runtime.bones.get('pelvis').quaternion.setFromAxisAngle(new THREE.Vector3(0,0,1),angle);runtime.update();renderer.render(scene,camera);
    const gpu=await runtime.readGpuGeometry(),cpu=runtime.syncCpuGeometry(),p=cpu.attributes.position;
    const a=new THREE.Vector3().fromBufferAttribute(p,0),b=new THREE.Vector3().fromBufferAttribute(p,1),c=new THREE.Vector3().fromBufferAttribute(p,2),center=a.clone().add(b).add(c).divideScalar(3),normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize(),visible=runtime.mesh.geometry,hits=[];
    runtime.mesh.raycast(new THREE.Raycaster(center.clone().addScaledVector(normal,2),normal.clone().negate()),hits);
    results.push({angle,gpu:{positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),packedPositions:Array.from(gpu.packedPositions),packedNormals:Array.from(gpu.packedNormals),layout:gpu.layout},cpu:{positions:Array.from(p.array),normals:Array.from(cpu.attributes.normal.array)},picking:{hits:hits.length,expected:center.toArray(),actual:hits[0]?.point.toArray(),geometryRestored:runtime.mesh.geometry===visible},state:runtime.read()});
-  }await renderer.backend.device.queue.onSubmittedWorkDone();if(gpuErrors.length)throw Error(gpuErrors.join('\n'));return {backend:'webgpu',results,gpuErrors,shaders};
-  }finally{runtime.dispose();renderer.dispose();}
+  }
+  second=createFullBodyRuntime({THREE,...data,deformerFactory:createGpuSkinDeformer});second.group.position.x=2;scene.add(second.group);renderer.render(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
+  scene.remove(runtime.group);runtime.dispose();renderer.render(scene,camera);await renderer.backend.device.queue.onSubmittedWorkDone();
+  if(gpuErrors.length)throw Error(gpuErrors.join('\n'));return {backend:'webgpu',results,gpuErrors,shaders,removedBodyDraws:second.read()};
+  }finally{runtime.dispose();second?.dispose();renderer.dispose();}
  });
  await save();for(const r of report.result.results){assert.ok(r.picking.hits>0&&r.picking.geometryRestored,'rendered storage layout must preserve current-pose picking and visible geometry');for(let i=0;i<3;i++)assert.ok(Math.abs(r.picking.expected[i]-r.picking.actual[i])<.00002);for(const key of ['positions','normals']){assert.equal(r.gpu[key].length,12);let max=0;for(let i=0;i<12;i++){assert.ok(Number.isFinite(r.gpu[key][i]));max=Math.max(max,Math.abs(r.gpu[key][i]-r.cpu[key][i]));}assert.ok(max<.00002,key+' differs: '+max);r[key+'MaxError']=max;}}
  assert.deepEqual(report.errors,[]);await page.screenshot({path:out+'/native-compute.png'});report.status='passed';
