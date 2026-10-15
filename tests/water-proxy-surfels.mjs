@@ -81,3 +81,36 @@ test('water display is a validated viewport preference',()=>{
  assert.equal(checkedViewportDisplay({water:'proxy'}).water,'proxy');
  assert.throws(()=>checkedViewportDisplay({water:'wire'}),/water/);
 });
+
+import {createProxySnapshotRegistry,surfelSummary} from '../proxy-snapshot.mjs';
+test('snapshots carry a bounds/centroid summary consumers can use without iterating',()=>{
+ const data=new Float32Array([0,0,0, 0,1,0, 0,0,0, 0.2,0, 2,4,-2, 0,1,0, 0,0,0, 0.4,0]);
+ const summary=surfelSummary(data,2);
+ assert.deepEqual({...summary,meanThickness:undefined},{count:2,bounds:[[0,0,-2],[2,4,0]],centroid:[1,2,-1],meanThickness:undefined});
+ assert.ok(Math.abs(summary.meanThickness-0.3)<1e-6);
+ assert.deepEqual(surfelSummary(new Float32Array(0),0),{count:0,bounds:null,centroid:null,meanThickness:null});
+ const counters=new Uint32Array(10);counters[0]=1;
+ const snapshot=decodeInterfaceSurfels(counters,records([{p:[1,2,3],v:[0,0,0],n:[0,1,0],thickness:0.5}],2),{...layout,capacity:2,maxInstances:8});
+ assert.deepEqual(snapshot.summary.bounds,[[1,2,3],[1,2,3]]);
+});
+
+test('the registry keeps the latest snapshot per source and tells producers when anyone is listening',()=>{
+ const registry=createProxySnapshotRegistry();
+ assert.equal(registry.wanted('water'),false);
+ const seen=[];const unsubscribe=registry.subscribe('water',s=>seen.push(s.writeTick));
+ assert.equal(registry.wanted('water'),true);
+ registry.publish('water',{writeTick:3,capturedAtMs:10,count:2,summary:{count:2}});
+ registry.publish('fire',{writeTick:9,capturedAtMs:11,count:0,summary:{count:0}});
+ assert.deepEqual(seen,[3]);
+ assert.equal(registry.latest('water').writeTick,3);
+ assert.deepEqual(registry.sources().map(s=>[s.source,s.subscribers,s.writeTick]),[['water',1,3],['fire',0,9]]);
+ const late=[];registry.subscribe('water',s=>late.push(s.writeTick),{replayLatest:true});
+ assert.deepEqual(late,[3],'a late subscriber can start from the latest snapshot');
+ registry.subscribe('water',()=>{throw Error('bad consumer');});
+ registry.publish('water',{writeTick:4,capturedAtMs:12,count:1,summary:{count:1}});
+ assert.deepEqual(seen,[3,4],'one failing consumer does not starve the others');
+ assert.equal(registry.state().consumerErrors,1);
+ unsubscribe();
+ registry.clear('water');
+ assert.equal(registry.latest('water'),null);
+});

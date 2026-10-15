@@ -6,6 +6,34 @@ export const PROXY_SNAPSHOT_SCHEMA='kaminos.proxy-snapshot.v0';
 // Surfel packing: position xyz, normal xyz, velocity xyz, thickness, curvature.
 export const SURFEL_FLOATS=11;
 
+// Where the surfels are, without iterating them: world bounds, centroid and
+// mean thickness, for maps, sketches and agents that need no drawing.
+export function surfelSummary(data,count) {
+ if(!count)return {count:0,bounds:null,centroid:null,meanThickness:null};
+ const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity],sum=[0,0,0];let thickness=0;
+ for(let i=0;i<count;i++){const at=i*SURFEL_FLOATS;for(let k=0;k<3;k++){const v=data[at+k];if(v<min[k])min[k]=v;if(v>max[k])max[k]=v;sum[k]+=v;}thickness+=data[at+9];}
+ return {count,bounds:[min,max],centroid:sum.map(v=>v/count),meanThickness:thickness/count};
+}
+
+// Page-level publication: the latest snapshot per source, subscribers, and a
+// demand signal so producers run while anyone (viewport layer, map, agent) is
+// listening. A failing consumer is counted and skipped, never allowed to stop
+// publication to the others.
+export function createProxySnapshotRegistry() {
+ const latest=new Map(),subscribers=new Map();let consumerErrors=0,lastConsumerError=null;
+ const set=source=>{if(!subscribers.has(source))subscribers.set(source,new Set());return subscribers.get(source);};
+ return {
+  publish(source,snapshot){latest.set(source,snapshot);for(const fn of [...(subscribers.get(source)||[])])try{fn(snapshot);}catch(error){consumerErrors++;lastConsumerError=String(error?.message||error);}},
+  latest:source=>latest.get(source)??null,
+  subscribe(source,fn,{replayLatest=false}={}){const listeners=set(source);listeners.add(fn);if(replayLatest&&latest.has(source))fn(latest.get(source));return ()=>listeners.delete(fn);},
+  wanted:source=>(subscribers.get(source)?.size??0)>0,
+  sources:()=>[...new Set([...latest.keys(),...subscribers.keys()])].map(source=>{const s=latest.get(source);
+   return {source,subscribers:subscribers.get(source)?.size??0,writeTick:s?.writeTick??null,capturedAtMs:s?.capturedAtMs??null,count:s?.count??null,summary:s?.summary??null};}),
+  clear(source){latest.delete(source);},
+  state:()=>({consumerErrors,lastConsumerError}),
+ };
+}
+
 export function surfelExtrapolationSeconds(nowS,snapshotS,maxS) {
  return Math.min(maxS,Math.max(0,nowS-snapshotS));
 }
@@ -28,7 +56,7 @@ export function decodeInterfaceSurfels(counters,records,{recordFloats,capacity,a
   data.set(values,count*SURFEL_FLOATS);count++;
  }
  return {schema:PROXY_SNAPSHOT_SCHEMA,kind:'surfels',source:'local-liquid-interface-records',writeTick,simTimeS:writeTick*stepSeconds,
-  capturedAtMs,activeRecords,stride,count,floatsPerSurfel:SURFEL_FLOATS,data:data.subarray(0,count*SURFEL_FLOATS)};
+  capturedAtMs,activeRecords,stride,count,floatsPerSurfel:SURFEL_FLOATS,data:data.subarray(0,count*SURFEL_FLOATS),summary:surfelSummary(data,count)};
 }
 
 // Copy interface records into caller-owned staging buffers every N ticks, with

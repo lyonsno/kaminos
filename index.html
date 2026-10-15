@@ -3856,7 +3856,7 @@ import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from '
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
 import {createViewportShading} from './viewport-shading.mjs';
 import {createSurfelProxyLayer} from './proxy-surfels.mjs';
-import {createInterfaceSurfelProducer} from './proxy-snapshot.mjs';
+import {createInterfaceSurfelProducer,createProxySnapshotRegistry} from './proxy-snapshot.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
@@ -3943,25 +3943,38 @@ function renderWithViewportShading(render) {
 }
 document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
  const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});});
+// Proxy snapshots: CPU-resident, camera-independent payloads published per
+// source. The viewport proxy layer is one subscriber; maps, sketches and agents
+// can subscribe through window.kaminosProxySnapshots. A producer runs while any
+// subscriber listens.
+const proxySnapshots=createProxySnapshotRegistry();
+window.kaminosProxySnapshots={latest:proxySnapshots.latest,subscribe:proxySnapshots.subscribe,sources:proxySnapshots.sources,state:proxySnapshots.state};
 // Water proxy: in Proxy display the local liquid host skips its liquid passes
-// and a surfel layer drawn from CPU snapshots of the solver's surface records
-// stands in for the water. Reconciled every frame against the current host, so
-// host restarts and disposal need no extra hooks.
+// and a surfel layer drawn from the latest water snapshot stands in for the
+// water. Reconciled every frame against the current host, so host restarts and
+// disposal need no extra hooks.
 let waterProxy=null;
 function syncWaterProxy() {
- const host=localLiquidHost,wantProxy=viewportDisplay.water==='proxy'&&!!host;
- if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.layer.dispose();waterProxy=null;}
- if(wantProxy&&!waterProxy){
-  const radius=(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.6;
-  const layer=createSurfelProxyLayer({radius});scene.add(layer.mesh);
-  const producer=createInterfaceSurfelProducer({descriptor:()=>localLiquidHost===host?host.interfaceRecordDescriptor():null,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>layer.setSnapshot(snapshot)});
-  waterProxy={host,layer,producer};
+ const host=localLiquidHost,display=viewportDisplay.water==='proxy'&&!!host;
+ if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
+ if(host&&!waterProxy){
+  const descriptor=()=>localLiquidHost===host?host.interfaceRecordDescriptor():null;
+  waterProxy={host,layer:null,unsubscribe:null,
+   producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
  }
- if(host&&host.presentation!==(wantProxy?'proxy':'full'))host.setPresentation(wantProxy?'proxy':'full');
- if(waterProxy){waterProxy.layer.mesh.visible=wantProxy;if(wantProxy)waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
+ if(waterProxy&&display&&!waterProxy.layer){
+  const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.6});
+  scene.add(layer.mesh);
+  waterProxy.layer=layer;
+  waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>layer.setSnapshot(snapshot),{replayLatest:true});
+ }
+ if(waterProxy&&!display&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
+ if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
+ if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
- hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,layer:waterProxy?.layer.state()??null});
+ hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
+ layer:waterProxy?.layer?.state()??{visible:false},snapshots:proxySnapshots.sources(),registry:proxySnapshots.state()});
 // Witness view: authored materials as save/export see them, plus what the last
 // viewport render drew.
 window.kaminosViewportShadingDebugState=()=>{
@@ -11984,7 +11997,7 @@ async function initScene() {
     });
     // Copy the surface records this frame's step wrote; queue order puts the
     // copy after the step.
-    if (waterProxy?.layer.mesh.visible) waterProxy.producer.tick();
+    if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
     sceneFrameCount++;
     lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;

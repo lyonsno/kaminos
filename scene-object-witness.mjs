@@ -512,6 +512,18 @@ async function runWaterProxySurfelsScenario(ws) {
   const restored = evidence.restored = await readProxy();
   check(restored.hostPresentation === 'full', `host did not return to the full render: ${restored.hostPresentation}`);
   check(restored.layer?.visible === false, 'proxy layer stayed visible in the full render');
+  // A camera-independent consumer (a map or an agent) subscribes while the
+  // viewport shows the full render: the producer runs for it alone.
+  evidence.externalSubscriber = await evaluate(ws, `(async () => {
+    const got = [];
+    const off = window.kaminosProxySnapshots.subscribe('water', s => got.push({ writeTick: s.writeTick, count: s.count, summary: s.summary }));
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    off();
+    return { received: got.length, last: got.at(-1) ?? null, presentation: window.kaminosWaterProxyDebugState().hostPresentation, layer: window.kaminosWaterProxyDebugState().layer };
+  })()`, { timeoutMs: 20000 });
+  check(evidence.externalSubscriber.received > 0, `an external subscriber received no water snapshots in the full render: ${JSON.stringify(evidence.externalSubscriber)}`);
+  check(evidence.externalSubscriber.presentation === 'full' && evidence.externalSubscriber.layer?.visible === false, 'an external subscriber changed the viewport presentation');
+  check(evidence.externalSubscriber.last?.summary?.count > 0 && Array.isArray(evidence.externalSubscriber.last.summary.bounds), `water snapshot summary is missing: ${JSON.stringify(evidence.externalSubscriber.last)}`);
   evidence.shots = [backgroundShot, fullShot, proxyShot, proxyLiveShot];
   assert.deepEqual(failures, [], `water proxy checks failed:\n- ${failures.join('\n- ')}`);
 }
