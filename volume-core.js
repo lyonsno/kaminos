@@ -17286,7 +17286,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeGpuThermalConsumer(encoder) {
-    gpuThermalConsumer?.encode(encoder,{device,fluid:fluidBuffers[currentFluid],dimensions:[gridSize,gridHeight,gridSize],
+    gpuThermalConsumer?.encode(encoder,{device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],
       simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
       dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,
       transform:{translate:[...productTransform.translate],scale:productTransform.scale}});

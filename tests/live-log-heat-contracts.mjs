@@ -16,9 +16,10 @@ test('local heat accumulates damage, then cools without erasing its history',()=
   assert.deepEqual(control,[0,0,0,0]);
 });
 test('GPU source identity rejects fallback device, absent generation and invalid coordinates',()=>{
-  const device={},frame={device,fluid:{},dimensions:[48,48,48],allocationId:'fluid-1',simStepCount:4,dt:1/60,transform:{translate:[0,0,0],scale:1}};
+  const device={},frame={device,fluid:{},collision:{createView(){}},dimensions:[48,48,48],allocationId:'fluid-1',simStepCount:4,dt:1/60,transform:{translate:[0,0,0],scale:1}};
   assert.equal(checkLiveLogFrame(frame,device),frame);
   assert.throws(()=>checkLiveLogFrame({...frame,device:{}},device),/same GPU/);
+  assert.throws(()=>checkLiveLogFrame({...frame,collision:null},device),/collision texture/);
   assert.throws(()=>checkLiveLogFrame({...frame,allocationId:null},device),/allocation identity/);
   assert.throws(()=>checkLiveLogFrame({...frame,dt:0},device),/duration/);
   assert.throws(()=>checkLiveLogFrame({...frame,transform:{translate:[0,0,NaN],scale:1}},device),/transform/);

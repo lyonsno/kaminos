@@ -16,7 +16,7 @@ test('resident texture survives reset, transforms follow the mesh and disposal n
   mesh.position.set(2,0,0);mesh.geometry.computeBoundingBox();
   const field=await createLiveLogHeatGpu({renderer,mesh,bounds:mesh.geometry.boundingBox});const texture=field.texture;
   const pass={setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};
-  field.encode({beginComputePass:()=>pass},{device,fluid:{},dimensions:[48,96,48],simStepCount:1,allocationId:'fluid-1',dt:1/60,transform:{translate:[1,0,0],scale:2}});
+  field.encode({beginComputePass:()=>pass},{device,fluid:{},collision:{createView(){}},dimensions:[48,96,48],simStepCount:1,allocationId:'fluid-1',dt:1/60,transform:{translate:[1,0,0],scale:2}});
   const params=writes.findLast(w=>w.buffer.label==='live log local-to-volume transform').values;
   assert.deepEqual(Array.from(params.slice(0,3)),[48,96,48]);
   assert.ok(Math.abs(params[3]-1/60)<1e-8);assert.equal(params[12],.25);assert.equal(params[24],.75);
