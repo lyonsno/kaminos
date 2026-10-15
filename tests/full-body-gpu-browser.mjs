@@ -22,11 +22,14 @@ try{
   const results=[];
   try{for(const angle of [0,.7,3.3,-3.3]){
    runtime.bones.get('pelvis').position.set(1,.2,-.1);runtime.bones.get('pelvis').quaternion.setFromAxisAngle(new THREE.Vector3(0,0,1),angle);runtime.update();renderer.render(scene,camera);
-   const gpu=await runtime.readGpuGeometry(),cpu=runtime.syncCpuGeometry();results.push({angle,gpu:{positions:Array.from(gpu.positions),normals:Array.from(gpu.normals)},cpu:{positions:Array.from(cpu.attributes.position.array),normals:Array.from(cpu.attributes.normal.array)},state:runtime.read()});
+   const gpu=await runtime.readGpuGeometry(),cpu=runtime.syncCpuGeometry(),p=cpu.attributes.position;
+   const a=new THREE.Vector3().fromBufferAttribute(p,0),b=new THREE.Vector3().fromBufferAttribute(p,1),c=new THREE.Vector3().fromBufferAttribute(p,2),center=a.clone().add(b).add(c).divideScalar(3),normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize(),visible=runtime.mesh.geometry,hits=[];
+   runtime.mesh.raycast(new THREE.Raycaster(center.clone().addScaledVector(normal,2),normal.clone().negate()),hits);
+   results.push({angle,gpu:{positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),packedPositions:Array.from(gpu.packedPositions),packedNormals:Array.from(gpu.packedNormals),layout:gpu.layout},cpu:{positions:Array.from(p.array),normals:Array.from(cpu.attributes.normal.array)},picking:{hits:hits.length,expected:center.toArray(),actual:hits[0]?.point.toArray(),geometryRestored:runtime.mesh.geometry===visible},state:runtime.read()});
   }await renderer.backend.device.queue.onSubmittedWorkDone();if(gpuErrors.length)throw Error(gpuErrors.join('\n'));return {backend:'webgpu',results,gpuErrors,shaders};
   }finally{runtime.dispose();renderer.dispose();}
  });
- await save();for(const r of report.result.results)for(const key of ['positions','normals']){assert.equal(r.gpu[key].length,12);let max=0;for(let i=0;i<12;i++){assert.ok(Number.isFinite(r.gpu[key][i]));max=Math.max(max,Math.abs(r.gpu[key][i]-r.cpu[key][i]));}assert.ok(max<.00002,key+' differs: '+max);r[key+'MaxError']=max;}
+ await save();for(const r of report.result.results){assert.ok(r.picking.hits>0&&r.picking.geometryRestored,'rendered storage layout must preserve current-pose picking and visible geometry');for(let i=0;i<3;i++)assert.ok(Math.abs(r.picking.expected[i]-r.picking.actual[i])<.00002);for(const key of ['positions','normals']){assert.equal(r.gpu[key].length,12);let max=0;for(let i=0;i<12;i++){assert.ok(Number.isFinite(r.gpu[key][i]));max=Math.max(max,Math.abs(r.gpu[key][i]-r.cpu[key][i]));}assert.ok(max<.00002,key+' differs: '+max);r[key+'MaxError']=max;}}
  assert.deepEqual(report.errors,[]);await page.screenshot({path:out+'/native-compute.png'});report.status='passed';
 }catch(e){report.status='failed';report.failure=String(e.stack??e);process.exitCode=1;if(page)try{await page.screenshot({path:out+'/failure.png'});}catch{}}
 finally{await browser?.close();report.browserClosed=true;await save();console.log(JSON.stringify({status:report.status,phase:report.phase,failure:report.failure,errors:report.errors}));}
