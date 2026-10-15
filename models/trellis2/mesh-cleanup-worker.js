@@ -3,9 +3,10 @@
 import {cleanupAndSimplifyPreservingSurface} from './mesh-cleanup.js';
 
 self.onmessage=({data})=>{
-  const {id,vertices,triangles,targetFaces,keepLargest}=data??{};
+  const {id,vertices,triangles,targetFaces,keepLargest,progress}=data??{};
   try{
-    const result=cleanupAndSimplifyPreservingSurface(new Float32Array(vertices),new Uint32Array(triangles),{targetFaces,keepLargest});
+    const onProgress=progress?e=>self.postMessage({id,progress:e}):undefined;
+    const result=cleanupAndSimplifyPreservingSurface(new Float32Array(vertices),new Uint32Array(triangles),{targetFaces,keepLargest,onProgress});
     self.postMessage({id,ok:true,vertices:result.vertices.buffer,triangles:result.faces.buffer,trace:result.trace},
       [result.vertices.buffer,result.faces.buffer]);
   }catch(error){self.postMessage({id,ok:false,error:String(error?.message??error)});}
