@@ -1,0 +1,82 @@
+{
+ "schema": "trellis2.mesh-finishing-source-fixture.v0",
+ "route": "postprocess-retained-mesh.py --cleanup-mode mlx-surface-preserving",
+ "source": {
+  "commit": "1201553c339008eb5e10ab6131acc11ab7cd0158",
+  "generateSha256": "4a24bbf9e865685a71d933b16f8f21c7126abe8502740e6ed654f575a65ee3b1",
+  "cleanupSha256": "a8dac70b2a7c72a26735a5b7e5ac57ec28995eff5d075831501748e4df100cae",
+  "packages": {
+   "numpy": "2.5.4",
+   "scipy": "1.18.1",
+   "trimesh": "5.1.1",
+   "fast-simplification": "0.2.0"
+  }
+ },
+ "cases": {
+  "simplify-route": {
+   "targetFaces": 3000,
+   "input": {
+    "vertices": 17547,
+    "faces": 34670,
+    "verticesSha256": "8000157c7c990909a7a7f852d7c9501753f27de584dfc308741e0ad88dfc247f",
+    "trianglesSha256": "0f422c3ef0c4a1be56a104432f00b5a5af96221a2116561f70781f6ec5ce4fca"
+   },
+   "simplifyPass0": {
+    "targetReduction": 0.9134698586674358,
+    "points": 1540,
+    "faces": 3000,
+    "pointsSha256": "ee5b96f8659dc6f5fe9126913da310ac82d40c1ffc014e2d92cff862f9b1888b",
+    "trianglesSha256": "a99ae49097691e05262d7f73b440135ccc97451c74379a81f96b470b08d1adc7"
+   },
+   "output": {
+    "vertices": 1548,
+    "faces": 2988,
+    "verticesSha256": "2d144bca9267d40877618c661ca457008667d0d429333782632eed94778439ea",
+    "trianglesSha256": "026112bd951bcb8241720845e943993aa1c647d5f47df5484951f61e474e18fa"
+   },
+   "sourceEvents": [
+    "Pre-simplify: 1,540V 3,000F (0.0s)",
+    "Cleanup: 0.6s"
+   ]
+  },
+  "below-target": {
+   "targetFaces": 20000,
+   "input": {
+    "vertices": 2475,
+    "faces": 4696,
+    "verticesSha256": "f2bbb41a4650a261f9d6344f7b25a40c6bcbc2181c646222b5e6ebffff46e97d",
+    "trianglesSha256": "e3df29f45d22d9a214effa65a20ba48c3ba96eacbcc7b54a8358df3f820518ec"
+   },
+   "output": {
+    "vertices": 2678,
+    "faces": 5120,
+    "verticesSha256": "6986cd7cb3b4557315d8a00ea9f1ffea56df6bd5fd5b78b823828ba6bd98f7e7",
+    "trianglesSha256": "704d7b921fd0c3889db2e5529eef4a54f04e23dddc5e98c870e4e3a0c41891b6"
+   },
+   "sourceEvents": [
+    "Cleanup pass 1: 0.0s",
+    "Cleanup final: 0.4s"
+   ]
+  },
+  "crosses-target-after-holes": {
+   "targetFaces": 4800,
+   "input": {
+    "vertices": 2475,
+    "faces": 4696,
+    "verticesSha256": "f2bbb41a4650a261f9d6344f7b25a40c6bcbc2181c646222b5e6ebffff46e97d",
+    "trianglesSha256": "e3df29f45d22d9a214effa65a20ba48c3ba96eacbcc7b54a8358df3f820518ec"
+   },
+   "output": {
+    "vertices": 2511,
+    "faces": 4809,
+    "verticesSha256": "15b3a34a455f44b684e592413f2e9e175d1881a303fea0fa4ee94814cbaaf402",
+    "trianglesSha256": "3e93ce8bf39243ce3530fc5c0f874934a7513fd309c66a6429e057a9b08b4860"
+   },
+   "sourceEvents": [
+    "Cleanup pass 1: 0.0s",
+    "Final simplify: 2,509V 4,799F (0.0s)",
+    "Cleanup final: 0.5s"
+   ]
+  }
+ }
+}

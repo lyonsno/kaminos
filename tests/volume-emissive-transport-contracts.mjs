@@ -20,7 +20,7 @@ const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema
 const materialLawControl = schema.controls.find(c => c.key === 'volume-physical-material-law');
 assert.ok(materialLawControl, 'saved settings must identify the selected material law');
 assert.equal(materialLawControl.additiveDefault, '0', 'old presets retain original mixed-carrier material');
-assert.deepEqual(materialLawControl.allowedValues, ['0','1']);
+assert.deepEqual(materialLawControl.allowedValues, ['0','1','2']);
 // Material regression only: a heat/front carrier without transported soot
 // must not manufacture incandescent particles. This is not image acceptance.
 // These two scalar function bodies share JS/WGSL expression syntax. Execute

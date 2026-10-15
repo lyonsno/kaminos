@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { RAY_START_WGSL } from '../volume-ray-start.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const cockpit = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -55,8 +56,12 @@ for (let q = 0; q < 2; q++) {
   assert.equal(entry('nonRidgeOpticalCaptureRows'), captureRows);
   assert.equal(entry('nonRidgeOpticalCaptureHeader'), resources.nonRidgeOpticalCaptureHeaderBuffer);
   assert.equal(group.entries.find(e => e.binding === 16)?.resource, resources.sceneSolidTextureView);
-  assert.deepEqual(group.entries.find(e => e.binding === 25)?.resource,
+  const noiseBinding = Number(RAY_START_WGSL.match(/@binding\((\d+)\) var rayStartNoise:/)?.[1]);
+  assert.ok(Number.isInteger(noiseBinding), 'noise texture has a shader binding');
+  assert.deepEqual(group.entries.find(e => e.binding === noiseBinding)?.resource,
     resources.rayStartNoiseTexture.createView(), 'the production group binds the spatial ray-start texture');
+  assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
+    'all fluid render resources have distinct bindings');
   assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
   for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
 }

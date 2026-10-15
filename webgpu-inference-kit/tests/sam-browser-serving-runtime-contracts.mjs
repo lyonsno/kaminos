@@ -330,3 +330,38 @@ for (const file of [
 }
 
 console.log('sam browser serving runtime contracts passed');
+
+// Exercise the real image-cache write, preserving cold diagnostics and downstream FPN inputs.
+const stageNames = ['imagePreprocessResult', 'imagePatchEmbedResult', 'imageVitPrefixResult', 'imageVitBlockStackResult', 'imageFpnNeckResult'];
+const cacheInputs = Object.fromEntries(stageNames.map((name, index) => [name, {
+  requestId: `cold-stage-${index}`,
+  receipt: { effectiveRouteId: `stage-${index}`, outputs: [{ sha256: `sha256:stage-${index}` }] },
+  debugReadback: { values: new Float32Array([index, index + 1]) },
+  finiteCheckpoints: [{ layerIndex: index, finite: true }],
+}]));
+for (let index = 0; index < 4; index += 1) {
+  cacheInputs[`gpuFpnNeckFeature${index}`] = new Float32Array([index, index + 1]);
+  cacheInputs[`fpnNeckFeature${index}Output`] = { artifactId: `fpn-${index}`, sha256: `sha256:fpn-${index}` };
+}
+const cacheWriteStart = servingSource.indexOf('servingResources.setImageFeatures(imageCacheKey, {');
+const cacheWriteEnd = servingSource.indexOf('\n          });', cacheWriteStart);
+assert.ok(cacheWriteStart >= 0 && cacheWriteEnd > cacheWriteStart, 'actual image-cache write must be exercised');
+const cacheProjection = servingSource.match(/function cacheSam3ImageStageResult\(result\) \{[\s\S]*?\n\}/)?.[0] || '';
+let retainedFeatures;
+new Function('servingResources', 'imageCacheKey', ...Object.keys(cacheInputs),
+  `${cacheProjection}\n${servingSource.slice(cacheWriteStart, cacheWriteEnd + '\n          });'.length)}`)(
+  { setImageFeatures(key, value) { assert.equal(key, firstImageKey); retainedFeatures = value; } },
+  firstImageKey, ...Object.values(cacheInputs),
+);
+for (const name of stageNames) {
+  assert.equal(Object.hasOwn(retainedFeatures[name], 'debugReadback'), false, `${name} must not retain diagnostic arrays in the image cache`);
+  assert.strictEqual(retainedFeatures[name].receipt, cacheInputs[name].receipt, `${name} must preserve original route provenance`);
+  assert.equal(retainedFeatures[name].requestId, cacheInputs[name].requestId);
+  assert.strictEqual(retainedFeatures[name].finiteCheckpoints, cacheInputs[name].finiteCheckpoints);
+  assert.ok(cacheInputs[name].debugReadback.values instanceof Float32Array, 'cold-run diagnostics must remain intact');
+}
+for (let index = 0; index < 4; index += 1) {
+  assert.strictEqual(retainedFeatures[`gpuFpnNeckFeature${index}`], cacheInputs[`gpuFpnNeckFeature${index}`], 'cache must keep the actual downstream FPN tensor');
+  assert.strictEqual(retainedFeatures[`fpnNeckFeature${index}Output`], cacheInputs[`fpnNeckFeature${index}Output`]);
+}
+console.log('sam image cache diagnostic retention contracts passed');

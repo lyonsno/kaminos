@@ -15,6 +15,7 @@ import { CooperativeUniMateDenoiser, UniMateDutyScheduler, createCooperativeCfgD
 import { dopri5Solve } from './unimate-dopri5.js';
 import { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
 import { requestUniMateDevice } from './unimate-denoiser.js';
+import { skinMatrices } from './unimate-rig-mesh.js';
 import { T5Encoder } from './unimate-t5.js';
 import { createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession }
   from '../../webgpu-inference-kit/src/core.js';
@@ -164,6 +165,45 @@ struct DotOut { @builtin(position) position: vec4f, @location(0) uv: vec2f, @loc
   let edge = clamp((1.0 - r2) / max(fwidth(r2), 1e-4), 0.0, 1.0);
   let n = vec3f(v.uv, sqrt(max(0.0, 1.0 - r2)));
   return vec4f(shade(mix(v.color, vec3f(1.0), 0.12), n), edge);
+}`;
+
+// A visitor's skinned mesh: linear blend skinning with up to 8 influences per vertex, lit like
+// the skeleton (key light from the upper left, soft fill), base colour times its texture.
+const MESH_SHADER = /* wgsl */`
+struct Cam {
+  viewProj: mat4x4f, invViewProj: mat4x4f, viewport: vec2f, radius: f32, focal: f32,
+  eye: vec3f, size: f32, light: vec3f, time: f32, focus: vec4f,
+};
+struct Material { color: vec4f };
+@group(0) @binding(0) var<uniform> cam: Cam;
+@group(0) @binding(1) var<storage, read> skin: array<mat4x4f>;
+@group(1) @binding(0) var<uniform> material: Material;
+@group(1) @binding(1) var tex: texture_2d<f32>;
+@group(1) @binding(2) var texSampler: sampler;
+
+struct In {
+  @location(0) position: vec3f, @location(1) normal: vec3f, @location(2) uv: vec2f,
+  @location(3) j0: vec4u, @location(4) j1: vec4u, @location(5) w0: vec4f, @location(6) w1: vec4f,
+};
+struct Out { @builtin(position) position: vec4f, @location(0) world: vec3f, @location(1) normal: vec3f, @location(2) uv: vec2f };
+@vertex fn meshVertex(v: In) -> Out {
+  var m = skin[v.j0.x] * v.w0.x + skin[v.j0.y] * v.w0.y + skin[v.j0.z] * v.w0.z + skin[v.j0.w] * v.w0.w
+        + skin[v.j1.x] * v.w1.x + skin[v.j1.y] * v.w1.y + skin[v.j1.z] * v.w1.z + skin[v.j1.w] * v.w1.w;
+  let world = (m * vec4f(v.position, 1.0)).xyz;
+  let normal = (m * vec4f(v.normal, 0.0)).xyz;
+  return Out(cam.viewProj * vec4f(world, 1.0), world, normal, v.uv);
+}
+@fragment fn meshFragment(v: Out, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  var n = normalize(v.normal);
+  let toEye = normalize(cam.eye - v.world);
+  if (dot(n, toEye) < 0.0) { n = -n; }
+  let key = normalize(vec3f(-0.45, 0.85, 0.4));
+  let base = material.color.rgb * textureSample(tex, texSampler, v.uv).rgb;
+  let diffuse = max(dot(n, key), 0.0);
+  let fill = 0.5 + 0.5 * n.y;
+  let rim = pow(1.0 - max(dot(n, toEye), 0.0), 3.0);
+  let spec = pow(max(dot(n, normalize(key + toEye)), 0.0), 40.0);
+  return vec4f(base * (0.22 + 0.68 * diffuse + 0.18 * fill) + vec3f(0.12) * spec + base * 0.18 * rim, 1.0);
 }`;
 
 // Column-major 4x4 helpers (WGSL mat4x4f layout).
@@ -353,6 +393,81 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     return targets;
   }
 
+  // Skinned mesh (an imported rig's): pipeline, buffers, per-frame skinning matrices.
+  const meshModule = device.createShaderModule({ code: MESH_SHADER });
+  const meshLayout0 = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+    { binding: 1, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+  ] });
+  const meshLayout1 = device.createBindGroupLayout({ entries: [
+    { binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+    { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} },
+  ] });
+  const meshPipe = await device.createRenderPipelineAsync({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [meshLayout0, meshLayout1] }),
+    vertex: { module: meshModule, entryPoint: 'meshVertex', buffers: [
+      { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }] },
+      { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x3' }] },
+      { arrayStride: 8, attributes: [{ shaderLocation: 2, offset: 0, format: 'float32x2' }] },
+      { arrayStride: 32, attributes: [{ shaderLocation: 3, offset: 0, format: 'uint32x4' }, { shaderLocation: 4, offset: 16, format: 'uint32x4' }] },
+      { arrayStride: 32, attributes: [{ shaderLocation: 5, offset: 0, format: 'float32x4' }, { shaderLocation: 6, offset: 16, format: 'float32x4' }] },
+    ] },
+    fragment: { module: meshModule, entryPoint: 'meshFragment', targets: [{ format }] },
+    primitive: { topology: 'triangle-list', cullMode: 'none' },
+    depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'less' }, multisample: { count: SAMPLES },
+  });
+  const meshSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat' });
+  const whiteTexture = device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({ texture: whiteTexture }, new Uint8Array([255, 255, 255, 255]), { bytesPerRow: 4 }, [1, 1]);
+  let mesh = null;        // { buffers, index, groups, joints, skinBuf, bind0, identity }
+  const showBones = { on: true };
+
+  async function setMesh(data, jointCount) {
+    clearMesh();
+    if (!data) return;
+    const buf = (arr, usage) => { const b = device.createBuffer({ size: Math.max(16, Math.ceil(arr.byteLength / 4) * 4), usage: usage | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(b, 0, arr); return b; };
+    const V = GPUBufferUsage.VERTEX;
+    const buffers = [buf(data.positions, V), buf(data.normals, V), buf(data.uvs, V), buf(data.joints, V), buf(data.weights, V)];
+    const index = buf(data.indices, GPUBufferUsage.INDEX);
+    const skinBuf = device.createBuffer({ size: jointCount * 64, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    const identity = new Float32Array(jointCount * 16);
+    for (let j = 0; j < jointCount; j++) identity.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1], j * 16);
+    const textures = [];
+    const groups = [];
+    for (const g of data.groups) {
+      const m = data.materials[g.material] ?? { baseColor: [1, 1, 1, 1] };
+      let texture = whiteTexture;
+      if (m.image) {
+        try {
+          const bitmap = await createImageBitmap(new Blob([m.image.bytes], { type: m.image.mimeType }), { colorSpaceConversion: 'none' });
+          texture = device.createTexture({ size: [bitmap.width, bitmap.height], format: 'rgba8unorm-srgb',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
+          device.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [bitmap.width, bitmap.height]);
+          textures.push(texture);
+        } catch (e) { console.warn('mesh texture unreadable', e); }
+      }
+      const colorBuf = buf(Float32Array.from(m.baseColor.slice(0, 4)), GPUBufferUsage.UNIFORM);
+      groups.push({ first: g.first, count: g.count, colorBuf, bind: device.createBindGroup({ layout: meshLayout1, entries: [
+        { binding: 0, resource: { buffer: colorBuf } }, { binding: 1, resource: texture.createView() }, { binding: 2, resource: meshSampler }] }) });
+    }
+    // The mesh's rest extent: the camera frames whichever is larger, skeleton or mesh.
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < data.positions.length; i += 3) for (let d = 0; d < 3; d++) { lo[d] = Math.min(lo[d], data.positions[i + d]); hi[d] = Math.max(hi[d], data.positions[i + d]); }
+    mesh = { buffers, index, groups, textures, skinBuf, identity, jointCount, skin: null, visible: true, extent: Math.max(...hi.map((v, d) => v - lo[d])),
+      bind0: device.createBindGroup({ layout: meshLayout0, entries: [{ binding: 0, resource: { buffer: camBuf } }, { binding: 1, resource: { buffer: skinBuf } }] }) };
+    showBones.on = false;
+  }
+  // The mesh belongs to one skeleton: hidden while another skeleton's clip plays.
+  function setMeshVisible(on) { if (!mesh) return; mesh.visible = on; showBones.on = !on || showBones.forced; }
+  function clearMesh() {
+    if (!mesh) return;
+    for (const b of [...mesh.buffers, mesh.index, mesh.skinBuf, ...mesh.groups.map(g => g.colorBuf)]) b.destroy();
+    for (const t of mesh.textures) t.destroy();
+    mesh = null;
+    showBones.on = true;
+  }
+
   let sk = null;          // { J, limbs, boneCount, jointBuf, boneBuf, bind, jointFrame, restFrame, size }
   const view = { motion: null, fps: 30, startedAt: performance.now(), target: [0, 0.25, 0], playing: true, pausedFrame: 0 };
   const orbit = { yaw: 0, pitch: 0.38, zoom: 1, lastInteraction: -1e9, drag: null, pointers: new Map(), pinch: null };
@@ -375,8 +490,9 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     sk = { J, limbs, boneCount: boneList.length, jointBuf, bind, boneBuf, restFrame, jointFrame: restFrame.slice(), size: size ?? Math.max(0.3, ...ext) };
     view.target = [restFrame[0], 0.35 * sk.size, restFrame[2]];
   }
-  function showMotion(motion, fps = 30) { view.motion = motion; view.fps = fps; view.startedAt = performance.now(); view.playing = true; }
-  function showRest() { view.motion = null; if (sk) sk.jointFrame.set(sk.restFrame); }
+  // skin: per-frame skinning matrices for the mesh (T x J x 16), or null (the mesh then rests).
+  function showMotion(motion, fps = 30, skin = null) { view.motion = motion; view.fps = fps; view.startedAt = performance.now(); view.playing = true; if (mesh) mesh.skin = skin; }
+  function showRest() { view.motion = null; if (sk) sk.jointFrame.set(sk.restFrame); if (mesh) mesh.skin = null; }
   function frameIndex(time) {
     const T = view.motion.frames;
     if (!view.playing) return view.pausedFrame;
@@ -438,7 +554,8 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     if (root.every(Number.isFinite)) view.target = [root[0], view.target[1] + (root[1] - view.target[1]) * 0.08, root[2]];
     // Narrow (portrait) screens step back so the body fits across.
     const aspect = canvas.width / canvas.height;
-    const ang = orbit.yaw, dist = Math.max(0.8, 2.4 * sk.size) * Math.max(1, 0.9 / aspect) * orbit.zoom, el = orbit.pitch;
+    const size = mesh?.visible ? Math.max(sk.size, mesh.extent) : sk.size;
+    const ang = orbit.yaw, dist = Math.max(0.8, 2.4 * size) * Math.max(1, 0.9 / aspect) * orbit.zoom, el = orbit.pitch;
     // Aim a little to the subject's left so it sits right of centre, clear of the panel on wide screens.
     const off = canvas.width > canvas.height ? 0.13 * dist : 0;
     // On portrait screens the panel covers the top, so aim above the body to sit it lower.
@@ -462,8 +579,21 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     main.setBindGroup(0, sk.bind);
     main.setBindGroup(1, tg.groundBind);
     main.setPipeline(bgPipe); main.draw(3);
-    main.setPipeline(bonePipe); main.draw(6, sk.boneCount);
-    main.setPipeline(jointPipe); main.draw(6, J);
+    if (mesh?.visible) {
+      const f = state.frameIndex, frame = view.motion && mesh.skin && f >= 0 ? mesh.skin.subarray(f * mesh.jointCount * 16, (f + 1) * mesh.jointCount * 16) : mesh.identity;
+      device.queue.writeBuffer(mesh.skinBuf, 0, frame);
+      main.setPipeline(meshPipe);
+      main.setBindGroup(0, mesh.bind0);
+      mesh.buffers.forEach((b, i) => main.setVertexBuffer(i, b));
+      main.setIndexBuffer(mesh.index, 'uint32');
+      for (const g of mesh.groups) { main.setBindGroup(1, g.bind); main.drawIndexed(g.count, 1, g.first); }
+      main.setBindGroup(0, sk.bind);
+      main.setBindGroup(1, tg.groundBind);
+    }
+    if (showBones.on) {
+      main.setPipeline(bonePipe); main.draw(6, sk.boneCount);
+      main.setPipeline(jointPipe); main.draw(6, J);
+    }
     main.end();
     return enc.finish();
   };
@@ -481,7 +611,7 @@ async function createSkeletonScene({ device, canvas, foreground }) {
     });
   };
   requestAnimationFrame(requestFrame);
-  return { state, view, setSkeleton, showMotion, showRest, setPlaying, seek, get frameIndex() { return state.frameIndex; } };
+  return { state, view, setSkeleton, showMotion, showRest, setPlaying, seek, setMesh, clearMesh, setMeshVisible, showBones, get hasMesh() { return Boolean(mesh); }, get frameIndex() { return state.frameIndex; } };
 }
 
 // createUniMateDemo starts the device and the scene and returns at once, so clips can
@@ -496,7 +626,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   const scene = await createSkeletonScene({ device, canvas, foreground });
 
   const demo = { device, scene: scene.state, bundle: null, parameterCount: null, forwardFlops: null,
-    hasTextEncoder: () => false, showClip, showGenerationSkeleton, showRest: () => scene.showRest(),
+    hasTextEncoder: () => false, showClip, showGenerationSkeleton, setGenerationMesh, showBones: on => { scene.showBones.forced = on; scene.showBones.on = on || !scene.hasMesh; }, showRest: () => scene.showRest(),
     setPlaying: on => scene.setPlaying(on), seek: f => scene.seek(f), view: scene.view, loadModel };
   let generationSkeleton = null;
 
@@ -505,15 +635,27 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     const p = clip.positions;
     scene.setSkeleton({ parents: skeleton.parents, jointNames: skeleton.jointNames, size: motionSize(p, clip.frames, J),
       rest: Array.from({ length: J }, (_, j) => [p[j * 3], p[j * 3 + 1], p[j * 3 + 2]]) });
+    scene.setMeshVisible(false);
     scene.showMotion({ frames: clip.frames, positions: p }, clip.fps ?? 30);
     generationSkeletonShown = false;
+    // A clip of the generation skeleton (one generated here) shows its mesh too.
+    if (clip.mesh && generationMesh) { scene.setMeshVisible(true); scene.showMotion({ frames: clip.frames, positions: p }, clip.fps ?? 30, clip.mesh); }
   }
   let generationSkeletonShown = false;
   function showGenerationSkeleton() {
     if (!generationSkeleton || generationSkeletonShown) return;
     scene.setSkeleton(generationSkeleton);
     scene.showRest();
+    scene.setMeshVisible(Boolean(generationMesh));
     generationSkeletonShown = true;
+  }
+  // The skinned mesh of the generation skeleton (an imported rig's), or null.
+  let generationMesh = null;
+  async function setGenerationMesh(data) {
+    generationMesh = data ?? null;
+    demo.generationMeshData = generationMesh;
+    await scene.setMesh(data, generationSkeleton?.parents.length ?? 0);
+    scene.setMeshVisible(Boolean(data) && generationSkeletonShown);
   }
 
   async function loadModel({ onStatus = () => {}, onBytes = () => {} } = {}) {
@@ -649,7 +791,9 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
         }
         scene.setSkeleton({ ...generationSkeleton, size: motionSize(result.motion.positions, result.motion.frames, J) });
         generationSkeletonShown = true;
-        scene.showMotion(result.motion, fps);
+        result.skin = generationMesh ? skinMatrices(result.motion, parents, rest) : null;
+        scene.setMeshVisible(Boolean(generationMesh));
+        scene.showMotion(result.motion, fps, result.skin);
         return result;
       } finally {
         try { await active.control?.close(); } catch { /* reported by the control */ }
@@ -672,6 +816,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
     // Switch the generation skeleton (a bundle directory) between runs.
     async function useSkeleton(base) {
       if (active) throw new Error('a generation is running');
+      await setGenerationMesh(null);
       applySkeleton(await fetchSkeleton(base));
       den.configure({ B: 2, J });
       generationSkeletonShown = false;

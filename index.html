@@ -101,6 +101,9 @@ body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !import
 .scene-load-picker-meta { color:#8a9a9e; font-size:10px; }
 #scene-add-menu-popup button { display:flex; width:100%; justify-content:space-between; gap:20px; padding:9px 10px; text-align:left; white-space:nowrap; }
 #scene-add-menu-popup small { color:#8fa1a6; font:10px 'SF Mono',monospace; }
+#scene-first-flame-dialog { color:#d4e0e2; background:#192023; border:1px solid #435159; border-radius:8px; max-width:440px; margin:auto; padding:20px; }
+#scene-first-flame-dialog select { width:100%; margin:10px 0; }
+#scene-first-flame-dialog::backdrop { background:#0008; }
 #local-liquid-performance .hint { margin:8px 0 0; color:#96a3a8; font:11px/1.5 'SF Mono',monospace; }
 #local-liquid-performance .slider-label { flex:0 0 105px; }
 #local-liquid-performance-status { color:#add4d6 !important; }
@@ -431,6 +434,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+/* Viewer play/pause: drives the look-lab Freeze (sim steps and shader time). */
+#volume-viewer-play { position: absolute; left: 10px; bottom: 10px; z-index: 4; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.16); border-radius: 50%; background: rgba(8,9,10,0.28); color: rgba(255,255,255,0.72); cursor: pointer; backdrop-filter: blur(2px); }
+#volume-viewer-play:hover { color: #fff; border-color: rgba(255,255,255,0.34); background: rgba(8,9,10,0.42); }
+#volume-viewer-play[hidden] { display: none; }
+#volume-viewer-play svg { width: 11px; height: 11px; }
+/* Physics appearance: controls that no longer reach the frame. */
+.slider-row.volume-physics-uncoupled { opacity: 0.36; }
+.slider-row.volume-physics-uncoupled::after { content: attr(data-physics-uncoupled); flex: 0 0 auto; font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; color: #8a7a5a; white-space: nowrap; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -553,6 +564,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./experiment-workspace.css">
 </head>
 <body>
 
@@ -646,6 +658,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
+        <label class="slider-row"><span class="slider-label">Show support</span><input id="local-liquid-support-visible" type="checkbox"></label>
+        <p class="hint">Water collides with the fixed analytical basin and rock. Show support reveals that geometry; hiding it keeps the same collision surface.</p>
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
           <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
@@ -1585,10 +1599,28 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row">
         <span class="slider-label">Material law</span>
-        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option></select>
+        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option><option value="2">Physics: soot × blackbody (no carriers)</option></select>
         <span class="slider-val" id="volume-physical-material-law-val">0</span>
       </div>
       <span class="slider-help">Old presets retain the original material law. Transported heat + soot is an explicit alternative: detail carriers no longer add heat and boundary coverage no longer supplies a minimum soot density. Recalibrate Peak soot K, Kelvin spread and Hot soot density when switching; settings are not automatically retuned.</span>
+      <div class="volume-control-section-title">Physics appearance</div>
+      <span class="slider-help">Material law = Physics (reactant law, Emissive transport): soot glows as a blackbody at the temperature the heat field implies (300 K + Kelvin per heat &times; heat), absorbs and scatters with Smoke extinction and Smoke albedo, and fresh burning adds the reaction spectrum (Clean emission). No appearance carrier is drawn. Thermal emission scales the glow; Exposure EV, Highlight knee, Camera white K and Tone mapping grade it; Density scales the soot. Dimmed controls do nothing under this law.</span>
+      <div class="slider-row">
+        <span class="slider-label" title="Calibration of the dimensionless heat field: T = 300 K + this × heat.">Kelvin per heat</span>
+        <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1600">
+        <span class="slider-val" id="volume-physical-kelvin-per-heat-val">1600</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Simulation: soot consumed per step at this rate × local oxygen fraction where the gas is hotter than Burnout K. 0 = off.">Soot burnout</span>
+        <input type="range" id="volume-physical-soot-burnout-rate" min="0" max="2" step="any" value="0">
+        <span class="slider-val" id="volume-physical-soot-burnout-rate-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Temperature (same Kelvin per heat calibration) above which soot burns out; ±150 K ramp.">Burnout K</span>
+        <input type="range" id="volume-physical-soot-burnout-kelvin" min="600" max="3000" step="any" value="1300">
+        <span class="slider-val" id="volume-physical-soot-burnout-kelvin-val">1300</span>
+      </div>
+      <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
       <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
@@ -3135,6 +3167,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <div id="viewport">
   <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
+  <button id="volume-viewer-play" type="button" hidden title="Pause / play the fire (look-lab Freeze)" aria-label="Pause the fire" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -3151,6 +3184,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button type="button" role="menuitem" data-scene-add="spot-light">Spot</button>
         <div class="scene-menu-heading">Emitter</div>
         <button type="button" role="menuitem" data-scene-add="water-emitter">Water</button>
+        <button type="button" role="menuitem" data-scene-add="flame-emitter">Flame</button>
       </div>
     </div>
   </nav>
@@ -3497,6 +3531,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -3586,11 +3621,12 @@ function refreshRenderingControls() {
   if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
   const selected = renderingChannelsForMode(renderingMode);
   const source = window.__kaminosSceneRadiance;
-  const distributed=source?.debugState().identity==='distributed-volume-direct-radiance-v0';
+  const hybrid=source?.debugState().identity==='hybrid-distributed-smoke-point-surfaces-v0';
+  const distributed=hybrid||source?.debugState().identity==='distributed-volume-direct-radiance-v0';
   document.getElementById('rendering-distributed-controls').hidden=!distributed;
   document.querySelector('.rendering-position-row').hidden=distributed;
   document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
-  document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  document.getElementById('rendering-source-title').textContent=hybrid?'Hybrid: distributed smoke / point surfaces':distributed ? 'Distributed flame source' : 'Shared point source';
   document.querySelector('label[for="rendering-shared-gain"]').textContent=distributed?'Transported-light gain (stops)':'Source gain (stops)';
   document.getElementById('rendering-source-description').textContent=distributed?'Artistic illumination master for surfaces and distributed smoke. Direct visible flame emission stays unchanged.':'This study source lights both mesh and smoke. Its gain changes source energy on both paths.';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
@@ -3629,7 +3665,7 @@ function refreshRenderingControls() {
     const sharedState = !hasSharedRoute ? 'not mounted on this route' : source ? (selected.shared ? 'on' : 'off') : 'mounting';
     const fieldState = !fireLightFieldPass ? 'not mounted on this route' : selected.flameField ? 'on' : 'off';
     const position = source?.debugState().source?.position?.map(value => value.toFixed(2)).join(', ');
-    status.textContent = `${distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
+    status.textContent = `${hybrid?'Hybrid prototype':distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} smoke directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
     status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
   }
   window._kaminosDirty?.();
@@ -3891,8 +3927,13 @@ import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
+import {installAgentVantage} from './agent-vantage.mjs';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
+import {installExperimentWorkspace} from './experiment-workspace.mjs';
+import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
+import {createInvestigationEntry} from './investigation-entry.mjs';
+import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -3908,6 +3949,11 @@ import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null;
+let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
+const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
+workbenchViewerReady.catch(()=>{});
+const workbenchSceneFrames=createWorkbenchFrameService({onError:error=>{window.kaminosWorkbenchSceneFrameError=error.message;setInfo('Experiment frame failed: '+error.message);}});
 let restoringSceneLight=false;
 const initialViewerParams = new URLSearchParams(window.location.search);
 
@@ -4004,6 +4050,8 @@ let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let activeSceneComposition = null;
 let authoringBusy = false;
+// Set while the agent vantage borrows the viewport camera for a picture.
+let vantageCaptureHeld = false;
 let volumePrototype = null;
 let annularBurner = null;
 let burnerRecipe = null;
@@ -4378,6 +4426,7 @@ let sceneObjects = [];
 let sceneNavigation = null;
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
+const sceneMembershipDisposers = new WeakMap();
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
@@ -5666,7 +5715,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
   refreshFlameDomainPreview();
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
   if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
@@ -5702,7 +5751,7 @@ function refreshFlameDomainPreview() {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,flameDomainTopY()*scale,scale).add(new THREE.Vector3(...translation)));
   if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
@@ -6722,7 +6771,7 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
-  if (flameDomainGuide) flameDomainGuide.visible = !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
@@ -6769,6 +6818,18 @@ function updateTransformInspector() {
   if(selectionProxy&&sceneSelection.ids.length&&!transformControls?.dragging)selectionTransformProxy();
   scenePlacementTools?.draw();
 }
+
+// Explicit owner restoration refresh; no edit, selection change or frame polling.
+function refreshWorkbenchAssetPresentation(handle) {
+  const row=sceneObjects.find(entry=>entry.id===handle?.id);
+  if(!row||row.object!==handle?.root)throw Error('Scene asset registration is no longer current');
+  row.object.updateMatrixWorld(true);
+  const selected=selectedPlacementEntry(),selectionMatched=selected?.id===row.id&&selected.object===row.object;
+  if(selectionMatched)updateTransformInspector();
+  window._kaminosDirty?.();
+  return {id:row.id,transform:sceneObjectTransformState(row.object),selectionMatched};
+}
+window.kaminosWorkbenchRefreshPresentation=refreshWorkbenchAssetPresentation;
 
 function applyTransformInspectorField(input) {
   const entry = selectedSceneObjectEntry();
@@ -7033,7 +7094,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -7042,7 +7103,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -7095,7 +7156,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -7183,6 +7244,7 @@ function refreshLocalLiquidPerformance() {
   if (panel.dataset.setup !== signature) {
     document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
     document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
+    document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
     panel.dataset.setup = signature;
   }
   const loading = localLiquidHostMount.isLoading();
@@ -7200,6 +7262,15 @@ function refreshLocalLiquidPerformance() {
 }
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
+window.kaminosSetLocalLiquidSupportVisible = value => {
+  assertSceneConstructionAvailable();
+  if(!localLiquidSetup)throw Error('Add a Water Emitter first');
+  return scenePlacementTools.edits.apply('@local-liquid-support-display',{visible:value},'Show water support');
+};
+document.getElementById('local-liquid-support-visible').addEventListener('change',event=>{
+  try{window.kaminosSetLocalLiquidSupportVisible(event.target.checked);}
+  catch(error){refreshLocalLiquidPerformance();setInfo(error.message);}
+});
 window.kaminosPauseLocalLiquid = paused => {
   localLiquidPaused = Boolean(paused);
   localLiquidHost?.setPaused(localLiquidPaused);
@@ -7221,6 +7292,7 @@ document.getElementById('local-liquid-apply').addEventListener('click', () => {
 });
 document.getElementById('local-liquid-pause').addEventListener('click', () => window.kaminosPauseLocalLiquid(!localLiquidPaused));
 
+window.kaminosLocalLiquidReadSceneColor = region => {if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.readSceneColor(region);};
 window.kaminosLocalLiquidState = () => {
   const hostState = localLiquidHost?.state() || null;
   return ({
@@ -7233,6 +7305,9 @@ window.kaminosLocalLiquidState = () => {
   frameCount: hostState?.frameCount ?? 0,
   failure: localLiquidFailure,
   setup: localLiquidSetup ? structuredClone(localLiquidSetup) : null,
+  supportGeometryVisible: hostState?.supportGeometryVisible ?? null,
+  sourceGeneration: hostState?.sourceGeneration ?? null,
+  linearSceneColorInput: hostState?.linearSceneColorInput ?? null,
   emitters: localLiquidEmitterRecords(),
   lastFrame: hostState?.lastFrame || null,
   solver: hostState?.solver || null,
@@ -7243,6 +7318,7 @@ window.kaminosLocalLiquidState = () => {
 };
 
 async function addLocalLiquidEmitter() {
+  assertSceneConstructionAvailable();
   const count = sceneObjects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).length;
   if (count >= LOCAL_LIQUID_EMITTER_CAPACITY) {
     setInfo(`The local water host supports ${LOCAL_LIQUID_EMITTER_CAPACITY} emitters per scene`);
@@ -7296,6 +7372,7 @@ sceneAddMenuPopup.addEventListener('click', event => {
     setActiveTab('assets');
     addLocalLiquidEmitter().catch(error => setInfo(`Could not add Water Emitter: ${error.message}`));
   }
+  if(action.dataset.sceneAdd==='flame-emitter')openFirstFlameFieldDialog().catch(error=>setInfo(error.message));
 });
 document.getElementById('scene-mesh-file').onchange=async event=>{
   const file=event.target.files[0];event.target.value='';if(!file)return;
@@ -8041,6 +8118,7 @@ async function createForgeHostStationScene({ force = false, source = 'fixture' }
 }
 
 function frameForgeHostCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.05, 1.85, 4.35);
   controls.target.set(0, -0.18, 0.16);
@@ -8224,6 +8302,7 @@ function disposeMotionTemporalScene() {
 }
 
 function frameMotionAgencyCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   if (!camera || !controls) return;
   camera.position.set(0.25, 2.1, 5.3);
   controls.target.set(0.05, 0.15, 0.15);
@@ -10477,7 +10556,9 @@ function releaseUnreferencedSceneMembershipObjects() {
     if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
-      if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);
+      const disposeTree = sceneMembershipDisposers.get(entry.object) || disposeObjectTree;
+      sceneMembershipDisposers.delete(entry.object);
+      if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);
     }
   }
 }
@@ -10608,7 +10689,7 @@ function pruneSceneSelection() {
   activeSceneObjectId=activeSceneGroupId?null:sceneSelection.activeId;
 }
 
-function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false } = {}) {
+function removeSceneObjectInternal(id, { recordHistory = true, preserveForMembershipHistory = false, disposeTree = disposeObjectTree } = {}) {
   if (id === FLAME_EMITTER_ID) return window.kaminosBurnerAuthoring.remove(id);
   if (recordHistory && scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
@@ -10651,8 +10732,11 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
-  if (retainForMembershipHistory) sceneMembershipRetainedObjects.set(id, entry);
-  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeObjectTree(entry.object);}
+  if (retainForMembershipHistory) {
+    sceneMembershipRetainedObjects.set(id, entry);
+    if (disposeTree !== disposeObjectTree) sceneMembershipDisposers.set(entry.object, disposeTree);
+  }
+  else {if(entry.type===PROCEDURAL_MESH_TYPE){proceduralMeshes.get(id)?.dispose();proceduralMeshes.delete(id);}else if(entry.type==='light')disposeSceneSpotLight(id);else disposeTree(entry.object);}
   const fallback = wasActive ? (sceneObjects[index] || sceneObjects[index - 1] || null) : sceneObjects.find(obj => obj.id === activeSceneObjectId);
   if(sceneSelection.ids.length){setSceneSelection(sceneSelection.ids,sceneSelection.activeId);}
   else if (activeGroupSurvives) {
@@ -11495,12 +11579,12 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = sceneGISettings.mode;
+    const graphKey = `${sceneGISettings.mode}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
       renderPipeline.outputNode = outlinedSceneOutput;
-      renderPipeline.outputColorTransform = true;
+      renderPipeline.outputColorTransform = !localLiquidHost;
       renderPipeline.needsUpdate = true;
       refreshRenderingControls();
       return;
@@ -11525,7 +11609,7 @@ async function initScene() {
     outlinedCameraOutput=sceneEmissiveCamera?selectionFeedback.output(sceneEmissiveCamera.outputNode):null;
     renderPipeline.outputNode=outlinedSceneOutput;
     giOutputGraphs.set(graphKey,{rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass});
-    renderPipeline.outputColorTransform = true;
+    renderPipeline.outputColorTransform = !localLiquidHost;
     renderPipeline.needsUpdate = true;
   }
   updateSceneGI = value => {
@@ -11540,6 +11624,7 @@ async function initScene() {
   };
   sceneGI.setSettings(sceneGISettings);
   rebuildSceneGIOutput();
+  window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
   window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
@@ -11716,7 +11801,7 @@ async function initScene() {
     navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
     frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
-    blocked: () => !!viewPie?.state() || authoringBusy || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
+    blocked: () => !!viewPie?.state() || authoringBusy || vantageCaptureHeld || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
     status: updateNavigationHint,
   });
@@ -11730,6 +11815,7 @@ async function initScene() {
   window.kaminosNavigationState = navigation.state;
   window.kaminosNavigationIndexState = navigation.indexState;
   window.kaminosFrameSelected = () => {
+    if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return false; }
     const changed = frameAuthoredSelection(); if (changed) markDirty(); return changed;
   };
   scenePlacementTools = installScenePlacementTools({
@@ -11756,6 +11842,7 @@ async function initScene() {
     refresh: () => { updateTransformInspector(); markDirty(); },
     allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
     busy: () => authoringBusy,
+    viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
     captureContext: id => id==='@flame-domain'?flameDomainFollowSource:id==='@selection-transform'||id === FLAME_EMITTER_ID || id?.startsWith('@group:') || id?.startsWith('@assembly:') ? [...flameDomainTranslation] : null,
     settled: event => {
@@ -11769,13 +11856,24 @@ async function initScene() {
   });
   scenePlacementTools.edits.register('@flame-domain',{read:()=>structuredClone(flameDomainDraft||acceptedFlameDomainPose()),write:writeFlameDomainPreview,check:checkedFlameDomainPose});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active){flameDomainDraft=null;refreshFlameDomainPreview();}});
-  window.kaminosFlameDomain={read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
+  window.kaminosFlameDomain={helpers:()=>({guideVisible:flameDomainGuide?.visible??false,guideCount:scene.children.filter(object=>object.name==='Flame simulation bounds').length}),read:()=>({translation:[...flameDomainTranslation],scale:flameDomainScale,followSource:flameDomainFollowSource}),set:patch=>{if(scenePlacementTools.edits.state().active)throw Error('Finish the active edit first');try{return scenePlacementTools.edits.apply('@flame-domain',patch,'Edit simulation box');}catch(error){scenePlacementTools.edits.cancel();throw error;}}};
   scenePlacementTools.edits.register('@burner-controls', {
     read: readBurnerControlHistoryState,
     write: restoreBurnerControlHistoryState,
     check: checkedBurnerControlHistoryState,
   });
   setupSelectionTransforms();
+  scenePlacementTools.edits.register('@local-liquid-support-display',{
+    read:()=>({visible:localLiquidSetup?.showSupportGeometry??false}),
+    check:value=>{if(typeof value?.visible!=='boolean')throw Error('Water support visibility must be Boolean');return {visible:value.visible};},
+    write:value=>{
+      if(!localLiquidSetup)throw Error('Water field is absent');
+      localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,showSupportGeometry:value.visible});
+      localLiquidHost?.setSetup(localLiquidSetup);
+      refreshLocalLiquidPerformance();window._kaminosDirty?.();
+    },
+  });
+  scenePlacementTools.addHistoryScope(document.getElementById('local-liquid-performance'));
   installBurnerAuthoring();
   createFlameQuickFields();
   setupAuthoringAssets();
@@ -11809,6 +11907,7 @@ async function initScene() {
       }
       return true;
     },
+    afterSwitch: mode => sharedWorkbench?.setActive(mode==='workbench'),
     openWorkbenchTab: tab => setActiveTab(tab),
   });
   window.kaminosWorkspace = authoringWorkspace;
@@ -11816,13 +11915,13 @@ async function initScene() {
     edits:scenePlacementTools.edits,
     readCamera:readAuthoredCameraView,
     readLens:()=>({fov:sceneCameras?.readNavigationView().fov??camera.fov}),
-    writeLens:value=>sceneCameras.setNavigationLens(value.fov),
+    writeLens:value=>{if(vantageCaptureHeld)throw Error('The agent sub is taking a picture');sceneCameras.setNavigationLens(value.fov);},
     writeCamera:view=>{sceneCameras?.leave();sceneNavigation.cancel();camera.position.fromArray(view.position);controls.target.fromArray(view.target);camera.up.fromArray(view.up);camera.fov=view.fov;camera.near=view.near;camera.far=view.far;camera.updateProjectionMatrix();sceneNavigation.resetView();window._kaminosDirty?.();},
-    admit:()=>{assertSceneConstructionAvailable();if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
+    admit:()=>{assertSceneConstructionAvailable();if(vantageCaptureHeld)throw Error('The agent sub is taking a picture');if(!controls.enabled||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current camera or preview operation');},
     changed:()=>{cameraViewsPanel?.refresh();window._kaminosDirty?.();},
     capture:item=>window.captureComposition({result:true,cameraView:item}),
   });
-  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
+  sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
   cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
@@ -11830,13 +11929,34 @@ async function initScene() {
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
   const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
-  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
-  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
+  viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
   window.kaminosCameraViews={...cameraViews,open:()=>{authoringWorkspace.setMode('authoring');authoringWorkspace.setContext('camera');cameraViewsPanel.refresh();}};
   installSelectionInput();
+  workbenchSceneHost=createWorkbenchSceneHost({scene,camera,controls,
+    loadAsset:(file,options)=>window.kaminosWorkbenchLoadAsset(file,options),
+    registerObject:registerSceneObject,findObject:root=>sceneObjects.find(row=>row.object===root),
+    removeObject:handle=>{
+      const row=sceneObjects.find(row=>row.id===handle.id);
+      if(!row||row.object!==handle.root)return false;
+      const hasMembershipHistory=Boolean(scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(handle.id))
+        || scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(handle.id)));
+      return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:hasMembershipHistory,
+        disposeTree:root=>disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
+    },
+    redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
+  });
+  window.kaminosWorkbenchSceneState=()=>{
+    const info=renderer.backend.adapter?.info;
+    return {...workbenchSceneFrames.state(),
+      rendererBackend:renderer.backend.isWebGPUBackend===true?'webgpu':renderer.backend.isWebGLBackend===true?'webgl':'unknown',
+      adapter:info?Object.fromEntries(['vendor','architecture','device','description'].map(key=>[key,info[key]??null])):null,
+    };
+  };
+  installSharedWorkbench();
 
   let ordinaryDepthEnabled = fireLightFieldRouteParams().get('volume_light_field_scene_depth') === '1'
     || isAuthoredKilnCollisionRoute();
@@ -11914,6 +12034,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
+    workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
@@ -11978,6 +12099,38 @@ async function initScene() {
       return {status:'registered',objectId:entry.id,source:entry.source,sha256,runId};
     },
   };
+  // Agent vantage: a sub (camera object) an agent pilots with tools/vantage.mjs.
+  // ?vantage=0 leaves the terminal link closed.
+  const vantageBusy=()=>authoringBusy?'A scene document action is running':window.kaminosSelection?.boxing?.()?'A box selection is in progress':(controls?.state??-1)!==-1?'A touch gesture is moving the view':scenePlacementTools?.edits.state().active?'An edit is in progress in Kaminos':scenePlacementTools?.edits.state().replaying?'Kaminos is replaying history':sceneNavigation?.state().gesture?'The viewport is being navigated':transformGizmoDragging||transformControls?.dragging?'A gizmo is being dragged':splatCorrectionMode?'Splat correction mode is active':greenroomPreviewIsActive()?'A Greenroom preview is showing':null;
+  // Hides what captureComposition hides for a clean shot when `all`; `hide` names objects hidden either way.
+  // Navigation is held by vantageCaptureHeld, not controls.enabled, which transforms save and restore themselves.
+  const suspendEditorDrawingForVantage=({all=true,hide=[]}={})=>{
+    const hidden=[],helper=transformControls?.getHelper(),helperVisible=helper?.visible,keep=object=>{if(object)hidden.push([object,object.visible]);};
+    if(all){scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly)keep(object);});for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);}
+    for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
+    if(all){if(helper)helper.visible=false;selectionCaptureSuspended=true;selectionFeedback?.suspend(true);for(const box of selectionBoxes.values())box.visible=false;}
+    for(const [object] of hidden)object.visible=false;
+    return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}window._kaminosDirty?.();};
+  };
+  // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
+  const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
+  // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
+  // flag rather than authoringBusy, which in-flight imports read as a stale document. Presses on the
+  // viewport canvases wait too, since they would resolve through the borrowed camera; the window capture
+  // listener runs before document-level handlers. Releases are delivered, so a gesture begun before the
+  // picture still ends. Dialogs, toolbars and the sub panel keep working. Selection, box selection and
+  // framing also check the flag themselves.
+  const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','mousedown','click','dblclick'],wait=event=>{const target=event.target;if(target?.tagName==='CANVAS'&&viewportEl.contains(target)&&!target.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)window.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)window.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
+  const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
+  const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
+  try{
+    const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>sceneObjects,
+      selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
+      viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
+      redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
+      link:new URLSearchParams(location.search).get('vantage')!=='0'});
+    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
+  }catch(error){console.error('Agent vantage unavailable',error);}
   animate();
 }
 
@@ -12484,6 +12637,9 @@ async function showGLB(file, options = {}) {
   const loadToken = sceneMutationToken;
   const isBlob = typeof file !== 'string';
   const url = isBlob ? URL.createObjectURL(file) : file;
+  const assetMetadata = {...(options.metadata || {})};
+  const assetSource = assetMetadata.source ?? (isBlob ? file.name : file);
+  const assetFileName = assetMetadata.fileName ?? file?.name ?? (isBlob ? 'object.glb' : String(file).split('/').pop());
   if (file && file.name) glbFileName = file.name;
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
@@ -12512,13 +12668,14 @@ async function showGLB(file, options = {}) {
         }
       });
       scene.add(model);
+      let registeredAsset = null;
       if (options.register === false) {
-        const metadata = options.metadata || {};
+        const metadata = assetMetadata;
         model.userData.kaminosSceneObject = {
-          source: metadata.source ?? modelSourceUrl,
+          source: assetSource,
           type: metadata.type ?? 'glb',
-          fileName: metadata.fileName ?? glbFileName,
-          label: metadata.label ?? metadata.fileName ?? glbFileName,
+          fileName: assetFileName,
+          label: metadata.label ?? assetFileName,
         };
         currentMesh = model;
         sceneNavigation?.prepare(model);
@@ -12527,17 +12684,24 @@ async function showGLB(file, options = {}) {
           transformControls.visible = true;
         }
       } else {
-        registerSceneObject(model, {
-          ...(options.metadata || {}),
-          source: options.metadata?.source ?? modelSourceUrl,
-          type: options.metadata?.type ?? 'glb',
-          fileName: options.metadata?.fileName ?? glbFileName,
+        registeredAsset = registerSceneObject(model, {
+          ...assetMetadata,
+          source: assetSource,
+          type: assetMetadata.type ?? 'glb',
+          fileName: assetFileName,
         });
       }
       document.getElementById('transform-bar').classList.add('visible');
       if (arrival === 'fresh' && arrivalPlacement) frameAssetArrival(model);
       setInfo('GLB Inspector — orbit to inspect | use toolbar to fix orientation');
-      resolve(model);
+      resolve(options.returnAsset ? {
+        id: registeredAsset?.id ?? null,
+        root: model,
+        clips: gltf.animations || [],
+        source: assetSource,
+        fileName: assetFileName,
+        arrival,
+      } : model);
     }, undefined, (err) => {
       if (isBlob) URL.revokeObjectURL(url);
       setInfo('Failed to load GLB: ' + (err.message || 'unknown error'));
@@ -12545,6 +12709,49 @@ async function showGLB(file, options = {}) {
     });
   });
 }
+
+// Scene-session owners borrow this loader; membership, placement and stale-load
+// admission remain the ordinary application's operations. Existing imports keep
+// their root-only result. The caller supplies its own lifetime via isCurrent.
+window.kaminosWorkbenchLoadAsset = async (file, options = {}) => {
+  await workbenchViewerReady;
+  return showGLB(file, {...options, clear: false, register: true, returnAsset: true});
+};
+
+function installSharedWorkbench() {
+  if(sharedWorkbench)return;
+  const byId=id=>document.getElementById(id);
+  sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
+    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
+    toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
+    openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
+  });
+  window.kaminosWorkbenchState=sharedWorkbench.state;
+  window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
+  sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
+}
+async function installOwnerWorkbenchEntry() {
+  if(ownerExperimentEntry)return;
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
+    async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
+    refreshPresentation:refreshWorkbenchAssetPresentation,
+  }};
+  ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
+    discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
+    onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
+  });
+  window.kaminosWorkbenchExperiments=ownerExperimentEntry;
+  const {id,inputsText}=readOwnerExperimentAddress(location);if(id)await ownerExperimentEntry.open(id,JSON.parse(inputsText));
+}
+window.kaminosMountInvestigationEntry=async(options={})=>{
+  await workbenchViewerReady;const tool=options.tool||'assets';
+  if(![...document.querySelectorAll('.tab[data-tab]')].some(node=>node.dataset.tab===tool))throw Error('Unknown Workbench tool: '+tool);
+  if(!authoringWorkspace)throw Error('Shared Kaminos workspace unavailable');
+  if(authoringWorkspace.state().mode!=='workbench'&&!authoringWorkspace.setMode('workbench'))throw Error('Finish the current scene edit before opening the investigation');
+  const component=createInvestigationEntry({document,...options,subject:options.subject||'experiment'});
+  sharedWorkbench.setInvestigation(component.node,{tool});setActiveTab(tool);return component;
+};
 
 // --- OBJ Inspector ---
 async function showOBJ(objFile, mtlFile, options = {}) {
@@ -12731,6 +12938,7 @@ function ensureFingerJuiceTabFrameLoaded() {
 
 function setActiveTab(tabName, { reveal = tabName !== 'assets' } = {}) {
   if (reveal && authoringWorkspace?.state().mode === 'authoring' && !authoringWorkspace.setMode('workbench')) return;
+  sharedWorkbench?.setTool(tabName);
   document.body.classList.toggle('sam-image-active', tabName === 'masks');
   document.getElementById('sam-image-viewport').hidden = tabName !== 'masks';
   samImageTools?.setActive(tabName === 'masks');
@@ -16763,7 +16971,10 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
-  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 1, continuous: false, decimals: 0 },
+  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 2, continuous: false, decimals: 0 },
+  { key: 'physicalKelvinPerHeat', id: 'volume-physical-kelvin-per-heat', param: 'volume_physical_kelvin_per_heat', min: 100, max: 6000, continuous: true, decimals: 0 },
+  { key: 'physicalSootBurnoutRate', id: 'volume-physical-soot-burnout-rate', param: 'volume_physical_soot_burnout_rate', min: 0, max: 2, continuous: true, decimals: 3 },
+  { key: 'physicalSootBurnoutKelvin', id: 'volume-physical-soot-burnout-kelvin', param: 'volume_physical_soot_burnout_kelvin', min: 600, max: 3000, continuous: true, decimals: 0 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -18165,7 +18376,7 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
-    if (field.key === 'physicalColorMode') continue; // Route-aware status owns this label.
+    if (field.key === 'physicalColorMode' || field.key === 'physicalMaterialLaw') continue; // Route-aware status owns these labels.
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
@@ -18922,7 +19133,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
   const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
-  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
+  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? (c.physicalMaterialLaw === 2 ? 'Glow gain' : 'Hot soot density') : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
   syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
@@ -19227,6 +19438,52 @@ function renderVolumeEmitterReceipt(receipt) {
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
 
+// Physics appearance: dim the controls that no longer reach the frame, and say
+// what is in force (volume-physics-appearance.mjs owns the list).
+function syncPhysicsAppearanceCockpit(physics) {
+  const active = physics?.effective?.render === true;
+  for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
+    const row = document.getElementById(id)?.closest('.slider-row');
+    if (!row) continue;
+    row.classList.toggle('volume-physics-uncoupled', active);
+    if (active) row.dataset.physicsUncoupled = reason === 'carriers-only' ? 'carriers only' : 'unused';
+    else delete row.dataset.physicsUncoupled;
+  }
+  // The material-law value label carries the law in force (the layout moves
+  // control rows, so this is where the state stays visible).
+  const law = document.getElementById('volume-physical-material-law-val');
+  if (law) {
+    const value = Number(document.getElementById('volume-physical-material-law')?.value || 0);
+    law.textContent = value !== 2 ? (value === 1 ? 'transported' : 'carriers')
+      : active ? 'physics · on' : `physics · NOT DRAWN (${String(physics?.reason || 'pending').replace(/^physics-appearance-/, '').replace(/-/g, ' ')})`;
+  }
+  const label = document.getElementById('volume-physics-appearance-state');
+  if (label) {
+    label.textContent = !physics?.requested
+      ? 'Physics appearance: off'
+      : active
+        ? `Physics appearance: on · ${physics.kelvinPerHeat.toFixed(0)} K per heat · soot burnout ${physics.effective.sootBurnout ? `${physics.sootBurnoutRate.toFixed(3)} above ${physics.sootBurnoutKelvin.toFixed(0)} K` : 'off'}`
+        : `Physics appearance: NOT DRAWN (${physics.reason})${physics.effective.sootBurnout ? ' · soot burnout still runs' : ''}`;
+  }
+}
+function syncVolumeViewerPlay(s) {
+  const button = document.getElementById('volume-viewer-play');
+  if (!button) return;
+  button.hidden = !document.getElementById('kaminos-volume-canvas')?.classList.contains('active');
+  const frozen = Number(document.getElementById('volume-look-freeze')?.value) >= 0.5;
+  button.dataset.state = frozen ? 'paused' : 'playing';
+  button.setAttribute('aria-label', frozen ? 'Play the fire' : 'Pause the fire');
+  button.querySelector('.pause-glyph').style.display = frozen ? 'none' : '';
+  button.querySelector('.play-glyph').style.display = frozen ? '' : 'none';
+}
+document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
+  const freeze = document.getElementById('volume-look-freeze');
+  if (!freeze) return;
+  freeze.value = Number(freeze.value) >= 0.5 ? '0' : '1';
+  freeze.dispatchEvent(new Event('input', { bubbles: true }));
+  freeze.dispatchEvent(new Event('change', { bubbles: true }));
+  syncVolumeViewerPlay();
+});
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
@@ -19258,6 +19515,8 @@ function refreshVolumeReadout() {
     : (heatRelease.effective.admitted
       ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
+  syncPhysicsAppearanceCockpit(s.physicsAppearance);
+  syncVolumeViewerPlay(s);
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
     ? 'authored'
@@ -19357,6 +19616,7 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
   const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
@@ -20178,9 +20438,7 @@ async function initKaminosVolumeRoute() {
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getSceneDepth: (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute())
-      ? () => ordinarySceneDepthProvider?.() ?? null
-      : null,
+    getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
     // The kiln is an explicit authored-solid experiment. Its exact registered
     // mesh and world transform, not its bounding box or camera depth, feed the
     // volume solver when the scene route requests volume_collision=kiln.
@@ -20207,10 +20465,11 @@ async function initKaminosVolumeRoute() {
     if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
     window.__kaminosSceneRadianceSetup = {status:'mounting'};
     const distributed=fireLightFieldRouteParams().get('volume_light_field_distributed')==='1';
+    const hybrid=distributed&&fireLightFieldRouteParams().get('volume_light_field_hybrid')==='1';
     if(distributed)renderingMode='shared';
-    import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
+    import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{pointCount:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_points')||4),shadowResolution:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_shadow_resolution')||256),smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
           badge.hidden=!message;
@@ -20222,13 +20481,14 @@ async function initKaminosVolumeRoute() {
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');
             const receiverLabel=document.getElementById('rendering-receiver-status');
-            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
+            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`PROTOTYPE: ${state.pointCount} live GPU point regions for surfaces; zero surface cache receivers. Distributed smoke retained. Spacing / surface reconstruction do not apply. Point surfaces omit smoke extinction; opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
             if(label.textContent!==text)label.textContent=text;
           }
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{
@@ -22035,19 +22295,119 @@ function installFlameAuthoring() {
     read:()=>flameSettingsState(),write:writeFlameSettingsState,check:checkFlameSettingsState,
     canApply:()=>{if(!volumePrototype?.debugState?.().active || !applyFlameEmitterPose)throw Error('Flame runtime is not active');},
     changed:()=>flameInspector?.sync(),
-    load:async id=>{
-      const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
-      const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
-      if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
-      const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
-      if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
-      return flameSettingsState(receipt.preset,receipt);
-    }});
+    load:loadAuthoredFlameBasin});
+}
+
+async function loadAuthoredFlameBasin(id) {
+  const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
+  const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
+  if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
+  const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
+  if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
+  return flameSettingsState(receipt.preset,receipt);
+}
+
+function firstFlameFieldState() {
+  return {composition:activeSceneComposition?structuredClone(activeSceneComposition):null,
+    settings:flameSettingsState(),sourcePresent:!!activeSceneComposition&&authoredFlamePresent,
+    route:Object.fromEntries([...new URLSearchParams(location.hash.slice(1))].filter(([key])=>key.startsWith('volume_light_field')||key==='volume_collision'))};
+}
+function checkFirstFlameFieldState(value) {
+  if(!value||typeof value.sourcePresent!=='boolean'||!value.route||typeof value.route!=='object')throw Error('Invalid first flame field state');
+  if(value.composition) {
+    if(value.composition.schema!==COMPOSITION_SCHEMA||value.route.volume_light_field!=='1')throw Error('Flame composition route is incomplete');
+    checkFlameSettingsState(value.settings);
+  }
+  return structuredClone(value);
+}
+function writeFirstFlameFieldState(value) {
+  const before=firstFlameFieldState();
+  const apply=next=>{
+    const wasWriting=burnerGraphWriting;burnerGraphWriting=true;
+    try{return writeFirstFlameFieldStateUnchecked(next);}finally{burnerGraphWriting=wasWriting;}
+  };
+  try {
+    const mounting=apply(value);
+    return mounting?.then ? mounting.catch(async error=>{await apply(before);throw error;}) : mounting;
+  } catch(error){apply(before);throw error;}
+}
+function writeFirstFlameFieldStateUnchecked(value) {
+  volumePrototype.setActive(false);
+  const url=new URL(location.href),hash=new URLSearchParams(url.hash.slice(1));
+  for(const key of [...hash.keys()])if(key.startsWith('volume_light_field')||key==='volume_collision')hash.delete(key);
+  for(const [key,entry] of Object.entries(value.route))hash.set(key,entry);
+  url.hash=hash.toString();history.replaceState(history.state,'',url);
+  activeSceneComposition=value.composition?structuredClone(value.composition):null;
+  authoredFlamePresent=value.sourcePresent;
+  writeFlameSettingsState(value.settings);
+  volumePrototype.setSceneCompositionPresentation(Boolean(value.composition));
+  window.kaminosOrdinaryDepthSetEnabled?.(value.route.volume_light_field_scene_depth==='1');
+  ensureAuthoredFlameEmitter();
+  window.kaminosRefreshSceneGIOutput?.();
+  if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
+  renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
+  if(value.composition) {
+    const mounting=volumePrototype.setActive(true).then(()=>{
+      if(!activeSceneComposition)volumePrototype.setActive(false);
+    });
+    window.__kaminosFirstFlameMount=mounting;
+    return mounting;
+  }
+}
+async function addFirstFlameField(presetId,{signal}={}) {
+  signal?.throwIfAborted();
+  assertSceneConstructionAvailable();
+  if(activeSceneComposition)return addBurnerObject('flame-source');
+  if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
+  const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
+  authoringBusy=true;
+  let settings;
+  try{settings=await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
+  signal?.throwIfAborted();
+  if(JSON.stringify(firstFlameFieldState())!==before||JSON.stringify(scenePlacementTools.edits.state())!==ledger)throw Error('Scene changed while loading the flame basin; add it again');
+  if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
+  if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
+  if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
+  const route={volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'};
+  const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
+  await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
+  if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
+  setActiveSceneObject(FLAME_EMITTER_ID);
+  setInfo('Added flame from the saved basin. Move its source; Undo removes the field.');
+  return FLAME_EMITTER_ID;
+}
+async function openFirstFlameFieldDialog() {
+  if(activeSceneComposition)return addFirstFlameField();
+  assertSceneConstructionAvailable();
+  const response=await fetch('/api/volume-settings-presets',{cache:'no-store'}),index=await response.json();
+  if(!response.ok)throw Error(index.error||'Basin library unavailable');
+  validateVolumeSettingsPresetIndex(index);
+  const dialog=document.createElement('dialog');
+  const request=new AbortController();let pendingAdd=false;
+  dialog.id='scene-first-flame-dialog';
+  dialog.innerHTML='<form method="dialog"><h2>Add Flame</h2><p>Choose a saved immersed-source basin. Its settings initialize the fire; the current scene and camera stay in place.</p><label>Fire basin <select id="scene-first-flame-basin"></select></label><p role="status"></p><button type="button" class="btn">Add Flame</button><button value="cancel" class="btn">Cancel</button></form>';
+  const select=dialog.querySelector('select');
+  const prompt=document.createElement('option');prompt.value='';prompt.textContent='Choose an immersed-source basin…';select.append(prompt);
+  for(const entry of index.entries){const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label||entry.presetId;select.append(option);}
+  dialog.querySelector('[type="button"]').disabled=!select.value;
+  select.onchange=()=>{dialog.querySelector('[type="button"]').disabled=pendingAdd||!select.value;};
+  dialog.querySelector('[type="button"]').onclick=async event=>{
+    if(pendingAdd||request.signal.aborted)return;
+    event.target.disabled=true;select.disabled=true;pendingAdd=true;
+    try{await addFirstFlameField(select.value,{signal:request.signal});if(!request.signal.aborted)dialog.close();}
+    catch(error){if(!request.signal.aborted)dialog.querySelector('[role="status"]').textContent=error.message;}
+    finally{pendingAdd=false;if(!request.signal.aborted){select.disabled=false;event.target.disabled=!select.value;}}
+  };
+  const cancelRequest=()=>{request.abort();if(pendingAdd&&scenePlacementTools.edits.state().active?.id==='@first-flame-field')scenePlacementTools.edits.cancel();};
+  dialog.querySelector('[value="cancel"]').onclick=cancelRequest;
+  dialog.addEventListener('cancel',cancelRequest);
+  dialog.addEventListener('close',()=>{cancelRequest();dialog.remove();},{once:true});document.body.append(dialog);dialog.showModal();
 }
 
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
   authoringControlSessions.push(sceneControlHistory);
+  edits.register('@first-flame-field',{read:firstFlameFieldState,write:writeFirstFlameFieldState,check:checkFirstFlameFieldState});
   // Finish a field before another control's pointerdown can begin a new target.
   document.addEventListener('pointerdown',event=>{
     if(event.target.closest?.('input,select,label,button,summary'))authoringControlSessions.forEach(session=>session.commit());
@@ -25249,7 +25609,7 @@ async function collectSceneComposition() {
 }
 
 async function withAuthoringAction(action, { result = false } = {}) {
-  if (authoringBusy) return result ? { ok: false, error: 'Another authoring action is busy' } : false;
+  if (authoringBusy || vantageCaptureHeld) return result ? { ok: false, error: vantageCaptureHeld ? 'The agent sub is taking a picture' : 'Another authoring action is busy' } : false;
   authoringBusy = true;
   document.getElementById('composition-capture').disabled = true;
   try {
@@ -25481,7 +25841,7 @@ function attachSceneObject(id,groupId) {
 }
 function assertSceneConstructionAvailable() {
   if(authoringBusy||sceneSaveBlockedByFailedRestore)throw Error('Wait for the document to finish loading');
-  const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying)throw Error('Finish the current edit first');
+  const state=scenePlacementTools?.edits.state();if(!state||state.active||state.replaying||scenePlacementTools.edits.isSettling())throw Error('Finish the current edit first');
 }
 function checkedObjectData(raw){if(raw.type===PROCEDURAL_MESH_TYPE)return checkedProceduralMesh(raw);if(raw.type==='light')return checkedSceneLightRecord(raw);throw Error('This data provider is read only');}
 function ensureMeshDataTarget(id) {
@@ -25668,7 +26028,7 @@ function installSceneConstruction() {
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
-  window.kaminosSceneAuthoring={addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+  window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
@@ -25756,7 +26116,7 @@ function updateSelectionFeedback(){
 function syncEditorHelperVisibility(){
   for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
   for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide){flameDomainGuide.visible= !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
+  if(flameDomainGuide){flameDomainGuide.visible= !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
   for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
@@ -25852,8 +26212,8 @@ function syncSelectionInspector(){
 function installSelectionInput(){
   let box=null,suppressBoxClick=false;const rect=document.createElement('div');rect.id='scene-selection-box';rect.hidden=true;document.getElementById('viewport').append(rect);
   function stopBox(){if(!box)return;controls.enabled=box.prior;box=null;rect.hidden=true;}
-  function beginBox(){if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
-  window.kaminosSelection.box=beginBox;
+  function beginBox(){if(vantageCaptureHeld){setInfo('The agent sub is taking a picture');return;}if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
+  window.kaminosSelection.box=beginBox;window.kaminosSelection.boxing=()=>!!box;
   document.addEventListener('keydown',event=>{
     if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
@@ -25861,7 +26221,7 @@ function installSelectionInput(){
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
   },true);
   document.addEventListener('pointerdown',event=>{
-    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event))return;
+    if(!box||viewportEventHitsInteractiveOverlay(event)||!viewportEventIsInsideCanvas(event)||event.target.closest?.('[data-vantage-ignore]'))return;
     event.preventDefault();event.stopImmediatePropagation();if(event.button===2){stopBox();return;}controls.enabled=false;box.start={x:event.clientX,y:event.clientY};box.subtract=event.button===1;rect.hidden=false;
   },true);
   document.addEventListener('pointermove',event=>{
@@ -26265,7 +26625,7 @@ async function saveToServer(sceneData, filename, { result: detailed = false, sav
       delete document._filename;
       delete document._saveAsName;
       delete document._overwrite;
-      const url = compositionRestoreUrl(document.composition, result.saved, location.origin);
+      const url = compositionRestoreUrl(document.composition, result.saved, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location));
       currentSceneFile = result.saved;
       history.replaceState(history.state,'',savedSceneLocation(location.href,result.saved));
       setInfo(`Scene saved: ${result.saved}`);
@@ -26393,7 +26753,7 @@ function claimLoadedSceneFile(file, sceneFile = null) {
 }
 
 async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
-  if (authoringBusy) {
+  if (authoringBusy || vantageCaptureHeld) {
     setInfo('Wait for the current capture or save');
     return;
   }
@@ -26443,7 +26803,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
       if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
       sceneFile = currentSceneFile;
     }
-    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin));
+    location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location)));
     return;
   }
   if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
@@ -26806,10 +27166,14 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
+
   const volumeLoaded = initKaminosVolumeRoute();
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
-  Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
-    const hash = new URLSearchParams(location.hash.slice(1));
+  const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
+  const startupSceneHash = new URLSearchParams(location.hash.slice(1));
+  const startupRestoreRequested = !!startupSceneHash.get('scene');
+  const startupSceneRestore = Promise.all([environmentLoaded, volumeLoaded]).then(async () => {
+    const hash = startupSceneHash;
     if (hash.get('authoring') !== '1' && !hash.has('scene')) return;
     if(hash.get('authoring')==='1'){
       document.body.classList.add('composition-authoring');
@@ -26826,12 +27190,16 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace')));
-        return;
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location)));
+        return startupSceneRedirect;
       }
     }
     await loadSceneFile(new File([JSON.stringify(data)], sceneFile), { sceneFile, mounted: true });
-  }).catch(error => {
+    // The ordinary loader reports some refusals in the UI and returns without
+    // throwing. Its effective completion flag still governs owner admission.
+    if (sceneSaveBlockedByFailedRestore) throw new Error('Starting scene restoration did not complete');
+  });
+  startupSceneRestore.catch(error => {
     // Only an authored composition restore blocks saving; ordinary routes keep
     // their own failure reporting (the volume route reports separately).
     const failedRoute=new URLSearchParams(location.hash.slice(1));
@@ -26843,12 +27211,26 @@ sceneInitialization.then(() => {
     compositionStatus(`Restore failed: ${error.message || error}`, true);
     setInfo(`Composition restore failed: ${error.message || error}`);
   });
+  // An owner enters the effective authored starting scene, never one that a
+  // pending restore will clear. Ordinary routes keep environment-only startup.
+  const ownerSceneReady = startupRestoreRequested ? startupSceneRestore : environmentLoaded;
+  ownerSceneReady.then(result => {
+    if(result===startupSceneRedirect){rejectWorkbenchViewerReady(new Error('Saved scene recovery is navigating'));return;}
+    resolveWorkbenchViewerReady();
+    void installOwnerWorkbenchEntry().catch(error => {
+      window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
+    });
+  }, error => {
+    rejectWorkbenchViewerReady(error);
+    window.kaminosWorkbenchExperimentError=error.message;setInfo('Experiments unavailable: '+error.message);
+  });
   initKaminosMotionAgencyRoute();
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
   initKaminosFingerJuiceTabRoute();
 }).catch(err => {
+  rejectWorkbenchViewerReady(err);
   console.error('initScene failed:', err);
   // Still init non-3D parts
   initEnvButtons();

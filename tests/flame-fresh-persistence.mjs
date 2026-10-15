@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {readOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -11,7 +12,7 @@ const fn=name=>section(`function ${name}(`,'\n}')+'\n}';
 function mount({fire=true,existing=false,refused=true}={}) {
  const writes=[],messages=[],fields=new Map(),runtime={active:true,simGridDimensions:[96,192,96],gridHeight:{admitted:!refused,heightCells:384}};
  const preset={domControls:{'volume-resolution':{value:96},'volume-grid-height-ratio':{value:refused?4:2}},rendererControls:{},presentationControls:{},route:{}};
- const c=vm.createContext({window:{},URLSearchParams,structuredClone,authoringBusy:false,currentSceneFile:null,
+ const c=vm.createContext({window:{},authoringWorkspace:null,readOwnerExperimentAddress,URLSearchParams,structuredClone,authoringBusy:false,vantageCaptureHeld:false,currentSceneFile:null,
   activeSceneComposition:existing?{}:null,volumePrototype:{debugState:()=>runtime},scenePlacementTools:null,
   sceneSaveBlockedByFailedRestore:false,greenroomPreviewIsActive:()=>false,isFireLightFieldRoute:()=>fire,
   sceneObjects:[{id:'kiln',type:'glb'}],volumePrimitives:[],localLiquidSetup:null,sceneCameras:null,

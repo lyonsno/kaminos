@@ -16,7 +16,15 @@ export async function createLabeler({ zipUrl, pyodideUrl = PYODIDE_URL, loadPyod
   onStatus('loading numpy');
   await py.loadPackage('numpy');
   onStatus('loading the labeller');
-  const zip = await (await fetch(zipUrl)).arrayBuffer();
+  // The zip must arrive whole: a failed or rate-limited response is retried once, then reported.
+  let zip = null;
+  for (let attempt = 0; attempt < 2 && !zip; attempt++) {
+    const res = await fetch(zipUrl);
+    const bytes = res.ok ? await res.arrayBuffer() : null;
+    if (bytes && bytes.byteLength > 4 && new DataView(bytes).getUint32(0, true) === 0x04034b50) zip = bytes;
+    else if (attempt) throw new Error(`the joint labeller did not download (${zipUrl}: HTTP ${res.status})`);
+    else await new Promise(r => setTimeout(r, 1500));
+  }
   py.unpackArchive(zip, 'zip', { extractDir: '/lib/unimate-labeler' });
   py.runPython("import sys\nif '/lib/unimate-labeler' not in sys.path: sys.path.insert(0, '/lib/unimate-labeler')");
   const labelRig = py.pyimport('unimate_browser_annotate').label_rig;

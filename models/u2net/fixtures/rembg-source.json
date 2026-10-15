@@ -1,0 +1,121 @@
+{
+ "schema": "kaminos.rembg-source-fixture.v0",
+ "source": "rembg BaseSession.normalize, U2netSession.predict (inference stubbed), bg.naive_cutout; Pillow Image.resize LANCZOS",
+ "versions": {
+  "rembg": "2.0.76",
+  "pillow": "12.3.0",
+  "numpy": "2.5.4"
+ },
+ "cases": [
+  {
+   "kind": "resample",
+   "file": "resample-0.u8",
+   "w": 257,
+   "h": 191,
+   "channels": 3,
+   "ow": 320,
+   "oh": 320,
+   "seed": 1,
+   "inputSha256": "aa243038d6e8d4401086764542807932673e2c9202f1309bce327e2953d76ec7",
+   "outputSha256": "6f037852994d0424115010ca08eefc6746c0a4263758ddaf27aa39938cad3bf8"
+  },
+  {
+   "kind": "resample",
+   "file": "resample-1.u8",
+   "w": 1500,
+   "h": 900,
+   "channels": 3,
+   "ow": 1024,
+   "oh": 614,
+   "seed": 2,
+   "inputSha256": "6ec9698d1876b1f261737f4ce791b23f02218e9fd58f475abe66c202c657fb47",
+   "outputSha256": "7cd41079f50df2e627c7a8cc1797f86009512a4f16520bcd7e5261f5c89216a3"
+  },
+  {
+   "kind": "resample",
+   "file": "resample-2.u8",
+   "w": 640,
+   "h": 480,
+   "channels": 3,
+   "ow": 320,
+   "oh": 320,
+   "seed": 3,
+   "inputSha256": "f89e0f325bb8c2978f16b3fc2c0bc64fe6adfaff4400d94be52adeb3a3924994",
+   "outputSha256": "7d4c55df983f474b81dc1eeaf085852d65b7024dc41f86852d62470c10f22944"
+  },
+  {
+   "kind": "resample",
+   "file": "resample-3.u8",
+   "w": 320,
+   "h": 320,
+   "channels": 1,
+   "ow": 777,
+   "oh": 513,
+   "seed": 4,
+   "inputSha256": "c372b666490029e39fc5a78d6fc3d0be599cc04f44bc78e85234542cd8ec9b4d",
+   "outputSha256": "3dcc892f279f26c193766baf9a249d74fa808cda85652a27484fad9a81db8b53"
+  },
+  {
+   "kind": "resample",
+   "file": "resample-4.u8",
+   "w": 300,
+   "h": 200,
+   "channels": 3,
+   "ow": 300,
+   "oh": 97,
+   "seed": 5,
+   "inputSha256": "fd788799f62d824ab4a771afe760abbfca45bed2b38074ec0e35f9ee5af49a3c",
+   "outputSha256": "27ae83fd425ef7bdc108b72014f2cf7aa4eee61a13197480e77d655d463031d4"
+  },
+  {
+   "kind": "resample",
+   "file": "resample-5.u8",
+   "w": 300,
+   "h": 200,
+   "channels": 4,
+   "ow": 150,
+   "oh": 200,
+   "seed": 6,
+   "inputSha256": "64e75083e5956e1546395af3269002e9e6a9d217bf9ad3b7fb2df7db50b8e9e5",
+   "outputSha256": "dcbb33e2887bde57d64df97ec6c88a7f6b3759dfb4ca440bad8456501a1406a9"
+  },
+  {
+   "kind": "pipeline",
+   "file": "pipeline-0.u8",
+   "pred": "pred-0.f32",
+   "w": 1500,
+   "h": 1000,
+   "seed": 11,
+   "predSeed": 21,
+   "inputSha256": "22f7ad09a90e5926f293125d2ed01b196cc9cf620243308aab5957c09cf99e11",
+   "predSha256": "ca3464e5770101a23df122dedb3f098dc192c7ae70adffaf6c192d3dbda1837b",
+   "size": [
+    1024,
+    682
+   ],
+   "preSha256": "9f8fd69d95f3ac41751915eeb865b7ecb9f019a3ac6fb880c5926a3f7bce9db2",
+   "inputTensorSha256": "cff6a050344fdd64c339714d8b5be3c9a83209fa45d656be5596426b1f6bbdde",
+   "maskSha256": "adb0146e4f11ef229823cd6398e9ea878da234968a5dd08400884d0e18b07fe3",
+   "cutoutSha256": "76df6526067be71463e7dcc1422c751cbad31001e929d7c7b5926e5d4665ed59"
+  },
+  {
+   "kind": "pipeline",
+   "file": "pipeline-1.u8",
+   "pred": "pred-1.f32",
+   "w": 600,
+   "h": 800,
+   "seed": 12,
+   "predSeed": 22,
+   "inputSha256": "6969ed7a9b6bc0e54c931456a694799d71c1ca7c547a95e613b945b81a69f8d6",
+   "predSha256": "e4e0b25330abf4ae468c30d30db39c695ed1c00fe28536f627e4beb95c634f2a",
+   "size": [
+    600,
+    800
+   ],
+   "preSha256": "6969ed7a9b6bc0e54c931456a694799d71c1ca7c547a95e613b945b81a69f8d6",
+   "inputTensorSha256": "380721264218be0c234769de16d4198a4540385c85ee0195cecdf36af76476dc",
+   "maskSha256": "206ec858d69a8b82d9dfc04c6625d41aed571b27b364cf2d439cfa767752626a",
+   "cutoutSha256": "1acea44424e1342205638d9fa1447ae5a44ce4ca5b72cc03e0cec187ff9c3596"
+  }
+ ]
+}

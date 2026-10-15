@@ -162,7 +162,26 @@ fn emissiveSootPopulation(coverage: f32, sootYield: f32, strength: f32, smokeAmo
 fn reactionLightFromBurn(freshBurn: f32, reference: f32) -> f32 {
   return 1.0-exp(-max(freshBurn,0.0)/max(reference,1e-6));
 }
+// Physics appearance (volume-physics-appearance.mjs; operator 2026-10-14): soot
+// emits as a blackbody at the temperature the heat field implies, absorbs and
+// scatters by the same coefficient, and fresh burning adds the reaction spectrum.
+// No appearance carrier and no carrier-built coverage is read.
+fn physicsEmissiveMaterial(r: FlowReconstructionSample, smokeVisible: f32) -> EmissiveMaterial {
+  let m = max(r.material, vec4<f32>(0.0));
+  let soot = m.x * max(0.0, u.viewport_steps_density.w);
+  let extinction = soot * u.emissive_material.x;
+  let albedo = clamp(u.emissive_material.y, 0.0, 1.0);
+  let scattering = extinction * albedo * smokeVisible;
+  let absorbing = extinction * (1.0 - albedo);
+  let kelvin = physicsSootKelvin(m.y, u.emissive_physics.y);
+  let thermal = absorbing * thermalRadiance(kelvin) * u.physical_fire.w;
+  let burnLight = reactionLightFromBurn(r.freshBurn, u.reactant_combustion_d.x);
+  let clean = burnLight * exp(-extinction * 2.0);
+  let gas = vec3<f32>(${REACTION_RGB.join(',')}) * clean * u.physical_display.x;
+  return EmissiveMaterial(thermal + gas, absorbing * smokeVisible, scattering);
+}
 fn emissiveMaterial(r: FlowReconstructionSample, coverage: f32, smokeVisible: f32) -> EmissiveMaterial {
+  if (u.emissive_physics.x > 0.5) { return physicsEmissiveMaterial(r, smokeVisible); }
   let m = max(r.material, vec4<f32>(0.0));
   let f = max(r.fireLayer, vec4<f32>(0.0));
   let d = max(r.microLayer, vec4<f32>(0.0));

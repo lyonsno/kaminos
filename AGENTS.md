@@ -1,5 +1,45 @@
 # Kaminos Agent Guidance
 
+## Start Visual Work In The Shared Workbench
+
+For work understood by viewing, manipulating or comparing a scene over time,
+use a Workbench experiment as its development and operator-facing surface.
+Examples include simulation, materials, rendering, animation, interactive
+geometry and generated-asset comparisons. Read
+[`docs/workbench-common-main.md`](docs/workbench-common-main.md) first and inspect
+the closest existing contribution. Extend a suitable experiment or add an
+owner-authored `*.experiment.mjs` in `experiments/`.
+
+Compose with the existing scene, camera, inspector, controls and applicable
+capture/recording tools. Feature modules own domain behavior and meaningful
+operations; the experiment connects them to both human controls and agent calls.
+The guide's executable material study supplies a small starting point.
+
+Build friendly human-facing interactions around Kaminos objects, scene editing
+and contextual tools by default. Put object properties in the relevant inspector,
+use ordinary selection/placement and shared camera/playback controls, and expose
+meaningful feature operations through the same agent-callable path. Keep the
+visible UI focused on what the person is manipulating; avoid a panel of bespoke
+buttons for every script step, fixed value or named test case.
+
+Fixtures are useful when a controlled setup is part of the experiment. Keep that
+setup explicit and give its controls a clear purpose. When one-off machinery
+reaches the operator, usually make the small extra investment that lets them
+choose a target, adjust a meaningful parameter, navigate and repeat the action
+without another code edit. Preserve those choices through the applicable shared
+state/recording flow. Generalize the useful interaction, proportionately to the
+work, rather than building a new framework or leaving fixture rails as the
+human's only interface. See the guide's interaction guidance.
+
+For straightforward asset inspection, use the existing asset viewer. For
+authored scene changes, use the scene-authoring flow. Computational changes use
+focused tests and their existing visual consumer where relevant. When task fit
+is uncertain, ask the operator before choosing the development surface: describe
+what needs to be observed or manipulated, recommend a route, and name the
+uncertainty. Resolve ordinary API questions through source and current owners.
+An unavailable shared capability is an integration question: identify the
+concrete missing operation and coordinate a reusable extension with its owner.
+
 ## Feature Branch Ancestry
 
 Before editing on a feature branch, fetch `origin/main` and record the chosen
@@ -16,6 +56,8 @@ unintegrated.
 ## Tests
 
 Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+
+Landing does not go through `node tools/land.mjs` for now: the `tests` workflow is disabled and main has no required check (2026-10-14), so the tool cannot get a CI run. When landing is authorized, rebase on current `origin/main`, run the full `npm test` (no new failures), and fast-forward main as before. A CI gate returns only after a pilot shows lanes pass it without added overhead. Details: `docs/landing.md`.
 
 ## Retiring Surfaces
 

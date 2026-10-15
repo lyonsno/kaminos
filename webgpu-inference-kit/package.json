@@ -1,9 +1,16 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.56",
+  "version": "0.1.57",
   "private": false,
   "type": "module",
-  "description": "A composable browser-native WebGPU inference runtime with cooperative scheduling, tensors, kernels, programs, and route adapters.",
+  "description": "WebGPU inference runtime for responsive browser AI: shared GPU devices, model loading, cooperative scheduling, and image, 3D, segmentation, and motion model ports.",
+  "homepage": "https://lyonsno.github.io/kaminos/inference-kit/",
+  "keywords": [
+    "webgpu", "browser-ai", "machine-learning", "inference", "wgsl",
+    "generative-ai", "image-generation", "image-to-3d", "gaussian-splatting",
+    "depth-estimation", "image-segmentation", "motion-generation",
+    "moge", "sharp", "stable-fast-3d", "kimodo", "sam3", "trellis", "flux", "supermat", "unimate"
+  ],
   "license": "UNLICENSED",
   "repository": {
     "type": "git",
@@ -30,6 +37,8 @@
     "./examples/sam-image": "./examples/sam-image.mjs"
   },
   "scripts": {
+    "pretest": "npm run test:sam31-per-frame",
+    "test:sam31-per-frame": "node tests/sam31-browser-tracker-perframe-contracts.mjs && node tests/sam31-tracker-memory-benchmark-contracts.mjs && node tests/sam31-tracker-memory-benchmark-source-contracts.mjs && node tests/sam31-tracker-memory-benchmark-runner-contracts.mjs",
     "test:entrypoints": "node --experimental-vm-modules tests/package-entrypoints-contracts.mjs && node tests/weight-representation-contracts.mjs",
     "test:parity-browser": "node tests/parity-primitives-browser-smoke.mjs",
     "test:render-browser": "node tests/render-plus-inference-browser.mjs",

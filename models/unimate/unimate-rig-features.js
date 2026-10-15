@@ -89,17 +89,31 @@ export function facingDirection(rest, facing) {
   return f;
 }
 
-// Rest pose in UniMate's canonical frame. rest: J x [x, y, z] world positions (Y up), root first.
-export function canonicalizeRest(rest, parents, facing) {
+// The similarity taking a rest pose to UniMate's canonical frame: x' = scale * (R x - [rx, 0, rz]) - [0, minY, 0],
+// R the yaw turning the facing direction to +Z. apply(p) maps a point, rotation (columns) is R.
+export function canonicalTransform(rest, parents, facing) {
   const f = facingDirection(rest, facing);
   const a = f ? Math.atan2(f[0], f[2]) : 0;                  // turn by -a about Y so f points at +Z
   const c = Math.cos(-a), s = Math.sin(-a);
-  let p = rest.map(([x, y, z]) => [x * c + z * s, y, -x * s + z * c]);
+  const turn = ([x, y, z]) => [x * c + z * s, y, -x * s + z * c];
+  let p = rest.map(turn);
   const [rx, , rz] = p[0];
   p = p.map(([x, y, z]) => [x - rx, y, z - rz]);
   const scale = 2.0 / treeDiameter(p, parents);
+  const minY = Math.min(...p.map(q => q[1] * scale));
+  const apply = q => { const [x, y, z] = turn(q); return [scale * (x - rx), scale * y - minY, scale * (z - rz)]; };
+  return { yaw: -a, scale, offset: [rx, rz, minY], rotation: [[c, 0, -s], [0, 1, 0], [s, 0, c]], apply };
+}
+
+// Rest pose in UniMate's canonical frame. rest: J x [x, y, z] world positions (Y up), root first.
+export function canonicalizeRest(rest, parents, facing) {
+  const { scale, offset: [rx, rz, minY] } = canonicalTransform(rest, parents, facing);
+  const f = facingDirection(rest, facing);
+  const a = f ? Math.atan2(f[0], f[2]) : 0;
+  const c = Math.cos(-a), s = Math.sin(-a);
+  let p = rest.map(([x, y, z]) => [x * c + z * s, y, -x * s + z * c]);
+  p = p.map(([x, y, z]) => [x - rx, y, z - rz]);
   p = p.map(q => q.map(v => v * scale));
-  const minY = Math.min(...p.map(q => q[1]));
   p = p.map(([x, y, z]) => [x, y - minY, z]);
   p[0][0] = 0; p[0][2] = 0;                                  // exactly: the root's x, z statistics have std 1e-8
   return p;

@@ -106,6 +106,8 @@
     <button id="play" aria-label="Pause playback">❚❚</button>
     <input id="scrub" type="range" min="0" max="59" value="0" aria-label="Frame">
     <span id="now-text"></span>
+    <button id="download" title="Download this animation">Download</button>
+    <label id="bones-toggle" hidden style="margin:0;display:flex;gap:4px;align-items:center"><input type="checkbox" id="bones"> bones</label>
   </div>
   <div class="strip" id="strip" role="group" aria-label="Generated clips"></div>
   <div class="legend"><span class="dot" style="background:#4fd4f2"></span>front legs and wings<span class="dot" style="background:#6be073"></span>hind legs<span class="dot" style="background:#f2bd47"></span>body, head and tail</div>
@@ -114,6 +116,7 @@
 import { createUniMateDemo, decodeClip } from './unimate-demo.js';
 import { readRig, buildSkeletonBundle, turnRest } from './unimate-rig-import.js';
 import { createLabeler } from './unimate-rig-labels.js';
+import { exportMotionGlb } from './unimate-export-glb.js';
 
 const $ = id => document.getElementById(id);
 const state = { phase: 'load', progress: null, result: null, error: null, clip: null };
@@ -162,6 +165,45 @@ function addChip(meta, clip = null, { prepend = false } = {}) {
   return entry;
 }
 
+// Download the playing animation: an animated .glb for a clip generated here (with the imported
+// rig's skinned mesh when there is one), the clip file (joint positions) for a gallery clip.
+const slugify = t => String(t).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+function saveFile(bytes, name, type) {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+function downloadCurrent() {
+  const c = current?.clip;
+  if (!c) return null;
+  const stem = `${slugify(c.animal)}-${slugify(c.prompt)}-seed-${slugify(c.seed)}`;
+  if (c.motion) {
+    const glb = exportMotionGlb({ name: stem, jointNames: c.skeleton.jointNames, parents: c.skeleton.parents, rest: c.rest, fps: c.fps ?? 30,
+      motion: c.motion, mesh: c.rigMesh ?? null,
+      extras: { generator: 'UniMate WebGPU (Kaminos)', prompt: c.prompt, seed: c.seed, skeleton: c.animal, model: 'UniMate v3 (CC BY-NC 4.0)' } });
+    saveFile(glb, `${stem}.glb`, 'model/gltf-binary');
+    return { name: `${stem}.glb`, bytes: glb.byteLength };
+  }
+  const { positions, ...rest } = c;
+  const bytes = new TextEncoder().encode(JSON.stringify({ ...rest, positionsFloat32: Array.from(positions) }));
+  saveFile(bytes, `${stem}.json`, 'application/json');
+  return { name: `${stem}.json`, bytes: bytes.byteLength };
+}
+$('download').addEventListener('click', () => { try { downloadCurrent(); } catch (e) { setStatus(`Could not export: ${e.message ?? e}`); } });
+// Witness hooks: build the current clip's .glb, then read it back in base64 slices.
+window.__unimateExportCurrent = () => {
+  const c = current?.clip;
+  if (!c?.motion) return 0;
+  window.__unimateExported = exportMotionGlb({ name: 'witness', jointNames: c.skeleton.jointNames, parents: c.skeleton.parents, rest: c.rest, fps: c.fps ?? 30, motion: c.motion, mesh: c.rigMesh ?? null });
+  return window.__unimateExported.length;
+};
+window.__unimateExportSlice = (start, end) => {
+  const b = window.__unimateExported.subarray(start, end);
+  let s = ''; for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+$('bones').addEventListener('change', () => demo.showBones($('bones').checked));
 $('play').addEventListener('click', () => {
   const playing = demo.view.playing;
   demo.setPlaying(!playing);
@@ -279,7 +321,9 @@ async function generate() {
     const sk = demo.bundle.skeleton;
     const clip = { id: `own-${++own}`, animal: skeletonLabel(), prompt: text, seed: seed ?? 'reference', fps: sk.fps, frames: result.motion.frames,
       skeleton: { name: sk.name, parents: sk.parents, jointNames: sk.jointNames }, positions: result.motion.positions,
-      generated: { wallMs: result.wallMs, own: true } };
+      generated: { wallMs: result.wallMs, own: true }, mesh: result.skin, motion: result.motion, features: result.features,
+      rest: Array.from({ length: sk.joints }, (_, j) => Array.from(demo.arrays.restPositions.subarray(j * 3, j * 3 + 3))),
+      rigMesh: ownRig ? demo.generationMeshData : null };
     const entry = addChip({ animal: `${skeletonLabel()} (yours)`, prompt: text }, clip, { prepend: true });
     current = entry;
     for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
@@ -302,7 +346,7 @@ $('skeleton').addEventListener('change', async () => {
   setStatus(`Loading the ${skeletons?.find(k => k.key === key)?.label ?? "built-in"} skeleton…`);
   try {
     await demo.useSkeleton(skeletonBase(key));
-    skeletonKey = key; ownRig = null; $('rig-review').hidden = true;
+    skeletonKey = key; ownRig = null; $('rig-review').hidden = true; $('bones-toggle').hidden = true;
     $('skeleton').querySelector('option[value=__rig]')?.remove();
     showSkeletonPrompts();
     demo.showGenerationSkeleton();
@@ -347,6 +391,8 @@ async function applyOwnRig() {
   const data = await buildSkeletonBundle(rig, labels, { name: ownRig.name, embed: text => demo.encodeText(text),
     motion: { frames: demo.bundle.skeleton.frames, outputTimes: demo.bundle.outputTimes } });
   await demo.useSkeletonData(data);
+  await demo.setGenerationMesh(data.mesh);
+  $('bones-toggle').hidden = !data.mesh; $('bones').checked = false;
   skeletonKey = null;
   if (!$('skeleton').querySelector('option[value=__rig]')) $('skeleton').insertBefore(new Option('', '__rig'), $('skeleton').querySelector('option[value=__import]'));
   $('skeleton').querySelector('option[value=__rig]').textContent = `${ownRig.name} · ${rig.names.length} joints`;

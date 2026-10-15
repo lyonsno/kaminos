@@ -30,13 +30,17 @@ export function normalizeSceneCapture(value) {
   return clone(value);
 }
 
-export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null) {
+export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null, owner = null) {
   const state = normalizeComposition(composition);
   if (!sceneFile || /[/\\]/.test(sceneFile)) throw new Error('Saved scene filename is required');
   const target = new URL(state ? '/volume-settings-preset.html' : '/', origin);
   if (state) target.searchParams.set('preset', state.flame.presetId);
   const hash = new URLSearchParams(state?.route || {});
   if (workspace !== null) hash.set('workspace', workspace);
+  if (owner?.id) {
+    if (typeof owner.id !== 'string' || typeof owner.inputsText !== 'string') throw new Error('Owner setup requires an experiment id and serialized inputs');
+    hash.set('experiment', owner.id);hash.set('experiment_inputs', owner.inputsText);
+  }
   hash.set('authoring', '1');
   hash.set('scene', sceneFile);
   target.hash = hash.toString();
@@ -50,7 +54,7 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   if (workspace !== null) hash.set('workspace',workspace);
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['workspace', 'authoring', 'scene', 'composition_module_url', 'volume_collision', 'volume_outer_smoke', 'volume_outer_grid', 'volume_outer_extent', 'volume_outer_pressure', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
+    if (['workspace', 'authoring', 'scene', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'volume_outer_smoke', 'volume_outer_grid', 'volume_outer_extent', 'volume_outer_pressure', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
       || key.startsWith('volume_light_field')) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();
