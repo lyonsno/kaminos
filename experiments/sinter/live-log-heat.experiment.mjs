@@ -18,7 +18,9 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
   const fire={availability:()=>({status:host.fire.read().authoredPresent?'mounted':'unavailable'}),
     read:()=>({status:host.fire.read().authoredPresent?'mounted':'unavailable',enabled:host.fire.read().emissionEnabled,visible,objectId:'flame-emitter',basin:{presetId:settings.source.presetId,label:settings.source.label}}),
     setEnabled:host.fire.setEnabled,setVisible(value){visible=value;host.fire.setVisible(value);},select:host.fire.select,
-    showLibrary(){document.getElementById('flame-basin-select')?.focus();},reacquire(){},dispose(){host.fire.setEnabled(false);}};
+    showLibrary(){document.getElementById('flame-basin-select')?.focus();},
+    async reacquire(){if(!host.fire.read().authoredPresent)await host.fire.add(settings.source.presetId);host.fire.setEnabled(false);},
+    dispose(){host.fire.setEnabled(false);}};
   const scene={...host.scene,ready:Promise.resolve(),dirty:()=>session.redraw(),
     async load(url,options){const asset=await session.loadAsset({url,...options,normalize:true,arrival:'append'});host.scene.refreshPresentation(asset);return asset.root;}};
   let inspectionLighting=null;

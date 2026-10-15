@@ -7,12 +7,15 @@ const [origin,out]=process.argv.slice(2);
 if(!origin||!out)throw Error('Usage: live-log-current-witness.mjs <origin> <output>');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],frames:[],
-  executable:process.env.CHROME_EXECUTABLE,sourceCommit:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
+  executable:process.env.CHROME_EXECUTABLE,
   requested:{grid:[32,32,32],rays:28,emitterRadius:.1,gi:{steps:4,slices:3}},claim:'GPU material observability and lightweight scene, not self-sustaining combustion'};
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let browser;
 try {
   await save();
+  report.phase='source-identity';await save();
+  report.sourceCommit=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
+  report.phase='launch';await save();
   assert.ok(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'),'Independent browser required');
   const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
   report.phase='browser-launch';await save();

@@ -71,7 +71,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
       flameView({visible}={}){if(disposed)throw Error('Live log experiment disposed');if(typeof visible!=='boolean')throw Error('Flame view requires a boolean');flameVisible=visible;if(fire)fire.setVisible(visible);else if(canvas)canvas.style.opacity=visible?'1':'0';emit('flame-view',read(),{visible});return read();},
       selectFire(){if(!fire)throw Error('No scene fire fixture');return fire.select();},
       basins(){if(!fire)throw Error('No scene fire fixture');return fire.showLibrary();},
-      reconnectFire(){if(disposed)throw Error('Live log experiment disposed');if(!fire)throw Error('No scene fire fixture');fire.reacquire();phase=fields.some(field=>field.read().steps>0)?'cooling':'cold';updateUI();return read();},
+      async reconnectFire(){if(disposed)throw Error('Live log experiment disposed');if(!fire)throw Error('No scene fire fixture');runtime.setSimulationPaused(true);paused=true;running=false;await fire.reacquire();burner=false;phase=fields.some(field=>field.read().steps>0)?'cooling':'cold';updateUI();return read();},
     };
     return {read,operations,
       mount({document,container,root,invoke}){
