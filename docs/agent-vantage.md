@@ -80,6 +80,8 @@ Hits carry the same value as `authority`, plus whether their object has moved si
 | `likely-same` | After a reload, the counts and sampled content match. |
 | `unverified` | After a reload, nothing could be checked. |
 
+The reconstruction covers the scene's meshes. Volumes such as the fire field are listed under `fields`. Water and other renderers that are not scene meshes are not accounted for: `exact` cannot rule out that the picture showed water in front of the hit.
+
 Pictures kept before objects were recorded are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 
 A pick names the first visible surface between the camera's near and far planes. It skips hidden objects, invisible or fully transparent materials, editor helpers, cameras and lights. A hit gives:
