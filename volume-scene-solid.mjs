@@ -18,7 +18,7 @@ export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
 
 // Mirror the emitter shader's signed-distance chemistry gate at cell centers.
 // The dispatch box alone is deliberately wider than the actual fuel source.
-export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid, height = 2 * grid) {
+export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid, height = 2 * grid, onSupport = null) {
   if (!dispatch?.active || !descriptor || !(solidCells instanceof Uint8Array)
     || solidCells.length !== grid * height * grid) {
     return {boundsFluidCells: 0, sourceSupportCells: 0, fluidSupportCells: 0, solidSupportCells: 0};
@@ -86,6 +86,7 @@ export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, gr
         // shader: 1 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, sourceDistance)
         if (!(sourceDistance < 1 / grid) || !(descriptor.strength > 0)) continue;
         sourceSupportCells++;
+        onSupport?.(solidFieldIndex(grid,x,y,z,height));
         if (solid) solidSupportCells++;
         else fluidSupportCells++;
       }

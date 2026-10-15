@@ -56,6 +56,8 @@ struct Params { matrix:mat4x4<f32>, domain:vec4<f32>, dims:vec4<u32> }
 @group(0) @binding(4) var<storage,read_write> mask:array<atomic<u32>>;
 @group(0) @binding(5) var<storage,read_write> combined:array<atomic<u32>>;
 @group(0) @binding(6) var output:texture_storage_3d<r32uint,write>;
+@group(0) @binding(7) var<storage,read> support:array<u32>;
+@group(0) @binding(8) var<storage,read_write> stats:array<atomic<u32>>;
 fn indexOf(c:vec3<u32>)->u32{return c.x+p.dims.x*(c.y+p.dims.y*c.z);}
 fn coord(i:u32)->vec3<u32>{return vec3<u32>(i%p.dims.x,(i/p.dims.x)%p.dims.y,i/(p.dims.x*p.dims.y));}
 fn count()->u32{return p.dims.x*p.dims.y*p.dims.z;}
@@ -112,7 +114,19 @@ fn join(a:u32,b:u32){
  let i=gid.x;if(i<count()){atomicOr(&combined[i],atomicLoad(&mask[i]));}
 }
 @compute @workgroup_size(64) fn present(@builtin(global_invocation_id) gid:vec3<u32>){
- let i=gid.x;if(i<count()){textureStore(output,vec3<i32>(coord(i)),vec4<u32>(atomicLoad(&combined[i]),0,0,0));}
+ let i=gid.x;if(i<count()){
+  let valid=atomicLoad(&stats[0])>0u&&(atomicLoad(&stats[2])==0u||atomicLoad(&stats[3])>0u);
+  textureStore(output,vec3<i32>(coord(i)),vec4<u32>(select(0u,atomicLoad(&combined[i]),valid),0,0,0));
+ }
+}
+@compute @workgroup_size(64) fn measure(@builtin(global_invocation_id) gid:vec3<u32>){
+ let i=gid.x;if(i>=count()){return;}let solid=atomicLoad(&combined[i]);let c=coord(i);
+ if(support[i]!=0u){atomicAdd(&stats[2],1u);if(solid==0u){atomicAdd(&stats[3],1u);}}
+ if(solid==0u){return;}atomicAdd(&stats[0],1u);var faces=0u;let plane=p.dims.x*p.dims.y;
+ if(c.x>0u&&atomicLoad(&combined[i-1u])==0u){faces++;}if(c.x+1u<p.dims.x&&atomicLoad(&combined[i+1u])==0u){faces++;}
+ if(c.y>0u&&atomicLoad(&combined[i-p.dims.x])==0u){faces++;}if(c.y+1u<p.dims.y&&atomicLoad(&combined[i+p.dims.x])==0u){faces++;}
+ if(c.z>0u&&atomicLoad(&combined[i-plane])==0u){faces++;}if(c.z+1u<p.dims.z&&atomicLoad(&combined[i+plane])==0u){faces++;}
+ atomicAdd(&stats[1],faces);
 }
 `;
 
@@ -121,16 +135,20 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
   const buffer=(label,size,extra=0)=>device.createBuffer({label,size:Math.max(16,size),usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST|extra});
   const texture=device.createTexture({label:'GPU resident scene solid',size:dims,dimension:'3d',format:'r32uint',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
   const view=texture.createView(),combined=buffer('scene solid union',bytes,GPUBufferUsage.COPY_SRC),dummy=buffer('scene solid unused triangles',48);
+  const support=buffer('scene solid source support',bytes),stats=buffer('scene solid validation',32,GPUBufferUsage.COPY_SRC);
+  device.queue.writeBuffer(support,0,new Uint32Array(cells));
   const meshCache=createResidentSolidMeshes({upload(data){const b=buffer('resident scene solid local triangles',data.byteLength);device.queue.writeBuffer(b,0,data);return b;},release:b=>b.destroy()});
   const module=device.createShaderModule({label:'GPU scene solid conservative raster and exterior connectivity',code:SCENE_SOLID_GPU_WGSL});
   const layout=device.createBindGroupLayout({entries:[
     {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
     {binding:1,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
     ...[2,3,4,5].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}})),
-    {binding:6,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32uint',viewDimension:'3d'}}
+    {binding:6,visibility:GPUShaderStage.COMPUTE,storageTexture:{access:'write-only',format:'r32uint',viewDimension:'3d'}},
+    {binding:7,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}},
+    {binding:8,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}
   ]});
   const pipelineLayout=device.createPipelineLayout({bindGroupLayouts:[layout]});
-  const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
+  const pipelines=Object.fromEntries(['raster','init','connect','fill','merge','measure','present'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:'scene solid '+entryPoint,layout:pipelineLayout,compute:{module,entryPoint}})]));
   const objects=new Map();let pending=false,key='',builds=0,current=null,wallKey='',one;
   function makeGroup(member,triangles=dummy,triangleCount=0,matrix=null){
     const uniform=device.createBuffer({label:'scene solid transform',size:96,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
@@ -139,13 +157,14 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
     uints.set([...dims,triangleCount],20);
     const group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},{binding:1,resource:{buffer:triangles}},
       {binding:2,resource:{buffer:member.shell}},{binding:3,resource:{buffer:member.parent}},{binding:4,resource:{buffer:member.mask}},
-      {binding:5,resource:{buffer:combined}},{binding:6,resource:view}]});
+      {binding:5,resource:{buffer:combined}},{binding:6,resource:view},{binding:7,resource:{buffer:support}},{binding:8,resource:{buffer:stats}}]});
     return {uniform,values,floats,group};
   }
   function dispatch(encoder,name,group,n){const pass=encoder.beginComputePass({label:'scene solid '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(n/64));pass.end();}
   function destroyMember(m){m.shell.destroy();m.parent.destroy();m.mask.destroy();m.base.uniform.destroy();for(const d of m.draws)d.uniform.destroy();}
   return {
     backend:'gpu',texture,view,
+    setSourceSupport(values){if(!(values instanceof Uint32Array)||values.length!==cells)throw Error('Invalid GPU source support');device.queue.writeBuffer(support,0,values);pending=true;},
     update(input,transform,shape,{wallCells=[]}={}){
       if(shape.grid!==grid||shape.gridHeight!==gridHeight)throw Error('GPU scene solid shape mismatch');
       const members=meshCache.update(input,transform),seen=new Set();builds=0;
@@ -174,16 +193,24 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
           for(const phase of ['init','connect','fill'])dispatch(encoder,phase,m.base.group,cells);m.dirty=false;}
         dispatch(encoder,'merge',m.base.group,cells);
       }
-      const first=objects.values().next().value;if(first)dispatch(encoder,'present',first.base.group,cells);
+      encoder.clearBuffer(stats);
+      const first=objects.values().next().value;if(first){dispatch(encoder,'measure',first.base.group,cells);dispatch(encoder,'present',first.base.group,cells);}
       pending=false;return true;
     },
     async snapshot(){
-      const staging=device.createBuffer({label:'explicit scene solid diagnostic snapshot',size:bytes,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
-      try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(combined,0,staging,0,bytes);device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);
-        const values=new Uint32Array(staging.getMappedRange());return {cells:Uint8Array.from(values),revision:key,dimensions:dims,backend:'gpu'};
+      const members=[...objects.entries()],revision=key;
+      const staging=device.createBuffer({label:'explicit scene solid diagnostic snapshot',size:bytes*(members.length+1)+32,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+      try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(combined,0,staging,0,bytes);
+        members.forEach(([,m],i)=>encoder.copyBufferToBuffer(m.mask,0,staging,bytes*(i+1),bytes));
+        encoder.copyBufferToBuffer(stats,0,staging,bytes*(members.length+1),32);
+        device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);
+        const values=new Uint32Array(staging.getMappedRange()),counts=Array.from(values.subarray(cells*(members.length+1))),valid=counts[0]>0&&(counts[2]===0||counts[3]>0);
+        const installed=Uint8Array.from(values.subarray(0,cells));if(!valid)installed.fill(0);
+        return {cells:installed,revision,dimensions:dims,backend:'gpu',counts,valid,
+          members:members.map(([id],i)=>({id,solidCellCount:values.subarray(cells*(i+1),cells*(i+2)).reduce((a,b)=>a+b,0)}))};
       }finally{staging.unmap();staging.destroy();}
     },
-    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();one?.destroy();texture.destroy();}
+    destroy(){meshCache.destroy();for(const m of objects.values())destroyMember(m);objects.clear();combined.destroy();dummy.destroy();support.destroy();stats.destroy();one?.destroy();texture.destroy();}
   };
   function wallOne(){if(!one){one=buffer('scene solid wall value',16,GPUBufferUsage.COPY_SRC);device.queue.writeBuffer(one,0,new Uint32Array([1]));}return one;}
 }

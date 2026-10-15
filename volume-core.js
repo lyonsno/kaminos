@@ -11955,6 +11955,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidCellsCpu = null;
   let sceneSolidGeometryCache = null;
   let sceneSolidGpu = null;
+  let sceneSolidGpuSupportKey = null;
   let sceneSolidSupportCache = null;
   let immersedWallCache = null;
   const immersedSourceWeightCache = createImmersedSourceWeightCache();
@@ -12857,6 +12858,7 @@ export function createKaminosVolumePrototype({
   function destroyFluidState() {
     sceneSolidGpu?.destroy();
     sceneSolidGpu = null;
+    sceneSolidGpuSupportKey = null;
     sceneSolidGeometryCache = null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
@@ -13226,9 +13228,15 @@ export function createKaminosVolumePrototype({
     try {
       const started = performance.now();
       if (typeof device.createComputePipeline === 'function' && !state.joinedBoundary?.admitted) {
-        sceneSolidGpu ||= createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});
+        if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
         const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
-        const maskKey=JSON.stringify([geometry.key,backWall.maskKey]);
+        const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
+        if(sceneSolidGpuSupportKey!==supportKey){
+          const support=new Uint32Array(gridSize*gridHeight*gridSize);
+          countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,new Uint8Array(support.length),gridSize,gridHeight,i=>{support[i]=1;});
+          sceneSolidGpu.setSourceSupport(support);sceneSolidGpuSupportKey=supportKey;
+        }
+        const maskKey=JSON.stringify([geometry.key,backWall.maskKey,supportKey]);
         if(sceneSolidTexture!==sceneSolidGpu.texture){
           sceneSolidTexture?.destroy();sceneSolidTexture=sceneSolidGpu.texture;sceneSolidTextureView=sceneSolidGpu.view;
           sceneSolidTextureSizeKey=[gridSize,gridHeight,gridSize].join('x');sceneSolidTextureDevice=device;
@@ -27234,7 +27242,9 @@ export function createKaminosVolumePrototype({
         if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<gridSize&&!cells[i+plane])blockedFaceCount++;
       }
       const sourceSupport=countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,cells,gridSize,gridHeight);
-      const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,validation:'explicit-gpu-snapshot'};
+      const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,
+        members:state.sceneCollision.members.map(m=>({...m,...snapshot.members.find(s=>s.id===m.id)})),
+        effective:snapshot.valid?'mesh-voxel-solid':'off',reason:snapshot.valid?null:snapshot.counts[0]===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support',validation:'explicit-gpu-snapshot'};
       return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
