@@ -29,7 +29,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
     fluid:{backend:runtime.debugState().backend,active:runtime.debugState().active,simStepCount:runtime.debugState().simStepCount,grid:runtime.debugState().simGrid},
     position:object?.position.toArray(),rotation:object?.rotation.toArray()});
   const emit=(name,effective,requested={})=>record({kind:'sinter.live-log.'+name,target:scene.objects().find(entry=>entry.object===object)?.id||'live-log',phase:'applied',requested,effective:{...effective,attempt}});
-  const updateUI=()=>{if(!mounted)return;const state=read();mounted.status.textContent=state.status==='cold'?'Cold · paused':state.status==='unavailable'?state.unavailableReason==='fire'?'Fire source removed or replaced':'Log removed':`${state.burner?'Heating':'Cooling'}${paused?' · paused':''}`;mounted.run.disabled=disposed||!membership()||!fireAvailable();mounted.reconnect.hidden=state.unavailableReason!=='fire';mounted.pause.disabled=!running;mounted.pause.textContent=paused?'Resume':'Pause';};
+  const updateUI=()=>{if(!mounted)return;const state=read();mounted.status.textContent=state.status==='cold'?'Cold · paused':state.status==='unavailable'?state.unavailableReason==='fire'?'Fire source removed or replaced':'Log removed':`${state.burner?'Heating':'Cooling'}${paused?' · paused':''}`;mounted.run.disabled=disposed||!membership()||!fireAvailable();mounted.reconnect.hidden=state.unavailableReason!=='fire';mounted.pause.disabled=!running;mounted.pause.textContent=paused?'Resume':'Pause';mounted.panel.querySelectorAll('[name=burn-view]').forEach(input=>{input.checked=input.value===state.view;});};
   try {
     object=await scene.load(source,{clear:false,arrival:'append',isCurrent:()=>!disposed,metadata:{label:'Live log / local heat',fileName:BURN_TABLE_ASSET.path}});
     object.position.fromArray(inputs.position??[.45,-.65,0]);object.rotation.set(0,Math.PI/2,0);object.scale.multiplyScalar(.35);
@@ -57,7 +57,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
     scene.frame([object,...(sourceObject?[sourceObject]:[])]);
     const entry=scene.objects().find(entry=>entry.object===object);if(entry)scene.select(entry.id);scene.dirty();
     const operations={
-      view({mode}={}){if(!['beauty','char','heat'].includes(mode))throw Error('Invalid material view');for(const binding of bindings)binding.setView(mode);view=mode;scene.dirty();emit('view',read(),{mode});return read();},
+      view({mode}={}){if(!['beauty','char','heat'].includes(mode))throw Error('Invalid material view');for(const binding of bindings)binding.setView(mode);view=mode;scene.dirty();emit('view',read(),{mode});updateUI();return read();},
       run(){assertActive();setSource(true);burner=true;running=true;paused=false;runtime.setSimulationPaused(false);phase='heating';emit('run',read());updateUI();return read();},
       burnerOff(){if(disposed)throw Error('Live log experiment disposed');setSource(false);burner=false;phase=running?'cooling':'cold';emit('burner-off',read());updateUI();return read();},
       pause(){assertActive();paused=!paused;runtime.setSimulationPaused(paused);emit('pause',read());updateUI();return read();},

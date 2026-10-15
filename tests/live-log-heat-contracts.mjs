@@ -32,7 +32,7 @@ async function fixture({fire}={}){
     async setActive(value){active=value;},debugState:()=>({backend:'WebGPU:test',active,simStepCount:steps,simGrid:48})};
   const field=()=>{let ticks=0;const f={stateNode:THREE.TSL.vec4(0),encode(){ticks++;},reset(){ticks=0;},read:()=>({steps:ticks}),dispose(){disposed++;}};fields.push(f);return f;};
   const context={THREE,BURN_TABLE_ASSET,LIVE_LOG_HEAT_IDENTITY,crypto:globalThis.crypto,console,
-    createLogBurnIndicator:()=>({dispose(){}}),createLiveLogHeatGpu:async()=>field(),createBurnMaterial:()=>({material:new THREE.MeshStandardNodeMaterial(),update(){},read:()=>({}),dispose(){}})};
+    createLogBurnIndicator:()=>({dispose(){}}),createLiveLogHeatGpu:async()=>field(),createBurnMaterial:()=>({material:new THREE.MeshStandardNodeMaterial(),setView(){},update(){},read:()=>({}),dispose(){}})};
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../live-log-experiment.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
   vm.runInContext(source+'\nglobalThis.create=createLiveLogExperiment;',context);
@@ -78,4 +78,17 @@ test('flame visibility changes only the presentation layer and restores its prio
   f.experiment.operations.flameView({visible:false});assert.equal(f.canvas.style.opacity,'0');
   assert.throws(()=>f.experiment.operations.flameView({visible:1}),/boolean/);
   f.experiment.dispose();assert.equal(f.canvas.style.opacity,'.85');
+});
+
+test('agent and human view changes keep the mounted surface selection in sync',async()=>{
+  const f=await fixture();
+  const inputs=['beauty','char','heat'].map(value=>({value,checked:value==='beauty'}));
+  const elements=new Map(['[role=status]','[data-action=run]','[data-action=pause]','[data-action=reconnectFire]'].map(key=>[key,{}]));
+  const panel={querySelector:key=>elements.get(key),querySelectorAll:key=>key==='[name=burn-view]'?inputs:[],remove(){}};
+  f.experiment.mount({document:{createElement:()=>panel},container:{prepend(){}},invoke:(name,args)=>Promise.resolve(f.experiment.operations[name](args))});
+  f.experiment.operations.view({mode:'char'});
+  assert.deepEqual(inputs.map(input=>input.checked),[false,true,false]);
+  f.experiment.operations.view({mode:'heat'});
+  assert.deepEqual(inputs.map(input=>input.checked),[false,false,true]);
+  await f.experiment.dispose();
 });

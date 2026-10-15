@@ -48,10 +48,15 @@ try {
   await invoke('frame');
   await page.locator('#live-log-heat [data-action=run]').click();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=600);
-  await invoke('pause');await shot('warm');
-  await invoke('view',{mode:'char'});await shot('char');
+  await invoke('pause');await page.evaluate(()=>window.kaminosSelection.clear());await shot('warm');
+  await invoke('flameView',{visible:false});
+  await invoke('view',{mode:'char'});assert.equal(await page.locator('#live-log-heat [name=burn-view]:checked').inputValue(),'char');await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
-  await invoke('view',{mode:'beauty'});await invoke('burnerOff');
+  report.phase='end-exposure';await save();
+  await invoke('move',{position:[-.4,0,0]});await invoke('pause');
+  await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=1200);
+  await invoke('pause');await invoke('frame');await invoke('view',{mode:'char'});await shot('end-char');
+  await invoke('view',{mode:'beauty'});await shot('end-material');await invoke('burnerOff');
   report.phase='reset';await invoke('reset');await shot('reset');assert.equal((await read()).fields[0].steps,0);
   report.phase='mobile';await page.setViewportSize({width:430,height:900});await shot('mobile');
   const active=await read();assert.equal(active.burnStatusAuthority,'resident-gpu-peak-reaction');assert.equal(active.selfEmission,false);
