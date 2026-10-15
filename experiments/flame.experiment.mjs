@@ -35,7 +35,7 @@ export default {
         apply=document.createElement('button');apply.type='button';apply.className='btn';apply.textContent='Apply preset';apply.disabled=true;
         presets.addEventListener('change',()=>{apply.disabled=!presets.value;});
         apply.addEventListener('click',async()=>{apply.disabled=true;try{await invoke('applyBasin',presets.value);}catch(error){failed(error);}finally{apply.disabled=!presets.value;}});
-        status=document.createElement('output');status.setAttribute('role','status');
+        status=document.createElement('div');status.className='owner-experiment-status';status.setAttribute('role','status');
         presetLabel.append(presets);root.append(commands,pauseLabel,presetLabel,apply,status);
         stop=flame.subscribe(sync);sync();
         try {for(const entry of (await flame.listBasins()).entries){const option=document.createElement('option');option.value=entry.presetId;option.textContent=entry.label;presets.append(option);}}
