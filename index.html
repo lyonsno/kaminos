@@ -3996,7 +3996,7 @@ let fireProxy=null;
 function syncFireProxy() {
  const prototype=volumePrototype,display=viewportDisplay.fire==='proxy'&&!!prototype,wanted=!!prototype&&(display||proxyRequirements.has('fire'));
  camera?.layers[display?'enable':'disable'](FIRE_PROXY_LAYER);
- if(fireProxy&&fireProxy.prototype!==prototype){fireProxy.prototype?.setResidualPartialsConsumer?.(null);fireProxy.unsubscribe?.();fireProxy.layer?.dispose();proxySnapshots.clear('fire');fireProxy=null;}
+ if(fireProxy&&fireProxy.prototype!==prototype){fireProxy.prototype?.setResidualPartialsConsumer?.(null);fireProxy.prototype?.setCanvasPresentationSuppressed?.(false);fireProxy.unsubscribe?.();fireProxy.layer?.dispose();proxySnapshots.clear('fire');fireProxy=null;}
  if(prototype&&!fireProxy)fireProxy={prototype,layer:null,unsubscribe:null,attached:false,decodeErrors:0,fieldGeneration:prototype.getResidualFieldGeneration?.()??null};
  // A recreated field (domain moved or scaled, grid rebuilt) invalidates every
  // snapshot of the old one: nothing stale is drawn while the new one fills.
@@ -4024,13 +4024,15 @@ function syncFireProxy() {
  const canvas=document.getElementById('kaminos-volume-canvas'),visibility=ready?'hidden':'';
  if(canvas&&canvas.style.visibility!==visibility)canvas.style.visibility=visibility;
  if(fireProxy)fireProxy.awaitingSnapshot=display&&!ready;
+ // While the splats stand in, the fire's own canvas raymarch is not drawn.
+ if(prototype&&fireProxy&&fireProxy.presentationSuppressed!==ready)fireProxy.presentationSuppressed=prototype.setCanvasPresentationSuppressed?.(ready)??false;
  // Routes that composite the fire through the canvas-texture bridge hide that
  // plane too; animate() stops refreshing it while Proxy is effective.
  if(ready&&volumeBridge?.mesh)volumeBridge.mesh.visible=false;
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
- attached:fireProxy?.attached??false,awaitingSnapshot:fireProxy?.awaitingSnapshot??false,fieldGeneration:fireProxy?.fieldGeneration??null,bridgeVisible:volumeBridge?.mesh?.visible??null,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
+ attached:fireProxy?.attached??false,awaitingSnapshot:fireProxy?.awaitingSnapshot??false,fieldGeneration:fireProxy?.fieldGeneration??null,bridgeVisible:volumeBridge?.mesh?.visible??null,presentationSuppressed:fireProxy?.presentationSuppressed??false,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
  canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
 window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};

@@ -700,6 +700,12 @@ async function runFireProxySplatsScenario(ws) {
   check(firstUse?.layer?.count > 0 && firstUse.canvasVisibility === 'hidden' && firstUse.awaitingSnapshot === false,
     `first Proxy on a paused flame did not replay the held field: ${JSON.stringify({ count: firstUse?.layer?.count, canvas: firstUse?.canvasVisibility, awaiting: firstUse?.awaitingSnapshot })}`);
   check(firstUse?.layer?.count > 0 || firstUse?.canvasVisibility === '', 'paused first use blanked the flame: no splats and the fire canvas hidden');
+  // While Proxy stands in, the fire canvas raymarch is not encoded at all.
+  const presentation = () => evaluate(ws, `(() => { const a = window.__kaminosVolumePrototype?.debugState()?.volumePresentationReceipt?.application; return a ? { compositionEffective: a.compositionEffective, raymarchEncoded: a.raymarchEncoded } : null; })()`);
+  await settleViewportFrames(ws, 300);
+  evidence.proxyPresentation = await presentation();
+  check(evidence.proxyPresentation?.raymarchEncoded === false && evidence.proxyPresentation?.compositionEffective === 'suppressed-for-scene-proxy-v0',
+    `the fire canvas raymarch still runs in Proxy: ${JSON.stringify(evidence.proxyPresentation)}`);
 
   phase = 'scenario-fire-proxy-splats-bridge';
   // The canvas-texture bridge route: with the light field off, animate()
@@ -738,6 +744,8 @@ async function runFireProxySplatsScenario(ws) {
   await settleViewportFrames(ws, 1000);
   const fullState = await readFire();
   check(fullState?.display === 'full' && fullState.canvasVisibility === '', `Full did not restore the fire canvas: ${JSON.stringify(fullState)}`);
+  evidence.fullPresentation = await presentation();
+  check(evidence.fullPresentation?.raymarchEncoded === true, `Full did not resume the fire canvas raymarch: ${JSON.stringify(evidence.fullPresentation)}`);
   const fullShot = await capturePngScreenshot(ws, siblingPngPath('-fire-full'));
   const baseline = decodeScreenshotPngRgb(readFileSync(baselineShot.path));
   const c = evidence.added.canvas, region = { x: c.x, y: c.y + 56, width: c.width, height: c.height - 56 - 120 };

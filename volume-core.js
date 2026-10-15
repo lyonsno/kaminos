@@ -12064,6 +12064,9 @@ export function createKaminosVolumePrototype({
   // is paused gets the held field without advancing it; cleared whenever the
   // fluid state is recreated (field generation = state.fluidStateResetCount).
   let lastResidualPartials = null;
+  // A scene proxy stands in for the fire (viewport Fire Proxy): the sim, light
+  // field and probes keep running, and the canvas raymarch is not drawn.
+  let canvasPresentationSuppressed = false;
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
@@ -21081,6 +21084,11 @@ export function createKaminosVolumePrototype({
           residualApplied,
           compositionEffective: 'authored-raymarch-plus-browser-residual-v0',
         });
+      } else if (typeof canvasPresentationSuppressed !== 'undefined' && canvasPresentationSuppressed) {
+        // typeof: source-extraction contract harnesses run this body without
+        // the closure that declares the flag.
+        recordBrowserResidualCost({ applied: false });
+        recordVolumePresentationApplication({ compositionEffective: 'suppressed-for-scene-proxy-v0' });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
         state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
@@ -27171,6 +27179,13 @@ export function createKaminosVolumePrototype({
       return Boolean(residualPartialsConsumer);
     },
     getResidualFieldGeneration() { return state.fluidStateResetCount; },
+    // Skip the ordinary canvas raymarch while a scene proxy stands in for the
+    // fire. Other presentation routes (boundary splats, browser residual) keep
+    // drawing; the frame's presentation receipt says which happened.
+    setCanvasPresentationSuppressed(suppressed) {
+      canvasPresentationSuppressed = suppressed === true;
+      return canvasPresentationSuppressed;
+    },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);
       if (next.mode !== 'current' && (!emissiveRaymarchAdmission().eligible || productFrameOwner !== 'prototype')) {
