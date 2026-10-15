@@ -35,8 +35,7 @@ try{
   const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));
   assert.equal(startup.error,undefined,JSON.stringify(startup));assert.equal(startup.state.id,'live-log-heat');
   report.effectiveUrl=page.url();report.sources=[];
-  await page.evaluate(()=>window.kaminosSceneCollision.set(true));
-  for(const name of ['volume-core.js','live-log-experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-gas-source.mjs']){
+  for(const name of ['volume-core.js','live-log-experiment.mjs','experiments/sinter/live-log-heat.experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-gas-source.mjs']){
     const actual=await(await page.request.get(origin+'/'+name)).body(),expected=await fs.readFile(path.join(report.repoRoot,name));
     const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(actual),sha(expected),name);report.sources.push({name,sha256:sha(actual)});
   }
@@ -46,6 +45,7 @@ try{
     controls:Object.fromEntries(['volume-resolution','volume-grid-height-ratio','volume-steps','volume-immersed-radius'].map(id=>[id,document.getElementById(id).value]))}));
   assert.match(report.effective.backend,/WebGPU/);assert.equal(Number(report.effective.controls['volume-resolution']),32);
   assert.equal(Number(report.effective.controls['volume-grid-height-ratio']),1);assert.equal(Number(report.effective.controls['volume-steps']),28);assert.equal(Number(report.effective.controls['volume-immersed-radius']),.1);
+  assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
   async function sample(name){
     const raw=await page.evaluate(async()=>{
       const runtime=window.__kaminosVolumePrototype,state=await window.kaminosWorkbenchExperiments.read(),context=await runtime.borrowThermalGpuContext();

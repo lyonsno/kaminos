@@ -6,7 +6,12 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
   const settings=host.fire.settings();
   if(!settings.source?.presetId)throw Error('Log experiment requires an explicitly mounted saved basin');
   const runtime=host.volume.get();runtime.setSimulationPaused(true);
-  await host.fire.add(settings.source.presetId);
+  async function addSavedFire(){
+    await host.fire.add(settings.source.presetId);
+    if(!globalThis.kaminosSceneCollision?.set)throw Error('Log experiment requires the shared scene collision control');
+    globalThis.kaminosSceneCollision.set(true);
+  }
+  await addSavedFire();
   host.fire.setEnabled(false);
   host.rendering.gi({mode:'combined',steps:4,slices:3});
   const state=runtime.debugState();
@@ -19,7 +24,7 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
     read:()=>({status:host.fire.read().authoredPresent?'mounted':'unavailable',enabled:host.fire.read().emissionEnabled,visible,objectId:'flame-emitter',basin:{presetId:settings.source.presetId,label:settings.source.label}}),
     setEnabled:host.fire.setEnabled,setVisible(value){visible=value;host.fire.setVisible(value);},select:host.fire.select,
     showLibrary(){document.getElementById('flame-basin-select')?.focus();},
-    async reacquire(){if(!host.fire.read().authoredPresent)await host.fire.add(settings.source.presetId);host.fire.setEnabled(false);},
+    async reacquire(){if(!host.fire.read().authoredPresent)await addSavedFire();host.fire.setEnabled(false);},
     dispose(){host.fire.setEnabled(false);}};
   const scene={...host.scene,ready:Promise.resolve(),dirty:()=>session.redraw(),
     async load(url,options){const asset=await session.loadAsset({url,...options,normalize:true,arrival:'append'});host.scene.refreshPresentation(asset);return asset.root;}};

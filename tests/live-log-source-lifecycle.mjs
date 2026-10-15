@@ -35,16 +35,19 @@ test('disabled authored emission survives serialization and source registration'
 
 test('actual experiment adapter restores a removed source without starting it',async()=>{
   const source=readFileSync(new URL('../experiments/sinter/live-log-heat.experiment.mjs',import.meta.url),'utf8');
-  let present=false,enabled=true,visible=true,adds=0,adapter,inspect;
+  let present=false,enabled=true,visible=true,adds=0,adapter,inspect,collision=false;
   const session={dispose:async()=>{}};
   const host={scene:{open:async()=>session},volume:{ready:Promise.resolve(),get:()=>({setSimulationPaused(){},debugState:()=>({simGrid:32,gridHeight:{heightCells:32}})})},
     fire:{settings:()=>({source:{presetId:'saved'},domControls:{'volume-steps':{value:28},'volume-immersed-radius':{value:.1}}}),
       add:async()=>{adds++;present=true;},setVisible:value=>{visible=value;},setEnabled:value=>{enabled=value;},read:()=>({authoredPresent:present,emissionEnabled:enabled})},rendering:{gi(){},readGI:()=>({gain:10}),readFireLighting:()=>({witnessMuted:false}),muteFireLighting(){}}};
-  const context={createLiveLogExperiment:async args=>{adapter=args.host.fire;inspect=args.host.inspection;return {dispose:async()=>{}};}};vm.createContext(context);
+  const context={kaminosSceneCollision:{set:value=>{collision=value;}},createLiveLogExperiment:async args=>{adapter=args.host.fire;inspect=args.host.inspection;return {dispose:async()=>{}};}};vm.createContext(context);
   vm.runInContext(source.replace(/^import .*;\n/gm,'').replace('export default','globalThis.definition='),context);
   await context.definition.create({host,inputs:{},record(){}});
+  assert.equal(collision,true,'the ordinary entry must enable the collisions used by its native witness');
+  collision=false;
   present=false;assert.equal(adapter.availability().status,'unavailable');
   await adapter.reacquire();
+  assert.equal(collision,true,'reconnecting a fire must restore the experiment collision setup');
   assert.equal(adapter.availability().status,'mounted');assert.equal(adds,2);assert.equal(enabled,false);
   inspect(true);assert.equal(visible,false);assert.equal(adapter.read().visible,false);
   inspect(false);assert.equal(visible,true);assert.equal(adapter.read().visible,true);
