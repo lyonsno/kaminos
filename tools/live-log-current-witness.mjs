@@ -15,7 +15,9 @@ try {
   await save();
   assert.ok(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'),'Independent browser required');
   const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
+  report.phase='browser-launch';await save();
   browser=await chromium.launch({executablePath:report.executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
+  report.phase='page-create';report.browserVersion=browser.version();await save();
   const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(0);
   page.on('pageerror',error=>report.errors.push(String(error)));page.on('console',message=>{if(message.type()==='error')report.errors.push(message.text());});
   report.phase='load';await save();
