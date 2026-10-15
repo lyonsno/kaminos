@@ -1,6 +1,7 @@
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
+import {createGpuSkinDeformer} from './gpu-skin-deformer.mjs';
 import {createGivenPaletteMotion} from './given-palette-motion.mjs';
 import {attachGivenPalettePlayback} from './given-palette-playback.mjs';
 import {createWalkingPoseAdapter} from './walking-pose.mjs';
@@ -24,7 +25,7 @@ export async function loadComparisonRecipe(input,{fetchImpl=globalThis.fetch}={}
 
 // A caller-owned list of authenticated bodies and clips, composed in the ordinary
 // scene. Placement is a base transform, not a rewrite of the model output.
-export async function createCreatureComparison({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,makeLabel=labelSprite,fetchImpl=globalThis.fetch,yieldWork=()=>new Promise(resolve=>setTimeout(resolve,0))}={}){
+export async function createCreatureComparison({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,makeLabel=labelSprite,fetchImpl=globalThis.fetch}={}){
  const recipe=await loadComparisonRecipe(inputs,{fetchImpl});inputs=recipe.inputs;
  const specs=inputs.entries,document=host?.controls?.document;
  if(!host?.scene?.open||!document)throw Error('Comparison requires the actual Workbench scene and controls');
@@ -51,7 +52,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
   if(!remaining){status='removed';unsubscribe();}
   session.redraw();refresh();
  }
- function present(){for(const row of rows)if(mounted(row))host.scene.refreshPresentation?.(row.asset);}
+ function present(){for(const row of rows)if(mounted(row)){row.runtime.syncCpuGeometry();host.scene.refreshPresentation?.(row.asset);}}
  function start(){if(stop||status!=='playing')return;stop=session.onFrame(({deltaSeconds})=>{
   try{if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Invalid shared comparison clock delta');seconds+=deltaSeconds;
    if(mode==='raw'&&seconds>=duration){seconds=duration;status='held';unsubscribe();}
@@ -61,10 +62,11 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
  function read(){return {status,seconds,presentation:mode,recipe:recipe.source,sourceDuration:duration,activeSubscription:Boolean(stop),
   semantics:{rootTravel:mode==='in-place'?'horizontal actor translation held at first sample':'retained source travel',verticalAction:'retained',yaw:'retained',seam:mode==='raw'?'none':'derived pose crossfade',contactSolver:false},
   entries:rows.map(row=>{row.runtime.group.updateMatrixWorld(true);return {key:row.spec.id,label:row.spec.label,id:row.removed?null:row.asset.id,status:row.removed?'removed':status,frame:row.last,cycle:row.cycle,source:row.source,skin:row.runtime.read(),rootMatrix:row.runtime.group.matrixWorld.toArray()};}),view:session?.readView()??null};}
- function inspect(){return {...read(),entries:read().entries.map((r,i)=>({...r,vertices:Array.from(rows[i].runtime.mesh.geometry.attributes.position.array),boneWorld:[...rows[i].runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))}))};}
+ function inspect(){return {...read(),entries:read().entries.map((r,i)=>({...r,vertices:Array.from(rows[i].runtime.syncCpuGeometry().attributes.position.array),boneWorld:[...rows[i].runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))}))};}
  async function dispose(){if(disposal)return disposal;disposed=true;unsubscribe();refresh=()=>{};disposal=Promise.resolve().then(async()=>{
   const errors=[];for(const row of rows)try{row.player.dispose();}catch(e){errors.push(e);}
   try{restoreGround();}catch(e){errors.push(e);}try{await session?.dispose();}catch(e){errors.push(e);}
+  for(const row of rows)try{row.runtime.dispose();}catch(e){errors.push(e);}
   for(const runtime of unattached)try{runtime.dispose();}catch(e){errors.push(e);}
   if(globalThis.window?.kaminosCreatureComparison===inspect)delete window.kaminosCreatureComparison;
   if(errors.length)throw new AggregateError(errors,'Comparison cleanup failed');
@@ -72,7 +74,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
  try{
   session=await host.scene.open();
   for(let i=0;i<specs.length;i++){
-   const spec=specs[i],runtime=createFullBodyRuntime({THREE,...data[i],retainPoses:mode!=='travel'});unattached.push(runtime);runtime.group.position.fromArray(spec.position);runtime.group.name=spec.label;
+   const spec=specs[i],runtime=createFullBodyRuntime({THREE,...data[i],deformerFactory:createGpuSkinDeformer});unattached.push(runtime);runtime.group.position.fromArray(spec.position);runtime.group.name=spec.label;
    const adapter=createGivenPaletteMotion({THREE,motion:data[i].motion,rigFrame:data[i].frame});
    const walking=createWalkingPoseAdapter({THREE,adapter,blendFrames:inputs.blend_frames??6});
    const source={...data[i].source,prompt:data[i].motion.prompt,seed:data[i].motion.seed,cfgScale:data[i].motion.cfgScale,presentation:'caller-positioned simultaneous comparison'};
@@ -82,7 +84,7 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
    const derived={...adapter,frame:index=>{const p=walking.frame(index,{mode:mode==='raw'?'source':'cycle',cycle:mode==='travel'?row.cycle:0});
     if(mode!=='in-place')return p;const actorMatrix=[...p.actorMatrix];actorMatrix[12]=first[12];actorMatrix[14]=first[14];return {...p,actorMatrix};}};
    row.player=attachGivenPalettePlayback({THREE,runtime,adapter:derived,source,document,mountRoot:document.createElement('div'),dirty:()=>{}});rows.push(row);
-   const label=makeLabel(document,spec.label);if(label){runtime.mesh.geometry.computeBoundingBox();const box=runtime.mesh.geometry.boundingBox;label.position.set((box.min.x+box.max.x)/2,box.max.y+.5,(box.min.z+box.max.z)/2);runtime.group.add(label);}
+   const label=makeLabel(document,spec.label);if(label){runtime.syncCpuGeometry();runtime.mesh.geometry.computeBoundingBox();const box=runtime.mesh.geometry.boundingBox;label.position.set((box.min.x+box.max.x)/2,box.max.y+.5,(box.min.z+box.max.z)/2);runtime.group.add(label);}
   }
   if(inputs.ground!==false){
    const height=document.getElementById('composition-ground-height'),visible=document.getElementById('composition-ground-visible');if(!height||!visible)throw Error('Shared comparison ground controls unavailable');
@@ -94,19 +96,18 @@ export async function createCreatureComparison({host,inputs={},record=()=>{}},{l
   }
   if(inputs.view)session.setView(inputs.view);
   const operations={
+   async inspectGpu(){active();if(status==='playing')throw Error('Pause comparison before same-pose GPU readback');return Promise.all(rows.filter(mounted).map(async row=>{
+    const gpu=await row.runtime.readGpuGeometry(),cpu=row.runtime.syncCpuGeometry();
+    return {key:row.spec.id,frame:row.last,source:row.source,backend:gpu.backend,dispatches:gpu.dispatches,positions:Array.from(gpu.positions),normals:Array.from(gpu.normals),cpuPositions:Array.from(cpu.attributes.position.array),cpuNormals:Array.from(cpu.attributes.normal.array)};
+   }));},
    play(){active();if(status==='removed')throw Error('All comparison bodies removed');status='playing';start();refresh();return read();},
    pause(){active();unsubscribe();status='paused';present();refresh();return read();},
    restart(){active();seconds=0;status='playing';apply();start();present();return read();},
    seek({seconds:next}={}){active();if(!Number.isFinite(next)||next<0||next>duration)throw Error('Comparison seek outside source duration');unsubscribe();seconds=next;status='paused';apply();present();return read();},
    presentation({mode:next}={}){active();if(!['in-place','travel','raw'].includes(next))throw Error('Unknown comparison presentation');unsubscribe();mode=next;for(const row of rows)row.runtime.setPoseRetention(mode!=='travel');seconds=0;status='paused';apply();present();return read();},
   };
-  // The default comparison repeats a finite set of exact source-derived poses.
-  // Compute them once, yielding to the app between poses, rather than repeating
-  // six dense CPU skin solves on every live frame. Traveling remains uncached.
-  if(mode==='in-place')for(const row of rows){
-   for(let index=0;index<row.adapter.frames;index++){row.player.seek(index);await yieldWork();}
-   row.player.seek(0);record({kind:'creature.comparison.pose-retention',phase:'prepared',entry:row.spec.id,...row.runtime.read().poseCache});
-  }
+  // GPU transport consumes the current bone palette in every presentation. No
+  // finite-mesh cache, warmup traversal, private renderer or private frame loop.
   apply();if(inputs.play!==false)operations.play();if(globalThis.window)window.kaminosCreatureComparison=inspect;
   return {read,operations,dispose,mount({root,invoke}){
    const timeline=data.reduce((a,b)=>a.motion.frames/a.motion.skeleton.fps>=b.motion.frames/b.motion.skeleton.fps?a:b).motion;

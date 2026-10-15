@@ -20,8 +20,10 @@ function fixture(){const scene=new THREE.Scene();let callback=null,closed=0,refr
 const inputs={blend_frames:0,ground:false,play:true,entries:Array.from({length:6},(_,i)=>({id:'body-'+i,label:'Pair '+Math.floor(i/2)+' / '+i%2,position:[i%2?3:-3,0,Math.floor(i/2)*6],source:{}}))};
 const f=fixture(),entry=await module.createCreatureComparison({host:f.host,inputs},{loadSources:async()=>structuredClone(data),makeLabel:()=>new THREE.Group()});
 assert.equal(f.scene.children.length,6);assert.equal(entry.read().entries.length,6);assert.equal(f.state().active,true);
-assert.ok(entry.read().entries.every(e=>e.skin.poseCache?.enabled),'comparison must reuse its finite repeated poses');
+assert.ok(entry.read().entries.every(e=>e.skin.deformation?.backend==='webgpu-dense-dq'&&e.skin.poseCache.bytes===0&&!e.skin.poseCache.enabled),'comparison must use all-influence GPU playback without a full-mesh pose cache');
+const cpuSolves=entry.read().entries.map(e=>e.skin.poseCache.deformations);
 f.tick(1/30);assert.deepEqual(entry.read().entries.map(e=>e.frame),[1,1,1,1,1,1]);
+assert.deepEqual(entry.read().entries.map(e=>e.skin.poseCache.deformations),cpuSolves,'shared-clock playback must not run CPU deformation');
 const after=entry.read().entries;for(let i=0;i<6;i++){assert.equal(after[i].rootMatrix[12],inputs.entries[i].position[0]);assert.equal(after[i].rootMatrix[14],inputs.entries[i].position[2]);}
 assert.ok(after.every(e=>Math.abs(e.rootMatrix[13]-.3)<1e-6),'in-place presentation preserves vertical motion');
 entry.operations.pause();assert.equal(f.state().active,false);const t=entry.read().seconds;f.tick(1);assert.equal(entry.read().seconds,t);
