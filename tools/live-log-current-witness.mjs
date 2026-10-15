@@ -9,7 +9,7 @@ if(!origin||!out)throw Error('Usage: live-log-current-witness.mjs <origin> <outp
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],frames:[],
   executable:process.env.CHROME_EXECUTABLE,
-  requested:{grid:[32,32,32],rays:28,emitterRadius:.1,gi:{steps:4,slices:3}},claim:'GPU material observability and lightweight scene, not self-sustaining combustion'};
+  requested:{grid:[32,32,32],rays:28,emitterRadius:.1,gi:{steps:4,slices:3},collisionCompare:process.env.SINTER_COLLISION_COMPARE==='1'},claim:'GPU material observability and lightweight scene, not self-sustaining combustion'};
 const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));
 let browser;
 try {
@@ -33,7 +33,7 @@ try {
   assert.equal(startup.error,undefined,JSON.stringify(startup));assert.equal(startup.state.id,'live-log-heat');
   report.effectiveUrl=page.url();report.browserVersion=browser.version();
   report.sources=[];
-  for(const name of ['index.html','volume-core.js','volume-physics-appearance.mjs','live-log-experiment.mjs','live-log-heat-gpu.mjs','burn-table-material.mjs','live-log-indicator.mjs']) {
+  for(const name of ['index.html','volume-core.js','volume-physics-appearance.mjs','live-log-experiment.mjs','live-log-heat-gpu.mjs','live-log-heat-core.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','live-log-indicator.mjs']) {
     const actual=await(await page.request.get(origin+'/'+name)).body(),expected=await fs.readFile(path.join(report.repoRoot,name));
     const sha=bytes=>createHash('sha256').update(bytes).digest('hex');assert.equal(sha(actual),sha(expected),name);report.sources.push({name,sha256:sha(actual)});
   }
@@ -46,6 +46,25 @@ try {
     controls:Object.fromEntries(['volume-resolution','volume-grid-height-ratio','volume-steps','volume-immersed-radius'].map(id=>[id,document.getElementById(id).value]))}));
   assert.equal(report.effective.controls['volume-resolution'],'32');assert.equal(Number(report.effective.controls['volume-grid-height-ratio']),1);
   assert.equal(Number(report.effective.controls['volume-steps']),28);assert.equal(Number(report.effective.controls['volume-immersed-radius']),.1);
+  if(report.requested.collisionCompare){
+    for(const enabled of [false,true]){
+      const arm=enabled?'collision-on':'collision-off';report.phase=arm;await save();
+      await invoke('view',{mode:'beauty'});await invoke('reset');await invoke('move',{position:[0,0,0]});await invoke('frame');
+      await page.evaluate(({id,enabled})=>{window.kaminosSceneAuthoring.setCollision(id,true);window.kaminosSceneCollision.set(enabled);},{id:(await read()).objectId,enabled});
+      await shot(arm+'-cold');await invoke('run');
+      await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=600);
+      await invoke('pause');
+      const collision=await page.evaluate(()=>window.kaminosSceneCollision.read());
+      assert.equal(collision.enabled,enabled);
+      assert.equal(collision.runtime.effective,enabled?'mesh-voxel-solid':'off',JSON.stringify(collision));
+      if(enabled)assert.ok(collision.runtime.solidCellCount>0,'collision-on must contain real solid cells');
+      (report.collisionArms??=[]).push({arm,collision,state:await read()});
+      await page.evaluate(()=>window.kaminosSelection.clear());await shot(arm+'-material');
+      await invoke('view',{mode:'char'});await shot(arm+'-char');
+      await invoke('view',{mode:'heat'});await shot(arm+'-heat');
+    }
+    await invoke('view',{mode:'beauty'});await invoke('reset');
+  }else{
   await shot('cold');
   report.phase='heat';await save();
   await invoke('move',{position:[0,0,0]});
@@ -87,6 +106,7 @@ try {
   checkRestoredLogSource(report.restoredObservation);
   report.restoredEffectiveUrl=page.url();
   await page.screenshot({path:path.join(out,'restored.png')});
+  }
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}

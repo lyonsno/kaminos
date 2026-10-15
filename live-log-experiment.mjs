@@ -31,7 +31,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
   const emit=(name,effective,requested={})=>record({kind:'sinter.live-log.'+name,target:scene.objects().find(entry=>entry.object===object)?.id||'live-log',phase:'applied',requested,effective:{...effective,attempt}});
   const updateUI=()=>{if(!mounted)return;const state=read();mounted.status.textContent=state.status==='cold'?'Cold · paused':state.status==='unavailable'?state.unavailableReason==='fire'?'Fire source removed or replaced':'Log removed':`${state.burner?'Heating':'Cooling'}${paused?' · paused':''}`;mounted.run.disabled=disposed||!membership()||!fireAvailable();mounted.reconnect.hidden=state.unavailableReason!=='fire';mounted.pause.disabled=!running;mounted.pause.textContent=paused?'Resume':'Pause';mounted.panel.querySelectorAll('[name=burn-view]').forEach(input=>{input.checked=input.value===state.view;});};
   try {
-    object=await scene.load(source,{clear:false,arrival:'append',isCurrent:()=>!disposed,metadata:{label:'Live log / local heat',fileName:BURN_TABLE_ASSET.path}});
+    object=await scene.load(source,{clear:false,arrival:'append',isCurrent:()=>!disposed,metadata:{label:'Live log / local heat',fileName:BURN_TABLE_ASSET.path,collision:{domainId:'flame-field',enabled:true}}});
     object.position.fromArray(inputs.position??[.45,-.65,0]);object.rotation.set(0,Math.PI/2,0);object.scale.multiplyScalar(.35);
     object.updateWorldMatrix(true,true);
     const meshes=[];object.traverse(child=>{if(child.isMesh)meshes.push(child);});
