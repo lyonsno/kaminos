@@ -44,4 +44,13 @@ for(const distance of [-1,NaN,Infinity])assert.throws(()=>path.advance(distance)
 assert.throws(()=>path.setArea({...moved,radii:[0,9]}),/area/i);
 assert.deepEqual(path.snapshot(),unchanged,'Rejected edits mutated current path');
 assert.throws(()=>createWanderPath({snapshot:{...unchanged,rng:NaN}}),/snapshot|random/i);
+// A nearly straight quadratic can still have nonlinear parameter speed. Check
+// the rendered geometric travel, not the controller's distance counter.
+for(const offset of [0,.01,.02]){
+ const angle=Math.atan2(.017188196681616738,.9998522720356412)+offset;
+ const straight=createWanderPath({area:{center:[0,0],radii:[10,10],yaw:0},position:[0,0],direction:[Math.cos(angle),Math.sin(angle)],seed:1});
+ let prior=straight.read().position,travel=0;
+ for(let i=0;i<1000;i++){const next=straight.advance(.001).position;travel+=Math.hypot(...next.map((v,k)=>v-prior[k]));prior=next;}
+ assert.ok(Math.abs(travel-1)<.001,'Arc-distance inversion changed actual geometric source-paced travel: '+travel);
+}
 console.log('Wander follows source distance, stays in its area, reconstructs and redirects without teleporting');

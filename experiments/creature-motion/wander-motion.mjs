@@ -30,8 +30,9 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   elapsed=snapshot.elapsed;heldFrame=snapshot.heldFrame;path=createWanderPath({snapshot:snapshot.path});
  } else path=pathSnapshot?createWanderPath({snapshot:pathSnapshot}):createWanderPath({area,position,direction,seed});
  function timing(time=elapsed) {
-  const cycle=Math.floor(time/period+1e-10),phase=Math.max(0,time-cycle*period);
-  const fractional=Math.min(adapter.frames-1,phase*adapter.fps),index=Math.floor(fractional),next=Math.min(adapter.frames-1,index+1);
+  const sourceFrames=time*adapter.fps,nearest=Math.round(sourceFrames);
+  const stableFrames=Math.abs(sourceFrames-nearest)<=16*Number.EPSILON*Math.max(1,sourceFrames)?nearest:sourceFrames;
+  const cycle=Math.floor(stableFrames/(adapter.frames-1)),fractional=stableFrames-cycle*(adapter.frames-1),index=Math.floor(fractional),next=Math.min(adapter.frames-1,index+1);
   return {cycle,frame:Math.min(adapter.frames-2,index),distance:cycle*sourceDistance+distances[index]+(distances[next]-distances[index])*(fractional-index)};
  }
  function read(){const t=timing();return {elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,path:path.read()};}
