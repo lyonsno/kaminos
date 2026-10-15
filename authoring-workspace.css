@@ -96,6 +96,27 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 .flame-basin-actions { display:flex; gap:6px; margin-top:6px; }
 #flame-basin-current { overflow-wrap:anywhere; }
 
+.flame-control-inspector { min-width:0; }
+.flame-inspector-navigation { margin:14px 0 4px; }
+.flame-inspector-navigation input[type=search] { box-sizing:border-box; width:100%; height:32px; padding:6px 9px; color:#d6d7db; background:#202125; border:1px solid #404248; border-radius:4px; font:inherit; font-size:11px; }
+.flame-inspector-navigation input[type=search]:focus { outline:1px solid #aa987b; outline-offset:1px; }
+.flame-inspector-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; border-bottom:1px solid #3d3e43; margin-top:8px; }
+.flame-inspector-tabs button { min-width:0; height:34px; padding:4px; color:#979ba3; background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0; cursor:pointer; font-size:11px; }
+.flame-inspector-tabs button:hover { color:#edf0f3; background:#ffffff08; }
+.flame-inspector-tabs button[aria-selected=true] { color:#e7dac3; border-bottom-color:#bca176; }
+.flame-inspector-tabs button:focus-visible { outline:1px solid #bca176; outline-offset:-3px; }
+.flame-control-inspector [hidden] { display:none !important; }
+.flame-inspector-section { border-bottom:1px solid #35373d; padding:0 0 10px; margin:0; }
+.flame-inspector-section > summary { padding:14px 0 10px; color:#d9dbdf; font-size:11px; font-weight:600; cursor:pointer; }
+.flame-control-inspector .flame-property-row { display:grid; grid-template-columns:minmax(0,46fr) minmax(0,54fr); align-items:center; gap:9px; min-height:31px; margin:5px 0 !important; }
+.flame-control-inspector .flame-property-row .slider-label { min-width:0; font-size:11px; line-height:1.35; color:#aeb2ba; overflow-wrap:anywhere; }
+.flame-control-inspector .flame-property-row .transform-input { box-sizing:border-box; width:100%; min-width:0; min-height:29px; font-size:11px; }
+.flame-control-inspector .flame-property-row select { background:#292b30; border:1px solid #41444b; border-radius:4px; color:#d6d7db; padding:5px 7px; }
+.flame-control-inspector .flame-property-row input[type=checkbox] { width:16px; min-height:16px; height:16px; margin:0 1px 0 auto; accent-color:#bca176; cursor:pointer; }
+.flame-control-inspector .flame-property-row input[type=color] { padding:3px; background:#292b30; border:1px solid #41444b; border-radius:4px; cursor:pointer; }
+.flame-inspector-empty { padding:18px 0; color:#9399a3; font-size:11px; }
+.flame-control-inspector .flame-domain-controls, .flame-control-inspector .flame-collision-controls { border-bottom:1px solid #35373d; padding:10px 0; }
+
 /* Numeric fields are relative scrub surfaces; text mode keeps normal selection. */
 :is(#authoring-inspector, #experiment-instruments) .authoring-number { appearance:textfield; cursor:ew-resize; text-align:right; padding:4px 9px; border:1px solid #424348; border-radius:4px; background:linear-gradient(#37383c,#303135); font-variant-numeric:tabular-nums; transition:border-color .1s,background .1s; }
 :is(#authoring-inspector, #experiment-instruments) .authoring-number:hover { background:#414247; border-color:#606168; }
