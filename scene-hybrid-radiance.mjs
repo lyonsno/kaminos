@@ -8,31 +8,46 @@ import {validateSceneSourceTransform} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
+import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
   if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('shadow softness must be finite and nonnegative');
   validateShadowSampling(shadowSampling);
-  const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
+  validateSourceQuadrature(pointCount);
+  const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
+  const paired=uniform(false,'bool');let pointSampling='all';
   let points,external,lights,irradiance;
   function buildPoints(count){
-  points=createPointRegions(device,{count,partition:count===2?'energy':'vertical'});
+  points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
   external=new THREE.ExternalTexture(points.texture);
   external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
   external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
   lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
+    const filterCoordinates=paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
     const direction=delta.div(distance2.sqrt().max(1e-6));
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility)};
   });
-  irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
+  const currentLights=lights;
+  irradiance=Fn(()=>{
+    // Derivatives must be evaluated in uniform flow, before source selection.
+    for(const light of currentLights)light.shadow.prepareSampling?.();
+    const sum=vec3(0).toVar();
+    const add=indices=>{for(const i of indices)sum.addAssign(currentLights[i].irradiance.mul(2));};
+    if(count===4)If(paired,()=>{
+      If(screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
+    }).Else(()=>{for(const light of currentLights)sum.addAssign(light.irradiance);});
+    else for(const light of currentLights)sum.addAssign(light.irradiance);
+    return sum.mul(surfaceGain);
+  })();
   }
   function releasePoints(){for(const light of lights)light.shadow.dispose();delete renderer.backend.get(external).texture;external.dispose();points.destroy();}
   buildPoints(pointCount);
@@ -92,6 +107,15 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   }
   prototype.setSceneMediumSource(null);prototype.setSceneSourceFrameConsumer(prepare);
   const nonnegative=(v)=>{if(!Number.isFinite(v)||v<0)throw new Error('nonnegative finite gain required');return v;};
+  function setQuadrature(value,sampling='all'){
+    validateSourceQuadrature(value,sampling);
+    if(disposed)throw Error('hybrid lighting disposed');
+    if(value!==pointCount){
+      valid=false;releasePoints();buildPoints(value);pointCount=value;status.pointCount=value;status.status='awaiting-source';
+      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+    }
+    pointSampling=sampling;paired.value=sampling==='paired';
+  }
   return {
     setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
@@ -101,19 +125,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setRetainComparisons(value){retainComparisons=!!value;},
     setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
     setShadowSampling(value){validateShadowSampling(value);for(const light of lights)light.shadow.setSampling(value);shadowSampling=value;status.shadowSampling=value;},
-    setPointCount(value){
-      if(![1,2].includes(value))throw Error('live surface point count must be 1 or 2');
-      if(disposed)throw Error('hybrid lighting disposed');
-      if(value===pointCount)return;
-      valid=false;releasePoints();buildPoints(value);pointCount=value;status.pointCount=value;status.status='awaiting-source';
-      // Material setup closes over the current irradiance graph. Mark all
-      // clones for recompilation so no draw retains the retired texture.
-      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
-    },
+    setQuadrature,setPointCount(value){setQuadrature(value);},setPointSampling(value){setQuadrature(pointCount,value);},
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
-    debugState(){return {...status,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
+    debugState(){return {...status,pointSampling,evaluatedPointCount:pointSampling==='paired'?2:pointCount,capturedPointCount:pointCount,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(){if(!gather)throw new Error('hybrid not encoded');return gather.readback();},
     readPointRegions(){if(!valid)throw Error('hybrid source not current');return points.readback();},

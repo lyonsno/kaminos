@@ -10,8 +10,8 @@ class Element {
   querySelector(key){if(!this.nodes.has(key))this.nodes.set(key,new Element());return this.nodes.get(key);}
 }
 globalThis.Option=class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}};
-let frame,points=1,sampling='fixed',href='http://localhost/index.html#scene=kiln.json';
-const document={createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,debugState:()=>({pointCount:points,shadowSampling:sampling,shadowSoftness:1})}}};
+let frame,points=1,pointSampling='all',sampling='fixed',href='http://localhost/index.html#scene=kiln.json';
+const document={createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1})}}};
 const host={controls:{document},scene:{open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}})}};
 const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
 await entry.open('fire-shadow-sampling',{sampling:'complementary',points:1,retained:'other input'});frame();
@@ -26,4 +26,11 @@ await entry.open('fire-shadow-sampling',inputs);frame();assert.equal(points,2);
 await entry.invoke('setSampling','fixed');
 assert.equal(JSON.parse(readOwnerExperimentAddress(new URL(href)).inputsText).sampling,'fixed');
 const prior=href;await assert.rejects(entry.invoke('setPoints',0),/point count/);assert.equal(href,prior,'invalid selection must not poison recovery');
+await entry.invoke('setQuadrature',{points:4,pointSampling:'paired'});
+const pairedInputs=JSON.parse(readOwnerExperimentAddress(new URL(href)).inputsText);
+assert.equal(pairedInputs.points,4);assert.equal(pairedInputs.pointSampling,'paired');assert.equal(pairedInputs.retained,'other input');
+points=1;pointSampling='all';await entry.open('fire-shadow-sampling',pairedInputs);frame();
+assert.equal(points,4);assert.equal(pointSampling,'paired');
+const pairedHref=href;await assert.rejects(entry.invoke('setQuadrature',{points:2,pointSampling:'paired'}),/four/);assert.equal(href,pairedHref);
+await entry.invoke('setPoints',2);assert.equal(JSON.parse(readOwnerExperimentAddress(new URL(href)).inputsText).pointSampling,'all');
 await entry.close();console.log('PASS actual owner operation/address/recovery preserves edited source count and sampling');
