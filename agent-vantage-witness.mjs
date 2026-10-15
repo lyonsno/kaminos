@@ -242,6 +242,38 @@ try {
   const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
   check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
 
+  report.phase = 'glance'; save();
+  // The sub's view from its own camera: the operator's view is never borrowed.
+  const beforeGlance = await page.evaluate(() => ({camera: window.kaminosCameraDebugState(), view: window.kaminosAgentVantage.capturing()}));
+  const glance = await vantageOk('glance', '--name', 'glance');
+  const afterGlance = await page.evaluate(() => window.kaminosCameraDebugState());
+  const glanceColors = colors(imageOf(glance, 'glance'));
+  report.effective.glance = {route: glance.result.route, colors: glanceColors, omitted: glance.result.omitted};
+  check('a glance shows the red box from the sub\'s own camera', glance.result.route === 'own-camera' && glanceColors.varied && glanceColors.red > 0.05, glanceColors);
+  check('and the operator\'s camera never moved', ['position', 'target'].every(key => beforeGlance.camera[key].every((v, i) => Math.abs(v - afterGlance[key][i]) < 1e-12)),
+    {before: beforeGlance.camera, after: afterGlance});
+  // Same sub pose as the red snap: the glance should match the borrowed picture's colour pixel for pixel, within a few
+  // levels (no ambient occlusion). A glance missing tone mapping differed by about 17 levels on average.
+  const glanceMatch = (() => {
+    const snapPx = decodeScreenshotPngRgb(readFileSync(imageOf(snapRed, 'snap'))), glancePx = decodeScreenshotPngRgb(readFileSync(imageOf(glance, 'glance')));
+    let total = 0, count = 0;
+    for (let y = 0; y < snapPx.height; y += 2) {
+      for (let x = 0; x < snapPx.width; x += 2) {
+        const i = (y * snapPx.width + x) * snapPx.channels;
+        const gx = Math.min(glancePx.width - 1, Math.floor((x + 0.5) * glancePx.width / snapPx.width)), gy = Math.min(glancePx.height - 1, Math.floor((y + 0.5) * glancePx.height / snapPx.height));
+        const j = (gy * glancePx.width + gx) * glancePx.channels;
+        for (let c = 0; c < 3; c++) total += Math.abs(snapPx.pixels[i + c] - glancePx.pixels[j + c]);
+        count += 3;
+      }
+    }
+    return {meanAbsoluteDifference: total / count};
+  })();
+  report.effective.glanceVersusSnap = glanceMatch;
+  check('the glance matches the borrowed snap of the same view in colour and exposure', glanceMatch.meanAbsoluteDifference < 6, glanceMatch);
+  const pickGlance = await vantageOk('pick', ...middle(glance), '--picture', glance.recordPath);
+  check('a pick on the glance names the red box, at the point the glance drew', pickGlance.result.hit?.id === scene.red && pickGlance.result.hit.pointBasis === 'depth'
+    && Math.abs(pickGlance.result.hit.point[2] - 0.5) < 2e-3, {hit: pickGlance.result.hit});
+
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
   check('a picture carries a map with both view cones', snapMap.teal > 50 && snapMap.white > 50, snapMap);

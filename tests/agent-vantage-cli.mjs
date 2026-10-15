@@ -253,3 +253,14 @@ test('a burst keeps depth only when asked', async t => {
   await run(['--server', url, 'burst', '--count', '2', '--depth']);
   assert.equal(received.at(-1).body.args.depth, true);
 });
+
+test('glance asks the page for the sub\'s own view and keeps the picture', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const result = await run(['--server', url, '--out', out, 'glance', '--max-size', '640', '--name', 'look']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(received[0].body.command, 'glance');
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', maxSize: 640, annotate: false, map: true});
+  assert.ok(readdirSync(out).some(name => name.endsWith('-look-glance.png')));
+});

@@ -17,13 +17,31 @@ A note's link, `index.html#scene=<file>&note=<id>`, opens the saved scene and th
 
 ## From a terminal
 
+From a Kaminos checkout, choose the server and the name people will address.
+Use that same name for registration, listening and replies:
+
 ```sh
 export KAMINOS_NOTES_SERVER=http://127.0.0.1:8090   # any Kaminos server on this machine
 export KAMINOS_NOTES_AS=my-agent-name
 
+node tools/notes.mjs register --about "What I work on"  # optional description/avatar
+node tools/notes.mjs participants         # known names and current listening state
+```
+
+Running `wait` already makes your name available in the page's mention suggestions;
+the name remains addressable after the wait ends. `register` can introduce your
+name before listening and add a description. Listening is separate: the page
+reports it while `wait` is active. An optional
+`register --avatar <object-id>` associates your name with a scene object; clicking
+the name selects that object. Existing integrations can supply the identity and
+connection. Run a new `wait` after each delivery to keep listening.
+
+With the same environment:
+
+```sh
 node tools/notes.mjs wait                 # block until a note for you arrives, print it, exit
-node tools/notes.mjs reply <ref> "text" [--picture shot.png]
-node tools/notes.mjs post "text" --on <object-id> --label "Name" [--to person] [--picture shot.png]
+node tools/notes.mjs reply kn-example "What I observed or changed"
+node tools/notes.mjs post "Please inspect this" --on object-id --label "Name" --to person
 node tools/notes.mjs show <ref>           # a note and its thread, with picture paths
 node tools/notes.mjs inbox                # notes for you not yet marked seen
 node tools/notes.mjs list                 # open threads
@@ -32,9 +50,30 @@ node tools/notes.mjs presence             # who is listening, which pages are op
 
 `node tools/notes.mjs --help` lists every command and flag; `--json` gives structured output. A reference can be a note id (`kn-...`), the text copied from the page, or a note link. For a reply, `show` and `wait` describe the reply's own view (camera, selection, picture, served code) first, then the view the thread opened with.
 
-**Being woken.** In Claude Code, run `wait` as a background command: when a note for you arrives the command exits, and its exit wakes the session. Run `wait` again after answering to keep listening. Agents without background commands check `inbox` at their own checkpoints. While a `wait` is running, the page shows the agent as listening.
+Replace `kn-example` and `object-id` with actual references. Add `--picture
+shot.png` to a reply or post to attach an image. Read the note and inspect its
+attached picture and context before responding; report the useful observation,
+change or question in that same thread. The retained view describes what the
+person saw then, even if the live scene has since changed. Restoring that view
+restores its camera and available selection; evolved simulation state comes
+from the feature's own reconstruction service.
+
+**Delivery and wake.** `wait` returns the note and exits. Claude Code's background
+command completion has been exercised as a session wake route. Codex wake from
+background completion remains unverified; use `inbox` at your normal checkpoints
+unless your current integration supplies an exercised delivery route. A background
+process existing by itself establishes listening, not that the model will resume.
+After consuming a delivery, run `wait` again to keep listening; checkpoint clients
+continue checking `inbox`. A reply marks the note read; use `seen <ref>` when you
+have read it without replying. Delivery alone records handover, not an answer.
 
 `wait` exits with status 3 if no server answers for `--give-up-after` seconds (default 120), so a dead server is reported instead of waited on forever. `--timeout S` stops waiting after S seconds with status 4.
+
+For recovery, verify the selected server and name with `participants` and
+`presence`, then use `inbox` for unread notes and restore the supported listener.
+`--server` and `--as` can supply those values directly when the environment is
+unavailable. Servers using the same `KAMINOS_NOTES_ROOT` share the conversation;
+an explicitly isolated notes root has its own log and participants.
 
 ## Who a note reaches
 

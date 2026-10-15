@@ -559,7 +559,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
   document.createElement = tag => new FakeElement(tag);
   document.getElementById = id => (id === 'viewport' ? viewport : null);
   let selection = [];
-  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, vantageCaptureHeld: true, controls: {enabled: true},
+  const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, vantageCaptureHeld: true, controls: {enabled: true},
     scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
     greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, setSceneSelection: ids => { selection = ids; },
@@ -587,7 +587,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
 
 test('click selection waits while a picture holds the viewport', () => {
   const calls = [];
-  const scope = {vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
+  const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
@@ -600,6 +600,12 @@ test('click selection waits while a picture holds the viewport', () => {
   scope.vantageCaptureHeld = false;
   fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
   assert.ok(calls.includes('object'), 'the same click picks once the picture is done');
+  calls.length = 0;
+  scope.polyEdit = {active: () => true};
+  fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
+  fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
+  fromIndexLive('handleViewportDoubleClick', scope)(event('dblclick'));
+  assert.deepEqual(calls, [], 'in Edit Mode a click picks components, never objects');
 });
 
 test('a picture waits for a touch gesture already moving the view', () => {
@@ -1243,7 +1249,7 @@ test('pictures keep depth with their pick map; a burst keeps it only when asked'
   for (const frame of deep.frames) assert.equal(frame.pickMap.depth?.encoding, 'float32le-base64');
 });
 
-test('the ID pass draws a material without its own outputs, and with the picture camera\'s far plane', async () => {
+test('the ID pass draws a material with the ID outputs in place of its own, and with the picture camera\'s far plane', async () => {
   // The page imports TSL through its import map, which points at the same r185 build; under Node the TSL module's
   // bare 'three/webgpu' import would reach another three, so the test takes TSL from the build itself.
   const W = await import('../lib/three.webgpu.js'), TSL = W.TSL;
@@ -1265,10 +1271,165 @@ test('the ID pass draws a material without its own outputs, and with the picture
   source.coordinateSystem = W.WebGPUCoordinateSystem; source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
   const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), near: 0.1, far: 1000, coordinateSystem: W.WebGPUCoordinateSystem};
   const drawing = createIdPass({THREE: W, TSL, renderer, scene}).draw({optics, width: 4, height: 4, depth: true});
-  assert.equal(drawnWith, null, 'its own outputs would replace the object number, so the ID pass draws it without them');
+  assert.ok(drawnWith && drawnWith !== ownOutputs && drawnWith.outputNodes.distance, 'its own outputs would replace the object number, so the ID draw gives it the ID outputs, which still run its own');
   assert.equal(material.mrtNode, ownOutputs, 'and gives them back');
   assert.equal(drawing.drawn[0].custom, undefined, 'its coverage is still its own shader\'s');
   assert.equal(camera.far, 1000, 'shaders that read the camera see the picture camera\'s far plane');
   const ids = await drawing.ready;
   assert.equal(ids.depths?.length, 16, 'and the depth is read back with the numbers');
+});
+
+// --- follow-ups: material discards and surface agreement --------------------------------
+
+// Compiles the fragment shader the ID pass would draw each object with, through the real
+// r185 node builder, by standing in for the GPU parts of a WebGPURenderer.
+async function idPassShaders(material) {
+  const W = await import('../lib/three.webgpu.js'), TSL = W.TSL;
+  const {createIdPass} = await import('../agent-vantage-ids.mjs');
+  const mesh = new W.Mesh(new W.BoxGeometry(), material), scene = new W.Scene(); scene.add(mesh);
+  const renderer = new W.WebGPURenderer({canvas: {style: {}, width: 4, height: 4, addEventListener() {}, removeEventListener() {}, getContext: () => null}});
+  const shaders = [];
+  let objectFunction = null;
+  Object.assign(renderer, {
+    getRenderObjectFunction: () => objectFunction, setRenderObjectFunction(fn) { objectFunction = fn; },
+    renderObject(object, drawScene, drawCamera, geometry, drawnMaterial) {
+      const builder = new W.WGSLNodeBuilder(object, renderer);
+      Object.assign(builder, {scene: drawScene, camera: drawCamera, material: drawnMaterial});
+      builder.build();
+      shaders.push(builder.fragmentShader);
+    },
+    render(drawScene, drawCamera) { objectFunction(mesh, drawScene, drawCamera, mesh.geometry, mesh.material, null, null, null, null); },
+    async readRenderTargetPixelsAsync(target, x, y, w, h, index = 0) {
+      const rows = Math.ceil(w * 4 / 256) * 256 * (h - 1);
+      return index ? new Float32Array(rows / 4 + w) : new Uint8Array(rows + w * 4);
+    }});
+  const source = new W.PerspectiveCamera(50, 1, 0.1, 100);
+  source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
+  const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), near: 0.1, far: 100, coordinateSystem: renderer.coordinateSystem};
+  await createIdPass({THREE: W, TSL, renderer, scene}).draw({optics, width: 4, height: 4}).ready;
+  return {shaders, TSL};
+}
+
+test('a material whose own outputs discard still discards in the pick map, which still writes the object number', async () => {
+  const W = await import('../lib/three.webgpu.js'), TSL = W.TSL;
+  const plain = (await idPassShaders(new W.MeshBasicNodeMaterial())).shaders[0];
+  const material = new W.MeshBasicNodeMaterial();
+  material.mrtNode = TSL.mrt({output: TSL.Fn(() => { TSL.Discard(); return TSL.vec4(1, 0, 0, 1); })()});
+  const [shader] = (await idPassShaders(material)).shaders;
+  const discards = text => text.split('discard;').length - 1;
+  assert.equal(discards(shader), discards(plain) + 1, 'the material\'s own discard is kept');
+  assert.ok(!shader.includes('vec4<f32>( 1.0, 0.0, 0.0, 1.0 );\n\treturn'), 'its own colour does not become the object number');
+  assert.ok(material.mrtNode.outputNodes.output, 'and the material keeps its own outputs');
+});
+
+test('the mesh agrees with the drawn point only to float precision, even far from the camera', () => {
+  const camera = new PerspectiveCamera(30, 1, 0.1, 2000);
+  camera.position.set(0, 0, 1000); camera.lookAt(0, 0, 0); camera.updateMatrixWorld(true); camera.updateProjectionMatrix();
+  const optics = {projection: camera.projectionMatrix.toArray(), viewInverse: camera.matrixWorldInverse.toArray(), near: 0.1, far: 2000};
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshBasicMaterial()), root = new THREE.Group(); root.add(plane);
+  root.updateWorldMatrix(true, true);
+  const entries = [{id: 'sheet', object: root}], ray = rayThrough(optics, [0.5, 0.5]);
+  const row = {id: 'sheet', path: [0], matrixWorld: plane.matrixWorld.toArray(), root: root.matrixWorld.toArray()};
+  const same = vantage.surfaceOf(THREE, entries, {row, ray, optics, depthPoint: [0, 0, 0]});
+  assert.equal(same.surfaceBasis, 'recast-agrees');
+  plane.geometry.translate(0, 0, 0.05);
+  const apart = vantage.surfaceOf(THREE, entries, {row, ray, optics, depthPoint: [0, 0, 0]});
+  assert.equal(apart.surfaceBasis, 'recast-differs', 'five centimetres at a kilometre is not float error');
+  assert.equal(apart.normal, null);
+  closeTo(apart.point, [0, 0, 0], 'the drawn point stays');
+  // At room scale a float32 depth error of a few micrometres still agrees, as the live witness measured.
+  const near = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial()), nearRoot = new THREE.Group(); nearRoot.add(near);
+  nearRoot.position.z = 7.4326; nearRoot.updateWorldMatrix(true, true);
+  const nearRow = {id: 'card', path: [0], matrixWorld: near.matrixWorld.toArray(), root: nearRoot.matrixWorld.toArray()};
+  const close = new PerspectiveCamera(30, 1, 0.1, 100); close.position.set(0, 0, 10); close.lookAt(0, 0, 0); close.updateMatrixWorld(true); close.updateProjectionMatrix();
+  const closeOptics = {projection: close.projectionMatrix.toArray(), viewInverse: close.matrixWorldInverse.toArray()};
+  const measured = vantage.surfaceOf(THREE, [{id: 'card', object: nearRoot}], {row: nearRow, ray: rayThrough(closeOptics, [0.5, 0.5]), optics: closeOptics, depthPoint: [0, 0, 7.4326 + 1.2e-6]});
+  assert.equal(measured.surfaceBasis, 'recast-agrees');
+  const millimetre = vantage.surfaceOf(THREE, [{id: 'card', object: nearRoot}], {row: nearRow, ray: rayThrough(closeOptics, [0.5, 0.5]), optics: closeOptics, depthPoint: [0, 0, 7.4336]});
+  assert.equal(millimetre.surfaceBasis, 'recast-differs', 'a millimetre at room scale is not float error either');
+});
+
+// --- glance: the sub's view from its own camera -----------------------------------------
+
+test('glance draws the sub view with its own camera, never borrowing the operator\'s, and keeps a pick map', async () => {
+  const {state, host, pilot} = await launched();
+  const renders = [];
+  host.renderView = options => { renders.push({...copy(options), view: copy(state.view)}); return {ready: Promise.resolve({canvas: {glance: true}, width: options.width, height: options.height})}; };
+  const before = {holds: state.holds, writes: state.writes.length, frames: state.frames, view: copy(state.view)};
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 640});
+  assert.equal(shot.kind, 'glance');
+  assert.equal(shot.route, 'own-camera');
+  assert.equal(state.holds, before.holds, 'nothing of the operator\'s is held');
+  assert.equal(state.writes.length, before.writes, 'the operator\'s view is never written');
+  assert.deepEqual(state.view, before.view);
+  assert.equal(renders.length, 1);
+  assert.deepEqual([renders[0].width, renders[0].height], [640, 360], 'at the viewport\'s aspect, to the size asked for');
+  assert.deepEqual(renders[0].hide, ['vantage-bebop'], 'the sub is not in its own view');
+  const subView = cameraViewFromRecord(state.cameras[0], 1600 / 900, 3);
+  closeTo(rayThrough(renders[0].optics, [0.5, 0.5]).direction, new Vector3(...subView.target).sub(new Vector3(...subView.position)).normalize().toArray(), 'through the sub\'s eye');
+  assert.deepEqual(state.idPasses.at(-1).optics, renders[0].optics, 'its pick map uses the same matrices');
+  assert.equal(shot.pickMap?.depth?.encoding, 'float32le-base64');
+  assert.ok(shot.omitted.some(item => /fire/.test(item)) && shot.omitted.some(item => /water/.test(item)), 'it says what a glance does not draw');
+});
+
+test('a page that cannot draw a second view refuses a glance', async () => {
+  const {pilot} = await launched();
+  await assert.rejects(() => pilot.run('glance', {}), error => error.phase === 'glance');
+});
+
+test('a glance finishes its picture with the page\'s own tone mapping and colour space, as they stand', async () => {
+  const W = await import('../lib/three.webgpu.js');
+  const {createGlance} = await import('../agent-vantage-glance.mjs');
+  const finishes = [];
+  const renderer = {coordinateSystem: W.WebGPUCoordinateSystem, reversedDepthBuffer: false, autoClear: false, toneMapping: W.AgXToneMapping, outputColorSpace: W.SRGBColorSpace,
+    getRenderTarget: () => null, setRenderTarget() {}, getMRT: () => null, setMRT() {}, render() {},
+    async readRenderTargetPixelsAsync(target, x, y, w, h) { return new Uint8Array(Math.ceil(w * 4 / 256) * 256 * (h - 1) + w * 4); }};
+  const glance = createGlance({THREE: W, TSL: W.TSL, renderer, scene: new W.Scene()});
+  const source = new W.PerspectiveCamera(50, 1, 0.1, 100); source.position.set(0, 0, 5); source.updateMatrixWorld(true); source.updateProjectionMatrix();
+  const optics = {projection: source.projectionMatrix.toArray(), viewInverse: source.matrixWorldInverse.toArray(), coordinateSystem: W.WebGPUCoordinateSystem};
+  const QuadRender = W.QuadMesh.prototype.render;
+  // What the output node consumes: its effective tone mapping and the stages its setup builds.
+  const stages = node => { const names = []; node.setup({context: {toneMapping: W.NoToneMapping, outputColorSpace: W.NoColorSpace}}).traverse(item => names.push(item.constructor.name)); return names; };
+  W.QuadMesh.prototype.render = function () {
+    const finish = this.material.colorNode, built = stages(finish);
+    finishes.push([finish.getToneMapping(), finish.outputColorSpace, built.includes('ToneMappingNode'), built.includes('ColorSpaceNode')]);
+  };
+  try {
+    await glance.draw({optics, width: 4, height: 4}).ready;
+    renderer.toneMapping = W.ACESFilmicToneMapping;
+    await glance.draw({optics, width: 4, height: 4}).ready;
+  } finally { W.QuadMesh.prototype.render = QuadRender; }
+  assert.deepEqual(finishes, [[W.AgXToneMapping, W.SRGBColorSpace, true, true], [W.ACESFilmicToneMapping, W.SRGBColorSpace, true, true]],
+    'drawn into a target, the output stage would otherwise apply neither');
+});
+
+test('a glance and its pick map leave out the fire billboard drawn for the operator\'s camera', () => {
+  const scene = new THREE.Scene(), bridge = new THREE.Mesh(), kiln = new THREE.Object3D();
+  bridge.userData.kaminosVolumeBridge = {composition: 'main-renderer-plane'};
+  scene.add(bridge, kiln);
+  const hide = fromIndex('hideEditorObjectsForIdPass', {scene, sceneObjects: [{id: 'kiln', type: 'glb', object: kiln}], FLAME_EMITTER_TYPE: 'flame-emitter',
+    LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter', RIM_LIGHT_ID: 'rim-light', transformControls: null, selectionBoxes: new Map()});
+  const plain = hide({hide: []});
+  assert.equal(bridge.visible, true, 'a borrowed snap shows it, so its own pick map keeps it');
+  plain();
+  const restore = hide({hide: [], bridges: true});
+  assert.equal(bridge.visible, false, 'a glance draws from its own camera, so the billboard aimed at the operator is left out');
+  restore();
+  assert.equal(bridge.visible, true);
+});
+
+test('a glance names what it drew from the scene as it stood when drawn, not after readback', async () => {
+  const {state, host} = await launched();
+  let resolve;
+  host.renderView = options => ({ready: new Promise(done => { resolve = () => done({canvas: {glance: true}, width: options.width, height: options.height}); })});
+  const pending = createVantagePilot(host).run('glance', {map: false, maxSize: 640});
+  await new Promise(done => setTimeout(done, 0));
+  const drawnFov = cameraViewFromRecord(state.cameras[0], 1600 / 900, 3).fov;
+  state.objects = [];                       // the objects go, and the viewport turns, before readback completes
+  state.size = {width: 900, height: 1600};
+  resolve();
+  const shot = await pending;
+  assert.deepEqual(shot.objects.inView.map(object => object.id), ['centre'], 'named from the scene as it was drawn');
+  assert.equal(shot.view.fov, drawnFov, 'the view reported is the one drawn');
+  assert.equal(shot.aspect, 1600 / 900);
 });

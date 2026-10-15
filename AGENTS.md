@@ -104,4 +104,8 @@ of substituting the generic fire route or a different renderer.
 
 ## Talking With The Person At The Page
 
-People leave notes on scene objects and address them to agents by name. To be reachable, run `node tools/notes.mjs wait --as <your-name>` as a background command: it exits when a note for you arrives, which wakes you, and prints the note with its object, camera, served commit and picture path. Answer with `node tools/notes.mjs reply <ref> "..."`, then wait again. A Kaminos note reference pasted into your conversation (`kn-...`) resolves with `node tools/notes.mjs show <ref>`. Details: `docs/notes.md`.
+Use Kaminos notes to discuss work with the person at the page. Resolve incoming
+references and inspect their attached context; answer in the same thread. When
+participating in a Workbench session, establish notes reachability through the
+supported integration. See [docs/notes.md](docs/notes.md) for setup, delivery
+behavior, and recovery.

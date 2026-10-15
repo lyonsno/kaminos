@@ -179,7 +179,10 @@ function viewLines(note, root) {
 // Everything an agent needs to act on a note without asking what it means. A
 // reply is described with its own view; the thread's opening view follows,
 // labeled, so one is never presented as the other.
-export function describeNote(state, id, {root}) {
+// One shell word, quoted only when it needs to be (an IPv6 host's brackets would glob).
+export const shellArg = value => /^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${String(value).replace(/'/g, `'\\''`)}'`;
+
+export function describeNote(state, id, {root, as = null, server = null}) {
   const target = state.notes.get(id);
   if (!target) throw new Error(`No note ${id} in this log`);
   const thread = state.notes.get(target.thread) ?? target;
@@ -199,7 +202,8 @@ export function describeNote(state, id, {root}) {
   lines.push([thread.to?.length ? `to: ${thread.to.join(', ')}` : 'to: anyone', ...delivered, thread.resolved ? 'resolved' : 'open'].join(' \u00b7 '));
   lines.push(`> ${thread.text || '(picture)'}`);
   for (const answer of thread.replies) lines.push(...describeLines(answer, root, 1, target.id));
-  lines.push(`reply: node tools/notes.mjs reply ${target.id} "<your reply>" --as <your name> [--picture <png>]`);
+  // Given who is reading and through which server, the reply is a command to run as is.
+  lines.push(`reply: node tools/notes.mjs${server ? ` --server ${shellArg(server)}` : ''} reply ${target.id} "<your reply>" --as ${as || '<your name>'} [--picture <png>]`);
   const link = noteLink(thread);
   if (link) lines.push(`open: ${link}`);
   return lines.join('\n');

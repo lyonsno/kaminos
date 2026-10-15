@@ -24,6 +24,8 @@ Commands
   align                      move the sub to the operator's view
   snap [--annotate] [--helpers] [--settle FRAMES] [--max-size PX] [--no-map] [--name NAME]
   peek [--annotate] [--clean] [--max-size PX] [--no-map] [--name NAME]     the operator's own view
+  glance [--annotate] [--max-size PX] [--no-map] [--name NAME]   the sub's view from its own camera: your view is never
+                             borrowed; the scene's meshes, lights and background, without the fire volume, local water or AO
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
@@ -93,6 +95,7 @@ function commandArgs(command, rest, options, pilot) {
     case 'frame': return defined({pilot, target: targetOf(rest, command), margin: number(options.margin)});
     case 'snap': return defined({pilot, settle: number(options.settle), maxSize: number(options['max-size']), annotate: options.annotate, helpers: options.helpers, map: options['no-map'] ? false : undefined});
     case 'peek': return defined({maxSize: number(options['max-size']), annotate: options.annotate, clean: options.clean, map: options['no-map'] ? false : undefined});
+    case 'glance': return defined({pilot, maxSize: number(options['max-size']), annotate: options.annotate, map: options['no-map'] ? false : undefined});
     case 'burst': return defined({pilot, count: number(options.count), interval: number(options.interval), settle: number(options.settle),
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
@@ -256,6 +259,7 @@ function summarize(command, record) {
     lines.push(`${result.kind} · ${result.pilot ?? 'operator'} · ${result.route} · ${result.image?.width}×${result.image?.height} · layers: ${(result.layers || []).join(', ')}`);
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
     lines.push(`  record    ${record.recordPath}`);
+    if (result.omitted?.length) lines.push(`  not drawn ${result.omitted.join(', ')} (snap draws every layer)`);
     if (result.unverifiedLayers?.length) lines.push(`  unverified ${result.unverifiedLayers.join(', ')}: pictured, but the page reports no frame counter, so these may be stale`);
     if (result.view) lines.push(`  from      ${point(result.view.position)} toward ${point(result.view.target)}, fov ${fmt(result.view.fov)}°`);
     const seen = result.objects?.inView ?? [], elsewhere = result.objects?.outOfView ?? [];

@@ -509,6 +509,7 @@ const COMMANDS = {
   snap: args => ({pilot: pilotArg(args), settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64),
     annotate: flag(args.annotate), helpers: flag(args.helpers), map: args.map !== false}),
   peek: args => ({maxSize: count(args.maxSize, 'maxSize', 1280, 64), annotate: flag(args.annotate), clean: flag(args.clean), map: args.map !== false}),
+  glance: args => ({pilot: pilotArg(args), maxSize: count(args.maxSize, 'maxSize', 1280, 64), annotate: flag(args.annotate), map: args.map !== false}),
   burst: args => ({pilot: pilotArg(args), count: count(args.count, 'count', 6), interval: positive(args.interval, 'interval', 250),
     settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64), cell: count(args.cell, 'cell', 480, 64),
     annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)}),
