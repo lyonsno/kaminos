@@ -10,6 +10,8 @@ export function validateCreatureControlRead(r,setup){
  assert.equal(r.currentSkin.pending,null);assert.equal(r.skin.bones,28);assert.ok(r.skin.vertices>0);
  assert.ok(Number.isInteger(r.playback.frame)&&r.playback.frame>=0&&r.playback.frame<r.playback.frames);
  assert.ok(r.transform.position.every(Number.isFinite));assert.ok(r.host.id);
+ assert.ok(r.registration?.some(row=>row.id===r.host.id&&row.objectVisible),'Creature is not registered and visible');
+ assert.equal(r.vertices?.length,r.skin.vertices*3);assert.ok(r.vertices.every(Number.isFinite));assert.ok(r.vertices.some(v=>v!==0));
 }
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});
@@ -26,7 +28,7 @@ export async function witness(args){
   report.phase='load';await page.goto(url.href,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>typeof window.kaminosWalkingCreature==='function');
   report.effectiveUrl=page.url();report.runtimeConfig=await page.evaluate(async()=>await(await fetch('/api/runtime-config')).json());assert.equal(report.runtimeConfig.source.repoRoot,root);
   report.source=[];for(const file of ['index.html','playback-controls.mjs','scene-owner-controls.mjs','experiments/creature-motion/creature-properties.mjs','experiments/creature-motion/walking.experiment.mjs','experiments/creature-motion/full-body-runtime.mjs']){const response=await page.request.get(new URL('/'+file,url).href);assert.equal(response.status(),200);const expected=hash(readFileSync(join(root,file))),actual=hash(await response.body());assert.equal(actual,expected);report.source.push({file,sha256:actual});}
-  const read=()=>page.evaluate(()=>window.kaminosWalkingCreature());
+  const read=()=>page.evaluate(()=>({...window.kaminosWalkingCreature(),registration:window.kaminosSceneObjectDebugState()}));
   const capture=async name=>{const path=join(out,name+'.png');await page.screenshot({path});report.captures.push(path);};
   report.initial=await read();validateCreatureControlRead(report.initial,setup);assert.notEqual(report.initial.playback.status,'playing');
   assert.equal(await page.locator('#experiment-owner-slot').isVisible(),false,'Creature context still exposes the experiment picker instead of ordinary scene objects');
