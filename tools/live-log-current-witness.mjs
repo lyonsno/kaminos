@@ -44,8 +44,10 @@ try {
   assert.equal(Number(report.effective.controls['volume-steps']),28);assert.equal(Number(report.effective.controls['volume-immersed-radius']),.1);
   await shot('cold');
   report.phase='heat';await save();
+  await invoke('move',{position:[0,0,0]});
+  await invoke('frame');
   await page.locator('#live-log-heat [data-action=run]').click();
-  await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=120);
+  await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=600);
   await invoke('pause');await shot('warm');
   await invoke('view',{mode:'char'});await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
