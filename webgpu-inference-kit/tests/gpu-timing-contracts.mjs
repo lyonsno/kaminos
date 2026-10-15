@@ -213,6 +213,67 @@ console.log('gpu timing program contracts passed');
   runtime.dispose();
 }
 
+// Observer failures must neither veto the next kernel nor strand later tokens in a readback batch.
+for (const capacity of [2, 4]) {
+  const sim = createSimulatedDevice({ lateTimingMaps: true });
+  const timer = createWebGpuGpuTimer({ device: sim.device, queue: sim.queue, options: { capacity } });
+  const tokens = [];
+  const observed = [];
+  await assert.doesNotReject(async () => {
+    for (let i = 0; i < capacity * 2 + 1; i++) {
+      await timer.prepare();
+      const token = timer.begin();
+      assert.ok(token, 'observer failure must not prevent the next timing epoch');
+      tokens.push(token);
+      if (i === 0) token.listeners.push(() => { throw new Error('observer failed'); });
+      token.listeners.push(() => observed.push(i));
+      const encoder = sim.device.createCommandEncoder();
+      encoder.beginComputePass({ timestampWrites: token.timestampWrites }).end();
+      timer.encodeResolve(encoder, token);
+      sim.queue.submit([encoder.finish()]);
+      timer.markSubmitted(token);
+    }
+    await timer.settle();
+  }, 'timing observers must not reject inference admission or timing settlement');
+  assert.equal(sim.log.passes.length, capacity * 2 + 1, 'every requested kernel is encoded');
+  assert.deepEqual(observed, tokens.map((_, i) => i), 'later listeners and tokens still receive settlement');
+  assert.ok(tokens.every(token => token.status === 'resolved' && token.ms === 1));
+  assert.equal(timer.summary.pendingKernels, 0);
+  assert.equal(timer.summary.invalidKernels, 0, 'observer errors do not invalidate GPU measurements');
+  assert.equal(timer.summary.untimedKernels, 0);
+  assert.equal(timer.summary.listenerErrors, 1, 'observer failure remains visible in the timing summary');
+  assert.equal(sim.log.querySets.length, 3, 'later epochs still rotate');
+  timer.destroy();
+}
+
+// Runtime admission remains independent of a prior measurement's failing observer.
+{
+  const sim = createSimulatedDevice({ lateTimingMaps: true });
+  const runtime = await createWebGpuInferenceRuntime({
+    routeId: 'gpu-timing-observer-contract', adapterName: 'sim', device: sim.device, queue: sim.queue,
+    kernel: { name: 'k', revision: 'test', profile: 'gpu-timing-contract' }, gpuTiming: { capacity: 4 },
+    requiredStages: Array.from({ length: 9 }, (_, i) => `observer-stage-${i}`),
+  });
+  const begin = runtime.gpuTimer.begin;
+  const tokens = [];
+  runtime.gpuTimer.begin = () => {
+    const token = begin();
+    if (tokens.length === 0) token.listeners.push(() => { throw new Error('observer failed'); });
+    tokens.push(token);
+    return token;
+  };
+  const kernel = { name: 'k', pipeline: {}, bindGroup: {}, bindings: [] };
+  for (let i = 0; i < 9; i++) await runtime.runKernel(kernel, { stage: `observer-stage-${i}`, dispatch: [1] });
+  await runtime.settleGpuTiming();
+  assert.equal(sim.log.passes.length, 9);
+  assert.equal(runtime.profile.stages.length, 9);
+  assert.ok(runtime.profile.stages.every(stage => stage.gpuStatus === 'resolved' && stage.gpuMs === 1));
+  assert.equal(runtime.finishProfile().profile.gpuTiming.listenerErrors, 1);
+  assert.equal(runtime.profile.gpuTiming.pendingKernels, 0);
+  assert.equal(sim.log.querySets.length, 3);
+  runtime.dispose();
+}
+
 // Reading a result does not make its physical timestamp pair eligible for immediate reuse.
 {
   const sim = createSimulatedDevice();
