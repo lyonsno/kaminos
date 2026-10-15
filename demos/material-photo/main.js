@@ -7,15 +7,19 @@ import { DEFAULT_PRESET, superMatProductProfile } from './demo-defaults.js';
 import { createInferenceCache,photoCacheKey,retainedGeometry } from './inference-cache.js';
 import { loadIncludedExample } from './included-examples.js';
 import { buildPhotoSurface } from './photo-surface.js';
+import { GENERATION_AVAILABLE, SUPERMAT_WEIGHTS_URL } from './deployment.js';
+import { createSampleCutout } from './sample-cutouts.js';
 
 const $=id=>document.getElementById(id), params=new URLSearchParams(location.search);
 const photos={celebration:['Celebration','./images/celebration.png'],bag:['Backpack','./images/bag.webp'],orb:['Metal & glow','./images/evil-orb.png']};
 const results=createPhotoRunState();
-const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null};
+const displayCutouts=new WeakMap();
+const state=window.__materialPhoto={status:'loading-image',error:null,source:null,runs:[],identity:null,generationAvailable:GENERATION_AVAILABLE};
 const cache=createInferenceCache({onError:error=>{(state.cacheErrors??=[]).push(String(error));}});
 // Bump these when producer/preparation semantics change. Custom weight URLs are
 // deliberately session-local: their contents may change without changing the URL.
-const cacheRevision=params.has('weights')?crypto.randomUUID():'moge-vendored-38539be0-supermat-f368906c.v1';
+const weightsUrl=params.get('weights')??SUPERMAT_WEIGHTS_URL;
+const cacheRevision=params.has('weights')?crypto.randomUUID():`moge-vendored-38539be0-supermat-f368906c.v1:${weightsUrl}`;
 let imageKey,sampleKey,imageBlob,completed;
 const geometryKey=key=>`${cacheRevision}:geometry:${key}`;
 const materialKey=(key,size)=>`${cacheRevision}:materials:${key}:${size}:${JSON.stringify(superMatProductProfile(gpu.device))}`;
@@ -27,7 +31,11 @@ const tuningFields=['gain','radius','thickness','slices','steps','denoise','aoSt
 const effectFields=['glowIntensity','glowThreshold','emissionReflection','bloomIntensity','bloomRadius','bloomThreshold','exposure'];
 function status(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
 function provenance(text){$('provenance').textContent=text;}
-function runButton(){ $('run').disabled=active||!image||['loading-image','restoring'].includes(state.status); }
+function runButton(){ $('run').disabled=!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status); }
+$('generation-controls').hidden=!GENERATION_AVAILABLE;
+$('local-generation').hidden=GENERATION_AVAILABLE;
+$('file').disabled=!GENERATION_AVAILABLE;
+$('execution-kind').textContent=GENERATION_AVAILABLE?'Local WebGPU inference':'Interactive model outputs';
 function showControls(open){
   $('controls').hidden=!open;$('workspace').dataset.controls=open?'open':'closed';
   $('tuning-toggle').setAttribute('aria-expanded',String(open));
@@ -106,7 +114,7 @@ function disableMaterials(){
 function applyImageGlow(){
   if(!viewer)return;
   viewer.glow=sampleKey==='orb';
-  if(viewer.glow)viewer.setEffects({glowIntensity:4.85});
+  if(viewer.glow)viewer.setEffects({glowIntensity:DEFAULT_PRESET.effects.glowIntensity});
 }
 async function load(blob,label,key=null,ticket=++imageTicket){
   state.status='loading-image';$('run').disabled=true;
@@ -116,6 +124,7 @@ async function load(blob,label,key=null,ticket=++imageTicket){
   context.drawImage(bitmap,0,0);bitmap.close();
   const input=context.getImageData(0,0,canvas.width,canvas.height),keyHash=await photoCacheKey(input);
   if(ticket!==imageTicket)return;
+  displayCutouts.set(input,createSampleCutout(key,input.width,input.height));
   image=input;imageKey=keyHash;sampleKey=key;imageBlob=blob;selection=results.select(label);state.source=label;state.status='loaded';state.error=null;state.result=null;state.cache=null;state.example=null;
   provenance('Original photograph');
   const old=$('preview').dataset.blob;
@@ -168,7 +177,7 @@ async function setup(){
   return setupPromise;
 }
 function presentDepth(input,depth){
-  disableMaterials();viewer.setImage(input,depth);viewer.map='surface';$('map').value='surface';
+  disableMaterials();viewer.setImage(input,depth,displayCutouts.get(input)??null);viewer.map='surface';$('map').value='surface';
   $('preview').hidden=true;$('scene').hidden=false;
   document.querySelector('[data-view=photo]').disabled=false;document.querySelector('[data-view=relit]').disabled=false;compare();
 }
@@ -214,7 +223,7 @@ async function restoreCached(ticket=++imageTicket){
   }else{provenance('Your cached depth');status(exampleError?'Example unavailable; depth restored; materials not yet computed at this resolution':'Depth restored; materials not yet computed at this resolution',exampleError);}
 }
 async function infer(){
-  if(active||!image||['loading-image','restoring'].includes(state.status))return;
+  if(!GENERATION_AVAILABLE||active||!image||['loading-image','restoring'].includes(state.status))return;
   active=true;state.status='running';state.error=null;
   const token=selection,ticket=imageTicket,input=image,key=imageKey,blob=imageBlob,sample=sampleKey,size=Number($('material-size').value),started=performance.now(),record={source:state.source,status:'running',phases:{}};
   const retainDisplay=!!viewer?.maps;
@@ -248,7 +257,7 @@ async function infer(){
     if(!materials){
       if(visible()&&!retainDisplay)viewer.setMaterialStatus('Loading materials');
       weightRoute??=await session.registerRoute({routeId:`${SUPERMAT_ROUTE_ID}.material-photo-weights`});
-      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl:params.get('weights')??'/scratch/supermat-weights/f16/',
+      materials=await createSuperMatAdapter({route:weightRoute,weightsUrl,weightLoading:'chunks',
         ...superMatProductProfile(gpu.device),onProgress:event=>{
           if(event.phase==='weights')progressStatus(`2/2 Materials: loading SuperMat ${event.resourceIndex+1}/${event.resourceCount} resources`);
         }});

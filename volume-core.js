@@ -18,6 +18,7 @@ import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, 
 import { createJoinedExterior } from './volume-joined-exterior.mjs';
 import { JOINED_OPTICS_WGSL } from './volume-joined-optics.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
+import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -3722,7 +3723,10 @@ struct Uniforms {
   emissive_white_r: vec4<f32>,
   emissive_white_g: vec4<f32>,
   emissive_white_b: vec4<f32>,
-  emissive_reserved: vec4<f32>,
+  // Physics appearance (volume-physics-appearance.mjs): x draw soot x blackbody
+  // (no carriers), y Kelvin per heat unit, z soot burnout rate (sim; 0 off),
+  // w soot burnout Kelvin.
+  emissive_physics: vec4<f32>,
   // Inflow boundary (emitter source law inflow-boundary), packed from the emitter descriptor when admitted.
   // .x aperture mode (0 off, 1 disc, 2 annulus, 3 rectangle); .y centre x; .z centre z; .w ring radius.
   inflow_aperture: vec4<f32>,
@@ -6181,6 +6185,7 @@ ${RAY_START_WGSL}
 ${OPTICAL_STEPPING_WGSL}
 ${EMISSIVE_TRANSPORT_WGSL}
 ${JOINED_OPTICS_WGSL}
+${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
@@ -8061,6 +8066,11 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   combustionFrontTopology = combustionFrontTopology * stepRate(1.0 - localQuenchSuppression * 0.028);
   fireLick = fireLick * stepRate(1.0 - localQuenchSuppression * 0.035);
   emberFleck = emberFleck * stepRate(1.0 - localQuenchSuppression * 0.020);
+  // Physics appearance: soot burns out where it is hot and meets oxygen
+  // (volume-physics-appearance.mjs); exactly 1 at rate 0.
+  if (reactantOn) {
+    smoke = smoke * sootBurnoutSurvival(heat, clamp(oxidizer / max(u.reactant_combustion_c.z, 1e-6), 0.0, 1.0), timeStep);
+  }
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
@@ -14059,6 +14069,7 @@ export function createKaminosVolumePrototype({
         allocation: fluidAllocationGeneration,
         fluidReadIndex: currentFluid,
         reactant: { effective: state.reactantCombustion?.effective ?? null, allocation: reactantAllocationGeneration, textures: reactantSidecarFull ? [...reactantTextures] : null },
+        physicsAppearance: state.physicsAppearance ?? null,
         frontBuffer: frontBuffers?.[currentFront] ?? null,
         burnRateTexture,
         solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
@@ -16729,12 +16740,17 @@ export function createKaminosVolumePrototype({
       emissiveWhiteKelvin = whiteKelvin;
     }
     const transportedEmissiveMaterial = (controlsSnapshot.physicalMaterialLaw ?? 0) === 1;
+    const physicsAppearance = resolvePhysicsAppearance(controlsSnapshot, {
+      reactantAdmitted: reactantCombustionConfig.effective.admitted === true,
+      emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
+    });
+    state.physicsAppearance = physicsAppearance;
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
       controlsSnapshot.physicalAmbient ?? 0.02, transportedEmissiveMaterial ? 1 : 0,
       ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
-      0,0,0,0,
+      ...physicsAppearanceUniformValues(physicsAppearance),
     ], EMISSIVE_UNIFORM_OFFSET);
     const physicalModel = physicalColorMode === 2 ? 'emissive-transport-v2' : 'thermal-reaction-v1';
     state.physicalColor = {
@@ -16746,9 +16762,9 @@ export function createKaminosVolumePrototype({
       rayStartNoise: uniforms[47] > 0.5,
       rayStartPattern: uniforms[47] > 0.5 ? 'stable-spatial-blue-noise-64-v1' : 'midpoint',
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
-      materialLawRequested: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      temperatureAuthority: physicalColorMode === 2 ? (transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
+      materialLawRequested: physicalColorMode === 2 ? (physicsAppearance.requested ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
+      materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
+      temperatureAuthority: physicalColorMode === 2 ? (physicsAppearance.effective.render ? 'transported-heat-linear-kelvin-per-heat' : transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',

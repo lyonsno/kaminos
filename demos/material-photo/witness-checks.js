@@ -1,4 +1,4 @@
-export function validateEpisode(state, source, size) {
+export function validateEpisode(state, source, size, hosted = null) {
   const run=state?.runs?.at(-1);
   if(state?.gpuErrors?.length)throw Error('Uncaptured GPU errors invalidate the output episode');
   if(state?.status!=='done'||run?.status!=='done')throw Error('Both models must complete');
@@ -9,6 +9,15 @@ export function validateEpisode(state, source, size) {
   if(!(run.output?.triangles>0&&run.output?.surfaceVertices>0))throw Error('Nonempty depth surface required');
   if(!run.output.materialSize?.every(x=>Number.isInteger(x)&&x>0)||run.output.materialSize.length!==2)throw Error('Material output required');
   if(size!==undefined&&(run.supermat?.size!==size||!run.output.materialSize.every(value=>value===size)))throw Error('Effective material resolution differs from selected resolution');
+  if(hosted){
+    if(state.runs.length!==1||run.moge.weights!=='hosted'||run.moge.cached===true||!hosted.revision||
+      state.identity.supermat.revision!==hosted.revision||run.supermat?.identity?.revision!==hosted.revision)
+      throw Error('Fresh hosted model generation required');
+    const requests=hosted.requests?.filter(row=>row.url?.startsWith(hosted.base));
+    if(!hosted.files?.length||!requests?.length||requests.some(row=>row.credentials!==false)||
+      !['package.json',...hosted.files].every(file=>requests.some(row=>row.url===new URL(file,hosted.base).href)))
+      throw Error('Anonymous manifest and every hosted weight chunk must be observed');
+  }
 }
 
 export function validateCachedRestoration(state,source,size,runCount) {
@@ -74,8 +83,14 @@ export function validateComparison(views) {
     if(view?.mode!==mode||view.map!=='surface'||view.glow!==false||view.physicalbaseline?.exposure!==1)throw Error('Four comparable views with fixed exposure and glow off required');
     if(!close(view.camera,reference.camera)||!close(view.light,reference.light)||view.gi?.enabled!==reference.gi?.enabled||
         !close(view.gi?.settings,reference.gi?.settings)||!close(view.gi?.debugState?.estimator,reference.gi?.debugState?.estimator))throw Error('Comparison changed camera, light or GI');
-    if(view.physicalbaseline.geometryId!==reference.physicalbaseline.geometryId||view.normalsMatchSurface!==true||
+    const unlit=mode==='original'||mode==='photo';
+    const geometry=reference.cutout&&unlit?views.photo?.physicalbaseline?.geometryId:reference.physicalbaseline.geometryId;
+    if(!geometry||view.physicalbaseline.geometryId!==geometry||view.normalsMatchSurface!==true||
         view.physicalbaseline.environmentIntensity!==reference.physicalbaseline.environmentIntensity)throw Error('Comparison changed geometry, normals or environment');
+    if(reference.cutout){
+      if(unlit?view.cutout!=null:!['sample','source','width','height'].every(key=>Object.hasOwn(reference.cutout,key)&&view.cutout?.[key]===reference.cutout[key]))
+        throw Error('Comparison changed subject cutout or masked the photograph baseline');
+    }
     if(reference.environment)for(const key of ['environment','source','rotation','intensity','direct']){
       if(!Object.hasOwn(reference.environment,key)||view.environment?.[key]!==reference.environment[key])throw Error('Comparison changed HDR source or lighting');
     }

@@ -434,6 +434,14 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 .reaction-front-atlas-state { color: #71848a; font: 9px 'SF Mono', monospace; margin: 5px 0 0; min-height: 13px; }
 #kaminos-volume-canvas { position: absolute; left: -10000px; top: -10000px; width: 1px; height: 1px; opacity: 0; pointer-events: none; background: #050607; }
 #kaminos-volume-canvas.active { left: 0; top: 0; width: 100%; height: 100%; opacity: 1; z-index: 3; }
+/* Viewer play/pause: drives the look-lab Freeze (sim steps and shader time). */
+#volume-viewer-play { position: absolute; left: 10px; bottom: 10px; z-index: 4; width: 26px; height: 26px; padding: 0; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.16); border-radius: 50%; background: rgba(8,9,10,0.28); color: rgba(255,255,255,0.72); cursor: pointer; backdrop-filter: blur(2px); }
+#volume-viewer-play:hover { color: #fff; border-color: rgba(255,255,255,0.34); background: rgba(8,9,10,0.42); }
+#volume-viewer-play[hidden] { display: none; }
+#volume-viewer-play svg { width: 11px; height: 11px; }
+/* Physics appearance: controls that no longer reach the frame. */
+.slider-row.volume-physics-uncoupled { opacity: 0.36; }
+.slider-row.volume-physics-uncoupled::after { content: attr(data-physics-uncoupled); flex: 0 0 auto; font-size: 8px; letter-spacing: 0.05em; text-transform: uppercase; color: #8a7a5a; white-space: nowrap; }
 
 /* Motion agency */
 .motion-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }
@@ -1573,10 +1581,28 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row">
         <span class="slider-label">Material law</span>
-        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option></select>
+        <select id="volume-physical-material-law" class="select-input"><option value="0">Original mixed carriers (replay)</option><option value="1">Transported heat + soot</option><option value="2">Physics: soot × blackbody (no carriers)</option></select>
         <span class="slider-val" id="volume-physical-material-law-val">0</span>
       </div>
       <span class="slider-help">Old presets retain the original material law. Transported heat + soot is an explicit alternative: detail carriers no longer add heat and boundary coverage no longer supplies a minimum soot density. Recalibrate Peak soot K, Kelvin spread and Hot soot density when switching; settings are not automatically retuned.</span>
+      <div class="volume-control-section-title">Physics appearance</div>
+      <span class="slider-help">Material law = Physics (reactant law, Emissive transport): soot glows as a blackbody at the temperature the heat field implies (300 K + Kelvin per heat &times; heat), absorbs and scatters with Smoke extinction and Smoke albedo, and fresh burning adds the reaction spectrum (Clean emission). No appearance carrier is drawn. Thermal emission scales the glow; Exposure EV, Highlight knee, Camera white K and Tone mapping grade it; Density scales the soot. Dimmed controls do nothing under this law.</span>
+      <div class="slider-row">
+        <span class="slider-label" title="Calibration of the dimensionless heat field: T = 300 K + this × heat.">Kelvin per heat</span>
+        <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1600">
+        <span class="slider-val" id="volume-physical-kelvin-per-heat-val">1600</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Simulation: soot consumed per step at this rate × local oxygen fraction where the gas is hotter than Burnout K. 0 = off.">Soot burnout</span>
+        <input type="range" id="volume-physical-soot-burnout-rate" min="0" max="2" step="any" value="0">
+        <span class="slider-val" id="volume-physical-soot-burnout-rate-val">0.000</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Temperature (same Kelvin per heat calibration) above which soot burns out; ±150 K ramp.">Burnout K</span>
+        <input type="range" id="volume-physical-soot-burnout-kelvin" min="600" max="3000" step="any" value="1300">
+        <span class="slider-val" id="volume-physical-soot-burnout-kelvin-val">1300</span>
+      </div>
+      <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
       <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
@@ -3123,6 +3149,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <div id="viewport">
   <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
+  <button id="volume-viewer-play" type="button" hidden title="Pause / play the fire (look-lab Freeze)" aria-label="Pause the fire" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -3486,6 +3513,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 <script type="module">
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
+import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -3575,11 +3603,12 @@ function refreshRenderingControls() {
   if (!hasSharedRoute && renderingMode === 'all') renderingMode = 'flame-field';
   const selected = renderingChannelsForMode(renderingMode);
   const source = window.__kaminosSceneRadiance;
-  const distributed=source?.debugState().identity==='distributed-volume-direct-radiance-v0';
+  const hybrid=source?.debugState().identity==='hybrid-distributed-smoke-point-surfaces-v0';
+  const distributed=hybrid||source?.debugState().identity==='distributed-volume-direct-radiance-v0';
   document.getElementById('rendering-distributed-controls').hidden=!distributed;
   document.querySelector('.rendering-position-row').hidden=distributed;
   document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
-  document.getElementById('rendering-source-title').textContent=distributed ? 'Distributed flame source' : 'Shared point source';
+  document.getElementById('rendering-source-title').textContent=hybrid?'Hybrid: distributed smoke / point surfaces':distributed ? 'Distributed flame source' : 'Shared point source';
   document.querySelector('label[for="rendering-shared-gain"]').textContent=distributed?'Transported-light gain (stops)':'Source gain (stops)';
   document.getElementById('rendering-source-description').textContent=distributed?'Artistic illumination master for surfaces and distributed smoke. Direct visible flame emission stays unchanged.':'This study source lights both mesh and smoke. Its gain changes source energy on both paths.';
   if(distributed)source.setGain(selected.shared ? 2**renderingGainStops : 0);
@@ -3618,7 +3647,7 @@ function refreshRenderingControls() {
     const sharedState = !hasSharedRoute ? 'not mounted on this route' : source ? (selected.shared ? 'on' : 'off') : 'mounting';
     const fieldState = !fireLightFieldPass ? 'not mounted on this route' : selected.flameField ? 'on' : 'off';
     const position = source?.debugState().source?.position?.map(value => value.toFixed(2)).join(', ');
-    status.textContent = `${distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
+    status.textContent = `${hybrid?'Hybrid prototype':distributed ? 'Distributed flame' : 'Shared point source'} (mesh + smoke): ${sharedState}${position ? ` · XYZ ${position}` : ''}${distributed ? ` · ${source.debugState().directions} smoke directions · ${source.debugState().status}` : ''}\nFlame field (mesh): ${fieldState}`;
     status.dataset.status = source || fireLightFieldPass ? 'active' : 'unavailable';
   }
   window._kaminosDirty?.();
@@ -16885,7 +16914,10 @@ function applyTallPlumeOperatorPreset(name, options = {}) {
 }
 
 const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
-  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 1, continuous: false, decimals: 0 },
+  { key: 'physicalMaterialLaw', id: 'volume-physical-material-law', param: 'volume_physical_material_law', min: 0, max: 2, continuous: false, decimals: 0 },
+  { key: 'physicalKelvinPerHeat', id: 'volume-physical-kelvin-per-heat', param: 'volume_physical_kelvin_per_heat', min: 100, max: 6000, continuous: true, decimals: 0 },
+  { key: 'physicalSootBurnoutRate', id: 'volume-physical-soot-burnout-rate', param: 'volume_physical_soot_burnout_rate', min: 0, max: 2, continuous: true, decimals: 3 },
+  { key: 'physicalSootBurnoutKelvin', id: 'volume-physical-soot-burnout-kelvin', param: 'volume_physical_soot_burnout_kelvin', min: 600, max: 3000, continuous: true, decimals: 0 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -18287,7 +18319,7 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
-    if (field.key === 'physicalColorMode') continue; // Route-aware status owns this label.
+    if (field.key === 'physicalColorMode' || field.key === 'physicalMaterialLaw') continue; // Route-aware status owns these labels.
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
@@ -19068,7 +19100,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-shell-inspect-mode-val').textContent = c.shellInspectMode;
   const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
   document.getElementById('volume-physical-mode-val').textContent = c.physicalColorMode > 0 ? (physicalBoundaryColor ? (c.physicalColorMode === 1 ? 'active' : 'requested') : 'inactive route') : 'legacy';
-  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? 'Hot soot density' : 'Thermal emission';
+  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? (c.physicalMaterialLaw === 2 ? 'Glow gain' : 'Hot soot density') : 'Thermal emission';
   document.getElementById('volume-physical-temperature-label').textContent = c.physicalColorMode === 2 ? 'Peak soot K' : 'Thermal K';
   syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
   document.getElementById('volume-shell-amount-val').textContent = c.shellAmount.toFixed(2);
@@ -19373,6 +19405,52 @@ function renderVolumeEmitterReceipt(receipt) {
   document.getElementById('volume-emitter-fallback').textContent = receipt.fallbackUsed ? 'yes' : 'no';
 }
 
+// Physics appearance: dim the controls that no longer reach the frame, and say
+// what is in force (volume-physics-appearance.mjs owns the list).
+function syncPhysicsAppearanceCockpit(physics) {
+  const active = physics?.effective?.render === true;
+  for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
+    const row = document.getElementById(id)?.closest('.slider-row');
+    if (!row) continue;
+    row.classList.toggle('volume-physics-uncoupled', active);
+    if (active) row.dataset.physicsUncoupled = reason === 'carriers-only' ? 'carriers only' : 'unused';
+    else delete row.dataset.physicsUncoupled;
+  }
+  // The material-law value label carries the law in force (the layout moves
+  // control rows, so this is where the state stays visible).
+  const law = document.getElementById('volume-physical-material-law-val');
+  if (law) {
+    const value = Number(document.getElementById('volume-physical-material-law')?.value || 0);
+    law.textContent = value !== 2 ? (value === 1 ? 'transported' : 'carriers')
+      : active ? 'physics · on' : `physics · NOT DRAWN (${String(physics?.reason || 'pending').replace(/^physics-appearance-/, '').replace(/-/g, ' ')})`;
+  }
+  const label = document.getElementById('volume-physics-appearance-state');
+  if (label) {
+    label.textContent = !physics?.requested
+      ? 'Physics appearance: off'
+      : active
+        ? `Physics appearance: on · ${physics.kelvinPerHeat.toFixed(0)} K per heat · soot burnout ${physics.effective.sootBurnout ? `${physics.sootBurnoutRate.toFixed(3)} above ${physics.sootBurnoutKelvin.toFixed(0)} K` : 'off'}`
+        : `Physics appearance: NOT DRAWN (${physics.reason})${physics.effective.sootBurnout ? ' · soot burnout still runs' : ''}`;
+  }
+}
+function syncVolumeViewerPlay(s) {
+  const button = document.getElementById('volume-viewer-play');
+  if (!button) return;
+  button.hidden = !document.getElementById('kaminos-volume-canvas')?.classList.contains('active');
+  const frozen = Number(document.getElementById('volume-look-freeze')?.value) >= 0.5;
+  button.dataset.state = frozen ? 'paused' : 'playing';
+  button.setAttribute('aria-label', frozen ? 'Play the fire' : 'Pause the fire');
+  button.querySelector('.pause-glyph').style.display = frozen ? 'none' : '';
+  button.querySelector('.play-glyph').style.display = frozen ? '' : 'none';
+}
+document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
+  const freeze = document.getElementById('volume-look-freeze');
+  if (!freeze) return;
+  freeze.value = Number(freeze.value) >= 0.5 ? '0' : '1';
+  freeze.dispatchEvent(new Event('input', { bubbles: true }));
+  freeze.dispatchEvent(new Event('change', { bubbles: true }));
+  syncVolumeViewerPlay();
+});
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
   const s = volumePrototype.debugState();
@@ -19404,6 +19482,8 @@ function refreshVolumeReadout() {
     : (heatRelease.effective.admitted
       ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
+  syncPhysicsAppearanceCockpit(s.physicsAppearance);
+  syncVolumeViewerPlay(s);
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
     ? 'authored'
@@ -20339,10 +20419,11 @@ async function initKaminosVolumeRoute() {
     if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
     window.__kaminosSceneRadianceSetup = {status:'mounting'};
     const distributed=fireLightFieldRouteParams().get('volume_light_field_distributed')==='1';
+    const hybrid=distributed&&fireLightFieldRouteParams().get('volume_light_field_hybrid')==='1';
     if(distributed)renderingMode='shared';
-    import(distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
+    import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{pointCount:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_points')||4),shadowResolution:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_shadow_resolution')||256),smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
           badge.hidden=!message;
@@ -20354,13 +20435,14 @@ async function initKaminosVolumeRoute() {
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');
             const receiverLabel=document.getElementById('rendering-receiver-status');
-            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
+            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`PROTOTYPE: ${state.pointCount} live GPU point regions for surfaces; zero surface cache receivers. Distributed smoke retained. Spacing / surface reconstruction do not apply. Point surfaces omit smoke extinction; opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
             if(label.textContent!==text)label.textContent=text;
           }
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
       refreshRenderingControls();
     }).catch(error=>{

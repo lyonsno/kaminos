@@ -26,7 +26,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,Ren
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11)}) {
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const enabled=uniform(requested?1:0),effective=uniform(0);
   const target=new THREE.CubeRenderTarget(resolution,{
@@ -54,7 +54,13 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const direction=delta.div(distance.max(.00001));
   // Bias follows the radial texel footprint, not viewer depth or light gain.
   const bias=distance.mul(2/resolution).max(.001);
-  const shadowDistance=cubeTexture(target.texture,direction).r;
+  const shadowSample=cubeTexture(target.texture,direction);
+  // This cube stores world-space radial distances, not environment radiance.
+  // Keep CubeCamera's backend convention but exclude CubeTextureNode's
+  // materialEnvRotation (otherwise rotating the HDR rotates solid shadows).
+  shadowSample.setupUV=(builder,uvNode)=>builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem
+    ?vec3(uvNode.x.negate(),uvNode.yz):uvNode;
+  const shadowDistance=shadowSample.r;
   const visibility=mix(float(1),step(distance.sub(bias),shadowDistance),enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0};
@@ -93,7 +99,8 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
           Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
           Math.max(Math.abs(bounds.min.y),Math.abs(bounds.max.y)),
           Math.max(Math.abs(bounds.min.z),Math.abs(bounds.max.z)));
-        const far=extent.length()+Math.sqrt(11)+.01;
+        const radius=sourceRadius();if(!Number.isFinite(radius)||radius<0)throw new Error('finite source radius required');
+        const far=extent.length()+radius+.01;
         for(const camera of cubeCamera.children) {camera.far=far;camera.updateProjectionMatrix();}
         renderFireShadowCube({renderer,scene,cubeCamera,material,far});
         effective.value=1;status.effective=true;status.reason=null;

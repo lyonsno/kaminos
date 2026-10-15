@@ -13,7 +13,7 @@ async function fixture(){
   class Viewer{
     async init(canvas,device,{rig,interactive}){this.canvas=canvas;this.renderer={backend:{device}};this.orbit=rig.orbit;this.target=rig.target;this.current=rig.current;this.interactive=interactive;calls.devices.push(device);this.settings={gain:1};this.lighting={rotation:0,intensity:1,direct:1};}
     resize(){}
-    setImage(image,depth,shared){this.surface=shared?.surface??{normal:[1]};this.mesh={geometry:shared?.geometry??{uuid:'shared'}};}
+    setImage(image,depth,shared,cutout){this.cutout=cutout;this.surface=shared?.surface??{normal:[1]};this.mesh={geometry:shared?.geometry??{uuid:'shared'}};}
     setMaterials(out){this.maps=out;}
     clear(){this.surface=this.maps=null;}
     setEnvironment(texture){this.environmentTexture=texture;}
@@ -62,6 +62,21 @@ test('a depth-only material pane keeps its photograph visible without claiming i
   assert.equal(surface.dataset.pending,'Inferring materials');
   viewer.setMaterials({});assert.equal(surface.dataset.pending,undefined);
   viewer.setImage({},{});assert.equal(surface.dataset.pending,'Materials not generated');
+});
+test('only the two lit views are cut out; photograph and depth retain the complete background',async()=>{
+  const {viewer}=await fixture(),cutout={sample:'bag'};
+  viewer.setImage({}, {}, cutout);
+  assert.equal(viewer.views.original.cutout,null);assert.equal(viewer.views.photo.cutout,null);
+  assert.equal(viewer.views.relit.cutout,cutout);assert.equal(viewer.views.materials.cutout,cutout);
+  assert.equal(viewer.views.relit.mesh.geometry,viewer.views.materials.mesh.geometry);
+  assert.equal(viewer.views.relit.surface,viewer.views.materials.surface);
+  assert.notEqual(viewer.views.photo.mesh.geometry,viewer.views.materials.mesh.geometry);
+  assert.notEqual(viewer.views.photo.surface,viewer.views.materials.surface);
+  assert.equal(viewer.views.original.mesh.geometry,viewer.views.photo.mesh.geometry);
+  assert.ok(Object.values(viewer.views).every(view=>view.orbit===viewer.orbit));
+  viewer.setImage({}, {});
+  assert.ok(Object.values(viewer.views).every(view=>view.cutout===null));
+  assert.ok(Object.values(viewer.views).every(view=>view.mesh.geometry===viewer.primary.mesh.geometry));
 });
 test('comparison chooses pane arrangement from available width and height',async()=>{
   const {viewer,container}=await fixture();

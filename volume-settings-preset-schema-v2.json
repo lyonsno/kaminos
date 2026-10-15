@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 252,
+  "controlCount": 255,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -10,7 +10,8 @@
       "additiveDefault": "0",
       "allowedValues": [
         "0",
-        "1"
+        "1",
+        "2"
       ]
     },
     {
@@ -1662,6 +1663,30 @@
       "type": "range",
       "additiveDefault": 55.06,
       "additiveSinceControlCount": 252
+    },
+    {
+      "key": "volume-physical-kelvin-per-heat",
+      "param": "volume_physical_kelvin_per_heat",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1600,
+      "additiveSinceControlCount": 253
+    },
+    {
+      "key": "volume-physical-soot-burnout-rate",
+      "param": "volume_physical_soot_burnout_rate",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 254
+    },
+    {
+      "key": "volume-physical-soot-burnout-kelvin",
+      "param": "volume_physical_soot_burnout_kelvin",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1300,
+      "additiveSinceControlCount": 255
     }
   ],
   "retiredControls": [
@@ -1747,7 +1772,10 @@
       "param": "volume_tone_mapping",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["agx", "custom"],
+      "allowedValues": [
+        "agx",
+        "custom"
+      ],
       "additiveDefault": "agx"
     },
     {

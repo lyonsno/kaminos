@@ -1,12 +1,56 @@
-// Noah's exported material-photograph-preset.json, October 11.
+// Noah's exported material-photograph-preset (6).json, October 12.
 export const DEFAULT_PRESET={
-  schema:'kaminos.material-photo-preset.v1',
-  settings:{gain:50,radius:1,thickness:.1,slices:8,steps:10,denoise:1,aoStrength:.5,
-    expFactor:1,screenSpaceSampling:true,linearThickness:false,backfaceLighting:1,depthPhi:.5,normalPhi:5,lumaPhi:5},
-  light:{x:.9997602257733113,y:.02189728206183767},
-  camera:{orbit:[-.018604133702531615,.0029375503220611795]},
-  gi:true,glow:false,lighting:{rotation:146,intensity:2,direct:3},
-  contrast:{mode:'manual',roughness:.49,metallic:.83},diagnostic:'scene',environment:'warehouse',
+  "schema": "kaminos.material-photo-preset.v1",
+  "settings": {
+    "gain": 1,
+    "radius": 4,
+    "thickness": 0.06,
+    "slices": 12,
+    "steps": 12,
+    "denoise": 0.001,
+    "aoStrength": 1,
+    "expFactor": 2,
+    "screenSpaceSampling": true,
+    "linearThickness": false,
+    "backfaceLighting": 0.3,
+    "depthPhi": 0.5,
+    "normalPhi": 5,
+    "lumaPhi": 5
+  },
+  "light": {
+    "x": 0.9762524801587303,
+    "y": 0.03689236111111113
+  },
+  "camera": {
+    "orbit": [
+      -0.20766499955689163,
+      -0.09401037635186385
+    ]
+  },
+  "gi": true,
+  "glow": false,
+  "lighting": {
+    "rotation": 163,
+    "intensity": 1.5,
+    "direct": 0.5
+  },
+  "contrast": {
+    "mode": "manual",
+    "roughness": 0.28,
+    "metallic": 1
+  },
+  "diagnostic": "scene",
+  "effects": {
+    "glowIntensity": 5.05,
+    "glowThreshold": 0.37,
+    "emissionReflection": 0,
+    "bloom": true,
+    "bloomIntensity": 1.18,
+    "bloomRadius": 0.5,
+    "bloomThreshold": 0.61,
+    "exposure": 1
+  },
+  "environment": "warehouse"
 };
 
 export function superMatProductProfile(device) {

@@ -42,7 +42,7 @@ retains its error and must already have cleaned its own partial construction.
 ## Owner Use
 
 ```js
-const scene = host.scene.open();
+const scene = await host.scene.open();
 const asset = await scene.loadAsset(inputs.asset);
 // Domain code binds its own controller to asset.root and asset.clips.
 const stopFrames = scene.onFrame(frame => {

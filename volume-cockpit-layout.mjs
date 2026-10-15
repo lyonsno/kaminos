@@ -19,6 +19,7 @@ const VOLUME_CONTROL_SELECTOR = [
 ].join(', ');
 
 const LAYOUT_API = '/api/volume-cockpit-layouts';
+const PHYSICS_APPEARANCE_CONTROL_IDS = Object.freeze(['volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin']);
 const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
@@ -200,10 +201,19 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
   if (rayGroup) {
     rayGroup.controlIds.splice(rayGroup.controlIds.indexOf('volume-steps') + 1, 0, 'volume-ray-start-noise');
   }
+  // Physics appearance (2026-10-14): its controls join the material law they belong to.
+  const physicsMissingIds = PHYSICS_APPEARANCE_CONTROL_IDS.filter(controlId => receipt.missingControlIds.includes(controlId));
+  const physicsGroup = physicsMissingIds.length
+    ? reconciled.groups.find(group => group.controlIds.includes('volume-physical-material-law'))
+    : null;
+  if (physicsGroup) {
+    physicsGroup.controlIds.splice(physicsGroup.controlIds.indexOf('volume-physical-material-law') + 1, 0, ...physicsMissingIds);
+  }
   const ordinaryMissingControlIds = receipt.missingControlIds
     .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
       && !(cameraGroup && controlId === 'volume-tone-mapping')
-      && !(rayGroup && controlId === 'volume-ray-start-noise'));
+      && !(rayGroup && controlId === 'volume-ray-start-noise')
+      && !(physicsGroup && physicsMissingIds.includes(controlId)));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
@@ -397,7 +407,7 @@ function sourceGroupForControl(control, looseIndex) {
 // remain unchanged. Unknown controls keep their source grouping.
 const ORGANIZED_GROUPS = [
   ['renderer', 'Renderer & emission model', /^volume-(physical-mode|fire-render-mode|shell-inspect-mode|reaction-live-view)$/],
-  ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(material-law|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
+  ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(material-law|kelvin-per-heat|soot-burnout-rate|soot-burnout-kelvin|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
   ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
   ['structure', 'Combustion-front structure', /^volume-(boundary-sidecar-source|boundary-sidecar-width|reaction-boundary-(gradient|cut|softness|core-reject|topology|curl|divergence)|reaction-boundary-fire-(ridge|ridge-cut|tip|erosion))$/],
   ['support', 'Support field & baked ridge', /^volume-(reaction-boundary-support-.+|boundary-sidecar-(blur|ridge))$/],
@@ -483,6 +493,8 @@ export function volumeCockpitModeAvailability(c, controlIds = [], physicalColor 
     physical, 'Requires an active thermal or emissive boundary-fire route.');
   set(['physical-material-law', 'physical-white', 'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient'],
     emissive, 'Emissive transport only.');
+  set(['physical-kelvin-per-heat', 'physical-soot-burnout-rate', 'physical-soot-burnout-kelvin'],
+    emissive && c.physicalMaterialLaw === 2, 'Material law = Physics only.');
   // These uniforms are replaced by the corresponding boundary controls, not
   // combined with them. Keep values for switching back to the shell renderer.
   set(['shell-thermal', 'shell-reaction', 'shell-front', 'shell-edge', 'shell-core-suppress',
