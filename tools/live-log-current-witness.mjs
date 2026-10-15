@@ -53,7 +53,6 @@ try {
   await page.locator('#live-log-heat [data-action=run]').click();
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.thermalConsumerState()?.fields[0].steps>=600);
   await invoke('pause');await page.evaluate(()=>window.kaminosSelection.clear());await shot('warm');
-  await invoke('flameView',{visible:false});
   await invoke('view',{mode:'char'});assert.equal(await page.locator('#live-log-heat [name=burn-view]:checked').inputValue(),'char');await shot('char');
   await invoke('view',{mode:'heat'});await shot('heat');
   report.phase='end-exposure';await save();

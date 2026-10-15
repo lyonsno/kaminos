@@ -7,6 +7,19 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {checkRestoredLogSource} from '../tools/live-log-witness-contracts.mjs';
+import {runInNewContext} from 'node:vm';
+
+test('scene restoration completing before owner discovery cannot satisfy the actual wait',async()=>{
+  const source=await fs.readFile(new URL('../tools/live-log-current-witness.mjs',import.meta.url),'utf8');
+  const start=source.lastIndexOf('await page.waitForFunction(()=>{')+'await page.waitForFunction('.length;
+  const end=source.indexOf('\n  });',start)+4;
+  const window={kaminosFlameEmitterState:()=>({registered:true})};
+  const document={querySelector:()=>null,getElementById:()=>({textContent:'Scene loaded: 2 objects'})};
+  const settled=runInNewContext('('+source.slice(start,end)+')',{window,document});
+  assert.equal(Boolean(settled()),false);
+  window.kaminosWorkbenchExperiments={state:()=>({id:null})};
+  assert.equal(Boolean(settled()),true);
+});
 
 test('restoration evidence rejects early registration, reenabled state and experiment masking',()=>{
   const observed={source:{registered:true,authoredPresent:true,emissionEnabled:false},experiment:{id:null},info:'Scene loaded: 2 objects'};

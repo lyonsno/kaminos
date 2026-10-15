@@ -26,11 +26,11 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
   let inspectionLighting=null;
   const inspection=enabled=>{
     if(enabled&&!inspectionLighting){
-      inspectionLighting={gain:host.rendering.readGI().gain,muted:host.rendering.readFireLighting().witnessMuted===true};
-      host.rendering.gi({...host.rendering.readGI(),gain:0});host.rendering.muteFireLighting(true);
+      inspectionLighting={gain:host.rendering.readGI().gain,muted:host.rendering.readFireLighting().witnessMuted===true,visible};
+      host.rendering.gi({...host.rendering.readGI(),gain:0});host.rendering.muteFireLighting(true);fire.setVisible(false);
     }else if(!enabled&&inspectionLighting){
       const previous=inspectionLighting;inspectionLighting=null;
-      host.rendering.gi({...host.rendering.readGI(),gain:previous.gain});host.rendering.muteFireLighting(previous.muted);
+      host.rendering.gi({...host.rendering.readGI(),gain:previous.gain});host.rendering.muteFireLighting(previous.muted);fire.setVisible(previous.visible);
     }
   };
   try {
