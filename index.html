@@ -3856,8 +3856,9 @@ import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from '
 import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
 import {createViewportShading} from './viewport-shading.mjs';
 import {createSurfelProxyLayer} from './proxy-surfels.mjs';
-import {createInterfaceSurfelProducer,createProxySnapshotRegistry,decodeHeatBlocks} from './proxy-snapshot.mjs';
+import {createInterfaceSurfelProducer,createProxySnapshotRegistry} from './proxy-snapshot.mjs';
 import {createFireSplatLayer} from './proxy-fire-splats.mjs';
+import {createFireProxySync} from './fire-proxy-sync.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
@@ -3988,52 +3989,19 @@ function syncWaterProxy() {
  if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
-// Fire proxy: heat-block splats drawn from snapshots of the fire's residual
-// probe readback. In Proxy display the fire canvas is hidden and the splats,
-// on their own layer, stand in for the flame. Prototype pending the probe
-// owner's answer on the readback seam.
-let fireProxy=null;
+// Fire proxy: heat-block splats on their own layer stand in for the flame in
+// Proxy display (fire-proxy-sync.mjs reconciles it each frame).
+let fireProxySync=null;
 function syncFireProxy() {
- const prototype=volumePrototype,display=viewportDisplay.fire==='proxy'&&!!prototype,wanted=!!prototype&&(display||proxyRequirements.has('fire'));
- camera?.layers[display?'enable':'disable'](FIRE_PROXY_LAYER);
- if(fireProxy&&fireProxy.prototype!==prototype){fireProxy.prototype?.setResidualPartialsConsumer?.(null);fireProxy.prototype?.setCanvasPresentationSuppressed?.(false);fireProxy.unsubscribe?.();fireProxy.layer?.dispose();proxySnapshots.clear('fire');fireProxy=null;}
- if(prototype&&!fireProxy)fireProxy={prototype,layer:null,unsubscribe:null,attached:false,decodeErrors:0,fieldGeneration:prototype.getResidualFieldGeneration?.()??null};
- // A recreated field (domain moved or scaled, grid rebuilt) invalidates every
- // snapshot of the old one: nothing stale is drawn while the new one fills.
- // Adopted here each frame, or by the consumer if the new field's first
- // readback lands before this runs.
- const adoptFireField=generation=>{if(!fireProxy||generation===fireProxy.fieldGeneration)return;fireProxy.fieldGeneration=generation;proxySnapshots.clear('fire');fireProxy.layer?.clear();};
- adoptFireField(prototype?.getResidualFieldGeneration?.()??null);
- const produce=!!fireProxy&&(wanted||proxySnapshots.wanted('fire'));
- if(produce&&!fireProxy.attached)fireProxy.attached=prototype.setResidualPartialsConsumer?.(info=>{
-  const current=prototype.getResidualFieldGeneration?.()??null;
-  if(info.fieldGeneration!=null&&info.fieldGeneration!==current)return;
-  adoptFireField(current);
-  const domain=window.kaminosFlameDomain?.read();if(!domain)return;
-  try{proxySnapshots.publish('fire',decodeHeatBlocks(info,{domain,capturedAtMs:performance.now()}));}catch(error){fireProxy.decodeErrors++;fireProxy.lastError=String(error?.message||error);}
- })??false;
- if(fireProxy&&!produce&&fireProxy.attached){prototype.setResidualPartialsConsumer?.(null);fireProxy.attached=false;}
- if(fireProxy&&wanted&&!fireProxy.layer){
-  const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);
-  fireProxy.layer=layer;fireProxy.unsubscribe=proxySnapshots.subscribe('fire',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
- }
- if(fireProxy&&!wanted&&fireProxy.layer){fireProxy.unsubscribe();fireProxy.layer.dispose();fireProxy.layer=null;fireProxy.unsubscribe=null;}
- // The full fire stays visible until a snapshot of the current field exists,
- // so selecting Proxy never blanks the flame (a paused sim publishes nothing new).
- const snapshot=proxySnapshots.latest('fire'),ready=display&&!!snapshot&&(snapshot.fieldGeneration==null||snapshot.fieldGeneration===fireProxy?.fieldGeneration);
- const canvas=document.getElementById('kaminos-volume-canvas'),visibility=ready?'hidden':'';
- if(canvas&&canvas.style.visibility!==visibility)canvas.style.visibility=visibility;
- if(fireProxy)fireProxy.awaitingSnapshot=display&&!ready;
- // While the splats stand in, the fire's own canvas raymarch is not drawn.
- if(prototype&&fireProxy&&fireProxy.presentationSuppressed!==ready)fireProxy.presentationSuppressed=prototype.setCanvasPresentationSuppressed?.(ready)??false;
- // Routes that composite the fire through the canvas-texture bridge hide that
- // plane too; animate() stops refreshing it while Proxy is effective.
- if(ready&&volumeBridge?.mesh)volumeBridge.mesh.visible=false;
+ fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
+  createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
+ fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
+  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge});
 }
-window.kaminosFireProxyStyle=patch=>{const style=fireProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
+window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
- attached:fireProxy?.attached??false,awaitingSnapshot:fireProxy?.awaitingSnapshot??false,fieldGeneration:fireProxy?.fieldGeneration??null,bridgeVisible:volumeBridge?.mesh?.visible??null,presentationSuppressed:fireProxy?.presentationSuppressed??false,decodeErrors:fireProxy?.decodeErrors??0,lastError:fireProxy?.lastError??null,layer:fireProxy?.layer?.state()??{visible:false},
- canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
+ ...(fireProxySync?.state()??{attached:false,awaitingSnapshot:false,fieldGeneration:null,presentationSuppressed:false,decodeErrors:0,lastError:null,layer:{visible:false}}),
+ bridgeVisible:volumeBridge?.mesh?.visible??null,canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
 window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
 window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
@@ -12094,7 +12062,7 @@ async function initScene() {
     const fireLightFieldRouteActive = fireLightFieldPass !== null;
     // Kiln composition already overlays the depth-clipped native canvas. Do
     // not upload that canvas back into the scene rendered by its depth provider.
-    const fireProxyEffective = viewportDisplay.fire === 'proxy' && fireProxy && !fireProxy.awaitingSnapshot;
+    const fireProxyEffective = fireProxySync?.effective() ?? false;
     const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;

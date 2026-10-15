@@ -27179,6 +27179,7 @@ export function createKaminosVolumePrototype({
       return Boolean(residualPartialsConsumer);
     },
     getResidualFieldGeneration() { return state.fluidStateResetCount; },
+    isActive() { return state.active === true; },
     // Skip the ordinary canvas raymarch while a scene proxy stands in for the
     // fire. Other presentation routes (boundary splats, browser residual) keep
     // drawing; the frame's presentation receipt says which happened.

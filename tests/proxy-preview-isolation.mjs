@@ -137,20 +137,19 @@ test('the glow reference holds the field peak, so an overall dimming shows inste
 });
 
 import {createFireSplatLayer} from '../proxy-fire-splats.mjs';
-test('a fire that cools overall dims in the splat layer, and a new field starts a fresh glow reference',()=>{
- const snapshotAt=(heat,fieldGeneration)=>{const partials=new Float32Array(20);partials.set([0,64*heat,0,0,64*heat*1.5,64*heat*1.5,0,0],12);
-  return decodeHeatBlocks({partials,grid:4,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16,fieldGeneration},{domain:{translation:[0,0,0],scale:1}});};
+test('the splat glow is normalised by the snapshot field reference, or by its own peak without one',()=>{
+ const snapshotAt=(heat,heatReference)=>{const partials=new Float32Array(20);partials.set([0,64*heat,0,0,64*heat*1.5,64*heat*1.5,0,0],12);
+  const snapshot=decodeHeatBlocks({partials,grid:4,gridY:4,workgroupsX:1,workgroupsY:1,workgroupsZ:1,floatsPerWorkgroup:20,step:16,fieldGeneration:3},{domain:{translation:[0,0,0],scale:1}});
+  if(heatReference!==undefined)snapshot.heatReference=heatReference;return snapshot;};
  const near=(a,b)=>Math.abs(a-b)<1e-6;
  const layer=createFireSplatLayer();
- layer.setSnapshot(snapshotAt(0.8,3));
- assert.ok(near(layer.state().heatReference,0.8));
- layer.setSnapshot(snapshotAt(0.4,3));
- assert.ok(near(layer.state().heatReference,0.8),`a proportionally cooled snapshot is not renormalised away (reference ${layer.state().heatReference})`);
+ layer.setSnapshot(snapshotAt(0.4,0.8));
+ assert.ok(near(layer.state().heatReference,0.8),'a cooled snapshot of a hotter field glows relative to the field peak');
  assert.equal(layer.state().snapshotFieldGeneration,3);
+ layer.setSnapshot(snapshotAt(0.4));
+ assert.ok(near(layer.state().heatReference,0.4),'without a field reference, the snapshot peak');
  layer.clear();
  assert.equal(layer.state().count,0);
- assert.equal(layer.state().snapshotFieldGeneration,null);
- layer.setSnapshot(snapshotAt(0.4,4));
- assert.ok(near(layer.state().heatReference,0.4),'a new field does not inherit the retired field\'s peak');
+ assert.equal(layer.state().heatReference,null);
  layer.dispose();
 });

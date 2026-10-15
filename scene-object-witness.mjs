@@ -707,31 +707,20 @@ async function runFireProxySplatsScenario(ws) {
   check(evidence.proxyPresentation?.raymarchEncoded === false && evidence.proxyPresentation?.compositionEffective === 'suppressed-for-scene-proxy-v0',
     `the fire canvas raymarch still runs in Proxy: ${JSON.stringify(evidence.proxyPresentation)}`);
 
-  phase = 'scenario-fire-proxy-splats-bridge';
-  // The canvas-texture bridge route: with the light field off, animate()
-  // refreshes the bridge plane (the full fire) every frame. Proxy must keep it
-  // hidden across frames, and Full must bring it back.
-  const bridgeVisible = () => evaluate(ws, 'window.__kaminosVolumeBridge?.mesh?.visible ?? null');
-  const bridgeSamples = async () => { const out = []; for (let i = 0; i < 6; i++) { await settleViewportFrames(ws, 100); out.push(await bridgeVisible()); } return out; };
-  const lightFieldRoute = enabled => evaluate(ws, `(() => { const hash = new URLSearchParams(location.hash.slice(1));
-    if (${enabled}) hash.set('volume_light_field', '1'); else hash.delete('volume_light_field');
-    history.replaceState(null, '', '#' + hash.toString()); window.kaminosRefreshSceneGIOutput(); window._kaminosDirty?.(); return location.hash; })()`);
-  await clickToggle('full');
-  evidence.bridge = { routeHash: await lightFieldRoute(false) };
-  evidence.bridge.full = await bridgeSamples();
-  await clickToggle('proxy');
-  evidence.bridge.proxy = await bridgeSamples();
-  evidence.bridge.proxyState = await readFire();
-  await clickToggle('full');
-  evidence.bridge.fullAgain = await bridgeSamples();
-  check(evidence.bridge.full.slice(-3).every(v => v === true), `the bridge route did not draw the full fire in Full, so it was not exercised: ${JSON.stringify(evidence.bridge.full)}`);
-  check(evidence.bridge.proxy.slice(-4).every(v => v === false) && evidence.bridge.proxyState?.layer?.count > 0, `the full fire stayed in the scene through the bridge plane in Proxy: ${JSON.stringify(evidence.bridge.proxy)}`);
-  check(evidence.bridge.fullAgain.slice(-3).every(v => v === true), `Full did not bring the bridge plane back: ${JSON.stringify(evidence.bridge.fullAgain)}`);
-  // Back to the authored light-field route; the light field route never
-  // refreshes the bridge, so the witness restores the plane it made visible.
-  await lightFieldRoute(true);
-  await evaluate(ws, 'window.__kaminosVolumeBridge && (window.__kaminosVolumeBridge.mesh.visible = false)');
-  await clickToggle('proxy');
+  phase = 'scenario-fire-proxy-splats-disable';
+  // Disabling the volume removes the fire in every mode: the proxy must stop
+  // drawing too. Enabling it again brings the held field back.
+  await evaluate(ws, `document.getElementById('volume-toggle').click(); true`);
+  await settleViewportFrames(ws, 600);
+  const disabled = evidence.disabled = await readFire();
+  check(disabled?.viewportCameraSeesProxies === false && !(disabled?.layer?.visible && disabled?.layer?.count > 0) && disabled?.presentationSuppressed === false,
+    `a disabled volume still draws its proxy: ${JSON.stringify({ camera: disabled?.viewportCameraSeesProxies, layer: disabled?.layer?.visible, count: disabled?.layer?.count, suppressed: disabled?.presentationSuppressed })}`);
+  await evaluate(ws, `document.getElementById('volume-toggle').click(); true`);
+  let reenabled = null;
+  for (let i = 0; i < 40; i++) { await settleViewportFrames(ws, 150); reenabled = await readFire(); if (reenabled?.layer?.count > 0 && reenabled.canvasVisibility === 'hidden') break; }
+  evidence.reenabled = reenabled;
+  check(reenabled?.layer?.count > 0 && reenabled.canvasVisibility === 'hidden' && reenabled.viewportCameraSeesProxies === true,
+    `enabling the volume again did not bring the held field back in Proxy: ${JSON.stringify({ count: reenabled?.layer?.count, canvas: reenabled?.canvasVisibility, camera: reenabled?.viewportCameraSeesProxies })}`);
 
   phase = 'scenario-fire-proxy-splats-compare';
   await settleViewportFrames(ws, 800);
@@ -810,6 +799,75 @@ async function runFireProxySplatsScenario(ws) {
   check(restored.display === 'full' && restored.canvasVisibility === '' && restored.layer?.visible === false && restored.attached === false, `fire did not return to the full render cleanly: ${JSON.stringify(restored)}`);
   evidence.shots = [backgroundShot, proxyShot, baselineShot, fullShot, liveShot];
   assert.deepEqual(failures, [], `fire proxy checks failed:\n- ${failures.join('\n- ')}`);
+}
+
+// Fire Proxy on the canvas-texture bridge route: a plain page whose volume is
+// enabled from the Volume tool (no authored flame, no light field), so
+// animate() refreshes the bridge plane every frame. Checks: Proxy hides the
+// bridge plane and stops refreshing it, suppresses the canvas raymarch and
+// draws splats; Full brings the plane back. Whether the bridge plane actually
+// carries the fire depends on its canvas-texture upload; the report records
+// that contribution (fire pixels with the fire canvas hidden) and any upload
+// error, and lowers the claim to control flow when the upload fails.
+async function runFireProxyBridgeRouteScenario(ws) {
+  phase = 'scenario-fire-proxy-bridge-route';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const evidence = lastEvidence.fireProxyBridgeRoute = { failures };
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); true');
+  await settleViewportFrames(ws, 1000);
+  const canvasRect = await evaluate(ws, `(() => { const r = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()`);
+  const region = { x: canvasRect.x, y: canvasRect.y + 56, width: canvasRect.width, height: canvasRect.height - 56 - 120 };
+  const backgroundShot = await capturePngScreenshot(ws, siblingPngPath('-bridge-route-background'));
+  evidence.beforeEnable = await evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype?.debugState(); return { active: d?.active ?? null, hash: location.hash }; })()`);
+  await evaluate(ws, `document.getElementById('volume-toggle').click(); true`);
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
+  const sample = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(), f = window.kaminosFireProxyDebugState();
+    return { active: d.active, error: d.error ?? null, presentation: d.volumePresentationReceipt?.application?.compositionEffective ?? null, bridge: window.__kaminosVolumeBridge?.mesh?.visible ?? null,
+      canvasVisibility: f.canvasVisibility, effective: f.awaitingSnapshot === false && f.display === 'proxy' && f.layer?.count > 0, count: f.layer?.count ?? null, suppressed: f.presentationSuppressed }; })()`);
+  const samples = async n => { const out = []; for (let i = 0; i < n; i++) { await settleViewportFrames(ws, 150); out.push(await sample()); } return out; };
+  evidence.full = await samples(4);
+  check(evidence.full.every(s => s.active && s.bridge === true && s.presentation === 'raymarch-only-v0'), `the bridge route was not live in Full: ${JSON.stringify(evidence.full.at(-1))}`);
+  // The bridge plane's own contribution: fire pixels with the fire canvas hidden.
+  await evaluate(ws, `(() => { document.getElementById('kaminos-volume-canvas').style.visibility = 'hidden'; return true; })()`);
+  await settleViewportFrames(ws, 600);
+  const bridgeOnlyShot = await capturePngScreenshot(ws, siblingPngPath('-bridge-route-bridge-only'));
+  await evaluate(ws, `(() => { document.getElementById('kaminos-volume-canvas').style.visibility = ''; return true; })()`);
+  const uploadError = evidence.full.map(s => s.error).find(e => /CopyTextureForBrowser|Invalid Texture/.test(e || '')) || null;
+  await evaluate(ws, `window.kaminosViewportSettings.set({ fire: 'proxy' }); true`);
+  let proxy = [];
+  for (let i = 0; i < 60; i++) { await settleViewportFrames(ws, 250); const s = await sample(); proxy.push(s); if (s.effective && proxy.length >= 6) break; }
+  evidence.proxy = proxy.slice(-6);
+  const last = evidence.proxy.at(-1);
+  check(last?.effective && last.canvasVisibility === 'hidden' && last.presentation === 'suppressed-for-scene-proxy-v0' && last.suppressed === true,
+    `Proxy did not stand in on the bridge route: ${JSON.stringify(last)}`);
+  check(evidence.proxy.slice(-4).every(s => s.bridge === false), `the bridge plane stayed visible in Proxy: ${JSON.stringify(evidence.proxy.map(s => s.bridge))}`);
+  const proxyShot = await capturePngScreenshot(ws, siblingPngPath('-bridge-route-proxy'));
+  // Same camera, no fire at all (canvas hidden, bridge hidden, splats hidden):
+  // the baseline for what the bridge plane alone contributed in Full.
+  await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: false })');
+  await settleViewportFrames(ws, 600);
+  const noFireShot = await capturePngScreenshot(ws, siblingPngPath('-bridge-route-no-fire'));
+  await evaluate(ws, 'window.kaminosFireProxyStyle({ visible: true })');
+  // Flame pixels the bridge plane added: warmth (red over blue) gained over the
+  // no-fire frame. Grey shading changes (the ground darkens while the plane is
+  // shown) are not flame and do not count.
+  const withBridge = decodeScreenshotPngRgb(readFileSync(bridgeOnlyShot.path)), noFire = decodeScreenshotPngRgb(readFileSync(noFireShot.path));
+  const bridgeOnly = { area: 0, bbox: null };
+  let shadingChanged = 0;
+  for (let y = Math.floor(region.y); y < Math.floor(region.y + region.height); y++) for (let x = Math.floor(region.x); x < Math.floor(region.x + region.width); x++) {
+    const a = (y * withBridge.width + x) * withBridge.channels, b = (y * noFire.width + x) * noFire.channels;
+    const warmGain = (withBridge.pixels[a] - withBridge.pixels[a + 2]) - (noFire.pixels[b] - noFire.pixels[b + 2]);
+    if (warmGain > 30) { bridgeOnly.area++; bridgeOnly.bbox = bridgeOnly.bbox ? [Math.min(bridgeOnly.bbox[0], x), Math.min(bridgeOnly.bbox[1], y), Math.max(bridgeOnly.bbox[2], x), Math.max(bridgeOnly.bbox[3], y)] : [x, y, x, y]; }
+    else if (Math.abs(withBridge.pixels[a] - noFire.pixels[b]) + Math.abs(withBridge.pixels[a + 1] - noFire.pixels[b + 1]) + Math.abs(withBridge.pixels[a + 2] - noFire.pixels[b + 2]) > 40) shadingChanged++;
+  }
+  evidence.bridgeContribution = { pixels: bridgeOnly.area, bbox: bridgeOnly.bbox, nonFlameShadingChangedPixels: shadingChanged, uploadError,
+    rendering: !uploadError && bridgeOnly.area > 500 ? 'observed' : `unverified: ${uploadError ? 'the canvas-texture upload failed' : 'no fire pixels from the bridge plane'}` };
+  await evaluate(ws, `window.kaminosViewportSettings.set({ fire: 'full' }); true`);
+  evidence.fullAgain = await samples(4);
+  check(evidence.fullAgain.slice(-3).every(s => s.bridge === true && s.presentation === 'raymarch-only-v0' && s.canvasVisibility === ''), `Full did not bring the bridge route back: ${JSON.stringify(evidence.fullAgain.at(-1))}`);
+  evidence.claim = evidence.bridgeContribution.rendering === 'observed' ? 'bridge rendering and its removal in Proxy' : 'bridge control flow only (plane hidden and not refreshed in Proxy); bridge rendering ' + evidence.bridgeContribution.rendering;
+  evidence.shots = [backgroundShot, bridgeOnlyShot, proxyShot, noFireShot];
+  assert.deepEqual(failures, [], `fire proxy bridge route checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
@@ -6670,6 +6728,8 @@ try {
     await runWaterProxyCadenceScenario(ws);
   } else if (scenario === 'fire-proxy-splats') {
     await runFireProxySplatsScenario(ws);
+  } else if (scenario === 'fire-proxy-bridge-route') {
+    await runFireProxyBridgeRouteScenario(ws);
   } else if (scenario === 'viewport-wire-gpu-deformation') {
     await runViewportWireGpuDeformationScenario(ws);
   } else if (scenario === 'mesh-asset-arrival') {
