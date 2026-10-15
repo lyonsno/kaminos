@@ -29,7 +29,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { accessSync, constants as fsConstants, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,13 +132,23 @@ function executableVersion(executable, args) {
   catch { return null; }
 }
 
+// Switches every launch of the route's browser carries: with them Chrome keeps
+// its secrets in a mock keychain and a basic store, so macOS raises no
+// Keychain dialog for a browser whose HOME has no default keychain.
+export const BROWSER_SAFETY_SWITCHES = Object.freeze(['--use-mock-keychain', '--password-store=basic']);
+
 // A browser's --version, bounded: a browser that never answers is recorded
-// without a version instead of holding the run.
+// without a version instead of holding the run. It is asked with the safety
+// switches and a private profile directory, removed afterwards, so even this
+// launch touches neither the Keychain nor any profile of the operator's.
 function browserVersion(executable, timeoutMs) {
+  const profile = mkdtempSync(path.join(os.tmpdir(), 'kaminos-browser-version-'));
   try {
-    return { version: execFileSync(executable, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, killSignal: 'SIGKILL' }).trim().split('\n')[0] || null, error: null };
+    return { version: execFileSync(executable, [...BROWSER_SAFETY_SWITCHES, `--user-data-dir=${profile}`, '--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, killSignal: 'SIGKILL' }).trim().split('\n')[0] || null, error: null };
   } catch (error) {
     return { version: null, error: error.code === 'ETIMEDOUT' ? `--version timed out after ${timeoutMs} ms` : String(error.message || error).split('\n')[0] };
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
   }
 }
 
@@ -587,7 +597,9 @@ export async function runSuite({
       try { stat = await fs.stat(browser); } catch (error) { throw fail(`cannot be read (${error.code || error.message})`); }
       if (!stat.isFile()) throw fail('is not a file');
       try { await fs.access(browser, fsConstants.X_OK); } catch { throw fail('is not executable'); }
-      report.effective.browser.realpath = realpathSync(browser);
+      // The native real path carries the volume's own spelling, so a link or a
+      // differently cased path to the installed app is still recognized.
+      report.effective.browser.realpath = realpathSync.native(browser);
       if (INSTALLED_CHROME.test(browser) || INSTALLED_CHROME.test(report.effective.browser.realpath)) throw fail('names the installed Google Chrome; use a Chrome for Testing executable');
       const probe = browserVersion(report.effective.browser.realpath, browserVersionTimeoutMs);
       report.effective.browser.version = probe.version;

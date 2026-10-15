@@ -1,6 +1,7 @@
 // kaminos-test: browser route — runs tests/gui-smoke.mjs with stub browsers, a forced runner timeout and a temporary HOME
 // Contracts of the GUI smoke's harness: it never reaches the installed Google
-// Chrome, a runner timeout leaves no server or browser behind and a receipt
+// Chrome, it launches the browser with the mock keychain, the basic password
+// store and a profile in its run directory, a runner timeout leaves no server or browser behind and a receipt
 // naming the phase, and a full run leaves its HOME's stores untouched.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
@@ -20,6 +21,10 @@ function tempDir(t, prefix) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+
+// Answers the runner's --version probe at once, like a real browser, so only
+// the smoke's own launch reaches the rest of a stub.
+const VERSION_PROBE = 'for a in "$@"; do [ "$a" = --version ] && { echo "Stub Browser 1.0"; exit 0; }; done\n';
 
 function writeExecutable(file, body) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -77,29 +82,62 @@ function listing(dir) {
 
 const realBrowser = process.env.KAMINOS_CHROME && !process.env.KAMINOS_CHROME.endsWith('browser-launch-stub.sh') ? process.env.KAMINOS_CHROME : null;
 
-test('a KAMINOS_CHROME that resolves into the installed Google Chrome is refused before anything starts, also through a link', t => {
+test('a KAMINOS_CHROME that resolves into the installed Google Chrome is refused before anything starts, through a link or spelled in lowercase', t => {
   const dir = tempDir(t, 'kaminos-gui-smoke-guard-');
   const marker = path.join(dir, 'launched');
   const installed = writeExecutable(path.join(dir, 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
     `#!/bin/sh\necho launched > '${marker}'\nexec sleep 30\n`);
   const link = path.join(dir, 'chrome-for-testing');
   fs.symlinkSync(installed, link);
+  // On a case-insensitive volume the lowercase spelling names the same file.
+  const lower = path.join(dir, 'applications', 'google chrome.app', 'contents', 'macos', 'google chrome');
+  const spellings = [link, ...(fs.existsSync(lower) ? [lower] : [])];
+  if (spellings.length === 1) t.diagnostic('case-sensitive volume: the lowercase spelling is a different, missing path here');
   const home = seededHome(t);
-  const res = spawnSync(process.execPath, [smoke], { cwd: root, encoding: 'utf8', timeout: 120000, env: { ...process.env, HOME: home, KAMINOS_CHROME: link } });
-  const receipt = receiptOf(t, res.stdout);
-  assert.equal(res.status, 1, res.stdout + res.stderr);
-  assert.equal(receipt.failurePhase, 'browser-executable');
-  assert.match(receipt.error, /resolves to the installed Google Chrome/);
-  assert.equal(receipt.executableRealpath, fs.realpathSync(installed));
-  assert.equal(receipt.server, null, 'no server was started');
-  assert.equal(fs.existsSync(marker), false, 'the installed-Chrome stand-in never ran');
+  for (const chrome of spellings) {
+    const res = spawnSync(process.execPath, [smoke], { cwd: root, encoding: 'utf8', timeout: 120000, env: { ...process.env, HOME: home, KAMINOS_CHROME: chrome } });
+    const receipt = receiptOf(t, res.stdout);
+    assert.equal(res.status, 1, `${chrome}\n${res.stdout}${res.stderr}`);
+    assert.equal(receipt.failurePhase, 'browser-executable', chrome);
+    assert.match(receipt.error, /resolves to the installed Google Chrome/, chrome);
+    assert.equal(receipt.executableRealpath, fs.realpathSync.native(installed), chrome);
+    assert.equal(receipt.server, null, `no server was started for ${chrome}`);
+    assert.equal(fs.existsSync(marker), false, `the installed-Chrome stand-in never ran for ${chrome}`);
+  }
+});
+
+test('the browser is launched with the mock keychain, the basic password store and a private profile in the run directory, so macOS raises no Keychain dialog', async t => {
+  const dir = tempDir(t, 'kaminos-gui-smoke-argv-');
+  // A browser that records its arguments and exits at once, so the smoke
+  // fails in its browser-launch phase without waiting for a timeout.
+  const argvFile = path.join(dir, 'argv');
+  const recording = writeExecutable(path.join(dir, 'recording-browser'), `#!/bin/sh\n${VERSION_PROBE}printf '%s\\n' "$@" > '${argvFile}'\nexit 3\n`);
+  const home = seededHome(t);
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  t.after(() => { process.env.HOME = previousHome; });
+  const reportPath = path.join(dir, 'report.json');
+  await runSuite({ root, only: ['tests/gui-smoke.mjs'], browser: recording, timeoutMs: 120000, parallel: 1, reportPath, logsDir: path.join(dir, 'logs') });
+  process.env.HOME = previousHome;
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const result = report.results.find(r => r.file === 'tests/gui-smoke.mjs');
+  assert.ok(result?.log, JSON.stringify(report.results));
+  const receipt = receiptOf(t, fs.readFileSync(result.log, 'utf8'));
+  assert.ok(fs.existsSync(argvFile), `the browser was launched (the run reached ${receipt.phase}: ${receipt.error})`);
+  assert.equal(receipt.failurePhase, 'browser-launch', receipt.error);
+  const argv = fs.readFileSync(argvFile, 'utf8').split('\n').filter(Boolean);
+  assert.ok(argv.includes('--use-mock-keychain'), `--use-mock-keychain in ${argv.join(' ')}`);
+  assert.ok(argv.includes('--password-store=basic'), `--password-store=basic in ${argv.join(' ')}`);
+  const profiles = argv.filter(a => a.startsWith('--user-data-dir='));
+  assert.deepEqual(profiles, [`--user-data-dir=${receipt.isolation.browserProfile}`], argv.join(' '));
+  assert.ok(receipt.isolation.browserProfile.startsWith(`${receipt.isolation.runDir}${path.sep}`), receipt.isolation.browserProfile);
 });
 
 test('a runner timeout stops the server and the browser with the test, and leaves a receipt naming the phase it reached', async t => {
   const dir = tempDir(t, 'kaminos-gui-smoke-timeout-');
   // A browser that never opens its DevTools port, so the run waits until the
   // runner's timeout kills it.
-  const hanging = writeExecutable(path.join(dir, 'hanging-browser'), '#!/bin/sh\nexec sleep 600\n');
+  const hanging = writeExecutable(path.join(dir, 'hanging-browser'), `#!/bin/sh\n${VERSION_PROBE}exec sleep 600\n`);
   const home = seededHome(t);
   const previousHome = process.env.HOME;
   process.env.HOME = home;
@@ -134,6 +172,8 @@ test('a full run leaves the stores of its HOME untouched and keeps every path it
     const [code] = await new Promise(resolve => child.on('close', (...args) => resolve(args)));
     assert.deepEqual(listing(home), before, 'nothing under HOME changed');
     const receipt = receiptOf(t, output);
+    // For checking the system log for this browser afterwards.
+    t.diagnostic(`browser pid ${receipt.browserPid}, ${receipt.browserVersion}, started ${receipt.startedAt}`);
     assert.equal(code, 0, output.slice(-3000));
     const { isolation } = receipt;
     const bases = [isolation.runDir, isolation.runDirReal];

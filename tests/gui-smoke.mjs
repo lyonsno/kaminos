@@ -176,7 +176,9 @@ async function main() {
   const chrome = process.env.KAMINOS_CHROME;
   if (!chrome) throw new Error('KAMINOS_CHROME is not set. Point it at a Chrome for Testing executable (the runner sets it from KAMINOS_BROWSER); the installed Google Chrome is never used.');
   let chromeReal;
-  try { chromeReal = realpathSync(chrome); } catch (error) { throw new Error(`KAMINOS_CHROME=${chrome} cannot be resolved: ${error.message}`); }
+  // The native real path carries the volume's own spelling, so a link or a
+  // differently cased path to the installed app is still recognized.
+  try { chromeReal = realpathSync.native(chrome); } catch (error) { throw new Error(`KAMINOS_CHROME=${chrome} cannot be resolved: ${error.message}`); }
   receipt.executableRealpath = chromeReal;
   if (INSTALLED_CHROME.test(chrome) || INSTALLED_CHROME.test(chromeReal)) throw new Error(`KAMINOS_CHROME (${chrome}) resolves to the installed Google Chrome (${chromeReal}); use a Chrome for Testing executable`);
   accessSync(chromeReal, constants.X_OK);

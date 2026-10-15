@@ -107,7 +107,7 @@ test('a KAMINOS_BROWSER that is not an executable file is an environment error b
 });
 
 test('a KAMINOS_BROWSER whose --version never answers is recorded without a version instead of stalling the run', async t => {
-  const stub = await browserStub(t, '#!/bin/sh\nif [ "$1" = "--version" ]; then exec sleep 600; fi\nenv\n');
+  const stub = await browserStub(t, '#!/bin/sh\nfor a in "$@"; do [ "$a" = --version ] && exec sleep 600; done\nenv\n');
   const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST }, manifest: manifestOf({}) });
   const started = Date.now();
   const result = await run(f, { browser: stub, browserVersionTimeoutMs: 300 });
@@ -116,4 +116,43 @@ test('a KAMINOS_BROWSER whose --version never answers is recorded without a vers
   assert.equal(result.ok, true, JSON.stringify(report.results.map(r => [r.file, r.outcome])));
   assert.equal(report.effective.browser.version, null);
   assert.match(report.effective.browser.versionError, /timed out|ETIMEDOUT/);
+});
+
+test('a KAMINOS_BROWSER inside the installed Google Chrome is refused in the browser phase, directly, through a link and spelled in lowercase', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-installed-chrome-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const installed = path.join(dir, 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome');
+  await fs.mkdir(path.dirname(installed), { recursive: true });
+  await fs.writeFile(installed, '#!/bin/sh\nenv\n', { mode: 0o755 });
+  const link = path.join(dir, 'chrome-for-testing');
+  await fs.symlink(installed, link);
+  // On a case-insensitive volume the lowercase spelling names the same file.
+  const lower = path.join(dir, 'applications', 'google chrome.app', 'contents', 'macos', 'google chrome');
+  const lowerResolves = await fs.access(lower).then(() => true, () => false);
+  if (!lowerResolves) t.diagnostic('case-sensitive volume: the lowercase spelling is a different, missing path here');
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST }, manifest: manifestOf({}) });
+  for (const browser of [installed, link, ...(lowerResolves ? [lower] : [])]) {
+    assert.equal((await run(f, { browser })).ok, false, browser);
+    const report = await readReport(f);
+    assert.equal(report.failurePhase, 'browser', browser);
+    assert.match(report.error, /installed Google Chrome/, browser);
+    assert.equal(report.counts.executed, 0, browser);
+  }
+});
+
+test('the version probe launches the browser with the mock keychain, the basic password store and a private profile it removes', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-probe-argv-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const argvFile = path.join(dir, 'argv');
+  const stub = await browserStub(t, `#!/bin/sh\nfor a in "$@"; do [ "$a" = --version ] && { printf '%s\\n' "$@" > '${argvFile}'; echo 'Stub Browser 1.0'; exit 0; }; done\nenv\n`);
+  const f = await fixture(t, { files: { 'b.mjs': BROWSER_TEST }, manifest: manifestOf({}) });
+  assert.equal((await run(f, { browser: stub })).ok, true);
+  assert.equal((await readReport(f)).effective.browser.version, 'Stub Browser 1.0');
+  const argv = (await fs.readFile(argvFile, 'utf8')).split('\n').filter(Boolean);
+  assert.equal(argv.length, 4, argv.join(' '));
+  assert.deepEqual([argv[0], argv[1], argv[3]], ['--use-mock-keychain', '--password-store=basic', '--version']);
+  const profile = argv[2].match(/^--user-data-dir=(.+)$/)?.[1];
+  assert.ok(profile, `a --user-data-dir in ${argv.join(' ')}`);
+  assert.ok(path.basename(profile).startsWith('kaminos-browser-version-'), `the profile ${profile} is the probe's own`);
+  assert.equal(await fs.access(profile).then(() => true, () => false), false, `the profile ${profile} was removed`);
 });
