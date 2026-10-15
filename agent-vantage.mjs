@@ -7,7 +7,7 @@
 import {
   VANTAGE_SCHEMA, DEFAULT_PILOT, vantageCameraId, poseLookingAt, poseAxes, movedPose, turnedPose,
   orbitPose, framePose, framingDistance, objectsInView, objectsInProjection, viewChange, resolveTarget, checkedCommand,
-  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, rayThrough, rayCrossesBox,
+  SKETCH_SCHEMA, sketchMapLayout, opticsOfView, rayThrough, rayCrossesBox, insideClipDepth,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
 
@@ -304,13 +304,20 @@ export function createVantagePilot(host) {
         if (capturing) fail('busy', 'The sub is taking a picture; pick from the operator view after it');
         source = 'operator'; camera = host.cameraMatrices();
       }
-      else { const record = requireSub(pilot); source = record.id; camera = opticsOfView(viewOf(record), aspect()); }
+      else {
+        // Looking through the sub, the operator sees its view through the camera frame's zoom and
+        // offset; a sub pick then uses those same matrices so its fractions mean the same frame.
+        const record = requireSub(pilot), state = host.cameras.state(), through = state.mode === 'camera' && state.activeId === record.id;
+        if (through && capturing) fail('busy', 'The sub is taking a picture; pick after it');
+        source = record.id;
+        camera = through ? host.cameraMatrices() : opticsOfView(viewOf(record), aspect());
+      }
       if (!host.raycast) fail('pick', 'This page cannot cast rays into its scene');
-      const ray = rayThrough(camera, at), {hits, missing} = host.raycast(ray, {exclude: subIds(), pose: pose ?? null});
+      const ray = rayThrough(camera, at), {hits, missing, unresolved = []} = host.raycast(ray, {exclude: subIds(), pose: pose ?? null, optics: camera});
       const fields = host.extraTargets().filter(field => field.bounds).map(field => ({field, crossing: rayCrossesBox(ray, field.bounds)}))
         .filter(item => item.crossing).map(({field, crossing}) => ({id: field.id, label: field.label, type: field.type, enter: crossing.enter, exit: crossing.exit}));
       return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ray, hit: hits[0] ?? null,
-        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields, missing,
+        beyond: hits.slice(1).map(hit => ({id: hit.id, label: hit.label, distance: hit.distance})), fields, missing, unresolved,
         pickedAt: new Date(host.now()).toISOString()};
     },
   };
@@ -685,28 +692,52 @@ const meshPath = (root, node) => {
   for (let at = node; at && at !== root; at = at.parent) path.unshift(at.parent ? at.parent.children.indexOf(at) : -1);
   return path;
 };
-const geometryIdentity = geometry => ({uuid: geometry?.uuid ?? null, version: geometry?.attributes?.position?.version ?? null,
-  vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null});
+// A sampled content fingerprint: FNV-1a over up to 512 evenly spaced vertex
+// positions, so the same geometry can be recognised after a page reload. It is
+// a sample, so an edit between sampled vertices can escape it.
+function sampledPositions(geometry) {
+  const position = geometry?.attributes?.position;
+  if (!position) return null;
+  let hash = 0x811c9dc5;
+  const mix = value => { hash ^= value & 0xff; hash = Math.imul(hash, 0x01000193) >>> 0; };
+  const step = Math.max(1, Math.floor(position.count / 512));
+  for (let i = 0; i < position.count; i += step) {
+    for (const value of [position.getX(i), position.getY(i), position.getZ(i)]) {
+      const q = Math.round(value * 1e5);
+      mix(q); mix(q >> 8); mix(q >> 16); mix(q >> 24);
+    }
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+const geometryIdentity = (geometry, session = null) => ({uuid: geometry?.uuid ?? null, version: geometry?.attributes?.position?.version ?? null,
+  vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null, sample: sampledPositions(geometry), session});
 // Whether the geometry under a mesh is the one a picture recorded. Within one
-// page session a geometry keeps its uuid and counts edits in its version; after
-// a reload every uuid differs, so equal counts can only be reported unverified.
-function geometryStatus(recorded, current) {
+// page session a geometry keeps its uuid and counts edits in its version, so a
+// different uuid is a replacement. Across sessions every uuid differs; the
+// sampled fingerprint then says likely-same or replaced.
+function geometryStatus(recorded, current, session) {
   if (!current) return 'replaced';
-  if (recorded.uuid && recorded.uuid === current.uuid) return recorded.version === current.version ? 'same' : 'edited';
-  return recorded.vertices === current.vertices && recorded.indices === current.indices ? 'unverified' : 'replaced';
+  if (session && recorded.session === session) {
+    if (recorded.uuid !== current.uuid) return 'replaced';
+    return recorded.version === current.version ? 'same' : 'edited';
+  }
+  if (recorded.vertices !== current.vertices || recorded.indices !== current.indices) return 'replaced';
+  if (recorded.sample && current.sample) return recorded.sample === current.sample ? 'likely-same' : 'replaced';
+  return 'unverified';
 }
 const sameMatrix = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 1e-9 * Math.max(1, Math.abs(value)));
 
 // Where each scene object stands and how to recognise its geometry: what a
-// picture records about the objects it shows.
-export function poseOfEntries(entries) {
+// picture records about the objects it shows. `session` names the page session
+// whose geometry identities these are.
+export function poseOfEntries(entries, {session = null} = {}) {
   const poses = [];
   for (const entry of entries) {
     if (!isPickable(entry)) continue;
     entry.object.updateWorldMatrix(true, true);
     const meshes = [];
     entry.object.traverse(node => {
-      if (node.isMesh) meshes.push({path: meshPath(entry.object, node), matrixWorld: node.matrixWorld.toArray(), geometry: geometryIdentity(node.geometry)});
+      if (node.isMesh) meshes.push({path: meshPath(entry.object, node), matrixWorld: node.matrixWorld.toArray(), geometry: geometryIdentity(node.geometry, session)});
     });
     poses.push({id: entry.id, root: entry.object.matrixWorld.toArray(), meshes});
   }
@@ -714,27 +745,44 @@ export function poseOfEntries(entries) {
 }
 
 // The nearest visible mesh hit of a ray in each scene entry, nearest first.
-// Cameras, lights, editor helpers and hidden objects are skipped. A hit names
-// the entry, the point in world and in the entry's own frame, the surface
-// normal, and which mesh and face it struck. With `pose`, the objects a kept
-// picture recorded are put back where they stood for the cast, only they are
-// candidates, and each hit says whether its object has moved since and whether
-// its geometry is the same, edited, replaced or unverified.
-export function raycastEntries(THREE, entries, {origin, direction}, {exclude = [], pose = null} = {}) {
-  const caster = new THREE.Raycaster(new THREE.Vector3(...origin), new THREE.Vector3(...direction).normalize());
+// Cameras, lights, editor helpers, hidden objects and invisible materials are
+// skipped; with `optics`, so is anything outside the camera's near and far
+// planes. A hit names the entry, the point in world and in the entry's own
+// frame, the surface normal, and which mesh, face and instance it struck.
+// Point clouds such as splats are not picked: one lying along the ray in front
+// of the hit is listed in `unresolved`, since it may be what the point shows.
+// With `pose`, the objects a kept picture recorded are put back where they
+// stood for the cast, only they are candidates, and each hit says whether its
+// object has moved since and how its geometry compares; recorded objects that
+// are gone are listed in `missing`.
+export function raycastEntries(THREE, entries, ray, {exclude = [], pose = null, optics = null, session = null} = {}) {
+  const caster = new THREE.Raycaster(new THREE.Vector3(...ray.origin), new THREE.Vector3(...ray.direction).normalize());
   const shown = object => {
     for (let node = object; node; node = node.parent) {
       if (!node.visible || node.userData?.kaminosEditorHelper || node.userData?.kaminosEditorOnly) return false;
     }
     return true;
   };
-  const posed = pose ? new Map(pose.map(entry => [entry.id, entry])) : null, present = new Set(), hits = [];
+  const drawn = hit => {
+    const material = Array.isArray(hit.object.material) ? hit.object.material[hit.face?.materialIndex ?? 0] : hit.object.material;
+    return !!material && material.visible !== false && !(material.transparent && material.opacity <= 0);
+  };
+  const inDepth = hit => !optics || insideClipDepth(optics, hit.point.toArray());
+  const usable = hit => hit.object.isMesh && shown(hit.object) && drawn(hit) && inDepth(hit);
+  const posed = pose ? new Map(pose.map(entry => [entry.id, entry])) : null, present = new Set(), hits = [], clouds = [];
   const describe = (entry, hit, frame, extra) => {
-    const normal = hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)).normalize() : null;
+    let surfaceMatrix = hit.object.matrixWorld;
+    if (hit.instanceId !== undefined && hit.object.isInstancedMesh) {
+      const instance = new THREE.Matrix4();
+      hit.object.getMatrixAt(hit.instanceId, instance);
+      surfaceMatrix = hit.object.matrixWorld.clone().multiply(instance);
+    }
+    const normal = hit.face ? hit.face.normal.clone().applyMatrix3(new THREE.Matrix3().getNormalMatrix(surfaceMatrix)).normalize() : null;
     const geometry = hit.object.geometry;
     return {id: entry.id, label: entry.label || entry.fileName || entry.id, type: entry.type, distance: hit.distance,
       point: hit.point.toArray(), local: hit.point.clone().applyMatrix4(frame.clone().invert()).toArray(), normal: normal?.toArray() ?? null,
-      surface: {path: meshPath(entry.object, hit.object), mesh: hit.object.name || null, face: hit.faceIndex ?? null},
+      surface: {path: meshPath(entry.object, hit.object), mesh: hit.object.name || null, face: hit.faceIndex ?? null,
+        ...(hit.instanceId !== undefined ? {instance: hit.instanceId} : {})},
       geometry: {vertices: geometry?.attributes?.position?.count ?? null, indices: geometry?.index?.count ?? null},
       source: entry.object.userData?.kaminosSceneObject?.source ?? null, ...extra};
   };
@@ -745,7 +793,13 @@ export function raycastEntries(THREE, entries, {origin, direction}, {exclude = [
     if (posed && !recorded) continue;
     if (!recorded) {
       if (!shown(entry.object)) continue;
-      const hit = caster.intersectObject(entry.object, true).find(item => item.object.isMesh && shown(item.object));
+      let cloud = false;
+      entry.object.traverse(node => { if (node.isPoints && shown(node)) cloud = true; });
+      if (cloud || entry.type === 'splat') {
+        const crossing = rayCrossesBox(ray, (() => { const box = new THREE.Box3().setFromObject(entry.object); return {min: box.min.toArray(), max: box.max.toArray()}; })());
+        if (crossing) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, distance: crossing.enter, reason: 'point clouds are not picked'});
+      }
+      const hit = caster.intersectObject(entry.object, true).find(usable);
       if (hit) hits.push(describe(entry, hit, entry.object.matrixWorld, {pictured: false}));
       continue;
     }
@@ -758,16 +812,21 @@ export function raycastEntries(THREE, entries, {origin, direction}, {exclude = [
         for (const index of mesh.path) node = node?.children?.[index];
         if (!node?.isMesh) continue;
         node.matrixWorld.fromArray(mesh.matrixWorld);
-        const hit = caster.intersectObject(node, false)[0];
-        if (hit && (!best || hit.distance < best.hit.distance)) best = {hit, mesh, status: geometryStatus(mesh.geometry, geometryIdentity(node.geometry))};
+        const hit = caster.intersectObject(node, false).find(item => drawn(item) && inDepth(item));
+        if (hit && (!best || hit.distance < best.hit.distance)) {
+          best = {hit, status: geometryStatus(mesh.geometry, geometryIdentity(node.geometry, session), session)};
+        }
       }
     } finally {
       entry.object.updateWorldMatrix(true, true);
     }
     if (best) hits.push(describe(entry, best.hit, new THREE.Matrix4().fromArray(recorded.root),
-      {pictured: true, moved, geometry: {...geometryIdentity(best.hit.object.geometry), status: best.status}}));
+      {pictured: true, moved, geometry: {...geometryIdentity(best.hit.object.geometry, session), status: best.status}}));
   }
-  return {hits: hits.sort((a, b) => a.distance - b.distance), missing: posed ? [...posed.keys()].filter(id => !present.has(id)) : []};
+  hits.sort((a, b) => a.distance - b.distance);
+  const nearest = hits[0]?.distance ?? Infinity;
+  return {hits, missing: posed ? [...posed.keys()].filter(id => !present.has(id)) : [],
+    unresolved: clouds.filter(cloud => cloud.distance < nearest).sort((a, b) => a.distance - b.distance)};
 }
 
 /**
@@ -807,8 +866,8 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     annotate: (canvas, inView) => annotateCanvas(document, canvas, inView),
     sheet: (frames, options) => contactSheet(document, frames, options),
     paintMap: layout => paintSceneMap(document, layout),
-    raycast: (ray, options) => raycastEntries(THREE, entries(), ray, options),
-    pose: () => poseOfEntries(entries()),
+    raycast: (ray, options) => raycastEntries(THREE, entries(), ray, {...options, session: pageId}),
+    pose: () => poseOfEntries(entries(), {session: pageId}),
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
   });

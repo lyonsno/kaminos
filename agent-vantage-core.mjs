@@ -2,7 +2,7 @@
 // agent pilots from the terminal and the operator places like any scene object.
 // Poses use the scene's camera convention: the camera looks down local -Z with
 // local +Y up, and rotation is an XYZ Euler triple in radians.
-import {Vector3, Quaternion, Euler, Matrix4, Box3, Frustum, PerspectiveCamera, WebGLCoordinateSystem} from './lib/three.core.js';
+import {Vector3, Vector4, Quaternion, Euler, Matrix4, Box3, Frustum, PerspectiveCamera, WebGLCoordinateSystem, WebGPUCoordinateSystem} from './lib/three.core.js';
 
 export const VANTAGE_SCHEMA = 'kaminos.agent-vantage.v1';
 export const DEFAULT_PILOT = 'bebop';
@@ -184,6 +184,16 @@ export function rayThrough({projection, viewInverse}, [x, y]) {
   return {origin: origin.toArray(), direction: direction.toArray()};
 }
 
+// Whether a world point lies between a camera's near and far planes, from the
+// matrices it renders with and its clip convention: WebGPU depth runs 0 to 1,
+// WebGL -1 to 1, and a reversed depth stays inside the same range.
+export function insideClipDepth({projection, viewInverse, coordinateSystem = WebGLCoordinateSystem}, point) {
+  const clip = new Vector4(...point, 1).applyMatrix4(new Matrix4().fromArray(viewInverse)).applyMatrix4(new Matrix4().fromArray(projection));
+  if (!(clip.w > 0)) return false;
+  const depth = clip.z / clip.w, low = coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
+  return depth >= low - 1e-9 && depth <= 1 + 1e-9;
+}
+
 // Where a ray enters and leaves an axis-aligned box, as distances along it, or
 // null when it misses. A ray starting inside enters at 0.
 export function rayCrossesBox({origin, direction}, {min, max}) {
@@ -292,7 +302,10 @@ const fraction = at => {
 const sixteen = value => Array.isArray(value) && value.length === 16 && value.every(Number.isFinite);
 const matrices = optics => {
   if (!optics || !sixteen(optics.projection) || !sixteen(optics.viewInverse)) throw new Error('Pick optics need projection and viewInverse matrices of 16 numbers');
-  return {projection: [...optics.projection], viewInverse: [...optics.viewInverse]};
+  return {projection: [...optics.projection], viewInverse: [...optics.viewInverse],
+    ...(Number.isFinite(optics.near) ? {near: optics.near} : {}),
+    ...(Number.isFinite(optics.coordinateSystem) ? {coordinateSystem: optics.coordinateSystem} : {}),
+    ...(typeof optics.reversedDepth === 'boolean' ? {reversedDepth: optics.reversedDepth} : {})};
 };
 // The objects a picture showed, as it recorded them: where each mesh stood and
 // how to recognise its geometry later.
