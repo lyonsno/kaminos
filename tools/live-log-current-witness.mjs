@@ -81,7 +81,7 @@ try {
   await page.goto(restoredUrl.href);
   await page.waitForFunction(()=>{
     const state=window.kaminosFlameEmitterState?.(),info=document.getElementById('info-bar')?.textContent||'';
-    return (state?.registered&&info.startsWith('Scene loaded:'))||document.querySelector('#status.failed')||info.startsWith('Scene load failed');
+    return (state?.registered&&info.startsWith('Scene loaded:')&&window.kaminosWorkbenchExperiments?.state())||document.querySelector('#status.failed')||info.startsWith('Scene load failed');
   });
   report.restoredSource=await page.evaluate(()=>window.kaminosFlameEmitterState());
   report.restoredObservation=await page.evaluate(()=>({source:window.kaminosFlameEmitterState(),experiment:window.kaminosWorkbenchExperiments?.state(),info:document.getElementById('info-bar')?.textContent}));
