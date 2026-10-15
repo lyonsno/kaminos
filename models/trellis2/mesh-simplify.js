@@ -250,7 +250,8 @@ function admitSurface(points,triangles){
 // fast_simplification.simplify(points,triangles,target_reduction|target_count,
 // agg=7,preserve_border=False). Points are widened to F64 and U32 indices are
 // read as I32, matching the wrapper. Returns F64 points and I32 triangles.
-export function simplifyMesh(points,triangles,{targetReduction,targetCount,aggressiveness=7,preserveBorder=false,onIteration}={}){
+// engine, when given (wasm-simplify.js), runs the same simplify_mesh in place of this port.
+export function simplifyMesh(points,triangles,{targetReduction,targetCount,aggressiveness=7,preserveBorder=false,onIteration,engine}={}){
   admitSurface(points,triangles);
   const nFaces=triangles.length/3;
   if(targetReduction&&targetCount)throw Error('specify targetReduction or targetCount, not both');
@@ -263,6 +264,7 @@ export function simplifyMesh(points,triangles,{targetReduction,targetCount,aggre
   if(count<0)throw RangeError('targetCount must be positive');
   if(count>nFaces)throw RangeError('targetCount must not exceed the face count');
   count=Math.trunc(count);
+  if(engine)return engine(points,triangles,count,aggressiveness,preserveBorder,onIteration);
   const s=new FastQuadricSimplifier(points,triangles instanceof Int32Array?triangles:new Int32Array(triangles.buffer,triangles.byteOffset,triangles.length));
   s.simplify(count,aggressiveness,preserveBorder,onIteration);
   return {points:s.p.slice(0,s.nv*3),triangles:s.tv.slice(0,s.nt*3)};

@@ -6,6 +6,7 @@
 // numpy reduction order and trimesh/networkx traversal. Those orders are
 // reproduced here so the same input gives the same triangles, not a look-alike.
 import {simplifyMesh} from './mesh-simplify.js';
+import {loadSimplifier} from './wasm-simplify.js';
 import {admitSignal,abortError,runFinishingWorker} from './finishing-worker.js';
 
 export const MESH_POSTPROCESS_ROUTE='Trellis2MLX/surface-preserving/browser-port-of-fast-simplify-first';
@@ -322,7 +323,8 @@ function admitSurface(vertices,faces){
 
 // onProgress, if given, sees {kind,...,elapsedSeconds} as the work happens:
 // entered, simplify-iteration, cleanup-step, and pass (each receipt trace row).
-export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onProgress}={}){
+// simplifier: an engine from wasm-simplify.js loadSimplifier, or undefined for the JS port.
+export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onProgress,simplifier}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive targetFaces required');
   admitSurface(vertices,faces);
   const started=performance.now(),emit=onProgress?e=>onProgress({...e,elapsedSeconds:(performance.now()-started)/1000}):()=>{};
@@ -337,7 +339,7 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
     // over the target). Every later cleanup keeps the already-filtered parts.
     const count=m=>m.faces.length/3,later={keepLargest:false,minComponentArea:0};
     const step=(operation,input,m)=>{trace.push({operation,inputFaces:input,outputFaces:count(m)});onPass(trace.at(-1));return m;};
-    const simplify=(m,reduction,operation)=>{const r=simplifyMesh(m.vertices,m.faces,{targetReduction:reduction,onIteration:onIteration(operation)});
+    const simplify=(m,reduction,operation)=>{const r=simplifyMesh(m.vertices,m.faces,{targetReduction:reduction,onIteration:onIteration(operation),engine:simplifier});
       return step(operation,count(m),{vertices:r.points,faces:r.triangles});};
     let m=step('cleanup',f.length/3,cleanupMesh(v,f,{keepLargest,fixNormals:false,onStep:onStep('cleanup')}));
     const finish=m=>{const clean=step('cleanup_final',count(m),cleanupMesh(m.vertices,m.faces,{...later,onStep:onStep('cleanup_final')}));
@@ -361,7 +363,7 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
   }
   for(let pass=0;pass<3;pass++){
     const ratio=targetFaces/(f.length/3);if(ratio>=1)break;
-    const input=f.length/3;({points:v,triangles:f}=simplifyMesh(v,f,{targetReduction:1.0-ratio,onIteration:onIteration('simplify_first')}));
+    const input=f.length/3;({points:v,triangles:f}=simplifyMesh(v,f,{targetReduction:1.0-ratio,onIteration:onIteration('simplify_first'),engine:simplifier}));
     trace.push({operation:'simplify_first',inputFaces:input,outputFaces:f.length/3});onPass(trace.at(-1));
     if(f.length/3<=targetFaces*1.1)break;
   }
@@ -374,9 +376,12 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
 // finisher in the page, with the same receipt shape the server finisher emits.
 // With WorkerClass it runs in mesh-cleanup-worker.js; without, on the caller's
 // thread. Either way the input arrays are copied, never detached from the caller.
-export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress}={}){
+// simplifier: 'auto' (Wasm where relaxed-SIMD multiply-adds fuse, else the JS
+// port) or 'js'; the receipt records which one ran.
+export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress,simplifier='auto'}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
   if(onProgress!==undefined&&typeof onProgress!=='function')throw TypeError('onProgress must be a function');
+  if(simplifier!=='auto'&&simplifier!=='js')throw TypeError("simplifier must be 'auto' or 'js'");
   // An observer that throws is the caller's problem, never the finisher's.
   const observe=onProgress&&(e=>{try{onProgress(e);}catch{}});
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
@@ -385,14 +390,16 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
     admitSurface(mesh.vertices,mesh.triangles); // before copying, so nothing is coerced
     const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
     const data=await runFinishingWorker({WorkerClass,url:new URL('./mesh-cleanup-worker.js',import.meta.url),signal,label:'mesh finisher',
-      message:{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest,progress:!!observe},transfer:[vertices.buffer,triangles.buffer],onProgress:observe});
-    return {vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace};
+      message:{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest,progress:!!observe,simplifier},transfer:[vertices.buffer,triangles.buffer],onProgress:observe});
+    return {vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace,simplifier:data.simplifier};
   }:async mesh=>{
     // Synchronous on this thread: Stop is honoured before and after, not mid-call.
     if(signal?.aborted)throw abortError(signal);
-    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe});
+    const {engine,route,reason}=await loadSimplifier({prefer:simplifier});
     if(signal?.aborted)throw abortError(signal);
-    return result;
+    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe,simplifier:engine??undefined});
+    if(signal?.aborted)throw abortError(signal);
+    return {...result,simplifier:reason?{route,reason}:{route}};
   };
   return async mesh=>{
     const started=performance.now(),inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
@@ -402,6 +409,6 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
       effectiveRoute:MESH_POSTPROCESS_ROUTE,execution:WorkerClass?'module-worker':'caller-thread',
       parityReference:'TRELLIS2MLX 1201553 postprocess-retained-mesh.py mlx-surface-preserving',
       modelCalls:0,targetFaces,keepLargest,inputVertices,inputFaces,outputVertices:result.vertices.length/3,
-      outputFaces:result.faces.length/3,operationTrace:result.trace,elapsedSeconds:(performance.now()-started)/1000}}};
+      outputFaces:result.faces.length/3,operationTrace:result.trace,simplifier:result.simplifier,elapsedSeconds:(performance.now()-started)/1000}}};
   };
 }
