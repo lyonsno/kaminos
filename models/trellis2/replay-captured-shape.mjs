@@ -40,6 +40,11 @@ try{
   report.browserVersion=await browser.version();report.browserPid=browser.process().pid;
   const page=await browser.newPage();
   await page.exposeFunction('__phase',async phase=>{report.phase=phase;report.phases.push({phase,at:Date.now()});await persist();});
+  // Preserve effective identity independently of the eventual evaluate return.
+  // These observations stay explicitly partial if a later decoder step fails.
+  await page.exposeFunction('__observe',async partial=>{
+    report.observedNative={...report.observedNative,...partial};await persist();
+  });
   await page.exposeFunction('__save',async(name,encoded,offset,total)=>{
     if(!['geometry.features','geometry.coordinates','mesh.vertices','mesh.triangles'].includes(name))throw Error('unknown replay output');
     const file=path.join(out,name+'.bin'),previous=report.outputs[name];
@@ -63,9 +68,11 @@ try{
     const manifest=JSON.parse(new TextDecoder().decode(manifestRaw));
     const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw Error('native WebGPU adapter required');
     const backend={vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description,
-      isFallbackAdapter:adapter.info.isFallbackAdapter??adapter.isFallbackAdapter};validateNativePrefixBackend(backend);
+      isFallbackAdapter:adapter.info.isFallbackAdapter??adapter.isFallbackAdapter};
+    await window.__observe({backend});validateNativePrefixBackend(backend);
     for(const feature of ['shader-f16','timestamp-query'])if(!adapter.features.has(feature))throw Error('native feature required: '+feature);
     const device=await adapter.requestDevice({requiredFeatures:['shader-f16','timestamp-query'],requiredLimits:{maxBufferSize:adapter.limits.maxBufferSize,maxStorageBufferBindingSize:adapter.limits.maxStorageBufferBindingSize}});
+    await window.__observe({effectiveFeatures:[...device.features]});
     const errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));device.pushErrorScope('validation');
     const session=await createWebGpuInferenceSession({sessionId:'grass-saved-shape-'+crypto.randomUUID(),device,queue:device.queue,adapter,
       adapterName:backend.description||backend.device||backend.vendor,deviceOwnership:'borrowed'});
@@ -75,6 +82,7 @@ try{
       await window.__save(name,btoa(s),offset,u.length);}};
     try{
       const route=await session.registerRoute({routeId:'trellis2.saved-shape-mesh-replay',runtimeOptions:{requiredStages:meta.decoder.plan.stages}}),runtime=route.runtime;
+      await window.__observe({routeId:route.routeId});
       const readParameter=key=>readGenerationTensor(manifest.tensors[key],{fetchFile:file=>fetch('/checkpoint/'+file),hash});
       const upload=async name=>{const spec=meta.files.find(f=>f.name===name),bytes=await(await fetch('/capture/'+name+'.bin')).arrayBuffer();
         if(bytes.byteLength!==spec.byteLength||await hash(bytes)!==spec.sha256)throw Error('captured input changed: '+name);
@@ -87,6 +95,9 @@ try{
       const terminal=await route.enqueue({jobId:'saved-shape-complete',execute:i=>decoder.run(i)}).completion;
       if(terminal.status!=='succeeded')throw Error(terminal.failure?.message??'saved decoder failed');
       await window.__phase('raw-geometry-retention');const decoded=terminal.output;
+      const descriptor=t=>({shape:[...t.shape],dtype:t.dtype,byteLength:t.byteLength});
+      await window.__observe({decoded:{rows:decoded.features.shape[0],resolution:decoded.resolution,activationStorage:decoded.activationStorage,
+        features:descriptor(decoded.features),coordinates:descriptor(decoded.coordinates)}});
       const features=await runtime.readTensor(decoded.features),coordinates=await runtime.readTensor(decoded.coordinates);
       await save('geometry.features',features);await save('geometry.coordinates',coordinates);
       await window.__phase('mesh-extraction');
@@ -102,5 +113,13 @@ try{
   for(const name of ['geometry.features','geometry.coordinates','mesh.vertices','mesh.triangles'])assert.equal(report.outputs[name]?.complete,true,'complete output required: '+name);
   report.phase='done';report.status='succeeded';
 }catch(error){report.error={name:error.name,message:error.message,stack:error.stack};process.exitCode=1;}
-finally{if(browser){await browser.close();report.ownedBrowserClosed=true;}if(server)await new Promise(resolve=>server.close(resolve));await persist();}
+finally{
+  // Compute/output status is independent of teardown. A close failure must not
+  // erase that result or prevent the other cleanup/report attempts.
+  const failed=(operation,error)=>{(report.teardownErrors??=[]).push({operation,message:String(error?.message??error)});process.exitCode=1;};
+  try{await persist();}catch(error){failed('persist-outcome',error);}
+  if(browser)try{await browser.close();report.ownedBrowserClosed=true;}catch(error){report.ownedBrowserClosed=false;failed('browser-close',error);}
+  if(server)try{await new Promise(resolve=>server.close(resolve));report.serverClosed=true;}catch(error){failed('server-close',error);}
+  try{await persist();}catch(error){failed('persist-final',error);console.error('Replay final report persistence failed:',error);}
+}
 console.log(JSON.stringify({status:report.status,phase:report.phase,faces:report.native?.faces,error:report.error?.message,report:path.join(out,'report.json')}));
