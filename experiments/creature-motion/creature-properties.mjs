@@ -7,6 +7,9 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  properties.append(style,el('h3','Creature'));
  const error=el('div');error.setAttribute('role','alert');error.textContent='';
  const select=(name,items,parent=properties)=>{const label=el('label',name),control=el('select');control.setAttribute('aria-label','Creature '+name.toLowerCase());for(const [value,text]of items){const option=el('option',text);option.value=value;control.append(option);}label.append(control);parent.append(label);return control;};
+ const action=select('Action',[['preview','Motion preview'],['wander','Wander here']]);
+ const actionNote=el('p');actionNote.style.cssText='margin:0;color:#a5b7bd;font-size:11px';properties.append(actionNote);
+ const editArea=el('button','Edit wander area');editArea.type='button';properties.append(editArea);
  const initial=read(),skins=initial.currentSkin?.choices??[];
  const casts=[...new Map(skins.map(c=>[c.cast,c])).values()];
  const cast=select('Cast',casts.map(c=>[c.cast,c.label]));cast.hidden=!casts.length;
@@ -21,6 +24,7 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  let disposed=false,lastVariants='';const requests=new Map(),failures=new Map();
  const perform=async(name,action)=>{if(disposed)return;const current=(requests.get(name)??0)+1;requests.set(name,current);failures.delete(name);try{const pending=action();update();await pending;}catch(e){if(!disposed&&requests.get(name)===current&&name!=='skin')failures.set(name,e.message);}finally{if(!disposed)update();}};
  const call=(name,input)=>perform(name,()=>invoke(name,input));
+ action.onchange=()=>call('action',{kind:action.value});editArea.onclick=()=>call('selectArea');
  cast.onchange=()=>{const current=read().currentSkin.current,variants=skins.filter(c=>c.cast===cast.value),choice=variants.find(c=>c.attachment===current.attachment)??variants.find(c=>c.attachment==='distributed')??variants[0];return call('skin',{cast:choice.cast,attachment:choice.attachment});};
  attachment.onchange=()=>call('skin',{cast:read().currentSkin.current.cast,attachment:attachment.value});
  motion.onchange=()=>call('motion',{id:motion.value});mode.onchange=()=>call('mode',{mode:mode.value});
@@ -37,7 +41,10 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
   if(disposed)return;const r=read(),s=r.currentSkin;
   // The selector owns Cast/Attachment errors, including requests made through
   // the agent invoker. Other properties cannot supersede that domain state.
-  error.textContent=[s?.error,...failures.values()].filter(Boolean).join('\n');
+  error.textContent=[s?.error,r.action?.error,...failures.values()].filter(Boolean).join('\n');
+  action.value=r.action?.kind??'preview';editArea.hidden=!r.action?.area?.mounted;
+  const wandering=r.action?.kind==='wander';mode.disabled=wandering;actionNote.hidden=!wandering;
+  actionNote.textContent=wandering?`${r.playback.status==='playing'?'Wandering':'Held pose'} · edit the area with the scene gizmo. Flat support; no foot-contact solve.`:'';
   if(s){cast.value=s.current.cast;cast.disabled=Boolean(s.pending);attachment.disabled=Boolean(s.pending);
    const variants=skins.filter(c=>c.cast===s.current.cast),key=variants.map(c=>c.attachment).join('|');
    if(key!==lastVariants){for(const child of [...attachment.children])child.remove();for(const c of variants){const o=el('option',c.attachmentLabel??c.attachment);o.value=c.attachment;attachment.append(o);}lastVariants=key;}attachment.value=s.current.attachment;
