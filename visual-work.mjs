@@ -18,17 +18,28 @@ export function assertCapturePixels({ width, height, channels, pixels }, capture
   assert.ok(varying, 'Capture is empty or uniform; inspect the rendered scene');
 }
 
-export function assertSavedResult(result, persisted, {workspace=null}={}) {
+export function assertSavedResult(result, persisted, {workspace=null,owner=null}={}) {
   assert.ok(result?.ok === true && result.document && result.filename?.endsWith('.kaminos.json'),
     `Save failed: ${result?.error || 'missing document result'}`);
-  assert.equal(result.url, compositionRestoreUrl(result.document.composition, result.filename, new URL(result.url).origin, workspace), 'Save URL differs from saved document');
+  assert.equal(result.url, compositionRestoreUrl(result.document.composition, result.filename, new URL(result.url).origin, workspace,owner), 'Save URL differs from saved document');
   assert.deepEqual(persisted, result.document, 'Persisted document differs from save result');
   return result;
 }
 
-export function assertMountedScene(document, actual) {
+export function assertMountedScene(document, actual, {authoredObjects=[],volume=null}={}) {
   for (const expected of document.objects || []) {
-    const mounted = actual.find(item => item.id === expected.id);
+    let mounted = actual.find(item => item.id === expected.id);
+    if(!mounted&&expected.type==='simulation-domain'){
+      const domain=authoredObjects.find(item=>item.id===expected.id&&item.type==='simulation-domain');
+      if(domain){
+        assert.ok(volume?.active&&Number.isFinite(volume.ordinaryDomainScale)&&volume.ordinaryDomainScale>0
+          &&volume.ordinaryDomainTranslation?.length===3&&volume.ordinaryDomainTranslation.every(Number.isFinite),'Live domain runtime is unavailable');
+        const scale=volume.ordinaryDomainScale,[x,y,z]=volume.ordinaryDomainTranslation;
+        const requestedGrid=expected.simulation?.settings?.['volume-resolution']?.value;
+        if(requestedGrid!==undefined)assert.equal(volume.controls?.resolution,Number(requestedGrid),'Live domain grid differs from saved domain grid');
+        mounted={...domain,transform:{position:[x,y+scale,z],rotation:[0,0,0],scale:[scale,scale,scale]}};
+      }
+    }
     assert.ok(mounted, `Mount missing object ${expected.id}`);
     for (const field of ['type', 'source']) assert.equal(mounted[field], expected[field], `Mount differs: ${expected.id}.${field}`);
     for (const field of ['position', 'rotation', 'scale']) {
@@ -41,7 +52,7 @@ export function assertMountedScene(document, actual) {
 
 // The caller supplies a Playwright page and feature operations. All edits and
 // persistence still run through the mounted editor's normal public operations.
-export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null, out, exercise }) {
+export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null,owner=null, out, exercise }) {
   await fs.mkdir(out, { recursive: true });
   const report = { status: 'running', phase: 'identity', startedAt: new Date().toISOString(),
     requested: { origin, repoRoot, sceneStore, basinStore, sceneFile, workspace }, observations: [], errors: [] };
@@ -62,7 +73,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
     const open = async filename => {
       report.phase = 'open'; await write();
       const document = await readScene(filename);
-      const url = compositionRestoreUrl(document.composition, filename, origin, workspace);
+      const url = compositionRestoreUrl(document.composition, filename, origin, workspace,owner);
       // Leaving the document explicitly also exercises fresh restoration when
       // only the scene hash would otherwise change.
       await page.goto('about:blank');
@@ -73,8 +84,8 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         if (failure || /Scene load failed|Invalid scene|water host unavailable/i.test(status)) throw Error(failure?.textContent || status);
         return /^(Scene loaded|Volume scene loaded)/.test(status);
       });
-      const objects = await page.evaluate(() => window.kaminosSceneObjectDebugState());
-      assertMountedScene(document, objects);
+      const mount = await page.evaluate(() => ({objects:window.kaminosSceneObjectDebugState(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,volume:window.__kaminosVolumePrototype?.debugState()}));
+      assertMountedScene(document, mount.objects, mount);report.mount=mount;
       assert.equal(new URL(page.url()).origin, new URL(origin).origin, 'Mount changed origin');
       const route = new URL(page.url());
       const effectiveScene = route.searchParams.get('scene') || new URLSearchParams(route.hash.slice(1)).get('scene');
@@ -84,7 +95,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       await write();
       return document;
     };
-    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null }) => {
+    const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null, owner: expectedOwner = owner }) => {
       assert.ok(/^[a-z0-9][a-z0-9_-]*$/i.test(name), 'Observation name must be a path-safe filename');
       report.phase = `observe:${name}`; await write();
       await settle(page);
@@ -93,7 +104,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture);
       if (!result?.ok) throw Error(`Save failed: ${result?.error || 'no result'}`);
       const persisted = await readScene(result.filename);
-      assertSavedResult(result, persisted, {workspace});
+      assertSavedResult(result, persisted, {workspace,owner:expectedOwner});
       assert.deepEqual(report.errors, [], 'Uncaught browser error');
       await fs.writeFile(path.join(out, `${name}.kaminos.json`), JSON.stringify(persisted, null, 2));
       if (capture) {

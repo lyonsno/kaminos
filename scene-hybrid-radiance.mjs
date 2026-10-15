@@ -7,33 +7,41 @@ import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
+import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,shadowResolution=256,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
+  if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('shadow softness must be finite and nonnegative');
+  validateShadowSampling(shadowSampling);
   const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
-  const points=createPointRegions(device,{count:pointCount});
-  const external=new THREE.ExternalTexture(points.texture);
-  external.image={width:pointCount,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
-  external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
-  const lights=Array.from({length:pointCount},(_,i)=>{
+  let points,external,lights,irradiance;
+  function buildPoints(count){
+  points=createPointRegions(device,{count,partition:count===2?'energy':'vertical'});
+  external=new THREE.ExternalTexture(points.texture);
+  external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
+  external.colorSpace=THREE.NoColorSpace;external.minFilter=external.magFilter=THREE.NearestFilter;external.generateMipmaps=false;
+  lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11)});
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
     const direction=delta.div(distance2.sqrt().max(1e-6));
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility)};
   });
-  let irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
+  irradiance=vec3(0);for(const light of lights)irradiance=irradiance.add(light.irradiance);irradiance=irradiance.mul(surfaceGain);
+  }
+  function releasePoints(){for(const light of lights)light.shadow.dispose();delete renderer.backend.get(external).texture;external.dispose();points.destroy();}
+  buildPoints(pointCount);
   const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   let sourceTransform=validateSceneSourceTransform();
-  const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,volumeGrid,directions,
+  const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,volumeGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
-    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','hard-point-shadows','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
+    limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
   function installMaterials(){
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
@@ -43,6 +51,10 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(!list.every(m=>m.isMeshStandardMaterial||m.isMeshStandardNodeMaterial||m.isMeshPhysicalMaterial||m.isMeshPhysicalNodeMaterial))return;
       const owned=list.map(original=>{
         const material=cloneSceneRadianceMaterial(renderer.library,original),setup=material.setupMaterialLightings;
+        const cacheKey=material.customProgramCacheKey;
+        // This injected graph is not one of NodeMaterial's enumerated node
+        // properties. A version bump alone can reuse its old texture bindings.
+        material.customProgramCacheKey=function(){return `${cacheKey.call(this)}:hybrid:${irradiance.uuid}`;};
         material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(irradiance)];};return material;
       });
       const installed=Array.isArray(source)?owned:owned[0];originals.set(mesh,{source,installed,owned});mesh.material=installed;
@@ -87,12 +99,24 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     setDirections(value){lightingDirections(value);directions=value;status.directions=value;},
     setAngularPattern(pattern,rotation=0){if(!['fixed','spatial','source','guided'].includes(pattern)||!Number.isFinite(rotation))throw new Error('valid angular pattern required');angularPattern=pattern;angularRotation=rotation;},
     setRetainComparisons(value){retainComparisons=!!value;},
+    setShadowSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');for(const light of lights)light.shadow.setSoftness(value);shadowSoftness=value;status.shadowSoftness=value;},
+    setShadowSampling(value){validateShadowSampling(value);for(const light of lights)light.shadow.setSampling(value);shadowSampling=value;status.shadowSampling=value;},
+    setPointCount(value){
+      if(![1,2].includes(value))throw Error('live surface point count must be 1 or 2');
+      if(disposed)throw Error('hybrid lighting disposed');
+      if(value===pointCount)return;
+      valid=false;releasePoints();buildPoints(value);pointCount=value;status.pointCount=value;status.status='awaiting-source';
+      // Material setup closes over the current irradiance graph. Mark all
+      // clones for recompilation so no draw retains the retired texture.
+      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+    },
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
     debugState(){return {...status,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(){if(!gather)throw new Error('hybrid not encoded');return gather.readback();},
+    readPointRegions(){if(!valid)throw Error('hybrid source not current');return points.readback();},
     dispose(){
       valid=false;disposed=true;prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
       for(const [mesh,row] of originals){
@@ -106,8 +130,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned)material.dispose();
       }
-      originals.clear();for(const light of lights)light.shadow.dispose();
-      delete renderer.backend.get(external).texture;external.dispose();points.destroy();gather?.destroy();
+      originals.clear();releasePoints();gather?.destroy();
     },
   };
 }

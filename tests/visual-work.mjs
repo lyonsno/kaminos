@@ -5,6 +5,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { assertMountedScene, assertSavedResult, assertCapturePixels } from '../visual-work.mjs';
+import { compositionRestoreUrl } from '../scene-authoring.mjs';
+
+test('save checks edited owner identity rather than accepting the opening count', () => {
+  const document={objects:[]},filename='edited.kaminos.json';
+  const opening={id:'fire-shadow-sampling',inputsText:'{"points":1}'},edited={...opening,inputsText:'{"points":2}'};
+  const result={ok:true,document,filename,url:compositionRestoreUrl(undefined,filename,'http://localhost','workbench',edited)};
+  assertSavedResult(result,document,{workspace:'workbench',owner:edited});
+  assert.throws(()=>assertSavedResult(result,document,{workspace:'workbench',owner:opening}),/Save URL differs/);
+});
 
 const object = { id: 'chair', type: 'glb', source: '/real.glb', transform: { position: [0, 1, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } };
 test('startup failure survives before the scene report exists', async () => {
