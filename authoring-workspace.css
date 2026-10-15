@@ -306,6 +306,7 @@ body[data-workspace=workbench] #authoring-assets{display:none!important;}
 #asset-step-source-name{color:#aeb6b9;font-size:11px;overflow-wrap:anywhere;}
 #asset-mesh-settings{color:#929da2;font-size:11px;line-height:1.4;}
 #asset-step-mesh #asset-mesh-model-row{margin:0;}#asset-step-mesh #asset-preparation-status{margin:0;font-size:11px;}
+#asset-step-mesh #asset-mesh-model{min-width:0;flex:1;}
 #asset-step-mesh #asset-run{background:#33403b;border-color:#56705f;}
 #asset-step-results #asset-results{margin:0;}
 body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asset-detail{display:none;}
