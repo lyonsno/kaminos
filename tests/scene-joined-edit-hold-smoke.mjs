@@ -44,6 +44,24 @@ try{
  await evaluate('window.kaminosSceneEdits.cancel()');report.cancelled=await step(3);
  assert.equal(report.cancelled.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);assert.equal(report.cancelled.joinedEditing.pending,false);
  await evaluate('window.__kaminosVolumePrototype.setSimulationPaused(true)');await shot('resumed');
+ report.phase='emitter-boundary-preview';await save();
+ const emitter=report.scene.objects.find(o=>o.type==='flame-emitter');assert(emitter);
+ const outside={...emitter.transform,position:emitter.transform.position.map((v,a)=>v+(a===0?100:0))};
+ report.emitterBefore=await evaluate('window.__kaminosVolumePrototype.debugState()');
+ await evaluate(`window.kaminosSceneEdits.begin(${JSON.stringify(emitter.id)},'Source boundary witness');window.kaminosSceneEdits.preview(${JSON.stringify(outside)});window.__kaminosVolumePrototype.setSimulationPaused(false)`);
+ report.emitterOutside=await step(3);
+ assert.equal(report.emitterOutside.joinedEditing.held,true);assert.equal(report.emitterOutside.joinedBoundary.deferredAdmission.admitted,false);
+ assert.equal(report.emitterOutside.immersedSource.effective.admitted,false,'outside source must remain disabled');
+ assert.equal(report.emitterOutside.fluidStateResetCount,report.emitterBefore.fluidStateResetCount);
+ assert.equal(report.emitterOutside.sceneSolidGeometryBuilds,report.emitterBefore.sceneSolidGeometryBuilds);
+ assert.equal(report.emitterOutside.joinedExterior.steps,report.emitterBefore.joinedExterior.steps);
+ assert.equal(report.emitterOutside.joinedRendering.enabled,true);
+ await evaluate(`window.kaminosSceneEdits.preview(${JSON.stringify(emitter.transform)})`);report.emitterReturned=await step(3);
+ assert.equal(report.emitterReturned.fluidStateResetCount,report.emitterBefore.fluidStateResetCount);
+ await evaluate('window.kaminosSceneEdits.cancel()');report.emitterCancelled=await step(3);
+ assert.equal(report.emitterCancelled.joinedEditing.pending,false);assert.equal(report.emitterCancelled.fluidStateResetCount,report.emitterBefore.fluidStateResetCount);
+ assert(report.emitterCancelled.joinedExterior.steps>report.emitterBefore.joinedExterior.steps);
+ await evaluate('window.__kaminosVolumePrototype.setSimulationPaused(true)');
  report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);if(browser)report.lastState=await browser.evaluate('window.__kaminosVolumePrototype?.debugState()').catch(()=>null);process.exitCode=1;}
 finally{await browser?.close();report.terminal=true;await save();}

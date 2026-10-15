@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {joinedBoundaryUniformValues} from '../volume-core.js';
+import {joinedBoundaryUniformValues,resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig} from '../volume-core.js';
 import {fireCollisionEdit} from '../scene-collider.mjs';
 const source=readFileSync(process.env.KAMINOS_EDIT_SOURCE||new URL('../volume-core.js',import.meta.url),'utf8');
 const body=name=>{const start=source.indexOf(`  function ${name}(`);assert(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4);};
@@ -64,4 +64,27 @@ test('edit adapter selects collision objects, grouped transforms, domain and sou
  for(const id of ['camera','@viewport-lens','@mesh-data:light','decor','@group:lights'])assert.equal(fireCollisionEdit({id},records,groups),null);
  assert.equal(fireCollisionEdit(null,records),null);
  assert.deepEqual(fireCollisionEdit({id:'@selection-transform',before:{roots:{'@group:group':{}}}},records,groups),{id:'@selection-transform'});
+});
+
+test('emitter inside/outside/inside previews defer admission rebuild without claiming the source remains admitted',()=>{
+ let rebuilds=0,editing=true;
+ const ctx={state:{joinedBoundary:{requested:true,admitted:true}},joinedExterior:{},device:{},gridSize:32,gridHeight:64,
+  controlsSnapshot:{pressureSolver:'converged-open-top',projection:1,emitterSourceLaw:'immersed-source',immersedSourceEnabled:true},
+  getSceneEditing:()=>editing?{id:'flame-emitter'}:null,
+  resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig,rebuildFluidState(){rebuilds++;}};
+ vm.createContext(ctx);vm.runInContext(body('refreshJoinedBoundary')+'\n'+body('joinedEditingHeld'),ctx);
+ const refresh=()=>vm.runInContext('refreshJoinedBoundary(); joinedEditingHeld()',ctx);
+ refresh();ctx.controlsSnapshot.immersedSourceEnabled=false;ctx.controlsSnapshot.immersedCentreX=2;refresh();
+ assert.equal(rebuilds,0,'source outside the box must not destroy committed collision during the drag');
+ assert.equal(ctx.state.joinedEditing.held,true);assert.equal(ctx.state.joinedBoundary.deferredAdmission.admitted,false);
+ ctx.controlsSnapshot.immersedSourceEnabled=true;ctx.controlsSnapshot.immersedCentreX=0;refresh();
+ editing=false;refresh();assert.equal(rebuilds,0,'cancel/return inside needs no admission allocation');
+ editing=true;ctx.controlsSnapshot.immersedSourceEnabled=false;refresh();editing=false;refresh();
+ assert.equal(rebuilds,1,'final outside placement reconciles admission once');assert.equal(ctx.state.joinedBoundary.admitted,false);
+});
+
+test('outside-source preview keeps the allocated reactant sidecar instead of replacing it with placeholders',()=>{
+ const ctx={device:{createTexture(){throw Error('preview must not allocate');}},reactantSidecarFull:true,reactantTextures:[{destroy(){throw Error('preview must not destroy');}},{destroy(){throw Error('preview must not destroy');}}],joinedExterior:{},getSceneEditing:()=>({id:'flame-emitter'})};
+ vm.createContext(ctx);vm.runInContext(body('ensureReactantSidecar'),ctx);
+ assert.equal(vm.runInContext('ensureReactantSidecar(false)',ctx),false);assert.equal(ctx.reactantSidecarFull,true);
 });

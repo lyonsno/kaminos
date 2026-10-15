@@ -12235,6 +12235,13 @@ export function createKaminosVolumePrototype({
       immersedAdmitted: Boolean(immersed.effective?.admitted),
       immersedReason: immersed.effective?.reason ?? null,
     });
+    // Emitter previews can temporarily disable injection outside the box.
+    // Keep the installed join allocation while the edit uses standalone fine
+    // uniforms. Source admission remains truthful in the immersed config.
+    if (joinedExterior && getSceneEditing?.() && state.joinedBoundary?.admitted) {
+      state.joinedBoundary = { ...state.joinedBoundary, requested: next.requested, deferredAdmission: next };
+      return state.joinedBoundary;
+    }
     const changed = Boolean(state.joinedBoundary?.admitted) !== next.admitted;
     state.joinedBoundary = next;
     if (changed && device) rebuildFluidState(gridSize, 'joined-boundary-change');
@@ -12284,6 +12291,9 @@ export function createKaminosVolumePrototype({
   // Returns true when the textures were (re)created, so the caller rebuilds the bind groups.
   function ensureReactantSidecar(admitted) {
     if (!device) return false;
+    // An outside-source preview must not destroy the existing oxidizer state.
+    // Admission uniforms still disable its use; settlement reconciles allocation.
+    if (!admitted && reactantSidecarFull && joinedExterior && getSceneEditing?.()) return false;
     if (reactantTextures.length === 2 && reactantSidecarFull === admitted) return false;
     for (const texture of reactantTextures) texture.destroy();
     const size = admitted ? [gridSize, gridHeight, gridSize] : [1, 1, 1];
@@ -14122,6 +14132,14 @@ export function createKaminosVolumePrototype({
     if (!joinedExterior || preparingJoinedExterior || joinedEditingHeld()) return null;
     preparingJoinedExterior = true;
     try {
+      if (state.joinedBoundary?.deferredAdmission) {
+        refreshJoinedBoundary();
+        if (!state.joinedBoundary.admitted) {
+          joinedEditingHeld();
+          syncJoinedRender();
+          return { admitted: false, reason: state.joinedBoundary.reason };
+        }
+      }
       let result = null;
       for (let round = 0; round < 3; round++) {
         const snapshot = joinedProducerSnapshot();
