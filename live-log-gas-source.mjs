@@ -1,3 +1,4 @@
+import {LIVE_LOG_GAS_EXPANSION_RATIO} from './live-log-heat-core.mjs';
 export const LOG_GAS_SOURCE_IDENTITY='kaminos.log.gpu-gas-source.v1';
 
 const RESOLVE=`
@@ -39,7 +40,7 @@ export async function createLogGasSourceGpu({device,dimensions}){
       setEnabled(value){if(typeof value!=='boolean')throw Error('Wood fuel feed requires a boolean');enabled=value;},
       begin(encoder){if(disposed)throw Error('Wood gas source disposed');encoder.clearBuffer(accumulation);},
       resolve(encoder){const pass=encoder.beginComputePass({label:'wood gas source resolve'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(x/4),Math.ceil(y/4),Math.ceil(z/4));pass.end();steps++;},
-      reset,read:()=>({identity:LOG_GAS_SOURCE_IDENTITY,enabled,steps,dimensions:[...dimensions],runtimeReadbacks:0,source:'finite-local-wood-fuel',units:'gas-volume-turnover-per-reference-step-and-temperature',expansionRatio:40}),
+      reset,read:()=>({identity:LOG_GAS_SOURCE_IDENTITY,enabled,steps,dimensions:[...dimensions],runtimeReadbacks:0,source:'finite-local-wood-fuel',units:'gas-volume-turnover-per-reference-step-and-temperature',expansionRatio:LIVE_LOG_GAS_EXPANSION_RATIO}),
       dispose(){if(disposed)return;disposed=true;for(const resource of owned)resource.destroy();},
     };
   }catch(error){for(const resource of owned)resource.destroy();throw error;}

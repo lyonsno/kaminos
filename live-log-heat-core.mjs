@@ -2,6 +2,8 @@ export const LIVE_LOG_HEAT_IDENTITY='kaminos.live-log.local-heat.v3';
 export const LIVE_LOG_THERMAL_MODEL='surface-ignition-finite-fuel-gas-feed-v3';
 export const LIVE_LOG_GRID=16;
 export const LIVE_LOG_BURN_RATE=.025;
+// Provisional volume yield, not a calibrated wood density or gas equation of state.
+export const LIVE_LOG_GAS_EXPANSION_RATIO=400;
 export const LIVE_LOG_CELL_WGSL='struct LogCell { material:vec4<f32>, burn:vec4<f32> }';
 export const LIVE_LOG_EVOLUTION_WGSL=`
 ${LIVE_LOG_CELL_WGSL}

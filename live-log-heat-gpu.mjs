@@ -1,5 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
-import {LIVE_LOG_GRID,LIVE_LOG_HEAT_IDENTITY,LIVE_LOG_THERMAL_MODEL,LIVE_LOG_CELL_WGSL,LIVE_LOG_EVOLUTION_WGSL,checkLiveLogFrame} from './live-log-heat-core.mjs';
+import {LIVE_LOG_GRID,LIVE_LOG_HEAT_IDENTITY,LIVE_LOG_THERMAL_MODEL,LIVE_LOG_BURN_RATE,LIVE_LOG_GAS_EXPANSION_RATIO,LIVE_LOG_CELL_WGSL,LIVE_LOG_EVOLUTION_WGSL,checkLiveLogFrame} from './live-log-heat-core.mjs';
 import {createLogSurfaceMask} from './live-log-surface-mask.mjs';
 
 export const LIVE_LOG_HEAT_WGSL=`
@@ -75,7 +75,7 @@ fn emitFuel(@builtin(global_invocation_id) c:vec3<u32>){
   if(any(c>=vec3<u32>(N))){return;}
   let i=c.x+N*(c.y+N*c.z);let s=surfaces[i];let state=after[i];
   if(s.point.w==0.0||state.material.z<=0.0){return;}
-  let rate=state.material.z*0.025/60.0*params.gas.x;
+  let rate=state.material.z*${LIVE_LOG_BURN_RATE}/60.0*params.gas.x;
   let temperature=state.material.x*0.35;
   let p=(params.localToVolume*vec4<f32>(s.point.xyz,1.0)).xyz;
   let cell=vec3<i32>(floor(p*params.gridDt.x));
@@ -145,7 +145,7 @@ export async function createLiveLogHeatGpu({renderer,mesh,bounds}) {
       worldToVolume.setPosition(...source.transform.translate.map(x=>.5-x*.5/s));
       const matrix=worldToVolume.multiply(mesh.matrixWorld),normalMatrix=matrix.clone().invert().transpose();
       const values=new Float32Array(48);values.set([...source.dimensions,source.dt]);values.set(bounds.min.toArray(),4);values.set(size.toArray(),8);values.set(matrix.elements,12);values.set(normalMatrix.elements,28);
-      values[44]=40*size.x*size.y*size.z*Math.abs(mesh.matrixWorld.determinant())/LIVE_LOG_GRID**3/(2*s/source.dimensions[0])**3;
+      values[44]=LIVE_LOG_GAS_EXPANSION_RATIO*size.x*size.y*size.z*Math.abs(mesh.matrixWorld.determinant())/LIVE_LOG_GRID**3/(2*s/source.dimensions[0])**3;
       if(!values.every(Number.isFinite))throw Error('Nonfinite log source transform or cell mass');
       device.queue.writeBuffer(params,0,values);return matrix;
     }
