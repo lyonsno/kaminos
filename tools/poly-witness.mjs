@@ -145,6 +145,7 @@ async function main() {
     const addressMiss = addressMismatch(requestedUrl, report.effectiveUrl);
     if (addressMiss) throw new Error(`effective address differs from the requested one: ${addressMiss}`);
     if (state?.id !== experiment) throw new Error(`experiment ${experiment} did not open; last state ${JSON.stringify(state)}`);
+    report.servedSource = await evaluate(`fetch('/api/workbench-experiments',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>j?.source??null).catch(()=>null)`);
     report.adapter = await evaluate(`(async()=>{const a=await navigator.gpu?.requestAdapter();return a?{vendor:a.info?.vendor,architecture:a.info?.architecture,description:a.info?.description}:null})()`);
     if (!report.adapter) throw new Error('page has no WebGPU adapter');
 
