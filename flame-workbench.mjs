@@ -31,8 +31,8 @@ export function observeFlameInvestigation({read,subscribe,channel}) {
   return subscribe(()=>{
     const current=read();
     for(const [key,kind,target] of [['settings','flame.settings','flame'],['view','camera.pose','camera'],['scene','scene.edit','scene']]) {
-      if(JSON.stringify(current[key])!==JSON.stringify(previous[key]))channel.emit({kind,phase:'applied',target,
-        effective:current[key],clock:current.clock});
+      if(JSON.stringify(current[key])!==JSON.stringify(previous[key]))channel.emit({kind,phase:'observed',target,
+        effective:current[key],effectiveRuntimeControls:current.runtime?.controls??null,clock:current.clock});
     }
     previous=current;
   });
