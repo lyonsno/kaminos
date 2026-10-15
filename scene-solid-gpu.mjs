@@ -170,7 +170,7 @@ export function createGpuSceneSolidProducer(device,{grid,gridHeight=grid}) {
       const members=meshCache.update(input,transform),seen=new Set();builds=0;
       for(const member of members){
         seen.add(member.id);let m=objects.get(member.id);
-        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes),draws:[]};m.base=makeGroup(m);objects.set(member.id,m);}
+        if(!m){m={shell:buffer('scene solid shell',bytes),parent:buffer('scene solid components',bytes+4),mask:buffer('scene solid object mask',bytes,GPUBufferUsage.COPY_SRC),draws:[]};m.base=makeGroup(m);objects.set(member.id,m);}
         if(m.revision===member.revision)continue;
         for(const d of m.draws)d.uniform.destroy();m.draws=[];
         for(const draw of member.draws){const d=makeGroup(m,draw.resource,draw.triangleCount,draw.matrix);d.floats.set([...transform.translate,transform.scale],16);device.queue.writeBuffer(d.uniform,0,d.values);m.draws.push({...d,triangleCount:draw.triangleCount});}
