@@ -28,7 +28,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,Ren
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed'}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',filterCoordinates}) {
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
   const softness=uniform(validateSoftness(shadowSoftness));
@@ -61,7 +61,9 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   // Bias follows the radial texel footprint, not viewer depth or light gain.
   const bias=distance.mul(2/resolution).max(.001);
   const sampleDepth=ray=>{
-  const shadowSample=cubeTexture(target.texture,ray);
+  // Explicit LOD is necessary inside spatially divergent source branches.
+  // These radial depth cubes have exactly one mip level.
+  const shadowSample=cubeTexture(target.texture,ray).level(0);
   // This cube stores world-space radial distances, not environment radiance.
   // Keep CubeCamera's backend convention but exclude CubeTextureNode's
   // materialEnvRotation (otherwise rotating the HDR rotates solid shadows).
@@ -70,11 +72,13 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   return shadowSample.r;
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary});
+  const filterDifferential=THREE.TSL.dFdx(direction).toVar();
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3();
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples:BLOCKER_DISK.length,filterSamples:FILTER_DISK.length};
   return {
+    prepareSampling(){filterDifferential.toStack();},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,
     resource() {
