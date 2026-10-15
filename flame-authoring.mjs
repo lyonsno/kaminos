@@ -171,6 +171,12 @@ export function flamePropertyApplies(id,{toneMapping,materialLaw,physicsActive=f
   if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return Number(materialLaw)===2;
   return !physicsActive||!physicsUnused.has(id);
 }
+export function flameAppearanceStatus(materialLaw,physics) {
+  if(Number(materialLaw)!==2)return {state:'off',text:''};
+  if(physics?.requested!==true)return {state:'pending',text:'Physics material: awaiting runtime'};
+  if(physics.effective?.render===true)return {state:'active',text:'Physics material active'};
+  return {state:'inactive',text:'Physics material inactive: '+String(physics.reason||'unavailable').replace(/^physics-appearance-/,'').replaceAll('-',' ')};
+}
 
 export function flameEmissionControlApplies(id, law) {
   if (id === 'volume-emitter-source-law') return true;
@@ -233,6 +239,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   };
   const aliases=[];
   const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
+  const appearanceStatus=document.createElement('output');appearanceStatus.id='flame-material-status';appearanceStatus.className='flame-material-status';appearanceStatus.setAttribute('role','status');
   for(const group of FLAME_PROPERTY_GROUPS) {
     const section=document.createElement('details');section.open=!!group.open;section.className='flame-inspector-section';section.dataset.flameGroup=group.name;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
@@ -289,6 +296,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       grip.title=source.closest('.slider-row')?.querySelector('[title]')?.title||label;
     }
     if(group.name==='Emission')section.append(runtimeStatus);
+    if(group.name==='Material')section.append(appearanceStatus);
     (group.name==='Emission'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
   }
@@ -299,6 +307,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     physicsActive:readAppearanceRuntime()?.effective?.render===true});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
+    const status=flameAppearanceStatus(currentMode.materialLaw,readAppearanceRuntime());
+    appearanceStatus.hidden=status.state==='off';appearanceStatus.dataset.state=status.state;appearanceStatus.textContent=status.text;
     const law=byId('volume-emitter-source-law').value;
     if(isSearching&&!searching)for(const item of sections)item.open=item.section.open;
     for(const item of rows){
