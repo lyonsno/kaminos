@@ -2,6 +2,13 @@
 // metric; velocities are local distance per reference transport tick, not cells.
 import {PASSIVE_MATERIAL_LAW, PASSIVE_MATERIAL_WGSL} from './volume-passive-material.mjs';
 import {reactantMaterialSurvival} from './volume-reactant-combustion.mjs';
+import {PHYSICS_APPEARANCE_IDENTITY, resolvePhysicsAppearance, physicsAppearanceUniformValues, SOOT_BURNOUT_WGSL} from './volume-physics-appearance.mjs';
+export function outerPhysicsUniformValues(config, physics) {
+  if(config.materialMode!=='reactant-raw'||physics==null)return physicsAppearanceUniformValues(resolvePhysicsAppearance());
+  if(physics.identity!==PHYSICS_APPEARANCE_IDENTITY||typeof physics.effective?.render!=='boolean'||typeof physics.effective?.sootBurnout!=='boolean'
+    ||![physics.kelvinPerHeat,physics.sootBurnoutRate,physics.sootBurnoutKelvin].every(Number.isFinite))throw new Error('valid fine physics appearance receipt required');
+  return physicsAppearanceUniformValues(physics);
+}
 export function outerSmokeConfig({grid=32, extent=4, pressureIterations=24, nearHeightRatio=2, materialMode='optical-only', donorMode='inset'}={}) {
   if(!['inset','joined-full'].includes(donorMode))throw new Error('unsupported outer donor mode');
   if(!['optical-only','authored-raw','reactant-raw'].includes(materialMode))throw new Error('unsupported outer material mode');
@@ -104,7 +111,8 @@ const MATERIAL_HEAT_SURVIVAL:f32=${PASSIVE_MATERIAL_LAW.heatSurvivalPerStep};
 const MATERIAL_SMOKE_SURVIVAL:f32=${PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep};
 ${PASSIVE_MATERIAL_WGSL}
 struct Cell { velocity:vec4<f32>, material:vec4<f32> }
-struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, padding:f32, materialLaw:vec4<f32> }
+struct Params { stepScale:f32, transportScale:f32, buoyancy:f32, padding:f32, materialLaw:vec4<f32>, physicsLaw:vec4<f32> }
+${SOOT_BURNOUT_WGSL.replaceAll('u.emissive_physics','params.physicsLaw')}
 @group(0) @binding(0) var<uniform> params:Params;
 @group(0) @binding(1) var<storage,read> near:array<vec4<f32>>;
 @group(0) @binding(2) var<storage,read> src:array<Cell>;
@@ -264,6 +272,11 @@ fn advect(@builtin(global_invocation_id) id:vec3<u32>){
     ${raw?`result.velocity.w=sampleChannel(end,7)*${reactant?'params.materialLaw.y':'pow(MATERIAL_SMOKE_SURVIVAL,params.stepScale)'}${reactant?'':'+passiveHeatToSmokeRate(heat,p.y)*params.stepScale'};
     result.material.z=sampleChannel(end,5);`:''}
     ${reactant?'result.material.w=sampleChannel(end,6);':''}
+    ${reactant?`// Same post-cooling, oxygen-weighted retirement as the fine producer.
+    // This consumes soot only: passive exterior does not burn fuel or make heat.
+    let burnout=sootBurnoutSurvival(heat,result.material.w/max(params.materialLaw.z,1e-6),params.stepScale);
+    result.material.x *= burnout;
+    result.velocity.w *= burnout;`:''}
     // Donors carry this tick's already-evolved fine material; do not age twice.
     if(nearPoint(p)){
       result.material=nearMaterial(c);
@@ -361,12 +374,14 @@ fn publish(@builtin(global_invocation_id) id:vec3<u32>){
 `;
 }
 
-export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactantTextures=null,reactantEffective=null}={}) {
+export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactantTextures=null,reactantEffective=null,physicsAppearance=null}={}) {
   const c=outerSmokeConfig(config), count=(c.grid+1)*(2*c.grid+1)*(c.grid+1);
   const materialMode=c.materialMode; // Shader capability is fixed at construction.
   const reactant=materialMode==='reactant-raw',raw=reactant||materialMode==='authored-raw';
   let materialEffective=reactantEffective;
   outerMaterialUniformValues(c,materialEffective,1);
+  let physicsEffective=physicsAppearance;
+  outerPhysicsUniformValues(c,physicsEffective);
   if(reactant&&(!reactantTextures||reactantTextures.length!==2||reactantTextures[0]===reactantTextures[1]||reactantTextures.some(t=>!t||t.width!==nearGrid||t.height!==nearGrid*c.nearHeightRatio||t.depthOrArrayLayers!==nearGrid||t.format!=='rg32float'||t.dimension!=='3d'||!(t.usage&GPUTextureUsage.TEXTURE_BINDING))))
     throw new Error('two current fine rg32float oxidizer textures required');
   validateOuterSmokeDevice(c,device.limits);
@@ -378,8 +393,8 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
   const pressures=[buffer('outer pressure A',count*8),buffer('outer pressure B',count*8)];
   const pressureStats=buffer('outer pressure completion',16);
   const pressureBudget=Math.max(c.pressureIterations,Math.ceil(c.pressureIterations*4*(c.grid/32)**2));
-  const params=device.createBuffer({label:'outer smoke step',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
-  const writeParams=(dtScale,backtraceScale,buoyancy)=>device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,0,...outerMaterialUniformValues(c,materialEffective,dtScale)]));
+  const params=device.createBuffer({label:'outer smoke step',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
+  const writeParams=(dtScale,backtraceScale,buoyancy)=>device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,0,...outerMaterialUniformValues(c,materialEffective,dtScale),...outerPhysicsUniformValues(c,physicsEffective)]));
   const optical=device.createTexture({label:'outer smoke optical material',size:c.shape,dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(optical);
   const solids=device.createTexture({label:'outer authored solid',size:c.shape,dimension:'3d',format:'r8uint',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});owned.push(solids);
   const layout=device.createBindGroupLayout({entries:[
@@ -448,6 +463,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
   return {
     config:c,optical,solids,shader,clearSolids,encodeGhostSnapshot,
     setReactantEffective(effective){outerMaterialUniformValues(c,effective,1);materialEffective=effective;},
+    setPhysicsAppearance(physics){outerPhysicsUniformValues(c,physics);physicsEffective=physics;},
     setSolids(packed,revision){device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
       assertUsable();projectionOwner='isolated';pressureCompletion=null;
@@ -482,6 +498,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
     },
     receipt(){return {requested:true,effective:projectionFailed?'external-projection-failed':projectionOwner==='external'?'external-projection-coarse-smoke-v0':'one-way-coarse-pressure-smoke-v0',shape:c.shape,bounds:{min:c.min,max:c.max},cellWidth:c.cellWidth,
       materialMode,rawSoot:raw,fuel:raw?'passive-no-reaction':'unavailable',oxidizer:reactant?'passive-ambient-boundary':'unavailable',
+      physicsAppearance:reactant&&physicsEffective?{...physicsEffective,effective:{...physicsEffective.effective},role:'passive-soot-retirement',uniform:outerPhysicsUniformValues(c,physicsEffective)}:null,
       passiveMaterial:reactant?{identity:'reactant-passive-exterior-v1',coolingTimeSteps:materialEffective.coolingTimeSteps,sootRetirementSteps:materialEffective.model.sootRetirementSteps,ambientOxidizer:materialEffective.model.ambientOxidizer,conversion:'none',reaction:'none',exchange:'advection-only',donorAging:'already-evolved-fine-overwrite'}:{identity:PASSIVE_MATERIAL_LAW.identity,heatSurvivalPerStep:PASSIVE_MATERIAL_LAW.heatSurvivalPerStep,smokeSurvivalPerStep:PASSIVE_MATERIAL_LAW.smokeSurvivalPerStep,conversion:'cooled-heat-fuel-free',heightFrame:PASSIVE_MATERIAL_LAW.heightFrame,donorAging:'already-evolved-fine-overwrite'},
       pressureIterations:projectionOwner==='isolated'?c.pressureIterations:null,pressureBudget:projectionOwner==='isolated'?pressureBudget:null,pressureWarmStart:projectionOwner==='isolated',pressureScheme:projectionOwner==='isolated'?'red-black-sor':'external-unverified',pressureTarget:projectionOwner==='isolated'?.001:null,pressureCompletion,steps,solidRevision,stateAndPressureBytes:count*80+16,advection:'bounded-cubic-velocity-smoke-heat-v0',wallInterpolation:'masked-trilinear-near-solids-and-exterior',donorBounds:outerDonorBounds(c),innerFeedback:false,scalarTransfer:'interior-overlap-volume-average-dirichlet-not-conservative-flux',outerBoundary:projectionOwner==='isolated'?'ambient-zero-pressure':'caller-owned-unverified'};},
     async readState(){assertUsable();const measuredStep=steps,measuredOwner=projectionOwner,b=device.createBuffer({size:count*32+16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});

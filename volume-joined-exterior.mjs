@@ -60,7 +60,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       const fineSolids={shape:p.dims,cells:p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1)),revision:String(p.solidMask?.revision??'disabled')};
       const coarseSolids=joinedExteriorSolids(g.shape,slab);
       const layout=createCompositeProducerLayout({geometry:g.geometry,fineSolids,coarseSolids}),storage=createCompositeStorageLayout(layout.grid);
-      const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers,{reactantTextures:p.reactant?.textures,reactantEffective:p.reactant?.effective});owned.push(outer);
+      const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers,{reactantTextures:p.reactant?.textures,reactantEffective:p.reactant?.effective,physicsAppearance:p.physicsAppearance});owned.push(outer);
       const row=Math.ceil(g.shape[0]/256)*256,packed=new Uint8Array(row*g.shape[1]*g.shape[2]);
       for(let z=0;z<g.shape[2];z++)for(let y=0;y<g.shape[1];y++){
         const i=g.shape[0]*(y+g.shape[1]*z);packed.set(coarseSolids.cells.subarray(i,i+g.shape[0]),row*(y+g.shape[1]*z));
@@ -87,6 +87,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     if(!built?.outer||built.key!==key(p))return lastStep={stepped:false,reason:'exterior-not-prepared-for-current-producer'};
     if(!p.ghosts?.textures)return lastStep={stepped:false,reason:'ghost-textures-missing'};
     built.outer.setReactantEffective(p.reactant?.effective);
+    built.outer.setPhysicsAppearance(p.physicsAppearance);
     built.outer.encodeExternalProjection(e,p.fluidReadIndex,p.timeStep,(encoder,coarse)=>{
       let entry=built.bridges.find(b=>b.fine===p.fluidBuffer&&b.coarse===coarse);
       if(!entry){const bridge=createCompositeStorageGPU(device,built.storage,{fine:p.fluidBuffer,coarse,lower:built.lower,flux:built.solver.fluxBuffer});built.owned.push(bridge);entry={fine:p.fluidBuffer,coarse,bridge};built.bridges.push(entry);}
