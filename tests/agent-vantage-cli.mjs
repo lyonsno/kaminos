@@ -133,10 +133,13 @@ test('map writes the painted map, and pictures can leave it out', async t => {
 });
 
 const pickReply = args => ({ok: true, id: 'c2', command: 'pick', page: {id: 'page-aaaaaaaa', title: 'Kaminos'}, elapsedMs: 3,
-  result: {schema: 'kaminos.agent-vantage.v1', kind: 'pick', from: args.optics ? 'picture' : 'vantage-bebop', at: args.at,
-    ray: {origin: [0, 1, 6], direction: [0, -0.1, -1]},
-    hit: {id: 'kiln', label: 'Kiln', type: 'glb', distance: 5.52, point: [0.2, 0.45, 0.5], local: [0.2, 0.05, 0.5], normal: [0, 0, 1],
-      surface: {path: [0, 2], mesh: 'Beam', face: 17}, geometry: {vertices: 4096, indices: 12000}, source: null},
+  result: {schema: 'kaminos.agent-vantage.v1', kind: 'pick', from: args.pictured ? 'picture' : args.optics ? 'camera' : 'vantage-bebop', at: args.at,
+    referent: args.pictured ? 'pictured' : 'rendered', ray: {origin: [0, 1, 6], direction: [0, -0.1, -1]},
+    hit: args.pictured?.n === 0 ? null : {id: 'kiln', label: 'Kiln', type: 'glb', authority: 'approximate', now: 'present', distance: 5.52,
+      point: [0.2, 0.45, 0.5], local: [0.2, 0.05, 0.5], normal: [0, 0, 1], pointBasis: 'recast',
+      surface: {path: [0, 2], mesh: 'Beam', face: 17, instance: null}, geometry: {status: 'same'}},
+    ...(args.pictured?.n === 0 ? {drawn: {kind: 'nothing'}} : {}),
+    unresolved: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', distance: 4.1, reason: 'simulation fields are drawn outside the pick map'}],
     fields: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', enter: 4.1, exit: 6.3}]}});
 
 test('pick sends picture fractions and says what the ray hits', async t => {
@@ -153,40 +156,61 @@ test('pick sends picture fractions and says what the ray hits', async t => {
   assert.match(pixels.stderr, /--picture/);
 });
 
-test('pick on a kept picture converts its pixels and sends the camera that took it', async t => {
+// A kept picture's pick map: 4x2 pixels. The top row shows nothing, then the kiln; the bottom row shows instance 1 of the rocks.
+const matrix = value => Array.from({length: 16}, (_, i) => (i % 5 === 0 ? value : 0));
+const kilnRow = {n: 3, id: 'kiln', label: 'Kiln', type: 'glb', path: [0, 2], mesh: 'Beam', matrixWorld: matrix(1), root: matrix(1), geometry: {uuid: 'g'}};
+const rocksRow = {n: 5, id: 'rocks', label: 'Rocks', type: 'glb', path: [0], mesh: null, matrixWorld: matrix(2), root: matrix(2), geometry: {uuid: 'r'},
+  instances: {1: matrix(4)}};
+const pickMap = (objects, runs) => ({schema: 'kaminos.vantage-pick-map.v1', width: 4, height: 2, runs, objects,
+  clouds: [{id: 'plume', label: 'Plume', type: 'splat', bounds: {min: [0, 0, 0], max: [1, 1, 1]}}], fields: [], water: false});
+
+test('pick on a kept picture looks the pixel up in its pick map and sends what the picture drew there', async t => {
   const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
   const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
   t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
   const optics = {projection: Array.from({length: 16}, (_, i) => i / 10), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1) / 10)};
   const frameOptics = {projection: Array.from({length: 16}, () => 2), viewInverse: Array.from({length: 16}, () => 3)};
-  const pose = [{id: 'kiln', root: Array.from({length: 16}, (_, i) => (i % 5 === 0 ? 1 : 0)), meshes: []}];
-  const framePose = [{id: 'beam', root: Array.from({length: 16}, (_, i) => (i % 5 === 0 ? 2 : 0)), meshes: []}];
-  const recordPath = path.join(out, 'snap.json');
-  writeFileSync(recordPath, JSON.stringify({result: {kind: 'burst', image: {width: 1280, height: 720}, optics, scenePose: pose,
-    frames: [{index: 0, optics, scenePose: pose}, {index: 1, optics: frameOptics, scenePose: framePose}]}}));
-  const first = await run(['--server', url, 'pick', '640', '180', '--picture', recordPath]);
+  const recordPath = path.join(out, 'burst.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'burst', image: {width: 1280, height: 720}, optics,
+    frames: [{index: 0, optics, pickMap: pickMap([kilnRow], '0 0 2 3 0 2 0 0 4')},
+      {index: 1, optics: frameOptics, pickMap: pickMap([rocksRow], '0 0 4 5 1 4')}]}}));
+  const first = await run(['--server', url, 'pick', '960', '180', '--picture', recordPath]);
   assert.equal(first.code, 0, first.stderr);
-  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.25], optics, pose},
-    'the camera and the objects the picture showed travel with the pick');
+  const {geometry, ...kiln} = kilnRow;
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.75, 0.25], optics,
+    pictured: {...kiln, geometry, instance: 0}, scene: {clouds: pickMap([], '').clouds, fields: [], water: false}},
+    'a burst without --frame is its first frame; the kiln drew that pixel');
+  assert.match(first.stdout, /Kiln/);
+  assert.match(first.stdout, /the picture drew/);
   const second = await run(['--server', url, 'pick', '0', '720', '--picture', recordPath, '--frame', '2']);
   assert.equal(second.code, 0, second.stderr);
-  assert.deepEqual(received[1].body.args.at, [0, 1]);
-  assert.deepEqual(received[1].body.args.optics, frameOptics, '--frame picks from that frame of a burst');
-  assert.deepEqual(received[1].body.args.pose, framePose);
+  const sent = received[1].body.args;
+  assert.deepEqual(sent.optics, frameOptics, '--frame picks from that frame of a burst');
+  assert.equal(sent.pictured.id, 'rocks');
+  assert.equal(sent.pictured.instance, 1);
+  assert.deepEqual(sent.pictured.instanceMatrix, matrix(4), 'the instance travels with the matrix it was drawn with');
+  assert.equal(sent.pictured.instances, undefined, 'not the whole table');
+  const empty = await run(['--server', url, 'pick', '10', '10', '--picture', recordPath]);
+  assert.equal(empty.code, 0, empty.stderr);
+  assert.deepEqual(received[2].body.args.pictured, {n: 0, instance: 0}, 'where the picture drew nothing, that is the answer');
+  assert.match(empty.stdout, /drew nothing/);
 });
 
-test('a picture kept before objects were recorded is refused unless today\'s scene is asked for', async t => {
+test('a picture kept without a pick map is refused unless today\'s scene is asked for', async t => {
   const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
   const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
   t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
   const optics = {projection: Array.from({length: 16}, (_, i) => i + 1), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1))};
   const recordPath = path.join(out, 'old.json');
-  writeFileSync(recordPath, JSON.stringify({result: {kind: 'snap', image: {width: 100, height: 100}, optics}}));
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'snap', image: {width: 100, height: 100}, optics,
+    scenePose: [{id: 'kiln', root: matrix(1), meshes: []}]}}));
   const refused = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath]);
   assert.equal(refused.code, 2);
+  assert.match(refused.stderr, /pick map/);
   assert.match(refused.stderr, /--now/, 'it says how to cast that camera into the scene as it is now');
   assert.equal(received.length, 0);
   const now = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath, '--now']);
   assert.equal(now.code, 0, now.stderr);
   assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.5], optics});
+  assert.match(now.stdout, /draws there now/);
 });
