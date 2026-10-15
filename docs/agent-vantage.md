@@ -60,17 +60,27 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 `pick X Y --picture RECORD.json` takes a pixel of a kept picture (`--frame N` for a burst frame). Every picture's record carries:
 - `optics`: the camera it was rendered with;
-- `scenePose`: where each object it shows stood, and how to recognise that object's geometry.
+- `scenePose`: for each object it could show, where its visible meshes stood, how to recognise their geometry and instance layout, its bounds, and any point clouds.
 
-The pick puts those objects back where the picture showed them, then casts from that camera. Objects the picture showed that are gone are listed as `missing`. Each hit says whether its object has moved since, and how its geometry compares:
+The pick puts those objects back where the picture showed them and casts from that camera. Only those objects are candidates. The answer's `reconstruction` says how far the result can be vouched for:
 
-| Status | Meaning |
+| Reconstruction | Meaning |
 | --- | --- |
-| `same` | Same geometry object and edit count, in the same page session. |
-| `edited` | Same geometry object, changed in place, in the same session. |
-| `replaced` | Another geometry object in the same session, or different content. |
-| `likely-same` | After a page reload, the counts and a sampled position fingerprint match. |
+| `exact` | Every recorded object the ray crosses is verifiably unchanged in this page session. |
+| `sampled` | The same, after a page reload, by counts and sampled content. |
+| `approximate` | Something the ray crosses changed (geometry, instances, a mesh or the whole object is gone) or is a point cloud. The picture may have shown something else at that point, and `changed` and `unresolved` say why. |
+
+Hits carry the same value as `authority`, plus whether their object has moved since and their own geometry status:
+
+| Geometry status | Meaning |
+| --- | --- |
+| `same` | Unchanged in this session. |
+| `edited` | The same geometry object, with any attribute, edit count or content changed. |
+| `replaced` | Another geometry object, or different content. |
+| `likely-same` | After a reload, the counts and sampled content match. |
 | `unverified` | After a reload, nothing could be checked. |
+
+Pictures kept before objects were recorded are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 
 A pick names the first visible surface between the camera's near and far planes. It skips hidden objects, invisible or fully transparent materials, editor helpers, cameras and lights. A hit gives:
 - the object;

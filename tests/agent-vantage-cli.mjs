@@ -174,3 +174,19 @@ test('pick on a kept picture converts its pixels and sends the camera that took 
   assert.deepEqual(received[1].body.args.optics, frameOptics, '--frame picks from that frame of a burst');
   assert.deepEqual(received[1].body.args.pose, framePose);
 });
+
+test('a picture kept before objects were recorded is refused unless today\'s scene is asked for', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const optics = {projection: Array.from({length: 16}, (_, i) => i + 1), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1))};
+  const recordPath = path.join(out, 'old.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'snap', image: {width: 100, height: 100}, optics}}));
+  const refused = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath]);
+  assert.equal(refused.code, 2);
+  assert.match(refused.stderr, /--now/, 'it says how to cast that camera into the scene as it is now');
+  assert.equal(received.length, 0);
+  const now = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath, '--now']);
+  assert.equal(now.code, 0, now.stderr);
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.5], optics});
+});

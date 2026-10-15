@@ -186,11 +186,12 @@ export function rayThrough({projection, viewInverse}, [x, y]) {
 
 // Whether a world point lies between a camera's near and far planes, from the
 // matrices it renders with and its clip convention: WebGPU depth runs 0 to 1,
-// WebGL -1 to 1, and a reversed depth stays inside the same range.
-export function insideClipDepth({projection, viewInverse, coordinateSystem = WebGLCoordinateSystem}, point) {
+// WebGL -1 to 1, and a reversed depth runs 0 to 1 in either.
+export function insideClipDepth({projection, viewInverse, coordinateSystem = WebGLCoordinateSystem, reversedDepth = false}, point) {
   const clip = new Vector4(...point, 1).applyMatrix4(new Matrix4().fromArray(viewInverse)).applyMatrix4(new Matrix4().fromArray(projection));
   if (!(clip.w > 0)) return false;
-  const depth = clip.z / clip.w, low = coordinateSystem === WebGPUCoordinateSystem ? 0 : -1;
+  // A reversed depth runs 1 at near to 0 at far in either convention.
+  const depth = clip.z / clip.w, low = coordinateSystem === WebGPUCoordinateSystem || reversedDepth ? 0 : -1;
   return depth >= low - 1e-9 && depth <= 1 + 1e-9;
 }
 
