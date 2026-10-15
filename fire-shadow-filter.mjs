@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
+import {positiveSampleCount,shadowStrata} from './fire-shadow-quality.mjs';
 
 // PCSS geometry, expressed as angular offsets for a radial-distance cube.
 // NVIDIA: developer.download.nvidia.com/assets/gamedev/docs/PCSS_Integration.pdf
@@ -10,17 +11,21 @@ export function receiverPlaneDistance(delta,normal,direction) {
   const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0),plane=dot(delta,normal),denominator=dot(direction,normal);
   return plane*denominator>0?plane/denominator:null;
 }
-export const BLOCKER_DISK=Object.freeze([[0,0],...Array.from({length:8},(_,i)=>{
-  const r=Math.sqrt((i+.5)/8),a=i*2.399963229728653;return Object.freeze([r*Math.cos(a),r*Math.sin(a)]);
-})]);
-export const FILTER_DISK=Object.freeze(Array.from({length:16},(_,i)=>{
-  const r=Math.sqrt((i+.5)/16),a=i*2.399963229728653;return Object.freeze([r*Math.cos(a),r*Math.sin(a)]);
-}));
+export function shadowDisk(count,center=false){
+  positiveSampleCount(count);
+  const n=count-(center?1:0);
+  return Object.freeze([...(center?[Object.freeze([0,0])]:[]),...Array.from({length:n},(_,i)=>{
+    const r=Math.sqrt((i+.5)/n),a=i*2.399963229728653;return Object.freeze([r*Math.cos(a),r*Math.sin(a)]);
+  })]);
+}
+export const BLOCKER_DISK=shadowDisk(9,true);
+export const FILTER_DISK=shadowDisk(16);
 
 // Fixed sample pattern, no temporal history or additional cube rendering.
 // Compare taps against the receiver plane: using the center's radial distance
 // at every tap would treat a tilted floor as a sphere and cause grazing acne.
-export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null}) {
+export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,blockerSamples=9,filterSamples=16}) {
+  const blockers=shadowDisk(blockerSamples,true),samples=shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
   const {Fn,If,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
   return Fn(()=>{
     const result=hardVisibility.toVar();
@@ -42,7 +47,7 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
       return {depth:sampleDepth(ray),receiver,valid};
     };
     const blockerSum=float(0).toVar(),blockerCount=float(0).toVar(),searchRadius=radius.div(distance.max(1e-5));
-    for(const xy of BLOCKER_DISK){
+    for(const xy of blockers){
       const p=tap(xy,searchRadius),blocked=p.valid.and(p.depth.lessThan(p.receiver.sub(bias)));
       blockerSum.addAssign(blocked.select(p.depth,0));blockerCount.addAssign(blocked.select(1,0));
     }
@@ -51,10 +56,10 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
     const blocker=blockerSum.div(blockerCount.max(1)).max(1e-5);
     const width=radius.mul(distance.sub(blocker).max(0)).div(blocker.mul(distance.max(1e-5)));
     const lit=float(0).toVar(),weight=float(0).toVar();
-    for(const [index,xy] of FILTER_DISK.entries()){
-      const band=Math.floor(index/4),sector=index%4;
-      const area=phaseY.add(sector*3+band).mod(4).add(.5).div(4).add(band).div(4);
-      const angle=phaseX.add(band*3+sector).mod(4).add(.5).div(4).add(sector).mul(2*Math.PI/4);
+    for(const [index,xy] of samples.entries()){
+      const band=Math.floor(index/sectors),sector=index%sectors;
+      const area=phaseY.add(sector*3+band).mod(4).add(.5).div(4).add(band).div(bands);
+      const angle=phaseX.add(band*3+sector).mod(4).add(.5).div(4).add(sector).mul(2*Math.PI/sectors);
       const radius=area.sqrt();
       const sample=complementary.select(vec2(radius.mul(angle.cos()),radius.mul(angle.sin())),vec2(...xy));
       const p=tap(sample,width,filterTangent);

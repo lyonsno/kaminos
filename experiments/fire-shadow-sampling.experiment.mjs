@@ -1,5 +1,6 @@
 import {validateShadowSampling} from '../fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from '../fire-source-quadrature.mjs';
+import {DEFAULT_SHADOW_QUALITY,validateShadowQuality} from '../fire-shadow-quality.mjs';
 
 export default {
   id:'fire-shadow-sampling',title:'Fire shadow sampling',
@@ -7,13 +8,26 @@ export default {
     const session=await host.scene.open(),document=host.controls.document,win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
     let selector,pointSelector,status;
+    let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
+    const qualityControls=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
-    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling})});
+    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality})});
     const source=()=>{const value=win.__kaminosSceneRadiance;if(!value?.setShadowSampling)throw Error('This scene has no hybrid fire shadow consumer');return value;};
-    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
-    const sync=()=>{const state=read();if(selector)selector.value=state.effective??requested;if(pointSelector)pointSelector.value=state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1);if(status)status.textContent=state.available?`Live: ${state.effective} · ${state.points} source(s), ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} cube captures · 16 filter taps per evaluated source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';};
+    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
+    const sync=()=>{
+      const state=read();
+      if(selector)selector.value=state.effective??requested;
+      if(pointSelector)pointSelector.value=state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1);
+      for(const {key,slider,number} of qualityControls){
+        const value=state.shadowQuality?.[key]??requestedQuality?.[key]??DEFAULT_SHADOW_QUALITY[key];
+        slider.max=String(Math.max(Number(slider.max),value));slider.value=number.value=String(value);
+        if(key==='resolution'&&state.maxShadowResolution)number.max=String(state.maxShadowResolution);
+      }
+      const quality=state.shadowQuality;
+      if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
+    };
     const apply=(points,mode)=>{
       validateSourceQuadrature(points,mode);
       if(source().setQuadrature)source().setQuadrature(points,mode);
@@ -21,10 +35,20 @@ export default {
       else throw Error('This runtime has no four-source quadrature consumer');
     };
     const setQuadrature=({points,pointSampling='all'})=>{apply(points,pointSampling);requestedPoints=points;requestedPointSampling=pointSampling;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.quadrature',phase:'applied',requested:{points,pointSampling},effective});return effective;};
-    const stop=session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);sync();stop();}});
+    const applyQuality=value=>{
+      validateShadowQuality(value,{maxTextureDimension2D:read().maxShadowResolution??Infinity});
+      if(!source().setShadowQuality)throw Error('This runtime has no shadow quality consumer');
+      source().setShadowQuality(value);
+    };
+    const setShadowQuality=value=>{
+      applyQuality(value);requestedQuality={...read().shadowQuality};persist();sync();session.redraw();
+      const effective=read();record({kind:'fire-shadow.quality',phase:'applied',requested:value,effective});return effective;
+    };
+    const stop=session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);if(requestedQuality!==null)applyQuality(requestedQuality);sync();stop();}});
     return {
       read,
       operations:{
+        setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
         setQuadrature,setPoints(value){return setQuadrature({points:value});},
         setSampling(value){validateShadowSampling(value);source().setShadowSampling(value);requested=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.sampling',phase:'applied',requested:value,effective});return effective;},
         setSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('finite nonnegative softness required');source().setShadowSoftness(value);sync();session.redraw();return read();},
@@ -40,7 +64,28 @@ export default {
         pointSelector=document.createElement('select');pointSelector.setAttribute('aria-label','Flame lighting sources');
         for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
         pointSelector.addEventListener('change',()=>invoke('setQuadrature',{points:pointSelector.value==='4-paired'?4:Number(pointSelector.value),pointSampling:pointSelector.value==='4-paired'?'paired':'all'}).catch(error=>{sync();status.textContent=error.message;}));
-        pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel,label,status);sync();
+        pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel,label);
+        const heading=document.createElement('h3');heading.textContent='Surface shadow cost';panel.append(heading);
+        for(const [key,text,max,help] of [
+          ['resolution','Shadow cube resolution',1024,'Pixels per cube face. Lower values reduce capture size and shadow detail.'],
+          ['blockerSamples','Blocker-search samples',32,'Depth reads used to estimate blocker distance and penumbra width.'],
+          ['filterSamples','Soft-shadow samples',64,'Depth reads used to smooth visibility when blockers are found.'],
+        ]){
+          const row=document.createElement('label');row.textContent=text;row.title=help;
+          const slider=document.createElement('input'),number=document.createElement('input');
+          slider.type='range';slider.min='1';slider.max=String(max);slider.step='1';slider.setAttribute('aria-label',text);
+          number.type='number';number.min='1';number.step='1';number.setAttribute('aria-label',text+' value');
+          const change=value=>invoke('setShadowQuality',{[key]:Number(value)}).catch(error=>{sync();status.textContent=error.message;});
+          // Rebuild only on release/commit, not every intermediate drag pixel.
+          slider.addEventListener('input',()=>{number.value=slider.value;});
+          slider.addEventListener('change',()=>change(slider.value));
+          number.addEventListener('change',()=>change(number.value));
+          qualityControls.push({key,slider,number});row.append(slider,number);panel.append(row);
+        }
+        const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
+        restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(error=>{sync();status.textContent=error.message;}));
+        const help=document.createElement('p');help.textContent='Applies on release; shader rebuild may pause briefly. All source cubes still update every frame. These controls do not scale the viewport or flame.';
+        panel.append(restore,help,status);sync();
       },
       async dispose(){stop();await session.dispose();},
     };
