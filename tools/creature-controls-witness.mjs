@@ -34,7 +34,7 @@ export async function witness(args){
   assert.equal(await page.locator('#experiment-owner-slot').isVisible(),false,'Creature context still exposes the experiment picker instead of ordinary scene objects');
   assert.equal(await page.getByRole('button',{name:'Replay source',exact:true}).count(),0);assert.equal(await page.getByLabel('Creature cast',{exact:true}).isVisible(),true);
   await capture('initial');
-  report.phase='replay';await page.getByRole('button',{name:'↻ Replay',exact:true}).click();await page.waitForFunction(()=>window.kaminosWalkingCreature().playback.frame>0);await page.getByRole('button',{name:'Ⅱ Pause',exact:true}).click();
+  report.phase='replay';await page.getByRole('button',{name:'↻ Replay',exact:true}).click();assert.ok(['playing','held'].includes((await read()).playback.status),'Replay did not start the owner clock');await page.waitForFunction(()=>window.kaminosWalkingCreature().playback.frame>0);await page.getByRole('button',{name:'Ⅱ Pause',exact:true}).click();
   report.held=await read();assert.notEqual(report.held.playback.status,'playing');report.actions.push({kind:'replay-pause',frame:report.held.playback.frame});await capture('held');
   report.phase='scrub';const track=page.getByLabel('Playback position',{exact:true}),bounds=await track.boundingBox();assert.ok(bounds?.width>100);report.scrubBounds=[bounds];
   await page.mouse.move(bounds.x+2,bounds.y+bounds.height/2);await page.mouse.down();
