@@ -38,9 +38,9 @@ window.runSolidConformance=async()=>{
    }finally{b.unmap();b.destroy();}
   }
   const negatives=[];
-  mesh.position.x=4;gpu.update([{id:'box',object:mesh}],transform);submit();
+  mesh.position.x=4;gpu.update([{id:'box',object:mesh}],transform,{grid:16,gridHeight:16});submit();
   let sampled=await gpu.snapshot();negatives.push({name:'outside-volume',valid:sampled.valid,counts:sampled.counts,installedCount:await installedCount()});
-  mesh.position.x=0;gpu.update([{id:'box',object:mesh}],transform);submit();sampled=await gpu.snapshot();
+  mesh.position.x=0;gpu.update([{id:'box',object:mesh}],transform,{grid:16,gridHeight:16});submit();sampled=await gpu.snapshot();
   gpu.setSourceSupport(Uint32Array.from(sampled.cells));submit();sampled=await gpu.snapshot();
   negatives.push({name:'occluded-source',valid:sampled.valid,counts:sampled.counts,installedCount:await installedCount()});
   gpu.setSourceSupport(new Uint32Array(16**3));submit();
@@ -51,7 +51,7 @@ window.runSolidConformance=async()=>{
   const makeOverlay=()=>createGpuCollisionVoxelMesh(THREE,renderer,{texture:gpu.texture,dimensions:[16,16,16],transform});
   const release=o=>{scene.remove(o);o.userData.disposeGpuSolid();o.geometry.dispose();o.material.dispose();};
   let overlay=makeOverlay();scene.add(overlay);await renderer.renderAsync(scene,camera);
-  mesh.position.x=.3;gpu.update([{id:'box',object:mesh}],transform);submit();await renderer.renderAsync(scene,camera);
+  mesh.position.x=.3;gpu.update([{id:'box',object:mesh}],transform,{grid:16,gridHeight:16});submit();await renderer.renderAsync(scene,camera);
   release(overlay);overlay=makeOverlay();scene.add(overlay);await renderer.renderAsync(scene,camera);
   await device.queue.onSubmittedWorkDone();
   const overlayCount=(await gpu.snapshot()).cells.reduce((a,b)=>a+b,0);
