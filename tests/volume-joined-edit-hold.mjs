@@ -56,6 +56,16 @@ test('resident mask update completes before predictor without skipping the fine 
  ctx.joinedExterior.canUpdateSolids=()=>true;
  step();assert.equal(calls.prepare,1);assert.equal(calls.fine,1);assert.equal(calls.outer,1);assert.equal(queued.length,0);
 });
+test('a changed producer retries a refused adapter before advancing either predictor',()=>{
+ const {ctx,calls,queued,step}=fixture();ctx.state.joinedBoundary={requested:true,admitted:false};
+ ctx.state.joinedEditing={held:false,pending:false};let changed=false;
+ ctx.joinedExterior.retryAvailable=()=>changed;
+ ctx.refreshJoinedBoundary=()=>{ctx.state.joinedBoundary.admitted=true;};
+ step();assert.equal(calls.fine,1);assert.equal(queued.length,0);
+ changed=true;step();assert.equal(calls.fine,1);assert.equal(queued.length,1);
+ queued.shift()();assert.equal(calls.prepare,1);assert.equal(calls.seed,1);
+ ctx.joinedExterior.matches=()=>true;step();assert.equal(calls.outer,1);
+});
 test('a stale live exterior snapshot prevents both predictors and queues reseeding',()=>{
  const {ctx,calls,queued,step}=fixture();ctx.state.joinedEditing={held:false,pending:false};
  ctx.joinedExterior.matches=()=>true;ctx.state.joinedGhosts.generation=6;
@@ -69,6 +79,20 @@ test('resident mesh dragging is live while domain and source edits retain their 
  assert.equal(vm.runInContext('joinedEditingHeld()',ctx),false);
  id='@flame-domain';assert.equal(vm.runInContext('joinedEditingHeld()',ctx),true);
  id='flame-emitter';assert.equal(vm.runInContext('joinedEditingHeld()',ctx),true);
+});
+test('grouped source previews hold and settle, collider-only groups stay live',()=>{
+ const {ctx,calls,prepare}=fixture();ctx.joinedExterior.residentSolids=true;ctx.state.joinedBoundary.requested=true;
+ const records=[{id:'cube',type:'procedural-mesh',collision:{enabled:true}},{id:'flame-emitter',type:'flame-emitter'}];
+ const groups=[{id:'burner',objectIds:['cube','flame-emitter']},{id:'obstacles',objectIds:['cube']}];
+ let edit;ctx.getSceneEditing=()=>edit;vm.runInContext(body('joinedEditingHeld'),ctx);
+ for(const id of ['@group:burner','@assembly:burner']){
+  edit=fireCollisionEdit({id},records,groups);assert.equal(vm.runInContext('joinedEditingHeld()',ctx),true);
+  prepare();assert.equal(calls.prepare,0);edit=null;
+  assert.equal(vm.runInContext('joinedEditingHeld()',ctx),false);assert.equal(ctx.state.joinedEditing.pending,true);
+  prepare();assert.equal(ctx.state.joinedEditing.pending,false);calls.prepare=0;
+ }
+ edit=fireCollisionEdit({id:'@group:obstacles'},records,groups);
+ assert.equal(vm.runInContext('joinedEditingHeld()',ctx),false);
 });
 test('diagnostic readback pause still prevents fine stepping during a drag',()=>{
  const {ctx,calls,step}=fixture();ctx.joinedExterior.paused=true;step();assert.equal(calls.fine,0);
@@ -98,7 +122,8 @@ test('actual uniform write disables joined boundary and ghost reads, without rev
 test('edit adapter selects collision objects, grouped transforms, domain and source, not cameras or unmarked meshes',()=>{
  const records=[{id:'cube',type:'procedural-mesh',collision:{enabled:true}},{id:'decor',type:'glb'},{id:'camera',type:'camera'},{id:'light',type:'light'}];
  const groups=[{id:'group',objectIds:['decor','cube']},{id:'lights',objectIds:['light']}];
- for(const id of ['cube','@mesh-data:cube','@object-collision:decor','@group:group','@assembly:group','@flame-domain','flame-emitter','@burner-controls'])assert.deepEqual(fireCollisionEdit({id},records,groups),{id});
+ for(const id of ['cube','@mesh-data:cube','@object-collision:decor','@group:group','@assembly:group'])assert.deepEqual(fireCollisionEdit({id},records,groups),{id});
+ for(const id of ['@flame-domain','flame-emitter','@burner-controls'])assert.deepEqual(fireCollisionEdit({id},records,groups),{id,affectsSource:true});
  for(const id of ['camera','@viewport-lens','@mesh-data:light','decor','@group:lights'])assert.equal(fireCollisionEdit({id},records,groups),null);
  assert.equal(fireCollisionEdit(null,records),null);
  assert.deepEqual(fireCollisionEdit({id:'@selection-transform',before:{roots:{'@group:group':{}}}},records,groups),{id:'@selection-transform'});
@@ -149,6 +174,7 @@ test('unsupported exterior keeps the fine grid and request, then readmits a supp
   getSceneEditing:()=>null,resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig,
   joinedExterior:{admission:p=>resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution:32,size:2})},
   rebuildFluidState(){rebuilds++;}};
+ ctx.joinedProducerSnapshot=()=>({dims:[ctx.gridSize,ctx.gridHeight,ctx.gridSize],pitch:2/ctx.gridSize});
  vm.createContext(ctx);vm.runInContext(body('refreshJoinedBoundary'),ctx);
  vm.runInContext('refreshJoinedBoundary()',ctx);
  assert.equal(ctx.state.joinedBoundary.requested,true);assert.equal(ctx.state.joinedBoundary.admitted,false);

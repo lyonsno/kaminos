@@ -2,14 +2,32 @@
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
+import {spawn} from 'node:child_process';
 import {launchChrome,sourceIdentity} from '../models/flux2-klein/cdp-harness.mjs';
-const [url,out]=process.argv.slice(2);assert(out,'evidence directory required');
+import {assertResidentMotion} from '../tools/joined-resident-witness.mjs';
+const [url,out,mode='held',storeSource]=process.argv.slice(2);assert(out,'evidence directory required');
+assert(['held','resident'].includes(mode),'unknown motion route');
 await fs.mkdir(out,{recursive:true});
-const report={source:sourceIdentity(resolve('.')),url,phase:'start',claim:'edit hold/commit/cancel consumer conformance; not scene frame-budget closure'};
+const report={source:sourceIdentity(resolve('.')),url,mode,phase:'start',claim:'edit motion/commit/cancel consumer conformance; not scene frame-budget closure'};
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
-let browser;
+let browser,server,serverExit,serverError;
 try{
  await save();await fs.copyFile(new URL(import.meta.url),out+'/effective-smoke.mjs');
+ if(storeSource){
+  report.phase='server';report.storeSource=resolve(storeSource);report.stores=resolve(out,'runtime');await save();
+  await fs.cp(report.storeSource,report.stores,{recursive:true,errorOnExist:true,force:false});
+  server=spawn('python3',['serve.py',new URL(url).port,'--volume-settings-store',report.stores+'/settings',
+   '--volume-basin-session-store',report.stores+'/basins','--volume-cockpit-layout-store',report.stores+'/layouts'],
+   {cwd:resolve('.'),env:{...process.env,KAMINOS_SCENES_DIR:report.stores+'/scenes'},stdio:['ignore','pipe','pipe']});
+  report.server={pid:server.pid,port:new URL(url).port,root:resolve('.')};report.serverLog='';
+  server.stdout.on('data',b=>{report.serverLog+=b;});server.stderr.on('data',b=>{report.serverLog+=b;});
+  serverExit=new Promise(r=>{server.once('error',e=>{serverError=e;r();});server.once('exit',r);});
+  while(true){
+   if(serverError)throw serverError;if(server.exitCode!==null)throw Error('witness server exited: '+report.serverLog);
+   try{const r=await fetch(new URL('/api/runtime-config',url));if(r.ok)break;}catch{}
+   await new Promise(r=>setTimeout(r,100));
+  }
+ }
  report.runtime=await (await fetch(new URL('/api/runtime-config',url))).json();
  assert.equal(report.runtime.source.repoRoot,resolve('.'));assert.equal(report.runtime.source.commit,report.source.rev);
  report.executable='/Users/noahlyons/.local/state/kaminos/browser-cache/cft154-verified-0930/chrome/mac_arm-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
@@ -31,18 +49,24 @@ try{
   await evaluate(`window.kaminosSceneEdits.preview(${JSON.stringify(pose)})`);
   report.previews.push(await step(3));
  }
- for(const s of report.previews){assert.equal(s.joinedEditing?.held,true);assert.equal(s.joinedExterior.steps,report.before.joinedExterior.steps);assert.equal(s.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds);assert.equal(s.joinedRendering.enabled,true);assert.equal(s.joinedExterior.generation,report.before.joinedExterior.generation);}
- await shot('drag-held');
+ if(mode==='resident')for(const [i,s] of report.previews.entries())assertResidentMotion(i?report.previews[i-1]:report.before,s);
+ else for(const s of report.previews){assert.equal(s.joinedEditing?.held,true);assert.equal(s.joinedExterior.steps,report.before.joinedExterior.steps);assert.equal(s.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds);assert.equal(s.joinedRendering.enabled,true);assert.equal(s.joinedExterior.generation,report.before.joinedExterior.generation);}
+ await shot(mode==='resident'?'drag-resident':'drag-held');
  report.phase='commit';await save();await evaluate('window.kaminosSceneEdits.commit()');report.placed=await step(3);
  assert.equal(report.placed.joinedEditing.held,false);assert.equal(report.placed.joinedEditing.pending,false);
- assert(report.placed.joinedExterior.steps>report.before.joinedExterior.steps);assert.equal(report.placed.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds+1);
+ assert(report.placed.joinedExterior.steps>report.before.joinedExterior.steps);
+ if(mode==='held')assert.equal(report.placed.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds+1);
+ else assert.equal(report.placed.joinedExterior.topologyGeneration,report.before.joinedExterior.topologyGeneration);
  assert.equal(report.placed.joinedExterior.generation,report.before.joinedExterior.generation);
  report.phase='cancel';await save();
  await evaluate(`window.kaminosSceneEdits.begin(${JSON.stringify(target.id)},'Cancel witness');window.kaminosSceneEdits.preview(${JSON.stringify(target.transform)})`);
- report.cancelHeld=await step(3);assert.equal(report.cancelHeld.joinedEditing.held,true);
- assert.equal(report.cancelHeld.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);
+ report.cancelHeld=await step(3);
+ if(mode==='resident')assertResidentMotion(report.placed,report.cancelHeld);
+ else{assert.equal(report.cancelHeld.joinedEditing.held,true);assert.equal(report.cancelHeld.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);}
  await evaluate('window.kaminosSceneEdits.cancel()');report.cancelled=await step(3);
- assert.equal(report.cancelled.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);assert.equal(report.cancelled.joinedEditing.pending,false);
+ if(mode==='held')assert.equal(report.cancelled.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);
+ else assertResidentMotion(report.cancelHeld,report.cancelled);
+ assert.equal(report.cancelled.joinedEditing.pending,false);
  await evaluate('window.__kaminosVolumePrototype.setSimulationPaused(true)');await shot('resumed');
  report.phase='emitter-boundary-preview';await save();
  const emitter=report.scene.objects.find(o=>o.type==='flame-emitter');assert(emitter);
@@ -80,5 +104,5 @@ try{
  await evaluate('window.__kaminosVolumePrototype.setSimulationPaused(true)');
  report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);if(browser)report.lastState=await browser.evaluate('window.__kaminosVolumePrototype?.debugState()').catch(()=>null);process.exitCode=1;}
-finally{await browser?.close();report.terminal=true;await save();}
+finally{await browser?.close();if(server){server.kill('SIGTERM');await serverExit;}report.terminal=true;await save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));

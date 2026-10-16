@@ -79,3 +79,17 @@ test('resident preparation refusal is visible to admission without revoking othe
   assert.equal(joined.admission({...p,dims:[8,8,8],pitch:.25}).admitted,true);
   joined.destroy();
 });
+test('a corrected producer allocation can recover from preparation failure at the same geometry',()=>{
+ const {device,p}=fixture(),joined=createJoinedExterior(device,{coarseResolution:4,residentSolids:true});
+ assert.equal(joined.prepare({...p,fluidBuffers:[]}).admitted,false);
+ assert.equal(joined.admission(p).admitted,false);
+ assert.equal(joined.retryAvailable(p),false);
+ p.allocation++;joined.deferRetry(p,'producer-resources-missing');
+ assert.equal(joined.retryAvailable(p),false,'fallback allocation itself must not trigger endless retries');
+ p.allocation++;
+ assert.equal(joined.retryAvailable(p),true);
+ assert.equal(joined.admission(p).admitted,true,'new producer must be allowed to retry');
+ assert.equal(joined.prepare(p).admitted,true);assert.equal(joined.admission(p).admitted,true);
+ assert.equal(joined.retryAvailable(p),false);
+ assert.equal(joined.matches(p),true);joined.destroy();
+});

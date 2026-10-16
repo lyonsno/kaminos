@@ -7,16 +7,18 @@ export const canCollideWithFire=record=>['glb','pbr','procedural-mesh'].includes
 export function fireCollisionEdit(active, records, groups=[]) {
   if (!active) return null;
   const affects = (id, seen=new Set()) => {
-    if (seen.has(id)) return false;
+    if (seen.has(id)) return 0;
     seen.add(id);
-    if (['@flame-domain','@burner-controls','flame-emitter'].includes(id)) return true;
-    if (id==='@selection-transform') return Object.keys(active.before?.roots??{}).some(key=>affects(key,seen));
-    if (id?.startsWith('@group:') || id?.startsWith('@assembly:')) return (groups.find(g=>g.id===id.slice(id.indexOf(':')+1))?.objectIds??[]).some(key=>affects(key,seen));
-    if (id?.startsWith('@object-collision:')) return canCollideWithFire(records.find(r=>r.id===id.slice('@object-collision:'.length)));
+    if (['@flame-domain','@burner-controls','flame-emitter'].includes(id)) return 2;
+    if (id==='@selection-transform') return Object.keys(active.before?.roots??{}).reduce((bits,key)=>bits|affects(key,seen),0);
+    if (id?.startsWith('@group:') || id?.startsWith('@assembly:')) return (groups.find(g=>g.id===id.slice(id.indexOf(':')+1))?.objectIds??[]).reduce((bits,key)=>bits|affects(key,seen),0);
+    if (id?.startsWith('@object-collision:')) return Number(canCollideWithFire(records.find(r=>r.id===id.slice('@object-collision:'.length))));
     const record=records.find(r=>r.id===(id?.startsWith('@mesh-data:')?id.slice('@mesh-data:'.length):id));
-    return Boolean(canCollideWithFire(record)&&record.collision?.enabled);
+    if(record?.type==='flame-emitter'||record?.type===FIRE_DOMAIN_TYPE)return 2;
+    return Number(Boolean(canCollideWithFire(record)&&record.collision?.enabled));
   };
-  return affects(active.id)?{id:active.id}:null;
+  const bits=affects(active.id);
+  return bits?{id:active.id,...(bits&2?{affectsSource:true}:{})}:null;
 }
 export function checkedObjectCollision(record,value=record?.collision) {
   if(value==null)return null;

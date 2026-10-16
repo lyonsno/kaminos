@@ -49,7 +49,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
   if(!Number.isInteger(budget)||budget<1)throw Error('positive integer budget required');
   let built=null,destroyed=false,paused=false,lastStep=null,generation=0,topologyGeneration=0;
   let preparationFailure=null;
-  const admissionKey=p=>JSON.stringify([p.dims,p.pitch,p.reactant?.effective?.admitted===true]);
+  const admissionKey=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.allocation,p.reactant?.effective?.admitted===true,p.solidMask?.revision]);
   const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.effective?.admitted===true,p.reactant?.allocation??0]);
   const revision=p=>String(p.solidMask?.revision??'disabled');
   const clear=()=>{if(built)for(const r of [...built.owned,...(built.projectionOwned??[])])r.destroy?.();built=null;lastStep=null;};
@@ -80,11 +80,11 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     if(destroyed)throw Error('joined exterior destroyed');
     const k=key(p),solidRevision=revision(p);
     if(built?.outer&&built.key===k){
-      if(built.solidRevision===solidRevision)return {rebuilt:false,...built.summary};
+      if(built.solidRevision===solidRevision){preparationFailure=null;return {rebuilt:false,...built.summary};}
       try{
         if(residentSolids){
           bindResident(built,p);built.solidRevision=solidRevision;built.layout.solidRevisions.fine=solidRevision;
-          built.summary.solids.fine=solidRevision;
+          built.summary.solids.fine=solidRevision;preparationFailure=null;
           return {rebuilt:false,topologyRebuilt:false,coefficients:'gpu-next-projection',...built.summary};
         }
         const cells=p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1));
@@ -100,11 +100,11 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
           built.summary.cells=next.layout.grid.cells.length;built.summary.faces=next.layout.grid.faces.length;
         }
         built.solidRevision=solidRevision;built.layout.solidRevisions.fine=solidRevision;
-        built.summary.solids.fine=solidRevision;
+        built.summary.solids.fine=solidRevision;preparationFailure=null;
         return {rebuilt:false,topologyRebuilt:changed,...built.summary};
       }catch(e){if(residentSolids)preparationFailure={key:admissionKey(p),reason:e.message};return {rebuilt:false,admitted:false,reason:e.message};}
     }
-    if(built?.key===k&&!built.outer)return {rebuilt:false,...built.summary};
+    if(built?.key===k&&!built.outer&&(!preparationFailure||preparationFailure.key===admissionKey(p)))return {rebuilt:false,...built.summary};
     clear();generation++;
     const reactant=p.reactant?.effective?.admitted===true;
     const g=resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size,reactant});
@@ -136,6 +136,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
         solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},pressureTopology:residentSolids?'fixed-resident-mask':'compact-cpu-mask',boundaryVelocity:'stationary-zero',materialMode:g.config.materialMode,lighting:'boundary-incident-continuation',reaction:'fine-only',forces:'exterior-linear-heat-lift-not-fine-force-parity'};
       topologyGeneration++;
       built={key:k,owned,g,...projected,outer,lower,lowerExport,steps:0,summary,solidRevision,coarseSolids,fineCells:fineSolids.cells.slice()};
+      preparationFailure=null;
       return {rebuilt:true,...summary};
     }catch(e){for(const r of [...owned,...(projected?.projectionOwned??[])])r.destroy?.();built={key:k,owned:[],summary:{admitted:false,reason:e.message}};preparationFailure={key:admissionKey(p),reason:e.message};return {rebuilt:true,...built.summary};}
   }
@@ -169,6 +170,8 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     }finally{paused=false;}
   }
   return {prepare,seedGhosts,step,probe,residentSolids,
+    deferRetry(p,reason){preparationFailure={key:admissionKey(p),reason};},
+    retryAvailable:p=>Boolean(preparationFailure&&preparationFailure.key!==admissionKey(p)),
     canUpdateSolids:p=>Boolean(residentSolids&&built?.outer&&built.key===key(p)),
     admission:p=>preparationFailure?.key===admissionKey(p)?{admitted:false,reason:preparationFailure.reason}:resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size,reactant:p.reactant?.effective?.admitted===true}),
     matches:p=>Boolean(built?.outer&&built.key===key(p)&&built.solidRevision===revision(p)),

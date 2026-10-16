@@ -12258,7 +12258,7 @@ export function createKaminosVolumePrototype({
       immersedReason: immersed.effective?.reason ?? null,
     });
     if (next.admitted && joinedExterior?.admission) {
-      const exterior = joinedExterior.admission({dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,reactant:{effective:state.reactantCombustion?.effective}});
+      const exterior = joinedExterior.admission(joinedProducerSnapshot());
       if (!exterior.admitted) Object.assign(next,{admitted:false,reason:`exterior:${exterior.reason}`,effective:'standalone-fine'});
     }
     // Emitter previews can temporarily disable injection outside the box.
@@ -13242,7 +13242,7 @@ export function createKaminosVolumePrototype({
   function joinedEditingHeld() {
     const active = Boolean(joinedExterior && (state.joinedBoundary?.requested || state.joinedBoundary?.admitted));
     const edit = active && getSceneEditing?.();
-    const liveCollider = joinedExterior?.residentSolids && edit && !['@flame-domain','flame-emitter','@burner-controls','@selection-transform'].includes(edit.id);
+    const liveCollider = joinedExterior?.residentSolids && edit && !edit.affectsSource && !['@flame-domain','flame-emitter','@burner-controls','@selection-transform'].includes(edit.id);
     const held = Boolean(edit && !liveCollider);
     const prior = state.joinedEditing;
     const pending = Boolean(active && (prior?.pending || (prior?.held && !held)));
@@ -14236,8 +14236,10 @@ export function createKaminosVolumePrototype({
         result = joinedExterior.prepare(snapshot);
         if (!result.admitted) {
           // A failed optional adapter must leave the established fine route
-          // usable. The exterior retains the refusal for this geometry/law.
+          // usable. Remember the resulting standalone allocation too, so our
+          // own downgrade cannot look like an independently repaired producer.
           refreshJoinedBoundary();
+          joinedExterior.deferRetry?.(joinedProducerSnapshot(),result.reason);
           state.joinedEditing = {...state.joinedEditing,pending:false,fine:'standalone',reason:result.reason};
           break;
         }
@@ -17490,6 +17492,13 @@ export function createKaminosVolumePrototype({
     // A changed pressure topology cannot be discovered after fine advances.
     refreshSceneCollision();
     const editingHeld = Boolean(state.joinedEditing?.held);
+    if (!editingHeld && state.joinedBoundary?.requested && !state.joinedBoundary.admitted && joinedExterior?.retryAvailable?.(joinedProducerSnapshot())) {
+      refreshJoinedBoundary();
+      if (state.joinedBoundary.admitted) {
+        if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+        return false;
+      }
+    }
     if (!editingHeld && state.joinedEditing?.pending) {
       if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
