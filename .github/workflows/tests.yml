@@ -1,7 +1,9 @@
 name: tests
 
-# Advisory: no step here blocks a push or a landing. Problems surface as
-# warnings on the run and in its summary; the run itself stays green.
+# Advisory: test results never fail the run or block a push or a landing.
+# Problems surface as warnings on the run and in its summary
+# (tools/ci-advisory-warnings.mjs). A failure to set up (checkout, toolchains,
+# installs) still shows red, since then nothing was checked at all.
 on:
   push:
     branches: [main]
@@ -9,7 +11,7 @@ on:
 
 concurrency:
   group: tests-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   suite:
@@ -44,31 +46,14 @@ jobs:
       - name: suite
         id: suite
         continue-on-error: true
+        timeout-minutes: 45
         run: node tools/test-runner.mjs --report test-results/report.json
       - name: warnings
         if: always()
         env:
           SERVE: ${{ steps.serve.outcome }}
           SUITE: ${{ steps.suite.outcome }}
-        run: |
-          node -e '
-            const fs = require("fs");
-            const out = [];
-            if (process.env.SERVE !== "success") out.push("serve.py did not answer within 10 s");
-            let r = null;
-            try { r = JSON.parse(fs.readFileSync("test-results/report.json", "utf8")); } catch {}
-            if (!r) out.push(`no suite report (suite step ${process.env.SUITE})`);
-            else {
-              for (const f of r.newFailures || []) out.push(`new failure: ${f}`);
-              for (const f of r.staleQuarantine || []) out.push(`stale quarantine: ${f}`);
-              for (const w of r.warnings || []) out.push(`warning: ${typeof w === "string" ? w : (w.message || JSON.stringify(w))}`);
-            }
-            const lines = out.map(l => l.replace(/\r?\n/g, " "));
-            for (const line of lines) console.log(`::warning::${line}`);
-            const c = r && r.counts;
-            const head = c ? `executed ${c.executed}, passed ${c.passed}, known ${c.knownFailures}, new ${c.newFailures}, not run ${c.notRun}` : "no report";
-            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Tests (advisory)\n\n${head}\n\n${lines.map(l => `- ${l}`).join("\n")}\n`);
-          '
+        run: node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE"
       - if: always()
         uses: actions/upload-artifact@v4
         with:
