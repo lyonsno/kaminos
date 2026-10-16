@@ -220,9 +220,9 @@ test('cockpit and schema carry the new controls', () => {
   assert.match(checks, /aperture pattern requested \$\{value\}, effective/, 'the arm capture refuses an arm whose pattern did not take effect');
   assert.match(checks, /wind model requested \$\{value\}, effective/, 'and one whose wind model did not');
   assert.match(readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8'), /const mismatches = effectiveMismatches\(arm, end, expectedMode, fault\);/, 'and the capture applies those checks to every arm');
-  assert.equal(schema.controlCount, 257); // 249 grid height ratio + the reaction law select and the two reactant controls + the three physics-appearance controls + the two wavelet turbulence controls
+  assert.equal(schema.controlCount, 258); // 249 grid height ratio + the reaction law select and the two reactant controls + the three physics-appearance controls + the three wavelet turbulence controls
   const additive = schema.controls.filter(control => control.additiveSinceControlCount >= 219).map(control => control.additiveSinceControlCount);
-  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257]);
+  assert.deepEqual(additive, [219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258]);
 });
 
 // Noah 2026-10-09: "wind is turned off" meant the model select, which offered

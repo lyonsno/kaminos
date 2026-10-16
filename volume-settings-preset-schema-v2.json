@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 257,
+  "controlCount": 258,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1703,6 +1703,14 @@
       "type": "range",
       "additiveDefault": 2,
       "additiveSinceControlCount": 257
+    },
+    {
+      "key": "volume-wavelet-strength",
+      "param": "volume_wavelet_strength",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1,
+      "additiveSinceControlCount": 258
     }
   ],
   "retiredControls": [

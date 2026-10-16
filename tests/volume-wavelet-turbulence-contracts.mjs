@@ -44,6 +44,9 @@ test('resolver: off at gain 0, admitted above it, octaves and gain clamped to th
   assert.equal(on.effective.admitted, true);
   assert.equal(on.gain, 0.4);
   assert.equal(on.octaves, 2);
+  assert.equal(on.strength, 1, 'strength defaults to the cascade expectation');
+  assert.equal(resolveWaveletTurbulence({ waveletStrength: 9 }).strength, WAVELET_TURBULENCE_RANGES.strength[1]);
+  assert.equal(resolveWaveletTurbulence({ waveletStrength: 2.5 }).strength, 2.5);
   const clamped = resolveWaveletTurbulence({ waveletTurbulence: 9, waveletOctaves: 7 });
   assert.equal(clamped.gain, WAVELET_TURBULENCE_RANGES.gain[1]);
   assert.equal(clamped.octaves, WAVELET_TURBULENCE_RANGES.octaves[1]);
@@ -51,10 +54,11 @@ test('resolver: off at gain 0, admitted above it, octaves and gain clamped to th
   assert.deepEqual(WAVELET_TURBULENCE_RANGES.octaves, [1, 2], 'a third octave would sit at one cell, below Nyquist');
 });
 
-test('uniforms: gain, octaves, coherence period, step count', () => {
-  const r = resolveWaveletTurbulence({ waveletTurbulence: 0.25, waveletOctaves: 1 });
-  assert.deepEqual(waveletTurbulenceUniformValues(r, { simStepCount: 17 }), [0.25, 1, WAVELET_COHERENCE_PERIOD_STEPS, 17]);
-  assert.deepEqual(waveletTurbulenceUniformValues(resolveWaveletTurbulence({}), { simStepCount: 17 }), [0, WAVELET_TURBULENCE_DEFAULTS.octaves, WAVELET_COHERENCE_PERIOD_STEPS, 17]);
+test('uniforms: gain, octaves, strength, step count; the coherence period is a WGSL constant', () => {
+  const r = resolveWaveletTurbulence({ waveletTurbulence: 0.25, waveletOctaves: 1, waveletStrength: 2 });
+  assert.deepEqual(waveletTurbulenceUniformValues(r, { simStepCount: 17 }), [0.25, 1, 2, 17]);
+  assert.deepEqual(waveletTurbulenceUniformValues(resolveWaveletTurbulence({}), { simStepCount: 17 }), [0, WAVELET_TURBULENCE_DEFAULTS.octaves, 1, 17]);
+  assert.match(WAVELET_TURBULENCE_WGSL, new RegExp(`const WAVELET_COHERENCE_PERIOD_STEPS: u32 = ${WAVELET_COHERENCE_PERIOD_STEPS}u;`));
 });
 
 test('gradient noise: zero-mean, bounded, and its analytic gradient matches finite differences', () => {
@@ -165,7 +169,9 @@ test('kernel: the closure fills the deficit of the transported sub band at the f
   assert.match(body, /let highPass = transported - waveletLowPassSample\(foot\);/, 'the sub band is the transported velocity against L1 at the same foot');
   assert.match(body, /let carried = dot\(highPass, detail\) \/ \(dd \* readGain\);/, 'only the component along the pattern is read');
   assert.match(body, /let blend = stepBlend\(clamp\(u\.wavelet_turbulence\.x, 0\.0, 1\.0\)\);/);
-  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* \(amplitude - carried\) \* detail;/, 'relaxation along the pattern; the fold restores the per-step blend');
+  assert.match(body, /let target = amplitude \* max\(u\.wavelet_turbulence\.z, 0\.0\);/, 'strength multiplies the Kolmogorov amplitude');
+  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* max\(target - carried, 0\.0\) \* detail;/, 'one-sided fill along the pattern; the fold restores the per-step blend');
+  assert.match(body, /waveletBlendA\(u32\(u\.wavelet_turbulence\.w\), WAVELET_COHERENCE_PERIOD_STEPS\)/);
   assert.doesNotMatch(body, /readSlot\(/, 'no destination-cell old-field term');
   assert.match(core, /if \(waveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
   const pre = core.slice(core.indexOf('fn csWaveletLowPass('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass(')));
@@ -204,7 +210,8 @@ test('WGSL: the kernel module carries the same slope, period and no trigonometri
 
 test('cockpit: the two wavelet controls exist, are in the control table, and the snapshot builder forwards them', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  for (const id of ['volume-wavelet-turbulence', 'volume-wavelet-octaves']) assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
+  for (const id of ['volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength']) assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
+  assert.match(index, /\{ key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength'/);
   assert.match(index, /\{ key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence'/);
   assert.match(index, /\{ key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves'/);
   // The live capture of 2026-10-16 found the sliders moving while the kernel stayed at gain 0:

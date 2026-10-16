@@ -29,9 +29,11 @@ export const WAVELET_LACUNARITY = 2;
 // lattice every period and two sets half a period apart are cross-faded so
 // the reset never shows. Even, so the second set's reset step is exact.
 export const WAVELET_COHERENCE_PERIOD_STEPS = 48;
-export const WAVELET_TURBULENCE_DEFAULTS = Object.freeze({ gain: 0, octaves: 2 });
+export const WAVELET_TURBULENCE_DEFAULTS = Object.freeze({ gain: 0, octaves: 2, strength: 1 });
 // Octaves at 4 and 2 cells; a third would sit at one cell, below Nyquist.
-export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2] });
+// Strength multiplies the Kolmogorov target amplitude: 1 is the cascade
+// expectation; above it is deliberate exaggeration, labelled as such.
+export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2], strength: [0.25, 4] });
 
 // Band estimator (measured on unit curl fields, see the contracts). The kernel
 // stores L1 = box3(v) and L2 = box3(L1) in a pre-pass; the resolved band it
@@ -58,12 +60,14 @@ const clamp = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
 export function resolveWaveletTurbulence(params = {}) {
   const gain = clamp(finite(Number(params.waveletTurbulence), WAVELET_TURBULENCE_DEFAULTS.gain), WAVELET_TURBULENCE_RANGES.gain);
   const octaves = clamp(Math.round(finite(Number(params.waveletOctaves), WAVELET_TURBULENCE_DEFAULTS.octaves)), WAVELET_TURBULENCE_RANGES.octaves);
+  const strength = clamp(finite(Number(params.waveletStrength), WAVELET_TURBULENCE_DEFAULTS.strength), WAVELET_TURBULENCE_RANGES.strength);
   const requested = gain > 0;
   return {
     identity: WAVELET_TURBULENCE_IDENTITY,
     requested,
     gain,
     octaves,
+    strength,
     baseWavelengthCells: WAVELET_BASE_WAVELENGTH_CELLS,
     bandSlope: WAVELET_BAND_SLOPE,
     coherencePeriodSteps: WAVELET_COHERENCE_PERIOD_STEPS,
@@ -71,9 +75,10 @@ export function resolveWaveletTurbulence(params = {}) {
   };
 }
 
-// vec4 packed after joined_ghost_dims: gain, octave count, coherence period, step count.
+// vec4 packed after joined_ghost_dims: gain, octave count, strength, step
+// count. The coherence period is a WGSL constant.
 export function waveletTurbulenceUniformValues(resolved, { simStepCount = 0 } = {}) {
-  return [resolved.gain, resolved.octaves, WAVELET_COHERENCE_PERIOD_STEPS, simStepCount >>> 0];
+  return [resolved.gain, resolved.octaves, resolved.strength, simStepCount >>> 0];
 }
 
 // ---- CPU reference -------------------------------------------------------
@@ -209,6 +214,7 @@ const WAVELET_BAND_SLOPE: f32 = -0.8333333;
 const WAVELET_BASE_WAVELENGTH_CELLS: f32 = ${WAVELET_BASE_WAVELENGTH_CELLS.toFixed(1)};
 const WAVELET_LACUNARITY: f32 = ${WAVELET_LACUNARITY.toFixed(1)};
 const WAVELET_CURL_RMS: f32 = ${WAVELET_CURL_RMS};
+const WAVELET_COHERENCE_PERIOD_STEPS: u32 = ${WAVELET_COHERENCE_PERIOD_STEPS}u;
 const WAVELET_TARGET_PER_ROOT_ENERGY: f32 = ${WAVELET_TARGET_PER_ROOT_ENERGY.toFixed(6)};
 const WAVELET_DETAIL_HIGHPASS_GAIN = array<f32, 2>(${WAVELET_DETAIL_HIGHPASS_GAIN.join(', ')});
 const WAVELET_OCTAVE_OFFSETS = array<vec3<f32>, 3>(${OCTAVE_OFFSETS.map(o => `vec3<f32>(${o.join(', ')})`).join(', ')});

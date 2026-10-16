@@ -4037,26 +4037,30 @@ fn waveletLowPassSample(p: vec3<f32>) -> vec3<f32> {
   return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
 }
 // The closure. At the characteristic's foot the resolved band L3 − L4 gives the
-// Kolmogorov amplitude A of the 4-cell octave; the synthesized pattern d (this
-// step's advected coordinates) is relaxed into the transported velocity along
-// its own direction only: the high-pass component of the transported velocity
-// along d is driven to what a pattern of amplitude A reads back as (gain g),
-// so the pattern's amplitude settles at A and nothing orthogonal to it is
-// touched. Transported velocity and L1 are both taken at the foot, so transport
-// and the band agree. The fold multiplies the return by the time step; the
-// per-step blend is 1 − (1 − gain)^dt.
-// (Two earlier forms on this branch failed the live capture: relaxing the
-// destination cell's old sub band ran away under a multi-cell backtrace, and a
-// magnitude-deficit gate stayed shut because the grid's own small-scale
-// content already exceeds the Kolmogorov amplitude: wavelet-evidence-2/-3.)
+// Kolmogorov amplitude A of the 4-cell octave, times the operator's strength
+// (1 = the cascade expectation). The synthesized pattern d (this step's
+// advected coordinates) is filled into the transported velocity along its own
+// direction only, and only up to that target: the high-pass component of the
+// transported velocity along d is read through the pattern's read-back gain g
+// and raised to the target where it falls short; where the gas already carries
+// as much along d, nothing is added, and nothing is ever removed. Transported
+// velocity and L1 are both taken at the foot, so transport and the band agree.
+// The fold multiplies the return by the time step; the per-step blend is
+// 1 − (1 − gain)^dt.
+// (Three earlier forms on this branch failed the live capture: relaxing the
+// destination cell's old sub band ran away under a multi-cell backtrace
+// (wavelet-evidence-2); a magnitude-deficit gate stayed shut because the grid's
+// own small-scale content already matches the Kolmogorov amplitude on the
+// operator's basin (-3); a two-sided relaxation along the pattern subtracted
+// where that content exceeded the target and drained the flame's energy across
+// every band (-4).)
 fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>, coordB: vec3<f32>, timeStep: f32) -> vec3<f32> {
   let footCell = vec3<i32>(clampCell(vec3<i32>(floor(foot))));
   let band = waveletLevel2Box(footCell, 2) - waveletLevel2Box(footCell, 4);
   let amplitude = waveletTargetAmplitude(0.5 * dot(band, band));
   if (amplitude <= 0.0) { return vec3<f32>(0.0); }
   let octaves = clamp(u32(u.wavelet_turbulence.y), 1u, 2u);
-  let period = u32(max(u.wavelet_turbulence.z, 2.0));
-  let wa = waveletBlendA(u32(u.wavelet_turbulence.w), period);
+  let wa = waveletBlendA(u32(u.wavelet_turbulence.w), WAVELET_COHERENCE_PERIOD_STEPS);
   var detail = vec3<f32>(0.0);
   if (wa > 0.0) { detail = detail + wa * waveletDetail(coordA, octaves); }
   if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(coordB, octaves); }
@@ -4065,8 +4069,9 @@ fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>,
   let highPass = transported - waveletLowPassSample(foot);
   let readGain = WAVELET_DETAIL_HIGHPASS_GAIN[octaves - 1u];
   let carried = dot(highPass, detail) / (dd * readGain);
+  let target = amplitude * max(u.wavelet_turbulence.z, 0.0);
   let blend = stepBlend(clamp(u.wavelet_turbulence.x, 0.0, 1.0));
-  return blend / max(timeStep, 1e-6) * (amplitude - carried) * detail;
+  return blend / max(timeStep, 1e-6) * max(target - carried, 0.0) * detail;
 }
 
 // Pre-pass 1: L1 for every cell, dispatched before the step while the closure is on.
@@ -6817,10 +6822,9 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var waveletCoordB = cell;
   if (waveletOn()) {
     // The noise coordinates ride the same characteristic as the gas.
-    let wPeriod = u32(max(u.wavelet_turbulence.z, 2.0));
-    let wPhase = u32(u.wavelet_turbulence.w) % wPeriod;
+    let wPhase = u32(u.wavelet_turbulence.w) % WAVELET_COHERENCE_PERIOD_STEPS;
     waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
-    waveletCoordB = select(waveletCoordSample(backCell, 1), cell, wPhase == wPeriod / 2u);
+    waveletCoordB = select(waveletCoordSample(backCell, 1), cell, wPhase == WAVELET_COHERENCE_PERIOD_STEPS / 2u);
     waveletCoordStore(cellI, 0, waveletCoordA);
     waveletCoordStore(cellI, 1, waveletCoordB);
   }
@@ -28106,7 +28110,7 @@ export function createKaminosVolumePrototype({
     async debugWaveletBandEnergy() {
       if (!device || !fluidBuffers) return { status: 'unsupported', reason: 'gpu-not-initialized' };
       const dims = [gridSize, gridHeight, gridSize];
-      const snapshot = { dims, simStepCount: state.simStepCount, wavelet: state.waveletTurbulence ? { gain: state.waveletTurbulence.gain, octaves: state.waveletTurbulence.octaves, admitted: state.waveletTurbulence.effective.admitted } : null };
+      const snapshot = { dims, simStepCount: state.simStepCount, wavelet: state.waveletTurbulence ? { gain: state.waveletTurbulence.gain, octaves: state.waveletTurbulence.octaves, strength: state.waveletTurbulence.strength, admitted: state.waveletTurbulence.effective.admitted } : null };
       const bytes = fluidBuffers[currentFluid].size;
       const staging = device.createBuffer({ label: 'kaminos wavelet band energy readback', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       try {
