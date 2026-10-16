@@ -36,11 +36,16 @@ for (const [, corner, expression] of frontReads) {
 // Execute only the scalar expressions from the real WGSL, not a duplicate support formula.
 const supportBlock = balancedWgslBlock(core, 'fn directCellOpticalSupportFromSlots(');
 const supportBody = supportBlock.slice(supportBlock.indexOf('{') + 1, -1);
+// The derived density is the shader's own law too (Snuffbox's channel cleanup:
+// density is derived where read), executed from its WGSL body.
+const derivedBlock = balancedWgslBlock(core, 'fn derivedDensityFromSlots(');
+const derived = new Function('material', 'microLayer', 'max', 'clamp', derivedBlock.slice(derivedBlock.indexOf('{') + 1, -1));
+const clampJs = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const support = new Function('velocityDensity', 'material', 'fireLayer', 'microLayer',
-  'combustionFrontTopology', 'length', 'max', 'clamp', supportBody);
+  'combustionFrontTopology', 'length', 'max', 'clamp', 'derivedDensityFromSlots', supportBody);
 const zero = { x: 0, y: 0, z: 0, w: 0, xyz: [0, 0, 0] };
 const frontSupport = front => support(zero, zero, zero, zero, front,
-  v => Math.hypot(...v), Math.max, (x, lo, hi) => Math.min(hi, Math.max(lo, x)));
+  v => Math.hypot(...v), Math.max, clampJs, (material, microLayer) => derived(material, microLayer, Math.max, clampJs));
 assert.ok(Math.abs(frontSupport(1) - 0.274) < 1e-12);
 assert.ok(frontSupport(1) > 0.0001);
 assert.ok(frontSupport(1 / 65536) < 0.0001, 'the old decode wrongly skipped front-only cells');
