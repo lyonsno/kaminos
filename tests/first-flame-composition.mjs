@@ -7,6 +7,7 @@ const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
 test('the actual domain helper retires when its field is absent and survives toggles',()=>{
   let flameDomainGuide=null,activeSceneComposition={},flameDomainDraft=null,flameDomainProxy=null;
+  const isSceneItemVisible=()=>true;
   const scene=new THREE.Scene(),selectionCaptureSuspended=false,viewportHelpersVisible=true;
   const viewportDisplay={domains:true,domainOpacity:1,domainWidth:1},transformControls=null;
   const acceptedFlameDomainPose=()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]});
