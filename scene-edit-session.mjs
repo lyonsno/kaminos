@@ -30,7 +30,10 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
   };
   const put = (id, value) => targets.has(id) ? targets.get(id).write(clone(value)) : write(id, value);
   const state = () => ({ active: active ? clone(active) : null, undoCount: past.length, redoCount: future.length, replaying });
-  const hasHistoryEntry = id => past.some(entry => entry.id === id) || future.some(entry => entry.id === id);
+  const hasHistoryEntry = (id,matches) => {
+    const retained=entry=>entry.id===id&&(!matches||matches(clone(entry)));
+    return past.some(retained)||future.some(retained);
+  };
   const waitForReplay = () => {
     if (!replaying) return Promise.resolve();
     return new Promise(resolve => {
