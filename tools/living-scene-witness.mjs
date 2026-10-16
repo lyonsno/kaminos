@@ -24,6 +24,9 @@ export async function witness(args){
   report.source=[];for(const file of ['experiments/creature-motion/living-scene.experiment.mjs','experiments/creature-motion/walking.experiment.mjs','experiments/creature-motion/live-actor-root.mjs','experiments/creature-motion/given-palette-playback.mjs']){const response=await page.request.get(new URL('/'+file,page.url()).href);assert.equal(response.status(),200);const sha256=hash(await response.body());assert.equal(sha256,hash(readFileSync(join(root,file))));report.source.push({file,sha256});}
   const read=()=>page.evaluate(()=>window.kaminosCreatureActors.read()),invoke=(operation,input)=>page.evaluate(({operation,input})=>window.kaminosWorkbenchExperiments.invoke(operation,input),{operation,input});
   const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  // Check the hit target, dispatch native pointer input, then observe domain
+  // state explicitly. A perpetual render loop is not page/navigation idleness.
+  const click=async locator=>{const box=await locator.boundingBox();assert.ok(box,'Native control has no hit box');const point={x:box.x+box.width/2,y:box.y+box.height/2};assert.ok(await locator.evaluate((node,p)=>node.contains(document.elementFromPoint(p.x,p.y)),point),'Native control is occluded');await page.mouse.click(point.x,point.y);};
   const capture=async name=>{await settle();const image=join(out,name+'.png');await page.screenshot({path:image});report.captures.push(image);return image;};
   report.initial=await read();validateActors(report.initial,setup);report.registrations=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
   for(const object of world.objects)assert.ok(report.registrations.some(row=>row.id===object.id),`Prepared world object missing: ${object.id}`);
@@ -33,8 +36,8 @@ export async function witness(args){
   await page.evaluate(()=>window.kaminosViewportSettings.set({bones:false,paths:false}));await capture('world-initial');
   report.phase='context-selection';for(const id of [a,b,c]){report.phase='select-'+id;await invoke('select',{id});await settle();assert.equal(await page.locator('.creature-properties:not([hidden])').count(),1,'Several property panels active');assert.equal(await page.locator('.scene-owner-playback:not([hidden])').count(),1,'Several playback bars active');assert.equal(await page.locator('.creature-properties:not([hidden]) strong').textContent(),setup.actors.find(a=>a.id===id).label);}
   report.phase='native-play';
-  await invoke('select',{id:a});await page.getByRole('button',{name:'↻ Replay',exact:true}).click();
-  await page.waitForFunction(id=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.action.motion.elapsed>.4,a);await page.locator('.scene-owner-playback:not([hidden]) .playback-play').click();
+  await invoke('select',{id:a});await click(page.getByRole('button',{name:'↻ Replay',exact:true}));
+  await page.waitForFunction(id=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.action.motion.elapsed>.4,a);await click(page.locator('.scene-owner-playback:not([hidden]) .playback-play'));
   report.afterNativePlay=await read();assert.ok(report.afterNativePlay.actors.find(row=>row.id===a).state.action.motion.elapsed>report.initial.actors.find(row=>row.id===a).state.action.motion.elapsed);
   assert.deepEqual(report.afterNativePlay.actors.find(row=>row.id===b).state.action.motion,report.initial.actors.find(row=>row.id===b).state.action.motion,'Local transport advanced a neighbour');
   await invoke('actor',{id:b,operation:'play'});await invoke('actor',{id:a,operation:'play'});await page.waitForFunction(id=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.action.motion.elapsed>.35,b);await invoke('actor',{id:a,operation:'pause'});
