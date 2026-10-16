@@ -296,3 +296,13 @@ export function addresseesIn(text, known) {
   for (const name of mentionsIn(text)) (names.has(name) ? recognized : unknown).push(name);
   return {recognized, unknown};
 }
+// What became of the geometry a point note is on, from a scene recheck
+// ({now, status}); nothing to say while it is the same or cannot be told.
+export function pointStatusText(result) {
+  if (!result) return '';
+  if (result.now === 'missing') return 'no longer in the scene';
+  if (result.now === 'mesh-missing') return 'its mesh is gone';
+  if (result.status === 'edited') return 'edited since this note';
+  if (result.status === 'replaced') return 'geometry replaced since this note';
+  return '';
+}

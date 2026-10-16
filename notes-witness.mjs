@@ -77,7 +77,7 @@ function colors(file) {
   return {width, height, red: red / (width * height), varied};
 }
 
-let browser, server, browserMarker;
+let browser, server, browserMarker, spotId = null;
 const savedScenes = [];
 const near = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => Math.abs(value - b[index]) < 1e-3);
 async function postFromComposer(target, text) {
@@ -563,6 +563,7 @@ try {
   await page.click('.kn-compose .kn-btn.primary');
   await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 30000}).catch(() => {});
   const spot = (await log()).filter(event => event.type === 'note' && event.text === 'this exact spot').at(-1);
+  spotId = spot?.id;
   const local = spot?.anchor?.local ?? [];
   check('the note is stored on a point of that object, inside it', spot?.anchor?.kind === 'point' && spot.anchor.id === red
     && local.length === 3 && local.every(value => Math.abs(value) <= 0.51) && spot.anchor.point?.length === 3
@@ -581,6 +582,15 @@ try {
   const after = await pinAt();
   check('the pin moves with its object', before && after && after.x - before.x > 20, {before, after});
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), red);
+  // Edit the noted geometry: the posted note says it changed since.
+  await page.evaluate(id => window.kaminosSceneAuthoring.setGeometry(id, {parameters: {width: 1.4}}), red);
+  const spotCard = `.kn-thread[data-thread="${spot?.id}"] .kn-on`;
+  await page.waitForFunction(([selector, id]) => /since this note/.test(document.querySelector(selector)?.textContent ?? '')
+    && document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status === 'changed', [spotCard, spot?.id], {timeout: 8000}).catch(() => {});
+  const edited = await page.evaluate(([selector, id]) => ({line: document.querySelector(selector)?.textContent ?? null,
+    pin: document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status ?? null}), [spotCard, spot?.id]);
+  check('after the geometry is edited, the posted note says it changed since', /since this note/.test(edited.line ?? '') && edited.pin === 'changed', edited);
+  await page.evaluate(id => window.kaminosSceneAuthoring.setGeometry(id, {parameters: {width: 1}}), red);
   // A point picked, then the selection left and returned while Notes was closed: the point is gone.
   await page.keyboard.down('Alt');
   await page.mouse.click(canvas.x, canvas.y);
@@ -752,6 +762,10 @@ try {
   await page.click(`.kn-thread[data-thread="${noteId}"] .kn-actions .kn-btn:nth-child(2)`);
   const goneStatus = await page.textContent('.kn-status');
   check('going to a note whose object was deleted says so and restores only the view', /no longer in this scene/.test(goneStatus), {goneStatus});
+  const pointGone = `.kn-thread[data-thread="${spotId}"] .kn-on`;
+  await page.waitForFunction(selector => /no longer in the scene/.test(document.querySelector(selector)?.textContent ?? ''), pointGone, {timeout: 8000}).catch(() => {});
+  const goneLine = await page.evaluate(selector => document.querySelector(selector)?.textContent ?? null, pointGone);
+  check('a point note whose object was deleted says it is no longer in the scene', /no longer in the scene/.test(goneLine ?? ''), {goneLine});
 
   const notesErrors = report.pageErrors.filter(text => /notes|kn-/i.test(text));
   check('no notes errors in the page', notesErrors.length === 0, {notesErrors});

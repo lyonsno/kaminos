@@ -12336,7 +12336,8 @@ async function initScene() {
         sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
         linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
         avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')],ownView:viewportOwnForNotes,
-        pickAt:at=>window.kaminosAgentVantage?.run?.('pick',{from:'operator',at})??null,pickCanvas:()=>renderer.domElement,selectionToken:()=>sceneSelection});
+        pickAt:at=>window.kaminosAgentVantage?.run?.('pick',{from:'operator',at})??null,pickCanvas:()=>renderer.domElement,selectionToken:()=>sceneSelection,
+        recheck:anchor=>window.kaminosAgentVantage?.run?.('recheck',anchor)??null});
       window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
     }catch(error){console.error('Notes unavailable',error);}
   }
