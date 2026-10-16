@@ -13,3 +13,15 @@ const before=structuredClone(sample),after=structuredClone(sample);after.action.
 checks.validateWanderProgress(before,after,{minimumCycles:1});
 for(const change of [s=>s.action.motion.elapsed=2,s=>s.action.motion.cycle=1,s=>s.action.motion.path.distance=5,s=>{s.action.motion.path.position=[2,3];s.boneWorld[0].matrix[12]=2;}]){const s=structuredClone(after);change(s);assert.throws(()=>checks.validateWanderProgress(before,s,{minimumCycles:1}));}
 console.log('Wander evidence rejects stale source, missing area, fake path-only movement and no completed cycle');
+assert.equal(typeof checks.validateCreatureBackendRead,'function');
+const gpu={deformation:{requested:'gpu',effective:'webgpu-dense-dq'},skin:{deformation:{backend:'webgpu-dense-dq',dispatches:1,pending:false}}};
+checks.validateCreatureBackendRead(gpu,'gpu');
+for(const change of [s=>s.deformation.requested='cpu',s=>s.deformation.effective='cpu-reference',s=>s.skin.deformation.backend='cpu-reference',s=>s.skin.deformation.dispatches=0,s=>s.skin.deformation.pending=true]){
+ const s=structuredClone(gpu);change(s);assert.throws(()=>checks.validateCreatureBackendRead(s,'gpu'));
+}
+assert.equal(typeof checks.validateCreatureGpuGeometry,'function');
+const cpu={vertices:[0,0,0,1,0,0,0,1,0]},readback={backend:'webgpu-dense-dq',dispatches:1,positions:[...cpu.vertices],normals:[0,0,1,0,0,1,0,0,1]};
+checks.validateCreatureGpuGeometry(readback,cpu);
+for(const change of [s=>s.backend='cpu-reference',s=>s.dispatches=0,s=>s.positions.pop(),s=>s.positions[0]=NaN,s=>s.positions.fill(0),s=>s.normals.pop(),s=>s.normals[0]=NaN]){
+ const s=structuredClone(readback);change(s);assert.throws(()=>checks.validateCreatureGpuGeometry(s,cpu));
+}

@@ -16,6 +16,7 @@ function checkAuthoredTransform(t){
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
@@ -41,14 +42,16 @@ async function checkRecipeView(view,current){
  try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
 }
 
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin}={}) {
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const choices=checkRecipeInputs(inputs);
  const data=await loadSources(inputs),document=host.controls.document;
+ const deformation=inputs.deformation??'cpu',deformerFactory=deformation==='gpu'?await loadGpuDeformer():null;
+ if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
  let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
  let walking=createWalkingPoseAdapter({THREE,adapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
  const source={...data.source,prompt:data.motion.prompt??null,seed:data.motion.seed??null,presentation:{mode:'source',...walking.identity}};
- let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs};
+ let chosen=choices.find(c=>c.motion===inputs.motion&&c.motion_sha256===data.source.motionSha256)??null,chosenInputs={...inputs,deformation};
  const placement=new THREE.Group();placement.name='Creature · authored placement';placement.userData.kaminosFrameContentOnly=true;
  if(inputs.transform!==undefined){
   const t=inputs.transform;
@@ -64,7 +67,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
+  skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
   transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined},
@@ -129,14 +132,20 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
   });return disposal;
  }
- function inspect({geometry=true}={}){if(!geometry)return read();placement.updateMatrixWorld(true);return {...read(),placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices:Array.from(runtime.mesh.geometry.attributes.position.array),boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};}
+ function inspect({geometry=true}={}){
+  if(!geometry)return read();
+  if(geometry==='gpu')return runtime.readGpuGeometry();
+  placement.updateMatrixWorld(true);
+  const vertices=Array.from(runtime.syncCpuGeometry().attributes.position.array);
+  return {...read(),geometrySource:'cpu-current-pose',placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices,boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};
+ }
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
   return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,now:()=>clock,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
-  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data});
+  session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
   placement.add(runtime.group);
   asset=await session.attach(placement,{owned:true,metadata:{fileName:'Creature',source:inputs.case,label:'Creature'}});
   player=makePlayer();
@@ -148,7 +157,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const height=document.getElementById('composition-ground-height'),visible=document.getElementById('composition-ground-visible');
    if(!height||!visible)throw Error('Shared Workbench ground controls are unavailable');
    const previous={height:height.value,visible:visible.checked};runtime.group.updateMatrixWorld(true);
-   const value=String(givenSourceSoleHeight(runtime.mesh.geometry.attributes.position.array,runtime.mesh.matrixWorld.elements));
+   const value=String(givenSourceSoleHeight(runtime.syncCpuGeometry().attributes.position.array,runtime.mesh.matrixWorld.elements));
    source.groundReference={kind:'source-start-surface-minimum',height:Number(value),animated:false,contactSolver:false};
    const size=inputs.floor_size??5*walking.identity.radius;if(!Number.isFinite(size)||size<=0)throw Error('Reference floor size must be positive');
    floor=new THREE.Mesh(new THREE.PlaneGeometry(size,size),new THREE.MeshStandardMaterial({color:0x808080,roughness:.65}));floor.name='Walking reference floor · not contact';floor.rotation.x=-Math.PI/2;floor.position.y=Number(value);floor.receiveShadow=true;
