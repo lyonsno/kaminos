@@ -424,7 +424,8 @@ def directory_and_notify_contracts():
             "body = json.load(sys.stdin)\n"
             "name = os.environ['KAMINOS_NOTES_RECIPIENT']\n"
             "(__import__('pathlib').Path(sys.argv[1]) / f'notified-{name}.json').write_text(json.dumps(\n"
-            "    {'recipient': name, 'note': body['note']['id'], 'text': body['note']['text'], 'server': os.environ.get('KAMINOS_NOTES_SERVER')}))\n"
+            "    {'recipient': name, 'note': body['note']['id'], 'text': body['note']['text'], 'server': os.environ.get('KAMINOS_NOTES_SERVER'),\n"
+            "     'listening': body['listening'], 'listeningEnv': os.environ.get('KAMINOS_NOTES_LISTENING')}))\n"
             "sys.exit(3 if name == 'late-agent' else 0)\n")
         process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
@@ -453,7 +454,8 @@ def directory_and_notify_contracts():
             rows = {row["name"]: row for row in body["participants"]}
             assert rows["late-agent"]["kind"] == "person", "the directory is read as it is now"
 
-            # near-agent is listening, far-agent is not: only far-agent's command runs.
+            # Every recipient's command runs, told whether that recipient's wait was active;
+            # whoever runs the server decides what a listening recipient needs.
             waiting = {}
             listener = threading.Thread(target=lambda: waiting.update(call(port, "GET", "/api/notes/wait?as=near-agent&timeout=20", timeout=30)[1]))
             listener.start()
@@ -472,8 +474,14 @@ def directory_and_notify_contracts():
                     break
                 time.sleep(0.05)
             told = json.loads(far.read_text())
-            assert told == {"recipient": "far-agent", "note": note["id"], "text": "both of you, look", "server": f"http://127.0.0.1:{port}"}, told
-            assert not (tmp / "notified-near-agent.json").exists(), "a listening recipient is not notified"
+            assert told == {"recipient": "far-agent", "note": note["id"], "text": "both of you, look", "server": f"http://127.0.0.1:{port}",
+                            "listening": False, "listeningEnv": "0"}, told
+            near = tmp / "notified-near-agent.json"
+            for _ in range(200):
+                if near.exists():
+                    break
+                time.sleep(0.05)
+            assert json.loads(near.read_text())["listening"] is True and json.loads(near.read_text())["listeningEnv"] == "1"
 
             status, note2 = call(port, "POST", "/api/notes", {"kind": "note", "text": "late one", "to": ["late-agent"],
                                                               "anchor": {"kind": "scene"}, "author": "writer-agent"})
@@ -481,13 +489,13 @@ def directory_and_notify_contracts():
             for _ in range(200):
                 events = call(port, "GET", "/api/notes")[1]["events"]
                 outcomes = {(event["notes"][0], event["recipient"]): event for event in events if event["type"] == "notified"}
-                if len(outcomes) >= 2:
+                if len(outcomes) >= 3:
                     break
                 time.sleep(0.05)
             assert outcomes[(note["id"], "far-agent")]["ok"] is True, outcomes
             failed = outcomes[(note2["id"], "late-agent")]
             assert failed["ok"] is False and "3" in failed["detail"], failed
-            assert (note["id"], "near-agent") not in outcomes
+            assert outcomes[(note["id"], "near-agent")]["ok"] is True, outcomes
 
             # Being notified is not being handed the note: far-agent's wait still gets it.
             status, got = call(port, "GET", "/api/notes/wait?as=far-agent&timeout=5", timeout=15)
@@ -500,11 +508,57 @@ def directory_and_notify_contracts():
                 process.kill()
 
 
+def notify_timing_contracts(notes):
+    """A wait that just ended is not listening, whatever the presence display
+    smooths over; and a note that was saved is notified even if its author's
+    response cannot be written."""
+    with tempfile.TemporaryDirectory() as tmp:
+        clock = [1000.0]
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah", clock=lambda: clock[0])
+        http = notes.NotesHttp(log, source=lambda: {"origin": "http://127.0.0.1:1"}, notify=["true"])
+        calls = []
+        http._run_notify = lambda note, name, server, listening: calls.append((note["id"], name, listening))
+        log.claim("near-agent", timeout=0)
+        note = log.post({"kind": "note", "text": "x", "to": ["near-agent"], "anchor": {"kind": "scene"}, "author": "writer-agent"}, origin=CLI)
+        http._notify_recipients(note)
+        for _ in range(100):
+            if calls:
+                break
+            time.sleep(0.02)
+        assert calls == [(note["id"], "near-agent", False)], calls
+
+        class Broken:
+            def write(self, data):
+                raise BrokenPipeError("client went away")
+        class Handler:
+            headers = {"Content-Type": "application/json", "Content-Length": "0"}
+            client_address = ("127.0.0.1", 5)
+            wfile = Broken()
+            def send_response(self, *args): pass
+            def send_header(self, *args): pass
+            def end_headers(self): pass
+        body = json.dumps({"kind": "note", "text": "y", "to": ["far-agent"], "anchor": {"kind": "scene"}, "author": "writer-agent"}).encode()
+        handler = Handler()
+        handler.headers = {"Content-Type": "application/json", "Content-Length": str(len(body))}
+        handler.rfile = __import__("io").BytesIO(body)
+        calls.clear()
+        try:
+            http.post(handler, {})
+        except OSError:
+            pass
+        for _ in range(100):
+            if calls:
+                break
+            time.sleep(0.02)
+        assert [name for _, name, _ in calls] == ["far-agent"], calls
+
+
 if __name__ == "__main__":
     notes = load_notes()
     log_contracts(notes)
     follow_up_contracts(notes)
     participant_contracts(notes)
+    notify_timing_contracts(notes)
     http_contracts()
     presence_stream_contracts()
     directory_and_notify_contracts()
