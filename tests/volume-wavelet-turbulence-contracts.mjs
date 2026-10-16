@@ -199,6 +199,43 @@ test('estimator calibration: the pinned gains match the filters on unit curl fie
   assert.ok(d2.b.kolmogorovSubEnergy < 0.1 * d2.b.sub, `the detail field feeds its own estimator at ${d2.b.kolmogorovSubEnergy / d2.b.sub}`);
 });
 
+test('parity: the coordinate textures ride the quench parity, which flips once per step; the fluid parity flips again under projection without copying them', () => {
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.match(core, /waveletRead: waveletTextures\[quenchIndex\],\s*waveletWrite: waveletTextures\[1 - quenchIndex\],/, 'bind groups key the coordinate ping-pong to the quench index');
+  assert.doesNotMatch(core, /waveletRead: waveletTextures\[fluidIndex\]/);
+  const encodeSim = core.slice(core.indexOf('function encodeSim('), core.indexOf('\n  }\n', core.indexOf('function encodeSim(')));
+  assert.equal((encodeSim.match(/currentQuench = 1 - currentQuench;/g) || []).length, 1, 'encodeSim flips the quench parity once');
+  assert.equal((core.match(/currentQuench = 1 - currentQuench;/g) || []).length, 1, 'nothing else flips the quench parity');
+  assert.ok((core.match(/currentFluid = 1 - currentFluid;/g) || []).length >= 2, 'the fluid parity also flips under projection');
+  // Replay of the bookkeeping (review WT-01): with projection on, the fluid
+  // parity returns to its start every step, so coordinates keyed to it would be
+  // re-read from the same texture; keyed to the quench parity they alternate.
+  let fluid = 0, quench = 0; const readsByFluid = [], readsByQuench = [];
+  for (let step = 0; step < 4; step++) {
+    readsByFluid.push(fluid); readsByQuench.push(quench);
+    fluid = 1 - fluid; quench = 1 - quench; // encodeSim
+    fluid = 1 - fluid;                       // projection writes back into the other fluid buffer
+  }
+  assert.deepEqual(readsByFluid, [0, 0, 0, 0]);
+  assert.deepEqual(readsByQuench, [0, 1, 0, 1], 'each step reads the set the previous step wrote');
+});
+
+test('capture: the band-energy readback must be its own arm and must postdate the configuration it is evidence for', async () => {
+  const { waveletBandEnergyMismatch, armSetsConfiguration } = await import('../volume-arm-capture-checks.mjs');
+  const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
+  assert.match(capture, /if \(cid === '@waveletBandEnergy'\) \{\s*if \(armSetsConfiguration\(arm\.set\)\) fail\(/, 'a configuring arm cannot carry the readback');
+  assert.match(capture, /waveletBandEnergyMismatch\(sample, \{ minStep: lastConfigStep \}\)/);
+  assert.equal(armSetsConfiguration([['volume-wavelet-turbulence', '0.5'], ['@waveletBandEnergy', '1']]), true);
+  assert.equal(armSetsConfiguration([['@waveletBandEnergy', '1']]), false);
+  const good = { status: 'sampled', simStepCount: 600, wavelet: { gain: 0.5, octaves: 2, strength: 1, admitted: true } };
+  assert.equal(waveletBandEnergyMismatch(good, { minStep: 574 }), null);
+  assert.match(waveletBandEnergyMismatch({ ...good, simStepCount: 400 }, { minStep: 574 }), /before the configuration settled/);
+  assert.match(waveletBandEnergyMismatch({ ...good, wavelet: { gain: 0, octaves: 2, strength: 1, admitted: false } }, { minStep: 0 }) ?? 'null', /null/);
+  assert.match(waveletBandEnergyMismatch({ ...good, wavelet: { gain: 0.5, octaves: 2, strength: 1, admitted: false } }), /incoherent/);
+  assert.match(waveletBandEnergyMismatch({ status: 'invalid' }), /invalid/);
+  assert.match(waveletBandEnergyMismatch(null), /missing/);
+});
+
 test('WGSL: the kernel module carries the same slope, period and no trigonometric authorship', () => {
   assert.match(WAVELET_TURBULENCE_WGSL, /const WAVELET_BAND_SLOPE: f32 = -0\.8333333/);
   assert.match(WAVELET_TURBULENCE_WGSL, /fn waveletCurlUnit\(p: vec3<f32>\) -> vec3<f32>/);

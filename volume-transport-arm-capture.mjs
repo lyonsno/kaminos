@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseSyntheticGhosts, parseArms, parseCameraFrame, resolveHeadlessBrowser, syntheticGhostSettlementMismatch } from './volume-arm-capture-checks.mjs';
+import { armSetsConfiguration, cameraFrameMismatch, waveletBandEnergyMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseSyntheticGhosts, parseArms, parseCameraFrame, resolveHeadlessBrowser, syntheticGhostSettlementMismatch } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -248,11 +248,14 @@ try {
         continue;
       }
       if (cid === '@waveletBandEnergy') {
-        // Read-only: velocity energy by band and a hash of the velocity bits.
+        if (armSetsConfiguration(arm.set)) fail(report.failurePhase, '@waveletBandEnergy must be its own arm, after the configuration arm has settled');
+        // Read-only: velocity energy by band and a hash of the velocity bits,
+        // accepted only when taken after the last configuration settled.
         const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.debugWaveletBandEnergy) return { status: 'missing-api' }; return await p.debugWaveletBandEnergy(); })()`));
         (arm.waveletBandEnergy ||= []).push(sample);
         applied.push([cid, value, sample?.status ?? null]);
-        if (sample?.status !== 'sampled') { report.lastTrustworthyEvidence.waveletBandEnergy = sample; fail(report.failurePhase, `wavelet band energy ${sample?.status ?? 'missing'}`); }
+        const mismatch = waveletBandEnergyMismatch(sample, { minStep: lastConfigStep });
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.waveletBandEnergy = sample; fail(report.failurePhase, mismatch); }
         continue;
       }
       if (cid === '@joinedGhostsSynthetic') {

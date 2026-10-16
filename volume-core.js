@@ -3864,9 +3864,9 @@ fn joinedLowerFace(c: vec3<i32>, axis: u32) -> f32 {
 @group(0) @binding(30) var ghostB: texture_3d<f32>;
 // Wavelet turbulence (volume-wavelet-turbulence.mjs): the advected noise
 // coordinates, two sets stacked along depth (A in [0, GRID), B in [GRID, 2 GRID)),
-// ping-ponged with the fluid like the reactant sidecar: read as a sampled
-// texture, written as a storage texture. Compute only; 1x1x1 placeholders
-// while the closure is off.
+// read as a sampled texture, written as a storage texture, ping-ponged on the
+// quench parity (one flip per step; the projection flips the fluid parity again
+// without copying these). Compute only; 1x1x1 placeholders while off.
 @group(0) @binding(31) var waveletCoordSrc: texture_3d<f32>;
 @group(0) @binding(32) var waveletCoordDst: texture_storage_3d<rgba32float, write>;
 ${WAVELET_TURBULENCE_WGSL}
@@ -13294,8 +13294,13 @@ export function createKaminosVolumePrototype({
           frontWrite: frontBuffers[1 - fluidIndex],
           reactantRead: reactantTextures[fluidIndex],
           reactantWrite: reactantTextures[1 - fluidIndex],
-          waveletRead: waveletTextures[fluidIndex],
-          waveletWrite: waveletTextures[1 - fluidIndex],
+          // Wavelet coordinates ride the quench parity, not the fluid parity: the
+          // pressure projection flips the fluid parity a second time each step
+          // (and copies the reactant sidecar across, but not these), so keying
+          // them to the fluid would read the stale set every step (review WT-01).
+          // The quench parity flips exactly once per step, in encodeSim.
+          waveletRead: waveletTextures[quenchIndex],
+          waveletWrite: waveletTextures[1 - quenchIndex],
           quenchRead: quenchBuffers[quenchIndex],
           quenchWrite: quenchBuffers[1 - quenchIndex],
           captureRows: nonRidgeOpticalCaptureRowBuffer,
