@@ -708,11 +708,12 @@ export function installVantageHud({document, viewport}) {
       title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
       show();
     },
-    live(frame, ImageData) {
+    live(frame, ImageData, label = 'Sub') {
       if (!frame) { liveOn = false; liveCanvas.hidden = true; picture.hidden = !hasPicture; show(); return; }
       if (liveCanvas.width !== frame.width || liveCanvas.height !== frame.height) { liveCanvas.width = frame.width; liveCanvas.height = frame.height; }
       liveCanvas.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
       liveCanvas.dataset.frame = String(++liveFrames);
+      if (!liveOn) title.textContent = `${label} · live`;
       liveOn = true;
       liveCanvas.hidden = false;
       picture.hidden = true;
@@ -1048,7 +1049,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     catch { current.skipped++; return; }
     current.pending = true;
     current.drawMs = clock() - started;
-    view.ready.then(frame => { if (live === current) { hud.live(frame, window.ImageData); current.frames++; } }, () => { current.skipped++; })
+    view.ready.then(frame => { if (live === current) { hud.live(frame, window.ImageData, record.label); current.frames++; } }, () => { current.skipped++; })
       .finally(() => { current.pending = false; });
   };
   function startLive({pilot: name, fps}) {

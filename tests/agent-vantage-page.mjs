@@ -684,7 +684,7 @@ function installedPage({subs = [], drawnAt = null, water = false, glance = null}
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
     idPass, glance, water: () => water});
   const refresh = intervals.find(item => item.ms === 400).fn;
-  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'),
+  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'), title: viewport.children[0].querySelector('.vantage-title'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
     set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
 }
@@ -1485,6 +1485,7 @@ test('while the live view runs it takes the last picture\'s place, so the panel 
   await new Promise(done => setTimeout(done, 0));
   assert.equal(page.live.hidden, false);
   assert.equal(page.picture.hidden, true, 'the live view stands in for the last picture');
+  assert.equal(page.title.textContent, 'Bebop · live', 'and the panel says so');
   await page.vantage.run('live', {on: false});
   assert.equal(page.live.hidden, true);
   assert.equal(page.picture.hidden, false, 'and the last picture returns when it stops');
