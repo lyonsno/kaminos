@@ -591,6 +591,44 @@ try {
     pin: document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status ?? null}), [spotCard, spot?.id]);
   check('after the geometry is edited, the posted note says it changed since', /since this note/.test(edited.line ?? '') && edited.pin === 'changed', edited);
   await page.evaluate(id => window.kaminosSceneAuthoring.setGeometry(id, {parameters: {width: 1}}), red);
+  // A point note on an object that is then deleted says so (same scene, before any save).
+  // Put it where the viewport canvas, not the drawer or a sidebar, is under its centre.
+  const {doomed, doomedAt} = await page.evaluate(() => {
+    const edit = window.kaminosSceneAuthoring;
+    const id = edit.addMesh('box', {width: 0.3, height: 0.3, depth: 0.3});
+    window.renameSceneObject(id, 'Doomed');
+    const canvas = [...document.querySelectorAll('canvas')].find(node => node.getBoundingClientRect().width > 300);
+    const state = window.kaminosCameraDebugState();
+    const apply = (m, v) => [0, 1, 2, 3].map(row => m[row] * v[0] + m[4 + row] * v[1] + m[8 + row] * v[2] + m[12 + row] * v[3]);
+    const rect = canvas.getBoundingClientRect();
+    for (const position of [[-0.3, 1.2, 1.0], [-0.5, 0.9, 1.2], [0.2, 1.25, 1.0], [-0.6, 0.3, 1.4], [0, 1.3, 0.6]]) {
+      const clip = apply(state.projectionMatrix, apply(state.matrixWorldInverse, [...position, 1]));
+      const x = rect.left + (clip[0] / clip[3] + 1) / 2 * rect.width, y = rect.top + (1 - clip[1] / clip[3]) / 2 * rect.height;
+      if (document.elementFromPoint(x, y) === canvas) {
+        window.kaminosSetSceneObjectTransform(id, {position});
+        window._kaminosDirty?.();
+        return {doomed: id, doomedAt: {x, y, position}};
+      }
+    }
+    return {doomed: id, doomedAt: null};
+  });
+  await sleep(500);
+  check('a spot for the throwaway box is in view', !!doomedAt, {doomedAt});
+  await page.keyboard.down('Alt');
+  await page.mouse.click(doomedAt.x, doomedAt.y);
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => /a point of "Doomed"/.test(document.querySelector('.kn-compose .kn-anchor')?.textContent ?? ''), null, {timeout: 10000}).catch(() => {});
+  await page.fill('.kn-compose textarea', 'this one goes away');
+  await page.click('.kn-compose .kn-btn.primary');
+  await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 30000}).catch(() => {});
+  const doomedNote = (await log()).filter(event => event.type === 'note' && event.text === 'this one goes away').at(-1);
+  await page.evaluate(id => { window.kaminosSelection.set([id], id); window.kaminosSelection.remove(); window._kaminosDirty?.(); }, doomed);
+  const doomedCard = `.kn-thread[data-thread="${doomedNote?.id}"] .kn-on`;
+  await page.waitForFunction(selector => /no longer in the scene/.test(document.querySelector(selector)?.textContent ?? ''), doomedCard, {timeout: 8000}).catch(() => {});
+  const goneLine = await page.evaluate(selector => document.querySelector(selector)?.textContent ?? null, doomedCard);
+  check('a point note whose object was deleted says it is no longer in the scene', doomedNote?.anchor?.kind === 'point' && doomedNote.anchor.id === doomed
+    && /no longer in the scene/.test(goneLine ?? ''), {anchor: doomedNote?.anchor ?? null, goneLine});
+  await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   // A point picked, then the selection left and returned while Notes was closed: the point is gone.
   await page.keyboard.down('Alt');
   await page.mouse.click(canvas.x, canvas.y);
@@ -762,10 +800,6 @@ try {
   await page.click(`.kn-thread[data-thread="${noteId}"] .kn-actions .kn-btn:nth-child(2)`);
   const goneStatus = await page.textContent('.kn-status');
   check('going to a note whose object was deleted says so and restores only the view', /no longer in this scene/.test(goneStatus), {goneStatus});
-  const pointGone = `.kn-thread[data-thread="${spotId}"] .kn-on`;
-  await page.waitForFunction(selector => /no longer in the scene/.test(document.querySelector(selector)?.textContent ?? ''), pointGone, {timeout: 8000}).catch(() => {});
-  const goneLine = await page.evaluate(selector => document.querySelector(selector)?.textContent ?? null, pointGone);
-  check('a point note whose object was deleted says it is no longer in the scene', /no longer in the scene/.test(goneLine ?? ''), {goneLine});
 
   const notesErrors = report.pageErrors.filter(text => /notes|kn-/i.test(text));
   check('no notes errors in the page', notesErrors.length === 0, {notesErrors});

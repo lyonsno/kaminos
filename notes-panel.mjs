@@ -2,7 +2,7 @@
 // agent by name, and read the answers where you are looking. The session
 // (createNotesSession) is separate from the DOM (installNotes) so it can be
 // tested without a browser. See docs/notes.md.
-import {addresseesIn, checkedAnchor, checkedPost, pointStatusText, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
+import {addresseesIn, checkedAnchor, checkedPost, pointInScene, pointStatusText, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
   rankParticipants} from './notes-core.mjs';
 
 export {mentionsIn};
@@ -815,7 +815,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     if (known?.pending || (known && now - known.at < 1000)) return;
     pointStatus.set(note.id, {...known, pending: true, at: now});
     Promise.resolve().then(() => recheck({id: note.anchor.id, path: note.anchor.path ?? [], identity: note.anchor.geometry ?? null}))
-      .then(result => result, () => null)
+      .then(result => result ?? {failed: true}, () => ({failed: true}))
       .then(result => {
         const before = pointStatusText(known?.result);
         pointStatus.set(note.id, {result, at: now, pending: false});
@@ -867,6 +867,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     // object's current placement applied to the point in its own frame.
     for (const note of session.threads()) {
       if (note.resolved || note.anchor?.kind !== 'point') continue;
+      // Another scene's point is neither checked nor pinned against this one.
+      if (!pointInScene(note, sceneFile())) { pointStatus.delete(note.id); continue; }
       checkPoint(note, now);
       const entry = entries().find(item => item.id === note.anchor.id);
       if (!entry?.object) continue;
@@ -886,7 +888,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       pin.textContent = '\u2022';
       const changedSince = pointStatusText(pointStatus.get(note.id)?.result);
       pin.title = `Note on a point of "${note.anchor.label}"${changedSince ? `: ${changedSince}` : ''}`;
-      pin.dataset.status = changedSince ? 'changed' : 'same';
+      const result = pointStatus.get(note.id)?.result;
+      pin.dataset.status = !result || result.failed || result.status === 'unverified' ? 'unknown' : changedSince ? 'changed' : 'same';
       pin.style.left = `${((point.x + 1) / 2) * width}px`;
       pin.style.top = `${((1 - point.y) / 2) * height}px`;
     }
