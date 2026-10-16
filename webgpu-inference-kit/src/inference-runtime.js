@@ -440,7 +440,12 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
   }
   runtime.settleCommandDuty(preparedCommandDuty, { status: 'encoded' });
   // Copy outstanding kernel timings out ahead of the readback so they resolve alongside it.
-  runtime.gpuTimer?.flush();
+  try { runtime.gpuTimer?.flush(); }
+  catch (error) {
+    try { staging.destroy(); }
+    catch (cleanupError) { throw new AggregateError([error, cleanupError], 'timing flush and tensor staging cleanup failed'); }
+    throw error;
+  }
   await runOptionalHostPhase(
     runtime,
     WEBGPU_HOST_PHASE.queueSubmission,

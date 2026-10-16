@@ -7,7 +7,12 @@ function fixture({ delayedMaps = false } = {}) {
   const f = { buffers: [], queries: [], fences: [], maps: [], submitError: null };
   const queue = {
     onSubmittedWorkDone: () => new Promise(resolve => f.fences.push(resolve)),
-    submit() { if (f.submitError) throw f.submitError; },
+    submit(commands) {
+      if (f.submitError) throw f.submitError;
+      for (const command of commands) for (const [source, sourceOffset, target, targetOffset, size] of command.copies) {
+        new Uint8Array(target.bytes, targetOffset, size).set(new Uint8Array(source.bytes, sourceOffset, size));
+      }
+    },
   };
   const device = { queue, features: new Set(['timestamp-query']), limits: {},
     createQuerySet() {
@@ -15,19 +20,23 @@ function fixture({ delayedMaps = false } = {}) {
       f.queries.push(query); return query;
     },
     createBuffer(d) {
-      const buffer = { ...d, destroyed: false,
+      const bytes = new ArrayBuffer(d.size);
+      if (d.label === 'kaminos.gpu-timing.resolve') {
+        const ns = new BigUint64Array(bytes);
+        for (let i = 0; i + 1 < ns.length; i += 32) { ns[i] = 1_000_000n; ns[i + 1] = 3_000_000n; }
+      }
+      const buffer = { ...d, bytes, destroyed: false,
         destroy() { this.destroyed = true; },
         mapAsync() { return delayedMaps ? new Promise(resolve => f.maps.push(resolve)) : Promise.resolve(); },
-        getMappedRange() {
-          const bytes = new ArrayBuffer(d.size), ns = new BigUint64Array(bytes);
-          for (let i = 0; i + 1 < ns.length; i += 32) { ns[i] = 1_000_000n; ns[i + 1] = 3_000_000n; }
-          return bytes;
-        },
+        getMappedRange: () => bytes,
         unmap() {},
       };
       f.buffers.push(buffer); return buffer;
     },
-    createCommandEncoder: () => ({ copyBufferToBuffer() {}, finish: () => ({}) }),
+    createCommandEncoder() {
+      const copies = [];
+      return { copyBufferToBuffer: (...args) => copies.push(args), finish: () => ({ copies }) };
+    },
   };
   f.device = device;
   f.budget = maxBytes => createWebGpuModelBufferBudget({ device, maxBytes });
@@ -104,5 +113,38 @@ test('timer readback keeps its charge through mapping and runtime disposal', asy
   assert.equal(f.buffers[1].destroyed, true);
   assert.equal(budget.snapshot().chargedBytes, 256);
   await f.retire(budget);
+  assert.equal(budget.snapshot().chargedBytes, 0);
+});
+
+test('readTensor retires its unsubmitted staging after timing refusal so the same allowance can retry', async () => {
+  const f = fixture(), budget = f.budget(1280), runtime = await f.runtime(budget);
+  const output = runtime.createTensor({ name: 'out', dtype: 'u32', shape: [64], usage: 132 });
+  const expected = Uint32Array.from({ length: 64 }, (_, i) => i + 7);
+  new Uint32Array(output.buffer.bytes).set(expected);
+  const held = runtime.createManagedBuffer({ label: 'caller-held', size: 256, usage: 128 });
+  const token = submitted(runtime);
+  assert.equal(budget.snapshot().chargedBytes, 1024);
+
+  await assert.rejects(runtime.readTensor(output), error => error.name === 'WebGpuBufferBudgetError'
+    && error.memoryBudget.label === 'kaminos.gpu-timing.readback');
+  const failedStaging = f.buffers.filter(buffer => buffer.label === 'out.readback');
+  assert.equal(failedStaging.length, 1);
+  assert.equal(failedStaging[0].destroyed, true, 'failed public readback must not strand its private staging');
+  assert.equal(budget.snapshot().chargedBytes, 1280, 'charge remains until completion');
+  assert.equal(budget.snapshot().pendingRetirementBytes, 256);
+  assert.equal(token.status, 'pending', 'submitted timings stay available for retry');
+  await f.retire(budget);
+  assert.equal(budget.snapshot().chargedBytes, 1024);
+  held.destroy(); await f.retire(budget);
+  assert.equal(budget.snapshot().chargedBytes, 768);
+
+  const result = await runtime.readTensor(output);
+  await runtime.settleGpuTiming();
+  assert.deepEqual(new Uint32Array(result), expected);
+  assert.equal(token.status, 'resolved');
+  assert.equal(budget.snapshot().peakChargedBytes, 1280);
+  assert.equal(f.buffers.filter(buffer => buffer.label === 'out.readback' && !buffer.destroyed).length, 1);
+  await f.retire(budget);
+  runtime.dispose(); await f.retire(budget);
   assert.equal(budget.snapshot().chargedBytes, 0);
 });
