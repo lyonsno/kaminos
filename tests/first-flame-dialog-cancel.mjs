@@ -42,6 +42,8 @@ function fixture({ holdActivation = false } = {}) {
     },
   };
   const context = {
+    // The fluid route is already up; a scene without it boots it first (fire-boot.mjs).
+    volumePrototype: {},
     structuredClone, AbortController,
     document: { createElement: type => type === 'dialog' ? dialog : {}, body: { append() {} } },
     fetch: async () => ({ ok: true, json: async () => ({ entries: [{ presetId: 'saved-immersed-basin' }] }) }),
