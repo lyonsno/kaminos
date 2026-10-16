@@ -1007,6 +1007,27 @@ async function runPreviewCostScenario(ws) {
   evidence.lightFieldProfile = (await evaluate(ws, 'window.kaminosFireLightFieldGpuProfile?.()'))?.compute ?? null;
 }
 
+// Slow-motion probe: the authored flame with its Speed lowered live. Records
+// whether the field restarts, the effective time step, and steps per frame.
+async function runFireSlowMotionProbeScenario(ws) {
+  phase = 'scenario-fire-slow-motion-probe';
+  const evidence = lastEvidence.fireSlowMotion = { windows: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
+  const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { speed: Number(document.getElementById('volume-speed').value), timeStep: window.__kaminosVolumePrototype.joinedProducerState?.()?.timeStep ?? null, resets: d.fluidStateResetCount, steps: d.simStepCount, frames: d.frameCount, simTime: d.simTimeSeconds ?? null }; })()`);
+  const base = await read();
+  evidence.base = base;
+  for (const factor of [1, 0.5, 0.25, 0.125]) {
+    await evaluate(ws, `(() => { const el = document.getElementById('volume-speed'); el.value = String(${base.speed} * ${factor}); el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); return el.value; })()`);
+    await delay(1500);
+    const a = await read(); await delay(3000); const b = await read();
+    const shot = await capturePngScreenshot(ws, siblingPngPath(`-speed-${factor}`));
+    evidence.windows.push({ factor, speed: b.speed, resetsBefore: base.resets, resets: b.resets, stepsPerFrame: (b.steps - a.steps) / Math.max(1, b.frames - a.frames), framesPerSecond: (b.frames - a.frames) / 3, timeStep: b.timeStep, shot: shot.path });
+  }
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -6867,6 +6888,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'fire-slow-motion-probe') {
+    await runFireSlowMotionProbeScenario(ws);
   } else if (scenario === 'preview-cost') {
     await runPreviewCostScenario(ws);
   } else if (scenario === 'viewport-wire-cost') {
