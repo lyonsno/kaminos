@@ -64,3 +64,10 @@ test('hide state survives ordinary scene serialization while physical sources re
  const document=buildSceneDocument({objects:[{id:'mesh',type:'glb',source:'/mesh.glb'}],editorDisplay:{hiddenIds:['mesh','water-field','flame-field']}});
  assert.deepEqual(planSceneRestore(document).editorDisplay.hiddenIds,['mesh','water-field','flame-field']);
 });
+import fs from 'node:fs';
+import vm from 'node:vm';
+test('visibility-owned selection cannot cancel its own shared edit and releases the guard after failure',()=>{
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8'),a=html.indexOf('function restoreVisibilitySelection('),b=html.indexOf('\n}',a)+2;
+ const c={burnerGraphWriting:false,setSceneSelection(ids){assert.equal(c.burnerGraphWriting,true,'selection change must retain the visibility transaction');if(!ids.length)throw Error('selection failure');return ids;}};
+ vm.createContext(c);vm.runInContext(html.slice(a,b),c);assert.deepEqual(c.restoreVisibilitySelection(['mesh'],'mesh'),['mesh']);assert.equal(c.burnerGraphWriting,false);assert.throws(()=>c.restoreVisibilitySelection([],null),/selection failure/);assert.equal(c.burnerGraphWriting,false);
+});

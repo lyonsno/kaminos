@@ -4010,6 +4010,12 @@ function attachViewportGizmo(target) {
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
 }
+// Visibility owns this selection change inside its existing edit transaction;
+// reuse the graph-write guard so changing the target cannot cancel that edit.
+function restoreVisibilitySelection(ids,activeId){
+ const previous=burnerGraphWriting;burnerGraphWriting=true;
+ try{return setSceneSelection(ids,activeId);}finally{burnerGraphWriting=previous;}
+}
 function sceneVisibilityContext(){return {objects:sceneObjects,groups:sceneGroups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(localLiquidSetup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function syncViewportDisplayControls() {
@@ -12133,7 +12139,7 @@ async function initScene() {
   };
   window.kaminosSceneVisibility=installSceneVisibility({document,viewport:viewportEl,outliner:document.getElementById('authoring-hierarchy'),edits:scenePlacementTools.edits,scene:sceneVisibilityContext,
     readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncEditorHelperVisibility();},
-    selection:()=>{const value=readSceneSelection();return {ids:value.ids,activeId:value.activeId};},setSelection:setSceneSelection,
+    selection:()=>{const value=readSceneSelection();return {ids:value.ids,activeId:value.activeId};},setSelection:restoreVisibilitySelection,
     blocked:()=>polyEdit?.active()?'Leave Edit Mode to hide objects':sceneCommandBlocked(),changed:()=>{syncEditorHelperVisibility();renderSceneObjectList();updateSelectionFeedback();markDirty();},onError:error=>setInfo(error.message)});
   window.kaminosCommandSearch=installCommandSearch({document,viewport:viewportEl,button:document.getElementById('authoring-search'),
     blocked:sceneCommandBlocked,onError:error=>setInfo(error.message),commands:()=>{
