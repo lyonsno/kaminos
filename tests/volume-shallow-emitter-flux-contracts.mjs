@@ -119,11 +119,9 @@ assert.match(injectionShader, /\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}/, 'the liv
 assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedMaterial = vec4<f32>\([\s\S]*candidateMaterial\.x,[\s\S]*candidateMaterial\.y,[\s\S]*candidateMaterial\.z,[\s\S]*select\(previousMaterial\.w, candidateMaterial\.w, legacyVolumeSourceLaw\)/, 'the shared shader policy preserves shallow material detail');
 assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedFireLayer = vec4<f32>\([\s\S]*select\(previousFireLayer\.w, candidateFireLayer\.w, legacyVolumeSourceLaw\)/, 'the shared shader policy preserves every shallow fire component');
 assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedMicroLayer = vec4<f32>\([\s\S]*select\(previousMicroLayer\.w, candidateMicroLayer\.w, legacyVolumeSourceLaw\)/, 'the shared shader policy preserves every shallow microstructure component');
-assert.match(
-  injectionShader,
-  /let injectedDensity = select\(previousVelocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
-  'the shallow law preserves the transported density carrier instead of reconstructing it from its new primary inputs',
-);
+// The density lane is reserved (derived where read) since the channel cleanup of 2026-10-13:
+// the shallow law neither preserves nor reconstructs a stored carrier.
+assert.match(injectionShader, /let candidateVelocityDensity = vec4<f32>\(injectedVelocity, 0\.0\);/, 'the shallow law writes the reserved density lane as zero');
 assert.match(coreSource, /let fixedSourceDephase = step\(0\.5, u\.reserved_source_extension_0\.x\);/, 'the fixed-grid source perturbation has an executable ablation gate');
 assert.match(coreSource, /let sourceStartupDephase = sourceSpatialDephase \* sourceStartupAuthority \* fixedSourceDephase;/, 'the ordinary source dephase obeys the ablation gate');
 assert.match(coreSource, /let startupDephase = staticDephase \* startupAuthority \* fixedSourceDephase;/, 'the Bonfire fixed-grid dephase obeys the same ablation gate');

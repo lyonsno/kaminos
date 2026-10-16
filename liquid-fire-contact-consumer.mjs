@@ -393,7 +393,6 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   let remainingLickRemoval = max(0.0, remainingFrontRemoval - removedCombustionFront);
   let removedFireLick = min(cell3.z, remainingLickRemoval);
   let removedVisibleFire = removedFlame + removedFlameDetail + removedCombustionFront + removedFireLick;
-  cell0.w = min(4.0, cell0.w + addedVapor * 0.4);
   cell1.x = min(4.0, cell1.x + addedVapor);
   cell1.y = max(0.0, cell1.y - removedHeat);
   cell1.z = max(0.0, cell1.z - removedFuel);

@@ -43,7 +43,7 @@ test('no pipeline is created with a grid-shape constant', () => {
 
 test('every compute and fragment entry point seats the grid shape first; vertex entry points that need it too', () => {
   const main = entryPoints(moduleText('WGSL'));
-  assert.equal(main.filter(e => e.stage !== 'vertex').length, 26, 'every main compute/fragment entry point is checked');
+  assert.equal(main.filter(e => e.stage !== 'vertex').length, 27, 'every main compute/fragment entry point is checked');
   assert.match(sceneSource, /fn seedSceneVolumeSource\(@builtin\(global_invocation_id\) c: vec3<u32>\) \{\n  seatGridShape\(\);/, 'the scene source seed (interpolated into the main shader) seats it too');
   for (const e of main) {
     if (e.stage === 'vertex') assert.notEqual(e.firstLine, 'seatGridShape();', `${e.name}: the vertex stage cannot read the fluid uniforms`);
@@ -80,7 +80,7 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /  productTransform: vec4<f32>,\n  gridShape: vec4<f32>,\n\}/);
   assert.match(source, /const splatCamera = new Float32Array\(60\);/);
   assert.match(source, /\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},/, 'the core passes the height to the emitter packer');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, 0, 0\], 56\);/);
+  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'x, y the grid shape; z the effective appearance-model flag (compact-3) for the splat module');
   assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
 

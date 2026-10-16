@@ -97,19 +97,14 @@ assert.doesNotMatch(
   /velocityDensity\.xyz\s*=/,
   'bounded emitter WGSL does not assign through a non-assignable vector swizzle',
 );
+// Density is no longer stored: the injection writes the reserved lane as zero and
+// every reader derives the same 1.08/0.42 law through derivedDensityFromSlots (channel cleanup 2026-10-13).
+assert.match(injectionShader, /let candidateVelocityDensity = vec4<f32>\(injectedVelocity, 0\.0\);/, 'the legacy filled-volume source writes the reserved density lane as zero; readers derive density');
+assert.doesNotMatch(injectionShader, /legacyInjectedDensity/);
+assert.doesNotMatch(injectionShader, /injectedDensity|previousVelocityDensity\.w/, 'no law reconstructs or preserves a stored density: the lane is reserved and density is derived where read');
 assert.match(
   injectionShader,
-  /let legacyInjectedDensity = clamp\(max\([\s\S]*?material\.x \* 1\.08 \+ microLayer\.x \* 0\.08[\s\S]*?material\.y \* 0\.42[\s\S]*?material\.w \* 0\.18[\s\S]*?microLayer\.y \* 0\.20[\s\S]*?microLayer\.z \* 0\.05[\s\S]*?material\.z \* 0\.10[\s\S]*?0\.0, 2\.2\);/,
-  'the legacy filled-volume source retains its density reconstruction law',
-);
-assert.match(
-  injectionShader,
-  /let injectedDensity = select\(previousVelocityDensity\.w, legacyInjectedDensity, sourceLaw < 0\.5\);/,
-  'density reconstruction is effective only for the legacy law while shallow-primary preserves transported density',
-);
-assert.match(
-  injectionShader,
-  /let injectedVelocity = clamp\([\s\S]*?let candidateVelocityDensity = vec4<f32>\(injectedVelocity, injectedDensity\);[\s\S]*?\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}[\s\S]*?fluid\[base\] = committedVelocityDensity;/,
+  /let injectedVelocity = clamp\([\s\S]*?let candidateVelocityDensity = vec4<f32>\(injectedVelocity, 0\.0\);[\s\S]*?\$\{VOLUME_EMITTER_FIELD_COMMIT_WGSL\}[\s\S]*?fluid\[base\] = committedVelocityDensity;/,
   'the bounded source write consumes the law-selected density contract through the shared field policy',
 );
 assert.match(core, /function encodeAnalyticEmitterInjection\(encoder\)/, 'fixed morphology owns a separate encoder boundary');

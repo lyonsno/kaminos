@@ -1471,7 +1471,7 @@ assert.match(core, /bonfireReactionFront[\s\S]*bonfireLiftedReactionFront/, 'bon
 assert.match(core, /bonfireCombustionFrontLiftCarrier/, 'bonfire transported combustion-front birth has a named lifted/off-axis carrier');
 assert.match(core, /bonfireCombustionFrontBirth[\s\S]*bonfireCombustionFrontLiftCarrier/, 'bonfire combustionFront birth must use the lifted/off-axis carrier rather than only source/interface terms');
 assert.match(core, /bonfireFrontTopologyBirth[\s\S]*bonfireCombustionFrontLiftCarrier/, 'bonfire sidecar front topology birth must use the lifted/off-axis carrier rather than only source/interface terms');
-assert.match(core, /frontDst\[idx\]\s*=\s*clamp\(combustionFrontTopology/, 'compute pass writes the independent combustion-front topology sidecar');
+assert.match(core, /frontDst\[idx\]\s*=\s*select\(clamp\(combustionFrontTopology, 0\.0, 2\.0\), 0\.0, compact\)/, 'compute pass writes the independent combustion-front topology sidecar');
 assert.match(core, /bonfireTopologyRadianceCarrier/, 'bonfire visible radiance has a named carrier derived from the sidecar topology field');
 assert.match(core, /bonfireRadianceBirth[\s\S]*bonfireTopologyRadianceCarrier/, 'bonfire radiance birth must use the sidecar front topology distribution');
 assert.match(core, /bonfireTopologyTransfer/, 'bonfire sidecar-to-visible transfer has a named transported-topology carrier');

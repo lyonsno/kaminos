@@ -1231,6 +1231,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
       <div class="field"><span class="field-key">Reaction law</span><span class="field-val" id="volume-reaction-law-state">authored</span></div>
+      <div class="field"><span class="field-key">Appearance model</span><span class="field-val" id="volume-appearance-model-state">authored</span></div>
       <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Immersed source</span><span class="field-val" id="volume-immersed-source-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
@@ -2815,6 +2816,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-reactant-cooling-time-val">55</span>
     </div>
     <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
+    <div class="slider-row">
+      <span class="slider-label">Appearance model</span>
+      <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
+        <option value="authored">Authored (nine carriers)</option>
+        <option value="compact-3">Compact (three carriers)</option>
+      </select>
+      <span class="slider-val" id="volume-appearance-model-val">authored</span>
+    </div>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; every slider and every renderer formula is unchanged, so the only question is whether three channels carry the look. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -18858,6 +18868,7 @@ function readVolumeControls() {
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
+    appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -19020,6 +19031,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
   document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
   document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
+  document.getElementById('volume-appearance-model-val').textContent = c.appearanceModel;
   document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
@@ -19439,6 +19451,10 @@ function refreshVolumeReadout() {
       : `Wavelet turbulence: on · gain ${wavelet.gain.toFixed(2)} · ${wavelet.octaves} octave${wavelet.octaves === 1 ? '' : 's'} below ${wavelet.baseWavelengthCells} cells · strength ${wavelet.strength.toFixed(2)}× Kolmogorov${wavelet.strength > 1.001 ? ' (exaggerated)' : ''} · coordinates reset every ${wavelet.coherencePeriodSteps} steps`;
   }
   syncVolumeViewerPlay(s);
+  const appearance = s.appearanceModel;
+  document.getElementById('volume-appearance-model-state').textContent = !appearance || appearance.effective !== 'compact-3'
+    ? 'authored · nine carriers + front field stored'
+    : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
     ? 'authored'
@@ -19802,7 +19818,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -20718,6 +20734,7 @@ async function initKaminosVolumeRoute() {
     'volume-reaction-law',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
+    'volume-appearance-model',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
     'volume-immersed-centre-y',
