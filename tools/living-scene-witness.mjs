@@ -13,7 +13,7 @@ export function validateActors(read,setup){
 const hash=data=>createHash('sha256').update(data).digest('hex');
 export async function witness(args){
  const out=resolve(args.out);mkdirSync(out,{recursive:true});const report={schema:'kaminos.living-scene-witness.v1',status:'running',phase:'inputs',requested:args,errors:[],captures:[],continuous:[]};
- const persist=()=>writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');persist();let browser,context,page;
+ const persist=()=>writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');let phase=report.phase;Object.defineProperty(report,'phase',{enumerable:true,get:()=>phase,set:value=>{phase=value;persist();}});persist();let browser,context,page;
  try{
   const root=realpathSync(args.root),setup=JSON.parse(readFileSync(args.setup)),world=JSON.parse(readFileSync(args.world));report.setupSha256=hash(readFileSync(args.setup));report.worldSha256=hash(readFileSync(args.world));
   const {chromium}=await import(args.playwright),executable=realpathSync(args.chrome);assert.ok(!executable.includes('/Applications/Google Chrome.app/'),'Independent automation browser required');report.effectiveExecutable=executable;
@@ -31,7 +31,8 @@ export async function witness(args){
   const poses=()=>page.evaluate(({ids,rootBone})=>Object.fromEntries(ids.map(id=>[id,window.kaminosCreatureActors.pose(id,{bones:[rootBone]})])),{ids:[a,b,c],rootBone});
   report.posesInitial=await poses();for(const pose of Object.values(report.posesInitial))for(const i of [12,13,14])assert.ok(Math.abs(pose.rootMatrix[i]-pose.bones[0].matrix[i])<1e-6,'Live handle does not follow actual root Bone');
   await page.evaluate(()=>window.kaminosViewportSettings.set({bones:false,paths:false}));await capture('world-initial');
-  report.phase='context-selection';for(const id of [a,b,c]){await invoke('select',{id});await settle();assert.equal(await page.locator('.creature-properties:not([hidden])').count(),1,'Several property panels active');assert.equal(await page.locator('.scene-owner-playback:not([hidden])').count(),1,'Several playback bars active');assert.equal(await page.getByLabel('Scene creature',{exact:true}).inputValue(),id);}
+  report.phase='context-selection';for(const id of [a,b,c]){report.phase='select-'+id;await invoke('select',{id});await settle();assert.equal(await page.locator('.creature-properties:not([hidden])').count(),1,'Several property panels active');assert.equal(await page.locator('.scene-owner-playback:not([hidden])').count(),1,'Several playback bars active');assert.equal(await page.locator('.creature-properties:not([hidden]) strong').textContent(),setup.actors.find(a=>a.id===id).label);}
+  report.phase='native-play';
   await invoke('select',{id:a});await page.getByRole('button',{name:'↻ Replay',exact:true}).click();
   await page.waitForFunction(id=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.action.motion.elapsed>.4,a);await page.locator('.scene-owner-playback:not([hidden]) .playback-play').click();
   report.afterNativePlay=await read();assert.ok(report.afterNativePlay.actors.find(row=>row.id===a).state.action.motion.elapsed>report.initial.actors.find(row=>row.id===a).state.action.motion.elapsed);
@@ -43,7 +44,7 @@ export async function witness(args){
   const field=page.locator('input[data-transform-field="position.x"]');await field.click();await field.fill(String(next));await field.press('Enter');await settle();
   report.edited=await read();assert.ok(Math.abs(report.edited.actors.find(row=>row.id===a).state.transform.position[0]-next)<1e-6);assert.deepEqual(report.edited.actors.find(row=>row.id===b).state.actorRoot,report.neighbourContinued.actors.find(row=>row.id===b).state.actorRoot);
   await invoke('actor',{id:a,operation:'advance',input:{seconds:1/30}});report.afterEditAdvance=await poses();for(const i of [12,13,14])assert.ok(Math.abs(report.afterEditAdvance[a].rootMatrix[i]-report.afterEditAdvance[a].bones[0].matrix[i])<1e-6);
-  await capture('selected-live-handle');
+  await page.evaluate(()=>window.kaminosViewportSettings.set({gizmos:true}));await capture('selected-live-handle');
   report.phase='cast-isolation';const before=await read(),oldB=before.actors.find(row=>row.id===b),choice=setup.actors[0].creature.choices.find(choice=>choice.attachment==='distributed'&&choice.case_sha256!==before.actors.find(row=>row.id===a).state.source.caseSha256);
   await page.getByLabel('Creature cast',{exact:true}).filter({visible:true}).selectOption(choice.cast);await page.waitForFunction(({id,sha})=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.source.caseSha256===sha,{id:a,sha:choice.case_sha256});
   report.castChanged=await read();assert.deepEqual(report.castChanged.actors.find(row=>row.id===b),oldB,'Cast exchange changed a neighbour');
