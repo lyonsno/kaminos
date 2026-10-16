@@ -247,6 +247,14 @@ try {
         if (sample?.status !== 'sampled') { report.lastTrustworthyEvidence.fluidBandStats = sample; fail(report.failurePhase, `fluid band stats ${sample?.status ?? 'missing'}`); }
         continue;
       }
+      if (cid === '@waveletBandEnergy') {
+        // Read-only: velocity energy by band and a hash of the velocity bits.
+        const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.debugWaveletBandEnergy) return { status: 'missing-api' }; return await p.debugWaveletBandEnergy(); })()`));
+        (arm.waveletBandEnergy ||= []).push(sample);
+        applied.push([cid, value, sample?.status ?? null]);
+        if (sample?.status !== 'sampled') { report.lastTrustworthyEvidence.waveletBandEnergy = sample; fail(report.failurePhase, `wavelet band energy ${sample?.status ?? 'missing'}`); }
+        continue;
+      }
       if (cid === '@joinedGhostsSynthetic') {
         // Witness only: bind an exterior geometry around the box and fill it with
         // a constant synthetic exterior; fails unless the ghosts are bound.

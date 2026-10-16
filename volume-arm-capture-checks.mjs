@@ -238,7 +238,7 @@ export function emissiveCoefficientsMismatch(sample, { minProducerStep = null } 
 // other control, including any other debug control, is configuration
 // (post-landing review of 2eef9ccdd: @confinementEpsilon slipped through a
 // guard that exempted every debug control).
-export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients', '@cameraFrame', '@savePreset', '@simGpuProfile', '@fluidBandStats']);
+export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients', '@cameraFrame', '@savePreset', '@simGpuProfile', '@fluidBandStats', '@waveletBandEnergy']);
 export function armSetsConfiguration(set) {
   return set.some(([id]) => !NON_CONFIGURING_CAPTURE_CONTROLS.has(id));
 }

@@ -21,6 +21,8 @@ import {
   waveletDetailVelocity,
   waveletTargetAmplitude,
   waveletBlendWeights,
+  velocityBandEnergies,
+  kolmogorovSubBandRatio,
   WAVELET_TURBULENCE_WGSL,
 } from '../volume-wavelet-turbulence.mjs';
 
@@ -122,6 +124,30 @@ test('coordinate sets: two phases half a period apart, weights sum to one and va
     if (w.resetA) assert.ok(w.a < 1e-12, 'set A carries no weight on its reset step');
     if (w.resetB) assert.ok(w.b < 1e-12, 'set B carries no weight on its reset step');
   }
+});
+
+test('band energies: a smooth field is all large band, a two-cell checkerboard is all sub band, the hash tracks the bits', () => {
+  const dims = [12, 10, 8], cells = dims[0] * dims[1] * dims[2];
+  const smooth = new Float32Array(cells * 16), fine = new Float32Array(cells * 16);
+  for (let z = 0; z < dims[2]; z++) for (let y = 0; y < dims[1]; y++) for (let x = 0; x < dims[0]; x++) {
+    const i = ((z * dims[1] + y) * dims[0] + x) * 16;
+    smooth[i] = 0.3; smooth[i + 1] = 0.1; smooth[i + 2] = -0.2;
+    fine[i + 1] = ((x + y + z) & 1) ? 0.5 : -0.5;
+  }
+  const a = velocityBandEnergies(smooth, dims);
+  assert.ok(Math.abs(a.total - 0.5 * (0.09 + 0.01 + 0.04)) < 1e-7);
+  assert.ok(a.sub < 1e-12 && a.mid < 1e-12 && Math.abs(a.large - a.total) < 1e-9, 'uniform flow has no sub or mid band');
+  const b = velocityBandEnergies(fine, dims);
+  // L1 passes the checkerboard at 1/27 in the interior (box filter; the clamped
+  // edges dilute it), so the sub band holds the energy and the mid and large
+  // bands see only the leak.
+  assert.ok(b.sub > 0.98 * b.total && b.mid < 0.01 * b.total && b.large < 0.01 * b.total, `checkerboard sub ${b.sub} mid ${b.mid} large ${b.large} total ${b.total}`);
+  assert.notEqual(a.velocityHash, b.velocityHash);
+  fine[1] = -fine[1];
+  assert.notEqual(velocityBandEnergies(fine, dims).velocityHash, b.velocityHash, 'one changed bit changes the hash');
+  assert.ok(Math.abs(kolmogorovSubBandRatio(1) - 2 ** (-5 / 3)) < 1e-12);
+  assert.ok(Math.abs(kolmogorovSubBandRatio(2) - (2 ** (-5 / 3) + 2 ** (-10 / 3))) < 1e-12);
+  assert.throws(() => velocityBandEnergies(new Float32Array(8), dims), /expected/);
 });
 
 test('WGSL: the kernel module carries the same slope, period and no trigonometric authorship', () => {

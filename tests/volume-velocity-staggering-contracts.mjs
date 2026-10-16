@@ -107,7 +107,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.equal(on.effective.faceForces, true);
   assert.match(source, /@group\(0\) @binding\(22\) var forceDelta: texture_storage_3d<r32float, read_write>;/, 'one r32float storage texture, components stacked along depth (compute is at its storage-buffer limit)');
   assert.match(source, /\{ binding: 22, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'fluid layout carries the force texture');
-  assert.match(source, /size: \[gridSize, gridHeight, gridSize \* 3\],/, 'three components along depth');
+  assert.match(source, /const planes = waveletSidecarFull \? 6 : 3;[\s\S]*?size: \[gridSize, gridHeight, gridSize \* planes\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
   assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);

@@ -142,6 +142,46 @@ export function waveletBlendWeights(simStepCount) {
   return { a, b: 1 - a, resetA: phase === 0, resetB: phase === P / 2 };
 }
 
+// ---- Evidence: velocity band energies -----------------------------------
+// Specific kinetic energy of a readback velocity field split into the bands the
+// closure reasons about, with the same seven-point axis means the kernel uses
+// (clamped at the box; solids are not excluded here). sub = v - mean1 (scales
+// under ~4 cells), mid = mean1 - mean2 (~4-8 cells), large = mean2. The
+// Kolmogorov expectation for the sub band from the mid band is one octave
+// down in amplitude per synthesized octave: E_sub/E_mid = sum_i 2^(-5/3 i).
+export function kolmogorovSubBandRatio(octaves) {
+  let r = 0;
+  for (let i = 1; i <= octaves; i++) r += WAVELET_LACUNARITY ** (2 * WAVELET_BAND_SLOPE * i);
+  return r;
+}
+export function velocityBandEnergies(values, dims, { stride = 16, offset = 0 } = {}) {
+  const [nx, ny, nz] = dims, cells = nx * ny * nz;
+  if (values.length < cells * stride) throw new Error(`velocity readback holds ${values.length} floats, ${cells * stride} expected`);
+  const index = (x, y, z) => (Math.min(nz - 1, Math.max(0, z)) * ny + Math.min(ny - 1, Math.max(0, y))) * nx + Math.min(nx - 1, Math.max(0, x));
+  const at = (x, y, z, k) => values[index(x, y, z) * stride + offset + k];
+  // L1: the 3x3x3 box mean (the kernel's pre-pass), then L2: L1 and its six
+  // neighbours at distance two.
+  const l1 = new Float32Array(cells * 3);
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) for (let k = 0; k < 3; k++) {
+    let acc = 0;
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) acc += at(x + dx, y + dy, z + dz, k);
+    l1[index(x, y, z) * 3 + k] = acc / 27;
+  }
+  const l1At = (x, y, z, k) => l1[index(x, y, z) * 3 + k];
+  let total = 0, sub = 0, mid = 0, large = 0, hash = 0x811c9dc5;
+  const bits = new Uint32Array(values.buffer, values.byteOffset, values.length);
+  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    for (let k = 0; k < 3; k++) {
+      const v = at(x, y, z, k), m1 = l1At(x, y, z, k);
+      const m2 = (m1 + l1At(x + 2, y, z, k) + l1At(x - 2, y, z, k) + l1At(x, y + 2, z, k) + l1At(x, y - 2, z, k) + l1At(x, y, z + 2, k) + l1At(x, y, z - 2, k)) / 7;
+      total += v * v; sub += (v - m1) ** 2; mid += (m1 - m2) ** 2; large += m2 * m2;
+      hash = Math.imul(hash ^ bits[index(x, y, z) * stride + offset + k], 0x01000193) >>> 0;
+    }
+  }
+  const n = cells;
+  return { cells: n, total: 0.5 * total / n, sub: 0.5 * sub / n, mid: 0.5 * mid / n, large: 0.5 * large / n, subOverMid: mid > 0 ? sub / mid : null, velocityHash: hash.toString(16).padStart(8, '0') };
+}
+
 // ---- WGSL ---------------------------------------------------------------
 
 export const WAVELET_TURBULENCE_WGSL = /* wgsl */`
