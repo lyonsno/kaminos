@@ -73,9 +73,13 @@ export function structuralFaceAt(point, half) {
 }
 
 export async function loadStoneAssets(detail = '500-normal') {
+  return loadStructuralAssets(stoneAssetsForDetail(detail));
+}
+
+export async function loadStructuralAssets(entries) {
   const loader = new GLTFLoader(), assets = [];
   try {
-    for (const entry of stoneAssetsForDetail(detail)) {
+    for (const entry of entries) {
       const response = await fetch(new URL(entry.url, import.meta.url));
       if (!response.ok) throw new Error(`Stone ${entry.id}: HTTP ${response.status}`);
       const bytes = await response.arrayBuffer();
@@ -91,6 +95,7 @@ export async function loadStoneAssets(detail = '500-normal') {
       asset.geometry = meshes[0].geometry.clone().applyMatrix4(meshes[0].matrixWorld);
       asset.material = meshes[0].material;
       asset.triangles = (asset.geometry.index?.count ?? asset.geometry.attributes.position.count) / 3;
+      if(entry.triangles!==undefined&&asset.triangles!==entry.triangles)throw new Error(`Material ${entry.id}: source triangle inventory differs`);
     }
     return assets;
   } catch (error) { disposeStoneAssets(assets); throw error; }

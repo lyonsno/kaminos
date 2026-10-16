@@ -1,4 +1,5 @@
 import {createStoneOwnerHost} from './structural-material-owner-host.mjs';
+export {admitStoneSource,stoneSupportNodes} from './structural-material-source-setup.mjs';
 
 export function stoneMaterialParameters(search){
  const query=new URLSearchParams(search),mesh=query.get('stoneMesh')??'fine',fragments=query.get('stoneFragments')??'fine';
@@ -9,6 +10,7 @@ export function stoneMaterialParameters(search){
  const fixture=query.get('stoneFixture');if(fixture!==null&&fixture!=='axial-chunks')throw Error('Unknown stone fixture');
  const motion=query.get('stoneMotion');if(motion!==null&&motion!=='coherent-translation')throw Error('Unknown stone motion');
  const parameters=new URLSearchParams({fracture:'bounded',connectivity:'elastic-support',inputs:mesh==='fine'?'./scratch/bounded-fine-inputs':'./scratch/shard-live-inputs',fragments,material:response});
+ const preparedInput=query.get('stoneInputs');if(preparedInput!==null){if(!preparedInput.trim())throw Error('Explicit prepared input path required');parameters.set('inputs',preparedInput);}
  if(query.has('stoneGrainScale'))parameters.set('grainScale',query.get('stoneGrainScale'));
  if(fixture!==null)parameters.set('fixture',fixture);
  if(motion!==null)parameters.set('motion',motion);
