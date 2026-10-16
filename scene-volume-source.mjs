@@ -288,6 +288,7 @@ fn seedSceneJoinedFineSource(@builtin(global_invocation_id) c:vec3<u32>){
 }
 @compute @workgroup_size(4,4,4)
 fn seedSceneJoinedExteriorSource(@builtin(global_invocation_id) c:vec3<u32>){
+  seatGridShape();
   let dims=textureDimensions(sceneSourceOut);
   if(any(c>=dims)){return;}
   var coefficients=vec4<f32>(0);var scattering=0.0;

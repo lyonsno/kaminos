@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {test} from 'node:test';
 import {createJoinedExterior} from '../volume-joined-exterior.mjs';
+import {joinedRouteParams,writeJoinedRoute} from '../volume-joined-route.mjs';
 
 test('exterior receipt distinguishes producer rebuilds, including identical dimensions',()=>{
   const owner=createJoinedExterior({});
@@ -30,7 +31,7 @@ function fixture(){
   const receipt=()=>({admitted:true,generation:1,shape:[32,64,32],ratio:2,cellWidth:.125,cells:97792,steps:20,lastStep:{stepped:true}});
   const state={active:true,simGridDimensions:[32,32,32],joinedBoundary:{admitted:true},joinedGhosts:{bound:true},joinedRendering:{enabled:true},joinedExterior:receipt()};
   const api={debugState:()=>state,setJoinedBoundary(){},setJoinedExterior(config){state.joinedExterior=config?receipt():null;return {receipt:state.joinedExterior};},probeJoinedExterior:async()=>sampled};
-  const sandbox={document:{getElementById:el},location:{href:'http://localhost/?volume_joined=1',search:'?volume_joined=1&volume_joined_bounds=0'},history:{replaceState(){}},URL,URLSearchParams,requestAnimationFrame(){},setInterval(fn){timers.push(fn);},setTimeout(){},api};
+  const sandbox={document:{getElementById:el},location:{href:'http://localhost/?volume_joined=1',search:'?volume_joined=1&volume_joined_bounds=0',hash:''},history:{replaceState(){}},URL,URLSearchParams,joinedRouteParams,writeJoinedRoute,requestAnimationFrame(){},setInterval(fn){timers.push(fn);},setTimeout(){},api};
   vm.runInNewContext(html.slice(start,end)+'\nwireJoinedProvisionalControls(api);',sandbox);
   return {el,state,api,measure:()=>el('volume-joined-measure').listeners.click(),tick:()=>timers.forEach(fn=>fn()),text:()=>el('volume-joined-exterior-solve-val').textContent,
     change(id,value){el(id).value=value;el(id).listeners.change();}};

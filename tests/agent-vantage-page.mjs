@@ -622,7 +622,8 @@ test('tool framing buttons wait while a picture holds the viewport', () => {
   for (const name of ['frameForgeHostCamera', 'frameMotionAgencyCamera', 'frameVolumeCamera']) {
     const writes = [];
     const vector = label => ({set: (...value) => writes.push([label, value]), copy: () => writes.push([label]), fromArray: () => writes.push([label])});
-    const scope = {vantageCaptureHeld: true, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
+    // No joined exterior (Sexy Fireman): frameVolumeCamera takes its standalone framing.
+    const scope = {vantageCaptureHeld: true, volumePrototype: {joinedWorldBounds: () => null}, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
       controls: {target: vector('target'), update() {}}};
     fromIndexLive(name, scope)();
     assert.deepEqual(writes, [], `${name} leaves the borrowed camera alone`);

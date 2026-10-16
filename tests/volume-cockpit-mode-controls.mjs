@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import * as gridOptions from '../volume-grid-options.mjs';
 
 const source = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
 const migration = readFileSync(new URL('../volume-retired-control-migration.mjs', import.meta.url), 'utf8');
@@ -73,7 +74,9 @@ const rows = ['volume-reaction-boundary-gamma', 'volume-physical-thermal'].map(i
 }));
 const root = { querySelectorAll: selector => selector === '.slider-row' ? rows : [] };
 const doc = {
-  getElementById: id => id === 'volume-primary-control-root' ? root : nodes.get(id),
+  // The readout first refreshes the grid-size options (Sexy Fireman); with no
+  // resolution select the real helper returns at once, as on such a page.
+  getElementById: id => id === 'volume-primary-control-root' ? root : id === 'volume-grid-height-ratio' ? { value: '2' } : id === 'volume-resolution' ? null : nodes.get(id),
   querySelectorAll: () => [],
 };
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -87,6 +90,7 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
       volumePrototype: { debugState: () => ({ physicalColor: { requested: 'emissive-transport-v2', effective, inactiveReason } }) },
       flameInspector:null,syncKilnCollisionControl(){},readVolumeControls: () => emissive, document: doc,
       syncVolumeCockpitModeAvailability: layout.syncVolumeCockpitModeAvailability,
+      syncVolumeGridOptions: gridOptions.syncVolumeGridOptions,
     });
     assert.equal(rows[0].dataset.volumeModeHidden, String(effective !== 'legacy'));
     assert.equal(rows[1].dataset.volumeModeHidden, String(effective === 'legacy'));
