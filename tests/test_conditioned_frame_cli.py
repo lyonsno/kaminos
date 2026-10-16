@@ -7,12 +7,12 @@ import tempfile
 import unittest
 from pathlib import Path
 import numpy as np
-from test_candidate_bind_frame import CandidateFrameTests
+import test_candidate_bind_frame as fixture
 
 
 class ConditionedFrameCliTests(unittest.TestCase):
     def test_real_conditioning_layout_without_forward_capture(self):
-        f = CandidateFrameTests(); f.setUp()
+        f = fixture.CandidateFrameTests(); f.setUp()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name, value in [('old',f.plan),('new',f.candidate),('control',f.control)]:

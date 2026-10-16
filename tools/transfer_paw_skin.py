@@ -65,7 +65,12 @@ def main():
         if digest(baseline/'manifest.json')!=args.expected_baseline_sha256 or digest(frame_path)!=args.expected_rig_frame_sha256:
             raise ValueError('baseline/frame digest mismatch')
         old=json.loads((baseline/'manifest.json').read_text());frame=json.loads(frame_path.read_text());control=json.loads(control_path.read_text())
-        solver.validate_source_frame(control,frame,old,digest(control_path))
+        # Registered alternate casts have their own geometry identity. Their
+        # rig identity is the explicit shared-frame provenance, not sourceSha256.
+        if frame['source']['control']['sha256']!=digest(control_path) or old['candidatePaintedWeights'] is not False:
+            raise ValueError('control/candidate identity mismatch')
+        if frame['source']['sourceSceneSha256']!=control['sourceSha256'] or old['provenance']['rigSourceSha256']!=control['sourceSha256']:
+            raise ValueError('registered cast rig source mismatch')
         if old['schema']!='kaminos.live-transport.v3' or frame['schema']!='kaminos.full-given-rig-frame.v1':raise ValueError('unsupported source schema')
         if frame['source']['originalFrame']['sha256']!=old['provenance']['frameChainSha256']:raise ValueError('baseline is not in the retained original frame')
         sources={str(baseline/'manifest.json'):args.expected_baseline_sha256,str(frame_path):args.expected_rig_frame_sha256,str(control_path):digest(control_path)}
