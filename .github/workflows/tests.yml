@@ -1,9 +1,9 @@
 name: tests
 
-# Advisory: test results never fail the run or block a push or a landing.
+# Advisory: nothing here fails the run or blocks a push or a landing.
 # Problems surface as warnings on the run and in its summary
-# (tools/ci-advisory-warnings.mjs). A failure to set up (checkout, toolchains,
-# installs) still shows red, since then nothing was checked at all.
+# (tools/ci-advisory-warnings.mjs), including a failure to set up (checkout,
+# toolchains, installs), which skips the suite and says nothing was checked.
 on:
   push:
     branches: [main]
@@ -18,20 +18,31 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - id: checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - id: node
+        continue-on-error: true
+        uses: actions/setup-node@v4
         with:
           node-version: '25'
-      - uses: actions/setup-python@v5
+      - id: python
+        continue-on-error: true
+        uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python3 -m pip install -r requirements.txt
-      - run: npm ci
+      - id: pip
+        continue-on-error: true
+        run: python3 -m pip install -r requirements.txt
+      - id: npm
+        continue-on-error: true
+        run: npm ci
       - name: serve.py answers within 10 s
         id: serve
         continue-on-error: true
+        if: steps.checkout.outcome == 'success' && steps.node.outcome == 'success' && steps.python.outcome == 'success' && steps.pip.outcome == 'success' && steps.npm.outcome == 'success'
         run: |
           python3 -u serve.py 18499 > serve-startup.log 2>&1 &
           pid=$!
@@ -46,15 +57,25 @@ jobs:
       - name: suite
         id: suite
         continue-on-error: true
+        if: steps.checkout.outcome == 'success' && steps.node.outcome == 'success' && steps.python.outcome == 'success' && steps.pip.outcome == 'success' && steps.npm.outcome == 'success'
         timeout-minutes: 45
         run: node tools/test-runner.mjs --report test-results/report.json
       - name: warnings
         if: always()
+        continue-on-error: true
         env:
           SERVE: ${{ steps.serve.outcome }}
           SUITE: ${{ steps.suite.outcome }}
-        run: node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE"
+          SETUP: checkout=${{ steps.checkout.outcome }} node=${{ steps.node.outcome }} python=${{ steps.python.outcome }} pip=${{ steps.pip.outcome }} npm=${{ steps.npm.outcome }}
+        run: |
+          if [ -f tools/ci-advisory-warnings.mjs ]; then
+            node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE" "$SETUP"
+          else
+            echo "::warning::setup failed before the repository was checked out ($SETUP); nothing was checked"
+            printf '### Tests (advisory)\n\nSetup failed before checkout (%s); nothing was checked.\n' "$SETUP" >> "$GITHUB_STEP_SUMMARY"
+          fi
       - if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: test-results

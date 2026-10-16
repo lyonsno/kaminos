@@ -6,7 +6,7 @@
 // warning annotation and a line in the step summary. A run that stays green
 // and says nothing must mean there was nothing to say.
 //
-//   node tools/ci-advisory-warnings.mjs <report.json> <serve outcome> <suite outcome>
+//   node tools/ci-advisory-warnings.mjs <report.json> <serve outcome> <suite outcome> ["checkout=success npm=failure ..."]
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -14,8 +14,21 @@ const firstLine = (text) => String(text ?? '').split(/\r?\n|\r/)[0];
 const stepNote = (step, outcome) => outcome === 'skipped' ? `${step} did not run (an earlier step failed)`
   : outcome === 'cancelled' ? `${step} was cancelled` : null;
 
-export function advisoryWarnings({ report: r, serve, suite }) {
+// Setup step outcomes as the workflow passes them: "name=outcome" pairs.
+export function parseSetup(text) {
+  const setup = {};
+  for (const pair of String(text ?? '').split(/\s+/).filter(Boolean)) {
+    const at = pair.indexOf('=');
+    if (at > 0) setup[pair.slice(0, at)] = pair.slice(at + 1);
+  }
+  return setup;
+}
+
+export function advisoryWarnings({ report: r, serve, suite, setup = {} }) {
   const out = [];
+  for (const [step, outcome] of Object.entries(setup)) {
+    if (outcome !== 'success') out.push(`setup step ${step} ${outcome === 'failure' ? 'failed' : `was ${outcome || 'not run'}`}, so the suite was not run and nothing was checked`);
+  }
   if (serve !== 'success') out.push(stepNote('serve.py check', serve) || 'serve.py did not answer within 10 s');
   if (!r) {
     out.push(stepNote('suite', suite) || `no suite report (suite step ${suite})`);
@@ -49,10 +62,10 @@ export function advisoryWarnings({ report: r, serve, suite }) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
-  const [reportPath, serve, suite] = process.argv.slice(2);
+  const [reportPath, serve, suite, setupText] = process.argv.slice(2);
   let report = null;
   try { report = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch {}
-  const lines = advisoryWarnings({ report, serve, suite });
+  const lines = advisoryWarnings({ report, serve, suite, setup: parseSetup(setupText) });
   for (const line of lines) console.log(`::warning::${line.replace(/%/g, '%25')}`);
   const c = report?.counts;
   const head = c ? `executed ${c.executed}, passed ${c.passed}, known failures ${c.knownFailures}, new failures ${c.newFailures}, not run ${c.notRun}` : 'no report';
@@ -60,3 +73,4 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(proces
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   else process.stdout.write(summary);
 }
+

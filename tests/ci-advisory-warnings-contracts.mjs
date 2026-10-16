@@ -4,7 +4,7 @@
 // must never be silent about a problem the runner itself would call a failure.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advisoryWarnings } from '../tools/ci-advisory-warnings.mjs';
+import { advisoryWarnings, parseSetup } from '../tools/ci-advisory-warnings.mjs';
 
 const clean = () => ({
   ok: true, counts: { executed: 2, passed: 2, knownFailures: 0, newFailures: 0, notRun: 0 },
@@ -80,4 +80,15 @@ test('a failure counted as new is warned once, not again as unsigned or changed'
   const report = { ...clean(), ok: false, newFailures: ['tests/a.mjs'],
     results: [{ file: 'tests/a.mjs', outcome: 'unsigned-failure' }], signatureChanged: [{ file: 'tests/a.mjs' }] };
   assert.deepEqual(advisoryWarnings({ report, serve: 'success', suite: 'failure' }), ['new failure: tests/a.mjs']);
+});
+
+test('a failed setup step is a warning naming it, and says nothing after it was checked', () => {
+  const w = advisoryWarnings({ report: null, serve: 'skipped', suite: 'skipped', setup: { checkout: 'success', node: 'success', python: 'success', pip: 'failure', npm: 'success' } });
+  assert.equal(w[0], 'setup step pip failed, so the suite was not run and nothing was checked');
+  assert.ok(w.includes('suite did not run (an earlier step failed)'), w.join('\n'));
+});
+
+test('setup outcomes parse from the workflow argument, and all-success adds nothing', () => {
+  assert.deepEqual(parseSetup('checkout=success node=success pip=failure'), { checkout: 'success', node: 'success', pip: 'failure' });
+  assert.deepEqual(advisoryWarnings({ report: clean(), ...ran, setup: parseSetup('checkout=success npm=success') }), []);
 });
