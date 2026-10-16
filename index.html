@@ -564,9 +564,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./startup-veil.css">
 <link rel="stylesheet" href="./experiment-workspace.css">
 </head>
-<body>
+<body class="kaminos-starting">
+<div id="kaminos-startup-veil" role="status">Starting Kaminos…</div>
 
 <div id="sidebar">
   <h1>Kaminos</h1>
@@ -3470,6 +3472,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import { loadRuntimeConfig } from './runtime-config-once.mjs';
+import { settleStartupVeil } from './startup-veil.mjs';
+// Ask the server once, now, so the answer arrives while modules load.
+loadRuntimeConfig().catch(() => {});
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
@@ -4687,9 +4693,7 @@ async function initializeHybridSplatOverlayModuleUrl() {
     return hybridSplatOverlayModuleUrl();
   }
   try {
-    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
-    if (!response.ok) throw new Error(`runtime config ${response.status}`);
-    const config = await response.json();
+    const config = await loadRuntimeConfig();
     if (config?.hybridSplatOverlayModuleUrl) {
       setHybridSplatOverlayModuleUrl(config.hybridSplatOverlayModuleUrl, { persist: false });
     }
@@ -11274,8 +11278,7 @@ async function initScene() {
   camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
-    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
-    if (response.ok) samHostConfig = (await response.json()).sam3 || null;
+    samHostConfig = (await loadRuntimeConfig()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
   // Load declarative requirements before constructing either GPU consumer.
   // Module top levels must be inert; mount remains after volume construction.
@@ -27086,6 +27089,7 @@ grInit();
 initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 const sceneInitialization = initScene();
+settleStartupVeil(document, sceneInitialization).catch(() => {});
 sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
