@@ -632,9 +632,14 @@ class NotesHttp:
 
     def post(self, handler, query):
         body = self._body(handler)
+        # Who was waiting when the note was posted; a waiting agent's wait ends as it takes the note.
+        active = self._active_waits()
         note = self.log.post(body, origin=self._origin(handler))
-        self._json(handler, note)
-        self._notify_absent(note)
+        try:
+            self._json(handler, note)
+        finally:
+            # The note is saved; its recipients are notified even if this response fails.
+            self._notify_recipients(note, active)
 
     def _directory_version(self):
         try:
@@ -643,21 +648,26 @@ class NotesHttp:
             rows = ["unavailable"]
         return hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
-    def _notify_absent(self, note):
-        """Run the notify command, once per recipient not listening right now,
-        with the note on stdin. Its outcome is logged; the note still waits for
-        that recipient's next wait."""
+    def _active_waits(self):
+        # An active wait, not the presence display's short grace after one ends.
+        return {row["name"] for row in self.log.presence(detail=True)["listeners"] if row.get("waitingNow")}
+
+    def _notify_recipients(self, note, active=None):
+        """Run the notify command once per recipient, with the note on stdin and
+        whether that recipient's wait was active right then. What a listening
+        recipient needs is the command's decision. The outcome is logged; the
+        note still waits for that recipient's next wait."""
         if not self.notify or note.get("kind") == "ref":
             return
-        listening = {row["name"] for row in self.log.presence()["listeners"]}
+        active = self._active_waits() if active is None else active
         server = self.source().get("origin")
         for name in note.get("recipients") or []:
-            if name not in listening:
-                threading.Thread(target=self._run_notify, args=(note, name, server), daemon=True).start()
+            threading.Thread(target=self._run_notify, args=(note, name, server, name in active), daemon=True).start()
 
-    def _run_notify(self, note, name, server):
-        payload = json.dumps({"schema": NOTES_SCHEMA, "recipient": name, "server": server, "note": note})
-        env = {**os.environ, "KAMINOS_NOTES_RECIPIENT": name, "KAMINOS_NOTES_NOTE_ID": note["id"], "KAMINOS_NOTES_SERVER": server or ""}
+    def _run_notify(self, note, name, server, listening):
+        payload = json.dumps({"schema": NOTES_SCHEMA, "recipient": name, "server": server, "listening": listening, "note": note})
+        env = {**os.environ, "KAMINOS_NOTES_RECIPIENT": name, "KAMINOS_NOTES_NOTE_ID": note["id"], "KAMINOS_NOTES_SERVER": server or "",
+               "KAMINOS_NOTES_LISTENING": "1" if listening else "0"}
         try:
             done = subprocess.run(self.notify, input=payload, text=True, capture_output=True, env=env)
             ok, detail = done.returncode == 0, ("" if done.returncode == 0 else f"notify command exited {done.returncode}: {done.stderr.strip()[-500:]}")
