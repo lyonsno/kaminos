@@ -7,7 +7,7 @@ import * as THREE from '../lib/three.core.js';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 test('visible domain edge click selects field after emitter editing',()=>{
- const ctx={performance,viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:null,
+ const ctx={performance,polyEdit:null,vantageCaptureHeld:false,viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:null,
  viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,greenroomPreviewIsActive:()=>false,
  pickFlameDomainFromViewportPointer:()=>true,pickSceneObjectFromViewportPointer:()=>null,
  selected:'flame-emitter',setActiveSceneObject(id){ctx.selected=id;},clearActiveSceneObjectSelection(){ctx.selected=null;},setInfo(){},

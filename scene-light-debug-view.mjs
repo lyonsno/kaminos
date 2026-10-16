@@ -3,7 +3,8 @@ import {measureSceneGpu} from './scene-light-timing.mjs';
 
 // One JSON session is the interface for interactive and headless consumers.
 // History is retained until the caller explicitly leaves/saves the session.
-export function mountLightingDebugView({document,renderer,camera,getLighting,getPrototype,drawFrame,beginSceneInspection}){
+// `held()` is true while another actor has borrowed the viewport camera; a pick then waits.
+export function mountLightingDebugView({document,renderer,camera,getLighting,getPrototype,drawFrame,beginSceneInspection,held=()=>false}){
   const panel=document.getElementById('rendering-light-debug');
   const session={identity:'kaminos-lighting-inspection-session-v1',records:[]};
   let armed=false,busy=false,savedRecords=0;
@@ -56,7 +57,7 @@ export function mountLightingDebugView({document,renderer,camera,getLighting,get
   }
   const pick=document.getElementById('rendering-light-debug-pick');pick.onclick=()=>{if(busy){status('Finish the current inspection/timing first.');return;}armed=!armed;status(armed?'Click a receiving kiln surface. Geometry and material edits are not performed.':'Surface picking cancelled.');};
   document.getElementById('rendering-light-debug-time').onclick=()=>void measure();
-  const pointer=e=>{if(!armed||!renderer.domElement.parentElement.contains(e.target)||e.target.closest('button,input,select,textarea,summary'))return;e.preventDefault();e.stopImmediatePropagation();void captureAt(e.clientX,e.clientY);};
+  const pointer=e=>{if(!armed||held()||!renderer.domElement.parentElement.contains(e.target)||e.target.closest('button,input,select,textarea,summary,[data-vantage-ignore]'))return;e.preventDefault();e.stopImmediatePropagation();void captureAt(e.clientX,e.clientY);};
   document.addEventListener('pointerdown',pointer,true);
   document.getElementById('rendering-light-debug-save').onclick=async()=>{
     const contents=JSON.stringify(session);

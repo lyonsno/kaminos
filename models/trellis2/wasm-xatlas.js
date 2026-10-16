@@ -15,15 +15,21 @@ const loadXatlas=()=>modulePromise??=xatlasFactory();
 // One xatlas run; returns per-UV-vertex positions source index, UVs and faces.
 export async function unwrapWithXatlas(vertices,triangles){
   if(!(vertices instanceof Float32Array)||!(triangles instanceof Uint32Array))throw TypeError('F32 vertices and U32 triangles required');
-  const M=await loadXatlas(),pv=M._malloc(vertices.byteLength),pi=M._malloc(triangles.byteLength);
+  return unwrapWithXatlasModule(await loadXatlas(),vertices,triangles);
+}
+// The same run on a given module instance.
+export async function unwrapWithXatlasModule(M,vertices,triangles){
+  if(!(vertices instanceof Float32Array)||!(triangles instanceof Uint32Array))throw TypeError('F32 vertices and U32 triangles required');
+  // Wasm addresses are unsigned: index the heaps with >>> so buffers above 2 GiB work.
+  const pv=M._malloc(vertices.byteLength),pi=M._malloc(triangles.byteLength);
   try{
-    M.HEAPF32.set(vertices,pv>>2);M.HEAPU32.set(triangles,pi>>2);
+    M.HEAPF32.set(vertices,pv>>>2);M.HEAPU32.set(triangles,pi>>>2);
     const n=M._xa_unwrap(pv,vertices.length/3,pi,triangles.length);
     if(n<0)throw Error('xatlas AddMesh refused the surface (error '+(-1-n)+')');
     const ni=M._xa_index_count(),pu=M._malloc(n*8),px=M._malloc(n*4),pf=M._malloc(ni*4);
     try{
       M._xa_read(pu,px,pf);
-      return {uvs:M.HEAPF32.slice(pu>>2,(pu>>2)+n*2),xref:M.HEAPU32.slice(px>>2,(px>>2)+n),faces:M.HEAPU32.slice(pf>>2,(pf>>2)+ni),
+      return {uvs:M.HEAPF32.slice(pu>>>2,(pu>>>2)+n*2),xref:M.HEAPU32.slice(px>>>2,(px>>>2)+n),faces:M.HEAPU32.slice(pf>>>2,(pf>>>2)+ni),
         charts:M._xa_charts(),width:M._xa_width(),height:M._xa_height()};
     }finally{M._free(pu);M._free(px);M._free(pf);M._xa_release();}
   }finally{M._free(pv);M._free(pi);}

@@ -6,6 +6,7 @@ import vm from 'node:vm';
 import {compositionRestoreUrl,forwardCompositionHash} from '../scene-authoring.mjs';
 import * as ownerAddress from '../owner-experiment-entry.mjs';
 import {fireAtBoot} from '../fire-boot.mjs';
+import {createSceneOwnerControls} from '../scene-owner-controls.mjs';
 const html=fs.readFileSync(process.env.KAMINOS_RECOVERY_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('sceneInitialization.then(() => {'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
 const tail=html.slice(start,end);
@@ -32,7 +33,7 @@ function destination(recovery){const url=new URL(recovery),target='http://localh
 async function openActualEntry(url){
  let opened=null,onChange;
  const location={href:url.href,search:url.search,hash:url.hash};
- const c={URL,URLSearchParams,JSON,...ownerAddress,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
+ const c={URL,URLSearchParams,JSON,...ownerAddress,createSceneOwnerControls,sceneOwnerControls:null,selectedPlacementEntry:()=>null,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
  async installOwnerExperimentEntry(options){onChange=options.onChange;return {async open(id,inputs){opened={id,inputs};}};}};
  vm.createContext(c);vm.runInContext(entry,c);await c.installOwnerWorkbenchEntry();return {opened,close:()=>onChange({id:null,inputs:null}),location};
 }

@@ -1,0 +1,27 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import experiment from '../experiments/fire-shadow-sampling.experiment.mjs';
+import {openExperiment} from '../workbench-experiments.mjs';
+let state={shadowSampling:'fixed',shadowSoftness:1,pointCount:1,shadows:[]},callback,removed=0,disposed=0,redraws=0;
+const win={__kaminosSceneRadiance:{debugState:()=>({...state}),setShadowSampling:value=>state.shadowSampling=value,setShadowSoftness:value=>state.shadowSoftness=value},kaminosSceneGIDebugState:()=>({gain:10})};
+const session={onFrame:fn=>{callback=fn;return()=>removed++;},redraw:()=>redraws++,dispose:async()=>disposed++};
+const records=[];
+const result=await experiment.create({host:{controls:{document:{defaultView:win}},scene:{open:async()=>session}},inputs:{sampling:'complementary'},record:value=>records.push(value)});
+assert.equal(result.read().effective,'fixed','state must describe actual runtime before deferred mount');
+callback();assert.equal(result.read().effective,'complementary');assert.equal(removed,1);
+win.__kaminosSceneRadiance.setPointCount=value=>state.pointCount=value;
+assert.equal(result.operations.setPoints(2).points,2);assert.equal(result.operations.setPoints(1).points,1);
+assert.throws(()=>result.operations.setPoints(0),/point count/);records.length=0;redraws=0;
+assert.equal(result.operations.setSampling('fixed').effective,'fixed');assert.equal(records.length,1);assert.equal(redraws,1);
+assert.throws(()=>result.operations.setSampling('blur'),/sampling/);assert.equal(result.read().effective,'fixed');
+assert.equal(result.operations.setSoftness(.5).softness,.5);
+win.__kaminosSceneRadiance=null;assert.equal(result.read().available,false);
+assert.throws(()=>result.operations.setSampling('complementary'),/no hybrid/);
+await result.dispose();assert.equal(disposed,1);
+win.__kaminosSceneRadiance={debugState:()=>({...state}),setShadowSampling:value=>state.shadowSampling=value,setShadowSoftness:value=>state.shadowSoftness=value};
+const wrapped=await openExperiment(experiment,{host:{controls:{document:{defaultView:win}},scene:{open:async()=>session}},inputs:{sampling:'complementary'},record:value=>records.push(value)});
+await wrapped.invoke('setSampling','fixed');
+assert.equal(wrapped.read().effective,undefined,'actual shared wrapper is asynchronous; synchronous predicates cannot observe effective state');
+assert.equal((await wrapped.read()).effective,'fixed','awaited real wrapper observes the changed sampling');
+await wrapped.dispose();assert.equal(disposed,2);
+console.log('PASS Workbench sampling operations reflect actual consumer, reject fallback and release lifetime');

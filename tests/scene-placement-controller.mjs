@@ -11,7 +11,7 @@ class Element extends EventTarget {
  setPointerCapture(id){this.captures.add(id);} hasPointerCapture(id){return this.captures.has(id);} releasePointerCapture(id){this.captures.delete(id);}
 }
 function emit(target,type,values={}){const event=new Event(type,{cancelable:true});for(const [key,value] of Object.entries(values))Object.defineProperty(event,key,{configurable:true,value});target.dispatchEvent(event);return event;}
-function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true})}={}){
+function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation=()=>[0,0,0],transformSettings=()=>({orientation:"world",explicit:true}),viewHeld=()=>null}={}){
  const document=new Element(),window=new Element(),viewport=new Element(),input=new Element(),grip=new Element(),status=new Element(),historyControl=new Element(),numberControl=new Element(),historyScope=new Element();
  historyControl.tagName='INPUT';historyControl.type='range';numberControl.tagName='INPUT';numberControl.type='number';numberControl.closest=()=>numberControl;historyScope.contains=target=>target===historyControl||target===numberControl;
  document.body=new Element();document.activeElement=new Element();
@@ -25,7 +25,7 @@ function fixture({overlaysVisible=()=>true,selected=()=> 'kiln',localOrientation
  let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},allowed=true,busy=false;
  const sceneObject={userData:{kaminosSceneObject:{label:'kiln'}},updateWorldMatrix(){}};
  let frames=0;
- const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,overlaysVisible,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,frameSelected:()=>frames++,historyScopes:[historyScope]});
+ const tools=installScenePlacementTools({viewport,camera,controls,gizmo,selected,overlaysVisible,read:()=>structuredClone(pose),write:(_,p)=>pose=structuredClone(p),object:()=>sceneObject,refresh(){},localOrientation,transformSettings,allowed:()=>allowed,busy:()=>busy,viewHeld,frameSelected:()=>frames++,historyScopes:[historyScope]});
  return {tools,input,grip,document,window,viewport,status,controls,gizmo,helper,historyControl,numberControl,historyScope,get frames(){return frames;},get pose(){return pose;},set allowed(v){allowed=v;},set busy(v){busy=v;},
    set position(value){pose.position=[...value];tools.draw();},
    get hud(){return viewport.children.find(child=>child.id==='scene-edit-hud');},get overlay(){return viewport.children.find(child=>child.id==='scene-edit-overlay');},
@@ -102,6 +102,25 @@ test('selected scene object accepts G after sidebar selection leaves neutral pag
  f.document.activeElement=new Element();
  emit(f.document,'keydown',{key:'g'});
  assert.equal(f.tools.state().modal,null,'a focused non-viewport control still owns its keys');
+});
+test('transforms and framing wait while another actor holds the viewport camera',()=>{
+ let held='The agent sub is taking a picture';
+ const f=fixture({viewHeld:()=>held});
+ f.document.body=new Element();f.document.activeElement=f.document.body;
+ emit(f.document,'keydown',{key:'g'});
+ assert.equal(f.tools.state().modal,null,'a transform must not start against a borrowed camera');
+ assert.equal(f.hud.textContent,held,'the HUD says why the key did nothing');
+ emit(f.document,'keydown',{key:'f'});
+ emit(f.document,'keydown',{key:'.',code:'NumpadDecimal'});
+ assert.equal(f.frames,0,'framing must not move a borrowed camera');
+ assert.equal(f.tools.start('rotate'),false,'programmatic transforms wait as well');
+ assert.equal(f.controls.enabled,true,'a refused transform leaves navigation alone');
+ held=null;
+ emit(f.document,'keydown',{key:'g'});
+ assert.equal(f.tools.state().modal?.operation,'translate','the same key works once the camera is released');
+ f.tools.finish(false);
+ emit(f.document,'keydown',{key:'f'});
+ assert.equal(f.frames,1);
 });
 test('sidebar-started move waits for the pointer to enter the viewport before applying motion',()=>{
  const f=fixture();

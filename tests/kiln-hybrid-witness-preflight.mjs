@@ -28,3 +28,12 @@ assert.match(missing.failure.message,/missing-playwright/);
 assert.equal(missing.browser,undefined,'missing dependency must precede browser launch');
 await assert.rejects(access(store),{code:'ENOENT'});
 console.log('PASS missing optional browser dependency retains report before store work');
+for(const [label,softness,sampling]of [['sampling','1','blur'],['softness','-1','fixed']]){
+ const target=join(scratch,label+'-evidence');
+ const result=spawnSync(process.execPath,[script,target,store,'http://127.0.0.1:1',softness,'unused.kaminos.json',sampling],{cwd:scratch,env,encoding:'utf8'});
+ assert.equal(result.status,1);
+ const failure=JSON.parse(await readFile(join(target,'kiln.json'),'utf8'));
+ assert.equal(failure.status,'failed');assert.equal(failure.failure.phase,'arguments');
+ assert.equal(failure.source,null);assert.equal(failure.browser,undefined);assert.match(failure.failure.message,new RegExp(label));
+ await assert.rejects(access(store),{code:'ENOENT'});
+}

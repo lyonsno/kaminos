@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {cleanupAndSimplifyPreservingSurface,createBrowserMeshPostprocess} from '../mesh-cleanup.js';
-import {unwrapWithXatlas,trimeshVertexNormals,createWasmXatlasUnwrapper,WASM_XATLAS_ROUTE} from '../wasm-xatlas.js';
+import {unwrapWithXatlas,unwrapWithXatlasModule,trimeshVertexNormals,createWasmXatlasUnwrapper,WASM_XATLAS_ROUTE} from '../wasm-xatlas.js';
+import xatlasFactory from '../vendor/xatlas/xatlas-0.0.11.mjs';
 import {finishTrellisMesh} from '../trellis-material.js';
 import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
 
@@ -24,6 +25,12 @@ assert.deepEqual([atlas.xref.length,atlas.charts,atlas.width,atlas.height],
 assert.equal(sha(atlas.uvs),fixture.atlasPin.uvsSha256,'Wasm xatlas UVs are deterministic');
 assert.equal(sha(atlas.faces),fixture.atlasPin.facesSha256);
 assert.equal(sha(atlas.xref),fixture.atlasPin.xrefSha256);
+// Wasm addresses are unsigned: with buffers above 2 GiB (a large surface's
+// atlas reaches them) the same atlas must come back.
+{const M=await xatlasFactory(),pad=M._malloc(2**31);assert.ok(pad>0,'reserve 2 GiB so later buffers sit above the signed range');
+  const high=await unwrapWithXatlasModule(M,clean.vertices,clean.faces);
+  assert.equal(sha(high.uvs),fixture.atlasPin.uvsSha256,'UVs read back correctly from above 2 GiB');
+  assert.equal(sha(high.faces),fixture.atlasPin.facesSha256);assert.equal(sha(high.xref),fixture.atlasPin.xrefSha256);}
 
 // Source normal law on this atlas, compared with trimesh's own result.
 const n=atlas.xref.length,exported=new Float64Array(n*3);
