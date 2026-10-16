@@ -23014,7 +23014,7 @@ function updateBackground() {
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 installRenderingNumberControls(document.getElementById('rendering-panel-content'));
-installRenderingNumberControls(document.getElementById('scene-gi-panel'));
+installRenderingNumberControls(document.getElementById('scene-ao-panel'));
 function readSceneGIControls() { return structuredClone(sceneGISettings); }
 function setSceneGIControls(value, {preserveInput=null}={}) {
   const settings = resolveSceneGIControlState(value);

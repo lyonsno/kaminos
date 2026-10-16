@@ -42,5 +42,10 @@ export function installRenderingNumberControl(input,installNumberDrag=installRel
   return installNumberDrag({input,grip:input,step:Number(input.step)>0?Number(input.step):.001,onStart:()=>{before=input.value;if(valid())lastValid=input.value;dragging=true;},onEnd:()=>{dragging=false;}});
 }
 export function installRenderingNumberControls(root) {
-  for(const input of root.querySelectorAll('input[type="number"],input[type="range"]'))installRenderingNumberControl(input);
+  for(const input of root.querySelectorAll('input[type="number"],input[type="range"]')) {
+    // GI already owns a scrub tied to its edit-history transaction. A second
+    // drag listener would survive that owner's stop/cancel subscription.
+    if(input.closest?.('#scene-gi-controls'))continue;
+    installRenderingNumberControl(input);
+  }
 }
