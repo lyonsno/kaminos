@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
+import {createSceneResourceFinalizers} from '../scene-resource-finalizers.mjs';
 const unavailable=()=>{throw Error('Shared scene host adapter is unavailable on baseline');};
 const {createWorkbenchFrameService=unavailable,createWorkbenchSceneHost=unavailable,disposeOwnedSceneTree=unavailable}=await import('../workbench-scene-host.mjs').catch(error=>{
  if(error.code==='ERR_MODULE_NOT_FOUND'&&error.url?.endsWith('/workbench-scene-host.mjs'))return {};
@@ -54,4 +55,46 @@ test('owned tree cleanup preserves shared geometry, materials and textures',()=>
  for(const [resource,name]of [[geometry,'geometry'],[material,'material'],[texture,'texture']])resource.addEventListener('dispose',()=>events.push(name));
  disposeOwnedSceneTree(a,[b]);assert.deepEqual(events,[]);assert.equal(material.map,texture);
  disposeOwnedSceneTree(a,[]);assert.deepEqual(events.sort(),['geometry','material','texture']);
+});
+
+
+test('completed publication is a separate synchronous phase before all render consumers',()=>{
+ const order=[],errors=[],service=createWorkbenchFrameService({onError:error=>errors.push(error.message)});
+ service.onFrame(()=>order.push('prepare'));
+ service.onBeforeRender(()=>order.push('publish'));
+ service.tick(10);assert.deepEqual(order,['prepare']);
+ assert.equal(service.beforeRender(),true);order.push('depth','ssgi','beauty');
+ assert.deepEqual(order,['prepare','publish','depth','ssgi','beauty']);
+ const cancel=service.onBeforeRender(()=>Promise.resolve());
+ assert.equal(service.beforeRender(),false,'async work cannot be reported as completed publication');
+ assert.match(errors.at(-1),/synchronous/);cancel();assert.equal(service.beforeRender(),true);
+});
+
+test('GPU access borrows the actual renderer device and rejects mismatched or unavailable routes',()=>{
+ const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(),canvas={},adapter={info:{isFallbackAdapter:false}},device={};
+ const renderer={backend:{isWebGPUBackend:true,device},domElement:canvas},controls={domElement:canvas,target:new THREE.Vector3()};
+ let effective={renderer,device,adapter,scene,camera,controls};
+ const host=createWorkbenchSceneHost({scene,camera,controls,getGpu:()=>effective,removeObject(){},redraw(){},onFrame(){},onBeforeRender(){}}),session=host.open();
+ const borrowed=session.gpu();assert.equal(borrowed.device,device);assert.equal(borrowed.renderer,renderer);assert.equal(borrowed.scene,scene);assert.equal(borrowed.controls,controls);
+ effective={...effective,device:{}};assert.throws(()=>session.gpu(),/device/);
+ effective=null;assert.throws(()=>session.gpu(),/unavailable/);
+});
+
+test('session disposal cancels synchronous publication and rejects stale GPU access',async()=>{
+ const callbacks=new Set(),h=harness();
+ const host=createWorkbenchSceneHost({scene:h.scene,camera:h.camera,controls:h.controls,removeObject(){},redraw(){},onFrame:h.frameService.onFrame,
+  onBeforeRender:callback=>{callbacks.add(callback);return()=>callbacks.delete(callback);}});
+ const session=host.open();let calls=0;session.onBeforeRender(()=>++calls);const stale=[...callbacks][0];stale();
+ await session.dispose();stale();assert.equal(calls,1);assert.equal(callbacks.size,0);assert.throws(()=>session.gpu(),/disposed/);
+});
+
+
+test('owned producer attachment transfers final resource cleanup without a second tree disposal',async()=>{
+ const h=harness(),finalizers=createSceneResourceFinalizers(),root=new THREE.Group();let calls=0;
+ const host=createWorkbenchSceneHost({scene:h.scene,camera:h.camera,controls:h.controls,loadAsset:async()=>{},
+  registerObject:h.register,findObject:value=>[...h.rows.values()].find(row=>row.object===value),
+  removeObject:handle=>{h.scene.remove(handle.root);h.rows.delete(handle.id);return finalizers.retire(handle.root);},
+  finalizers,redraw(){},onFrame:h.frameService.onFrame});
+ const session=host.open();await session.attach(root,{owned:true,finalize:value=>{assert.equal(value,root);++calls;}});
+ assert.equal(finalizers.canRestore(root),true);await session.dispose();await session.dispose();assert.equal(calls,1);
 });

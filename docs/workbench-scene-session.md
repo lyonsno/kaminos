@@ -13,7 +13,7 @@ stay with the host and owner; model inference is an explicit domain operation.
 
 ## Application Hooks
 
-All hooks are required. They close over the application's actual services:
+The core hooks below are required. They close over the application's actual services:
 
 | Hook | Contract |
 | --- | --- |
@@ -54,7 +54,7 @@ const stopFrames = scene.onFrame(frame => {
 ```
 
 The returned methods are `loadAsset`, `attach`, `readView`, `setView`, `redraw`,
-`onFrame`, and `dispose`. Disposal immediately disables callbacks, requests load
+`onFrame`, and `dispose`; application GPU/publication extensions are described below. Disposal immediately disables callbacks, requests load
 cancellation, awaits late receipts and releases every owned registration, reporting
 cleanup errors together. Repeated disposal returns the same promise. Caller must
 await disposal before reusing the application slot. Host callbacks may still be
@@ -80,3 +80,58 @@ and the existing investigation layer owns capture and persistence.
 objects with injected host services. These tests establish lifecycle behavior.
 Hotwet's real loader, registration, frame service and shared capture remain the
 browser conformance boundary for each consumer.
+
+## GPU Producers In The Application Scene
+
+On the application host, `session.gpu()` returns the borrowed effective
+`{renderer, device, adapter, scene, camera, controls, ownership:'borrowed', backend:'webgpu'}`.
+It rejects an unavailable WebGPU route or a device/view that does not match the
+application. It does not allocate another adapter/device and does not transfer
+renderer, controls, camera or device disposal authority. Producers can impose
+their own native-adapter requirements using the returned actual adapter info.
+
+`session.onBeforeRender(callback)` is a separate synchronous publication phase.
+The app calls it before scene shadows, depth/GI and beauty consumers in each
+scene draw. Prepare asynchronously from `onFrame` or domain operations; publish
+only a complete state here. A producer can retain its previous completed state
+while its next step is pending. Returning a Promise fails the publication phase,
+reports the error and blocks scene draws until that subscription is cancelled.
+The host does not await a simulation step or treat a promise as publication.
+Disposing the session cancels its publication subscriptions, including stale
+callbacks. Call `session.redraw()` when a new state needs presenting.
+
+An owned attachment can supply `finalize(root)`:
+
+```js
+const session = await host.scene.open();
+const api = await createMyProducer({host: session.gpu(), participation: 'producer'});
+const remaining = new Set(api.roots);
+for (const root of api.roots) {
+  await session.attach(root, {owned: true, metadata: {label: root.name},
+    finalize(retiredRoot) {
+      remaining.delete(retiredRoot);
+      if (!remaining.size) return api.dispose();
+    }});
+}
+session.onBeforeRender(() => api.publish());
+// Domain scheduling owns advance/hold/resume and calls session.redraw().
+// On experiment close, stop that scheduling, await api.quiesce(), then:
+await session.dispose();
+```
+
+The finalizer owns the complete producer allocation, including its Three
+resources; the app never combines it with generic tree disposal. Use it for
+resources owned exclusively by these roots. It runs exactly once on final
+retirement, including ordinary Delete or scene replacement. In-document Undo
+keeps the actual producer root/resources alive until scene history releases
+its references; closing a session may therefore finish before final resource
+retirement. A retained object can reappear quiescent after closing its experiment.
+For multiple roots sharing one producer, aggregate their retirement as above
+so the producer is disposed only after every root retires. Cleanup failures are
+reported and preserved; repeated retirement returns the same result.
+
+This adds in-memory history retention, not a serialized producer checkpoint or
+an asset reload recipe. Saved-scene admission keeps its existing source rules.
+The producer owns safe quiescence, async simulation scheduling, reconstruction
+and any supported physical placement; ordinary scene placement alone does not
+establish physical rotation or scale support.

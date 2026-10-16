@@ -3,12 +3,35 @@ import {createOwnerSceneSession} from './owner-scene-session.mjs';
 // This clock is driven by the application's existing frame loop. Each new
 // subscription starts at zero elapsed time, including a producer's resume.
 export function createWorkbenchFrameService({onError=error=>console.error(error)}={}) {
- const listeners=new Set();
+ const listeners=new Set(),publishers=new Set();
+ const report=error=>{try{onError(error);}catch(reportError){console.error('Scene frame failure reporting failed',reportError);}};
  return Object.freeze({
   onFrame(callback){
    if(typeof callback!=='function')throw TypeError('Frame callback must be callable');
    const listener={callback,last:null};listeners.add(listener);
    return ()=>listeners.delete(listener);
+  },
+  onBeforeRender(callback){
+   if(typeof callback!=='function')throw TypeError('Publication callback must be callable');
+   const listener={callback,failed:false};publishers.add(listener);
+   return ()=>publishers.delete(listener);
+  },
+  beforeRender(){
+   let complete=true;
+   for(const listener of [...publishers]){
+    if(!publishers.has(listener))continue;
+    if(listener.failed){complete=false;continue;}
+    try{
+     const result=listener.callback();
+     if(result&&typeof result.then==='function'){
+      // Observe a rejected accidental async callback, but never admit its
+      // promise as a synchronous publication boundary.
+      Promise.resolve(result).catch(report);
+      throw Error('Before-render publication must be synchronous');
+     }
+    }catch(error){listener.failed=true;complete=false;report(error);}
+   }
+   return complete;
   },
   tick(timestampMs){
    if(!Number.isFinite(timestampMs))throw Error('Frame timestamp must be finite milliseconds');
@@ -20,7 +43,7 @@ export function createWorkbenchFrameService({onError=error=>console.error(error)
     catch(error){listeners.delete(listener);try{onError(error);}catch(reportError){console.error('Scene frame failure reporting failed',reportError);}}
    }
   },
-  state:()=>({activeSubscriptions:listeners.size}),
+  state:()=>({activeSubscriptions:listeners.size,publicationSubscriptions:publishers.size,failedPublications:[...publishers].filter(item=>item.failed).length}),
  });
 }
 
@@ -51,7 +74,7 @@ function vector(value,name){
  return [...value];
 }
 
-export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame}) {
+export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,registerObject,findObject,removeObject,redraw,onFrame,onBeforeRender,getGpu,finalizers}) {
  const readView=()=>({schema:'kaminos.workbench-scene-view.v0',position:camera.position.toArray(),target:controls.target.toArray(),up:camera.up.toArray(),fov:camera.fov,zoom:camera.zoom,near:camera.near,far:camera.far});
  const setView=view=>{
   const next={...readView(),...view};
@@ -67,6 +90,13 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
   }finally{controls.enableDamping=damping;}
   return readView();
  };
+ const gpu=()=>{
+  const value=getGpu?.();
+  if(!value?.renderer?.backend?.isWebGPUBackend||!value.adapter||!value.device)throw Error('Shared Workbench WebGPU access is unavailable');
+  if(value.renderer.backend.device!==value.device)throw Error('Shared Workbench GPU device does not match the renderer');
+  if(value.scene!==scene||value.camera!==camera||value.controls!==controls||controls.domElement!==value.renderer.domElement)throw Error('Shared Workbench GPU view does not match the application');
+  return Object.freeze({...value,ownership:'borrowed',backend:'webgpu'});
+ };
  return Object.freeze({open:()=>createOwnerSceneSession({
   async loadAsset(input,context){
    const options=typeof input==='string'?{url:input}:input;
@@ -80,13 +110,19 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
    if(!root?.isObject3D)throw Error('Scene attachment requires an actual Three object');
    if(!context.isCurrent())throw Error('Scene session is disposed');
    const existing=findObject(root);
+   if(options.finalize!==undefined&&(typeof options.finalize!=='function'||!options.owned||!finalizers))throw Error('Producer finalizer requires an owned root and application retirement service');
    if(!options.owned){if(!existing)throw Error('Borrowed root needs an existing scene registration');return {id:existing.id,root,owned:false,clips:options.clips||[],source:existing.source};}
    if(existing||root.parent)throw Error('Owned attachment cannot acquire an existing registration or parent');
    if(options.metadata?.id!==undefined)throw Error('Owned attachment receives a new scene registration');
+   const rollback=options.finalize?finalizers.register(root,options.finalize):null;
    scene.add(root);
    try{const row=registerObject(root,{type:'experiment',...(options.metadata||{})});redraw();return {id:row.id,root,owned:true,clips:options.clips||[],source:row.source};}
-   catch(error){scene.remove(root);throw error;}
+   catch(error){scene.remove(root);rollback?.();throw error;}
   },
-  remove:removeObject,readView,setView,redraw,onFrame,
+  async remove(handle){
+   const result=await removeObject(handle);
+   await finalizers?.pending(handle.root);
+   return result;
+  },readView,setView,redraw,onFrame,onBeforeRender,gpu,
  })});
 }
