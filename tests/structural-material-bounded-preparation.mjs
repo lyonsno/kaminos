@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import test from 'node:test';
+import {selectSolidEnergyKernel,createSolidResident} from '../structural-material-solid-resident.js';
 const root=new URL('../',import.meta.url).pathname,asset=path.join(root,'assets/arch-stones/03-bedded-stone-500-normal.glb');
 const hash=b=>createHash('sha256').update(b).digest('hex');
 const directory=()=>fs.mkdtempSync(path.join(os.tmpdir(),'stone-prepare-contract-'));
@@ -13,11 +14,17 @@ const write=(p,value)=>{const b=Buffer.from(JSON.stringify(value));fs.writeFileS
 const run=args=>spawnSync(process.execPath,args,{cwd:root,encoding:'utf8'});
 const mesh={status:'passed',route:'ftetwild-cpu-wildmeshing-0.4.1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1]],tetrahedra:[[0,1,2,3]],volume:1/6};
 
-test('a graph-only preparation does not execute the unused peridynamic contender',()=>{
+test('a graph-only preparation does not execute the unused peridynamic contender',async()=>{
  const dir=directory(),input=path.join(dir,'mesh.json'),config=path.join(dir,'config.json'),out=path.join(dir,'prepared');write(input,mesh);write(config,{kinds:['graph'],young:100000,poisson:.25,density:1000,damageLaw:'event-frozen-isotropic-degradation-v1'});
  const result=run(['structural-material-solid-prepare.mjs',input,out,config]);
  assert.equal(result.status,0,result.stdout+result.stderr);const r=JSON.parse(fs.readFileSync(path.join(out,'report.json')));
  assert.equal(r.status,'passed');assert.deepEqual(r.models.map(m=>m.kind),['graph']);assert.equal(r.models[0].buffers.coefficients.byteLength,36*4);
+ const descriptor=r.models[0],arrays=Object.fromEntries(Object.entries(descriptor.buffers).map(([name,b])=>{const bytes=fs.readFileSync(path.join(out,b.filename)),copy=Uint8Array.from(bytes);return[name,new ({Float32Array,Uint32Array}[b.type])(copy.buffer)];}));
+ assert.equal(descriptor.constitutiveLayout,'event-frozen-isotropic-degradation-v1');
+ assert.equal(selectSolidEnergyKernel(descriptor,arrays),'isotropic-degradation-v1');
+ const previous=globalThis.GPUBufferUsage,sentinel=Error('GPU allocation boundary reached');globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4};
+ try{await assert.rejects(createSolidResident({get limits(){throw sentinel;}},descriptor,arrays),error=>error===sentinel);}
+ finally{if(previous===undefined)delete globalThis.GPUBufferUsage;else globalThis.GPUBufferUsage=previous;}
 });
 test('an explicit invalid material selection fails with a durable report',()=>{
  for(const kinds of [null,[],['graph','graph'],['unknown']]){
