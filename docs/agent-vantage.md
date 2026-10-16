@@ -115,7 +115,7 @@ A cloud or field whose bounds the ray crosses in front of the drawn depth, and w
 
 Pictures kept without a pick map are refused. `--now` casts their camera into the scene as it is now, and the answer then says `from: camera`.
 
-A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
+A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera; `watching()` gives the pilot, the awaited event and the frames drawn while a watch runs, and null otherwise.
 
 ## Limits
 

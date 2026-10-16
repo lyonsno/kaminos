@@ -47,6 +47,7 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
 export function createVantagePilot(host) {
   // `released` resolves when the current picture releases the camera.
   let capturing = false, released = Promise.resolve(), markReleased = () => {};
+  let watching = null;   // a watch in progress, for page readers
   const aspect = () => {
     const {width, height} = host.viewportSize();
     if (!(width > 0 && height > 0)) fail('viewport', 'The Kaminos viewport has no visible area');
@@ -418,7 +419,11 @@ export function createVantagePilot(host) {
         }
       };
       const shots = [];
-      const draw = async () => shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
+      const draw = async () => {
+        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
+        watching.frames = shots.length;
+      };
+      watching = {pilot, until, frames: 0};
       try {
         await draw();
         let tick = 0;
@@ -430,7 +435,7 @@ export function createVantagePilot(host) {
           await draw();
           tick = next;
         }
-      } finally { stopListening?.(); }
+      } finally { stopListening?.(); watching = null; }
       const record = subRecord(pilot), first = shots[0];
       const sheet = host.sheet(shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
@@ -555,7 +560,7 @@ export function createVantagePilot(host) {
   }
   // idle() waits until no picture holds the camera, through back-to-back pictures.
   const idle = async () => { while (capturing) await released; };
-  return {run, isCapturing: () => capturing, idle, sketch};
+  return {run, isCapturing: () => capturing, watching: () => (watching ? {...watching} : null), idle, sketch};
 }
 
 // --- pixels ---------------------------------------------------------------
@@ -1210,7 +1215,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const pageId = `page-${window.crypto.randomUUID()}`;
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
-    pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
+    pageId, run: pilot.run, capturing: pilot.isCapturing, watching: pilot.watching, idle: pilot.idle,
     dispose() { stopLive(); window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }
