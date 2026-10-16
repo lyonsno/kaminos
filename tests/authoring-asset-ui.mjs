@@ -66,3 +66,13 @@ test('Use for generation retains preparation for services that require it',async
  ui.doc.getElementById('asset-use-image').onclick();await tick();
  assert.equal(f.preparations(),1);assert.deepEqual(f.controller.read().preparation.value,f.prepared);
 });
+test('for a self-preparing model the drawer reports the page cutout, even over a retained server-preparation error',async()=>{
+ const preview={kind:'cutout-unsaved',source:null,error:'disk full',input:selectedImage.source};
+ const controller=createAuthoringAssets({request:async url=>url==='/api/roots'?{'image-inbox':{exists:true}}:{schema:'kaminos.authoring-assets.v1',collection:'image-inbox',entries:[]},
+  prepareImage:async()=>{throw Error('server preparation unavailable');},
+  generator:()=>({preparesInput:true,read:()=>({status:'complete',results:[],inputPreview:preview})})});
+ controller.select(selectedImage);await controller.prepare().catch(()=>{});
+ assert.equal(controller.read().preparation.error,'server preparation unavailable','the server error is retained');
+ const ui=fixture(async()=>null,controller);await ui.ui.open('generate');await tick();ui.ui.render(controller.read());
+ assert.match(ui.doc.getElementById('asset-preparation-status').textContent,/could not be saved.*disk full/,'the drawer must disclose the page cutout save failure');
+});
