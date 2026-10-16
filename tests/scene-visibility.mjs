@@ -71,3 +71,20 @@ test('visibility-owned selection cannot cancel its own shared edit and releases 
  const c={burnerGraphWriting:false,setSceneSelection(ids){assert.equal(c.burnerGraphWriting,true,'selection change must retain the visibility transaction');if(!ids.length)throw Error('selection failure');return ids;}};
  vm.createContext(c);vm.runInContext(html.slice(a,b),c);assert.deepEqual(c.restoreVisibilitySelection(['mesh'],'mesh'),['mesh']);assert.equal(c.burnerGraphWriting,false);assert.throws(()=>c.restoreVisibilitySelection([],null),/selection failure/);assert.equal(c.burnerGraphWriting,false);
 });
+import * as THREE from '../lib/three.core.js';
+import {checkedSceneLightRecord,RIM_LIGHT_ID} from '../scene-rim-light.mjs';
+test('actual viewport submission masks mounted light and group illumination while preserving authored settings',()=>{
+ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const grab=name=>{const a=html.indexOf(`function ${name}(`);return a<0?'':html.slice(a,html.indexOf('\n}',a)+2);};
+ const c={THREE,checkedSceneLightRecord,RIM_LIGHT_ID,scene:new THREE.Scene(),sceneObjects:[],sceneSpotLights:new Map(),viewportHelpersVisible:true,window:{},applySceneObjectTransformState(root,pose){root.position.fromArray(pose.position);root.rotation.fromArray(pose.rotation);root.scale.fromArray(pose.scale);}};
+ vm.createContext(c);vm.runInContext(grab('mountSceneSpotLight')+grab('viewportVisibilityObjects'),c);
+ const record={id:'spot',type:'light',source:'kaminos:scene-spot-light',transform:{position:[2,3,2],rotation:[-.6,.7,0],scale:[1,1,1]},light:{kind:'spot',enabled:true,color:'#ffffff',intensity:120,angle:30,penumbra:.3,aimDistance:3}};
+ const entry=c.mountSceneSpotLight(record),{light}=c.sceneSpotLights.get('spot');
+ // Evaluate the runtime collection actually supplied at the render call site.
+ const expression=/const shadingReceipt = withViewportVisibility\((.*?),isSceneItemVisible/.exec(html)[1];
+ const objects=vm.runInContext(expression,c),scene={objects:c.sceneObjects,groups:[{id:'lights',objectIds:['spot']}]};
+ for(const hidden of [['spot'],['@group:lights']]){
+  assert.throws(()=>withViewportVisibility(objects,id=>sceneItemVisible(id,hidden,scene),()=>{assert.equal(entry.object.visible,false);assert.equal(light.visible,false,'hidden authored light must be absent from viewport lighting');throw Error('render failed');}),/render failed/);
+  assert.equal(light.visible,true);assert.equal(light.intensity,120);assert.equal(entry.light.enabled,true);
+ }
+});

@@ -4016,6 +4016,9 @@ function restoreVisibilitySelection(ids,activeId){
  const previous=burnerGraphWriting;burnerGraphWriting=true;
  try{return setSceneSelection(ids,activeId);}finally{burnerGraphWriting=previous;}
 }
+function viewportVisibilityObjects(){
+ return [...sceneObjects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light}))];
+}
 function sceneVisibilityContext(){return {objects:sceneObjects,groups:sceneGroups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(localLiquidSetup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function syncViewportDisplayControls() {
@@ -12260,7 +12263,7 @@ async function initScene() {
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
-    const shadingReceipt = withViewportVisibility(sceneObjects,isSceneItemVisible,()=>renderWithViewportShading(() => {
+    const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
         try { localLiquidHost.render(); }
         catch (error) {
