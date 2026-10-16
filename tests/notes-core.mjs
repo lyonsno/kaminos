@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor, pointStatusText,
+import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor, pointStatusText, pointInScene,
   parseRef, formatRef, noteLink, describeNote, mentionQueryAt, rankParticipants, completeMention, addresseesIn} from '../notes-core.mjs';
 
 const at = seq => `2026-10-14T18:${String(seq).padStart(2, '0')}:00.000Z`;
@@ -240,6 +240,15 @@ test("a point note says what became of the geometry it was on", () => {
   assert.equal(pointStatusText({now: 'present', status: 'replaced'}), 'geometry replaced since this note');
   assert.equal(pointStatusText({now: 'missing', status: null}), 'no longer in the scene');
   assert.equal(pointStatusText({now: 'mesh-missing', status: null}), 'its mesh is gone');
-  assert.equal(pointStatusText({now: 'present', status: 'unverified'}), '');
+  assert.equal(pointStatusText({now: 'present', status: 'unverified'}), "can't tell whether its geometry changed");
+  assert.equal(pointStatusText({failed: true}), "couldn't check its geometry");
   assert.equal(pointStatusText(null), '');
+});
+
+test('a point note is checked only in its own scene', () => {
+  const note = {subject: {scene: 'arm.kaminos.json'}};
+  assert.equal(pointInScene(note, 'arm.kaminos.json'), true);
+  assert.equal(pointInScene(note, 'kiln.kaminos.json'), false);
+  assert.equal(pointInScene(note, ''), false);
+  assert.equal(pointInScene({subject: {scene: null}}, ''), true, 'an unsaved scene matches an unsaved scene');
 });
