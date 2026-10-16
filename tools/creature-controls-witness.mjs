@@ -5,6 +5,22 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import * as THREE from '../lib/three.core.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
+export function validateCreatureBackendRead(r,requested){
+ assert.ok(['cpu','gpu'].includes(requested),'Unknown requested deformation');
+ const effective=requested==='gpu'?'webgpu-dense-dq':'cpu-reference';
+ assert.equal(r.deformation?.requested,requested);assert.equal(r.deformation?.effective,effective);
+ assert.equal(r.skin.deformation.backend,effective);
+ if(requested==='gpu'){assert.ok(r.skin.deformation.dispatches>0,'GPU request has not drawn');assert.equal(r.skin.deformation.pending,false,'GPU pose has not been presented');}
+ return {requested,effective,dispatches:r.skin.deformation.dispatches??null};
+}
+export function validateCreatureGpuGeometry(gpu,cpu){
+ assert.equal(gpu.backend,'webgpu-dense-dq');assert.ok(gpu.dispatches>0);
+ assert.equal(gpu.positions.length,cpu.vertices.length);assert.equal(gpu.normals.length,cpu.vertices.length);
+ assert.ok(gpu.positions.every(Number.isFinite)&&gpu.normals.every(Number.isFinite),'Invalid GPU geometry');
+ let maxError=0;for(let i=0;i<cpu.vertices.length;i++)maxError=Math.max(maxError,Math.abs(gpu.positions[i]-cpu.vertices[i]));
+ assert.ok(maxError<.0001,'Native GPU positions differ from current CPU pose: '+maxError);
+ return {vertices:gpu.positions.length/3,maxError,tolerance:.0001,backend:gpu.backend,dispatches:gpu.dispatches};
+}
 export function validateCreatureControlRead(r,setup){
  assert.equal(r.host.route,'shared-owner-scene');assert.equal(r.host.scene.rendererBackend,'webgpu');
  assert.equal(r.source.frameSha256,setup.frame_sha256);assert.equal(r.source.caseSha256,r.currentSkin.current.case_sha256);
