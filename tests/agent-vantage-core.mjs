@@ -402,3 +402,13 @@ test('a picture pick carries the depth and pixel its pick map holds', () => {
   assert.deepEqual(args.pictured.pixel, [3, 1]);
   assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0, depth: -1}}}), /depth/);
 });
+
+test('watch takes a window, a frame rate and an optional event name', () => {
+  const plain = checkedCommand({command: 'watch', args: {}});
+  assert.deepEqual([plain.args.seconds, plain.args.fps, plain.args.maxSize, plain.args.until], [5, 2, 320, null]);
+  assert.equal(checkedCommand({command: 'watch', args: {until: 'cut-complete', seconds: 30}}).args.until, 'cut-complete');
+  assert.throws(() => checkedCommand({command: 'watch', args: {fps: 20}}), /fps/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {seconds: 0}}), /seconds/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {seconds: 3601}}), /seconds/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {until: 'cut complete!'}}), /event/);
+});

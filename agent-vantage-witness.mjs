@@ -304,6 +304,56 @@ try {
   check('and the operator\'s frame rate holds while it runs', fpsOn >= 0.8 * fpsOff, {fpsOff, fpsOn});
   check('live off stops it and reports what it cost', liveOff.result.live.on === false && liveOff.result.live.frames >= 8 && Number.isFinite(liveOff.result.live.drawMs), liveOff.result.live);
 
+  report.phase = 'watch'; save();
+  // A film strip from the sub's own camera while the red box moves, ended by a page event. The strip must show the
+  // motion, end one frame after the event, and leave the operator's frame rate where it was.
+  const redCentre = file => {
+    const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+    let sx = 0, sy = 0, n = 0;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * channels, r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      if (r > 70 && r > 1.6 * g && r > 1.6 * b) { sx += x; sy += y; n++; }
+    }
+    return n ? {x: sx / n / width, y: sy / n / height, share: n / (width * height)} : null;
+  };
+  const watching = vantage('watch', '--seconds', '10', '--fps', '4', '--until', 'witness-fell', '--frames', '--name', 'watch');
+  const during = await page.evaluate(async id => {
+    await new Promise(done => setTimeout(done, 400));
+    let frames = 0;
+    const start = performance.now();
+    await new Promise(done => {
+      const step = () => {
+        frames++;
+        const t = Math.min(1, (performance.now() - start) / 1500);
+        window.kaminosSetSceneObjectTransform(id, {position: [1.2 * t, 0.5, 0]});
+        if (t < 1) requestAnimationFrame(step); else done();
+      };
+      requestAnimationFrame(step);
+    });
+    const fps = frames / ((performance.now() - start) / 1000);
+    window.dispatchEvent(new CustomEvent('kaminos:witness-fell', {detail: {box: id, x: 1.2}}));
+    return {fps};
+  }, scene.red);
+  const watched = await watching;
+  if (watched.code !== 0 || !watched.record) throw new Error(`vantage watch exited ${watched.code}: ${watched.stderr}`);
+  for (const image of watched.record.result?.images ?? []) report.artifacts.push(image.path);
+  report.artifacts.push(watched.record.recordPath);
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
+  const strip = watched.record.result, stripFrames = strip.images.filter(image => /^frame-/.test(image.name));
+  const centres = stripFrames.map(image => redCentre(image.path));
+  const firstRed = centres[0], lastRed = centres.at(-1);
+  report.effective.watch = {ended: strip.ended, event: strip.event, missedTicks: strip.missedTicks, frames: strip.frames.map(frame => frame.atMs),
+    centres, fpsDuring: during.fps, fpsOff, image: strip.image};
+  check('watch ends one frame after the page event, carrying what the event said', strip.ended === 'event' && strip.event?.name === 'witness-fell'
+    && strip.event.detail?.box === scene.red && strip.frames.at(-1).atMs >= strip.event.atMs && strip.frames.at(-2).atMs <= strip.event.atMs, report.effective.watch);
+  check('its frames come from the sub\'s own camera and each keeps a pick map', strip.route === 'own-camera' && strip.frames.length >= 6
+    && strip.frames.every(frame => frame.pickMap && frame.optics), {frames: strip.frames.length});
+  check('the strip shows the red box moving', !!firstRed && !!lastRed && Math.hypot(lastRed.x - firstRed.x, lastRed.y - firstRed.y) > 0.05, {firstRed, lastRed});
+  check('and the operator\'s frame rate holds while it watches', during.fps >= 0.8 * fpsOff, {fpsOff, fpsDuring: during.fps});
+  const windowed = await vantageOk('watch', '--seconds', '1', '--fps', '2', '--name', 'watch-window');
+  check('without --until a watch ends at the end of its window', windowed.result.ended === 'window' && windowed.result.frames.length === 3
+    && windowed.result.frames.every((frame, i) => Math.abs(frame.atMs - i * 500) < 250), windowed.result.frames.map(frame => frame.atMs));
+
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
   check('a picture carries a map with both view cones', snapMap.teal > 50 && snapMap.white > 50, snapMap);

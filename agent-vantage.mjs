@@ -205,6 +205,35 @@ export function createVantagePilot(host) {
   };
   const withMap = (images, wanted) => wanted && host.paintMap ? [...images, mapOf(sketch(), 480).image] : images;
 
+  // One view from the sub's own camera, with its pick map drawn in the same
+  // task with the same matrices. Everything the record says about the view is
+  // taken as it is drawn: a later edit or resize changes none of it.
+  async function glanceOf(record, {maxSize, depth, phase}) {
+    const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
+    const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
+    const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
+    let drawn, drawing = null, drawError = null;
+    try { drawn = host.renderView({optics, width, height, hide}); }
+    catch (error) { fail(phase, `The sub's view could not be drawn: ${error?.message || error}`); }
+    if (host.drawIds) {
+      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true}); }
+      catch (error) { drawError = error?.message || String(error); }
+    }
+    let shot;
+    try { shot = await drawn.ready; }
+    catch (error) { fail(phase, `The sub's view could not be read back: ${error?.message || error}`); }
+    const item = {drawing, drawError};
+    await withPickMaps({shots: [item]});
+    return {view, sub, ratio, optics, seen, shot, item};
+  }
+
+  // An event's detail is carried only when it is plain data.
+  const eventDetail = detail => {
+    if (detail === undefined || detail === null) return {detail: null};
+    try { return {detail: JSON.parse(JSON.stringify(detail))}; }
+    catch (error) { return {detail: null, detailError: error?.message || String(error)}; }
+  };
+
   const handlers = {
     sketch: () => sketch(),
     map({size}) {
@@ -304,22 +333,7 @@ export function createVantagePilot(host) {
     async glance({pilot, maxSize, annotate, map}) {
       const record = requireSub(pilot);
       if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
-      const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
-      // Everything the record says about the view is taken now, as it is drawn: a later edit or resize changes none of it.
-      const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
-      const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
-      let drawn, drawing = null, drawError = null;
-      try { drawn = host.renderView({optics, width, height, hide}); }
-      catch (error) { fail('glance', `The sub's view could not be drawn: ${error?.message || error}`); }
-      if (host.drawIds) {
-        try { drawing = host.drawIds({optics, width, height, hide, depth: true, bridges: true}); }
-        catch (error) { drawError = error?.message || String(error); }
-      }
-      let shot;
-      try { shot = await drawn.ready; }
-      catch (error) { fail('glance', `The sub's view could not be read back: ${error?.message || error}`); }
-      const item = {drawing, drawError};
-      await withPickMaps({shots: [item]});
+      const {view, sub, ratio, optics, seen, shot, item} = await glanceOf(record, {maxSize, depth: true, phase: 'glance'});
       const images = withMap(picture('glance', shot, annotate, seen), map);
       host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub, view,
@@ -332,6 +346,47 @@ export function createVantagePilot(host) {
       if (on) requireSub(pilot);
       if (!host.live) fail('live', 'This page cannot draw a second view of its scene');
       return {schema: VANTAGE_SCHEMA, kind: 'live', live: on ? host.live.start({pilot, fps}) : host.live.stop()};
+    },
+
+    // A film strip from the sub's own camera: a glance on each tick of the
+    // window, from wherever the sub is then. The operator's view is never
+    // borrowed. With `until`, the strip ends one frame after the page event
+    // `kaminos:<until>`. Draws never stack: a frame that runs past its tick
+    // moves the next frame to the following tick and counts the ticks missed.
+    async watch({pilot, seconds, fps, until, maxSize, cell, frames, map, depth}) {
+      requireSub(pilot);
+      if (!host.renderView) fail('watch', 'This page cannot draw a second view of its scene');
+      if (until && !host.listen) fail('watch', 'This page cannot listen for events, so it cannot watch until one');
+      const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000;
+      let event = null, missedTicks = 0, tick = 0;
+      const stopListening = until ? host.listen(until, detail => { event ??= {name: until, atMs: host.now() - started, ...eventDetail(detail)}; }) : null;
+      const shots = [];
+      try {
+        while (true) {
+          const eventBefore = !!event, atMs = host.now() - started;
+          shots.push({index: shots.length, atMs, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
+          if (eventBefore) break;
+          if (event) continue;   // the event came while this frame was drawn: one more frame shows what followed
+          const elapsed = host.now() - started;
+          let next = tick + 1;
+          while (next * interval < elapsed) { if (next * interval <= windowMs) missedTicks++; next++; }
+          if (next * interval > windowMs) break;
+          tick = next;
+          await host.sleep(tick * interval - elapsed);
+        }
+      } finally { stopListening?.(); }
+      const record = subRecord(pilot), first = shots[0];
+      const sheet = host.sheet(shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
+      const images = [{name: 'sheet', ...host.encode(sheet)}];
+      if (frames) shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
+      if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
+      host.shutter?.({kind: 'watch', label: record?.label ?? first.sub?.label, image: images[0]});
+      return {schema: VANTAGE_SCHEMA, kind: 'watch', route: 'own-camera', pilot, sub: record ? describe(record) : first.sub,
+        requested: {seconds, fps, until}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
+        aspect: first.ratio, naming: 'effective-camera', layers: ['scene'], omitted: [...GLANCE_OMITS],
+        image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
+        frames: shots.map(item => ({index: item.index, atMs: item.atMs, view: item.view, optics: item.optics, ...pickMapOf(item.item), objects: item.seen})),
+        capturedAt: new Date(started).toISOString()};
     },
 
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
@@ -1005,6 +1060,12 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     suspendHelpers: options => suspendEditorDrawing(options),
     frames: count => animationFrames(window, count),
     sleep: ms => new Promise(resolve => window.setTimeout(resolve, ms)),
+    // Tools announce what happened with window.dispatchEvent(new CustomEvent(`kaminos:<name>`, {detail})).
+    listen: (name, handler) => {
+      const heard = event => handler(event.detail);
+      window.addEventListener(`kaminos:${name}`, heard);
+      return () => window.removeEventListener(`kaminos:${name}`, heard);
+    },
     compose: ({maxSize}) => composeViewport({document, window, viewport, hostCanvas, maxSize}),
     encode: encodeCanvas,
     blank: isBlankCanvas,

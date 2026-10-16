@@ -519,6 +519,17 @@ const COMMANDS = {
     if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Live fps is between 0.5 and 15');
     return {pilot: pilotArg(args), on: args.on, fps};
   },
+  // A strip of glances over a window, ending early at the page event `until`
+  // (window event `kaminos:<until>`). The window is bounded only by how long
+  // the server will hold a command.
+  watch: args => {
+    const seconds = args.seconds ?? 5, fps = args.fps ?? 2, until = args.until ?? null;
+    if (!(Number.isFinite(seconds) && seconds > 0 && seconds <= 3600)) throw new Error('Watch seconds is more than 0 and at most 3600');
+    if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Watch fps is between 0.5 and 15');
+    if (until !== null && !(typeof until === 'string' && /^[a-z0-9][a-z0-9._:-]{0,63}$/i.test(until))) throw new Error('Watch --until names an event: letters, digits, . _ : -');
+    return {pilot: pilotArg(args), seconds, fps, until, maxSize: count(args.maxSize, 'maxSize', 320, 64), cell: count(args.cell, 'cell', 240, 64),
+      frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)};
+  },
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),
   pick: args => {

@@ -1532,3 +1532,103 @@ test('restarting the live view never draws over a readback still in flight', asy
   active().fn();
   assert.equal(draws.length, 2, 'once it settles the current stream draws');
 });
+
+// --- watch: a film strip from the sub's own camera over a window --------------------------
+
+// A page clock the watch runs on: sleeping advances it, and each draw takes `drawMs`.
+function watchClock(host, state, {drawMs = 30, onSleep = null} = {}) {
+  let t = 0;
+  const renders = [], listeners = new Map();
+  host.now = () => t;
+  host.sleep = async ms => { t += ms; onSleep?.(t); };
+  host.renderView = options => {
+    renders.push({...copy(options), at: t, view: copy(state.view)});
+    t += drawMs;
+    return {ready: Promise.resolve({canvas: {watch: renders.length}, width: options.width, height: options.height})};
+  };
+  host.listen = (name, handler) => {
+    listeners.set(name, handler);
+    return () => listeners.delete(name);
+  };
+  return {renders, listeners, emit: (name, detail) => listeners.get(name)?.(detail), advance: ms => { t += ms; }};
+}
+
+test('watch draws a strip from the sub\'s own camera over its window, never borrowing the operator\'s view', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  const before = {holds: state.holds, writes: state.writes.length, composed: state.composed.length, view: copy(state.view)};
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false, frames: true, maxSize: 320});
+  assert.equal(strip.kind, 'watch');
+  assert.equal(strip.route, 'own-camera');
+  assert.equal(strip.ended, 'window');
+  assert.equal(state.holds, before.holds, 'nothing of the operator\'s is held');
+  assert.equal(state.writes.length, before.writes, 'the operator\'s view is never written');
+  assert.equal(state.composed.length, before.composed, 'nor is the viewport pictured');
+  assert.deepEqual(clock.renders.map(render => render.at), [0, 500, 1000, 1500, 2000], 'a frame on each tick of the window, its ends included');
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500, 2000]);
+  assert.ok(clock.renders.every(render => render.hide.includes('vantage-bebop')), 'the sub is not in its own view');
+  assert.ok(strip.frames.every(frame => frame.pickMap && frame.optics), 'every frame keeps its own pick map and camera');
+  assert.equal(strip.images[0].name, 'sheet');
+  assert.deepEqual(strip.images.slice(1).map(image => image.name), ['frame-1', 'frame-2', 'frame-3', 'frame-4', 'frame-5']);
+  assert.ok(strip.omitted.some(item => /fire/.test(item)), 'it says what its frames leave out');
+});
+
+test('watch follows the sub as it moves, naming each frame from its own view', async () => {
+  const {state, host} = await launched();
+  const original = state.cameras[0].transform.position.slice();
+  watchClock(host, state, {onSleep: () => { state.cameras[0].transform.position[0] += 1; }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.view.position[0] - original[0]), [0, 1, 2], 'each frame is drawn from where the sub was then');
+  assert.notDeepEqual(strip.frames[0].optics, strip.frames[2].optics);
+});
+
+test('watch ends at the named page event, after one more frame, and keeps what the event said', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {onSleep: t => { if (t >= 1000) clock.emit('cut-complete', {tool: 'saw', pieces: 2, element: {toJSON() { throw new Error('not data'); }}}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'cut-complete', map: false});
+  assert.equal(strip.ended, 'event');
+  assert.equal(strip.event.name, 'cut-complete');
+  assert.equal(strip.event.atMs, 1000);
+  assert.equal(strip.event.detail, null, 'a detail that is not plain data is not carried');
+  assert.equal(strip.event.detailError !== undefined, true);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000], 'the last frame is the one after the event');
+  assert.equal(clock.listeners.size, 0, 'the watch stops listening when it ends');
+});
+
+test('an event detail that is plain data is carried as it was sent', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', {body: 'arch', speed: 0.001}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+  assert.deepEqual(strip.event.detail, {body: 'arch', speed: 0.001});
+});
+
+test('a frame that draws past its tick delays the next one instead of stacking draws, and says how many ticks it missed', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state, {drawMs: 700});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false});
+  const starts = clock.renders.map(render => render.at);
+  assert.ok(starts.every((at, i) => i === 0 || at >= starts[i - 1] + 700), 'one draw at a time');
+  assert.ok(strip.missedTicks > 0, 'the strip says it fell behind');
+});
+
+test('watch stops listening even when a frame cannot be drawn', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  host.renderView = () => { throw new Error('device lost'); };
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1, fps: 2, until: 'settled'}), error => error.phase === 'watch');
+  assert.equal(clock.listeners.size, 0);
+});
+
+test('a page that cannot draw a second view, or listen for events, refuses a watch it cannot keep', async () => {
+  const {host} = await launched();
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1}), error => error.phase === 'watch');
+  host.renderView = () => ({ready: Promise.resolve({canvas: {}, width: 1, height: 1})});
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1, until: 'settled'}), error => error.phase === 'watch' && /listen/.test(error.message));
+});
+
+test('the installed page hears watch events as kaminos: window events', () => {
+  const source = readFileSync(new URL('../agent-vantage.mjs', import.meta.url), 'utf8');
+  assert.match(source, /addEventListener\(`kaminos:\$\{name\}`/, 'tools announce events with window.dispatchEvent(new CustomEvent(`kaminos:<name>`, {detail}))');
+});
