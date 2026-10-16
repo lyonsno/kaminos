@@ -9,6 +9,7 @@ import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-e
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
+import {validateVolumeSettingsPresetSourceIdentity} from './volume-settings-preset-contract.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -5965,7 +5966,16 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  assertExpectedServerRoot(effectiveServerRoots);
+  if(scenario==='shared-gpu-host'){
+    const commit=args.get('--expected-source-commit');
+    if(!expectedServerRoot||!commit)throw Error('Shared GPU host witness requires expected server checkout and commit');
+    const response=await fetch(new URL('/api/workbench-experiments',effectiveUrl));
+    if(!response.ok)throw Error('Shared GPU host source identity HTTP '+response.status);
+    const discovery=await response.json();
+    lastEvidence.hostSource={requested:{repoRoot:expectedServerRoot,commit},effective:discovery.source};
+    validateVolumeSettingsPresetSourceIdentity(lastEvidence.hostSource.requested,discovery.source);
+    if(discovery.source.dirty!==false)throw Error('Shared GPU host source is dirty or unverified');
+  }else assertExpectedServerRoot(effectiveServerRoots);
 
   if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
