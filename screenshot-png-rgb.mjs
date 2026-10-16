@@ -99,3 +99,14 @@ export function countChangedVisibleWaterPixels({beforePng, afterPng, bounds, vie
   }
   return {changedWaterPixelCount, sampledPixels:(right-left)*(bottom-top), minimumPixels, imageWidth:before.width, imageHeight:before.height};
 }
+
+// Mean absolute difference over every channel of every pixel of two decoded
+// frames of the same shape (decodeScreenshotPngRgb output).
+export function meanAbsolutePixelDifference(a, b) {
+  if (a.width !== b.width || a.height !== b.height || a.channels !== b.channels) {
+    throw new Error(`Frame shape differs: ${a.width}x${a.height}x${a.channels} vs ${b.width}x${b.height}x${b.channels}`);
+  }
+  let sum = 0;
+  for (let i = 0; i < a.pixels.length; i++) sum += Math.abs(a.pixels[i] - b.pixels[i]);
+  return sum / a.pixels.length;
+}

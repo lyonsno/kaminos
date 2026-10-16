@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { assertLocalLiquidSelectionContinuity } from './local-liquid-selection-evidence.mjs';
 import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
-import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
+import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb, meanAbsolutePixelDifference } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
 import { ambientGpuLabel, createGpuUtilizationSampler, windowUtilization } from './gpu-utilization.mjs';
@@ -45,7 +45,7 @@ function delay(ms) {
 // Frame-rate scenarios sample whole-device GPU utilization for the run: an
 // ambient reading before the browser starts, then each measurement window's
 // share by its wall-clock bounds.
-const GPU_RATE_SCENARIOS = new Set(['viewport-wire-cost', 'preview-cost', 'viewport-preview-quality', 'preview-bound']);
+const GPU_RATE_SCENARIOS = new Set(['viewport-wire-cost', 'preview-cost', 'viewport-preview-quality', 'preview-bound', 'fire-decoupled-cadence']);
 let gpuSampler = null;
 
 function withGpuWindow(result) {
@@ -1174,6 +1174,88 @@ async function runPreviewBoundScenario(ws) {
     for (const name of round % 2 ? [...names].reverse() : names) for (const arm of round % 2 ? [name, 'preview'] : ['preview', name]) evidence.windows.push({ round, ...(await measure(arm)) });
   }
   await evaluate(ws, base);
+}
+
+// Decoupled fire cadence: the sim steps every N frames; held stepping repeats
+// the last state, advect carries it forward between steps. The fire loop is
+// paused and stepped one presented frame at a time from a frame that lands a
+// sim step (F0) through the next one (FN), and the fire canvas is read after
+// each frame. Pop is the jump into FN from what was last shown: held shows F0
+// until FN, advect shows F(N-1). Held in-between differences are the capture's
+// noise floor. A short live window per arm records rates and GPU utilization.
+async function runFireDecoupledCadenceScenario(ws) {
+  phase = 'scenario-fire-decoupled-cadence';
+  const failures = [];
+  const check = (ok, message) => { if (!ok) failures.push(message); };
+  const every = Math.max(2, Math.floor(Number(args.get('--every') || 4)));
+  const evidence = lastEvidence.fireDecoupledCadence = { every, arms: [], rates: [], failures };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  const quality = args.get('--quality') === 'full' ? 'full' : 'preview';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await evaluate(ws, `window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: '${quality}' }); window.kaminosSelection?.clear?.(); true`);
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
+  evidence.display = await displayIdentity(ws);
+  const outDir = dirname(out);
+  for (const advect of [false, true]) {
+    const name = advect ? 'advect' : 'held';
+    await evaluate(ws, `window.kaminosFireCadence({ every: ${every}, advect: ${advect} }); true`);
+    await settleViewportFrames(ws, 800);
+    const captured = await evaluate(ws, `(async () => {
+      const v = window.__kaminosVolumePrototype, canvas = document.getElementById('kaminos-volume-canvas');
+      v.setSelectiveHeadLiveCapturePaused(true);
+      const grab = r => { const d = v.debugState(); return { simStepDelta: r.simStepCount - r.beforeSimStepCount, frameDelta: r.frameCount - r.beforeFrameCount, simStepCount: r.simStepCount,
+        pacing: d.proxyPacing ?? null, png: canvas.toDataURL('image/png') }; };
+      let r, guard = 0;
+      do { r = await v.stepSelectiveHeadLiveCaptureFrame(); guard++; } while (r.simStepCount - r.beforeSimStepCount !== 1 && guard < ${every * 3});
+      const frames = [grab(r)];
+      for (let k = 0; k < ${every}; k++) { r = await v.stepSelectiveHeadLiveCaptureFrame(); frames.push(grab(r)); }
+      v.setSelectiveHeadLiveCapturePaused(false);
+      return { frames, canvas: [canvas.width, canvas.height], aligned: guard <= ${every * 3} };
+    })()`, { timeoutMs: 180000 });
+    const decoded = captured.frames.map((f, k) => {
+      const png = Buffer.from(f.png.replace(/^data:image\/png;base64,/, ''), 'base64');
+      const file = resolve(outDir, `cadence-${name}-f${k}.png`);
+      writeFileSync(file, png);
+      return { frame: decodeScreenshotPngRgb(png), file };
+    });
+    const mean = d => { let sum = 0; for (let i = 0; i < d.pixels.length; i++) sum += d.pixels[i]; return sum / d.pixels.length; };
+    const steps = decoded.map((_, k) => k === 0 ? null : meanAbsolutePixelDifference(decoded[k - 1].frame, decoded[k].frame));
+    const arm = { name, advect, canvas: captured.canvas,
+      frames: captured.frames.map((f, k) => ({ file: decoded[k].file, simStepDelta: f.simStepDelta, frameDelta: f.frameDelta, simStepCount: f.simStepCount,
+        presentationPhase: f.pacing?.presentationPhase ?? null, pacing: f.pacing ? { simStepEvery: f.pacing.simStepEvery, presentationAdvect: f.pacing.presentationAdvect } : null,
+        meanLevel: mean(decoded[k].frame) })),
+      consecutiveDifferences: steps.slice(1),
+      popFromLastShown: meanAbsolutePixelDifference(decoded[advect ? every - 1 : 0].frame, decoded[every].frame),
+      heldPopSameRun: meanAbsolutePixelDifference(decoded[0].frame, decoded[every].frame) };
+    evidence.arms.push(arm);
+    const expectedDeltas = [1, ...Array(every - 1).fill(0), 1];
+    check(arm.frames.every(f => f.frameDelta === 1), `${name}: a capture step did not present exactly one frame: ${JSON.stringify(arm.frames.map(f => f.frameDelta))}`);
+    check(JSON.stringify(arm.frames.map(f => f.simStepDelta)) === JSON.stringify(expectedDeltas), `${name}: sim steps per frame ${JSON.stringify(arm.frames.map(f => f.simStepDelta))} instead of ${JSON.stringify(expectedDeltas)}`);
+    check(arm.frames.every(f => f.pacing?.simStepEvery === every && f.pacing?.presentationAdvect === advect), `${name}: effective pacing differs from the request: ${JSON.stringify(arm.frames.map(f => f.pacing))}`);
+    const expectedPhases = advect ? expectedDeltas.map((_, k) => (k % every) / every) : expectedDeltas.map(() => 0);
+    check(arm.frames.every((f, k) => Math.abs((f.presentationPhase ?? -1) - expectedPhases[k]) < 1e-6), `${name}: phases ${JSON.stringify(arm.frames.map(f => f.presentationPhase))} instead of ${JSON.stringify(expectedPhases)}`);
+    check(arm.frames.every(f => f.meanLevel > 1), `${name}: a captured fire frame is blank: ${JSON.stringify(arm.frames.map(f => f.meanLevel))}`);
+  }
+  const held = evidence.arms.find(a => !a.advect), advectArm = evidence.arms.find(a => a.advect);
+  if (held && advectArm) {
+    const noiseFloor = Math.max(...held.consecutiveDifferences.slice(0, every - 1));
+    evidence.noiseFloor = noiseFloor;
+    evidence.advectInBetweenMotion = advectArm.consecutiveDifferences.slice(0, every - 1);
+    evidence.popRatio = advectArm.popFromLastShown / Math.max(advectArm.heldPopSameRun, 1e-9);
+    check(Math.min(...evidence.advectInBetweenMotion) > noiseFloor * 2 + 0.01, `advect: the in-between frames do not move beyond the capture noise floor: ${JSON.stringify({ noiseFloor, motion: evidence.advectInBetweenMotion })}`);
+    check(held.consecutiveDifferences[every - 1] > noiseFloor * 2 + 0.01, `held: the real step did not change the frame beyond the noise floor: ${JSON.stringify(held.consecutiveDifferences)}`);
+  }
+  const windowMs = Number(args.get('--window-ms') || 3000);
+  for (const [label, cadence] of [['every-1', { every: 1 }], [`held-${every}`, { every, advect: false }], [`advect-${every}`, { every, advect: true }]]) {
+    await evaluate(ws, `window.kaminosFireCadence(${JSON.stringify(cadence)}); true`);
+    evidence.rates.push({ label, ...(await evaluate(ws, `(async () => { let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
+      await new Promise(r => setTimeout(r, 1500)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
+      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(), e0 = Date.now(); await new Promise(r => setTimeout(r, ${windowMs}));
+      const b = read(), v1 = window.__kaminosVolumePrototype.debugState(), s = (performance.now() - t0) / 1000; stop = true;
+      return { appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s, windowEpoch: [e0, Date.now()] }; })()`, { timeoutMs: windowMs + 30000 }).then(withGpuWindow)) });
+  }
+  await evaluate(ws, 'window.kaminosFireCadence({ every: 1 }); true');
+  assert.deepEqual(failures, [], `fire decoupled cadence checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
@@ -7051,6 +7133,8 @@ try {
     await runFireProxyBridgeRouteScenario(ws);
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
+  } else if (scenario === 'fire-decoupled-cadence') {
+    await runFireDecoupledCadenceScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {
     await runViewportPreviewQualityScenario(ws);
   } else if (scenario === 'fire-slow-motion-probe') {

@@ -4075,11 +4075,16 @@ function syncWaterProxy() {
 let fireProxySync=null,fireProxyStepEvery=1;
 // Opt-in: while the fire proxy stands in, step the fire sim every nth frame.
 window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
+// Opt-in decoupled fire cadence outside Proxy: step the fire sim every nth
+// frame; with advect, the frames between steps show the latest state carried
+// forward along its velocity (prototype; fire-presentation-cadence.mjs).
+let fireCadence={every:1,advect:false};
+window.kaminosFireCadence=(next={})=>{fireCadence={every:Math.max(1,Math.floor(Number(next.every))||1),advect:next.advect===true};window._kaminosDirty?.();return {...fireCadence};};
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
  fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
-  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
+  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery,cadence:fireCadence});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
 window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,

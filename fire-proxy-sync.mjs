@@ -8,7 +8,7 @@ import {decodeHeatBlocks,nextHeatReference} from './proxy-snapshot.mjs';
 
 export function createFireProxySync({registry, createLayer, readDomain, now = () => performance.now(), onDirty = () => {}}) {
  let fireProxy = null;
- function sync({prototype, display: displayRequested, required, camera, layerId, canvas, bridge, stepEvery = 1}) {
+ function sync({prototype, display: displayRequested, required, camera, layerId, canvas, bridge, stepEvery = 1, cadence = null}) {
   // A disabled volume shows no fire in any mode, so its proxy draws nothing;
   // pausing is different and keeps the held field on screen.
   const present = !!prototype && (prototype.isActive?.() ?? true);
@@ -61,10 +61,15 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   if (prototype && fireProxy && fireProxy.presentationSuppressed !== ready) fireProxy.presentationSuppressed = prototype.setCanvasPresentationSuppressed?.(ready) ?? false;
   // The scene light field is rebuilt only when a snapshot publishes, so the
   // lighting stays in step with the splats; the sim itself steps every
-  // stepEvery frames (1 unless opted in).
-  const every = Math.max(1, Math.floor(Number(stepEvery) || 1)), pacingKey = ready ? `snapshots:${every}` : null;
+  // stepEvery frames (1 unless opted in). Outside Proxy an opted-in fire
+  // cadence steps the sim every `every` frames, optionally carrying the shown
+  // state forward between steps (fire-presentation-cadence.mjs).
+  const every = Math.max(1, Math.floor(Number(stepEvery) || 1));
+  const cadenceEvery = present ? Math.max(1, Math.floor(Number(cadence?.every) || 1)) : 1, advect = cadence?.advect === true;
+  const pacingKey = ready ? `snapshots:${every}` : cadenceEvery > 1 ? `cadence:${cadenceEvery}:${advect}` : null;
   if (prototype && fireProxy && fireProxy.pacingKey !== pacingKey) {
-   prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every} : null);
+   prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every}
+    : cadenceEvery > 1 ? {lightFieldWithSnapshots: false, simStepEvery: cadenceEvery, presentationAdvect: advect} : null);
    fireProxy.pacingKey = pacingKey;
   }
   // Routes that composite the fire through the canvas-texture bridge hide that

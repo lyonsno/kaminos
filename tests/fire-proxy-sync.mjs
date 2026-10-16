@@ -31,7 +31,7 @@ function harness() {
   createLayer: () => { const layer = createFireSplatLayer(); layers.push(layer); return layer; }});
  const enabled = new Set(), camera = {layers: {enable: layer => enabled.add(layer), disable: layer => enabled.delete(layer)}};
  const canvas = {style: {visibility: ''}}, bridge = {mesh: {visible: true}};
- const frame = (display, required = false, stepEvery = 1) => sync.sync({prototype, display, required, camera, layerId: 4, canvas, bridge, stepEvery});
+ const frame = (display, required = false, stepEvery = 1, cadence) => sync.sync({prototype, display, required, camera, layerId: 4, canvas, bridge, stepEvery, cadence});
  return {registry, layers, prototype, sync, enabled, canvas, bridge, frame};
 }
 const near = (a, b) => Math.abs(a - b) < 1e-6;
@@ -108,4 +108,20 @@ test('while the splats stand in, the light field rebuilds only with snapshots an
  assert.equal(h.prototype.pacing, null, 'Full runs the sim and light field every frame');
  h.frame(true); h.prototype.setActive(false); h.frame(true);
  assert.equal(h.prototype.pacing, null, 'a disabled volume carries no pacing');
+});
+
+test('in Full the opted-in fire cadence reaches the sim with presentation advection, and Proxy keeps its own pacing', () => {
+ const h = harness(), cadence = {every: 3, advect: true};
+ h.frame(false, false, 1, cadence);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true});
+ h.frame(false, false, 1, {every: 3, advect: false});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: false}, 'held stepping is the comparison arm');
+ h.frame(true, false, 1, cadence);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true}, 'until a snapshot exists the full fire shows, at its cadence');
+ h.prototype.readback(0.8); h.frame(true, false, 1, cadence);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: true, simStepEvery: 1}, 'Proxy keeps its snapshot pacing');
+ h.frame(false, false, 1, cadence);
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true}, 'back in Full the cadence returns');
+ h.frame(false, false, 1, {every: 1, advect: true});
+ assert.equal(h.prototype.pacing, null, 'stepping every frame needs no pacing');
 });

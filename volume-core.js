@@ -5,6 +5,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './vol
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
+import { presentationPhase } from './fire-presentation-cadence.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
@@ -4650,6 +4651,20 @@ fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
   return sampleFluidSlot(cell, 0u);
 }
 
+// Decoupled fire cadence (presentation only): while the sim steps every N
+// presented frames, the raymarch shows the latest real state carried forward
+// along its own velocity by the elapsed fraction of a step, on the same
+// characteristic the transport backtraces and clipped at scene solids. The
+// phase is 0 on the frame a step lands; diagnostic captures read the real
+// field; nothing is written back.
+fn presentationAdvect(p: vec3<f32>, diagnostic: bool) -> vec3<f32> {
+  let phase = clamp(u.reserved_render_controls.y, 0.0, 1.0);
+  if (phase <= 0.0 || diagnostic) { return p; }
+  let cell = worldToCell(p);
+  let velocity = sampleFluidSlot(cell, 0u).xyz;
+  return cellToWorld(sceneClipCharacteristic(cell, cell - velocity * (dynamicsBacktraceScale() * phase)));
+}
+
 fn sampleWorldMaterial(p: vec3<f32>) -> vec4<f32> {
   let cell = worldToCell(p);
   return sampleFluidSlot(cell, 1u);
@@ -8560,7 +8575,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fullGridX = min(u32(floor(in.uv.x * f32(GRID))), GRID - 1u);
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
-    let p = select(ro + rd * t, fullGridP, fullGridCapture);
+    let p = presentationAdvect(select(ro + rd * t, fullGridP, fullGridCapture), fullGridCapture || opticalTrace);
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var neighborhood: RaymarchNeighborhood;
@@ -16450,6 +16465,10 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
+    // Decoupled fire cadence: the fraction of a sim step this frame shows
+    // (0 unless opted in). typeof: source-extraction harnesses run this body
+    // without the closure that declares the pacing.
+    uniforms[45] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null);
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;
@@ -21267,7 +21286,8 @@ export function createKaminosVolumePrototype({
         encodeSelectiveHeadLiveFields(encoder);
       }
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
-      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, steppedThisFrame: stepThisFrame };
+      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, presentationAdvect: pacing.presentationAdvect === true,
+        presentationPhase: uniforms[45], steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -27502,8 +27522,9 @@ export function createKaminosVolumePrototype({
     // fire. Other presentation routes (boundary splats, browser residual) keep
     // drawing; the frame's presentation receipt says which happened.
     setProxyPacing(pacing) {
-      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true, frame: 0, lightFieldStep: null } : null;
-      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots } : null;
+      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true,
+        presentationAdvect: pacing.presentationAdvect === true, frame: 0, lightFieldStep: null } : null;
+      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots, presentationAdvect: proxyPacing.presentationAdvect } : null;
       return state.proxyPacing;
     },
     setCanvasPresentationSuppressed(suppressed) {
