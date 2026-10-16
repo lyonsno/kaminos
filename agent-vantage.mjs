@@ -413,7 +413,8 @@ export function createVantagePilot(host) {
           distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
           localNormal: normalInFrame(found.normal ?? null, row.root ?? null), entryMatrix: row.root ?? null,
           pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}),
-          geometry: found.geometry ? {...found.geometry, identity: row.geometry ?? null} : null,
+          // The map's identity is kept even when there is no mesh now to compare it with.
+          geometry: found.geometry || row.geometry ? {status: found.geometry?.status ?? null, identity: row.geometry ?? null} : null,
           surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
           ...(row.coverage ? {coverage: row.coverage} : {})};
       } else {
@@ -872,18 +873,33 @@ export function geometryIdentity(mesh, session = null) {
     ...(instances ? {instanceMatrix: attributeId(instances), instanceVersion: instances.version, instanceCount: mesh.count,
       instanceSample: sampled(mesh.count, 16, (i, c) => instances.array[i * 16 + c])} : {})};
 }
+// Whether a kept identity has every field a comparison reads, each of the type
+// geometryIdentity writes. The instance fields come together or not at all.
+const counted = value => value === null || (Number.isInteger(value) && value >= 0);
+const hashed = value => value === null || (typeof value === 'string' && /^[0-9a-f]{8}$/.test(value));
+const INSTANCE_KEYS = ['instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
+function comparableIdentity(recorded) {
+  if (!recorded || typeof recorded !== 'object' || Array.isArray(recorded)) return false;
+  if (!(recorded.uuid === null || typeof recorded.uuid === 'string') || !(recorded.session === null || typeof recorded.session === 'string')) return false;
+  if (!['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices'].every(key => counted(recorded[key]))) return false;
+  if (!hashed(recorded.sample) || !hashed(recorded.indexSample)) return false;
+  const instanced = INSTANCE_KEYS.filter(key => recorded[key] !== undefined).length;
+  if (instanced === 0) return true;
+  return instanced === INSTANCE_KEYS.length && counted(recorded.instanceMatrix) && counted(recorded.instanceVersion) && counted(recorded.instanceCount) && hashed(recorded.instanceSample);
+}
 // Whether the geometry under a mesh is the one a picture recorded. Within one
 // page session a different geometry object is a replacement, and any change to
 // its attributes, stores, edit counts or sampled content is an edit. Across
 // sessions identities differ, so counts and samples decide likely-same or replaced.
+// A kept identity missing a field the comparison reads, or holding the wrong
+// type there, is unverified: absent evidence is never read as a match or a change.
 export function geometryStatus(recorded, current, session) {
   if (!current) return 'replaced';
-  if (!recorded) return 'unverified';
+  if (!comparableIdentity(recorded)) return 'unverified';
   if (session && recorded.session === session) {
     if (recorded.uuid !== current.uuid) return 'replaced';
-    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample',
-      'instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
-    return keys.every(key => recorded[key] === undefined || recorded[key] === current[key]) ? 'same' : 'edited';
+    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample', ...INSTANCE_KEYS];
+    return keys.every(key => (recorded[key] ?? null) === (current[key] ?? null)) ? 'same' : 'edited';
   }
   if (recorded.vertices !== current.vertices || recorded.indices !== current.indices || (recorded.instanceCount ?? null) !== (current.instanceCount ?? null)) return 'replaced';
   if (recorded.sample && current.sample) {

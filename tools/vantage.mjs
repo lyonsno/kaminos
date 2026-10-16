@@ -159,13 +159,16 @@ function pickArgs(rest, options, pilot) {
 
 // An anchor is a note anchor ({id, path, geometry: identity}) or a pick: a
 // saved record, or its hit ({id, surface: {path}, geometry: {status, identity}}).
+// A pick's geometry is a wrapper with a status; one saved before identities
+// were kept has no identity, and is never taken for one.
 function recheckArgs(options) {
   if (!options.anchor) throw new Exit(2, 'recheck needs --anchor FILE: a note anchor or a saved pick record');
   let data;
   try { data = JSON.parse(readFileSync(options.anchor, 'utf8')); }
   catch (error) { throw new Exit(2, `Cannot read the anchor ${options.anchor}: ${error.message}`); }
   const hit = data?.result?.hit ?? data?.hit ?? data, geometry = hit?.geometry;
-  const identity = geometry && typeof geometry === 'object' && 'identity' in geometry ? geometry.identity : geometry ?? null;
+  const wrapper = geometry && typeof geometry === 'object' && ('identity' in geometry || 'status' in geometry);
+  const identity = wrapper ? geometry.identity ?? null : geometry ?? null;
   return {id: hit?.id, path: hit?.path ?? hit?.surface?.path, identity};
 }
 

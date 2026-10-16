@@ -1567,3 +1567,29 @@ test('recheck says whether an anchored mesh is still the one picked, without dra
   assert.deepEqual(await page.vantage.run('recheck', {...anchor, path: []}), {now: 'present', status: null, reason: 'not-a-mesh'});
   assert.equal(page.idPass.calls.length, draws, 'nothing was drawn');
 });
+
+test('a pictured pick keeps the identity its map recorded when the entry or mesh is gone, so a later recheck can still compare', async () => {
+  const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])}, entry = page.entries[1];
+  const meshless = await page.vantage.run('pick', {optics, at, pictured: {...pictured, path: [3]}});
+  assert.equal(meshless.hit.now, 'mesh-missing');
+  assert.deepEqual(meshless.hit.geometry, {status: null, identity: pictured.geometry});
+  page.entries.splice(1, 1);
+  const gone = await page.vantage.run('pick', {optics, at, pictured});
+  assert.equal(gone.hit.now, 'missing');
+  assert.deepEqual(gone.hit.geometry, {status: null, identity: pictured.geometry}, 'kept, with no status while there is nothing to compare');
+  page.entries.splice(1, 0, entry);   // as undo puts the entry back
+  assert.deepEqual(await page.vantage.run('recheck', {id: gone.hit.id, path: pictured.path, identity: gone.hit.geometry.identity}), {now: 'present', status: 'same'});
+});
+
+test('recheck answers unverified when the kept identity cannot support a comparison', async () => {
+  const page = installedPage(), mesh = page.entries[1].object.children[0];
+  const full = vantage.geometryIdentity(mesh, page.vantage.pageId), {sample, ...unsampled} = full;
+  for (const identity of [{}, {status: 'same'}, {...full, vertices: 'many'}, {...full, sample: 42}, unsampled]) {
+    assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity}), {now: 'present', status: 'unverified'}, JSON.stringify(identity).slice(0, 80));
+  }
+  const partial = {session: full.session, uuid: full.uuid};
+  mesh.geometry.attributes.position.setX(0, 5); mesh.geometry.attributes.position.needsUpdate = true;
+  assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity: partial}), {now: 'present', status: 'unverified'},
+    'an identity missing what an edit would change cannot say same');
+});

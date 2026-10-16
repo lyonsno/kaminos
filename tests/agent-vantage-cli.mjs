@@ -298,3 +298,15 @@ test('recheck reads an anchor, or a pick record, and says whether its mesh is th
   const bad = await run(['--server', url, 'recheck']);
   assert.equal(bad.code, 2);
 });
+
+test('a pick saved before identities were kept carries none, so its recheck cannot claim a status', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, {ok: true, id: 'c', command: 'recheck', page: {id: 'page-a'}, elapsedMs: 1,
+    result: {now: 'present', status: 'unverified'}}]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const legacy = path.join(out, 'legacy-pick.json');
+  writeFileSync(legacy, JSON.stringify({result: {kind: 'pick', hit: {id: 'beam', surface: {path: [0]}, geometry: {status: 'same'}}}}));
+  const result = await run(['--server', url, 'recheck', '--anchor', legacy]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(received[0].body.args, {id: 'beam', path: [0], identity: null}, 'the status wrapper is not an identity');
+});
