@@ -40,7 +40,7 @@ try{
   const advance=async target=>{await page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target);await invoke('pause');};
   report.phase='ignite';await save();await invoke('run');await advance(180);const hot=await sample('lighter-on');assert.ok(hot.ignited.length>0,'Real fluid heat must ignite the fuse');
   await invoke('lighterOff');await invoke('flameView',{visible:false});await page.evaluate(()=>window.kaminosSelection.clear());
-  await sample('burner-off-front');await invoke('pause');await advance(300);const front=await sample('material-front');
+  await sample('burner-off-front');await invoke('pause');await advance(210);const front=await sample('material-front');
   assert.ok(front.spent.length>0&&front.spent.length<96,'Intermediate view must retain spent and intact material');
   assert.ok(front.hot.length>0,'Intermediate view must include a hot reaction region');
   await invoke('pause');await advance(1080);const after=await sample('lighter-off');assert.equal(after.state.lighter,false);
