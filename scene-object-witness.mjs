@@ -7184,6 +7184,7 @@ try {
       if(fixture.read().finalizations!==1||fixture.read().mounted)throw Error('Final producer retirement was not exact');
       return fixture.read();
     })()`);
+    phase='scenario-shared-gpu-host-unrelated-history';
     lastEvidence.gpuHost.wholeSceneHistory=await evaluate(ws,`(async()=>{
       const entry=window.kaminosWorkbenchExperiments;await entry.open('shared-gpu-host-fixture');
       const fixture=window.kaminosGpuHostFixture,before=fixture.read();
@@ -7198,6 +7199,7 @@ try {
       if(fixture.read().finalizations!==1)throw Error('Whole-scene retained producer finalization was not exact');
       return fixture.read();
     })()`);
+    phase='scenario-shared-gpu-host-scene-replacement';
     lastEvidence.gpuHost.sceneReplacement=await evaluate(ws,`(async()=>{
       const entry=window.kaminosWorkbenchExperiments;await entry.open('shared-gpu-host-fixture');
       const fixture=window.kaminosGpuHostFixture,initial=fixture.read();
@@ -7206,7 +7208,7 @@ try {
       document.getElementById('append-import-toggle').checked=false;
       document.getElementById('viewport').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}));
       await fixture.retired();
-      while(!(window.kaminosSceneObjectDebugState()||[]).some(row=>row.fileName==='replacement.obj'))await new Promise(resolve=>requestAnimationFrame(resolve));
+      while(!(window.kaminosSceneObjectDebugState()||[]).some(row=>row.source==='replacement.obj'&&row.type==='obj'))await new Promise(resolve=>requestAnimationFrame(resolve));
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       const terminal=fixture.read(),draw=window.__kaminosRenderSceneForInspection();
       if(!draw.drawn||terminal.finalizations!==1||terminal.mounted||window.kaminosWorkbenchSceneState().publicationSubscriptions!==0)throw Error('Scene replacement left a retired producer active or blocked rendering');
