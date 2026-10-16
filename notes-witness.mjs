@@ -688,6 +688,58 @@ try {
 
   const notesErrors = report.pageErrors.filter(text => /notes|kn-/i.test(text));
   check('no notes errors in the page', notesErrors.length === 0, {notesErrors});
+  report.phase = 'hidden-tabs'; save();
+  // Chrome keeps six connections per server. Hidden tabs let their notes
+  // stream rest, so more tabs than that still load, and a tab shown again
+  // announces what arrived while it was hidden. (?vantage=0 isolates notes.)
+  const hide = tab => tab.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
+    Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const show = tab => tab.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'visible'});
+    Object.defineProperty(document, 'hidden', {configurable: true, get: () => false});
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const tabs = [];
+  try {
+    for (let index = 0; index < 7; index++) {
+      const tab = await context.newPage();
+      tabs.push(tab);
+      await tab.goto(`${origin}/index.html?vantage=0`, {waitUntil: 'load', timeout: 30000});
+      // A tab that was looked at: its notes stream has linked once before it is hidden.
+      await tab.waitForFunction(() => window.kaminosNotes?.session?.author, null, {timeout: 30000});
+      await hide(tab);
+    }
+    await sleep(1500);
+    const pagesNow = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.length;
+    const extra = await context.newPage();
+    tabs.push(extra);
+    const started = Date.now();
+    const loaded = await extra.goto(`${origin}/index.html?vantage=0`, {waitUntil: 'load', timeout: 20000}).then(() => true).catch(() => false)
+      && await extra.waitForFunction(() => window.kaminosNotes, null, {timeout: 20000}).then(() => true).catch(() => false);
+    let extraLinked = false;
+    for (const deadline = Date.now() + 15000; loaded && !extraLinked && Date.now() < deadline; await sleep(300)) {
+      const id = await extra.evaluate(() => window.kaminosNotes.pageId);
+      extraLinked = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === id);
+    }
+    check('with seven hidden tabs open, another page still loads and links its notes', loaded && extraLinked,
+      {loaded, extraLinked, ms: Date.now() - started, pagesWhileHidden: pagesNow});
+    const first = tabs[0];
+    const firstId = await first.evaluate(() => window.kaminosNotes.pageId);
+    const hiddenListed = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === firstId);
+    check('a hidden tab holds no notes stream', !hiddenListed, {firstId});
+    const missed = await notes(['post', 'while you were away', '--as', AGENT, '--on', 'scene', '--to', PERSON]);
+    await sleep(800);
+    await show(first);
+    await first.waitForFunction(() => /while you were away/.test(document.querySelector('.kn-toast')?.textContent ?? ''), null, {timeout: 15000}).catch(() => {});
+    const toastText = await first.evaluate(() => [...document.querySelectorAll('.kn-toast')].map(node => node.textContent).join(' | '));
+    check('a tab shown again catches up and announces what arrived while hidden', missed.code === 0 && /while you were away/.test(toastText), {toastText});
+  } finally {
+    for (const tab of tabs) await tab.close().catch(() => {});
+  }
+
   report.status = 'passed';
 } catch (error) {
   report.status = 'failed';

@@ -97,12 +97,14 @@ export function createNotesSession({transport, selection, entries, readView, wri
       const note = await post({kind: 'ref'});
       return {note, text: formatRef(note)};
     },
-    hello(payload) {
+    hello(payload, {resume = false} = {}) {
       author = payload.author;
-      // Everything up to the stream's starting point is backlog, not news.
-      liveAfter = Math.max(Number(payload.lastSeq) || 0, maxKnown);
+      // Everything up to the stream's starting point is backlog, not news;
+      // a stream resumed after resting keeps announcing what arrived meanwhile.
+      if (!resume) liveAfter = Math.max(Number(payload.lastSeq) || 0, maxKnown);
       changed();
     },
+    lastSeq() { return maxKnown; },
     receive(batch) {
       const fresh = batch.filter(event => !known.has(event.seq));
       if (!fresh.length) return [];
@@ -855,24 +857,41 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     say(result.object && !result.present ? `Opened ${note.id}; its object is not in this scene, so only the view was restored` : `Opened ${note.id} and restored the view it was written from`);
   };
   if (ready) Promise.resolve().then(ready).then(() => { sceneReady = true; applyLink(); }, () => { /* the page is moving to the saved scene's route; the link travels with it */ });
-  const source = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=0`);
-  source.addEventListener('hello', event => {
-    const hello = JSON.parse(event.data);
-    transport.token = hello.token;
-    session.hello(hello);
-    refreshParticipants();
-    if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
-  });
-  source.addEventListener('events', event => {
-    const batch = JSON.parse(event.data).events;
-    const known = new Set(session.participants.map(person => person.name));
-    const notices = session.receive(batch);
-    if (batch.some(item => item.type === 'note' && item.author && !known.has(item.author))) refreshParticipantsSoon();
-    for (const note of notices) toast(note);
-    applyLink();
-  });
-  source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
-  source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
+  // The browser allows a handful of connections per server, and every tab
+  // holds its streams open: the notes stream rests while the tab is hidden
+  // and resumes from the last event seen when it is shown again.
+  let source = null, linkedBefore = false;
+  function connect() {
+    if (source) return;
+    const resume = linkedBefore;
+    source = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=${session.lastSeq()}`);
+    source.addEventListener('hello', event => {
+      const hello = JSON.parse(event.data);
+      transport.token = hello.token;
+      session.hello(hello, {resume});
+      linkedBefore = true;
+      refreshParticipants();
+      if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
+    });
+    source.addEventListener('events', event => {
+      const batch = JSON.parse(event.data).events;
+      const known = new Set(session.participants.map(person => person.name));
+      const notices = session.receive(batch);
+      if (batch.some(item => item.type === 'note' && item.author && !known.has(item.author))) refreshParticipantsSoon();
+      for (const note of notices) toast(note);
+      applyLink();
+    });
+    source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
+    source.addEventListener('error', () => { if (source && source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
+  }
+  function rest() {
+    if (!source) return;
+    source.close();
+    source = null;
+  }
+  const onVisibility = () => (document.hidden ? rest() : connect());
+  document.addEventListener('visibilitychange', onVisibility);
+  if (!document.hidden) connect();
   const unsubscribe = session.onChange(render);
   const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) { refreshAnchor(); placeDrawer(); } }, 500);
   const placeOnResize = () => { if (!drawer.hidden) placeDrawer(); };
@@ -885,7 +904,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     open: thread => openDrawer({thread}),
     compose: () => openDrawer({composeFocus: true}),
     dispose() {
-      source.close();
+      rest();
+      document.removeEventListener('visibilitychange', onVisibility);
       unsubscribe();
       window.cancelAnimationFrame(frame);
       window.clearInterval(refreshOnSelection);

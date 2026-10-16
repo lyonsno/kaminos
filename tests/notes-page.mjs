@@ -280,3 +280,14 @@ test('when the server notifies people who are not listening, the preview says wh
   session.setParticipants([{name: 'near-agent', listening: true}, {name: 'far-agent', listening: false}]);
   assert.deepEqual(session.preview({text: '@far-agent'}).notified, [], 'without a notify command nobody is notified');
 });
+
+test('a stream that rests while the tab is hidden picks up where it left off and still announces what arrived', () => {
+  const {session} = fakePage();
+  session.hello({author: 'noah', lastSeq: 2});
+  session.receive([note(1, {author: 'water-agent', to: ['noah'], recipients: ['noah']}), note(2, {author: 'water-agent'})]);
+  assert.equal(session.lastSeq(), 2, 'the stream reconnects after the last event seen');
+  // Hidden, the stream closes; shown again, it resumes and the server is now at 4.
+  session.hello({author: 'noah', lastSeq: 4}, {resume: true});
+  const notices = session.receive([note(3, {author: 'water-agent', to: ['noah'], recipients: ['noah']}), note(4, {author: 'water-agent'})]);
+  assert.deepEqual(notices.map(item => item.id), ['kn-000000000003'], 'a note that arrived while hidden is announced on return');
+});
