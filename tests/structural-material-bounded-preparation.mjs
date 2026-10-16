@@ -23,7 +23,7 @@ test('a graph-only preparation does not execute the unused peridynamic contender
  assert.equal(descriptor.constitutiveLayout,'event-frozen-isotropic-degradation-v1');
  assert.equal(selectSolidEnergyKernel(descriptor,arrays),'isotropic-degradation-v1');
  const previous=globalThis.GPUBufferUsage,sentinel=Error('GPU allocation boundary reached');globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,COPY_SRC:4};
- try{await assert.rejects(createSolidResident({get limits(){throw sentinel;}},descriptor,arrays),error=>error===sentinel);}
+ try{await assert.rejects(createSolidResident({get limits(){throw sentinel;}},descriptor,arrays),error=>error.cause===sentinel);}
  finally{if(previous===undefined)delete globalThis.GPUBufferUsage;else globalThis.GPUBufferUsage=previous;}
 });
 test('an explicit invalid material selection fails with a durable report',()=>{
