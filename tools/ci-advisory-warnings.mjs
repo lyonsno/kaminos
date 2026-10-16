@@ -44,17 +44,17 @@ export function advisoryWarnings({ report: r, serve, suite, setup = {} }) {
     const counted = new Set(list('newFailures', r.newFailures));
     each('new failure', 'newFailures', [...counted]);
     each('unsigned failure', 'results', list('results', r.results).filter(x => x?.outcome === 'unsigned-failure' && !counted.has(x.file)), x => x.file);
-    each('changed failure signature', 'signatureChanged', list('signatureChanged', r.signatureChanged).filter(x => !counted.has(x?.file)), x => x.file);
+    each('changed failure signature', 'signatureChanged', list('signatureChanged', r.signatureChanged).filter(x => !counted.has(x?.file)), x => x?.file ?? JSON.stringify(x));
     each('quarantined test now passes', 'staleQuarantine', r.staleQuarantine);
     each('unclassified test file', 'unclassified', r.unclassified);
-    each('invalid classification', 'invalid', r.invalid, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
-    each('invalid quarantine entry', 'invalidQuarantine', r.invalidQuarantine, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
+    each('invalid classification', 'invalid', r.invalid, x => (typeof x === 'string' ? x : x?.file || JSON.stringify(x)));
+    each('invalid quarantine entry', 'invalidQuarantine', r.invalidQuarantine, x => (typeof x === 'string' ? x : x?.file || JSON.stringify(x)));
     each('selector matched nothing', 'unmatchedSelectors', r.unmatchedSelectors);
-    each('browser launch reached by a test', 'browserLaunchAttempts', r.browserLaunchAttempts, x => x.file);
+    each('browser launch reached by a test', 'browserLaunchAttempts', r.browserLaunchAttempts, x => x?.file ?? JSON.stringify(x));
     each('test root neither run nor excluded', 'uncoveredTestRoots', r.uncoveredTestRoots);
     each('manifest entry for a missing file', 'orphans.manifest', r.orphans?.manifest);
     each('quarantine entry for a missing file', 'orphans.quarantine', r.orphans?.quarantine);
-    each('warning', 'warnings', r.warnings, w => (typeof w === 'string' ? w : w.message || JSON.stringify(w)));
+    each('warning', 'warnings', r.warnings, w => (typeof w === 'string' ? w : w?.message || JSON.stringify(w)));
     if (!out.length && suite !== 'success') out.push(`suite step ${suite} without a reason in its report`);
     else if (!out.length && r.ok !== true) out.push('report is not ok without a reason the runner names');
   }

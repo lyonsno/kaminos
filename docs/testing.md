@@ -1,6 +1,6 @@
 # Testing
 
-Run the suite from the repository root after `npm ci`. If `node_modules` is a link to another worktree's install (many worktrees share one), do not run `npm ci` there: it empties the shared install for every worktree that links to it. The runner's summary names a shared install, and when packages are missing it says where to install instead.
+Run the suite from the repository root after `npm ci`. If `node_modules` is a link to another worktree's install (many worktrees share one), do not run `npm ci` or `npm install` in this worktree or in the one it points to: either empties or changes the shared install for every worktree linked to it. To get your own install, `unlink node_modules` (it removes only the link), then `npm ci`. The runner's summary names a shared install, and when packages are missing it gives that remedy.
 
 ```sh
 npm test

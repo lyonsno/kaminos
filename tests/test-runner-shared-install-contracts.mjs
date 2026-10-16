@@ -44,7 +44,25 @@ test('a missing dependency behind a shared link never says to run npm ci there',
   assert.doesNotMatch(report.error, /Run npm ci\./);
   assert.ok(report.error.includes(target), report.error);
   assert.match(report.error, /shared/);
-  assert.match(report.error, /empties/);
+  // Running npm ci or npm install anywhere that writes the shared directory
+  // empties or changes it for every linked worktree; the only remedy is an
+  // install of this worktree's own.
+  assert.doesNotMatch(report.error, /npm (ci|install) in /);
+  assert.match(report.error, /unlink node_modules/);
+  assert.match(report.error, /then npm ci here/);
+});
+
+test('a dangling node_modules link is recorded as a link, and the remedy says to unlink it', async t => {
+  const f = await fixture(t, { files, manifest });
+  await fs.writeFile(path.join(f.root, 'package.json'), JSON.stringify({ name: 'fixture', dependencies: { 'fake-dep': '1.0.0' } }));
+  const gone = path.join(f.root, 'gone', 'node_modules');
+  await fs.symlink(gone, path.join(f.root, 'node_modules'));
+  await run(f);
+  const report = await readReport(f);
+  assert.equal(report.effective.nodeModules.linkTarget, gone);
+  assert.equal(report.effective.nodeModules.dangling, true);
+  assert.doesNotMatch(report.error, /Run npm ci\./);
+  assert.match(report.error, /unlink node_modules/);
 });
 
 test('a missing dependency in a worktree that owns its install still says to run npm ci', async t => {
@@ -65,7 +83,7 @@ test('a shared install is recorded and named in the summary, without a warning',
   assert.equal(report.effective.nodeModules.linkTarget, target);
   assert.deepEqual(report.warnings, []);
   const cli = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f), encoding: 'utf8' });
-  assert.match(cli.stdout, new RegExp(`node_modules: shared install at ${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; do not run npm ci here`));
+  assert.match(cli.stdout, new RegExp(`node_modules: shared install at ${target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}; do not run npm ci or npm install here`));
 });
 
 test('an owned install is recorded with no link target', async t => {

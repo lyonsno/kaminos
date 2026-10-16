@@ -29,7 +29,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, readlinkSync, realpathSync, rmSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -157,15 +157,20 @@ function browserVersion(executable, timeoutMs) {
 // empties it for all of them.
 function nodeModulesLink(root) {
   const dir = path.join(root, 'node_modules');
-  try {
-    if (!lstatSync(dir).isSymbolicLink()) return { path: dir, linkTarget: null };
-    return { path: dir, linkTarget: realpathSync.native(dir) };
-  } catch { return { path: dir, linkTarget: null }; }
+  let stat;
+  try { stat = lstatSync(dir); } catch { return { path: dir, linkTarget: null, dangling: false }; }
+  if (!stat.isSymbolicLink()) return { path: dir, linkTarget: null, dangling: false };
+  try { return { path: dir, linkTarget: realpathSync.native(dir), dangling: false }; }
+  catch { return { path: dir, linkTarget: path.resolve(root, readlinkSync(dir)), dangling: true }; }
 }
 
+// npm ci or npm install, run here or where the link points, rewrites the shared
+// directory for every worktree linked to it; the only safe remedy is an install
+// of this worktree's own. unlink removes the link and never what it points at.
 function npmRemedy(link) {
   if (!link.linkTarget) return 'Run npm ci.';
-  return `node_modules here is a shared install at ${link.linkTarget}, linked from other worktrees; npm ci here empties it for all of them. Run npm ci in ${path.dirname(link.linkTarget)}, which owns it, or replace this link with an install of your own (remove the link, then npm ci).`;
+  if (link.dangling) return `node_modules here is a link to ${link.linkTarget}, which no longer exists. Install your own: unlink node_modules, then npm ci here.`;
+  return `node_modules here is a link to a shared install at ${link.linkTarget} that other worktrees also use; npm ci or npm install, here or there, empties or changes it for all of them. Install your own instead: unlink node_modules (this removes only the link), then npm ci here.`;
 }
 
 async function checkDependencies(root) {
@@ -831,7 +836,7 @@ function summarize({ report, reportPath }) {
   // The browser line follows the counts line and any warnings.
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
   const shared = report.effective?.nodeModules?.linkTarget;
-  if (shared) lines.push(`node_modules: shared install at ${shared}; do not run npm ci here`);
+  if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}` : `shared install at ${shared}`}; do not run npm ci or npm install here`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');

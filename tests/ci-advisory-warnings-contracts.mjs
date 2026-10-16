@@ -92,3 +92,9 @@ test('setup outcomes parse from the workflow argument, and all-success adds noth
   assert.deepEqual(parseSetup('checkout=success node=success pip=failure'), { checkout: 'success', node: 'success', pip: 'failure' });
   assert.deepEqual(advisoryWarnings({ report: clean(), ...ran, setup: parseSetup('checkout=success npm=success') }), []);
 });
+
+test('entries that are not objects do not crash the warnings', () => {
+  const report = { ...clean(), ok: false, browserLaunchAttempts: [null], signatureChanged: [null], results: [null] };
+  const w = advisoryWarnings({ report, serve: 'success', suite: 'failure' });
+  assert.ok(w.some(l => l.startsWith('browser launch reached by a test:')), w.join('\n'));
+});
