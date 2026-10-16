@@ -15,9 +15,15 @@ export async function compileSceneLighting(renderer, passes) {
       if(pass._layers)camera.layers.mask=pass._layers.mask;
       if(pass.overrideMaterial!==null)scene.overrideMaterial=pass.overrideMaterial;
       if(pass.contextNode!==null){
-        if(!pass._contextNodeCache||pass._contextNodeCache.version!==pass.version)
-          pass._contextNodeCache={version:pass.version,context:TSL.context({...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
-        renderer.contextNode=pass._contextNodeCache.context;
+        const data={...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()};
+        const receiveOutput=data.getOutput;
+        // compileAsync also builds dependent fullscreen producers under this
+        // receiving context. Their MRT output structs are not surface colors:
+        // a receiving hook would collapse GI/history attachments into vec4.
+        if(receiveOutput)data.getOutput=function(node,...args){return node.isOutputStructNode?node:receiveOutput.call(this,node,...args);};
+        // Use a compilation-local context; the native pass owns its cache,
+        // which may already exist from the initial successful scene draw.
+        renderer.contextNode=TSL.context(data);
       }
       scene.name=pass.name||scene.name;
       await renderer.compileAsync(scene,camera);
