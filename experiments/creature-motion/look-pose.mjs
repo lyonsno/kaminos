@@ -32,7 +32,9 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   const unmodified={applied:false,reason:null,requestedYaw:0,requestedPitch:0,appliedYaw:0,appliedPitch:0,pose};
   if(target==null)return {...unmodified,reason:'no target: original pose preserved'};
   if(!Number.isFinite(strength))fail('strength must be a finite blend fraction');
+  if(strength<0||strength>1)fail('strength must be a blend fraction in [0,1]');
   if(strength<=0)return {...unmodified,reason:'zero strength: original pose preserved'};
+  if(!Array.isArray(target)||target.length!==3||!target.every(Number.isFinite))fail('target must be a finite [x,y,z] world point');
 
   const byName=new Map(pose.bones.map(b=>[b.name,b]));
   const neckBone=byName.get(neck),headBone=byName.get(head);
@@ -42,7 +44,9 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   // pose.bones[*].worldMatrix is already actor-inclusive (the given-motion/
   // walking-pose schema's "world" frame); only placementMatrix remains to
   // reach true world space.
-  const placement=new THREE.Matrix4().fromArray(placementMatrix??new THREE.Matrix4().identity().toArray());
+  const placementArray=placementMatrix??new THREE.Matrix4().identity().toArray();
+  if(!Array.isArray(placementArray)||placementArray.length!==16||!placementArray.every(Number.isFinite))fail('placementMatrix must be a finite 16-element array');
+  const placement=new THREE.Matrix4().fromArray(placementArray);
   const headWorldFull=placement.clone().multiply(new THREE.Matrix4().fromArray(headBone.worldMatrix));
   const headPosWorld=new THREE.Vector3().setFromMatrixPosition(headWorldFull);
   const headQuatFull=new THREE.Quaternion().setFromRotationMatrix(headWorldFull);
@@ -75,33 +79,40 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   const neckCorrection=identityQuat.clone().slerp(fullCorrection,neckShare);
   const headCorrection=identityQuat.clone().slerp(fullCorrection,1-neckShare);
 
-  const pelvisLike=pose.bones.filter(b=>b.name!==neck&&b.name!==head);
   const neckOriginal=decompose(neckBone.localMatrix);
   const headOriginal=decompose(headBone.localMatrix);
-  const neckLocal={p:neckOriginal.p,q:neckOriginal.q.clone().multiply(neckCorrection).normalize(),s:neckOriginal.s};
-  const headLocal={p:headOriginal.p,q:headOriginal.q.clone().multiply(headCorrection).normalize(),s:headOriginal.s};
+  const neckLocalArray=compose(neckOriginal.p,neckOriginal.q.clone().multiply(neckCorrection).normalize(),neckOriginal.s);
+  const headLocalArray=compose(headOriginal.p,headOriginal.q.clone().multiply(headCorrection).normalize(),headOriginal.s);
 
-  // Recompute world/skin fields coherently from the parent chain rather than
-  // leaving pre-correction world/skin matrices stranded under a new local pose.
-  const resolved=new Map(pelvisLike.map(b=>[b.name,new THREE.Matrix4().fromArray(b.worldMatrix)]));
+  // Any bone whose ancestor chain passes through neck (including neck and
+  // head itself, and every descendant of head such as a head-end tip) moves;
+  // everything else, including a sibling leg hung off a shared chest parent,
+  // keeps its exact original fields untouched.
+  const isDescendantOfNeck=name=>{
+   let walk=name;
+   while(walk!=null){if(walk===neck)return true;walk=byName.get(walk)?.parent??null;}
+   return false;
+  };
+  const resolvedWorld=new Map();
   function worldOf(name){
-   if(resolved.has(name))return resolved.get(name);
-   const bone=byName.get(name),local=name===neck?compose(neckLocal.p,neckLocal.q,neckLocal.s):name===head?compose(headLocal.p,headLocal.q,headLocal.s):bone.localMatrix;
+   if(resolvedWorld.has(name))return resolvedWorld.get(name);
+   const bone=byName.get(name);
+   if(!isDescendantOfNeck(name)){const world=new THREE.Matrix4().fromArray(bone.worldMatrix);resolvedWorld.set(name,world);return world;}
+   const local=name===neck?neckLocalArray:name===head?headLocalArray:bone.localMatrix;
    const parentWorld=bone.parent==null?new THREE.Matrix4():worldOf(bone.parent);
    const world=parentWorld.clone().multiply(new THREE.Matrix4().fromArray(local));
-   resolved.set(name,world);return world;
+   resolvedWorld.set(name,world);return world;
   }
-  const neckWorld=worldOf(neck),headWorldNew=worldOf(head);
 
-  const neckRest=specs.get(neck),headRest=specs.get(head);
-  const restMatrixOf=spec=>new THREE.Matrix4().set(...spec.restMatrix.flat());
+  const restMatrixOf=name=>{const spec=specs.get(name);if(!spec)fail(`rigFrame has no Bone named "${name}" to recompute a coherent skin matrix`);return new THREE.Matrix4().set(...spec.restMatrix.flat());};
   const inverseActorForSkin=new THREE.Matrix4().fromArray(pose.actorMatrix).invert();
-  const skinOf=(world,restSpec)=>inverseActorForSkin.clone().multiply(world).multiply(restMatrixOf(restSpec).clone().invert());
+  const skinOf=(world,name)=>inverseActorForSkin.clone().multiply(world).multiply(restMatrixOf(name).clone().invert());
 
   const bones=pose.bones.map(b=>{
-   if(b.name===neck)return {...b,localMatrix:compose(neckLocal.p,neckLocal.q,neckLocal.s),worldMatrix:neckWorld.toArray(),skinMatrix:skinOf(neckWorld,neckRest).toArray()};
-   if(b.name===head)return {...b,localMatrix:compose(headLocal.p,headLocal.q,headLocal.s),worldMatrix:headWorldNew.toArray(),skinMatrix:skinOf(headWorldNew,headRest).toArray()};
-   return b;
+   if(!isDescendantOfNeck(b.name))return b;
+   const world=worldOf(b.name);
+   const local=b.name===neck?neckLocalArray:b.name===head?headLocalArray:b.localMatrix;
+   return {...b,localMatrix:local,worldMatrix:world.toArray(),skinMatrix:skinOf(world,b.name).toArray()};
   });
 
   return {
