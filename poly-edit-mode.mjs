@@ -12,6 +12,8 @@ import {createComponentSelection,setSelectMode,clickComponent,selectAll,boxSelec
 const SELECTED=0xff9a1f,WIRE=0xb8c2d6;
 function compact(attribute,width){
   if(!attribute)return null;
+  // Plain float attributes copy as they lie; interleaved or normalized ones go through the accessors.
+  if(!attribute.isInterleavedBufferAttribute&&!attribute.normalized&&attribute.itemSize===width&&attribute.array instanceof Float32Array)return attribute.array.slice(0,attribute.count*width);
   const out=new Float32Array(attribute.count*width),get=['getX','getY','getZ'];
   for(let i=0;i<attribute.count;i++)for(let k=0;k<width;k++)out[i*width+k]=attribute[get[k]](i);
   return out;
@@ -31,10 +33,26 @@ function triangleMeshes(root){const found=[];root.traverse(o=>{if(o.isMesh&&o.ge
 function mergedArrays(meshes){
   const materials=[...new Set(meshes.map(m=>m.material))];
   const parts=meshes.map(m=>{const g=m.geometry,count=g.attributes.position.count;return {positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):Uint32Array.from({length:count},(_,i)=>i),count};});
-  const join=(key,width)=>parts.every(p=>p[key])?Float32Array.from(parts.flatMap(p=>[...p[key]])):null;
-  let base=0;const indices=Uint32Array.from(parts.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.count;return out;}));
-  const faceMaterial=Uint8Array.from(meshes.flatMap((m,i)=>Array(parts[i].indices.length/3).fill(materials.indexOf(m.material))));
-  return {positions:join('positions',3),normals:join('normals',3),uvs:join('uvs',2),indices,faceMaterial,materialCount:materials.length};
+  const join=key=>{if(!parts.every(p=>p[key]))return null;if(parts.length===1)return parts[0][key];const out=new Float32Array(parts.reduce((n,p)=>n+p[key].length,0));let at=0;for(const p of parts){out.set(p[key],at);at+=p[key].length;}return out;};
+  const indices=new Uint32Array(parts.reduce((n,p)=>n+p.indices.length,0)),faceMaterial=new Uint8Array(indices.length/3);
+  for(let i=0,at=0,base=0;i<parts.length;i++){const p=parts[i];for(let k=0;k<p.indices.length;k++)indices[at+k]=p.indices[k]+base;faceMaterial.fill(materials.indexOf(meshes[i].material),at/3,(at+p.indices.length)/3);at+=p.indices.length;base+=p.count;}
+  return {positions:join('positions'),normals:join('normals'),uvs:join('uvs'),indices,faceMaterial,materialCount:materials.length};
+}
+
+// Prepared editing data per geometry, so Tab back into an object is immediate. Keyed by the
+// first primitive's geometry and checked against every primitive's attribute versions, so an
+// in-place geometry change (winding, normals, debris tools) prepares it afresh.
+const prepared=new WeakMap();
+const geometryVersions=meshes=>meshes.map(m=>{const g=m.geometry;return [g.id,...Object.values(g.attributes).map(a=>a.version),g.index?.version??-1].join(':');}).join('|')+'|'+meshes.map(m=>[m.material].flat().map(x=>x.id).join(',')).join('|');
+function prepare(meshes){
+  const key=meshes[0].geometry,versions=geometryVersions(meshes),cached=prepared.get(key);
+  if(cached?.versions===versions)return cached;
+  const arrays=mergedArrays(meshes),kernel=buildPolyMesh(arrays),q=kernel.vertexPositions,wirePositions=new Float32Array(kernel.edgeCount*6);
+  for(let e=0;e<kernel.edgeCount;e++){const a=3*kernel.edgeVertices[2*e],b=3*kernel.edgeVertices[2*e+1];wirePositions[6*e]=q[a];wirePositions[6*e+1]=q[a+1];wirePositions[6*e+2]=q[a+2];wirePositions[6*e+3]=q[b];wirePositions[6*e+4]=q[b+1];wirePositions[6*e+5]=q[b+2];}
+  const entry={versions,arrays,kernel,wirePositions,barrier:arrays.materialCount>1?materialBarrier(kernel,arrays.faceMaterial):null,bvh:null};
+  // Picking structure on first use, not on Tab: the first click, box or L pays for it once.
+  entry.picking=()=>{if(!entry.bvh){const picking=new BufferGeometry();picking.setAttribute('position',new Float32BufferAttribute(arrays.positions,3));picking.setIndex(new Uint32BufferAttribute(arrays.indices,1));entry.bvh=new MeshBVH(picking,{indirect:true});}return entry.bvh;};
+  prepared.set(key,entry);return entry;
 }
 
 export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
@@ -48,11 +66,17 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     const {mesh,overlay,selection,kernel}=edit,q=kernel.vertexPositions;
     for(const child of [...overlay.children])if(child.userData.polySelection){overlay.remove(child);child.geometry.dispose();child.material.dispose();}
     const add=object=>{object.userData.polySelection=true;object.renderOrder=3;overlay.add(object);};
-    const faces=[];for(let f=0;f<kernel.faceCount;f++)if(selection.faces[f])for(let c=3*f;c<3*f+3;c++)faces.push(...q.subarray(3*kernel.cornerVertex[c],3*kernel.cornerVertex[c]+3));
+    // Typed arrays sized by count: this runs on every selection change.
+    const count=flags=>{let n=0;for(let i=0;i<flags.length;i++)if(flags[i])n++;return n;};
+    const put=(out,at,v)=>{out[at]=q[3*v];out[at+1]=q[3*v+1];out[at+2]=q[3*v+2];};
+    const faces=new Float32Array(count(selection.faces)*9);
+    for(let f=0,at=0;f<kernel.faceCount;f++)if(selection.faces[f])for(let c=3*f;c<3*f+3;c++,at+=3)put(faces,at,kernel.cornerVertex[c]);
     if(faces.length){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(faces,3));add(new Mesh(g,new MeshBasicMaterial({color:SELECTED,transparent:true,opacity:.35,side:DoubleSide,depthTest:!edit.through,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})));}
-    const edges=[];for(let e=0;e<kernel.edgeCount;e++)if(selection.edges[e])edges.push(...q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),...q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3));
+    const edges=new Float32Array(count(selection.edges)*6);
+    for(let e=0,at=0;e<kernel.edgeCount;e++)if(selection.edges[e]){put(edges,at,kernel.edgeVertices[2*e]);put(edges,at+3,kernel.edgeVertices[2*e+1]);at+=6;}
     if(edges.length){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(edges,3));add(new LineSegments(g,new LineBasicMaterial({color:SELECTED,depthTest:!edit.through})));}
-    const points=[];for(let v=0;v<kernel.vertexCount;v++)if(selection.vertices[v])points.push(...q.subarray(3*v,3*v+3));
+    const points=new Float32Array(count(selection.vertices)*3);
+    for(let v=0,at=0;v<kernel.vertexCount;v++)if(selection.vertices[v]){put(points,at,v);at+=3;}
     if(points.length&&selection.mode==='vertex'){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(points,3));add(new Points(g,new PointsMaterial({color:SELECTED,size:5,sizeAttenuation:false,depthTest:!edit.through})));}
     edit.wire.material.depthTest=!edit.through;edit.wire.material.needsUpdate=true;
     for(const {material,transparent,opacity,depthWrite} of edit.materialStates){material.transparent=edit.through||transparent;material.opacity=edit.through?.3:opacity;material.depthWrite=edit.through?false:depthWrite;material.needsUpdate=true;}
@@ -109,15 +133,11 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const meshes=triangleMeshes(object);if(!meshes.length)throw Error('Edit Mode needs an object with a triangle mesh');
       const mesh=meshes[0];object.updateMatrixWorld(true);
       if(meshes.some(m=>!m.matrixWorld.equals(mesh.matrixWorld)))throw Error('Edit Mode needs every primitive of the mesh to share one placement');
-      const arrays=mergedArrays(meshes),kernel=buildPolyMesh(arrays),picking=new BufferGeometry();
-      picking.setAttribute('position',new Float32BufferAttribute(arrays.positions,3));picking.setIndex(new Uint32BufferAttribute(arrays.indices,1));
-      const bvh=new MeshBVH(picking,{indirect:true}),overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
-      const wirePositions=new Float32Array(kernel.edgeCount*6),q=kernel.vertexPositions;
-      for(let e=0;e<kernel.edgeCount;e++){wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),6*e);wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3),6*e+3);}
+      const ready=prepare(meshes),{arrays,kernel,wirePositions}=ready,overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
       const materialStates=meshes.flatMap(m=>[m.material].flat()).map(material=>({material,transparent:material.transparent,opacity:material.opacity,depthWrite:material.depthWrite}));
-      edit={object,mesh,objectId,arrays,kernel,barrier:arrays.materialCount>1?materialBarrier(kernel,arrays.faceMaterial):null,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
+      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
       rebuildOverlay();return result();
     },
     exit(){

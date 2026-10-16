@@ -121,3 +121,13 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   assert.throws(()=>two.enter(apart,{objectId:'apart'}),/share one placement/);
 }
 
+// Tabbing back into the same object reuses its prepared kernel; a geometry change rebuilds it.
+{
+  const again=createPolyEditMode({camera,canvas});
+  again.enter(root,{objectId:'cache'});const first=again.kernel();again.exit();
+  again.enter(root,{objectId:'cache'});assert.equal(again.kernel(),first,'re-entering reuses the kernel');again.exit();
+  mesh.geometry.attributes.position.needsUpdate=true;
+  again.enter(root,{objectId:'cache'});assert.notEqual(again.kernel(),first,'an edited geometry is prepared afresh');
+  again.setMode('face');assert.equal(again.selectAll('select').counts.faces,12);again.exit();
+}
+
