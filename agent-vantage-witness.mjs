@@ -295,6 +295,9 @@ try {
     for (let i = 0; i < data.length; i += 4) if (data[i] > 70 && data[i] > 1.6 * data[i + 1] && data[i] > 1.6 * data[i + 2]) red++;
     return {shown: true, frame: Number(canvas.dataset.frame), red: red / (data.length / 4), width: canvas.width, height: canvas.height};
   });
+  const panelShot = path.join(out, 'live-panel.png');
+  await page.locator('#agent-vantage-hud').screenshot({path: panelShot});
+  report.artifacts.push(panelShot);
   const liveOff = await vantageOk('live', 'off');
   report.effective.live = {fpsOff, fpsOn, frame: liveFrame, state: liveOff.result.live};
   check('the live view puts frames from the sub\'s camera in its panel', liveOn.result.live.on && liveFrame.shown && liveFrame.frame >= 8 && liveFrame.red > 0.02, liveFrame);
