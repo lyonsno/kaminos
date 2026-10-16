@@ -9,9 +9,9 @@ const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function addFirstFlameField(');
 const end = source.indexOf('function installAuthoringParameterEditing()', start);
 
-function fixture({ holdActivation = false } = {}) {
+function fixture({ holdActivation = false, coldBoot = false } = {}) {
   let field = { composition: null, settings: {}, sourcePresent: false, route: {} };
-  let mountCount = 0, pending, releaseActivation;
+  let mountCount = 0, pending, releaseActivation, boot, bootCalls = 0, basinLoads = 0;
   const edits = createSceneEdits({ read: () => null, write: () => {} });
   edits.register('@first-flame-field', {
     read: () => field, check: value => value,
@@ -42,15 +42,17 @@ function fixture({ holdActivation = false } = {}) {
     },
   };
   const context = {
-    // The fluid route is already up; a scene without it boots it first (fire-boot.mjs).
-    volumePrototype: {},
+    // The fluid route is already up unless coldBoot; a scene without it boots it first (fire-boot.mjs).
+    volumePrototype: coldBoot ? null : {},
+    initKaminosVolumeRoute: () => { bootCalls++; return new Promise((resolve, reject) => {
+      boot = { resolve: () => { context.volumePrototype = {}; resolve(); }, reject }; }); },
     structuredClone, AbortController,
     document: { createElement: type => type === 'dialog' ? dialog : {}, body: { append() {} } },
     fetch: async () => ({ ok: true, json: async () => ({ entries: [{ presetId: 'saved-immersed-basin' }] }) }),
     validateVolumeSettingsPresetIndex() {},
     activeSceneComposition: null, authoringBusy: false, sceneSaveBlockedByFailedRestore: false,
     scenePlacementTools: { edits }, firstFlameFieldState: () => field,
-    loadAuthoredFlameBasin: () => new Promise((resolve, reject) => { pending = { resolve: () => resolve(settings), reject }; }),
+    loadAuthoredFlameBasin: () => (basinLoads++, new Promise((resolve, reject) => { pending = { resolve: () => resolve(settings), reject }; })),
     COMPOSITION_SCHEMA: 'scene-composition', FLAME_EMITTER_ID: 'flame-emitter',
     setActiveSceneObject() {}, setInfo() {},
   };
@@ -60,6 +62,7 @@ function fixture({ holdActivation = false } = {}) {
   runInNewContext(source.slice(guardStart, guardEnd) + source.slice(start, end) + '\nglobalThis.openDialog = openFirstFlameFieldDialog;', context);
   return { context, dialog, button, select, status, edits, settings,
     read: () => field, mounts: () => mountCount, pending: () => pending,
+    boot: () => boot, bootCalls: () => bootCalls, basinLoads: () => basinLoads,
     releaseActivation: () => releaseActivation() };
 }
 
@@ -110,6 +113,34 @@ for (const lateResult of ['resolve', 'reject']) {
     const retry = f.button.onclick({ target: f.button }); f.pending().resolve(); await retry;
     assert.equal(f.read().sourcePresent, true);
     assert.equal(f.mounts(), 1);
+    assert.equal(f.edits.state().undoCount, 1);
+  });
+}
+
+for (const lateBoot of ['resolve', 'reject']) {
+  test(`a scene without fire: dismissing Add Flame while the fluid boots (late ${lateBoot}) adds nothing, then a retry adds it`, async () => {
+    const f = fixture({ coldBoot: true });
+    await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
+    const first = f.button.onclick({ target: f.button });
+    await new Promise(setImmediate);
+    assert.equal(f.bootCalls(), 1, 'the add boots the fluid route');
+    assert.equal(f.context.authoringBusy, true, 'authoring is held while the fluid boots');
+    f.dialog.close();
+    if (lateBoot === 'resolve') f.boot().resolve(); else f.boot().reject(Error('no adapter'));
+    await first;
+    assert.equal(f.basinLoads(), 0, 'a dismissed add does not go on to load the basin');
+    assert.equal(f.read().sourcePresent, false);
+    assert.equal(f.mounts(), 0);
+    assert.equal(f.edits.state().active, null);
+    assert.equal(f.edits.state().undoCount, 0);
+    assert.equal(f.context.authoringBusy, false);
+    await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
+    const retry = f.button.onclick({ target: f.button });
+    await new Promise(setImmediate);
+    if (lateBoot === 'reject') { assert.equal(f.bootCalls(), 2, 'a failed boot is tried again'); f.boot().resolve(); }
+    else assert.equal(f.bootCalls(), 1, 'a booted route is reused');
+    await new Promise(setImmediate); f.pending().resolve(); await retry;
+    assert.equal(f.read().sourcePresent, true);
     assert.equal(f.edits.state().undoCount, 1);
   });
 }

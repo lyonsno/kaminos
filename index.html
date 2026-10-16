@@ -27238,11 +27238,12 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
-  // The frame owner models borrow frames from: the fire scene's volume prototype when
-  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  // The frame owner models borrow frames from: the fire scene's volume prototype while it
+  // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
+  // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
   let appFrameSource=null;
   const frameOwner=()=>{
-    if(volumePrototype?.foregroundGpuContext){
+    if(volumePrototype?.foregroundGpuContext?.().active){
       // A fire scene took over: the app owner stops requesting frames.
       if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
       return volumePrototype;
