@@ -44,6 +44,9 @@ class _Page:
         # A page whose tab was hidden is letting go of its link: it is sent and
         # chosen for nothing until it is shown again or closes.
         self.resting = False
+        # The newest visibility the page has reported. Reports arrive on
+        # separate requests and can overtake one another; an older one is stale.
+        self.seq = None
 
 
 class _Pending:
@@ -122,22 +125,40 @@ class VantageBroker:
             if page is None:
                 return False
             page.last_seen = self._clock()
+            if self._stale(page, meta.get("seq")):
+                return True
             self._update(page, meta)
             if page.meta.get("visible"):
                 page.resting = False
                 self._lock.notify_all()
             return True
 
-    def rest(self, page_id):
+    @staticmethod
+    def _stale(page, seq):
+        """Whether a visibility report is older than one the page already made.
+        A report without a sequence (an older page) is never stale."""
+        if not isinstance(seq, int) or isinstance(seq, bool):
+            return False
+        if page.seq is not None and seq < page.seq:
+            return True
+        page.seq = seq
+        return False
+
+    def rest(self, page_id, seq=None):
         """A page whose tab was hidden asks to let go of its link. It is sent and
         chosen for nothing more. A command still queued for it fails at once: it
         never reached the page, so it did not run. Commands already taken for
         delivery are returned, with when each stops being wanted, so the page can
-        answer them before it closes its link. None for a page that is not linked."""
+        answer them before it closes its link. `resting` says whether this
+        request rested the page: a request older than the page's newest
+        visibility report rests nothing and lists nothing. None for a page that
+        is not linked."""
         with self._lock:
             page = self._pages.get(page_id)
             if page is None or page.link is None:
                 return None
+            if self._stale(page, seq):
+                return {"resting": False, "outstanding": []}
             page.resting = True
             queued = [message["id"] for message in page.queue]
             page.queue.clear()
@@ -147,8 +168,8 @@ class VantageBroker:
                     pending.failure = VantageError(409, "page-hidden", "The Kaminos tab was hidden before it received the command, so the command did not run")
                     pending.done.set()
             self._lock.notify_all()
-            return [{"id": command_id, "expiresAt": pending.expires_at}
-                    for command_id, pending in self._pending.items() if pending.page_id == page_id]
+            return {"resting": True, "outstanding": [{"id": command_id, "expiresAt": pending.expires_at}
+                                                     for command_id, pending in self._pending.items() if pending.page_id == page_id]}
 
     def reply(self, page_id, command_id, payload):
         with self._lock:

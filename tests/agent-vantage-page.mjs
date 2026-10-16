@@ -1599,7 +1599,10 @@ test('recheck answers unverified when the kept identity cannot support a compari
 // A fake browser for the page's link: EventSources it opened, its timers and
 // posts, and a document whose visibility the test changes.
 function linkHarness({visible = true, outstanding = []} = {}) {
-  const sources = [], timers = [], posts = [], listeners = {document: {}, window: {}}, server = {outstanding};
+  const sources = [], timers = [], posts = [], listeners = {document: {}, window: {}};
+  const answer = (status, body) => ({status, ok: status >= 200 && status < 300, json: async () => body});
+  // The server's answers, which a test can replace: /rest and /reply by default succeed.
+  const server = {outstanding, rest: () => answer(200, {ok: true, resting: true, outstanding: server.outstanding}), reply: () => answer(200, {ok: true}), answer};
   class FakeEventSource {
     static CLOSED = 2;
     constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
@@ -1613,9 +1616,11 @@ function linkHarness({visible = true, outstanding = []} = {}) {
     addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
   const window = {EventSource: FakeEventSource, location: {href: 'http://127.0.0.1:8484/index.html'},
     fetch: async (url, init) => {
-      posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null});
-      const body = String(url).endsWith('/rest') ? {ok: true, outstanding: server.outstanding} : {ok: true};
-      return {status: 200, ok: true, json: async () => body};
+      const body = init?.body ? JSON.parse(init.body) : null;
+      posts.push({url: String(url), body});
+      if (String(url).endsWith('/rest')) return server.rest(body);
+      if (String(url).endsWith('/reply')) return server.reply(body);
+      return answer(200, {ok: true});
     },
     setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: () => 0, clearInterval() {},
     addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
@@ -1707,4 +1712,52 @@ test('the link witness credits only the eighth page\'s own link, never a backgro
   assert.equal(credited.ok, false, 'a background tab that linked cannot stand in for the eighth page');
   assert.match(credited.reasons.join(' '), /page-b2/);
   assert.equal(restingTabsVerdict({backgroundIds, freshId: null, connectedIds: ['page-main']}).ok, false, 'an eighth page that never installed is not a pass');
+});
+
+test('a hide, show and hide while the server answers the first rest makes the tab ask again before letting go', async () => {
+  const h = linkHarness(), asked = [];
+  h.server.rest = body => new Promise(resolve => asked.push({body, resolve}));
+  linked(h);
+  h.show('hidden'); await h.settle();
+  h.show('visible'); h.show('hidden'); await h.settle();
+  assert.equal(asked.length, 1, 'one rest in flight');
+  const first = asked[0].body.seq;
+  asked[0].resolve(h.server.answer(200, {ok: true, resting: true, outstanding: []}));
+  await h.settle();
+  assert.equal(h.live().length, 1, 'the first answer predates the latest hide, so it cannot be the boundary');
+  assert.equal(asked.length, 2, 'it asks again');
+  assert.ok(asked[1].body.seq > first, 'with the newer visibility');
+  assert.ok(h.posts.filter(post => post.url.endsWith('/presence')).every(post => Number.isInteger(post.body.seq)), 'every presence carries the visibility it reports');
+  asked[1].resolve(h.server.answer(200, {ok: true, resting: true, outstanding: []}));
+  await h.settle();
+  assert.equal(h.live().length, 0);
+});
+
+test('a reply the server did not acknowledge keeps its command outstanding until it expires', async () => {
+  const h = linkHarness({outstanding: [{id: 'c5', expiresAt: Date.now() + 60000}]});
+  h.server.reply = () => h.server.answer(503, {ok: false});
+  linked(h);
+  h.sources[0].emit('command', {data: JSON.stringify({id: 'c5', command: 'status', args: {}, expiresAt: Date.now() + 60000})});
+  await h.settle();
+  h.show('hidden'); await h.settle();
+  assert.equal(h.live().length, 1, 'the server still owns c5, so the tab keeps its link');
+});
+
+test('a tab never lets go without the server resting it: an older server keeps it linked, a failed rest is retried', async () => {
+  const older = linkHarness();
+  older.server.rest = () => older.server.answer(404, {error: 'Not found'});
+  linked(older);
+  older.show('hidden'); await older.settle();
+  assert.equal(older.live().length, 1, 'a server without rest cannot make a safe boundary, so the tab stays linked');
+
+  const flaky = linkHarness();
+  let calls = 0;
+  flaky.server.rest = () => { calls++; if (calls === 1) throw new Error('network'); return flaky.server.answer(200, {ok: true, resting: true, outstanding: []}); };
+  linked(flaky);
+  flaky.show('hidden'); await flaky.settle();
+  assert.equal(flaky.live().length, 1, 'a failed rest is not an empty drain');
+  assert.ok(flaky.timers.length >= 1, 'it tries again');
+  flaky.timers.at(-1).fn(); await flaky.settle();
+  assert.equal(calls, 2);
+  assert.equal(flaky.live().length, 0, 'and lets go once the server has rested it');
 });

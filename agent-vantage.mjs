@@ -773,16 +773,21 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
   let source = null, closed = false, retry = null;
   const post = (path, body) => window.fetch(endpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const hidden = () => document.visibilityState !== 'visible';
-  const facts = () => ({page: pageId, visible: !hidden(), focused: document.hasFocus(), href: window.location.href, title: document.title});
+  // Visibility reports travel on separate requests and can overtake one another,
+  // so each carries a sequence; the server ignores one older than it has seen.
+  let seq = 0;
+  const facts = () => ({page: pageId, seq, visible: !hidden(), focused: document.hasFocus(), href: window.location.href, title: document.title});
   const presence = () => { if (!closed && source) post('/presence', facts()).catch(() => {}); };
-  // Ids this page has answered, and whoever is waiting to hear of the next answer.
-  const answered = new Set(), waiters = new Set();
-  const pump = createCommandPump({run, reply: answer => {
-    answered.add(answer.id);
-    for (const wake of waiters) wake();
-    waiters.clear();
-    return post('/reply', {page: pageId, ...answer});
+  // Ids whose answer the server acknowledged, and whoever is waiting for news.
+  const acknowledged = new Set(), waiters = new Set();
+  const wakeAll = () => { for (const wake of waiters) wake(); waiters.clear(); };
+  const pump = createCommandPump({run, reply: async answer => {
+    const response = await post('/reply', {page: pageId, ...answer});
+    if (response.ok) acknowledged.add(answer.id);
+    wakeAll();
+    return response;
   }});
+  const pause = ms => new Promise(wake => { waiters.add(wake); window.setTimeout(wake, ms); });
   // The link is held only while the tab is shown. A browser keeps few connections
   // to one server (six over HTTP/1.1), and every open stream holds one, so tabs
   // left open in the background would stop the next page from loading at all.
@@ -816,25 +821,37 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
   }
   let resting = false;
   const stillHidden = () => source && hidden() && !closed;
-  async function askToRest() {
+  // The server's answer to a rest: rested with what it had already sent, not
+  // rested (an older request), unsupported (a server without rest), or failed.
+  async function askToRest(asked) {
     try {
-      const response = await post('/rest', {page: pageId});
-      return response.ok ? (await response.json()).outstanding ?? [] : null;
-    } catch { return null; }
+      const response = await post('/rest', {page: pageId, seq: asked});
+      if (response.status === 404) {
+        const body = await response.json().catch(() => null);
+        return body?.phase === 'select' ? {kind: 'failed'} : {kind: 'unsupported'};
+      }
+      if (!response.ok) return {kind: 'failed'};
+      const body = await response.json();
+      return body.resting === true ? {kind: 'rested', outstanding: body.outstanding ?? []} : {kind: 'not-rested'};
+    } catch { return {kind: 'failed'}; }
   }
+  // The tab lets go only on the server's word, given for its newest visibility,
+  // once everything the server had sent it is acknowledged or no longer wanted.
   async function rest() {
     if (resting) return;
     resting = true;
     try {
       while (stillHidden()) {
         if (pump.busy()) { await pump.idle(); continue; }
-        // A server that cannot rest a page (an older one) answers null; the page then lets go when idle.
-        const outstanding = await askToRest();
+        const asked = seq, answer = await askToRest(asked);
         if (!stillHidden()) { presence(); return; }
-        const waiting = () => (outstanding ?? []).some(item => !answered.has(item.id) && Date.now() < item.expiresAt);
-        while (waiting() && stillHidden()) await new Promise(wake => { waiters.add(wake); window.setTimeout(wake, 250); });
+        if (seq !== asked) continue;
+        if (answer.kind === 'unsupported') { onStatus({state: 'linked', pageId, rest: 'unsupported'}); return; }
+        if (answer.kind !== 'rested') { await pause(2000); continue; }
+        const waiting = () => answer.outstanding.some(item => !acknowledged.has(item.id) && Date.now() < item.expiresAt);
+        while (waiting() && stillHidden() && seq === asked) await pause(250);
         if (!stillHidden()) { presence(); return; }
-        if (pump.busy()) continue;
+        if (seq !== asked || pump.busy()) continue;
         source.close();
         source = null;
         window.clearTimeout(retry);
@@ -843,7 +860,7 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
       }
     } finally { resting = false; }
   }
-  const follow = () => { presence(); if (hidden()) rest(); else open(); };
+  const follow = () => { seq++; wakeAll(); presence(); if (hidden()) rest(); else open(); };
   document.addEventListener('visibilitychange', follow);
   window.addEventListener('focus', presence);
   window.addEventListener('blur', presence);

@@ -166,7 +166,7 @@ def broker_contracts():
     deadline = time.monotonic() + 3
     while broker.pages()[0]["pendingCommands"] < 2 and time.monotonic() < deadline:
         time.sleep(0.01)
-    outstanding = broker.rest("page-rrrrrrrr")
+    outstanding = broker.rest("page-rrrrrrrr")["outstanding"]
     assert [item["id"] for item in outstanding] == [sent["id"]], outstanding
     assert outstanding[0]["expiresAt"] == sent["expiresAt"], "the page learns how long the sent command is wanted"
     queued_worker.join(3)
@@ -182,6 +182,22 @@ def broker_contracts():
     sent_worker.join(3)
     assert outcomes["sent"]["ok"] is True, outcomes["sent"]
     assert broker.rest("page-unknown0") is None, "an unknown page has nothing to rest"
+
+    # Visibility reports carry the page's sequence: a late, older report cannot undo a newer one.
+    ordered = bridge.VantageBroker()
+    ordered_link = ordered.attach("page-oooooooo", {"visible": True})
+    assert ordered.presence("page-oooooooo", {"visible": False, "seq": 1}) is True
+    assert ordered.rest("page-oooooooo", seq=1)["resting"] is True
+    assert ordered.presence("page-oooooooo", {"visible": False, "seq": 3}) is True
+    assert ordered.rest("page-oooooooo", seq=3)["resting"] is True
+    assert ordered.presence("page-oooooooo", {"visible": True, "seq": 2}) is True
+    assert ordered.pages()[0]["resting"] is True, "a delayed visible report from before the latest hide does not wake the page"
+    assert ordered.rest("page-oooooooo", seq=2)["resting"] is False and ordered.pages()[0]["resting"] is True, "a stale rest neither rests the page nor wakes it"
+    assert ordered.presence("page-oooooooo", {"visible": True, "seq": 4}) is True
+    assert ordered.pages()[0]["resting"] is False, "the newest visible report does"
+    stale = ordered.rest("page-oooooooo", seq=3)
+    assert stale["resting"] is False and stale["outstanding"] == [], "a rest older than the page's newest report is refused"
+    ordered.detach(ordered_link)
     assert broker.presence("page-rrrrrrrr", {"visible": True}) is True
     assert broker.pages()[0]["resting"] is False, "shown again, it is chosen again"
     broker.detach(resting)
@@ -277,7 +293,7 @@ def main():
             assert len(body["pages"]) == 2, "closed pages are forgotten rather than accumulating"
 
             status, body = call(port, "POST", "/api/vantage/rest", {"page": "page-aaaaaaaa"})
-            assert status == 200 and body["ok"] is True and body["outstanding"] == [], (status, body)
+            assert status == 200 and body["ok"] is True and body["resting"] is True and body["outstanding"] == [], (status, body)
             status, body = call(port, "POST", "/api/vantage/command", {"command": "status", "args": {}, "page": "page-aaa"})
             assert status == 409 and body["phase"] == "page-hidden" and "page-aaaaaaaa" in body["error"], ("a resting page is not chosen, and says why", status, body)
             status, body = call(port, "POST", "/api/vantage/rest", {"page": "page-zzzzzzzz"})

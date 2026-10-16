@@ -3989,11 +3989,11 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         body = self._vantage_body()
         if body is not None:
-            outstanding = vantage_bridge()[1].rest(str(body.get("page") or ""))
-            if outstanding is None:
+            rested = vantage_bridge()[1].rest(str(body.get("page") or ""), body.get("seq"))
+            if rested is None:
                 self.send_json({"ok": False, "phase": "select", "error": "No linked Kaminos page has that id"}, 404)
             else:
-                self.send_json({"ok": True, "outstanding": outstanding})
+                self.send_json({"ok": True, **rested})
 
     def handle_vantage_reply(self):
         if not self._vantage_allowed():
