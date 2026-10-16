@@ -407,9 +407,13 @@ export function createVantagePilot(host) {
         // Past 65,536 instances the map's instance number wraps, so it names no instance.
         const depthPoint = depth ? pointAtViewDepth(camera, centre, depth) : null;
         const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera, depthPoint}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
+        // What an anchor keeps: the geometry identity the map recorded (for recheck), and the
+        // entry matrix it was drawn with, in whose frame `local` and `localNormal` are given.
         hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
           distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
-          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}), geometry: found.geometry ?? null,
+          localNormal: normalInFrame(found.normal ?? null, row.root ?? null), entryMatrix: row.root ?? null,
+          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}),
+          geometry: found.geometry ? {...found.geometry, identity: row.geometry ?? null} : null,
           surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
           ...(row.coverage ? {coverage: row.coverage} : {})};
       } else {
@@ -432,6 +436,12 @@ export function createVantagePilot(host) {
       if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
       return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ...(pixel ? {pixel} : {}), pixelCentre: centre, ray,
         referent: pictured ? 'pictured' : 'rendered', hit, ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
+    },
+
+    // Whether an anchored mesh is still the one picked. It reads the scene and draws nothing.
+    recheck({id, path, identity}) {
+      if (!host.recheck) fail('recheck', 'This page cannot look up scene meshes');
+      return host.recheck({id, path, identity});
     },
   };
 
@@ -921,6 +931,29 @@ export function sceneOutsideMap(THREE, entries, fields, water) {
   return {clouds, fields: fields.filter(field => field.bounds).map(({id, label, type, bounds}) => ({id, label, type, bounds})), water: !!water};
 }
 
+// A world-space normal in the frame of `matrix` (a column-major 4x4): the
+// transpose of its linear part, which is the inverse transpose of the map
+// from world to that frame. Null when there is no normal or frame.
+function normalInFrame(normal, matrix) {
+  if (!normal || !matrix) return null;
+  const n = [0, 1, 2].map(i => matrix[4 * i] * normal[0] + matrix[4 * i + 1] * normal[1] + matrix[4 * i + 2] * normal[2]);
+  const length = Math.hypot(...n);
+  return length > 0 ? n.map(value => value / length) : null;
+}
+
+// Whether the mesh at `path` under the entry `id` is still the geometry an
+// anchor recorded: same, edited or replaced within the page session that
+// recorded it, likely-same or replaced from another, unverified without an
+// identity. Reads the scene only.
+export function recheckAnchor(entries, {id, path, identity}, session = null) {
+  const entry = entries.find(item => item.id === id);
+  if (!entry?.object) return {now: 'missing', status: null};
+  const node = nodeAt(entry.object, path);
+  if (!node) return {now: 'mesh-missing', status: null};
+  if (!node.isMesh) return {now: 'present', status: null, reason: 'not-a-mesh'};
+  return {now: 'present', status: geometryStatus(identity, geometryIdentity(node, session), session)};
+}
+
 // Where a ray meets one mesh placed with the given matrices: the nearest
 // intersection inside the camera's depth range. A stand-in mesh shares the
 // mesh's geometry, material and morph weights, so nothing in the scene moves.
@@ -1018,6 +1051,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
       return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
     } : null,
     surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
+    recheck: anchor => recheckAnchor(entries(), anchor, pageId),
     // A glance's pixels become a canvas like any other picture.
     renderView: glance ? options => {
       const view = glance.draw(options);

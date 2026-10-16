@@ -224,6 +224,13 @@ try {
   check('its point is the one the picture drew, from its depth, on the red box\'s front face, and the mesh agrees with it',
     pickRed.result.hit?.pointBasis === 'depth' && pickRed.result.hit.surfaceBasis === 'recast-agrees' && onRedFace(pickRed.result.hit.point),
     {point: pickRed.result.hit?.point, pointBasis: pickRed.result.hit?.pointBasis, surfaceBasis: pickRed.result.hit?.surfaceBasis});
+  // What a note anchor keeps from the pick, and a recheck of it against the scene as it is now.
+  const redAnchor = path.join(out, 'red-anchor.json');
+  writeFileSync(redAnchor, JSON.stringify(pickRed));
+  const recheckRed = await vantageOk('recheck', '--anchor', redAnchor);
+  check('a pick gives an anchor its geometry identity, entry matrix and entry-frame normal, and a recheck finds the same geometry',
+    !!pickRed.result.hit.geometry?.identity?.sample && pickRed.result.hit.entryMatrix?.length === 16 && pickRed.result.hit.localNormal?.length === 3
+    && recheckRed.result.now === 'present' && recheckRed.result.status === 'same', {hit: pickRed.result.hit, recheck: recheckRed.result});
   const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
   check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it from its depth',
     pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.pointBasis === 'depth'
@@ -512,6 +519,8 @@ try {
     && samePoint(pickGone.result.hit.point, pickRed.result.hit.point), {hit: pickGone.result.hit});
   check('and a live pick through the same sub view no longer names it', liveGone.result.referent === 'rendered' && liveGone.result.hit?.id !== scene.red,
     {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
+  const recheckGone = await vantageOk('recheck', '--anchor', redAnchor);
+  check('and a recheck of its anchor says it is no longer in the scene', recheckGone.result.now === 'missing' && recheckGone.result.status === null, recheckGone.result);
 
   report.phase = 'remove'; save();
   await vantageOk('remove');
