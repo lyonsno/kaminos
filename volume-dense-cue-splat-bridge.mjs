@@ -46,7 +46,9 @@ const learnedSplatRadius = Number(args.get('--learned-splat-radius') || 1);
 const learnedSplatSharpness = Number(args.get('--learned-splat-sharpness') || 3.4);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
 // How long to wait for Chrome's DevTools endpoint before giving up.
-const devtoolsWaitMs = Math.max(0, Number(args.get('--devtools-wait-ms') || 12500));
+// Without --devtools-wait-ms the wait is 100 tries 125 ms apart, as before,
+// which a loaded machine stretches; with it, a fixed deadline.
+const devtoolsWaitMs = args.has('--devtools-wait-ms') ? Math.max(0, Number(args.get('--devtools-wait-ms')) || 0) : null;
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 // The Chrome profile is created only when a browser is launched, under the
 // temp root, and removed once the browser has exited unless --user-data-dir
@@ -219,15 +221,16 @@ async function cdpFetch(path, options) {
 }
 
 async function waitForCdp() {
-  const deadline = Date.now() + devtoolsWaitMs;
-  do {
+  const deadline = devtoolsWaitMs === null ? null : Date.now() + devtoolsWaitMs;
+  for (let attempt = 1; ; attempt += 1) {
     try {
       return await cdpFetch('/json/version');
     } catch {
+      if (deadline === null ? attempt >= 100 : Date.now() >= deadline) break;
       await delay(125);
     }
-  } while (Date.now() < deadline);
-  throw new Error(`Chrome DevTools endpoint did not open on port ${debugPort} within ${devtoolsWaitMs} ms`);
+  }
+  throw new Error(`Chrome DevTools endpoint did not open on port ${debugPort} ${devtoolsWaitMs === null ? 'after 100 tries 125 ms apart' : `within ${devtoolsWaitMs} ms`}`);
 }
 
 function routeWithBridgeControls(route, grid) {
