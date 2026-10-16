@@ -3501,7 +3501,7 @@ let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
-let flameDomainGuide = null;
+let flameDomainGuide = null, localLiquidDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
 let flameDomainDraft = null, flameDomainProxy = null;
@@ -3842,6 +3842,7 @@ import {
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
+  fingerFluidAnalyticalSupportGeometry,
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -3854,7 +3855,7 @@ import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUti
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
@@ -5712,7 +5713,7 @@ function refreshFlameDomainPreview() {
   if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,flameDomainTopY()*scale,scale).add(new THREE.Vector3(...translation)));
-  if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
+  if(flameDomainGuide)styleSimulationDomainGuide(flameDomainGuide,'flame-field');
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
   for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
   const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,flameDomainTopY()+1,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
@@ -6736,9 +6737,9 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   sceneOwnerControls?.update();
-  inspector.dataset.selectedObjectId = entry?.id || '';
+  inspector.dataset.selectedObjectId = activeSceneFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
-  inspector.dataset.selectionCount=String(sceneSelection.ids.length);
+  inspector.dataset.selectionCount=String(activeSceneFieldId?1:sceneSelection.ids.length);
   inspector.dataset.selectedFieldId=activeSceneFieldId||'';
   inspector.hidden=!!activeSceneFieldId;
   empty.hidden = !!entry;
@@ -6996,6 +6997,7 @@ function clearActiveSceneObjectSelection() {
 }
 
 function setActiveSceneObject(id,options={}) {
+  if(id==='flame-field'||id==='water-field')return window.selectSceneField(id);
   if(!sceneObjects.some(o=>o.id===id)){clearActiveSceneObjectSelection();return;}
   if(splatCorrectionMode&&splatCorrectionMode.objectId!==id)exitSplatCorrectionMode({revert:false,silent:true});
   const next=changeSelection(sceneSelection,id,options);return setSceneSelection(next.ids,next.activeId);
@@ -7059,6 +7061,7 @@ function handleViewportPointerDown(event) {
     x: event.clientX,
     y: event.clientY,
     pointerId: event.pointerId,
+    gizmo: !!(transformGizmoDragging || transformControls?.dragging || transformControls?.axis),
   };
 }
 
@@ -7074,7 +7077,7 @@ function handleViewportSelectionClick(event) {
     }
     viewportSuppressedClick = null;
   }
-  if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) {
+  if (greenroomPreviewIsActive()) {
     viewportPointerDown = null;
     return;
   }
@@ -7089,22 +7092,30 @@ function handleViewportSelectionClick(event) {
     return;
   }
   const drift = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-  if (drift > 5) {
+  if (event.type === 'pointerup' || drift > 5) {
     viewportSuppressedClick = {
       x: event.clientX,
       y: event.clientY,
       at: performance.now(),
     };
-    return;
   }
+  if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
+  const record = pickSceneObjectFromViewportPointer(event);
+  // Source symbols are drawn through the scene, including domain edges.
+  if(record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)){
+    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
+    setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
+  }
   if (pickFlameDomainFromViewportPointer(event)) {
     window.selectSceneField('flame-field');
     setInfo('Selected: Fire & smoke domain');
     window._kaminosDirty?.();
     return;
   }
-  const record = pickSceneObjectFromViewportPointer(event);
+  if (pickWaterDomainFromViewportPointer(event)) {
+    window.selectSceneField('water-field');window._kaminosDirty?.();return;
+  }
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
@@ -7424,7 +7435,7 @@ window.selectSceneField=function(id) {
 
 window.selectSceneObject = function(id,options={}) {
   setActiveSceneObject(id,options);
-  if (currentMesh) {
+  if (currentMesh && !activeSceneFieldId) {
     const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
     window._kaminosDirty?.();
@@ -11742,15 +11753,11 @@ async function initScene() {
   });
   initTransformInspector();
   const viewportEl = document.getElementById('viewport');
-  renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
-  renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
-  renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
-  renderer.domElement.addEventListener('mousedown', handleViewportPointerDown);
-  renderer.domElement.addEventListener('click', handleViewportSelectionClick);
-  renderer.domElement.addEventListener('dblclick', handleViewportDoubleClick);
+  // One bubbling route handles each gesture. Its click is suppressed after
+  // pointerup, including a gizmo release, so selection cannot toggle twice.
   viewportEl.addEventListener('pointerdown', handleViewportPointerDown);
   viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
-  viewportEl.addEventListener('mousedown', handleViewportPointerDown);
+  viewportEl.addEventListener('pointercancel', () => { viewportPointerDown = null; });
   viewportEl.addEventListener('click', handleViewportSelectionClick);
   viewportEl.addEventListener('dblclick', handleViewportDoubleClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
@@ -12323,6 +12330,7 @@ function clearScene({loadRequestId = null} = {}) {
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
+  if(localLiquidDomainGuide){scene.remove(localLiquidDomainGuide);disposeObjectTree(localLiquidDomainGuide);localLiquidDomainGuide=null;}
   if (flameDomainGuide) {
     scene.remove(flameDomainGuide);
     disposeObjectTree(flameDomainGuide);
@@ -26016,6 +26024,10 @@ function selectionTransformProxy(){
   selectionProxy.userData.kaminosSceneObject={label:`${sceneSelection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
 function setSceneSelection(ids,activeId=ids.at(-1)??null){
+  if(ids.some(id=>id==='flame-field'||id==='water-field')){
+    if(ids.length!==1||activeId!==ids[0])throw Error('Select a simulation field on its own');
+    window.selectSceneField(ids[0]);return readSceneSelection();
+  }
   const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=checkedSelection(ids,activeId);
@@ -26028,7 +26040,12 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   if(transformControls){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
+function readSceneSelection(){
+  return structuredClone({...sceneSelection,...(activeSceneFieldId?{ids:[activeSceneFieldId],activeId:activeSceneFieldId}:{}),fieldId:activeSceneFieldId,memberIds:sceneSelectionMembers(),preferences:transformPreferences});
+}
 function updateSelectionFeedback(){
+  if(flameDomainGuide)styleSimulationDomainGuide(flameDomainGuide,'flame-field');
+  if(localLiquidDomainGuide)styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');
   syncSceneHelperVisibility(sceneObjects.map(entry=>entry.object),viewportDisplay,selectionCaptureSuspended);
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
@@ -26040,13 +26057,33 @@ function updateSelectionFeedback(){
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===activeSceneObjectId||activeSceneGroupId&&sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
-    box.visible=!selectionCaptureSuspended&&viewportBoundsVisible&&entry.object.visible;
+    const emitter=[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type);
+    box.visible=!selectionCaptureSuspended&&entry.object.visible&&(viewportBoundsVisible||emitter&&viewportHelpersVisible&&viewportDisplay.overlays&&viewportDisplay.outlines&&viewportDisplay.outlineOpacity>0);
   }
 }
+function styleSimulationDomainGuide(guide,id){
+  const selected=activeSceneFieldId===id;
+  guide.material.color.set(selected?0xffc66d:0x5bd8f5);
+  styleHelperLines(guide,{width:viewportDisplay.domainWidth+(selected?1:0),opacity:viewportDisplay.domainOpacity});
+}
+function syncWaterDomainGuide(){
+  if(localLiquidSetup&&!localLiquidDomainGuide){
+    const {boundsMin,boundsMax}=fingerFluidAnalyticalSupportGeometry();
+    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(...boundsMin),new THREE.Vector3(...boundsMax)),0x5bd8f5);
+    localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
+    localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
+  }
+  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=!!localLiquidSetup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
+}
+function pickWaterDomainFromViewportPointer(event){
+  if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
+  return pointerHitsBoxOutline(localLiquidDomainGuide.box,camera,{x:event.clientX,y:event.clientY},renderer.domElement.getBoundingClientRect());
+}
 function syncEditorHelperVisibility(){
+  syncWaterDomainGuide();
   for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
   for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide){flameDomainGuide.visible= !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
+  if(flameDomainGuide){flameDomainGuide.visible= !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
   for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
@@ -26055,7 +26092,7 @@ function setupSelectionTransforms(){
   selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>sceneSelection,groups:()=>sceneGroups,preferences:()=>transformPreferences,
     read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
   scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
-  window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:()=>structuredClone({...sceneSelection,memberIds:sceneSelectionMembers(),preferences:transformPreferences}),
+  window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
     set:(ids,activeId)=>setSceneSelection(ids,activeId),all:()=>setSceneSelection([...sceneGroups.map(g=>'@group:'+g.id),...sceneObjects.map(o=>o.id)]),clear:()=>clearActiveSceneObjectSelection(),
     transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
@@ -26220,7 +26257,8 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
-  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
+  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
+  if(activeSceneFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)

@@ -132,7 +132,11 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     if (mode !== 'workbench') return;
     document.activeElement?.blur?.();
     setInspectorActive(active); sceneTreeSlots.setActive(active);
-    if (active && byId('transform-inspector').hidden) setContext('scene');
+    if (active) {
+      const selection=byId('transform-inspector').dataset;
+      if(selection.selectedObjectId||selection.selectedGroupId||selection.selectedFieldId)setContext('object');
+      else if(byId('transform-inspector').hidden)setContext('scene');
+    }
     byId('authoring-inspector-scene-tree').hidden=!active;
     document.body.classList.toggle('has-workbench-inspector',active);
   }
