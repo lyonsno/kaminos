@@ -150,10 +150,12 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function setQuadrature(value,sampling='all'){
     validateSourceQuadrature(value,sampling);
     if(disposed)throw Error('hybrid lighting disposed');
+    // Status observers serialize the entire configuration synchronously.
+    // Publish a valid pair before requestRebuild notifies them.
+    pointSampling=sampling;paired.value=sampling==='paired';
     if(value!==pointCount){
       pointCount=value;status.pointCount=value;requestRebuild();
     }
-    pointSampling=sampling;paired.value=sampling==='paired';
   }
   return {
     setShadowComparison(value){

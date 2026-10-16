@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
 import {mountDistributedSceneRadiance} from '../scene-hybrid-radiance.mjs';
+import {fireShadowSceneRoute} from '../fire-shadow-scene-settings.mjs';
 globalThis.GPUBufferUsage={STORAGE:1,COPY_DST:2,UNIFORM:4,COPY_SRC:8};
 globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_SRC:4};
 const passes=[],uploads=[],pipelines=[];
@@ -149,4 +150,24 @@ await Promise.resolve();await Promise.resolve();
 compileRelease();await retry;consume(field);
 assert.equal(held,false);assert.equal(asyncMount.canRender(),true);
 asyncMount.dispose();
+for(const count of [2,1]){
+  let transitioning;
+  const saved=[];
+  transitioning=mountDistributedSceneRadiance({renderer,scene,prototype,device,rebuild,volumeGrid:2,smokeRefinement:1,pointCount:4,pointSampling:'paired',
+    onStatus(){if(transitioning)saved.push(fireShadowSceneRoute(transitioning.debugState()));},
+    createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
+  consume(field);
+  const before=compileCalls;
+  transitioning.setQuadrature(count,'all');
+  assert.equal(held,true);
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(compileCalls,before+1);
+  compileRelease();await transitioning.whenRebuilt();consume(field);
+  assert.equal(held,false);assert.equal(transitioning.canRender(),true);
+  assert.equal(transitioning.debugState().pointCount,count);
+  assert.equal(transitioning.debugState().pointSampling,'all');
+  assert.equal(transitioning.debugState().shadows.length,count);
+  assert(saved.length>0);assert.doesNotThrow(()=>fireShadowSceneRoute(transitioning.debugState()));
+  transitioning.dispose();
+}
 console.log('hybrid lifecycle and honest rebuild boundaries passed');
