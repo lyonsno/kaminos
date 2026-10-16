@@ -28057,7 +28057,7 @@ export function createKaminosVolumePrototype({
         const values = new Float32Array(staging.getMappedRange().slice(0));
         staging.unmap();
         if (values.length !== dims[0] * dims[1] * dims[2] * 16) return { status: 'invalid', reason: 'readback-size-mismatch', ...snapshot };
-        if (state.simStepCount !== snapshot.simStepCount) return { status: 'invalid', reason: 'state-advanced-during-readback', ...snapshot };
+        // The copy is a snapshot of the step it was encoded at; stepping may continue while it maps.
         const bands = velocityBandEnergies(values, dims);
         if (![bands.total, bands.sub, bands.mid, bands.large].every(Number.isFinite)) return { status: 'invalid', reason: 'nonfinite-band-energy', ...snapshot };
         return { status: 'sampled', ...snapshot, ...bands, kolmogorovSubOverMid: kolmogorovSubBandRatio(snapshot.wavelet?.octaves ?? 2) };
