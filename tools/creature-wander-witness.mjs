@@ -4,7 +4,7 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import * as THREE from '../lib/three.core.js';
-import {validateCreatureControlRead,validateWanderObservation,validateWanderProgress} from './creature-controls-witness.mjs';
+import {validateCreatureControlRead,validateWanderObservation,validateWanderProgress,validateCreatureBackendRead,validateCreatureGpuGeometry} from './creature-controls-witness.mjs';
 const hash=data=>createHash('sha256').update(data).digest('hex');
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});
@@ -22,11 +22,20 @@ export async function witness(args){
   const read=()=>page.evaluate(()=>({...window.kaminosWalkingCreature({geometry:true}),registration:window.kaminosSceneObjectDebugState()}));
   const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   const capture=async name=>{await settle();const path=join(out,name+'.png');await page.screenshot({path});report.captures.push(path);return path;};
+  const gpuCheck=async(name,cpu)=>{
+   if(setup.deformation!=='gpu')return;
+   const gpu=await page.evaluate(async()=>{const r=await window.kaminosWalkingCreature({geometry:'gpu'});return {...r,positions:Array.from(r.positions),normals:Array.from(r.normals),packedPositions:Array.from(r.packedPositions),packedNormals:Array.from(r.packedNormals)};});
+   const path=join(out,name+'-gpu.json');writeFileSync(path,JSON.stringify(gpu)+'\n');
+   (report.gpuComparisons??=[]).push({name,path,...validateCreatureGpuGeometry(gpu,cpu)});
+  };
+  await settle();
   report.initial=await read();validateCreatureControlRead(report.initial,setup);validateWanderObservation(report.initial);assert.notEqual(report.initial.playback.status,'playing');
-  report.deformationRoute=report.initial.skin.route;assert.equal(report.deformationRoute,'shared-owner-scene-full-body-dq');report.deformationBackend='CPU-reference DQ deformation; WebGPU scene rendering';
+  report.deformationRoute=report.initial.skin.route;assert.equal(report.deformationRoute,'shared-owner-scene-full-body-dq');report.deformationBackend=validateCreatureBackendRead(report.initial,setup.deformation??'cpu');await gpuCheck('initial',report.initial);
   await capture('initial');report.phase='native-sustained-playback';
   await page.getByRole('button',{name:'↻ Replay',exact:true}).click();
   await page.waitForFunction(()=>{const r=window.kaminosWalkingCreature({geometry:false});return r.action.motion.cycle>=1;});
+  report.liveLight=await page.evaluate(()=>window.kaminosWalkingCreature({geometry:false}));
+  if(setup.deformation==='gpu')assert.equal(report.liveLight.skin.poseCache.deformations,report.initial.skin.poseCache.deformations,'Unattended playback invoked CPU skinning');
   report.live=await read();assert.equal(report.live.playback.status,'playing');report.liveProgress=validateWanderProgress(report.initial,report.live,{minimumCycles:1});
   await page.locator('.playback-play').click();report.held=await read();assert.notEqual(report.held.playback.status,'playing');
   await settle();report.heldAfter=await read();assert.deepEqual(report.heldAfter.action.motion,report.held.action.motion,'Pause left the action advancing');
@@ -40,6 +49,7 @@ export async function witness(args){
   const previousId=report.areaEdited.host.id;await page.getByLabel('Open creature setup',{exact:true}).setInputFiles(saved);
   await page.waitForFunction(id=>typeof window.kaminosWalkingCreature==='function'&&window.kaminosWalkingCreature({geometry:false}).host.id!==id,previousId);
   report.reopened=await read();validateCreatureControlRead(report.reopened,setup);validateWanderObservation(report.reopened);
+  await settle();report.reopenedBackend=validateCreatureBackendRead(await page.evaluate(()=>window.kaminosWalkingCreature({geometry:false})),setup.deformation??'cpu');
   assert.deepEqual(report.reopened.action.motion.path.position,report.areaEdited.action.motion.path.position);assert.deepEqual(report.reopened.action.area.transform,report.areaEdited.action.area.transform);assert.notEqual(report.reopened.playback.status,'playing');
   assert.notDeepEqual(report.reopened.action.motion.path.area,report.held.action.motion.path.area,'Paused edit did not control the reopened path');
   report.areaApplied=report.reopened;
@@ -58,6 +68,7 @@ export async function witness(args){
   await page.evaluate(()=>window.kaminosViewportSettings.set({bones:false,paths:false}));
   for(let i=0;i<20;i++){
    const state=await read();validateWanderObservation(state);
+   if([0,9,19].includes(i))await gpuCheck('frame-'+String(i).padStart(2,'0'),state);
    const posePath=join(out,'frame-'+String(i).padStart(2,'0')+'.json');writeFileSync(posePath,JSON.stringify(state)+'\n');
    const bodyBox=new THREE.Box3().setFromArray(state.vertices).applyMatrix4(new THREE.Matrix4().fromArray(state.rootMatrix)),center=bodyBox.getCenter(new THREE.Vector3()),size=bodyBox.getSize(new THREE.Vector3()),distance=size.length()*1.15;
    const camera=await page.evaluate(({center,distance})=>window.__kaminosSetSceneCameraFrame([center[0]+distance*.7,center[1]+distance*.27,center[2]-distance*.7],center),{center:center.toArray(),distance});
