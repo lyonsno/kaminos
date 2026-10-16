@@ -1,0 +1,27 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {resolveSceneGIControlState} from '../scene-gi-settings.mjs';
+assert.equal(resolveSceneGIControlState().temporal,false,'saved tuned profile must retain its original temporal behavior');
+assert.equal(resolveSceneGIControlState({temporal:true,temporalWeight:.8}).temporalWeight,.8);
+for(const value of [{temporal:1},{temporalWeight:1},{temporalWeight:-1},{temporalWeight:NaN}])assert.throws(()=>resolveSceneGIControlState(value));
+const {default:History}=await import('../scene-gi-history.mjs');
+const {PerspectiveCamera,Texture}=await import('../lib/three.webgpu.js');
+const camera=new PerspectiveCamera();camera.updateMatrixWorld();
+const sample={value:new Texture()};
+const history=new History(sample,sample,sample,sample,camera);
+assert.equal(history.valid.value,false);
+assert.equal(history.frames,0);
+const output=history.getGINode(),original=output.value;
+const saved=output.sample();
+const renderer={getRenderTarget:()=>null,setRenderTarget(){},getMRT:()=>null,setMRT(){},autoClear:true};
+history.quad.render=()=>{};
+history.renderFrame(renderer,16,8);
+assert.equal(history.frames,1);assert.equal(history.valid.value,true);
+assert.notEqual(output.value,original,'history must publish the newly written target');
+assert.equal(saved.value,output.value,'cloned sampling nodes must follow the current target');
+const previous=output.value;history.renderFrame(renderer,16,8);
+assert.notEqual(output.value,previous);assert.equal(history.frames,2);
+history.reset('lighting-change');assert.equal(history.valid.value,false);
+history.renderFrame(renderer,8,4);assert.deepEqual(history.size,[8,4]);
+history.dispose();
+console.log('GI history settings, reset and alternating texture identity pass');

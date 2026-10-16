@@ -3377,7 +3377,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="field"><label for="scene-gi-steps">Steps</label><input id="scene-gi-steps" type="number" min="1" step="1" value="8"></div>
         <div class="field"><label for="scene-gi-backfaceLighting" title="Contribution from surfaces whose normals face away from the receiving point. Zero ignores their bounce.">Back-face bounce</label><input id="scene-gi-backfaceLighting" type="number" min="0" step="0.01" value="0"></div>
         <div class="field"><label for="scene-gi-denoise" title="Spatial filter radius for GI and AO. Zero displays the unfiltered estimates.">GI/AO filter radius</label><input id="scene-gi-denoise" type="number" min="0" step="0.5" value="3"></div>
+        <div class="field"><label for="scene-gi-temporal" title="Reuse indirect lighting from matching surfaces in previous frames. Experimental; direct lighting and geometry stay current.">Temporal GI</label><input id="scene-gi-temporal" type="checkbox"></div>
         <details><summary>Sampling and filter edges</summary>
+          <div class="field"><label for="scene-gi-temporalWeight" title="Maximum previous-frame fraction after surface rejection and current-light clamping. Larger values settle more slowly.">History blend</label><input id="scene-gi-temporalWeight" type="number" min="0" max="0.99" step="0.01" value="0.9"></div>
           <div class="field"><label for="scene-gi-expFactor" title="Larger values concentrate samples nearer the receiving surface; sample count stays the same.">Sample concentration</label><input id="scene-gi-expFactor" type="number" min="0.01" step="0.05" value="2"></div>
           <div class="field"><label for="scene-gi-screenSpaceSampling" title="Use a radius measured in screen space rather than world space.">Screen-space radius</label><input id="scene-gi-screenSpaceSampling" type="checkbox"></div>
           <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
@@ -11572,7 +11574,7 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
+    const graphKey = `${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11607,7 +11609,7 @@ async function initScene() {
   }
   updateSceneGI = value => {
     const next = resolveSceneGIControlState(value);
-    const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0);
+    const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0) || next.temporal!==sceneGISettings.temporal;
     sceneGI.setSettings(next);
     sceneGI.setEstimatorSettings(next.estimator);
     sceneGISettings = next;
