@@ -57,15 +57,15 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 
 `glance`, `watch` and `live` draw the scene from the sub's own camera into their own targets, with the exact matrices of the sub's view, through the page's tone mapping and colour space. The person's view is never borrowed or held, so these can run while someone works. A glance draws the scene's meshes, lights and background. It leaves out the fire volume, local water and ambient occlusion, and says so in `omitted`; `snap` draws every layer. Each glance keeps a pick map with depth, drawn in the same task with the same matrices.
 
-`watch` is a film strip: a glance on each tick of a window (`--seconds`, default 5; `--fps`, default 2; 320 pixels on the long side). Each frame is drawn from wherever the sub is at that moment and keeps its own view, camera, pick map and named objects, so `pick X Y --picture RECORD.json --frame N` works on any frame. Depth is kept only with `--depth`. `--frames` keeps each frame as its own picture beside the contact sheet. Draws never stack. A frame that runs past its tick moves the next frame to the following tick, and the record counts the ticks missed (`missedTicks`). Other vantage commands wait until the watch ends.
+`watch` is a film strip: a glance at the start of each frame interval of a window (`--seconds`, default 5; `--fps`, default 2; 320 pixels on the long side), so a 2-second watch at 2 fps draws at 0, 500, 1000 and 1500 ms. Each frame is drawn from wherever the sub is at that moment and keeps its own view, size, camera, pick map and named objects, so `pick X Y --picture RECORD.json --frame N` works on any frame, even after the viewport was resized. Depth is kept only with `--depth`. `--frames` keeps each frame as its own picture beside the contact sheet. A frame is drawn only within its own interval and never after the deadline. Draws never stack: when a draw or a late timer passes a frame's interval, that frame is skipped and counted in `missedTicks`. The watch lasts its whole window. Other vantage commands wait until it ends. `--seconds` plus `--timeout` may not exceed 3600, the longest the server holds a command.
 
-`--until EVENT` ends the strip one frame after the page announces `kaminos:EVENT`, so the last frame shows what followed. A tool announces something that happened with:
+`--until EVENT` ends the strip as soon as the page announces `kaminos:EVENT`, with one more frame drawn at once, so the last frame shows what followed. The event is heard at any time until the deadline. A tool announces something that happened with:
 
 ```js
 window.dispatchEvent(new CustomEvent('kaminos:cut-complete', {detail: {pieces: 2}}));
 ```
 
-The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data. Without the event, the strip ends with its window (`ended: "window"`).
+The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data: null, booleans, finite numbers, strings, arrays and plain objects. Any other detail (a Map, a Date, a function, NaN, a missing array entry) is not altered into something else; `detail` is null and `detailError` says what could not be carried. Without the event, the strip ends with its window (`ended: "window"`).
 
 `live on` draws a small glance into the sub's panel on a timer (`--fps`, default 4) in place of the last picture, until `live off`. A tick is skipped while the tab is hidden, while a picture holds the camera, or while the previous frame is still being read back. `live off` reports the frames drawn, the ticks skipped and the last draw time.
 

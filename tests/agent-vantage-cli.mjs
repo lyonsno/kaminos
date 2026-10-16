@@ -290,3 +290,33 @@ test('watch asks for a strip over its window and waits that long beyond the usua
   assert.deepEqual(received[0].body.args, {pilot: 'bebop', seconds: 12, fps: 3, until: 'cut-complete', maxSize: 320, cell: 240, frames: true, map: true, depth: false});
   assert.equal(received[0].body.timeoutMs, 42000);
 });
+
+test('a pick on a later watch frame uses that frame\'s own size', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const optics = {projection: Array.from({length: 16}, () => 1), viewInverse: Array.from({length: 16}, () => 1)};
+  const recordPath = path.join(out, 'watch.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'watch', image: {width: 320, height: 180}, optics,
+    frames: [{index: 0, optics, image: {width: 320, height: 180}, pickMap: pickMap([kilnRow], '0 0 8')},
+      {index: 1, optics, image: {width: 180, height: 320}, pickMap: pickMap([rocksRow], '0 0 8')}]}}));
+  const picked = await run(['--server', url, 'pick', '90', '240', '--picture', recordPath, '--frame', '2']);
+  assert.equal(picked.code, 0, picked.stderr);
+  assert.deepEqual(received[0].body.args.pictured.pixel, [2, 1], 'the pixel at half its width and three quarters of its height');
+  assert.deepEqual(received[0].body.args.at, [0.625, 0.75]);
+  const now = await run(['--server', url, 'pick', '90', '240', '--picture', recordPath, '--frame', '2', '--now']);
+  assert.equal(now.code, 0, now.stderr);
+  assert.deepEqual(received[1].body.args.at, [0.5, 0.75]);
+});
+
+test('a watch longer than the server will hold a command is refused before it is sent', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  t.after(() => server.close());
+  const tooLong = await run(['--server', url, 'watch', '--seconds', '3590']);
+  assert.equal(tooLong.code, 2);
+  assert.match(tooLong.stderr, /3600/);
+  assert.equal(received.length, 0);
+  const fits = await run(['--server', url, 'watch', '--seconds', '3590', '--timeout', '10']);
+  assert.equal(fits.code, 0, fits.stderr);
+  assert.equal(received[0].body.timeoutMs, 3600000);
+});

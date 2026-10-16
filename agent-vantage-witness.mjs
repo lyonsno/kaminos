@@ -351,7 +351,7 @@ try {
   check('the strip shows the red box moving', !!firstRed && !!lastRed && Math.hypot(lastRed.x - firstRed.x, lastRed.y - firstRed.y) > 0.05, {firstRed, lastRed});
   check('and the operator\'s frame rate holds while it watches', during.fps >= 0.8 * fpsOff, {fpsOff, fpsDuring: during.fps});
   const windowed = await vantageOk('watch', '--seconds', '1', '--fps', '2', '--name', 'watch-window');
-  check('without --until a watch ends at the end of its window', windowed.result.ended === 'window' && windowed.result.frames.length === 3
+  check('without --until a watch ends at the end of its window', windowed.result.ended === 'window' && windowed.result.frames.length === 2
     && windowed.result.frames.every((frame, i) => Math.abs(frame.atMs - i * 500) < 250), windowed.result.frames.map(frame => frame.atMs));
 
   report.phase = 'map'; save();

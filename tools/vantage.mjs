@@ -135,7 +135,8 @@ function pickArgs(rest, options, pilot) {
   const source = frame !== null ? result.frames?.[frame - 1] : ['burst', 'watch'].includes(result.kind) ? result.frames?.[0] : result;
   const optics = frame === null ? result.optics : source?.optics;
   if (!optics) throw new Exit(2, frame === null ? `${options.picture} records no camera; take the picture again with this version` : `${options.picture} has no frame ${frame} with a camera`);
-  const {width, height} = result.image ?? {};
+  // A watch frame keeps its own size: the viewport can be resized during a watch.
+  const {width, height} = (frame === null ? null : source?.image) ?? result.image ?? {};
   if (!(width > 0 && height > 0)) throw new Exit(2, `${options.picture} records no picture size`);
   if (options.now) return {pilot, from: 'sub', at: [x / width, y / height], optics};
   const map = source?.pickMap;
@@ -282,7 +283,7 @@ function summarize(command, record) {
     if (result.objects?.occlusion === 'not-tested') lines.push('  (in view means inside the frame by bounds; something nearer may hide it)');
     if (result.frames) lines.push(`  frames    ${result.frames.map(frame => `+${Math.round(frame.atMs)} ms`).join(', ')}`);
     if (result.kind === 'watch') {
-      lines.push(`  ended     ${result.ended === 'event' ? `one frame after kaminos:${result.event?.name} at +${Math.round(result.event?.atMs)} ms` : `at the end of its ${result.requested?.seconds ?? "?"} s window`}${result.missedTicks ? `; ${result.missedTicks} ticks missed while frames were drawn` : ''}`);
+      lines.push(`  ended     ${result.ended === 'event' ? `one frame after kaminos:${result.event?.name} at +${Math.round(result.event?.atMs)} ms` : `at the end of its ${result.requested?.seconds ?? "?"} s window`}${result.missedTicks ? `; ${result.missedTicks} ticks missed (a draw or a late timer passed them)` : ''}`);
       if (result.event?.detail != null) lines.push(`  event     ${JSON.stringify(result.event.detail)}`);
     }
     const maps = result.frames ? result.frames : [result];
@@ -327,6 +328,8 @@ async function main(argv) {
   const timeout = Number(options.timeout ?? 30);
   if (!(timeout > 0)) throw new Exit(2, '--timeout must be a positive number of seconds');
   const extra = checked.command === 'burst' ? checked.args.count * checked.args.interval / 1000 : checked.command === 'watch' ? checked.args.seconds : 0;
+  // The server holds a command for at most an hour.
+  if (timeout + extra > 3600) throw new Exit(2, `${checked.command === 'watch' ? '--seconds' : 'The command\'s duration'} plus --timeout (${timeout} s) is ${timeout + extra} s; the server holds a command for at most 3600 s`);
   const body = {command: checked.command, args: checked.args, timeoutMs: Math.round((timeout + extra) * 1000), ...(options.page ? {page: options.page} : {})};
   const sentAt = new Date().toISOString();
   const {status, payload} = await request(server, 'POST', '/api/vantage/command', body);
