@@ -590,6 +590,7 @@ test('click selection waits while a picture holds the viewport', () => {
   const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
+    pickWaterDomainFromViewportPointer: () => false,
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
     clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
   const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
