@@ -159,3 +159,13 @@ test('WGSL: the kernel module carries the same slope, period and no trigonometri
   const source = readFileSync(new URL('../volume-wavelet-turbulence.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /Math\.(?:sin|cos|tan)\b/);
 });
+
+test('cockpit: the two wavelet controls exist, are in the control table, and the snapshot builder forwards them', () => {
+  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  for (const id of ['volume-wavelet-turbulence', 'volume-wavelet-octaves']) assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
+  assert.match(index, /\{ key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence'/);
+  assert.match(index, /\{ key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves'/);
+  // The live capture of 2026-10-16 found the sliders moving while the kernel stayed at gain 0:
+  // the snapshot builder filtered the table to keys starting with `physical`.
+  assert.match(index, /REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS\.filter\(field => field\.key\.startsWith\('physical'\) \|\| field\.key\.startsWith\('wavelet'\)\)/, 'the snapshot builder forwards the wavelet keys');
+});
