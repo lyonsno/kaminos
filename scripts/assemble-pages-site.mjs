@@ -57,7 +57,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   }
   for(const dir of ["images","examples","icons"])fs.cpSync(path.join(repoRoot,"demos","material-photo",dir),path.join(photograph,dir),{recursive:true});
   fs.writeFileSync(path.join(photograph,"deployment.js"),`export const GENERATION_AVAILABLE=${!!supermatWeightsUrl};\nexport const SUPERMAT_WEIGHTS_URL=${JSON.stringify(supermatWeightsUrl)};\n`);
-  for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs",
+  for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs","scene-gi-history.mjs",
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
     "lib/addons/tsl/display/SSGINode.js","lib/addons/tsl/display/SSGINode.LICENSE","lib/addons/tsl/display/DenoiseNode.js","lib/addons/math/SimplexNoise.js",
