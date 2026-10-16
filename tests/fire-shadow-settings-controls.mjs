@@ -5,7 +5,7 @@ class Element {
  constructor(tag){this.tagName=tag;this.children=[];this.listeners={};this.attrs={};this._value='';this.assignments=0;}
  append(...children){this.children.push(...children);}
  setAttribute(key,value){this.attrs[key]=value;}
- addEventListener(key,fn){this.listeners[key]=fn;}
+ addEventListener(key,fn,capture=false){const previous=this.listeners[key];this.listeners[key]=async()=>{let stopped=false;const event={stopImmediatePropagation(){stopped=true;}};if(capture){await fn(event);if(!stopped)await previous?.();}else{await previous?.();await fn(event);}};}
  set value(value){this._value=value;this.assignments++;}get value(){return this._value;}
 }
 let state={shadowSampling:'complementary',pointCount:4,pointSampling:'paired',shadowResolution:48,blockerSamples:3,filterSamples:3,shadowImplementation:'shared',shadowGrain:'world',shadowWorldCellSize:.02};
@@ -24,6 +24,6 @@ assert.equal(controls.filter(v=>v.type==='range').length,0,'quality uses a singl
 assert.equal(installed.length,4,'world-cell size and all three cost controls use the shared widget');
 assert(controls.some(v=>v.value==='screen-animated'),'animated screen grain is exposed');
 const cell=controls.find(v=>v.attrs['aria-label']==='World grain cell size');
-cell.value='0';await cell.listeners.change();
+await cell.listeners.focus();cell.value='0';await cell.listeners.change();
 assert.equal(cell.value,'.02'.replace(/^\./,'0.'),'rejected edits restore the effective value');
 console.log('PASS status refresh preserves pending controls and native numeric widgets are installed');
