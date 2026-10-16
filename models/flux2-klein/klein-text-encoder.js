@@ -61,6 +61,9 @@ export class KleinTextEncoder {
     }
   }
 
+  // Free the activations and the weights; the instance is unusable afterwards.
+  destroy() { for (const b of Object.values(this.act ?? {})) b.destroy(); this.act = null; this.unloadWeights(); }
+
   // Free the weights but keep the compiled pipelines, so loadBundles can bring them back.
   unloadWeights() { for (const w of Object.values(this.weights)) w.buf?.destroy(); this.weights = {}; }
   get weightsResident() { return Object.values(this.weights).some(w => w.buf); }
