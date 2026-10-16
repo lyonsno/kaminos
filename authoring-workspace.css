@@ -329,3 +329,8 @@ body[data-workspace=workbench] #authoring-gizmo-slot button, body[data-workspace
 
 /* While Workbench object controls borrow the list into the left panel, the right-hand outliner would be an empty box. */
 body.experiment-workspace.outline-in-experiment #authoring-hierarchy, body.experiment-workspace.outline-in-experiment .authoring-outline-splitter { display:none; }
+
+.scene-visibility-eye {flex:none;display:grid;place-items:center;width:25px;height:24px;padding:3px!important;border:0!important;background:transparent!important;color:#d8dce2;cursor:pointer;border-radius:3px}
+.scene-visibility-eye svg {width:18px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4}
+.scene-visibility-eye[aria-pressed=false] {color:#747a84}
+.scene-visibility-eye:hover,.scene-visibility-eye:focus-visible {color:white;background:#414650!important;outline:1px solid #7798c2}
