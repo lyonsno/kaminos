@@ -1490,3 +1490,45 @@ test('while the live view runs it takes the last picture\'s place, so the panel 
   assert.equal(page.live.hidden, true);
   assert.equal(page.picture.hidden, false, 'and the last picture returns when it stops');
 });
+
+test('the panel header names what the panel shows, through map repaints, new pictures and stopping', async () => {
+  const frame = options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})});
+  const page = installedPage({subs: [BEBOP], glance: {draw: frame}});
+  const flush = () => new Promise(done => setTimeout(done, 0));
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  const still = page.title.textContent;
+  assert.match(still, /^Bebop · glance/);
+  await page.vantage.run('live', {on: true, fps: 4});
+  const tick = () => page.intervals.find(item => item.ms === 250 && !item.cleared).fn();
+  tick(); await flush();
+  assert.equal(page.title.textContent, 'Bebop · live');
+  page.projection = opticsOf({position: [1, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
+  page.refresh();
+  assert.equal(page.title.textContent, 'Bebop · live', 'a map repaint keeps the live title');
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.equal(page.title.textContent, 'Bebop · live', 'a picture arriving while live keeps it too');
+  const newer = page.title.textContent;
+  await page.vantage.run('live', {on: false});
+  assert.equal(page.picture.hidden, false);
+  assert.match(page.title.textContent, /^Bebop · glance/, 'stopping restores the picture and its own title');
+  assert.notEqual(page.title.textContent, newer);
+});
+
+test('restarting the live view never draws over a readback still in flight', async () => {
+  const draws = [], readbacks = [];
+  const glance = {draw(options) {
+    draws.push(options);
+    return {ready: new Promise(done => readbacks.push(() => done({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})))};
+  }};
+  const page = installedPage({subs: [BEBOP], glance});
+  const active = () => page.intervals.filter(item => !item.cleared && item.ms !== 400 && item.ms !== 1000).at(-1);
+  for (const fps of [4, 6, 8]) { await page.vantage.run('live', {on: true, fps}); active().fn(); }
+  await page.vantage.run('live', {on: false});
+  await page.vantage.run('live', {on: true, fps: 4});
+  active().fn();
+  assert.equal(draws.length, 1, 'one draw outstanding across restarts');
+  readbacks[0](); await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.dataset.frame, undefined, 'a frame from an earlier stream is not shown');
+  active().fn();
+  assert.equal(draws.length, 2, 'once it settles the current stream draws');
+});

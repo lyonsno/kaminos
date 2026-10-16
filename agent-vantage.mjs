@@ -684,8 +684,12 @@ export function installVantageHud({document, viewport}) {
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'click', 'dblclick', 'wheel']) root.addEventListener(type, event => event.stopPropagation());
   const mapCanvas = root.querySelector('canvas'), liveCanvas = root.querySelector('.vantage-live'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
   // While the live view runs it stands in for the last picture, which returns when it stops.
-  let dismissed = false, liveFrames = 0, hasPicture = false, liveOn = false;
-  const show = () => { root.hidden = dismissed || (mapCanvas.hidden && picture.hidden && liveCanvas.hidden); };
+  // The header always names what the panel shows: the live view, else the last picture, else the map.
+  let dismissed = false, liveFrames = 0, hasPicture = false, liveOn = false, pictureTitle = '', liveTitle = '';
+  const show = () => {
+    title.textContent = liveOn ? liveTitle : hasPicture ? pictureTitle : mapCanvas.hidden ? 'Sub' : 'Sub · map';
+    root.hidden = dismissed || (mapCanvas.hidden && picture.hidden && liveCanvas.hidden);
+  };
   root.querySelector('button').addEventListener('click', () => { dismissed = true; show(); });
   viewport.append(root);
   return {
@@ -696,7 +700,6 @@ export function installVantageHud({document, viewport}) {
         const context = mapCanvas.getContext('2d');
         context.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
         context.drawImage(canvas, 0, 0, mapCanvas.width, mapCanvas.height);
-        if (picture.hidden) title.textContent = 'Sub · map';
       }
       show();
     },
@@ -705,7 +708,7 @@ export function installVantageHud({document, viewport}) {
       picture.src = image.dataUrl;
       hasPicture = true;
       picture.hidden = liveOn;
-      title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
+      pictureTitle = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
       show();
     },
     live(frame, ImageData, label = 'Sub') {
@@ -713,7 +716,7 @@ export function installVantageHud({document, viewport}) {
       if (liveCanvas.width !== frame.width || liveCanvas.height !== frame.height) { liveCanvas.width = frame.width; liveCanvas.height = frame.height; }
       liveCanvas.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
       liveCanvas.dataset.frame = String(++liveFrames);
-      if (!liveOn) title.textContent = `${label} · live`;
+      liveTitle = `${label} · live`;
       liveOn = true;
       liveCanvas.hidden = false;
       picture.hidden = true;
@@ -1033,12 +1036,13 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   // The live view: a small glance from the sub's camera on a timer. A tick is
   // skipped while the tab is hidden, while a picture holds the camera, or while
   // the previous frame is still being read back, so it never queues work.
-  let live = null;
+  // One live draw at most is ever in flight, whichever stream issued it.
+  let live = null, liveInFlight = false;
   const clock = () => window.performance?.now?.() ?? Date.now();
   const liveState = () => (live ? {on: true, pilot: live.pilot, fps: live.fps, frames: live.frames, skipped: live.skipped, drawMs: live.drawMs} : {on: false});
   const liveTick = () => {
     if (!live) return;
-    if (live.pending || document.visibilityState !== 'visible' || pilot.isCapturing()) { live.skipped++; return; }
+    if (liveInFlight || document.visibilityState !== 'visible' || pilot.isCapturing()) { live.skipped++; return; }
     const record = cameras.read().cameras.find(item => item.id === vantageCameraId(live.pilot));
     if (!record) { stopLive(); return; }
     const ratio = viewport.clientWidth / viewport.clientHeight || 16 / 9, width = 320, height = Math.max(1, Math.round(width / ratio));
@@ -1047,14 +1051,14 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     let view;
     try { view = glance.draw({optics, width, height, hide: [record.id]}); }
     catch { current.skipped++; return; }
-    current.pending = true;
+    liveInFlight = true;
     current.drawMs = clock() - started;
     view.ready.then(frame => { if (live === current) { hud.live(frame, window.ImageData, record.label); current.frames++; } }, () => { current.skipped++; })
-      .finally(() => { current.pending = false; });
+      .finally(() => { liveInFlight = false; });
   };
   function startLive({pilot: name, fps}) {
     stopLive();
-    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, pending: false, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
+    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
     return liveState();
   }
   function stopLive() {
