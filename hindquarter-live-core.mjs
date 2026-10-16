@@ -18,10 +18,14 @@ function rigidQuaternion(e){
     [(e[1]-e[4])/d,(e[8]+e[2])/d,(e[9]+e[6])/d,v];
   const norm=Math.hypot(...q);return q.map(x=>x/norm);
 }
+export function transportDualQuaternions(matrices){
+ const real=matrices.map(rigidQuaternion),dual=matrices.map((e,i)=>multiply([0,e[12],e[13],e[14]],real[i]).map(x=>x*.5));
+ return {real,dual};
+}
 export function skinTransport(rest,weights,matrices){
   const channels=matrices.length,n=rest.length/3;
   if(!Number.isInteger(n)||weights.length!==n*channels||!channels)throw Error('Incomplete transport arrays');
-  const real=matrices.map(rigidQuaternion),dual=matrices.map((e,i)=>multiply([0,e[12],e[13],e[14]],real[i]).map(x=>x*.5));
+  const {real,dual}=transportDualQuaternions(matrices);
   const output=new Float32Array(rest.length);
   for(let v=0;v<n;v++){
     let dominant=0,total=0;
