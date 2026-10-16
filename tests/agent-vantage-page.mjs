@@ -1732,3 +1732,26 @@ test('event detail is copied once from its own data, and what cannot be copied i
     assert.deepEqual(strip.event.detail, expected);
   }
 });
+
+test('event detail keeps an own __proto__ key as data, and rejects array keys and numbers JSON would drop or change', async () => {
+  const watchFor = async detail => {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    return (await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false})).event;
+  };
+  for (const text of ['{"pieces":2,"__proto__":{"affected":"arch"}}', '{"nested":{"__proto__":{"affected":"arch"}}}']) {
+    const event = await watchFor(JSON.parse(text));
+    assert.equal(event.detailError, undefined);
+    assert.equal(JSON.stringify(event.detail), text, 'the detail serializes exactly as it was sent');
+    const holder = event.detail.nested ?? event.detail;
+    assert.ok(Object.hasOwn(holder, '__proto__'), 'as an own key');
+    assert.equal(Object.getPrototypeOf(holder), Object.prototype, 'without changing the copy\'s prototype');
+  }
+  for (const detail of [Object.assign([1, 2], {'-1': 'arch'}), Object.assign([1, 2], {'4294967295': 'arch'}), {speed: -0}]) {
+    const event = await watchFor(detail);
+    assert.equal(event.name, 'settled', 'the event still counts');
+    assert.equal(event.detail, null);
+    assert.equal(typeof event.detailError, 'string');
+  }
+});

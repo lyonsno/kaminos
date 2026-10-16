@@ -65,7 +65,7 @@ A command waits for the page for `--timeout` seconds. If the page never took it,
 window.dispatchEvent(new CustomEvent('kaminos:cut-complete', {detail: {pieces: 2}}));
 ```
 
-The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data: null, booleans, finite numbers, strings, arrays and plain objects. Detail is copied once from its own data properties. Any other detail (a Map, a Date, a function, NaN, a getter, a symbol key, a missing array entry or an extra property on an array) is not altered into something else: the event still counts, `detail` is null and `detailError` says what could not be carried. Without the event, the strip ends with its window (`ended: "window"`).
+The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data: null, booleans, finite numbers, strings, arrays and plain objects. Detail is copied once from its own data properties. Any other detail (a Map, a Date, a function, NaN or -0, a getter, a symbol key, a missing array entry or a property on an array that is not an entry) is not altered into something else: the event still counts, `detail` is null and `detailError` says what could not be carried. Without the event, the strip ends with its window (`ended: "window"`).
 
 `live on` draws a small glance into the sub's panel on a timer (`--fps`, default 4) in place of the last picture, until `live off`. A tick is skipped while the tab is hidden, while a picture holds the camera, or while the previous frame is still being read back. `live off` reports the frames drawn, the ticks skipped and the last draw time.
 
