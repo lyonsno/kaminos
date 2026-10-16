@@ -23,7 +23,7 @@ export default {id:'curved-fuse',title:'Curved fuse propagation',async create({h
     if(!Number.isFinite(radius)||radius<=0)throw Error('Fuse radius must be positive');
     const geometry=new THREE.TubeGeometry(curve,FUSE_SAMPLES-1,radius,10,false);
     const material=new THREE.MeshStandardNodeMaterial({roughness:.82,metalness:0});
-    const mesh=new THREE.Mesh(geometry,material);mesh.name='Curved fuse';mesh.position.fromArray(inputs.position??[0,-.35,0]);
+    const mesh=new THREE.Mesh(geometry,material);mesh.name='Curved fuse';mesh.position.fromArray(inputs.position??[.1,.15,.02]);
     asset=await session.attach(mesh,{owned:true,metadata:{type:'experiment-mesh',label:'Curved fuse',source:FUSE_IDENTITY,collision:{enabled:true,domainId:'flame-field'}}});
     host.scene.refreshPresentation(asset);globalThis.kaminosSceneCollision.set(true);
     field=await createFuseGpu({renderer,mesh,points:curve.getSpacedPoints(FUSE_SAMPLES-1),length:curve.getLength(),radius});
@@ -33,7 +33,7 @@ export default {id:'curved-fuse',title:'Curved fuse propagation',async create({h
     material.colorNode=T.mix(virgin,T.vec3(.008,.009,.008),T.smoothstep(.02,.5,s.y));
     material.roughnessNode=T.mix(T.float(.82),T.float(.95),s.y.clamp(0,1));
     material.emissiveNode=T.vec3(1,.12,.008).mul(s.x.sub(.5).max(0).mul(s.z.clamp(0,1).mul(3).add(.15)));
-    indicator=createLogBurnIndicator({object:mesh,fields:[field],document:host.controls.document});
+    indicator=createLogBurnIndicator({object:mesh,fields:[field],document:host.controls.document,scale:.5});
     gas=await createLogGasSourceGpu(context);
     const exists=()=>host.scene.objects().some(r=>r.object===mesh);
     const assertActive=()=>{if(disposed||!exists())throw Error('Fuse removed or disposed');if(!host.fire.read().authoredPresent)throw Error('Lighter source removed');};
