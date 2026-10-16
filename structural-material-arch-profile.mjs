@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { rasterizeArchTriangles, rasterizeArchTriangleDepthEnvelope } from './structural-material-arch-core.js';
+import { Matrix4, Vector3 } from 'three';
 
-export function readArchGlbTriangles(bytes) {
+export function readArchGlbTriangles(bytes, { singleRigidNode = false } = {}) {
   if (!Buffer.isBuffer(bytes) || bytes.length < 28 || bytes.toString('ascii', 0, 4) !== 'glTF' ||
       bytes.readUInt32LE(4) !== 2 || bytes.readUInt32LE(8) !== bytes.length) {
     throw new Error('invalid GLB v2 container');
@@ -18,8 +19,27 @@ export function readArchGlbTriangles(bytes) {
   if (bytes.readUInt32LE(binaryHeader + 4) !== 0x004e4942 || binaryStart + binaryLength > bytes.length) {
     throw new Error('invalid GLB binary chunk');
   }
+  let sourceNodeMatrix = null;
   if (gltf.nodes?.some(node => node.matrix || node.translation || node.rotation || node.scale)) {
-    throw new Error('arch GLB extraction does not admit node transforms');
+    if (!singleRigidNode) throw new Error('arch GLB extraction does not admit node transforms');
+    const node = gltf.nodes[0], scene = gltf.scenes?.[gltf.scene ?? 0];
+    if (gltf.nodes.length !== 1 || node.mesh !== 0 || node.children?.length || node.skin !== undefined ||
+        gltf.meshes?.length !== 1 || scene?.nodes?.length !== 1 || scene.nodes[0] !== 0 || gltf.animations?.length) {
+      throw new Error('Stone transform admission requires a single root mesh node');
+    }
+    const m = node.matrix;
+    if (!Array.isArray(m) || m.length !== 16 || !m.every(Number.isFinite) ||
+        node.translation || node.rotation || node.scale || m[3] !== 0 || m[7] !== 0 || m[11] !== 0 || m[15] !== 1) {
+      throw new Error('Stone requires an explicit finite proper rigid node matrix');
+    }
+    const axes = [0,4,8].map(i => new Vector3(...m.slice(i,i+3)));
+    const matrix = new Matrix4().fromArray(m);
+    if (axes.some(v => Math.abs(v.lengthSq()-1)>1e-6) ||
+        Math.abs(axes[0].dot(axes[1]))>1e-6 || Math.abs(axes[0].dot(axes[2]))>1e-6 ||
+        Math.abs(axes[1].dot(axes[2]))>1e-6 || Math.abs(matrix.determinant()-1)>1e-6) {
+      throw new Error('Stone requires a proper rigid node matrix (no scale, shear, or reflection)');
+    }
+    sourceNodeMatrix = [...m];
   }
   const primitives = gltf.meshes?.flatMap(mesh => mesh.primitives || []) || [];
   if (primitives.length !== 1 || (primitives[0].mode === undefined ? 4 : primitives[0].mode) !== 4) {
@@ -52,6 +72,7 @@ export function readArchGlbTriangles(bytes) {
     ? bytes.readUInt32LE(indicesStart + index * 4)
     : bytes.readUInt16LE(indicesStart + index * 2);
   const vertices = [];
+  const sourceMatrix = sourceNodeMatrix ? new Matrix4().fromArray(sourceNodeMatrix) : null;
   let minX = Infinity;
   let minY = Infinity;
   let minZ = Infinity;
@@ -59,10 +80,11 @@ export function readArchGlbTriangles(bytes) {
   let maxY = -Infinity;
   let maxZ = -Infinity;
   for (let index = 0; index < positions.count; index += 1) {
-    const x = bytes.readFloatLE(positionsStart + index * 12);
-    const y = bytes.readFloatLE(positionsStart + index * 12 + 4);
-    const z = bytes.readFloatLE(positionsStart + index * 12 + 8);
+    let x = bytes.readFloatLE(positionsStart + index * 12);
+    let y = bytes.readFloatLE(positionsStart + index * 12 + 4);
+    let z = bytes.readFloatLE(positionsStart + index * 12 + 8);
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) throw new Error('arch GLB position is not finite');
+    if (sourceMatrix) [x,y,z] = new Vector3(x,y,z).applyMatrix4(sourceMatrix).toArray();
     vertices.push([x, y, z]);
     minX = Math.min(minX, x);
     minY = Math.min(minY, y);
@@ -93,6 +115,7 @@ export function readArchGlbTriangles(bytes) {
   const boundaryEdges = incidences.filter(count => count === 1).length;
   const nonManifoldEdges = incidences.filter(count => count > 2).length;
   return {
+    vertices, sourceNodeMatrix,
     triangles,
     bounds: { min: [minX, minY], max: [maxX, maxY] },
     bounds3d: { min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },

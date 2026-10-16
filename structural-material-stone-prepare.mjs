@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import Module from 'manifold-3d';
 import path from 'node:path';
 import { readArchGlbTriangles } from './structural-material-arch-profile.mjs';
-import {BufferGeometry,Float32BufferAttribute,Vector3} from 'three';
+import {BufferGeometry,Float32BufferAttribute,Vector3,Matrix4} from 'three';
 
 const wasm = await Module();
 wasm.setup();
@@ -12,7 +12,7 @@ export const STONE_PREPARATION_ROUTE = 'kaminos.imported-solid.grid-intersection
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export function prepareStoneFromGlb(bytes, { size, cellSize, surfaceTolerance=0 } = {}) {
-  const extracted = readArchGlbTriangles(bytes);
+  const extracted = readArchGlbTriangles(bytes,{singleRigidNode:true});
   if(!Number.isFinite(surfaceTolerance)||surfaceTolerance<0)throw new Error('Finite nonnegative mechanical surface tolerance required');
   if (!Array.isArray(size) || size.length !== 3 || !size.every(n => Number.isFinite(n) && n > 0) || !(cellSize > 0) || !Number.isFinite(cellSize)) throw new Error('Positive specimen dimensions and physical cell size required');
   const jsonLength = bytes.readUInt32LE(12), gltf = JSON.parse(bytes.toString('utf8', 20, 20 + jsonLength));
@@ -49,10 +49,12 @@ export function prepareStoneFromGlb(bytes, { size, cellSize, surfaceTolerance=0 
   const center = bounds.min.map((v, a) => (v + bounds.max[a]) / 2);
   const normalize = vector => { const n = Math.hypot(...vector); if (!(n > 0)) throw new Error('Degenerate normal/tangent'); return vector.map(v => v / n); };
   const properties = new Float32Array(positions.length * 12);
-  positions.forEach((p, i) => properties.set([
+  const sourceMatrix=extracted.sourceNodeMatrix?new Matrix4().fromArray(extracted.sourceNodeMatrix):null;
+  const direction=v=>sourceMatrix?new Vector3(...v).transformDirection(sourceMatrix).toArray():v;
+  extracted.vertices.forEach((p, i) => properties.set([
     ...p.map((v, a) => (v - center[a]) * scale[a]),
-    ...normalize(normals[i].map((v, a) => v / scale[a])), ...uvs[i],
-    ...normalize(tangents[i].slice(0, 3).map((v, a) => v * scale[a])), tangents[i][3],
+    ...normalize(direction(normals[i]).map((v, a) => v / scale[a])), ...uvs[i],
+    ...normalize(direction(tangents[i].slice(0, 3)).map((v, a) => v * scale[a])), tangents[i][3],
   ], i * 12));
   const sourceId = Manifold.reserveIDs(1);
   const input = new Mesh({ numProp: 12, vertProperties: properties, triVerts: indices, runIndex: new Uint32Array([0, indices.length]), runOriginalID: new Uint32Array([sourceId]) });
@@ -67,6 +69,7 @@ export function prepareStoneFromGlb(bytes, { size, cellSize, surfaceTolerance=0 
     const preparedVolume=solid.volume(),relativeVolumeError=Math.abs(preparedVolume-referenceVolume)/referenceVolume;
     const componentVolumes=value=>{const parts=value.decompose();try{return parts.map(p=>p.volume());}finally{for(const p of parts)p.delete();}};
     const mechanicalPreparation={route:surfaceTolerance>0?'manifold-3.5.4-simplify-within-tolerance-v1':'manifold-3.5.4-source-v1',sourceSha256:hash(bytes),surfaceTolerance,referenceVolume,preparedVolume,relativeVolumeError,referenceTriangles:reference.numTri(),preparedTriangles:solid.numTri(),referenceComponentVolumes:componentVolumes(reference),preparedComponentVolumes:componentVolumes(solid)};
+    if(extracted.sourceNodeMatrix)mechanicalPreparation.sourceNodeMatrix=extracted.sourceNodeMatrix;
     if(!(Number.isFinite(preparedVolume)&&preparedVolume>0&&Number.isFinite(relativeVolumeError))||relativeVolumeError>.01){const error=new Error('Mechanical surface approximation changes admitted volume by over one percent');error.mechanicalPreparation=mechanicalPreparation;throw error;}
     const grid = size.map(s => Math.ceil(s / cellSize)), spacing = size.map((s, a) => s / grid[a]);
     const cells = [], byGrid = new Map();
