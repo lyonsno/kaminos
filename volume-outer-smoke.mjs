@@ -397,6 +397,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
   const writeParams=(dtScale,backtraceScale,buoyancy)=>device.queue.writeBuffer(params,0,new Float32Array([dtScale,backtraceScale,buoyancy,0,...outerMaterialUniformValues(c,materialEffective,dtScale),...outerPhysicsUniformValues(c,physicsEffective)]));
   const optical=device.createTexture({label:'outer smoke optical material',size:c.shape,dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING});owned.push(optical);
   const solids=device.createTexture({label:'outer authored solid',size:c.shape,dimension:'3d',format:'r8uint',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING});owned.push(solids);
+  let activeSolids=solids;
   const layout=device.createBindGroupLayout({entries:[
     {binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'uniform'}},
     ...[1,2,4].map(binding=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:'read-only-storage'}})),
@@ -444,7 +445,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
     const key=`${nearIndex}/${s}/${p}`;if(groups.has(key))return groups.get(key);
     const bindings=[params,nearBuffers[nearIndex],states[s],states[1-s],pressures[p],pressures[1-p]];
     const g=device.createBindGroup({layout,entries:[...bindings.map((b,binding)=>({binding,resource:{buffer:b}})),
-      {binding:6,resource:solids.createView()},{binding:7,resource:optical.createView()},{binding:8,resource:{buffer:pressureStats}},
+      {binding:6,resource:activeSolids.createView()},{binding:7,resource:optical.createView()},{binding:8,resource:{buffer:pressureStats}},
       ...(reactant?[{binding:9,resource:reactantTextures[nearIndex].createView()}]:[])]});groups.set(key,g);return g;
   };
   let current=0,pressureCurrent=0,steps=0,solidRevision=null,pressureCompletion=null;
@@ -456,6 +457,7 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
     else{pass.dispatchWorkgroups(Math.ceil((c.grid+1)/4),Math.ceil((2*c.grid+1)/4),Math.ceil((c.grid+1)/4));}pass.end();
   };
   const clearSolids=()=>{
+    if(activeSolids!==solids){activeSolids=solids;groups.clear();}
     const bytesPerRow=Math.ceil(c.grid/256)*256;
     device.queue.writeTexture({texture:solids},new Uint8Array(bytesPerRow*2*c.grid*c.grid),
       {bytesPerRow,rowsPerImage:2*c.grid},c.shape);solidRevision=null;
@@ -464,7 +466,14 @@ export function createOuterSmoke(device, config, nearGrid, nearBuffers, {reactan
     config:c,optical,solids,shader,clearSolids,encodeGhostSnapshot,
     setReactantEffective(effective){outerMaterialUniformValues(c,effective,1);materialEffective=effective;},
     setPhysicsAppearance(physics){outerPhysicsUniformValues(c,physics);physicsEffective=physics;},
-    setSolids(packed,revision){device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
+    setSolids(packed,revision){if(activeSolids!==solids){activeSolids=solids;groups.clear();}device.queue.writeTexture({texture:solids},packed.data,{bytesPerRow:packed.bytesPerRow,rowsPerImage:packed.rowsPerImage},c.shape);solidRevision=revision;},
+    // Borrow the same resident occupancy used by the joined pressure solver.
+    // Pose changes update its contents without rebuilding pipelines or groups.
+    bindSolids(texture,revision){
+      if(!texture||texture.dimension!=='3d'||!['r8uint','r32uint'].includes(texture.format)||!(texture.usage&GPUTextureUsage.TEXTURE_BINDING)||
+        texture.width!==c.shape[0]||texture.height!==c.shape[1]||texture.depthOrArrayLayers!==c.shape[2])throw Error('exterior solid texture must match current domain');
+      if(activeSolids!==texture){activeSolids=texture;groups.clear();}solidRevision=revision;
+    },
     encode(encoder,nearIndex,{dtScale,backtraceScale},buoyancy=.002){
       assertUsable();projectionOwner='isolated';pressureCompletion=null;
       writeParams(dtScale,backtraceScale,buoyancy);

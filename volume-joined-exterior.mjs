@@ -7,6 +7,7 @@ import {createCompositeProducerGPU} from './volume-composite-producer-gpu.mjs';
 import {createCompositeStorageLayout} from './volume-composite-storage.mjs';
 import {createCompositeStorageGPU,createCompositeLowerFaceGPU} from './volume-composite-storage-gpu.mjs';
 import {createCompositePCGGPU} from './volume-composite-pcg-gpu.mjs';
+import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
 export const JOINED_EXTERIOR_ROUTE='joined-exterior-transport-pressure-v1';
 export function resolveJoinedExteriorGeometry({fineDims,pitch,coarseResolution=32,size=2,reactant=false}) {
   try {
@@ -49,9 +50,9 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
   if(!Number.isInteger(budget)||budget<1)throw Error('positive integer budget required');
   let built=null,destroyed=false,paused=false,lastStep=null,generation=0,topologyGeneration=0;
   let preparationFailure=null;
-  const admissionKey=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.allocation,p.reactant?.effective?.admitted===true,p.solidMask?.revision]);
+  const admissionKey=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.allocation,p.reactant?.effective?.admitted===true,revision(p)]);
   const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.effective?.admitted===true,p.reactant?.allocation??0]);
-  const revision=p=>String(p.solidMask?.revision??'disabled');
+  const revision=p=>JSON.stringify([p.solidMask?.revision??'disabled',p.sceneSolids?.revision??'disabled']);
   const clear=()=>{if(built)for(const r of [...built.owned,...(built.projectionOwned??[])])r.destroy?.();built=null;lastStep=null;};
   function projection(g,fineSolids,coarseSolids){
     const owned=[];
@@ -72,8 +73,25 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
   }
   function bindResident(b,p){
     const fine=p.solidMask?.backend==='gpu'?p.solidMask.texture:b.fineMaskTexture;
+    const scene=p.sceneSolids;
+    let coarse=b.coarseMaskTexture,coarseRevision=b.coarseSolids.revision;
+    let sceneReceipt={backend:'configured-wall',status:'host-authored'};
+    if(scene?.objects?.length){
+      const t=scene.transform,halfWidth=b.g.cellWidth*b.g.shape[0]/2;
+      if(!t||!Number.isFinite(t.scale)||t.scale<=0||t.translate?.length!==3||!t.translate.every(Number.isFinite))throw Error('invalid exterior scene transform');
+      const transform={scale:t.scale*halfWidth,translate:b.g.config.min.map((v,a)=>t.translate[a]+t.scale*(v+halfWidth))};
+      if(!b.sceneProducer){b.sceneProducer=createGpuSceneSolidProducer(device,{grid:b.g.shape[0],gridHeight:b.g.shape[1]});}
+      const geometry=b.sceneProducer.update(scene.objects,transform,{grid:b.g.shape[0],gridHeight:b.g.shape[1]},{wallCells:b.wallCells});
+      const encoder=device.createCommandEncoder({label:'exterior scene solid GPU rebuild'});
+      if(b.sceneProducer.encode(encoder))device.queue.submit([encoder.finish()]);
+      coarse=b.sceneProducer.texture;coarseRevision=JSON.stringify([geometry.revision,b.coarseSolids.revision]);
+      sceneReceipt={backend:'gpu',status:'submitted-unverified',revision:geometry.revision,members:geometry.members,triangleCount:geometry.triangleCount};
+    }
     // Validate before changing any current GPU data or revision identity.
-    b.solver.bindSolids({fine,coarse:b.coarseMaskTexture});
+    b.solver.bindSolids({fine,coarse});
+    b.outer.bindSolids(coarse,coarseRevision);
+    if(!scene?.objects?.length&&b.sceneProducer){b.sceneProducer.destroy();b.sceneProducer=null;}
+    b.summary.solids.coarse=coarseRevision;b.summary.solids.scene=sceneReceipt;
     if(p.solidMask?.backend!=='gpu')writeMask(fine,p.dims,p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1)));
   }
   function prepare(p){
@@ -120,7 +138,6 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       if(residentSolids){
         projected.fineMaskTexture=maskTexture(p.dims,fineSolids.cells,projected.projectionOwned);
         projected.coarseMaskTexture=maskTexture(g.shape,coarseSolids.cells,projected.projectionOwned);
-        bindResident(projected,p);
       }
       const {layout,storage}=projected;
       const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers,{reactantTextures:p.reactant?.textures,reactantEffective:p.reactant?.effective,physicsAppearance:p.physicsAppearance});owned.push(outer);
@@ -136,6 +153,12 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
         solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},pressureTopology:residentSolids?'fixed-resident-mask':'compact-cpu-mask',boundaryVelocity:'stationary-zero',materialMode:g.config.materialMode,lighting:'boundary-incident-continuation',reaction:'fine-only',forces:'exterior-linear-heat-lift-not-fine-force-parity'};
       topologyGeneration++;
       built={key:k,owned,g,...projected,outer,lower,lowerExport,steps:0,summary,solidRevision,coarseSolids,fineCells:fineSolids.cells.slice()};
+      if(residentSolids){
+        built.wallCells=[];
+        for(let z=0;z<g.shape[2];z++)for(let y=0;y<g.shape[1];y++)for(let x=0;x<g.shape[0];x++)if(coarseSolids.cells[x+g.shape[0]*(y+g.shape[1]*z)])built.wallCells.push({x,y,z});
+        const owner=built;owned.push({destroy(){owner.sceneProducer?.destroy();owner.sceneProducer=null;}});
+        bindResident(built,p);
+      }
       preparationFailure=null;
       return {rebuilt:true,...summary};
     }catch(e){for(const r of [...owned,...(projected?.projectionOwned??[])])r.destroy?.();built={key:k,owned:[],summary:{admitted:false,reason:e.message}};preparationFailure={key:admissionKey(p),reason:e.message};return {rebuilt:true,...built.summary};}
@@ -170,6 +193,14 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     }finally{paused=false;}
   }
   return {prepare,seedGhosts,step,probe,residentSolids,
+    async sampleSceneSolids(){
+      const b=built,producer=b?.sceneProducer,revision=b?.solidRevision;
+      if(!producer)return {status:'not-scene-gpu',scene:b?.summary.solids.scene??null};
+      const sampled=await producer.snapshot();
+      if(b!==built||producer!==built.sceneProducer||revision!==built.solidRevision)return {status:'stale',revision};
+      b.summary.solids.scene={...b.summary.solids.scene,status:sampled.valid?'accepted':'empty',solidCellCount:sampled.counts[0],validation:'explicit-gpu-snapshot'};
+      return {status:'sampled',...sampled,scene:b.summary.solids.scene};
+    },
     deferRetry(p,reason){preparationFailure={key:admissionKey(p),reason};},
     retryAvailable:p=>Boolean(preparationFailure&&preparationFailure.key!==admissionKey(p)),
     canUpdateSolids:p=>Boolean(residentSolids&&built?.outer&&built.key===key(p)),

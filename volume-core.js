@@ -11980,6 +11980,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidCellsCpu = null;
   let sceneSolidGeometryCache = null;
   let sceneSolidGpu = null;
+  let joinedSceneSolids = null;
   let sceneSolidGpuSupportKey = null;
   let sceneSolidSupportCache = null;
   let immersedWallCache = null;
@@ -12904,6 +12905,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    joinedSceneSolids = null;
     joinedRenderFallback?.destroy(); joinedRenderFallback=null;
     joinedRenderUniform?.destroy(); joinedRenderUniform=null;
     sceneSolidGpu?.destroy();
@@ -13262,6 +13264,7 @@ export function createKaminosVolumePrototype({
     if (!device || typeof getSceneCollision !== 'function') return;
     const backWall = immersedBackWallForState();
     const source = getSceneCollision();
+    joinedSceneSolids = null;
     const requested = source?.requested === true;
     const sourceId = requested ? String(source.id || '') : null;
     const solver = resolvePressureSolverConfig(controlsSnapshot).effective;
@@ -13308,6 +13311,7 @@ export function createKaminosVolumePrototype({
           sceneSolidGpu.setSourceSupport(support);sceneSolidGpuSupportKey=supportKey;
         }
         const maskKey=JSON.stringify([geometry.key,backWall.maskKey,supportKey]);
+        joinedSceneSolids={objects:source.objects||[{id:sourceId,object:source.object}],transform:{translate:[...productTransform.translate],scale:productTransform.scale},revision:geometry.key};
         if(sceneSolidTexture!==sceneSolidGpu.texture){
           sceneSolidTexture?.destroy();sceneSolidTexture=sceneSolidGpu.texture;sceneSolidTextureView=sceneSolidGpu.view;
           sceneSolidTextureSizeKey=[gridSize,gridHeight,gridSize].join('x');sceneSolidTextureDevice=device;
@@ -13374,6 +13378,7 @@ export function createKaminosVolumePrototype({
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
+      joinedSceneSolids = null;
       if (sceneSolidGpu) {
         sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;sceneSolidRevisionKey=null;
         installSceneSolidTexture();rebuildSceneSolidBindingViews();
@@ -14177,7 +14182,7 @@ export function createKaminosVolumePrototype({
 
   function joinedProducerSnapshot() {
       const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
-      return {
+      const snapshot = {
         joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
         dims: [gridSize, gridHeight, gridSize],
         pitch: 2 / gridSize,
@@ -14199,6 +14204,10 @@ export function createKaminosVolumePrototype({
           textures: joinedGhostTextures ? { a: joinedGhostTextures[0], b: joinedGhostTextures[1] } : null },
         simStepCount: state.simStepCount,
       };
+      // Borrow live authored objects internally; do not serialize scene graphs
+      // into debug snapshots or bridge them through structured-clone transport.
+      Object.defineProperty(snapshot,'sceneSolids',{value:joinedSceneSolids});
+      return snapshot;
     }
 
   // Builds (or rebuilds) the provisional exterior around the current producer,
@@ -28165,6 +28174,7 @@ export function createKaminosVolumePrototype({
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
     async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
+    async sampleJoinedExteriorSolids() { return joinedExterior ? joinedExterior.sampleSceneSolids() : {status:'disabled'}; },
     joinedWorldBounds() {
       const receipt=joinedExterior?.receipt();
       if(!receipt?.admitted||!state.joinedBoundary?.admitted)return null;
