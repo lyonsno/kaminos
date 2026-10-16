@@ -12,7 +12,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  sourcePanel.classList.add('authored-water-controls');simulationPanel.classList.add('authored-water-controls');
  const $=q=>node.querySelector(q)??sourcePanel.querySelector(q)??simulationPanel.querySelector(q);
  const sourceError=$('[data-source-error]'),runError=$('[data-run-error]'),simulationError=$('[data-simulation-error]');
- let selected=null,dirty=false,simulationDirty=false,revision=0,simulationRevision=0,disposed=false,inFlight=null;
+ let selected=null,dirty=false,simulationDirty=false,revision=0,simulationRevision=0,disposed=false,inFlight=null,ownWrite=null,acceptedSource=null,acceptedSimulation=null;
  const timers=new Map(),gestures=new Set(),scrubs=[];
  const stopTimer=kind=>{if(timers.has(kind)){cancel(timers.get(kind));timers.delete(kind);}};
  const current=(id,version)=>!disposed&&selected?.id===id&&revision===version;
@@ -22,11 +22,12 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   for(let k=0;k<3;k++){const input=document.createElement('input');input.type='number';input.className='transform-input';input.step='.1';input.dataset.bound=name;input.dataset.axis=k;input.setAttribute('aria-label',`${name} ${'XYZ'[k]}`);row.append(input);}
   $('[data-bounds]').append(row);
  }
- const bounds=()=>Object.fromEntries(['min','max'].map(name=>[name,[...(sourceRoot?sourcePanel:node).querySelectorAll(`[data-bound=${name}]`)].map(input=>Number(input.value))]));
+ const number=input=>{if(String(input.value).trim()==='')throw Error('Complete the water property value.');return Number(input.value);};
+ const bounds=()=>Object.fromEntries(['min','max'].map(name=>[name,[...(sourceRoot?sourcePanel:node).querySelectorAll(`[data-bound=${name}]`)].map(number)]));
  const proposal=()=>{
   // Number('') is zero; incomplete keyboard input must remain an invalid draft.
-  const number=selector=>{const value=$(selector).value;if(String(value).trim()==='')throw Error('Complete the water property value.');return Number(value);};
-  return {mode:$('[data-mode]').value,...($('[data-mode]').value==='continuous'?{rate:number('[data-rate]'),baseRadius:number('[data-radius]'),strength:number('[data-strength]')}:{}),drop:{width:number('[data-width]'),samplesPerUnit:number('[data-samples]')/number('[data-width]'),container:$('[data-container]').checked?bounds():null,...(!$('[data-container]').checked?{worldBounds:bounds()}:{})}};
+  const value=selector=>number($(selector));
+  return {mode:$('[data-mode]').value,...($('[data-mode]').value==='continuous'?{rate:value('[data-rate]'),baseRadius:value('[data-radius]'),strength:value('[data-strength]')}:{}),drop:{width:value('[data-width]'),samplesPerUnit:value('[data-samples]')/value('[data-width]'),container:$('[data-container]').checked?bounds():null,...(!$('[data-container]').checked?{worldBounds:bounds()}:{})}};
  };
  async function flush(kind){
   stopTimer(kind);
@@ -45,7 +46,9 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   const error=kind==='source'?sourceError:simulationError;error.textContent='';
   const operation=(async()=>{
    try{
-    await (kind==='source'?api.edit(id,patch):api.editSimulation(patch));
+    let result;ownWrite=kind;
+    try{result=kind==='source'?api.edit(id,patch):api.editSimulation(patch);}finally{ownWrite=null;}
+    await result;
     if(disposed)return false;
     if(kind==='source'&&current(id,version))dirty=false;
     if(kind==='simulation'&&simulationRevision===simVersion)simulationDirty=false;
@@ -65,7 +68,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  for(const input of node.querySelectorAll('input[type=number]')){
   const kind=input===$('[data-passes]')?'simulation':'source';
   input.addEventListener('input',kind==='simulation'?()=>{simulationRevision++;simulationDirty=true;queue(kind);}:preview);
-  const drag=controls.installNumberDrag({input,step:Number(input.step),onStart:()=>{gestures.add(kind);stopTimer(kind);},onEnd:()=>{gestures.delete(kind);if((kind==='source'?dirty:simulationDirty)&&!disposed)queue(kind);}});scrubs.push(drag);
+  const drag=controls.installNumberDrag({input,step:Number(input.step),onStart:()=>{gestures.add(kind);stopTimer(kind);},onEnd:()=>{gestures.delete(kind);if((kind==='source'?dirty:simulationDirty)&&!disposed)void flush(kind);}});scrubs.push(drag);
   input.addEventListener('pointercancel',()=>{stopTimer(kind);if(kind==='simulation'){simulationDirty=false;simulationRevision++;}else{dirty=false;revision++;sourceError.textContent='';}refresh();});
  }
  $('[data-mode]').onchange=preview;$('[data-container]').onchange=preview;
@@ -76,7 +79,11 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  $('[data-pause]').onclick=()=>call(()=>api.pause());
  function refresh(){
   if(disposed)return;const s=api.read();
-  if(s.selected?.id!==selected?.id){stopTimer('source');dirty=false;revision++;sourceError.textContent='';}
+  const sourceSignature=JSON.stringify(s.selected?.settings),simulationSignature=JSON.stringify(s.simulation?.settings);
+  const sourceChanged=s.selected?.id!==selected?.id||(acceptedSource!==sourceSignature&&ownWrite!=='source');
+  if(sourceChanged){stopTimer('source');dirty=false;revision++;sourceError.textContent='';}
+  if(acceptedSimulation!==simulationSignature&&ownWrite!=='simulation'){stopTimer('simulation');simulationDirty=false;simulationRevision++;simulationError.textContent='';}
+  acceptedSource=sourceSignature;acceptedSimulation=simulationSignature;
   selected=s.selected;sourcePanel.hidden=!selected;
   const simulation=s.simulation;simulationPanel.hidden=!simulation?.present;$('[data-select-simulation]').disabled=!simulation?.present;
   if(!simulation?.present){stopTimer('simulation');simulationDirty=false;simulationRevision++;}
@@ -98,6 +105,14 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
   const status=text+(s.runtime?.pendingSourceChanges?' · Source edits apply on next release.':'');if($('[data-state]').textContent!==status)$('[data-state]').textContent=status;
   $('[data-release]').textContent=s.runtime?'Reset & release all drops':'Release all drops';$('[data-pause]').disabled=!s.runtime;$('[data-pause]').textContent=s.runtime?.paused?'Resume water':'Pause water';
  }
+ let historyState={undoCount:0,redoCount:0};
+ const unsubscribe=api.subscribeEdits?.(state=>{
+  const historyBoundary=state.replaying||state.undoCount<historyState.undoCount||state.redoCount!==historyState.redoCount;
+  historyState=state;
+  if(!disposed&&!ownWrite&&historyBoundary){
+   stopTimer('source');stopTimer('simulation');dirty=false;simulationDirty=false;revision++;simulationRevision++;sourceError.textContent='';simulationError.textContent='';refresh();
+  }
+ });
  if(sourceRoot)sourceRoot.append(sourcePanel);if(simulationRoot)simulationRoot.append(simulationPanel);
- refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){disposed=true;stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
+ refresh();return {node,refresh,refreshStatus,flush:async()=>await flush('source')&&await flush('simulation'),dispose(){disposed=true;unsubscribe?.();stopTimer('source');stopTimer('simulation');for(const drag of scrubs)drag?.stop?.();sourcePanel.remove?.();simulationPanel.remove?.();node.remove();}};
 }
