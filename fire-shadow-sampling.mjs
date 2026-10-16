@@ -1,24 +1,25 @@
 import {shadowStrata} from './fire-shadow-quality.mjs';
 export function validateShadowComparison({implementation='shared',grain='ordered',worldCellSize=.02}={}) {
   if(!['shared','legacy'].includes(implementation))throw Error('shadow implementation must be shared or legacy');
-  if(!['ordered','screen','world'].includes(grain))throw Error('shadow grain must be ordered, screen or world');
+  if(!['ordered','screen','screen-animated','world'].includes(grain))throw Error('shadow grain must be ordered, screen, screen-animated or world');
   if(!Number.isFinite(worldCellSize)||worldCellSize<=0)throw Error('world grain cell size must be finite and positive');
   return {implementation,grain,worldCellSize};
 }
 
 // Integer PCG permutation (same constants as the bundled Three TSL hash).
 // Low four bits select the existing equal-area filter phase; a separate bit
-// selects the source pair. No frame index: stationary surfaces do not boil.
-export function shadowGrainPhase(cell) {
-  const seed=(Math.imul(cell[0],73856093)^Math.imul(cell[1],19349663)^Math.imul(cell[2],83492791))>>>0;
+// selects the source pair. A zero frame seed preserves stable spatial grain.
+export function shadowGrainPhase(cell,frame=0) {
+  const seed=(Math.imul(cell[0],73856093)^Math.imul(cell[1],19349663)^Math.imul(cell[2],83492791)^Math.imul(frame,2654435761))>>>0;
   const state=(Math.imul(seed,747796405)+2891336453)>>>0;
   const word=Math.imul((state>>>((state>>>28)+4))^state,277803737)>>>0;
   const bits=((word>>>22)^word)>>>0;
   return {x:bits&3,y:(bits>>>2)&3,pair:(bits>>>4)&1};
 }
-export function shadowGrainNode(cell,{uint,vec2}) {
+export function shadowGrainNode(cell,{uint,vec2},frame=null) {
   const c=cell.floor().toIVec3().toUVec3();
-  const seed=c.x.mul(uint(73856093)).bitXor(c.y.mul(uint(19349663))).bitXor(c.z.mul(uint(83492791)));
+  let seed=c.x.mul(uint(73856093)).bitXor(c.y.mul(uint(19349663))).bitXor(c.z.mul(uint(83492791)));
+  if(frame)seed=seed.bitXor(frame.mul(uint(2654435761)));
   const state=seed.mul(uint(747796405)).add(uint(2891336453));
   const word=state.shiftRight(state.shiftRight(uint(28)).add(uint(4))).bitXor(state).mul(uint(277803737));
   const bits=word.shiftRight(uint(22)).bitXor(word).toVar();
