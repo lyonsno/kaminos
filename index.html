@@ -3875,6 +3875,7 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
@@ -6912,9 +6913,16 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
+const SCENE_OUTLINE_GLYPHS = {field:'◈', group:'▣', light:'✦', camera:'◉', [FLAME_EMITTER_TYPE]:'▲', [LOCAL_LIQUID_EMITTER_TYPE]:'▲'};
+function sceneOutlineGlyph(kind) { return `<span class="scene-outline-glyph" aria-hidden="true">${SCENE_OUTLINE_GLYPHS[kind] || '◆'}</span>`; }
+function sceneOutlineToggle(row) {
+  if (!row?.childCount) return '<span class="scene-outline-toggle-space" aria-hidden="true"></span>';
+  return `<button type="button" class="scene-outline-toggle" data-outline-toggle="${escapeHtml(row.key)}" aria-expanded="${row.collapsed ? 'false' : 'true'}" title="${row.collapsed ? 'Expand' : 'Collapse'}">${row.collapsed ? '▸' : '▾'}</button>`;
+}
+function sceneOutlineAttributes(row) { return row ? ` data-outline-depth="${row.depth}" data-outline-key="${escapeHtml(row.key)}"` : ''; }
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
-  const grouped = options.grouped ? ' grouped' : '';
+  const grouped = options.grouped && !options.outline ? ' grouped' : '';
   const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${sceneSelectionMembers().includes(record.id)?' selected':''}${grouped}`;
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
@@ -6922,9 +6930,9 @@ function renderSceneObjectRow(record, options = {}) {
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
-    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
+        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
       </span>
       <span class="scene-object-actions">
@@ -6936,14 +6944,14 @@ function renderSceneObjectRow(record, options = {}) {
   `;
 }
 
-function renderSceneGroupRow(group) {
+function renderSceneGroupRow(group, outline = null) {
   const active = group.id === activeSceneGroupId;
   const rowClass = `scene-group-row ${active?'active':sceneSelection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
   return `
-    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
+        ${outline ? sceneOutlineToggle(outline) + sceneOutlineGlyph('group') : ''}<input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
@@ -6953,6 +6961,7 @@ function renderSceneGroupRow(group) {
   `;
 }
 
+const sceneOutlineCollapsed = new Set();
 function renderSceneObjectList() {
   updateAuthoringPropertySelection();
   refreshLocalLiquidPerformance();
@@ -6961,20 +6970,30 @@ function renderSceneObjectList() {
   if (!list || !empty) return;
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
-  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  // The outliner is a tree: fields own their emitters, groups their members.
+  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
+  const outline = visibleOutlineRows(buildSceneOutline({fields, groups: sceneGroups, objects: sceneObjects,
+    emitterFields: {[FLAME_EMITTER_TYPE]:'flame-field', [LOCAL_LIQUID_EMITTER_TYPE]:'water-field'}}), sceneOutlineCollapsed);
   const rows = [];
-  for(const [id,label,present] of [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]])if(present)rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}" role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${label}</span><small>Simulation</small></div>`);
-  for (const group of sceneGroups) {
-    rows.push(renderSceneGroupRow(group));
-    for (const objectId of group.objectIds) {
-      const record = sceneObjects.find(entry => entry.id === objectId);
-      if (record) rows.push(renderSceneObjectRow(record, { grouped: true }));
+  for (const row of outline) {
+    if (row.kind === 'field') {
+      const {id,label} = fields.find(field => field.id === row.id);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><small>Simulation</small></div>`);
+    } else if (row.kind === 'group') {
+      const group = sceneGroups.find(entry => entry.id === row.id);
+      if (group) rows.push(renderSceneGroupRow(group, row));
+    } else {
+      const record = sceneObjects.find(entry => entry.id === row.id);
+      if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
-  for (const record of sceneObjects) {
-    if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
-  }
   list.innerHTML = rows.join('');
+  list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    const key = button.dataset.outlineToggle;
+    if (sceneOutlineCollapsed.has(key)) sceneOutlineCollapsed.delete(key); else sceneOutlineCollapsed.add(key);
+    renderSceneObjectList();
+  }));
   list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
@@ -12774,7 +12793,8 @@ function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
-    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    // Add and Navigate live in the shared viewport toolbar in both workspaces.
+    inspector:authoringWorkspace,sceneActions:null,navigation:null,
     sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],

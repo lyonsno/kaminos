@@ -31,7 +31,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
   hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
-  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Scene</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click name to rename · × removes (Undo restores)</p></div>`;
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Outliner</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)</p></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
@@ -40,8 +40,14 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <div id="authoring-scene-properties" class="authoring-inspector-body" hidden><details id="authoring-inspector-scene-tree" hidden><summary>Scene objects</summary><div id="authoring-inspector-tree-slot"></div></details><h2>Composition</h2><div class="scene-data-choices"><button type="button" id="scene-fire-data">Fire & smoke data</button><button type="button" id="scene-water-data">Water simulation data</button></div><div id="authoring-composition-slot"></div><details open id="authoring-world-slot"><summary>Environment</summary></details><div id="authoring-water-slot"></div><details id="authoring-render-slot"><summary>Rendering</summary></details></div>`;
   const toolbar = document.createElement('div'); toolbar.id = 'authoring-viewport-tools';
   toolbar.innerHTML = `<div id="authoring-add-slot"></div><details id="authoring-presets"><summary>Presets</summary><div><button type="button" id="apply-burner-preset">Burner setup</button><p>Apply to the current fire field</p></div></details><label class="selection-setting">Axes <select id="selection-orientation"><option value="world">World</option><option value="local">Local</option></select></label><label class="selection-setting">Pivot <select id="selection-pivot"><option value="median">Median</option><option value="active">Active</option><option value="individual">Individual origins</option></select></label><div id="authoring-gizmo-slot" aria-label="Transform gizmo"></div><details id="authoring-viewport-settings"><summary>Viewport</summary><div><label title="Shift+Alt+Z"><input id="viewport-show-overlays" type="checkbox" checked> Overlays <small>Shift Alt Z</small></label><label title="Ctrl+tilde"><input id="viewport-show-gizmos" type="checkbox" checked> Transform gizmos <small>Ctrl ~</small></label><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-outlines" type="checkbox" checked> Object outlines</label></legend><label>Width <input id="viewport-outlineWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1.5"></label><label>Opacity <input id="viewport-outlineOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value="1"></label><label><input id="viewport-show-bounds" type="checkbox"> Bounding boxes</label></fieldset><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-domains" type="checkbox" checked> Simulation boundaries</label></legend><label>Width <input id="viewport-domainWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1"></label><label>Opacity <input id="viewport-domainOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value=".82"></label></fieldset><fieldset class="viewport-display-group"><legend><label><input id="viewport-show-emitters" type="checkbox" checked> Emitter symbols</label></legend><label>Width <input id="viewport-emitterWidth" class="transform-input" type="number" min=".5" max="8" step=".25" value="1"></label><label>Opacity <input id="viewport-emitterOpacity" class="transform-input" type="number" min="0" max="1" step=".05" value=".55"></label></fieldset><label><input id="viewport-show-helpers" type="checkbox" checked> Show helpers</label><label><input id="viewport-show-hints" type="checkbox" checked> Navigation hints</label></div></details><div class="authoring-header-spacer"></div><button type="button" id="authoring-box">Box · B</button><button type="button" id="authoring-duplicate">Duplicate</button><button type="button" id="authoring-delete">Delete</button><button type="button" id="authoring-frame" title="Frame selected (F)">Frame</button><button type="button" id="authoring-undo" title="Undo (Cmd/Ctrl Z)">Undo</button><button type="button" id="authoring-redo" title="Redo (Cmd/Ctrl Shift Z)">Redo</button><div id="authoring-navigation-slot"></div>`;
+  // Outliner above Properties in one right-hand column, as in Blender; the
+  // row divider sets how much of the column the outliner takes.
+  const right = document.createElement('div'); right.id = 'authoring-right';
+  const outlineSplitter = document.createElement('div'); outlineSplitter.className = 'authoring-outline-splitter';
+  outlineSplitter.tabIndex = 0; outlineSplitter.setAttribute('role', 'separator'); outlineSplitter.setAttribute('aria-label', 'Outliner height'); outlineSplitter.setAttribute('aria-orientation', 'horizontal');
+  right.append(hierarchy, outlineSplitter, inspector);
   document.body.prepend(header);
-  document.body.append(hierarchy, inspector);
+  document.body.append(right);
   byId('viewport').prepend(toolbar);
   const shot=document.createElement('details');shot.id='scene-camera-settings';shot.open=true;shot.innerHTML='<summary>Camera &amp; output</summary>';shot.append(byId('authoring-camera-properties'));byId('authoring-composition-slot').after(shot);
   const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>{setContext('scene');shot.open=true;shot.scrollIntoView({block:'nearest'});};byId('authoring-frame').before(cameraButton);
@@ -74,8 +80,10 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
   const entries = [];
+  // Document commands and the viewport toolbar serve both workspaces.
+  const sharedDestinations = new Set(['authoring-document-actions', 'authoring-add-slot', 'authoring-gizmo-slot', 'authoring-navigation-slot']);
   const move = (node, destination) => entries.push({ node, destination: byId(destination),
-    workbenchDestination: destination === 'authoring-document-actions' ? byId(destination) : null });
+    workbenchDestination: sharedDestinations.has(destination) ? byId(destination) : null });
   move(byId('scene-object-list').closest('.panel'), 'authoring-tree');
   move(byId('transform-inspector'), 'authoring-transform-slot');
   move(byId('selected-light-properties'), 'authoring-type-slot');
@@ -115,7 +123,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const inspectorEntries = entries.filter(entry => inspector.contains(entry.destination));
   const workspaceSlots = createControlSlots(document, entries.filter(entry => !inspector.contains(entry.destination)));
   const inspectorSlots = createControlSlots(document, inspectorEntries);
-  const sceneTreeSlots = createControlSlots(document, [{node: byId('scene-object-list').closest('.panel'), destination: byId('authoring-inspector-tree-slot')}]);
+  const sceneTreeSlots = createControlSlots(document, [{node: byId('scene-object-list').closest('.panel'), destination: byId('authoring-tree')}]);
   let mode = null, inspectorActive = false, inspectorContext='object';
   // One inspector and one set of live property controls serve both modes.
   function setInspectorActive(active) {
@@ -133,7 +141,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     document.activeElement?.blur?.();
     setInspectorActive(active); sceneTreeSlots.setActive(active);
     if (active && byId('transform-inspector').hidden) setContext('scene');
-    byId('authoring-inspector-scene-tree').hidden=!active;
+    byId('authoring-inspector-scene-tree').hidden=true;
     document.body.classList.toggle('has-workbench-inspector',active);
   }
   function setContext(context) {
@@ -202,17 +210,24 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
 
   // Native splitters change viewport geometry; existing ResizeObserver owns
   // camera aspect and render targets.
-  for (const [side, label] of [['left', 'Scene hierarchy width'], ['right', 'Properties width']]) {
-    const splitter = document.createElement('div'); splitter.className = `authoring-splitter ${side}`;
-    splitter.tabIndex = 0; splitter.setAttribute('role', 'separator'); splitter.setAttribute('aria-label', label); splitter.setAttribute('aria-orientation', 'vertical');
+  {
+    const splitter = document.createElement('div'); splitter.className = 'authoring-splitter right';
+    splitter.tabIndex = 0; splitter.setAttribute('role', 'separator'); splitter.setAttribute('aria-label', 'Outliner and properties width'); splitter.setAttribute('aria-orientation', 'vertical');
     document.body.append(splitter);
-    const panel = side === 'left' ? hierarchy : inspector;
-    const resize = value => { const width = Math.max(180, Math.min(document.body.clientWidth * .4, value)); document.body.style.setProperty(`--authoring-${side}`, `${width}px`); splitter.setAttribute('aria-valuenow', String(Math.round(width))); };
-    splitter.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight'].includes(event.key)) { event.preventDefault(); resize(panel.clientWidth + (event.key === 'ArrowRight' ? 10 : -10) * (side === 'left' ? 1 : -1)); } });
+    const resize = value => { const width = Math.max(220, Math.min(document.body.clientWidth * .45, value)); document.body.style.setProperty('--authoring-right', `${width}px`); splitter.setAttribute('aria-valuenow', String(Math.round(width))); };
+    splitter.addEventListener('keydown', event => { if (['ArrowLeft','ArrowRight'].includes(event.key)) { event.preventDefault(); resize(right.clientWidth + (event.key === 'ArrowLeft' ? 10 : -10)); } });
     let drag;
-    splitter.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); drag = { x: event.clientX, width: panel.clientWidth }; splitter.setPointerCapture(event.pointerId); });
-    splitter.addEventListener('pointermove', event => { if (drag) resize(drag.width + (event.clientX - drag.x) * (side === 'left' ? 1 : -1)); });
+    splitter.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); drag = { x: event.clientX, width: right.clientWidth }; splitter.setPointerCapture(event.pointerId); });
+    splitter.addEventListener('pointermove', event => { if (drag) resize(drag.width - (event.clientX - drag.x)); });
     splitter.addEventListener('pointerup', () => { drag = null; }); splitter.addEventListener('pointercancel', () => { drag = null; });
+  }
+  {
+    const resize = value => { const height = Math.max(90, Math.min(right.clientHeight - 140, value)); right.style.setProperty('--authoring-outline-height', `${height}px`); outlineSplitter.setAttribute('aria-valuenow', String(Math.round(height))); };
+    outlineSplitter.addEventListener('keydown', event => { if (['ArrowUp','ArrowDown'].includes(event.key)) { event.preventDefault(); resize(hierarchy.clientHeight + (event.key === 'ArrowDown' ? 10 : -10)); } });
+    let drag;
+    outlineSplitter.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); drag = { y: event.clientY, height: hierarchy.clientHeight }; outlineSplitter.setPointerCapture(event.pointerId); });
+    outlineSplitter.addEventListener('pointermove', event => { if (drag) resize(drag.height + (event.clientY - drag.y)); });
+    outlineSplitter.addEventListener('pointerup', () => { drag = null; }); outlineSplitter.addEventListener('pointercancel', () => { drag = null; });
   }
   document.body.classList.add('has-authoring-workspace');
   setMode(initialMode);
