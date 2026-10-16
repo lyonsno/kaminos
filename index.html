@@ -3434,6 +3434,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div id="scene-gi-status" role="status"></div>
       </div>
+      <section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section>
+      <div id="rendering-light-study">
       <p class="rendering-description">Switch light contributions while viewing the same kiln. The flame, environment and authored geometry remain visible in every mode.</p>
       <label for="rendering-light-mode">Light contributions</label>
       <select class="rendering-channel-select" id="rendering-light-mode">
@@ -3452,7 +3454,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>8</option><option>10</option><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
-        <details id="rendering-fire-shadows" hidden><summary>Fire lighting & shadows · advanced</summary><div id="rendering-fire-shadow-controls"></div></details>
+        <details id="rendering-fire-shadows" hidden><summary>Fire shadows · quality & grain</summary><div id="rendering-fire-shadow-controls"></div></details>
         <label for="rendering-receiver-spacing">Surface receiver spacing (experimental)</label><select id="rendering-receiver-spacing"><option value="0" selected>Per vertex · reference</option><option value="0.04">0.04 source units · fine</option><option value="0.08">0.08 source units · medium</option><option value="0.16">0.16 source units · coarse</option></select>
         <p class="rendering-description" id="rendering-receiver-status">Reference mesh receivers; full render and shadow geometry retained.</p>
         <details id="rendering-light-debug" hidden><summary>Receiver / ray debug</summary>
@@ -3480,6 +3482,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <p class="rendering-description">Transported-light gain adjusts surface and distributed smoke illumination together; direct flame emission is unchanged. Surface scattering uses the distributed incident field even during legacy smoke comparison. Surface-to-surface bounce and repeated smoke scattering are not included.</p></div>
       <h2>Flame field</h2>
       <p class="rendering-description">The flame-derived field lights scene surfaces. This gain adjusts its receiving pass; it does not change the visible flame or shared point source.</p>
+      </div>
     </div>
     <div id="authored-mix-panel-content" role="tabpanel" aria-labelledby="right-tab-mix">
     <div class="volume-authored-mix-kicker">Volume</div>
@@ -3549,6 +3552,7 @@ import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './experiments/fire-shadow-sampling.experiment.mjs';
 import { installRenderingNumberControls } from './rendering-number-controls.mjs';
+import { organizeFireRenderingPanel } from './fire-rendering-panel.mjs';
 import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
 import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -3637,6 +3641,12 @@ function refreshRenderingControls() {
   const source = window.__kaminosSceneRadiance;
   const hybrid=source?.debugState().identity==='hybrid-distributed-smoke-point-surfaces-v0';
   const distributed=hybrid||source?.debugState().identity==='distributed-volume-direct-radiance-v0';
+  if(hybrid){
+    const notice=document.getElementById('rendering-fire-route-status');
+    const smokeMode=document.getElementById('rendering-smoke-solver').value;
+    notice.textContent=renderingMode!=='shared'||smokeMode!=='distributed'?`Saved comparison configuration: light paths ${renderingMode}; smoke ${smokeMode}.`:'';
+    notice.hidden=!notice.textContent;
+  }
   document.getElementById('rendering-distributed-controls').hidden=!distributed;
   document.querySelector('.rendering-position-row').hidden=distributed;
   document.querySelector('.rendering-position-row').style.display=distributed ? 'none' : '';
@@ -20878,6 +20888,12 @@ async function initKaminosVolumeRoute() {
           if(key!==statusKey){statusKey=key;settings.sync();}
         }};
         settings.mount({root:document.getElementById('rendering-fire-shadow-controls'),document,invoke});
+        organizeFireRenderingPanel(document);
+        document.querySelector('label[for="rendering-angular-samples"]').textContent='Smoke lighting directions';
+        document.querySelector('label[for="rendering-shared-gain"]').title='Changes surface and smoke illumination, not visible flame emission.';
+        document.querySelector('label[for="rendering-source-softness"]').title='Redistributes source emission. Can change escaped light and flicker; not brightness-neutral.';
+        document.querySelector('label[for="rendering-surface-gain"]').title='Adjusts fire-lit surfaces without changing smoke or flame emission.';
+        document.getElementById('rendering-match-flame-camera').parentElement.querySelector('span').textContent='Match flame camera';
       }
       refreshRenderingControls();
     }).catch(error=>{
@@ -22996,6 +23012,7 @@ function updateBackground() {
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
 installRenderingNumberControls(document.getElementById('rendering-panel-content'));
+installRenderingNumberControls(document.getElementById('scene-gi-panel'));
 function readSceneGIControls() { return structuredClone(sceneGISettings); }
 function setSceneGIControls(value, {preserveInput=null}={}) {
   const settings = resolveSceneGIControlState(value);
