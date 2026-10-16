@@ -7121,6 +7121,7 @@ function handleViewportDoubleClick(event) {
 function localLiquidEmitterRecords() {
   return sceneObjects.filter(entry => entry.type === LOCAL_LIQUID_EMITTER_TYPE).map(entry => ({
     id: entry.id,
+    label: sceneObjectDisplayLabel(entry),
     type: entry.type,
     transform: sceneObjectTransformState(entry.object),
     localLiquidEmitter: structuredClone(entry.localLiquidEmitter),
