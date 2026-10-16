@@ -17,6 +17,7 @@ import getpass
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -100,7 +101,51 @@ def checked_anchor(raw):
             raise NotesError(400, "request", "An object anchor needs the object id")
         label = raw.get("label").strip() if isinstance(raw.get("label"), str) and raw.get("label").strip() else object_id
         return {"kind": "object", "id": object_id, "label": label}
-    raise NotesError(400, "request", "A new thread needs an anchor: the scene or one object")
+    if isinstance(raw, dict) and raw.get("kind") == "point":
+        return checked_point_anchor(raw)
+    raise NotesError(400, "request", "A new thread needs an anchor: the scene, one object, or a point on one")
+
+
+def checked_point_anchor(raw):
+    """A point on an object as a pick named it, in the object's own frame and in the world."""
+    def vector(value, size):
+        return (isinstance(value, list) and len(value) == size
+                and all(isinstance(item, (int, float)) and not isinstance(item, bool) and math.isfinite(item) for item in value))
+
+    object_id = raw.get("id").strip() if isinstance(raw.get("id"), str) else ""
+    if not object_id:
+        raise NotesError(400, "request", "A point anchor needs the object id")
+    if not vector(raw.get("local"), 3):
+        raise NotesError(400, "request", "A point anchor needs its local point as [x, y, z]")
+    if not vector(raw.get("point"), 3):
+        raise NotesError(400, "request", "A point anchor needs its world point as [x, y, z]")
+    label = raw.get("label").strip() if isinstance(raw.get("label"), str) and raw.get("label").strip() else object_id
+    anchor = {"kind": "point", "id": object_id, "label": label, "local": list(raw["local"]), "point": list(raw["point"])}
+    if raw.get("normal") is not None:
+        if not vector(raw["normal"], 3):
+            raise NotesError(400, "request", "A point anchor normal is [x, y, z]")
+        anchor["normal"] = list(raw["normal"])
+    if raw.get("face") is not None:
+        if not isinstance(raw["face"], int) or isinstance(raw["face"], bool) or raw["face"] < 0:
+            raise NotesError(400, "request", "A point anchor face is a face index")
+        anchor["face"] = raw["face"]
+    if raw.get("path") is not None:
+        if not isinstance(raw["path"], str):
+            raise NotesError(400, "request", "A point anchor path is the mesh path inside the object")
+        anchor["path"] = raw["path"]
+    if raw.get("geometry") is not None:
+        if not isinstance(raw["geometry"], dict):
+            raise NotesError(400, "request", "A point anchor geometry is an object")
+        anchor["geometry"] = raw["geometry"]
+    if raw.get("authority") is not None:
+        if raw["authority"] not in ("exact", "approximate"):
+            raise NotesError(400, "request", "A point anchor authority is exact or approximate")
+        anchor["authority"] = raw["authority"]
+    if raw.get("at") is not None:
+        if not vector(raw["at"], 2):
+            raise NotesError(400, "request", "A point anchor at is [x, y], fractions of the view")
+        anchor["at"] = list(raw["at"])
+    return anchor
 
 
 def decode_picture(raw):

@@ -2,7 +2,7 @@
 // agent by name, and read the answers where you are looking. The session
 // (createNotesSession) is separate from the DOM (installNotes) so it can be
 // tested without a browser. See docs/notes.md.
-import {addresseesIn, checkedPost, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
+import {addresseesIn, checkedAnchor, checkedPost, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
   rankParticipants} from './notes-core.mjs';
 
 export {mentionsIn};
@@ -26,11 +26,16 @@ export function createNotesSession({transport, selection, entries, readView, wri
     return (current.memberIds?.length ? current.memberIds : current.ids ?? []).filter(id => !String(id).startsWith('@group:'));
   };
 
+  // A point picked on an object anchors the note while that object stays the
+  // selection; selecting anything else drops it.
+  let point = null;
   function anchorFromSelection() {
     const current = selection() ?? {};
     const ids = selectedIds();
     const id = current.activeId && entryOf(current.activeId) ? current.activeId : ids.find(entryOf);
     const entry = id ? entryOf(id) : null;
+    if (point && entry?.id !== point.id) point = null;
+    if (point) return {...point};
     return entry ? {kind: 'object', id: entry.id, label: entry.label || entry.fileName || entry.id} : {kind: 'scene'};
   }
 
@@ -119,6 +124,8 @@ export function createNotesSession({transport, selection, entries, readView, wri
     setPresence(next) { presence = next; changed(); },
     setParticipants(list, {notifies: notifying = false} = {}) { participants = Array.isArray(list) ? list : []; notifies = !!notifying; changed(); },
     notifies() { return notifies; },
+    setPoint(anchor) { point = anchor ? checkedAnchor(anchor) : null; changed(); },
+    point() { return point ? {...point} : null; },
     // The scene object that stands for an agent: the avatar it registered, else
     // what the vantage says, else the sub piloted under its name. Null when
     // none of these is in the scene.
@@ -170,7 +177,7 @@ export function createNotesSession({transport, selection, entries, readView, wri
       const root = folded.notes.get(note.thread) ?? note;
       const view = root.context?.view;
       if (view) writeView(view);
-      const object = root.anchor?.kind === 'object' ? root.anchor.id : null;
+      const object = ['object', 'point'].includes(root.anchor?.kind) ? root.anchor.id : null;
       const present = object ? !!entryOf(object) : false;
       if (present) select(object);
       return {found: true, viewRestored: !!view, object, present};
@@ -228,6 +235,7 @@ const STYLE = `
 .kn-replybox[hidden]{display:none}
 .kn-pins{position:absolute;inset:0;overflow:hidden}
 .kn-pin{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;min-width:18px;height:18px;padding:0 5px;border:1px solid #5fd3c8;border-radius:9px 9px 9px 2px;background:rgba(16,20,22,.92);color:#bff3e4;font-size:10px;line-height:16px;cursor:pointer;box-shadow:0 2px 8px #000a}
+.kn-point-pin{transform:translate(-50%,-50%);min-width:12px;height:12px;padding:0;border-radius:6px;line-height:10px;text-align:center}
 .kn-pin[data-unread="true"]{border-color:#f0d28a;color:#f0d28a}
 .kn-reach{font-size:10px;color:#8fa3a8;min-height:12px;line-height:1.35}
 .kn-reach[data-unknown="true"]{color:#f0d28a}
@@ -276,7 +284,7 @@ export async function capturePicture({capture, document}) {
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
   sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
-  ownView = async () => true}) {
+  ownView = async () => true, pickAt = null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -384,7 +392,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
 
   let focusThread = null;
   const say = (message, tone = '') => { status.textContent = message; status.dataset.tone = tone; };
-  const anchorText = anchor => anchor?.kind === 'object' ? `"${anchor.label}"` : 'the scene';
+  const anchorText = anchor => anchor?.kind === 'object' ? `"${anchor.label}"` : anchor?.kind === 'point' ? `a point of "${anchor.label}"` : 'the scene';
   const refreshAnchor = () => { anchorLine.textContent = `On ${anchorText(session.anchorFromSelection())}`; };
 
   const listeningNames = () => (session.presence.listeners ?? []).filter(row => row.waiting).map(row => row.name);
@@ -837,6 +845,30 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       pin.style.left = `${((point.x + 1) / 2) * width}px`;
       pin.style.top = `${((1 - point.y) / 2) * height}px`;
     }
+    // A note on a point gets its own pin there, carried by its object: the
+    // object's current placement applied to the point in its own frame.
+    for (const note of session.threads()) {
+      if (note.resolved || note.anchor?.kind !== 'point') continue;
+      const entry = entries().find(item => item.id === note.anchor.id);
+      if (!entry?.object) continue;
+      entry.object.updateMatrixWorld();
+      point.fromArray(note.anchor.local).applyMatrix4(entry.object.matrixWorld).project(camera);
+      if (point.z < -1 || point.z > 1 || Math.abs(point.x) > 1.05 || Math.abs(point.y) > 1.05) continue;
+      const key = `point:${note.id}`;
+      keep.add(key);
+      let pin = pins.querySelector(`[data-pin="${CSS.escape(key)}"]`);
+      if (!pin) {
+        pin = element(document, 'button', 'kn-pin kn-point-pin');
+        pin.type = 'button';
+        pin.dataset.pin = key;
+        pin.addEventListener('click', () => openDrawer({thread: note.id}));
+        pins.append(pin);
+      }
+      pin.textContent = '\u2022';
+      pin.title = `Note on a point of "${note.anchor.label}"`;
+      pin.style.left = `${((point.x + 1) / 2) * width}px`;
+      pin.style.top = `${((1 - point.y) / 2) * height}px`;
+    }
     for (const pin of [...pins.children]) if (!keep.has(pin.dataset.pin)) pin.remove();
   }
   frame = window.requestAnimationFrame(placePins);
@@ -874,6 +906,28 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
   source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
   const unsubscribe = session.onChange(render);
+  // With the drawer open, Alt-click on the scene pins the note to the point
+  // under the cursor, as the renderer drew it (the host's pick).
+  const onPointPick = event => {
+    if (drawer.hidden || !pickAt || !event.altKey || event.button !== 0 || event.target?.tagName !== 'CANVAS' || !viewport.contains(event.target)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const rect = event.target.getBoundingClientRect();
+    const at = [(event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height];
+    Promise.resolve().then(() => pickAt(at)).then(result => {
+      const hit = result?.hit;
+      if (!hit?.id || !hit.local || !hit.point) return say('Nothing to pin there');
+      const entry = entries().find(item => item.id === hit.id);
+      select(hit.id);
+      session.setPoint({kind: 'point', id: hit.id, label: entry?.label || hit.label || hit.id, local: hit.local, point: hit.point,
+        ...(hit.normal ? {normal: hit.normal} : {}), ...(Number.isInteger(hit.surface?.face) ? {face: hit.surface.face} : {}),
+        ...(typeof hit.surface?.path === 'string' ? {path: hit.surface.path} : {}),
+        ...(hit.geometry?.identity ? {geometry: hit.geometry.identity} : {}), ...(hit.authority ? {authority: hit.authority} : {}), at});
+      refreshAnchor();
+      say(`Pinned a point on "${entry?.label || hit.label || hit.id}"${hit.authority === 'approximate' ? ' (approximate: something drawn outside the scene may cover it)' : ''}`);
+    }).catch(error => say(`Could not pin a point: ${error.message}`, 'error'));
+  };
+  window.addEventListener('pointerdown', onPointPick, {capture: true});
   const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) { refreshAnchor(); placeDrawer(); } }, 500);
   const placeOnResize = () => { if (!drawer.hidden) placeDrawer(); };
   window.addEventListener('resize', placeOnResize);
@@ -889,6 +943,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       unsubscribe();
       window.cancelAnimationFrame(frame);
       window.clearInterval(refreshOnSelection);
+      window.removeEventListener('pointerdown', onPointPick, {capture: true});
       window.removeEventListener('resize', placeOnResize);
       window.clearTimeout(participantsTimer);
       document.removeEventListener('keydown', onKey);
