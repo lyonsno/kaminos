@@ -83,7 +83,8 @@ export function installCommandSearch({ document, viewport, button, commands, blo
   }
   function close({ restoreFocus = true } = {}) {
     if (!opened) return;
-    opened = false; backdrop.hidden = true; input.blur(); button?.setAttribute('aria-expanded', 'false');
+    opened = false; backdrop.hidden = true;
+    if (backdrop.contains(document.activeElement)) document.activeElement.blur(); button?.setAttribute('aria-expanded', 'false');
     if (restoreFocus && previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     else if (!restoreFocus) { viewport.tabIndex = viewport.tabIndex < 0 ? -1 : viewport.tabIndex; viewport.focus({ preventScroll: true }); }
   }

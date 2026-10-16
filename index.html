@@ -11945,6 +11945,7 @@ async function initScene() {
     },onError:error=>setInfo(error.message),commands:()=>{
       const edits=scenePlacementTools.edits,state=edits.state(),selection=readSceneSelection();
       const objectReason=()=>sceneSelection.ids.length?null:'Select an object first';
+      const duplicateReason=()=>objectReason()||(sceneSelectionMembers(selectedRootIds()).some(id=>!canDuplicateObject(sceneObjects.find(object=>object.id===id)))?'Independent duplication of simulation sources is unsupported':null);
       const transformReason=()=>selectedPlacementEntry()?null:'Select an object or the Fire & smoke domain first';
       const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
       const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
@@ -11956,7 +11957,7 @@ async function initScene() {
         command('add.fire','Add','Fire & Smoke',()=>openFirstFlameFieldDialog(),{aliases:['flame','emitter','volume','source','burner']}),
         command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
         ...[['translate','Move','G'],['rotate','Rotate','R'],['scale','Scale','S']].map(([mode,label,shortcut])=>command('transform.'+mode,'Transform',label,()=>{if(!scenePlacementTools.start(mode))throw Error('Could not start transform');},{shortcut,aliases:mode==='translate'?['translate','grab']:mode==='rotate'?['rotation','turn']:['resize','size'],disabled:transformReason})),
-        command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:objectReason}),
+        command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:duplicateReason}),
         command('object.delete','Object','Delete',()=>removeSelectedSceneObjects(),{aliases:['remove'],disabled:objectReason}),
         command('object.group','Object','Group Selection',()=>groupSelectedObjects(),{disabled:objectReason}),
         command('object.ungroup','Object','Unparent Selection',()=>ungroupSelectedObjects(),{aliases:['ungroup','detach'],disabled:objectReason}),
