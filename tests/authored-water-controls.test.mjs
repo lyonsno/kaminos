@@ -58,7 +58,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
- Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){}});
+ Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){}});
  vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
  f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
  const check=(paused,step)=>{
@@ -104,4 +104,12 @@ for(const applied of ['finite_drop','continuous'])for(const action of ['pause','
  f.draftWidth(.75);await f.controls.flush();assert.match(f.input('[data-source-error]').textContent??'',/positive extents/,'Rejected source Apply must explain failure beside source properties when Fluid is hidden');
  f.hold(null);await f.controls.flush();assert.equal(f.input('[data-source-error]').textContent,'','A valid source Apply clears source feedback');
  f.api.release=()=>{throw Error('Release failed');};await f.input('[data-release]').onclick();assert.equal(f.input('[data-run-error]').textContent,'Release failed','Run rejection stays with left playback actions');
+}
+
+{
+ const f=fixture(),read=f.api.read;let matched=0,compatible=false;
+ f.api.read=()=>({...read(),sources:[{id:'A'},{id:'B'}],simulation:{present:true,settings:{densityIterations:2},compatibility:{compatible,sourceCount:2,message:'B: particle spacing differs',match:{referenceId:'A',referenceLabel:'A',spacing:.05,containerEnabled:true,particleCount:3925,changes:compatible?[]:[{id:'B',label:'B',previousWorldWidth:.63,worldWidth:.65,previousParticleCount:250047,particleCount:2197}]}}}});
+ f.api.match=id=>{assert.equal(id,'A');matched++;compatible=true;};f.controls.refresh();
+ assert.equal(f.input('[data-pause]').disabled,true,'An incompatible initial setup cannot offer a false Play');assert.equal(f.input('[data-release]').disabled,true);assert.match(f.input('[data-compatibility-status]').textContent,/B.*spacing/);assert.match(f.input('[data-match-plan]').textContent,/0.63000 → 0.65000/);assert.equal(matched,0,'Showing the repair cannot change source amounts');
+ await f.input('[data-match]').onclick();assert.equal(matched,1);assert.equal(f.input('[data-pause]').disabled,false);assert.equal(f.input('[data-release]').disabled,false);assert.equal(f.input('[data-match]').hidden,true);
 }

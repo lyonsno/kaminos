@@ -34,3 +34,50 @@ export function createAuthoredWaterDrop(drop,pose) {
  const planes=[];for(let k=0;k<3;k++)for(const side of ['min','max']){const normal=[0,0,0];normal[k]=side==='min'?1:-1;planes.push({normal,offset:normal[k]*d.bounds[side][k]});}
  return {...d,population:{...population,particleVolumeScale:d.particleVolumeScale,worldVolume:d.worldVolume,representedVolume:d.particleCount*d.particleVolumeScale,fixture:'authored_drop',source:'authored_scene_pose_regular_finite_lattice_no_recycling'},box:{schema:'kaminos.fluid-reference-box.v1',bounds:d.bounds,planes,collisionRadius:d.collisionRadius,collisions:d.containerEnabled}};
 }
+
+
+const closeSpacing=(a,b)=>Math.abs(a-b)<=1e-9*Math.max(Math.abs(a),Math.abs(b));
+const finiteSources=records=>records.filter(r=>r.localLiquidEmitter?.mode==='finite_drop');
+const sourceName=r=>r.label??r.id;
+function checkedPlacement(record,description){
+ const {samplesAcross:n,spacing,bounds,collisionRadius}=description;
+ const half=(n-1)*spacing/2,rotation=new Euler(...record.transform.rotation),origin=new Vector3(...record.transform.position);
+ for(const x of [-half,half])for(const y of [-half,half])for(const z of [-half,half]){
+  const p=new Vector3(x,y,z).applyEuler(rotation).add(origin);
+  for(let k=0;k<3;k++)if(p.getComponent(k)<bounds.min[k]+collisionRadius-1e-12||p.getComponent(k)>bounds.max[k]-collisionRadius+1e-12)throw Error(`${sourceName(record)}: initial particles must fit the shared world bounds. Move the drop or enlarge the bounds.`);
+ }
+}
+export function inspectAuthoredWaterCompatibility(records){
+ const sources=finiteSources(records);
+ if(!sources.length)return {compatible:true,sourceCount:0,message:''};
+ try{
+  const first=describeAuthoredWaterDrop(sources[0].localLiquidEmitter.drop,sources[0].transform),conflicts=[];
+  for(const r of sources){
+   const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform),reasons=[];
+   if(!closeSpacing(d.spacing,first.spacing))reasons.push(`particle spacing ${d.spacing.toPrecision(5)} differs from ${sourceName(sources[0])} (${first.spacing.toPrecision(5)})`);
+   if(JSON.stringify(d.bounds)!==JSON.stringify(first.bounds)||d.containerEnabled!==first.containerEnabled)reasons.push('container bounds or walls differ');
+   if(reasons.length)conflicts.push(`${sourceName(r)}: ${reasons.join('; ')}`);
+   checkedPlacement(r,d);
+  }
+  return {compatible:conflicts.length===0,sourceCount:sources.length,spacing:first.spacing,message:conflicts.join('. ')};
+ }catch(e){return {compatible:false,sourceCount:sources.length,message:e.message};}
+}
+export function planAuthoredWaterMatch(records,referenceId){
+ const sources=finiteSources(records),reference=sources.find(r=>r.id===referenceId);
+ if(!reference)throw Error('Select a finite water drop to use as the shared setup.');
+ const d=describeAuthoredWaterDrop(reference.localLiquidEmitter.drop,reference.transform),changes=[];
+ checkedPlacement(reference,d);
+ for(const r of sources){
+  const old=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform),scale=r.transform.scale[0];
+  const n=Math.max(1,Math.round(old.width/d.spacing)),width=n*d.spacing/scale;
+  const drop={width,samplesPerUnit:scale/d.spacing,container:d.containerEnabled?clone(d.bounds):null,...(!d.containerEnabled?{worldBounds:clone(d.bounds)}:{})};
+  const settings={...clone(r.localLiquidEmitter),drop:normalizeAuthoredWaterDrop(drop)},next=describeAuthoredWaterDrop(settings.drop,r.transform);
+  checkedPlacement(r,next);
+  // Equivalent floating representations need no mutation, especially the reference.
+  if(closeSpacing(old.spacing,d.spacing)&&JSON.stringify(old.bounds)===JSON.stringify(d.bounds)&&old.containerEnabled===d.containerEnabled)continue;
+  changes.push({id:r.id,label:sourceName(r),settings,previousWorldWidth:old.width,worldWidth:next.width,previousParticleCount:old.particleCount,particleCount:next.particleCount});
+ }
+ const count=sources.reduce((sum,r)=>sum+(changes.find(c=>c.id===r.id)?.particleCount??describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform).particleCount),0);
+ if(!Number.isSafeInteger(count)||count*16>0xffffffff)throw Error('Combined water population exceeds typed-array capacity');
+ return {referenceId,referenceLabel:sourceName(reference),spacing:d.spacing,bounds:clone(d.bounds),containerEnabled:d.containerEnabled,changes,particleCount:count};
+}
