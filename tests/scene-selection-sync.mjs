@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
+import {checkedSelection} from '../scene-selection.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 function pointerContext(){const c={polyEdit:null,FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',vantageCaptureHeld:false,performance:{now:()=>100},viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:{dragging:false,axis:null},viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,greenroomPreviewIsActive:()=>false,pickFlameDomainFromViewportPointer:()=>false,pickWaterDomainFromViewportPointer:()=>false,pickSceneObjectFromViewportPointer:()=>({id:'source'}),selection:false,cleared:false,setActiveSceneObject(id,{extend}){c.selection=extend?!c.selection:true;},clearActiveSceneObjectSelection(){c.cleared=true;},setInfo(){},window:{_kaminosDirty(){}}};vm.createContext(c);vm.runInContext(grab('handleViewportPointerDown')+grab('handleViewportSelectionClick'),c);return c;}
@@ -53,4 +54,25 @@ test('Edit Mode owns viewport down, release and click without changing object or
  const c=pointerContext();c.polyEdit={active:()=>true};c.selection=true;c.pickFlameDomainFromViewportPointer=()=>{throw Error('object-mode domain picker ran');};c.pickSceneObjectFromViewportPointer=()=>{throw Error('object-mode source picker ran');};
  const event={button:0,clientX:50,clientY:20,pointerId:1};c.handleViewportPointerDown(event);c.handleViewportSelectionClick({...event,type:'pointerup'});c.handleViewportSelectionClick({...event,type:'click'});
  assert.equal(c.viewportPointerDown,null);assert.equal(c.selection,true);assert.equal(c.cleared,false);
+});
+
+function selectionTargetContext(){
+ const c={structuredClone,checkedSelection,sceneObjects:[{id:'mesh',object:{}},{id:'source',object:{}}],sceneGroups:[],sceneSelection:{ids:['mesh'],activeId:'mesh'},activeSceneObjectId:'mesh',activeSceneGroupId:null,activeSceneFieldId:null,currentMesh:{},activeSceneComposition:{},localLiquidSetup:{},burnerGraphWriting:false,transformControls:null,
+  editing:true,exits:0,splatCorrectionMode:null,scenePlacementTools:{selectionChanged(){}},updateSelectionFeedback(){},renderSceneObjectList(){},updateTransformInspector(){},refreshFlameDomainPreview(){},flameDomainEditObject:()=>({}),authoringWorkspace:{setContext(){}},setInfo(){},document:{getElementById:()=>({classList:{remove(){}}})},
+  selectedSceneObjectEntry:()=>c.sceneObjects.find(o=>o.id===c.activeSceneObjectId),window:{_kaminosDirty(){}}
+ };
+ c.window.kaminosPolyEdit={active:()=>c.editing,read:()=>({objectId:'mesh'}),exit(){c.editing=false;c.exits++;}};
+ vm.createContext(c);vm.runInContext(grab('setSceneSelection')+grab('clearActiveSceneObjectSelection'),c);
+ const a=html.indexOf('window.selectSceneField=function'),b=html.indexOf('\n};',a)+3;vm.runInContext(html.slice(a,b),c);
+ return c;
+}
+test('selecting a field leaves component editing before changing the inspector target',()=>{
+ for(const field of ['water-field','flame-field']){const c=selectionTargetContext();c.window.selectSceneField(field);assert.equal(c.activeSceneFieldId,field);assert.equal(c.editing,false);assert.equal(c.exits,1);}
+});
+test('object selection preserves Edit Mode only for the same sole object',()=>{
+ const c=selectionTargetContext();c.setSceneSelection(['mesh']);assert.equal(c.editing,true);assert.equal(c.exits,0);
+ c.setSceneSelection(['source']);assert.equal(c.editing,false);assert.equal(c.exits,1);assert.equal(c.activeSceneObjectId,'source');
+});
+test('clearing the authored target also leaves its component editing mode',()=>{
+ const c=selectionTargetContext();c.clearActiveSceneObjectSelection();assert.equal(c.editing,false);assert.equal(c.exits,1);assert.equal(c.activeSceneObjectId,null);
 });
