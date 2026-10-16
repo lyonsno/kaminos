@@ -89,7 +89,10 @@ export default {
         cellInput=document.createElement('input');cellInput.type='number';cellInput.min='0.000001';cellInput.step='any';cellInput.setAttribute('aria-label','World grain cell size');
         cellInput.addEventListener('change',()=>invoke('setShadowComparison',{worldCellSize:Number(cellInput.value)}).catch(error=>{sync();status.textContent=error.message;}));
         cellRow.append(cellInput);panel.append(cellRow);
-        const grainHelp=document.createElement('p');grainHelp.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. World cells are measured in scene units and stay in the world as objects move. Scrambling trades the ordered coverage of neighboring pixels for irregular grain; it is not a denoiser. Use complementary sampling to compare filter grain.';panel.append(grainHelp);
+        const grainHelp=document.createElement('details'),grainSummary=document.createElement('summary'),grainText=document.createElement('p');
+        grainSummary.textContent='About grain and A/B';
+        grainText.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. World cells are measured in scene units and stay in the world as objects move. Scrambling trades the ordered coverage of neighboring pixels for irregular grain; it is not a denoiser. Use complementary sampling to compare filter grain.';
+        grainHelp.append(grainSummary,grainText);panel.append(grainHelp);
         const heading=document.createElement('h3');heading.textContent='Surface shadow cost';panel.append(heading);
         for(const [key,text,max,help] of [
           ['resolution','Shadow cube resolution',1024,'Pixels per cube face. Lower values reduce capture size and shadow detail.'],
