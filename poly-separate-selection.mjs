@@ -21,9 +21,9 @@ function editedPrimitive(sourceBytes,faceMask,geometry) {
   const materials=[...new Set(primitives.map(p=>p.material??0))];
   if(materials.length>2)throw Error('Edit Mode supports one material plus cut caps for now');
   const blocks=primitives.map(p=>({...p,indices:p.indices??Uint32Array.from({length:p.positions.length/3},(_,i)=>i)}));
-  const join=key=>blocks.every(p=>p[key])?Float32Array.from(blocks.flatMap(p=>[...p[key]])):null;
-  let base=0;const indices=Uint32Array.from(blocks.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.positions.length/3;return out;}));
-  const faceMaterial=Uint8Array.from(blocks.flatMap(p=>Array(p.indices.length/3).fill(materials.indexOf(p.material??0))));
+  const join=key=>{if(!blocks.every(p=>p[key]))return null;if(blocks.length===1)return blocks[0][key];const out=new Float32Array(blocks.reduce((n,p)=>n+p[key].length,0));let at=0;for(const p of blocks){out.set(p[key],at);at+=p[key].length;}return out;};
+  const indices=new Uint32Array(blocks.reduce((n,p)=>n+p.indices.length,0)),faceMaterial=new Uint8Array(indices.length/3);
+  for(let b=0,at=0,base=0;b<blocks.length;b++){const p=blocks[b],slot=materials.indexOf(p.material??0);for(let i=0;i<p.indices.length;i++)indices[at+i]=p.indices[i]+base;faceMaterial.fill(slot,at/3,(at+p.indices.length)/3);at+=p.indices.length;base+=p.positions.length/3;}
   const arrays={positions:join('positions'),normals:join('normals'),uvs:join('uvs'),indices,faceMaterial},faces=indices.length/3;
   if(faceMask&&faceMask.length!==faces)throw Error(`The selection covers ${faceMask.length} faces but the GLB has ${faces}`);
   if(geometry)checkSameTriangles(arrays.positions,indices,geometry);

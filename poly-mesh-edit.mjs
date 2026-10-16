@@ -24,10 +24,19 @@ function vertexDistances(mesh,{p,n},epsilon){
   return d;
 }
 // Growable output arrays that start as copies of the source render vertices.
+// Values stay double precision until finish, as the cut's geometric tests expect.
+function grower(source,width){
+  if(!source)return null;
+  const g={array:new Float64Array(Math.max(source.length*1.25|0,width*16)),length:source.length};g.array.set(source);
+  g.push=values=>{if(g.length+width>g.array.length){const next=new Float64Array(g.array.length*2);next.set(g.array.subarray(0,g.length));g.array=next;}g.array.set(values,g.length);g.length+=width;};
+  return g;
+}
 function builder(arrays){
-  const out={positions:Array.from(arrays.positions),normals:arrays.normals?Array.from(arrays.normals):null,uvs:arrays.uvs?Array.from(arrays.uvs):null,indices:[],faceMaterial:[]};
-  out.add=(position,normal,uv)=>{out.positions.push(...position);if(out.normals)out.normals.push(...normal);if(out.uvs)out.uvs.push(...uv);return out.positions.length/3-1;};
-  out.finish=()=>({positions:Float32Array.from(out.positions),normals:out.normals&&Float32Array.from(out.normals),uvs:out.uvs&&Float32Array.from(out.uvs),indices:Uint32Array.from(out.indices),faceMaterial:Uint8Array.from(out.faceMaterial)});
+  const P=grower(arrays.positions,3),N=grower(arrays.normals,3),U=grower(arrays.uvs,2);
+  // positions is a view of the filled part; it is stale after the next add, so read it afresh.
+  const out={get positions(){return P.array.subarray(0,P.length);},normals:!!N,uvs:!!U,indices:[],faceMaterial:[]};
+  out.add=(position,normal,uv)=>{P.push(position);if(N)N.push(normal);if(U)U.push(uv);return P.length/3-1;};
+  out.finish=()=>({positions:Float32Array.from(P.array.subarray(0,P.length)),normals:N&&Float32Array.from(N.array.subarray(0,N.length)),uvs:U&&Float32Array.from(U.array.subarray(0,U.length)),indices:Uint32Array.from(out.indices),faceMaterial:Uint8Array.from(out.faceMaterial)});
   return out;
 }
 const area2=(P,a,b,c)=>{
@@ -104,14 +113,19 @@ export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
 // vertices it uses and every attribute unchanged.
 export function extractFaces(arrays,mask) {
   checkedFaceMask(arrays,mask);
-  const faces=[[],[]];for(let f=0;f<mask.length;f++)faces[mask[f]?0:1].push(f);
+  let selected=0;for(let f=0;f<mask.length;f++)if(mask[f])selected++;
+  const faces=[new Uint32Array(selected),new Uint32Array(mask.length-selected)];
+  for(let f=0,a=0,b=0;f<mask.length;f++)if(mask[f])faces[0][a++]=f;else faces[1][b++]=f;
+  const I=arrays.indices,renderCount=arrays.positions.length/3,remap=new Int32Array(renderCount);
+  // Render vertices in order of first use, so the output is the same whatever the storage.
   const take=list=>{
-    const map=new Map(),indices=new Uint32Array(list.length*3);
-    list.forEach((f,j)=>{for(let i=0;i<3;i++){const r=arrays.indices[3*f+i];if(!map.has(r))map.set(r,map.size);indices[3*j+i]=map.get(r);}});
-    const order=[...map.keys()],gather=(values,width)=>{if(!values)return null;const g=new Float32Array(order.length*width);order.forEach((r,i)=>g.set(values.subarray(width*r,width*r+width),width*i));return g;};
-    return {positions:gather(arrays.positions,3),normals:gather(arrays.normals,3),uvs:gather(arrays.uvs,2),indices,faceMaterial:Uint8Array.from(list,f=>arrays.faceMaterial?.[f]??0)};
+    remap.fill(-1);const indices=new Uint32Array(list.length*3),order=new Uint32Array(renderCount);let used=0;
+    for(let j=0;j<list.length;j++)for(let i=0;i<3;i++){const r=I[3*list[j]+i];if(remap[r]<0){remap[r]=used;order[used++]=r;}indices[3*j+i]=remap[r];}
+    const gather=(values,width)=>{if(!values)return null;const g=new Float32Array(used*width);for(let v=0;v<used;v++)for(let k=0;k<width;k++)g[v*width+k]=values[width*order[v]+k];return g;};
+    const faceMaterial=new Uint8Array(list.length);if(arrays.faceMaterial)for(let j=0;j<list.length;j++)faceMaterial[j]=arrays.faceMaterial[list[j]];
+    return {positions:gather(arrays.positions,3),normals:gather(arrays.normals,3),uvs:gather(arrays.uvs,2),indices,faceMaterial};
   };
-  return {part:take(faces[0]),rest:take(faces[1]),partFaces:Uint32Array.from(faces[0]),restFaces:Uint32Array.from(faces[1])};
+  return {part:take(faces[0]),rest:take(faces[1]),partFaces:faces[0],restFaces:faces[1]};
 }
 
 // Close the openings that lie in a plane. Loops come from the open boundary as

@@ -68,10 +68,11 @@ export function boxSelect(selection,mesh,{projected,visible,rect,through=false,m
   if(kind==='vertex')for(let v=0;v<mesh.vertexCount;v++)hits[v]=seen(v)&&inside(P[2*v],P[2*v+1])?1:0;
   else if(kind==='edge')for(let e=0;e<mesh.edgeCount;e++){const a=mesh.edgeVertices[2*e],b=mesh.edgeVertices[2*e+1];hits[e]=seen(a)&&seen(b)&&inside(P[2*a],P[2*a+1])&&inside(P[2*b],P[2*b+1])?1:0;}
   else for(let f=0;f<mesh.faceCount;f++){
-    const [a,b,c]=mesh.cornerVertex.subarray(3*f,3*f+3);
+    const a=mesh.cornerVertex[3*f],b=mesh.cornerVertex[3*f+1],c=mesh.cornerVertex[3*f+2];
     hits[f]=seen(a)&&seen(b)&&seen(c)&&inside((P[2*a]+P[2*b]+P[2*c])/3,(P[2*a+1]+P[2*b+1]+P[2*c+1])/3)?1:0;
   }
-  const base=mode==='set'?hits:Uint8Array.from(selection[key(kind)],(s,i)=>mode==='extend'?s|hits[i]:s&&!hits[i]?1:0);
+  let base=hits;
+  if(mode!=='set'){const prior=selection[key(kind)];base=new Uint8Array(hits.length);for(let i=0;i<hits.length;i++)base[i]=mode==='extend'?prior[i]|hits[i]:prior[i]&&!hits[i]?1:0;}
   return flush(mesh,kind,base,selection.active);
 }
 

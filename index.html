@@ -26671,8 +26671,10 @@ async function readPolySource(entry){
 }
 // pieces: [{bytes, name, receipt, shift?}], shift moving the piece in its parent frame. The first
 // piece keeps editing, as Blender keeps editing what remains; all pieces end up selected.
-async function replacePolyObject({id,token,verb,sha256,pieces}){
-  const stored=await Promise.all(pieces.map(piece=>storeDerivedMesh(piece.bytes)));
+// Phase timings for Edit Mode operations, returned with each result so slowness has a location.
+function polyTimer(){const out={},start=performance.now();let last=start;const mark=name=>{const now=performance.now();out[name]=Math.round(now-last);last=now;out.total=Math.round(now-start);return out;};mark.timings=out;return mark;}
+async function replacePolyObject({id,token,verb,sha256,pieces,mark=polyTimer()}){
+  const stored=await Promise.all(pieces.map(piece=>storeDerivedMesh(piece.bytes)));mark('store');
   if(token!==sceneMutationToken||polyEdit.api.read().objectId!==id)throw Error(`The scene changed during ${verb}; nothing was changed`);
   assertSceneConstructionAvailable();
   polyEdit.api.exit();
@@ -26686,23 +26688,23 @@ async function replacePolyObject({id,token,verb,sha256,pieces}){
   for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?ids:[member]);
   after.selection={...after.selection,ids:[...ids].reverse(),activeId:ids[0]};after.field=null;
   for(const target of [id,...ids])compoundRetentionTargets.set(target,'@selection-membership');
-  await writeSelectionMembership(after);
+  await writeSelectionMembership(after);mark('swap');
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`${verb} ${original.label}`);
-  polyEdit.api.enter(ids[0]);
-  return {ids,stored};
+  polyEdit.api.enter(ids[0]);mark('edit');
+  return {ids,stored,timings:mark.timings};
 }
 async function splitPolyObject(verb,split){
-  const {id,entry,geometry,token}=polyEditTarget(verb),mask=polyEdit.api.selectedFaceMask();
+  const mark=polyTimer(),{id,entry,geometry,token}=polyEditTarget(verb),mask=polyEdit.api.selectedFaceMask();
   if(!mask.some(Boolean))throw Error(`Select faces to ${verb.toLowerCase()}`);
   setInfo(`${verb === 'Slice' ? 'Slicing' : 'Separating'}…`);
-  const {sourceBytes,sha256}=await readPolySource(entry);
+  const {sourceBytes,sha256}=await readPolySource(entry);mark('read');
   // Blender's naming: the new piece takes the next free .001, .002… after the base name.
   const label=entry.label||'Mesh',base=label.replace(/\.\d{3}$/,''),taken=new Set(sceneObjects.map(o=>o.label));
   let n=1;while(taken.has(`${base}.${String(n).padStart(3,'0')}`))n++;const partLabel=`${base}.${String(n).padStart(3,'0')}`;
-  const {part,rest}=split(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});
-  const {ids:[restId,partId],stored:[restStored,partStored]}=await replacePolyObject({id,token,verb,sha256,pieces:[{bytes:rest.bytes,name:label,receipt:rest.receipt},{bytes:part.bytes,name:partLabel,receipt:part.receipt}]});
+  const {part,rest}=split(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});mark('compute');
+  const {ids:[restId,partId],stored:[restStored,partStored],timings}=await replacePolyObject({id,token,verb,sha256,mark,pieces:[{bytes:rest.bytes,name:label,receipt:rest.receipt},{bytes:part.bytes,name:partLabel,receipt:part.receipt}]});
   setInfo(`${verb==='Slice'?'Sliced':'Separated'} ${part.faces} faces into ${partLabel}${part.capFaces!==undefined?` · caps ${part.capFaces} + ${rest.capFaces} faces${part.openChains||rest.openChains?` · ${part.openChains+rest.openChains} section chains left open`:''}`:''} · Undo restores`);
-  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partCapFaces:part.capFaces??0,restCapFaces:rest.capFaces??0,openChains:(part.openChains??0)+(rest.openChains??0),partSource:partStored.source,restSource:restStored.source};
+  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partCapFaces:part.capFaces??0,restCapFaces:rest.capFaces??0,openChains:(part.openChains??0)+(rest.openChains??0),partSource:partStored.source,restSource:restStored.source,timings};
 }
 // Origin to Selection (Shift+S): the selection's median becomes the object's origin, so it turns
 // about that point. The object moves by the offset, rotated and scaled by its transform, and the
