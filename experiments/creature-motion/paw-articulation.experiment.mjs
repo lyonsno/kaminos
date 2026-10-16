@@ -9,13 +9,13 @@ export default {
  async create({host,inputs,record}) {
   if(!Array.isArray(inputs.casts)||!inputs.casts.length)throw Error('Explicit retained/corrected cast pairs required');
   const session=await host.scene.open(),root=new THREE.Group();root.name='Paw articulation · old left / corrected right';
-  let runtimes=[],index=0,joint=paws[0],angle=0,asset,disposed=false,request=0,select,slider,output,status;
+  let runtimes=[],index=0,joint=paws[0],angle=0,asset,disposed=false,request=0,castSelect,select,slider,output,status;
   const rest=new Map();
   const ground=host.controls.document.getElementById('composition-ground-height');
   const oldGround=ground?.value;let referenceGround;
   function seatGround(){if(ground){referenceGround=String(Math.min(...runtimes.map(r=>r.mesh.geometry.boundingBox.min.y))-.05);ground.value=referenceGround;ground.dispatchEvent(new Event('change'));}}
   function restoreGround(){if(ground&&ground.value===referenceGround){ground.value=oldGround;ground.dispatchEvent(new Event('change'));}}
-  function sync(){if(select)select.value=joint;if(slider)slider.value=String(angle);if(output)output.textContent=`${angle}°`;}
+  function sync(){if(castSelect)castSelect.value=String(index);if(select)select.value=joint;if(slider)slider.value=String(angle);if(output)output.textContent=`${angle}°`;}
   function apply(){
    for(const [i,runtime] of runtimes.entries()){
     for(const name of paws)runtime.bones.get(name).quaternion.copy(rest.get(i+':'+name));
@@ -35,16 +35,25 @@ export default {
     active();if(version!==request)throw Error('Paw study cast request superseded');
     if(loaded[0].manifest.bones.length!==28||loaded[1].manifest.bones.length!==32)throw Error('Requested old28/corrected32 pair was not loaded');
     if(loaded[0].manifest.assets['rest.bin'].sha256!==loaded[1].manifest.assets['rest.bin'].sha256||loaded[0].manifest.assets['triangles.bin'].sha256!==loaded[1].manifest.assets['triangles.bin'].sha256)throw Error('Pair changed cast geometry');
-    const next=[];
-    try{for(const data of loaded)next.push(createFullBodyRuntime({THREE,...data}));}catch(error){next.forEach(r=>r.dispose());throw error;}
-    for(const runtime of runtimes){root.remove(runtime.group);runtime.dispose();}
-    runtimes=next;rest.clear();index=requested;
-    for(const [i,runtime] of runtimes.entries()){
-     runtime.group.name=i?'Corrected32 · feet forward':'Retained28 · previous feet';runtime.group.position.x=i?2.3:-2.3;
-     for(const name of paws)rest.set(i+':'+name,runtime.bones.get(name).quaternion.clone());
-     root.add(runtime.group);
+    if(runtimes.length){
+     // Preserve actual mesh/Bone handles through the existing exchange route;
+     // the shared selection renderer may still reference those handles.
+     for(const [i,data] of loaded.entries())for(const bone of data.manifest.bones){
+      const previous=runtimes[i].bones.get(bone.name);
+      if(!previous)throw Error('Cast exchange changed rig inventory');
+     }
+     for(const [i,data] of loaded.entries())runtimes[i].replaceSkin(data);
+    }else{
+     const next=[];
+     try{for(const data of loaded)next.push(createFullBodyRuntime({THREE,...data}));}catch(error){next.forEach(r=>r.dispose());throw error;}
+     runtimes=next;
+     for(const [i,runtime] of runtimes.entries()){
+      runtime.group.name=i?'Corrected32 · feet forward':'Retained28 · previous feet';runtime.group.position.x=i?2.3:-2.3;
+      for(const name of paws)rest.set(i+':'+name,runtime.bones.get(name).quaternion.clone());
+      root.add(runtime.group);
+     }
     }
-    apply();seatGround();
+    index=requested;apply();seatGround();if(asset)host.scene.refreshPresentation?.(asset);
    }catch(error){if(status)status.textContent=error.message;throw error;}
    return read();
   }
@@ -65,7 +74,7 @@ export default {
    return {read,operations,
     mount({root:panel,document,invoke}){
      const description=document.createElement('p');description.textContent='Old feet on the left; corrected feet on the right. Same cast geometry. Corrected casts use paw-local influence refinement; an unchanged-weight Strong baseline is also retained. Rotate a toe joint, then return to Neutral. No generated motion here.';
-     const casts=document.createElement('select');casts.setAttribute('aria-label','Paw study cast');
+     const casts=castSelect=document.createElement('select');casts.setAttribute('aria-label','Paw study cast');
      inputs.casts.forEach((c,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=c.label;casts.append(option);});
      select=document.createElement('select');select.setAttribute('aria-label','Paw joint');
      paws.forEach(n=>{const option=document.createElement('option');option.value=n;option.textContent=n.replaceAll('-',' ');select.append(option);});
