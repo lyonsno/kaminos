@@ -1383,9 +1383,72 @@ def read_volume_settings_preset(store_path, preset_ref, schema=None):
     }
 
 
+# The preset index is requested on every page load and reads every preset in
+# the local store and the shared basin library. Presets are content-addressed,
+# so the hash check, schema projection and validation of an unchanged file are
+# kept per (store, reference, schema) and reused while the alias and preset
+# files keep their identity (inode, size, mtime). A changed or missing file is
+# read again; a read that fails is never cached.
+_VOLUME_SETTINGS_PRESET_SUMMARIES = {}
+
+
+def _volume_settings_schema_key(schema):
+    return hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _file_identity(path):
+    stat = path.stat()
+    return (str(path), stat.st_ino, stat.st_size, stat.st_mtime_ns)
+
+
+def _volume_settings_preset_summary_from_document(document):
+    preset = document.get("preset") or {}
+    projection = document.get("schemaProjection") or {}
+    return {
+        "label": document["label"],
+        "presetId": document["presetId"],
+        "contentHash": document["contentHash"],
+        "schemaIdentity": document["schemaIdentity"],
+        "controlCount": document["controlCount"],
+        "rendererControlCount": len(preset.get("rendererControls") or {}),
+        "presentationControlCount": len(preset.get("presentationControls") or {}),
+        "schemaProjection": {
+            field: list(projection.get(field) or [])
+            for field in ("defaultsApplied", "retiredControlsStripped", "carriedControls", "unsupportedValuesDefaulted")
+        },
+    }
+
+
+def read_volume_settings_preset_summary(store_path, preset_ref, schema, schema_key=None):
+    """The fields the preset index lists, from a cached validated read."""
+    store = _volume_settings_store_path(store_path)
+    schema_key = schema_key or _volume_settings_schema_key(schema)
+    ref = str(preset_ref or "").strip()
+    try:
+        if ref.startswith("vsp-"):
+            paths = [store / "presets" / f"{ref}.json"]
+        else:
+            alias_path = store / "aliases" / f"{ref}.json"
+            preset_id = _read_json_object(alias_path, "alias").get("presetId")
+            paths = [alias_path, store / "presets" / f"{preset_id}.json"]
+        identity = tuple(_file_identity(path) for path in paths)
+    except (OSError, ValueError, TypeError):
+        identity = None
+    key = (str(store), ref, schema_key)
+    cached = _VOLUME_SETTINGS_PRESET_SUMMARIES.get(key)
+    if identity is not None and cached is not None and cached[0] == identity:
+        summary = cached[1]
+    else:
+        summary = _volume_settings_preset_summary_from_document(read_volume_settings_preset(store, ref, schema))
+        if identity is not None:
+            _VOLUME_SETTINGS_PRESET_SUMMARIES[key] = (identity, summary)
+    return {**summary, "schemaProjection": copy.deepcopy(summary["schemaProjection"])}
+
+
 def list_volume_settings_presets(store_path, schema=None):
     schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     store = _volume_settings_store_path(store_path)
+    schema_key = _volume_settings_schema_key(schema)
     aliases_dir = store / "aliases"
     aliases_dir.mkdir(parents=True, exist_ok=True)
     entries = []
@@ -1408,7 +1471,7 @@ def list_volume_settings_presets(store_path, schema=None):
             invalid_aliases.append({"alias": alias_path.stem, "path": str(alias_path), "error": str(error)})
             continue
         try:
-            document = read_volume_settings_preset(store, alias, schema)
+            document = read_volume_settings_preset_summary(store, alias, schema, schema_key)
         except (OSError, ValueError) as error:
             # One unreadable basin is reported on its own entry; it must not
             # take down the picker for every other basin in the store.
@@ -1432,8 +1495,8 @@ def list_volume_settings_presets(store_path, schema=None):
             "contentHash": document["contentHash"],
             "schemaIdentity": document["schemaIdentity"],
             "controlCount": document["controlCount"],
-            "rendererControlCount": len((document.get("preset") or {}).get("rendererControls") or {}),
-            "presentationControlCount": len((document.get("preset") or {}).get("presentationControls") or {}),
+            "rendererControlCount": document["rendererControlCount"],
+            "presentationControlCount": document["presentationControlCount"],
             "defaultsApplied": (document.get("schemaProjection") or {}).get("defaultsApplied") or [],
             "retiredControlsStripped": (document.get("schemaProjection") or {}).get("retiredControlsStripped") or [],
             "carriedControls": (document.get("schemaProjection") or {}).get("carriedControls") or [],
@@ -1457,7 +1520,7 @@ def list_volume_settings_presets(store_path, schema=None):
             if preset_id == current_by_alias.get(alias):
                 continue
             try:
-                document = read_volume_settings_preset(store, preset_id, schema)
+                document = read_volume_settings_preset_summary(store, preset_id, schema, schema_key)
             except (OSError, ValueError) as error:
                 unavailable_entries.append({
                     "alias": alias,
@@ -2281,15 +2344,46 @@ def scene_library_import_basin(document, scene_store):
         return {'kind': 'basin', 'presetId': preset_id, 'status': 'present'}
     except FileNotFoundError:
         pass
-    # The consumer store is the observed scenes/basins sibling layout. Copy
-    # only its verified immutable artifact, leaving aliases and source untouched.
-    source_store = Path(scene_store).parent / 'basins'
-    read_volume_settings_preset(source_store, preset_id)
-    source = source_store / 'presets' / f'{preset_id}.json'
-    destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
-    _atomic_write_json(destination, json.loads(source.read_text()))
-    read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
-    return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported'}
+    # Look beside the scene first (the observed scenes/basins consumer layout),
+    # then in this machine's basin library and default preset store, which a
+    # lane server with a private store and no shared library cannot otherwise
+    # see. Copy only the verified immutable artifact, leaving aliases and
+    # source untouched.
+    candidates = [Path(scene_store).parent / 'basins', SHARED_BASIN_STORE_DEFAULT, VOLUME_SETTINGS_STORE_DEFAULT]
+    searched, rejected = [], []
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        source_store = Path(candidate).expanduser()
+        if source_store in searched:
+            continue
+        searched.append(source_store)
+        source = source_store / 'presets' / f'{preset_id}.json'
+        if not source.is_file():
+            continue
+        # Verify the exact bytes that will be stored, read once: a source that
+        # changes after verification cannot put unverified content here. A
+        # copy that fails verification is skipped for the next location.
+        data = source.read_bytes()
+        try:
+            with tempfile.TemporaryDirectory() as staging:
+                staged = Path(staging) / 'presets' / source.name
+                staged.parent.mkdir(parents=True)
+                staged.write_bytes(data)
+                read_volume_settings_preset(Path(staging), preset_id)
+        except ValueError as error:
+            rejected.append(f'{source_store}: {error}')
+            continue
+        destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
+        _atomic_write_json(destination, json.loads(data))
+        read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
+        return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported', 'from': str(source_store)}
+    if rejected:
+        raise ValueError(f'volume settings preset artifact content hash mismatch or invalid for {preset_id}: ' + '; '.join(rejected))
+    raise FileNotFoundError(
+        f"volume settings preset not found: {preset_id} (looked in this server's stores and "
+        + ', '.join(str(store) for store in searched) + ')'
+    )
 
 
 def scene_library_stores():
