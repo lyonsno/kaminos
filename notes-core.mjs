@@ -298,8 +298,14 @@ export function addresseesIn(text, known) {
 }
 // What became of the geometry a point note is on, from a scene recheck
 // ({now, status}); nothing to say while it is the same or cannot be told.
-// A point note's geometry can only be checked in the scene it was written in.
-export const pointInScene = (note, scene) => (note?.subject?.scene ?? null) === (scene || null);
+// A point note's geometry can only be checked in the scene it was written in:
+// a named scene by its name; an unsaved scene only with evidence that it is
+// the same one, the page and scene load the note was written in.
+export function pointInScene(note, scene, instance = null) {
+  const written = note?.subject?.scene ?? null;
+  if (written || scene) return written === (scene || null);
+  return !!instance && note?.context?.sceneInstance === instance;
+}
 
 export function pointStatusText(result) {
   if (!result) return '';
