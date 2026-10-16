@@ -14,15 +14,15 @@ import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null}) {
   validateShadowQuality({resolution:shadowResolution,blockerSamples,filterSamples},device.limits);
   if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('shadow softness must be finite and nonnegative');
   validateShadowSampling(shadowSampling);
-  validateSourceQuadrature(pointCount);
+  validateSourceQuadrature(pointCount,pointSampling);
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
-  const paired=uniform(false,'bool');let pointSampling='all';
-  let comparison=validateShadowComparison();
+  const paired=uniform(pointSampling==='paired','bool');
+  let comparison=validateShadowComparison(shadowComparison);
   const worldCellSize=uniform(comparison.worldCellSize);
   let points,external,lights,irradiance;
   function buildPoints(count){
@@ -66,6 +66,35 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,blockerSamples,filterSamples,maxShadowResolution:device.limits.maxTextureDimension2D,volumeGrid,directions,
     geometryBuilds:0,visibilityBuilds:0,previewStale:false,receiverSpacingRequested:0,surfaceReconstructionRequested:0,
     limitations:['point-region-surface-approximation','point-surfaces-omit-medium-extinction','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
+  let rebuildRevision=0,rebuildTask=null,rebuilding=false;
+  function replaceLighting(){
+    releasePoints();buildPoints(pointCount);installMaterials();
+    for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+  }
+  function requestRebuild(){
+    rebuildRevision++;
+    if(!rebuild){valid=false;replaceLighting();status.status='awaiting-source';return;}
+    status.status='compiling-lighting';delete status.error;onStatus({...status});
+    if(rebuildTask)return;
+    const quiescent=rebuild.hold(true);
+    rebuildTask=Promise.resolve().then(async()=>{
+      await quiescent;
+      rebuilding=true;valid=false;
+      let compiled;
+      do {
+        if(disposed)return;
+        compiled=rebuildRevision;replaceLighting();
+        await rebuild.compile();
+      } while(!disposed&&compiled!==rebuildRevision);
+      if(!disposed){rebuilding=false;status.status='awaiting-source';rebuild.hold(false);onStatus({...status});}
+    }).catch(error=>{
+      if(!disposed){status.status='lighting-compile-failed';status.error=String(error.message);onStatus({...status});}
+      throw error;
+    }).finally(()=>{rebuildTask=null;if(disposed)rebuild.hold(false);});
+    // Keep a failed compile visible and held until retry/disposal, without an
+    // unhandled rejection from synchronous UI setters. whenRebuilt rejects.
+    rebuildTask.catch(()=>{});
+  }
   function installMaterials(){
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
@@ -86,6 +115,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   }
   function prepare(field){
     if(disposed)throw new Error('hybrid lighting disposed');valid=false;
+    if(rebuilding||status.status==='lighting-compile-failed')throw Error(status.error??'lighting compilation pending');
     try {
       sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
@@ -121,8 +151,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     validateSourceQuadrature(value,sampling);
     if(disposed)throw Error('hybrid lighting disposed');
     if(value!==pointCount){
-      valid=false;releasePoints();buildPoints(value);pointCount=value;status.pointCount=value;status.status='awaiting-source';
-      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+      pointCount=value;status.pointCount=value;requestRebuild();
     }
     pointSampling=sampling;paired.value=sampling==='paired';
   }
@@ -132,7 +161,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(disposed)throw Error('hybrid lighting disposed');
       const rebuild=next.implementation!==comparison.implementation||next.grain!==comparison.grain;
       comparison=next;worldCellSize.value=next.worldCellSize;
-      if(rebuild){valid=false;releasePoints();buildPoints(pointCount);status.status='awaiting-source';for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;}
+      if(rebuild)requestRebuild();
     },
     setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
@@ -146,13 +175,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const next=validateShadowQuality({resolution:shadowResolution,blockerSamples,filterSamples,...value},device.limits);
       if(disposed)throw Error('hybrid lighting disposed');
       if(next.resolution===shadowResolution&&next.blockerSamples===blockerSamples&&next.filterSamples===filterSamples)return;
-      valid=false;
-      releasePoints();
       shadowResolution=next.resolution;blockerSamples=next.blockerSamples;filterSamples=next.filterSamples;
-      buildPoints(pointCount);
-      Object.assign(status,{shadowResolution,blockerSamples,filterSamples,status:'awaiting-source'});
-      for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+      Object.assign(status,{shadowResolution,blockerSamples,filterSamples});requestRebuild();
     },
+    whenRebuilt(){return rebuildTask??(status.error?Promise.reject(Error(status.error)):Promise.resolve());},
+    retryRebuild(){if(disposed)throw Error('hybrid lighting disposed');requestRebuild();return rebuildTask;},
     setQuadrature,setPointCount(value){setQuadrature(value);},setPointSampling(value){setQuadrature(pointCount,value);},
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
@@ -163,6 +190,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     readPointRegions(){if(!valid)throw Error('hybrid source not current');return points.readback();},
     dispose(){
       valid=false;disposed=true;prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
+      const cleanup=()=>{
       for(const [mesh,row] of originals){
         if(mesh.material===row.installed){
           // Preserve edits to the installed material without contaminating an
@@ -175,6 +203,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         for(const material of row.owned)material.dispose();
       }
       originals.clear();releasePoints();gather?.destroy();
+      };
+      if(rebuildTask)rebuildTask.then(cleanup,cleanup);else {cleanup();rebuild?.hold(false);}
     },
   };
 }

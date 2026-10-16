@@ -20897,6 +20897,17 @@ export function createKaminosVolumePrototype({
   let foregroundRequester = null;
   let foregroundPending = null;
   let foregroundSequence = 0;
+  let sceneLightingRebuildPending = false;
+  let foregroundDrain = Promise.resolve();
+
+  function setSceneLightingRebuildPending(pending) {
+    sceneLightingRebuildPending = Boolean(pending);
+    if (pending) { cancelAnimationFrame(raf); raf = 0; }
+    else if (state.active && !selectiveHeadLiveCapturePaused && !foregroundPending && !raf) raf = requestAnimationFrame(render);
+    // A previously admitted foreground frame must finish with its old inputs.
+    // New frames stay parked until the replacement lighting has compiled.
+    return foregroundDrain;
+  }
 
   function setForegroundOpportunityRequester(requester) {
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
@@ -20908,6 +20919,7 @@ export function createKaminosVolumePrototype({
   }
 
   function render(now) {
+    if (sceneLightingRebuildPending) { raf = 0; return; }
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
     if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
@@ -20915,7 +20927,7 @@ export function createKaminosVolumePrototype({
     const requester = foregroundRequester;
     // Reserve before invoking the requester, which may service synchronously.
     foregroundPending = {requestId};
-    Promise.resolve().then(() => {
+    foregroundDrain = Promise.resolve().then(() => {
       const handle = requester({
         requestId,
         metadata: {renderer: 'ordinary-volume', frameCountBefore: state.frameCount, simStepCountBefore: state.simStepCount},
@@ -20945,7 +20957,7 @@ export function createKaminosVolumePrototype({
       emitStatus({phase: 'foreground-frame-error', error: state.error});
     }).finally(() => {
       foregroundPending = null;
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!sceneLightingRebuildPending && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     });
   }
 
@@ -28178,6 +28190,7 @@ export function createKaminosVolumePrototype({
       }
     },
     fireIrradianceLightField,
+    setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
       sceneVolumeSourceRequested = enabled === true;
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}

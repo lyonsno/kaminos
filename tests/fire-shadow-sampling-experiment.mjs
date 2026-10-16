@@ -1,11 +1,13 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import experiment from '../experiments/fire-shadow-sampling.experiment.mjs';
+import * as shadowSettings from '../experiments/fire-shadow-sampling.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
 let state={shadowSampling:'fixed',shadowSoftness:1,pointCount:1,shadows:[]},callback,removed=0,disposed=0,redraws=0;
 const win={__kaminosSceneRadiance:{debugState:()=>({...state}),setShadowSampling:value=>state.shadowSampling=value,setShadowSoftness:value=>state.shadowSoftness=value},kaminosSceneGIDebugState:()=>({gain:10})};
 const session={onFrame:fn=>{callback=fn;return()=>removed++;},redraw:()=>redraws++,dispose:async()=>disposed++};
 const records=[];
+assert.equal(typeof shadowSettings.createFireShadowSettings,'function','ordinary Scene Rendering must use the same controller without opening an experiment');
 const result=await experiment.create({host:{controls:{document:{defaultView:win}},scene:{open:async()=>session}},inputs:{sampling:'complementary'},record:value=>records.push(value)});
 assert.equal(result.read().effective,'fixed','state must describe actual runtime before deferred mount');
 callback();assert.equal(result.read().effective,'complementary');assert.equal(removed,1);

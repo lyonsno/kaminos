@@ -11,7 +11,7 @@ class Element {
 }
 globalThis.Option=class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}};
 let frame,points=1,pointSampling='all',sampling='fixed',quality={resolution:256,blockerSamples:9,filterSamples:16},href='http://localhost/index.html#scene=kiln.json';
-const document={createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}}};
+const document={getElementById:()=>null,createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}}};
 const host={controls:{document},scene:{open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}})}};
 const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
 await entry.open('fire-shadow-sampling',{sampling:'complementary',points:1,retained:'other input'});frame();
