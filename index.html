@@ -166,8 +166,10 @@ canvas { display: block; }
 #rendering-distributed-controls > label { display: block; margin-top: 12px; font-size: 11px; color: #a6b2b5; }
 #rendering-fire-shadow-controls > label { display:block; margin:12px 0; font-size:11px; color:#a6b2b5; }
 #rendering-fire-shadow-controls select { display:block; width:100%; margin-top:5px; background:#15191a; color:#e6ecee; border:1px solid #405158; padding:6px; }
-#rendering-fire-shadow-controls input[type="range"] { width:65%; margin:6px 8px 0 0; }
-#rendering-fire-shadow-controls input[type="number"] { width:65px; background:#15191a; color:#e6ecee; border:1px solid #405158; }
+#rendering-panel-content .authoring-number-wrap { min-width:65px; }
+#rendering-panel-content .slider-row .slider-val, #rendering-panel-content .slider-row output { display:none; }
+#rendering-fire-shadow-controls .authoring-number-wrap { display:flex; margin:6px 0; }
+#rendering-panel-content .authoring-number-wrap input { width:100%; background:#15191a; color:#e6ecee; border:1px solid #405158; }
 #rendering-fire-shadow-controls p, #rendering-fire-shadow-controls [role="status"] { font-size:11px; line-height:1.5; color:#a6b2b5; }
 #rendering-fire-shadow-controls button { margin:6px 6px 6px 0; padding:6px 8px; border:1px solid #405158; border-radius:4px; background:#252a2d; color:#e6ecee; cursor:pointer; font-size:11px; }
 #rendering-fire-shadow-controls h3 { margin:14px 0 8px; font-size:12px; }
@@ -3546,6 +3548,7 @@ import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
 import { compileSceneLighting } from './scene-lighting-compile.mjs';
 import { createFireShadowSettings } from './experiments/fire-shadow-sampling.experiment.mjs';
+import { installRenderingNumberControls } from './rendering-number-controls.mjs';
 import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
 import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
@@ -13435,6 +13438,7 @@ function setRightPanelTab(name) {
   }
   if (name === 'rendering') refreshRenderingControls();
 }
+installRenderingNumberControls(document.getElementById('rendering-panel-content'));
 for (const name of ['rendering', 'mix']) {
   document.getElementById(`right-tab-${name}`).addEventListener('click', () => setRightPanelTab(name));
 }
