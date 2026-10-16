@@ -48,8 +48,11 @@ export function checkedAnchor(raw) {
       anchor.face = raw.face;
     }
     if (raw.path != null) {
-      if (typeof raw.path !== 'string') throw new Error('A point anchor path is the mesh path inside the object');
-      anchor.path = raw.path;
+      // Child indices from the object down to the mesh; [] is the object itself.
+      if (!Array.isArray(raw.path) || !raw.path.every(index => Number.isInteger(index) && index >= 0)) {
+        throw new Error('A point anchor path is the list of child indices down to the mesh');
+      }
+      anchor.path = [...raw.path];
     }
     if (raw.geometry != null) anchor.geometry = plainJson(raw.geometry, 'A point anchor geometry');
     if (raw.authority != null) {

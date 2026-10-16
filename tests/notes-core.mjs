@@ -209,7 +209,7 @@ test('a notification outcome is kept with the note and is not a delivery', () =>
 
 test('a note can be on a point of an object, as a pick named it', () => {
   const raw = {kind: 'point', id: 'boom-arm', label: 'Straight boom arm', local: [0.1, 0.25, -0.5], point: [1.2, 3.4, 0.5],
-    normal: [0, 1, 0], face: 42, path: 'Boom/Beam', geometry: {uuid: 'g-1', version: 3}, authority: 'exact', at: [0.41, 0.62]};
+    normal: [0, 1, 0], face: 42, path: [0, 2], geometry: {uuid: 'g-1', version: 3}, authority: 'exact', at: [0.41, 0.62]};
   assert.deepEqual(checkedAnchor(raw), raw);
   assert.deepEqual(checkedAnchor({kind: 'point', id: 'boom-arm', local: [0, 0, 0], point: [1, 2, 3]}),
     {kind: 'point', id: 'boom-arm', label: 'boom-arm', local: [0, 0, 0], point: [1, 2, 3]});
@@ -218,7 +218,9 @@ test('a note can be on a point of an object, as a pick named it', () => {
   assert.throws(() => checkedAnchor({kind: 'point', id: 'boom-arm', local: [0, 0, NaN], point: [1, 2, 3]}), /local point/);
   assert.throws(() => checkedAnchor({kind: 'point', local: [0, 0, 0], point: [1, 2, 3]}), /object id/);
   assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], authority: 'sure'}), /authority/);
-  assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], path: 7}), /path/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], path: 'Boom/Beam'}), /path/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], path: [0, -1]}), /path/);
+  assert.deepEqual(checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], path: []}).path, [], 'the entry itself');
 });
 
 test('an agent reading a point note is told the object, the point on it and how sure the pick was', () => {

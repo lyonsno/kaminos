@@ -558,7 +558,7 @@ def point_anchor_contracts(notes):
     with tempfile.TemporaryDirectory() as tmp:
         log = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
         anchor = {"kind": "point", "id": "boom-arm", "label": "Straight boom arm", "local": [0.1, 0.25, -0.5], "point": [1.2, 3.4, 0.5],
-                  "normal": [0, 1, 0], "face": 42, "path": "Boom/Beam", "geometry": {"uuid": "g-1"}, "authority": "exact", "at": [0.4, 0.6]}
+                  "normal": [0, 1, 0], "face": 42, "path": [0, 2], "geometry": {"uuid": "g-1"}, "authority": "exact", "at": [0.4, 0.6]}
         note = log.post({"kind": "note", "text": "this beam", "anchor": anchor, "author": "writer-agent"}, origin=CLI)
         assert note["anchor"] == anchor, note["anchor"]
         for bad in ({"kind": "point", "id": "boom-arm", "point": [1, 2, 3]},
@@ -566,7 +566,8 @@ def point_anchor_contracts(notes):
                     {"kind": "point", "local": [0, 0, 0], "point": [1, 2, 3]},
                     {"kind": "point", "id": "b", "local": [0, 0, 0], "point": [1, 2, 3], "authority": "sure"},
                     {"kind": "point", "id": "b", "local": [0, 0, float("nan")], "point": [1, 2, 3]},
-                    {"kind": "point", "id": "b", "local": [0, 0, 0], "point": [1, 2, 3], "path": 7}):
+                    {"kind": "point", "id": "b", "local": [0, 0, 0], "point": [1, 2, 3], "path": "Boom/Beam"},
+                    {"kind": "point", "id": "b", "local": [0, 0, 0], "point": [1, 2, 3], "path": [0, -1]}):
             expect_error(notes, 400, "request", lambda bad=bad: log.post({"kind": "note", "text": "x", "anchor": bad, "author": "writer-agent"}, origin=CLI))
 
 

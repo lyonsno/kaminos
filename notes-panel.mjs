@@ -11,7 +11,7 @@ const walk = (note, visit) => { visit(note); for (const reply of note.replies) w
 const involves = (note, name) => { let found = false; walk(note, item => { if (item.author === name || (item.recipients ?? []).includes(name)) found = true; }); return found; };
 
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
-  href = () => '', title = () => '', avatarOf = null, ownView = async () => true}) {
+  href = () => '', title = () => '', avatarOf = null, ownView = async () => true, selectionToken = () => null}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
   let participants = [], notifies = false;
   const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
@@ -26,15 +26,15 @@ export function createNotesSession({transport, selection, entries, readView, wri
     return (current.memberIds?.length ? current.memberIds : current.ids ?? []).filter(id => !String(id).startsWith('@group:'));
   };
 
-  // A point picked on an object anchors the note while that object stays the
-  // selection; selecting anything else drops it.
-  let point = null;
+  // A point picked on an object anchors the note while that selection stands;
+  // any change of selection since, even one Notes did not see, drops it.
+  let point = null, pointToken = null;
   function anchorFromSelection() {
     const current = selection() ?? {};
     const ids = selectedIds();
     const id = current.activeId && entryOf(current.activeId) ? current.activeId : ids.find(entryOf);
     const entry = id ? entryOf(id) : null;
-    if (point && entry?.id !== point.id) point = null;
+    if (point && (entry?.id !== point.id || selectionToken() !== pointToken)) point = null;
     if (point) return {...point};
     return entry ? {kind: 'object', id: entry.id, label: entry.label || entry.fileName || entry.id} : {kind: 'scene'};
   }
@@ -124,7 +124,7 @@ export function createNotesSession({transport, selection, entries, readView, wri
     setPresence(next) { presence = next; changed(); },
     setParticipants(list, {notifies: notifying = false} = {}) { participants = Array.isArray(list) ? list : []; notifies = !!notifying; changed(); },
     notifies() { return notifies; },
-    setPoint(anchor) { point = anchor ? checkedAnchor(anchor) : null; changed(); },
+    setPoint(anchor) { point = anchor ? checkedAnchor(anchor) : null; pointToken = selectionToken(); changed(); },
     point() { return point ? {...point} : null; },
     // The scene object that stands for an agent: the avatar it registered, else
     // what the vantage says, else the sub piloted under its name. Null when
@@ -284,7 +284,7 @@ export async function capturePicture({capture, document}) {
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
   sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
-  ownView = async () => true, pickAt = null}) {
+  ownView = async () => true, pickAt = null, pickCanvas = () => null, selectionToken = () => null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -303,7 +303,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   transport.post = body => send(endpoint, body);
   transport.receipt = body => send(`${endpoint}/receipt`, body);
   const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
-    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf,
+    capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf, selectionToken,
     ownView: () => ownView({waiting: () => say("Waiting for a sub's picture to finish, so yours shows your view\u2026")})});
 
   // --- structure ---
@@ -909,7 +909,9 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   // With the drawer open, Alt-click on the scene pins the note to the point
   // under the cursor, as the renderer drew it (the host's pick).
   const onPointPick = event => {
-    if (drawer.hidden || !pickAt || !event.altKey || event.button !== 0 || event.target?.tagName !== 'CANVAS' || !viewport.contains(event.target)) return;
+    // Only the main viewport canvas is in the frame the operator pick reads;
+    // other canvases (a sub's map or live view) show other cameras.
+    if (drawer.hidden || !pickAt || !event.altKey || event.button !== 0 || !event.target || event.target !== pickCanvas()) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const rect = event.target.getBoundingClientRect();
@@ -921,7 +923,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       select(hit.id);
       session.setPoint({kind: 'point', id: hit.id, label: entry?.label || hit.label || hit.id, local: hit.local, point: hit.point,
         ...(hit.normal ? {normal: hit.normal} : {}), ...(Number.isInteger(hit.surface?.face) ? {face: hit.surface.face} : {}),
-        ...(typeof hit.surface?.path === 'string' ? {path: hit.surface.path} : {}),
+        ...(Array.isArray(hit.surface?.path) ? {path: hit.surface.path} : {}),
         ...(hit.geometry?.identity ? {geometry: hit.geometry.identity} : {}), ...(hit.authority ? {authority: hit.authority} : {}), at});
       refreshAnchor();
       say(`Pinned a point on "${entry?.label || hit.label || hit.id}"${hit.authority === 'approximate' ? ' (approximate: something drawn outside the scene may cover it)' : ''}`);
