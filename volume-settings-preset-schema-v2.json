@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 255,
+  "controlCount": 257,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1687,6 +1687,22 @@
       "type": "range",
       "additiveDefault": 1300,
       "additiveSinceControlCount": 255
+    },
+    {
+      "key": "volume-wavelet-turbulence",
+      "param": "volume_wavelet_turbulence",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 256
+    },
+    {
+      "key": "volume-wavelet-octaves",
+      "param": "volume_wavelet_octaves",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 257
     }
   ],
   "retiredControls": [

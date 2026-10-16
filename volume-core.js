@@ -17,6 +17,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
+import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues } from './volume-wavelet-turbulence.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -2133,7 +2134,13 @@ export const JOINED_BOUNDARY_UNIFORM_OFFSET = REACTANT_COMBUSTION_UNIFORM_OFFSET
 // b = (exterior origin in fine cells xyz, exterior cell width in fine cells);
 // c = (exterior cell dims xyz, fine pitch in exterior local units).
 export const JOINED_BOUNDARY_UNIFORM_FLOATS = 12;
-export const VOLUME_UNIFORM_FLOATS = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
+// Wavelet turbulence (volume-wavelet-turbulence.mjs; Noah 2026-10-16): one
+// vec4 after the joined boundary: gain (0 off), octaves, coherence period in
+// steps, step count. Off, the kernel path is the one main runs.
+export const WAVELET_TURBULENCE_UNIFORM_OFFSET = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
+export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 4;
+export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
+export const VOLUME_UNIFORM_FLOATS = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3761,6 +3768,7 @@ struct Uniforms {
   joined_boundary: vec4<f32>,
   joined_ghost_geometry: vec4<f32>,
   joined_ghost_dims: vec4<f32>,
+  wavelet_turbulence: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3854,6 +3862,14 @@ fn joinedLowerFace(c: vec3<i32>, axis: u32) -> f32 {
 // tick) + raw soot; B = optical smoke, heat, fuel, oxidizer (cell-centred).
 @group(0) @binding(29) var ghostA: texture_3d<f32>;
 @group(0) @binding(30) var ghostB: texture_3d<f32>;
+// Wavelet turbulence (volume-wavelet-turbulence.mjs): the advected noise
+// coordinates, two sets stacked along depth (A in [0, GRID), B in [GRID, 2 GRID)),
+// ping-ponged with the fluid like the reactant sidecar: read as a sampled
+// texture, written as a storage texture. Compute only; 1x1x1 placeholders
+// while the closure is off.
+@group(0) @binding(31) var waveletCoordSrc: texture_3d<f32>;
+@group(0) @binding(32) var waveletCoordDst: texture_storage_3d<rgba32float, write>;
+${WAVELET_TURBULENCE_WGSL}
 
 fn joinedGhosts() -> bool {
   return joinedBoundary() && u.joined_boundary.y > 0.5;
@@ -3947,6 +3963,65 @@ fn forceDeltaStore(c: vec3<i32>, f: vec3<f32>) {
 
 fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
   return textureLoad(forceDelta, c + vec3<i32>(0, 0, component * i32(GRID))).x;
+}
+
+// Wavelet turbulence: the sub-band the grid cannot sustain (scales under about
+// four cells) is relaxed toward divergence-free curl noise whose amplitude is
+// one Kolmogorov octave below the resolved four-to-eight-cell band, evaluated
+// on noise coordinates that travel with the gas. Each set of coordinates is
+// reset to the lattice once per coherence period, half a period apart, and
+// the two syntheses are cross-faded so the reset never shows.
+fn waveletOn() -> bool {
+  return u.wavelet_turbulence.x > 0.0;
+}
+fn waveletCoordLoad(c: vec3<i32>, set: i32) -> vec3<f32> {
+  return textureLoad(waveletCoordSrc, vec3<i32>(clampCell(c)) + vec3<i32>(0, 0, set * i32(GRID)), 0).xyz;
+}
+fn waveletCoordStore(c: vec3<i32>, set: i32, coord: vec3<f32>) {
+  textureStore(waveletCoordDst, c + vec3<i32>(0, 0, set * i32(GRID)), vec4<f32>(coord, 0.0));
+}
+// Trilinear read of a coordinate set at a cell-space position (values live at
+// cell centres).
+fn waveletCoordSample(p: vec3<f32>, set: i32) -> vec3<f32> {
+  let q = p - vec3<f32>(0.5);
+  let i0 = vec3<i32>(floor(q));
+  let f = q - floor(q);
+  let c00 = mix(waveletCoordLoad(i0, set), waveletCoordLoad(i0 + vec3<i32>(1, 0, 0), set), f.x);
+  let c10 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 0), set), waveletCoordLoad(i0 + vec3<i32>(1, 1, 0), set), f.x);
+  let c01 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 0, 1), set), waveletCoordLoad(i0 + vec3<i32>(1, 0, 1), set), f.x);
+  let c11 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 1), set), waveletCoordLoad(i0 + vec3<i32>(1, 1, 1), set), f.x);
+  return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
+}
+// Mean of the stored velocity over the cell and its six neighbours at
+// distance r, solids excluded: r = 1 keeps scales of about four cells and
+// longer, r = 2 about eight and longer.
+fn waveletAxisMean(c: vec3<i32>, r: i32) -> vec3<f32> {
+  var acc = readSlot(c, 0u).xyz;
+  var n = 1.0;
+  for (var a = 0; a < 6; a = a + 1) {
+    var o = vec3<i32>(0);
+    o[a / 2] = select(-r, r, (a & 1) == 0);
+    let nc = c + o;
+    if (!sceneSolidAt(nc)) {
+      acc = acc + readSlot(nc, 0u).xyz;
+      n = n + 1.0;
+    }
+  }
+  return acc / n;
+}
+fn waveletCorrection(c: vec3<i32>) -> vec3<f32> {
+  let mean1 = waveletAxisMean(c, 1);
+  let mean2 = waveletAxisMean(c, 2);
+  let band = mean1 - mean2;
+  let amplitude = waveletTargetAmplitude(0.5 * dot(band, band));
+  let octaves = u32(max(u.wavelet_turbulence.y, 1.0));
+  let period = u32(max(u.wavelet_turbulence.z, 2.0));
+  let wa = waveletBlendA(u32(u.wavelet_turbulence.w), period);
+  var detail = vec3<f32>(0.0);
+  if (wa > 0.0) { detail = detail + wa * waveletDetail(waveletCoordLoad(c, 0), octaves); }
+  if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(waveletCoordLoad(c, 1), octaves); }
+  let subBand = readSlot(c, 0u).xyz - mean1;
+  return clamp(u.wavelet_turbulence.x, 0.0, 1.0) * (amplitude * detail - subBand);
 }
 // (It holds gain x rate, the expansion target; the pressure kernels bind the
 // fluid-front read layout, which carries no uniform.)
@@ -6568,6 +6643,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
     forceDeltaStore(cellI, vec3<f32>(0.0));
+    if (waveletOn()) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
@@ -6650,6 +6726,13 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
+  if (waveletOn()) {
+    // The noise coordinates ride the same characteristic as the gas.
+    let wPeriod = u32(max(u.wavelet_turbulence.z, 2.0));
+    let wPhase = u32(u.wavelet_turbulence.w) % wPeriod;
+    waveletCoordStore(cellI, 0, select(waveletCoordSample(backCell, 0), cell, wPhase == 0u));
+    waveletCoordStore(cellI, 1, select(waveletCoordSample(backCell, 1), cell, wPhase == wPeriod / 2u));
+  }
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
   // Shared characteristic for gas-carried state (Sexy Fireman's common-gas
@@ -7416,6 +7499,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   vel = vel + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   centredForce = centredForce + (swirl * heat * (0.018 + 0.010 * curl) + swirl * source * 0.012) * bonfireSwirlSymmetryGain * artisticSwirl;
   vel = vel + confinement;
+  // Wavelet turbulence: velocity-derived, so it stays on the stored value
+  // under the staggered reading (like confinement); the fold below scales it
+  // by the time step with every other increment.
+  if (waveletOn()) { vel = vel + waveletCorrection(cellI); }
   vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
@@ -12279,6 +12366,39 @@ export function createKaminosVolumePrototype({
     if (!device || !reactantSidecarFull) return;
     for (const texture of reactantTextures) writeReactantAmbient(texture);
   }
+  // Wavelet turbulence coordinates (volume-wavelet-turbulence.mjs): two sets of
+  // advected noise coordinates stacked along depth, ping-ponged with the fluid.
+  // Allocated at grid size only while the closure is on; fresh coordinates are
+  // the lattice itself, so a later switch-on starts from undistorted noise.
+  let waveletTextures = [];
+  let waveletSidecarFull = false;
+  function writeWaveletLattice(texture) {
+    const texels = new Float32Array(gridSize * gridHeight * gridSize * 2 * 4);
+    let i = 0;
+    for (let set = 0; set < 2; set += 1) for (let z = 0; z < gridSize; z += 1) for (let y = 0; y < gridHeight; y += 1) for (let x = 0; x < gridSize; x += 1) {
+      texels[i] = x + 0.5; texels[i + 1] = y + 0.5; texels[i + 2] = z + 0.5; i += 4;
+    }
+    device.queue.writeTexture({ texture }, texels, { bytesPerRow: gridSize * 16, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 2]);
+  }
+  function ensureWaveletCoordinates(admitted) {
+    if (!device) return false;
+    if (waveletTextures.length === 2 && waveletSidecarFull === admitted) return false;
+    for (const texture of waveletTextures) texture.destroy();
+    const size = admitted ? [gridSize, gridHeight, gridSize * 2] : [1, 1, 1];
+    waveletTextures = [0, 1].map(i => {
+      const texture = device.createTexture({
+        label: `kaminos ${WAVELET_TURBULENCE_IDENTITY} coordinates ${admitted ? gridShapeLabel(gridSize) : 'placeholder'} ${i}`,
+        size,
+        dimension: '3d',
+        format: 'rgba32float',
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+      if (admitted) writeWaveletLattice(texture);
+      return texture;
+    });
+    waveletSidecarFull = admitted;
+    return true;
+  }
   let quenchBuffers = [];
   let pressureBuffers = [];
   let currentFluid = 0;
@@ -12849,6 +12969,8 @@ export function createKaminosVolumePrototype({
     for (const buffer of quenchBuffers) buffer.destroy();
     for (const texture of reactantTextures) texture.destroy();
     reactantTextures = [];
+    for (const texture of waveletTextures) texture.destroy();
+    waveletTextures = [];
     reactantSidecarFull = false;
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
@@ -12981,6 +13103,8 @@ export function createKaminosVolumePrototype({
     // crash. The main raymarch groups are built per fluid index.
     reactantRead = reactantTextures[0],
     reactantWrite = reactantTextures[1],
+    waveletRead = waveletTextures[0],
+    waveletWrite = waveletTextures[1],
   }) {
     return device.createBindGroup({
       label,
@@ -13009,6 +13133,8 @@ export function createKaminosVolumePrototype({
         { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
         { binding: 23, resource: reactantRead.createView({ dimension: '3d' }) },
         { binding: 24, resource: reactantWrite.createView({ dimension: '3d' }) },
+        { binding: 31, resource: waveletRead.createView({ dimension: '3d' }) },
+        { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
       ],
     });
@@ -13052,6 +13178,8 @@ export function createKaminosVolumePrototype({
           frontWrite: frontBuffers[1 - fluidIndex],
           reactantRead: reactantTextures[fluidIndex],
           reactantWrite: reactantTextures[1 - fluidIndex],
+          waveletRead: waveletTextures[fluidIndex],
+          waveletWrite: waveletTextures[1 - fluidIndex],
           quenchRead: quenchBuffers[quenchIndex],
           quenchWrite: quenchBuffers[1 - quenchIndex],
           captureRows: nonRidgeOpticalCaptureRowBuffer,
@@ -14081,6 +14209,7 @@ export function createKaminosVolumePrototype({
       return buffer;
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
+    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted));
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
       size: [gridSize, gridSize, 1],
@@ -15045,6 +15174,10 @@ export function createKaminosVolumePrototype({
         { binding: 28, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
         { binding: 29, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 30, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        // Wavelet turbulence coordinates: sampled read, storage write (the fourth
+        // compute storage texture: 19, 22, 24 and this one sit at the default limit).
+        { binding: 31, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 32, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float', viewDimension: '3d' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         // Reactant sidecar: read as a sampled texture, written as a storage
         // texture (the compute stage is at its storage-buffer limit); compute only.
@@ -16559,6 +16692,14 @@ export function createKaminosVolumePrototype({
       generation: state.joinedGhosts?.generation ?? -1,
     };
     uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
+    const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
+    state.waveletTurbulence = waveletTurbulence;
+    uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
+    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
+      rebuildFluidBindGroups();
+      rebuildSceneSolidBindingViews();
+      rebuildSelectiveHeadLiveBindGroups();
+    }
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
