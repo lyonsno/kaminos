@@ -52,9 +52,9 @@ function fullWorldOf(pose,name){
  return placementMatrix.clone().multiply(new THREE.Matrix4().fromArray(bone.worldMatrix));
 }
 function worldPointOf(pose,name){return new THREE.Vector3().setFromMatrixPosition(fullWorldOf(pose,name));}
-function headForwardOf(pose){return new THREE.Vector3(0,0,1).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(fullWorldOf(pose,'head'))).normalize();}
-function headRightOf(pose){return new THREE.Vector3(1,0,0).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(fullWorldOf(pose,'head'))).normalize();}
-function headUpOf(pose){return new THREE.Vector3(0,1,0).applyQuaternion(new THREE.Quaternion().setFromRotationMatrix(fullWorldOf(pose,'head'))).normalize();}
+function headForwardOf(pose){return new THREE.Vector3(0,0,1).transformDirection(fullWorldOf(pose,'head'));}
+function headRightOf(pose){return new THREE.Vector3(1,0,0).transformDirection(fullWorldOf(pose,'head'));}
+function headUpOf(pose){return new THREE.Vector3(0,1,0).transformDirection(fullWorldOf(pose,'head'));}
 
 function makeModifier(overrides={}){
  return module.createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:0.6,maxPitch:0.5,neckShare:0.4,...overrides});
