@@ -14,13 +14,15 @@ export function checkedPose(pose) {
 }
 
 export function createSceneEdits({ read, write, changed = () => {}, settled = () => {},
-  captureContext = () => null, admit = () => {} }) {
+  captureContext = () => null, admit = () => {}, history = () => null }) {
   let active = null;
   let past = [];
   let future = [];
   let replaying = false;
   let settling = null;
   const targets = new Map();
+  const captureHistory=(id,value)=>clone(history(id)?.capture(clone(value))??value);
+  const restoreHistory=(id,value)=>clone(history(id)?.restore(clone(value))??value);
   const listeners = new Set();
   const check = (id, value) => {
     const target = targets.get(id);
@@ -62,7 +64,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     admit();
     assertAvailable();
     if (active) throw new Error('A scene edit is already active');
-    active = { id, label, before: get(id), beforeContext: clone(captureContext(id)) };
+    const before=get(id);
+    active = { id, label, before, historyBefore:captureHistory(id,before), beforeContext: clone(captureContext(id)) };
     notify();
     return state();
   }
@@ -83,8 +86,8 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     admit();
     assertAvailable();
     const after = get(active.id);
-    const entry = { ...active, after };
-    if (JSON.stringify(entry.before) !== JSON.stringify(after)) {
+    const entry = { ...active, after, historyAfter:captureHistory(active.id,after) };
+    if (JSON.stringify(entry.historyBefore) !== JSON.stringify(entry.historyAfter)) {
       settled({ operation: 'commit', id: entry.id, before: clone(entry.before), after: clone(after),
         beforeContext: clone(entry.beforeContext) });
       entry.afterContext = clone(captureContext(entry.id));
@@ -100,7 +103,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     if (!active) return false;
     assertAvailable();
     get(active.id);
-    put(active.id, clone(active.before));
+    put(active.id, restoreHistory(active.id,active.historyBefore??active.before));
     active = null;
     notify();
     return true;
@@ -148,11 +151,12 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
     const entry = from.at(-1);
     if (!entry) return false;
     const previous = get(entry.id,entry[key]);
-    const result = put(entry.id, clone(entry[key]));
+    const next=restoreHistory(entry.id,entry[key==='before'?'historyBefore':'historyAfter']??entry[key]);
+    const result = put(entry.id, next);
     const finish = () => {
       try {
         settled({ operation: key === 'before' ? 'undo' : 'redo', id: entry.id,
-          before: clone(previous), after: clone(entry[key]),
+          before: clone(previous), after: clone(next),
           beforeContext: clone(entry[key === 'before' ? 'afterContext' : 'beforeContext']),
           afterContext: clone(entry[`${key}Context`]) });
       } catch (error) {
@@ -189,7 +193,7 @@ export function createSceneEdits({ read, write, changed = () => {}, settled = ()
       throw new Error(`Applied scene edit "${label}" does not match target "${id}"`);
     }
     if (JSON.stringify(checkedBefore) === JSON.stringify(checkedAfter)) return false;
-    past.push({ id, label, before: checkedBefore, after: checkedAfter,
+    past.push({ id, label, before: checkedBefore, after: checkedAfter,historyBefore:captureHistory(id,checkedBefore),historyAfter:captureHistory(id,checkedAfter),
       beforeContext: null, afterContext: clone(captureContext(id)) });
     future = [];
     notify();
