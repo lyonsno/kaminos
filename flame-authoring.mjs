@@ -167,6 +167,14 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
       if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';
       function syncField(force=false) {
+        if(id==='volume-resolution')for(const option of field.options) {
+          const origin=[...source.options].find(candidate=>candidate.value===option.value);
+          if(!origin)continue;
+          option.textContent=origin.textContent;option.title=origin.title;
+          option.style.color=origin.style.color;option.disabled=false;
+          if(origin.dataset.gridAdmission)option.dataset.gridAdmission=origin.dataset.gridAdmission;
+          else delete option.dataset.gridAdmission;
+        }
         const bounds=readControlBounds(id);
         if(bounds)syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {

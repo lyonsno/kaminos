@@ -7,11 +7,11 @@ function radicalInverse(index,base) {
   while(index){value+=(index%base)*scale;index=Math.floor(index/base);scale/=base;}
   return value;
 }
-export function progressiveSourcePoint(index,rotation=0) {
+export function progressiveSourcePoint(index,rotation=0,domain={lo:SOURCE_LO,hi:SOURCE_HI}) {
   if(!Number.isSafeInteger(index)||index<0||!Number.isFinite(rotation))throw new Error('finite progressive source index and rotation required');
   return [2,3,5].map((base,a)=>{
     const v=radicalInverse(index+1,base)+rotation/(2*Math.PI);
-    return SOURCE_LO[a]+(SOURCE_HI[a]-SOURCE_LO[a])*(v-Math.floor(v));
+    return domain.lo[a]+(domain.hi[a]-domain.lo[a])*(v-Math.floor(v));
   });
 }
 export function sourceInterval(p,d,limit=Infinity) {
@@ -66,12 +66,14 @@ fn sourceDirection(p:vec3<f32>,a:u32)->vec3<f32> {
   return normalize(v);
 }
 fn uniformSourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {
-  let span=interval(p,d,vec3<f32>(-1.0),vec3<f32>(1.0,3.0,1.0),1e30);
+  let span=interval(p,d,SOURCE_DOMAIN_LO,SOURCE_DOMAIN_HI,1e30);
   if(span.y<=span.x){return 0.0;}
-  return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/48.0;
+  let extent=SOURCE_DOMAIN_HI-SOURCE_DOMAIN_LO;
+  return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/(3.0*extent.x*extent.y*extent.z);
 }
 fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32> {
-  let lo=vec3<f32>(-1.0);let hi=vec3<f32>(1.0,3.0,1.0);
+  if(JOINED_SOURCE){return integrateJoinedRay(p,d,limit);}
+  let lo=FINE_SOURCE_LO;let hi=FINE_SOURCE_HI;
   let span=interval(p,d,lo,hi,limit);
   if(span.y<=span.x){return vec3<f32>(0.0);}
   let dims=vec3<i32>(textureDimensions(coefficients));

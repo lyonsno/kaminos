@@ -16,7 +16,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   validateShadowSampling(shadowSampling);
   const {uniform,vec3,textureLoad,ivec2,positionWorld,normalWorld}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
-  let points,external,lights,irradiance;
+  let points,external,lights,irradiance,fineSourceRadius=Math.sqrt(11);
   function buildPoints(count){
   points=createPointRegions(device,{count,partition:count===2?'energy':'vertical'});
   external=new THREE.ExternalTexture(points.texture);
@@ -25,7 +25,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*fineSourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
@@ -36,7 +36,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   }
   function releasePoints(){for(const light of lights)light.shadow.dispose();delete renderer.backend.get(external).texture;external.dispose();points.destroy();}
   buildPoints(pointCount);
-  const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,geometryRevision=null,frame=null,disposed=false,valid=false;
+  const originals=new Map(),localVisibility=createLocalSceneVisibility();let gather=null,exteriorGather=null,domainKey=null,geometryRevision=null,frame=null,disposed=false,valid=false;
   let gain=1,sourceSoftness=0,surfaceScattering=false,smokeMode='distributed',angularPattern='fixed',angularRotation=0,retainComparisons=false;
   let sourceTransform=validateSceneSourceTransform();
   const status={identity:'hybrid-distributed-smoke-point-surfaces-v0',status:'awaiting-source',surfaceTransport:'gpu-point-regions',surfaceReceivers:0,pointCount,shadowResolution,shadowSoftness,shadowSampling,volumeGrid,directions,
@@ -67,25 +67,43 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
       installMaterials();
       const started=performance.now(),snapshot=localVisibility.snapshot(scene),{revision,geometry:packed}=snapshot;
+      const fineDomain={lo:field.source.localMin??[-1,-1,-1],hi:field.source.localMax};
+      const ext=field.source.exterior,exteriorDomain=ext?{lo:ext.localMin,hi:ext.localMax}:null;
+      const nextDomainKey=JSON.stringify([fineDomain,exteriorDomain]);
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
-      if(!gather||revision!==geometryRevision){
+      if(!gather||revision!==geometryRevision||nextDomainKey!==domainKey){
         status.status='building-smoke-world-visibility';onStatus({...status});
-        const next=createVolumeGather(device,{geometry:packed,receivers:[],volumeGrid,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true});
-        prototype.setSceneDistributedLightFrame(null);gather?.destroy();gather=next;geometryRevision=revision;
+        const options={geometry:packed,receivers:[],volumeGrid,smokeRefinement,directions,angularPattern,angularRotation,worldGeometry:true,fineDomain,exteriorDomain};
+        const fineDims=[volumeGrid,Math.round(volumeGrid*(fineDomain.hi[1]-fineDomain.lo[1])/(fineDomain.hi[0]-fineDomain.lo[0])),volumeGrid];
+        const next=createVolumeGather(device,{...options,volumeDimensions:fineDims});
+        let nextExterior=null;
+        try{if(ext)nextExterior=createVolumeGather(device,{...options,receiverDomain:exteriorDomain,volumeDimensions:fineDims});}
+        catch(error){next.destroy();throw error;}
+        prototype.setSceneDistributedLightFrame(null);gather?.destroy();exteriorGather?.destroy();gather=next;exteriorGather=nextExterior;geometryRevision=revision;domainKey=nextDomainKey;
         status.geometryBuilds++;status.visibilityBuilds++;status.lastGeometryBuildMs=performance.now()-started;status.staticTriangles=packed.triangleCount;
       }
       gather.setGeometryTransforms(packed.matrices);
       gather.setDirections(directions);gather.setAngularPattern(angularPattern,angularRotation);gather.setRetainComparisons(retainComparisons);
+      exteriorGather?.setGeometryTransforms(packed.matrices);
+      exteriorGather?.setDirections(directions);exteriorGather?.setAngularPattern(angularPattern,angularRotation);exteriorGather?.setRetainComparisons(retainComparisons);
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('hybrid guided smoke requires authored source guide');
-        gather.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform));
+        const guide=deriveSourceGuide(getSourceGuide(),sourceTransform);
+        // The fine emitter envelope remains the focused proposal; the uniform
+        // component spans the whole joined source and accounts for its PDF.
+        guide.lo=guide.lo.map((v,a)=>Math.max(v,fineDomain.lo[a]));guide.hi=guide.hi.map((v,a)=>Math.min(v,fineDomain.hi[a]));
+        if(guide.lo.some((v,a)=>v>=guide.hi[a]))Object.assign(guide,fineDomain);
+        gather.setSourceGuide(guide);exteriorGather?.setSourceGuide(guide);
       }
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed'});
+      const exteriorFrame=exteriorGather&&smokeMode==='distributed'?exteriorGather.encode(field.source,{gain,sourceSoftness,smokeEnabled:true}):null;
       const reduction=points.encode(gather.transportSource());
+      fineSourceRadius=Math.hypot(...fineDomain.lo.map((v,a)=>Math.max(Math.abs(v),Math.abs(fineDomain.hi[a]))));
       for(const light of lights)light.shadow.render();
-      frame={...frame,pointRegions:reduction,surfaceTransport:status.surfaceTransport,previewStale:false};
+      frame={...frame,exteriorSmokeReconstruction:exteriorFrame?.smokeReconstruction??null,exteriorSourceGeneration:exteriorFrame?ext.generation:null,
+        exteriorVolumeReceivers:exteriorFrame?.volumeReceivers??0,pointRegions:reduction,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
     } catch(error){status.status='preparation-failed';status.error=String(error.message);prototype.setSceneDistributedLightFrame(null);onStatus({...status});throw error;}
@@ -130,7 +148,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned)material.dispose();
       }
-      originals.clear();releasePoints();gather?.destroy();
+      originals.clear();releasePoints();gather?.destroy();exteriorGather?.destroy();
     },
   };
 }

@@ -1202,6 +1202,47 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
     </div>
+    <div class="panel" id="volume-joined-panel" data-volume-cockpit-layout-ui="joined-provisional" aria-label="Joined exterior (provisional)">
+      <div class="panel-title">Joined flame + exterior <span style="opacity:.6">(experimental; grid settings in URL)</span></div>
+      <div class="slider-row">
+      <span class="slider-label">Joined boundary</span>
+      <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
+      <span class="slider-val" id="volume-joined-boundary-val">off</span>
+    </div>
+      <div class="slider-row"><button class="btn" id="volume-joined-make-admissible">Use immersed source + converged solver</button></div>
+      <span class="slider-help">Shared pressure, transported exterior smoke and heat, and one combined ray march. Requires immersed source + converged solver. Changes apply immediately. Exterior changes clear exterior state; resolution changes also restart the fine field. Material and camera controls remain live. Grid settings are kept in this URL, not in basin presets.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior size (× fine width)</span>
+      <select id="volume-joined-exterior-size"><option value="0">none</option><option value="1.5">1.5</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
+      <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
+    </div>
+      <span class="slider-help">Exterior width relative to the fine width. The exterior is twice as tall as it is wide, with extra space above the flame. Changing size clears the exterior; changing resolution also restarts the fine field. None turns the joined boundary off.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior resolution</span>
+      <select id="volume-joined-exterior-ratio"><option value="24">24×48×24</option><option value="28">28×56×28</option><option value="32" selected>32×64×32</option><option value="48">48×96×48</option><option value="64">64×128×64</option></select>
+      <span class="slider-val" id="volume-joined-exterior-ratio-val">—</span>
+    </div>
+      <span class="slider-help">Cells across the exterior, independent of the fine resolution in Simulation. Higher resolutions cost more. The readout reports effective cell width; unsupported geometry is refused explicitly.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior solve budget</span>
+      <select id="volume-joined-exterior-budget"><option value="16">16</option><option value="32" selected>32</option><option value="64">64</option><option value="128">128</option></select>
+      <span class="slider-val" id="volume-joined-exterior-solve-val">—</span>
+    </div>
+      <span class="slider-help">Maximum shared-pressure iterations per step. Measurement briefly pauses simulation and reads the GPU; it never runs automatically.</span>
+      <button class="btn" id="volume-joined-measure">Measure pressure</button>
+      <div class="slider-row">
+      <span class="slider-label">Grid bounds</span>
+      <input type="checkbox" id="volume-joined-grid-bounds">
+      <span class="slider-val" id="volume-joined-grid-bounds-val"><span style="color:#ffb347">fine</span> · <span style="color:#d070ff">exterior</span></span>
+    </div>
+      <span class="slider-help">Thin outlines of the fine grid (orange) and the exterior grid (violet) in the viewport, drawn from the transform the volume renders with.</span>
+      <div class="slider-row">
+      <span class="slider-label">Exterior wall</span>
+      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+y">roof (+y)</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
+      <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
+    </div>
+      <span class="slider-help">A synthetic solid slab two coarse cells thick, two cells off the named fine-box side, spanning the exterior. Applies immediately and clears exterior state; the fine field continues. Not an authored scene object.</span>
+    </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
@@ -3481,6 +3522,8 @@ loadStartupRuntimeConfig().catch(() => {});
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
+import { syncVolumeGridOptions } from './volume-grid-options.mjs';
+import { joinedRouteParams, writeJoinedRoute } from './volume-joined-route.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -3490,7 +3533,7 @@ import { createSceneGI } from './scene-gi.mjs';
 import { resolveSceneGISettings } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import {collisionVoxelInstances} from './scene-collision-debug.mjs';
+import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -3655,13 +3698,17 @@ function writeKilnCollisionState({enabled}) {
 
 let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
 const sceneColliderCollection=createSceneColliderCollection(THREE);
+let volumeSceneEditing=null;
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
   if(snapshot) {
     collisionVoxelRevision=snapshot.revision;
-    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
-    if(snapshot.cells) {
+    const retainGpuView=snapshot.backend==='gpu'&&collisionVoxelMesh?.userData.gpuSolidTexture===snapshot.texture&&collisionVoxelMesh.userData.gpuSolidFrame===JSON.stringify([snapshot.dimensions,snapshot.transform]);
+    if(!retainGpuView&&collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(snapshot.backend==='gpu'&&!retainGpuView){
+      collisionVoxelMesh=createGpuCollisionVoxelMesh(THREE,renderer,snapshot);scene.add(collisionVoxelMesh);
+    } else if(snapshot.cells) {
       const {centres,size}=collisionVoxelInstances(snapshot);
       collisionVoxelMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size*.94,size*.94,size*.94),new THREE.MeshBasicMaterial({color:0x46d7dd,transparent:true,opacity:.35,depthWrite:false,depthTest:false}),centres.length);
       const matrix=new THREE.Matrix4();centres.forEach((p,i)=>collisionVoxelMesh.setMatrixAt(i,matrix.makeTranslation(...p)));
@@ -3680,7 +3727,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const text=!enabled?'Scene collisions off'
     : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
-    : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
+    : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?'Active · GPU solid field':`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');
@@ -3752,7 +3799,7 @@ import {
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
-import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
+import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection,fireCollisionEdit} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -3862,7 +3909,7 @@ import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUti
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
-import { frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
+import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
 import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
@@ -3915,6 +3962,7 @@ let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
+let ownerVolumeReady=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -5682,6 +5730,7 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
+  if(entry&&Object.hasOwn(metadata,'emissionEnabled')){entry.emissionEnabled=metadata.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
   if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
   return entry?.object || null;
 }
@@ -5817,6 +5866,7 @@ function writeAuthoredFlameEmitterPose(value) {
 window.kaminosFlameEmitterState = () => ({
   registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
   authoredPresent: authoredFlamePresent,
+  emissionEnabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false,
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
@@ -7388,6 +7438,7 @@ function registerSceneObject(object, metadata = {}) {
     assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
     collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
+    ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false}:{}),
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -7406,6 +7457,7 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
     localLiquidEmitter: record.localLiquidEmitter,
+    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled}:{}),
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -11870,6 +11922,7 @@ async function initScene() {
     onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
+  scenePlacementTools.edits.subscribe(edit=>{volumeSceneEditing=fireCollisionEdit(edit.active,sceneObjects,sceneGroups);});
   installAuthoringParameterEditing();
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
@@ -12790,7 +12843,17 @@ async function installOwnerWorkbenchEntry() {
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
-  }};
+    renderer:()=>renderer,objects:()=>sceneObjects,select:setActiveSceneObject,
+    frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
+    setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
+    enterWorkbench:()=>{authoringWorkspace.setMode('workbench');setActiveTab('assets',{reveal:false});},
+  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype},
+  fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
+    setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
+    read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
+    select:()=>setActiveSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+  rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
+    readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
     onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
@@ -18580,6 +18643,137 @@ function linkedVolumeEmitterInletVelocity() {
   }).linkedInletVelocity;
 }
 
+// Provisional joined-boundary and exterior controls (Noah 2026-10-13: tune fine
+// and coarse live and independently). They drive the prototype's joined API
+// directly and are not part of the saved basin.
+function wireJoinedProvisionalControls(prototype) {
+  const $ = id => document.getElementById(id);
+  const boundary = $('volume-joined-boundary'), size = $('volume-joined-exterior-size'), ratio = $('volume-joined-exterior-ratio'), wall = $('volume-joined-exterior-wall'), budget = $('volume-joined-exterior-budget'), bounds = $('volume-joined-grid-bounds');
+  if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
+  const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
+  const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
+  let exteriorRevision = 0, measurementIdentity = null;
+  const currentMeasurementIdentity = () => {
+    const s = prototype.debugState?.();
+    return JSON.stringify([exteriorRevision, s?.joinedExterior?.generation ?? null, s?.simGridDimensions, Boolean(s?.joinedBoundary?.admitted)]);
+  };
+  const invalidateMeasurement = () => {
+    measurementIdentity = currentMeasurementIdentity();
+    text('volume-joined-exterior-solve-val', 'not measured for current grid/wall');
+  };
+  const refreshMeasurementIdentity = () => {
+    if (measurementIdentity !== currentMeasurementIdentity()) invalidateMeasurement();
+  };
+  const remember = () => {
+    const u = writeJoinedRoute(location.href,{volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'});
+    history.replaceState(history.state,'',u);
+  };
+  const applyExterior = () => {
+    exteriorRevision++;
+    invalidateMeasurement();
+    if (!(parseFloat(size.value) > 0)) boundary.value = 'off';
+    remember();
+    const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
+    if (boundary.value !== 'on' || !(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
+    const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
+    const res = prototype.setJoinedExterior({ enabled: true, size: mult, coarseResolution: r, wall: side, budget: parseInt(budget.value, 10) });
+    const receipt = res?.receipt;
+    const joinOn = prototype.debugState?.()?.joinedBoundary?.admitted;
+    if (!receipt?.admitted) text('volume-joined-exterior-extent-val', joinOn ? `refused: ${receipt?.reason ?? 'unknown'}` : 'waiting: turn the joined boundary on (and admitted) first', true);
+    text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
+  };
+  boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); applyExterior(); });
+  for (const el of [size, ratio, wall, budget]) el.addEventListener('change', applyExterior);
+  $('volume-joined-make-admissible').addEventListener('click', () => {
+    const set = (id, value) => { const el = $(id); if (!el) return; el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
+    set('volume-pressure-solver', 'converged-open-top'); set('volume-emitter-source-law', 'immersed-source');
+    setTimeout(() => { if (boundary.value === 'on') { prototype.setJoinedBoundary({ enabled: true }); if (size.value !== '0') applyExterior(); } }, 300);
+  });
+  // Outlines of both grids, drawn on a 2D canvas pinned over the volume canvas
+  // with the volume's own local-to-clip matrix (the editor scene is not drawn
+  // on the volume route, so scene helpers would never show).
+  let overlay = null;
+  const ensureOverlay = () => {
+    const host = prototype.canvasElement?.(); if (!host) return null;
+    if (!overlay) { overlay = document.createElement('canvas'); overlay.id = 'volume-joined-bounds-overlay'; Object.assign(overlay.style, { position: 'fixed', pointerEvents: 'none', zIndex: 50 }); document.body.appendChild(overlay); }
+    const r = host.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    Object.assign(overlay.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    if (overlay.width !== Math.round(r.width * dpr) || overlay.height !== Math.round(r.height * dpr)) { overlay.width = Math.round(r.width * dpr); overlay.height = Math.round(r.height * dpr); }
+    return overlay;
+  };
+  const drawBox = (ctx, m, lo, hi, color) => {
+    const project = p => { const x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15]; return w > 1e-6 ? [(x / w + 1) / 2 * ctx.canvas.width, (1 - y / w) / 2 * ctx.canvas.height] : null; };
+    const c = [0, 1, 2, 3, 4, 5, 6, 7].map(i => project([i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]));
+    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1) * 0.75); ctx.globalAlpha = 0.85; ctx.beginPath();
+    for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) if (c[a] && c[b]) { ctx.moveTo(...c[a]); ctx.lineTo(...c[b]); }
+    ctx.stroke();
+  };
+  const updateBoxes = () => {
+    const s = prototype.debugState?.(); const dims = s?.simGridDimensions;
+    if (!bounds.checked || !Array.isArray(dims)) { if (overlay) overlay.style.display = 'none'; return; }
+    const o = ensureOverlay(); if (!o) return; o.style.display = '';
+    const ctx = o.getContext('2d'); ctx.clearRect(0, 0, o.width, o.height);
+    const m = prototype.localViewProjection?.(); if (!m) return;
+    drawBox(ctx, m, [-1, -1, -1], [1, -1 + 2 * dims[1] / dims[0], 1], '#ffb347');
+    const x = s.joinedExterior;
+    if (x?.admitted) { const cw = 2 / dims[0] * x.ratio; const lo = x.origin.map(v => -1 - v * cw); drawBox(ctx, m, lo, lo.map((v, a) => v + x.shape[a] * cw), '#d070ff'); }
+  };
+  const boundsLoop = () => { if (bounds.checked) updateBoxes(); requestAnimationFrame(boundsLoop); };
+  requestAnimationFrame(boundsLoop);
+  bounds.addEventListener('change', () => { remember(); updateBoxes(); });
+  // Live readouts.
+  let probing = false;
+  $('volume-joined-measure').addEventListener('click', async () => {
+    if(probing)return; probing=true;
+    const measuredIdentity = currentMeasurementIdentity();
+    measurementIdentity = measuredIdentity;
+    text('volume-joined-exterior-solve-val','measuring (simulation paused)…');
+    try {
+      const p=await prototype.probeJoinedExterior();
+      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
+      text('volume-joined-exterior-solve-val',p?.status==='sampled'?`snapshot at exterior step ${p.steps}: ${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`:`not measured: ${p?.status ?? 'no exterior'}`,p?.status!=='sampled');
+    }
+    catch(e){
+      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
+      text('volume-joined-exterior-solve-val',`measurement failed: ${e.message}`,true);
+    }
+    finally{probing=false;}
+  });
+  setInterval(() => {
+    const s = prototype.debugState?.(); if (!s) return;
+    refreshMeasurementIdentity();
+    if (boundary.value === 'on') {
+      if (s.joinedEditing?.held) text('volume-joined-boundary-val', 'Editing: fine standalone · last committed collision · exterior frozen');
+      else if (s.joinedEditing?.pending) text('volume-joined-boundary-val', `Rejoining: ${s.joinedEditing.reason ?? 'rebuilding collision and pressure'}`, true);
+      else if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
+      else text('volume-joined-boundary-val', `REFUSED: ${s.joinedBoundary?.reason ?? 'unknown'} (the sim is running standalone)`, true);
+    } else text('volume-joined-boundary-val', 'off');
+    const x = s.joinedExterior;
+    if (x?.admitted && size.value !== '0') {
+      const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted && !s.joinedEditing?.held && !s.joinedEditing?.pending;
+      const status=s.joinedEditing?.held?'FROZEN during edit':s.joinedEditing?.pending?'waiting for placement rebuild':stepping?`stepping (${x.steps})`:'NOT STEPPING: the join is off or refused';
+      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${status}`, !stepping && !s.joinedEditing?.held);
+      text('volume-joined-exterior-ratio-val', `${x.ratio.toFixed(2)} fine cells, ${x.cellWidth.toFixed(3)} local · ${s.joinedRendering?.enabled ? 'rendered' : 'NOT RENDERED'}`, !s.joinedRendering?.enabled);
+    } else {
+      const after = s.pressureSolver?.residual?.compact?.after?.maxAbs;
+      text('volume-joined-exterior-solve-val', Number.isFinite(after) ? `standalone fine solve: ${s.pressureSolver?.effective?.iterations ?? '?'} sweeps, worst cell ${after.toExponential(1)}` : '—');
+    }
+    updateBoxes();
+  }, 2000);
+  const params=joinedRouteParams(location);
+  for(const [el,key,fallback] of [[size,'volume_joined_size','2'],[ratio,'volume_joined_resolution','32'],[budget,'volume_joined_budget','32'],[wall,'volume_joined_wall','none']]) {
+    const value=params.get(key)??fallback;
+    if([...el.options].some(o=>o.value===value))el.value=value;
+  }
+  bounds.checked=params.get('volume_joined_bounds')!=='0';
+  boundary.value=params.get('volume_joined')==='1'?'on':'off';
+  if(boundary.value==='on') {
+    const start=()=>{
+      if(!prototype.debugState?.()?.active){requestAnimationFrame(start);return;}
+      prototype.setJoinedBoundary({enabled:true});applyExterior();
+    };requestAnimationFrame(start);
+  }
+}
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -19438,6 +19632,9 @@ document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
 });
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
+  syncVolumeGridOptions(document.getElementById('volume-resolution'),
+    request => volumePrototype.previewGridShape(request),
+    Number(document.getElementById('volume-grid-height-ratio').value));
   const s = volumePrototype.debugState();
   syncKilnCollisionControl(s.sceneCollision);
   flameInspector?.sync();
@@ -19569,6 +19766,11 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
+  const joined=volumePrototype?.joinedWorldBounds?.();
+  if(joined){
+    frameBox(new THREE.Box3(new THREE.Vector3(...joined.min),new THREE.Vector3(...joined.max)),camera,controls);
+    window._kaminosDirty?.();return;
+  }
   const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
@@ -20383,6 +20585,7 @@ async function initKaminosVolumeRoute() {
       if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
       return sceneColliderCollection.update(sceneObjects);
     },
+    getSceneEditing: () => volumeSceneEditing,
   });
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
     // Composition routes need the live Three scene visible under the flame:
@@ -20392,6 +20595,7 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  wireJoinedProvisionalControls(volumePrototype);
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
       installOpticalSteppingPreview(volumePrototype, document);
@@ -20476,7 +20680,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -20794,6 +20998,8 @@ async function initKaminosVolumeRoute() {
     const preview = () => {
       holdVolumeRebuildControl(id);
       publishVolumeGridPreview(volumePrototype?.previewGridShape?.({ gridHeightRatio: parseFloat(control.value) || 2 }) ?? null);
+      syncVolumeGridOptions(document.getElementById('volume-resolution'),
+        request => volumePrototype.previewGridShape(request), Number(control.value));
       updateVolumeRebuildControlLabel(id);
       refreshFlameDomainGuideBox();
     };
@@ -22340,6 +22546,15 @@ async function openFirstFlameFieldDialog() {
 
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
+  edits.register('@flame-source-enabled',{
+    read:()=>({enabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false}),
+    check:state=>{if(typeof state.enabled!=='boolean')throw Error('Flame source enabled must be boolean');return {enabled:state.enabled};},
+    write:({enabled})=>{
+      const entry=sceneObjects.find(row=>row.id===FLAME_EMITTER_ID);if(!entry)throw Error('Flame source is not registered');
+      entry.emissionEnabled=enabled;entry.object.userData.kaminosSceneObject.emissionEnabled=enabled;
+      writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
+    },
+  });
   authoringControlSessions.push(sceneControlHistory);
   edits.register('@first-flame-field',{read:firstFlameFieldState,write:writeFirstFlameFieldState,check:checkFirstFlameFieldState});
   // Finish a field before another control's pointerdown can begin a new target.
@@ -25240,6 +25455,7 @@ function serializeSceneObject(entry) {
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
+    ...(entry.type===FLAME_EMITTER_TYPE?{emissionEnabled:entry.emissionEnabled!==false}:{}),
     ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
 
@@ -25507,6 +25723,7 @@ async function collectSceneComposition() {
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
     burnerRecipe, isAuthoredKilnCollisionRoute(),
+    [...joinedRouteParams(location)],
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -25525,6 +25742,7 @@ async function collectSceneComposition() {
     : (await saveVolumeSettingsPreset({ preset, sceneSnapshot:true, label:`${document.getElementById('composition-label').value.trim() || 'Scene'} · flame` })).effective;
   assertUnchanged();
   const route = {};
+  for(const [key,value] of joinedRouteParams(location))route[key]=value;
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
@@ -26090,6 +26308,7 @@ async function writeSelectionMembershipUnchecked(value){
     if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
     if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
     entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
+    if(entry.type===FLAME_EMITTER_TYPE){entry.emissionEnabled=record.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
   }
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
@@ -27151,6 +27370,7 @@ sceneInitialization.then(() => {
   const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
   window.__kaminosFireBoot = fireBoot;
   const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
+  ownerVolumeReady=volumeLoaded;
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
