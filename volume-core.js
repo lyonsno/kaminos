@@ -4657,9 +4657,9 @@ fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
 // characteristic the transport backtraces and clipped at scene solids. The
 // phase is 0 on the frame a step lands; diagnostic captures read the real
 // field; nothing is written back.
-fn presentationAdvect(p: vec3<f32>, diagnostic: bool) -> vec3<f32> {
+fn presentationAdvect(p: vec3<f32>, readRealField: bool) -> vec3<f32> {
   let phase = clamp(u.reserved_render_controls.y, 0.0, 1.0);
-  if (phase <= 0.0 || diagnostic) { return p; }
+  if (phase <= 0.0 || readRealField) { return p; }
   let cell = worldToCell(p);
   let velocity = sampleFluidSlot(cell, 0u).xyz;
   return cellToWorld(sceneClipCharacteristic(cell, cell - velocity * (dynamicsBacktraceScale() * phase)));
