@@ -42,12 +42,13 @@ test('resolver: off at gain 0, admitted above it, octaves and gain clamped to th
   const clamped = resolveWaveletTurbulence({ waveletTurbulence: 9, waveletOctaves: 7 });
   assert.equal(clamped.gain, WAVELET_TURBULENCE_RANGES.gain[1]);
   assert.equal(clamped.octaves, WAVELET_TURBULENCE_RANGES.octaves[1]);
-  assert.equal(resolveWaveletTurbulence({ waveletTurbulence: 'x', waveletOctaves: 2.6 }).octaves, 3, 'octaves is an integer');
+  assert.equal(resolveWaveletTurbulence({ waveletTurbulence: 'x', waveletOctaves: 1.6 }).octaves, 2, 'octaves is an integer');
+  assert.deepEqual(WAVELET_TURBULENCE_RANGES.octaves, [1, 2], 'a third octave would sit at one cell, below Nyquist');
 });
 
 test('uniforms: gain, octaves, coherence period, step count', () => {
-  const r = resolveWaveletTurbulence({ waveletTurbulence: 0.25, waveletOctaves: 3 });
-  assert.deepEqual(waveletTurbulenceUniformValues(r, { simStepCount: 17 }), [0.25, 3, WAVELET_COHERENCE_PERIOD_STEPS, 17]);
+  const r = resolveWaveletTurbulence({ waveletTurbulence: 0.25, waveletOctaves: 1 });
+  assert.deepEqual(waveletTurbulenceUniformValues(r, { simStepCount: 17 }), [0.25, 1, WAVELET_COHERENCE_PERIOD_STEPS, 17]);
   assert.deepEqual(waveletTurbulenceUniformValues(resolveWaveletTurbulence({}), { simStepCount: 17 }), [0, WAVELET_TURBULENCE_DEFAULTS.octaves, WAVELET_COHERENCE_PERIOD_STEPS, 17]);
 });
 
@@ -148,6 +149,20 @@ test('band energies: a smooth field is all large band, a two-cell checkerboard i
   assert.ok(Math.abs(kolmogorovSubBandRatio(1) - 2 ** (-5 / 3)) < 1e-12);
   assert.ok(Math.abs(kolmogorovSubBandRatio(2) - (2 ** (-5 / 3) + 2 ** (-10 / 3))) < 1e-12);
   assert.throws(() => velocityBandEnergies(new Float32Array(8), dims), /expected/);
+});
+
+test('kernel: the closure fills the deficit of the transported sub band at the foot, scaled for the time step, and never subtracts', () => {
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  const start = core.indexOf('fn waveletCorrection('), body = core.slice(start, core.indexOf('\n}\n', start));
+  assert.match(body, /fn waveletCorrection\(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>, coordB: vec3<f32>, timeStep: f32\)/);
+  assert.match(body, /let carried = length\(transported - waveletLowPassSample\(foot\)\);/, 'the sub band is the transported velocity against L1 at the same foot');
+  assert.match(body, /let deficit = clamp\(1\.0 - carried \/ amplitude, 0\.0, 1\.0\);/);
+  assert.match(body, /let blend = stepBlend\(clamp\(u\.wavelet_turbulence\.x, 0\.0, 1\.0\)\);/);
+  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* amplitude \* deficit \* detail;/, 'additive only; the fold restores the per-step blend');
+  assert.doesNotMatch(body, /readSlot\(/, 'no destination-cell old-field term');
+  assert.match(core, /if \(waveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);
+  const pre = core.slice(core.indexOf('fn csWaveletLowPass('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass(')));
+  assert.match(pre, /for \(var dz = -1; dz <= 1; dz = dz \+ 1\)/); assert.match(pre, /if \(!sceneSolidAt\(nc\)\)/);
 });
 
 test('WGSL: the kernel module carries the same slope, period and no trigonometric authorship', () => {

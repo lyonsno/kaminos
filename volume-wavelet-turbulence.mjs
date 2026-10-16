@@ -30,7 +30,8 @@ export const WAVELET_LACUNARITY = 2;
 // the reset never shows. Even, so the second set's reset step is exact.
 export const WAVELET_COHERENCE_PERIOD_STEPS = 48;
 export const WAVELET_TURBULENCE_DEFAULTS = Object.freeze({ gain: 0, octaves: 2 });
-export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 3] });
+// Octaves at 4 and 2 cells; a third would sit at one cell, below Nyquist.
+export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2] });
 
 // Measured rms of the raw curl of the three-potential gradient noise at unit
 // frequency (see the contracts); divides the curl so one octave at weight one
@@ -239,7 +240,7 @@ fn waveletDetail(p: vec3<f32>, octaves: u32) -> vec3<f32> {
   var out = vec3<f32>(0.0);
   var s = 1.0 / WAVELET_BASE_WAVELENGTH_CELLS;
   var w = 1.0;
-  for (var i = 0u; i < min(octaves, 3u); i = i + 1u) {
+  for (var i = 0u; i < min(octaves, 2u); i = i + 1u) {
     out = out + w * waveletCurlUnit(p * s + WAVELET_OCTAVE_OFFSETS[i]);
     s = s * WAVELET_LACUNARITY;
     w = w * pow(WAVELET_LACUNARITY, WAVELET_BAND_SLOPE);

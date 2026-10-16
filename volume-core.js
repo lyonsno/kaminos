@@ -4025,18 +4025,43 @@ fn waveletWideMean(c: vec3<i32>) -> vec3<f32> {
   }
   return acc / n;
 }
-fn waveletCorrection(c: vec3<i32>) -> vec3<f32> {
-  let l1 = waveletLowPassLoad(c);
-  let band = l1 - waveletWideMean(c);
+// Trilinear read of L1 at a cell-space position (the characteristic's foot).
+fn waveletLowPassSample(p: vec3<f32>) -> vec3<f32> {
+  let q = p - vec3<f32>(0.5);
+  let i0 = vec3<i32>(floor(q));
+  let f = q - floor(q);
+  let c00 = mix(waveletLowPassLoad(i0), waveletLowPassLoad(i0 + vec3<i32>(1, 0, 0)), f.x);
+  let c10 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 1, 0)), waveletLowPassLoad(i0 + vec3<i32>(1, 1, 0)), f.x);
+  let c01 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 0, 1)), waveletLowPassLoad(i0 + vec3<i32>(1, 0, 1)), f.x);
+  let c11 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 1, 1)), waveletLowPassLoad(i0 + vec3<i32>(1, 1, 1)), f.x);
+  return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
+}
+// The closure, deficit-fill form: the sub band the transported velocity
+// carries (transported − L1 at the same foot, so transport and the band
+// agree) is compared with the Kolmogorov amplitude expected from the resolved
+// band at that foot; where it falls short, synthesized detail (on this step's
+// advected coordinates) fills the deficit, never above the expectation and
+// never removing structure the flow already carries. The fold multiplies the
+// return by the time step, so the per-step blend is 1 − (1 − gain)^dt.
+// (The first form relaxed toward the target with the sub band taken at the
+// destination cell of the old field; under a backtrace of several cells per
+// step that injected the inverted old sub band and ran away to the velocity
+// bound: capture wavelet-evidence-2, 2026-10-16.)
+fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>, coordB: vec3<f32>, timeStep: f32) -> vec3<f32> {
+  let footCell = vec3<i32>(clampCell(vec3<i32>(floor(foot))));
+  let band = waveletLowPassLoad(footCell) - waveletWideMean(footCell);
   let amplitude = waveletTargetAmplitude(0.5 * dot(band, band));
+  if (amplitude <= 0.0) { return vec3<f32>(0.0); }
   let octaves = u32(max(u.wavelet_turbulence.y, 1.0));
   let period = u32(max(u.wavelet_turbulence.z, 2.0));
   let wa = waveletBlendA(u32(u.wavelet_turbulence.w), period);
   var detail = vec3<f32>(0.0);
-  if (wa > 0.0) { detail = detail + wa * waveletDetail(waveletCoordLoad(c, 0), octaves); }
-  if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(waveletCoordLoad(c, 1), octaves); }
-  let subBand = readSlot(c, 0u).xyz - l1;
-  return clamp(u.wavelet_turbulence.x, 0.0, 1.0) * (amplitude * detail - subBand);
+  if (wa > 0.0) { detail = detail + wa * waveletDetail(coordA, octaves); }
+  if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(coordB, octaves); }
+  let carried = length(transported - waveletLowPassSample(foot));
+  let deficit = clamp(1.0 - carried / amplitude, 0.0, 1.0);
+  let blend = stepBlend(clamp(u.wavelet_turbulence.x, 0.0, 1.0));
+  return blend / max(timeStep, 1e-6) * amplitude * deficit * detail;
 }
 
 // Pre-pass: L1 for every cell, dispatched before the step while the closure is on.
@@ -6765,12 +6790,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backtraceScale = transportBacktraceScale(speed) * timeStep;
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
+  var waveletCoordA = cell;
+  var waveletCoordB = cell;
   if (waveletOn()) {
     // The noise coordinates ride the same characteristic as the gas.
     let wPeriod = u32(max(u.wavelet_turbulence.z, 2.0));
     let wPhase = u32(u.wavelet_turbulence.w) % wPeriod;
-    waveletCoordStore(cellI, 0, select(waveletCoordSample(backCell, 0), cell, wPhase == 0u));
-    waveletCoordStore(cellI, 1, select(waveletCoordSample(backCell, 1), cell, wPhase == wPeriod / 2u));
+    waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
+    waveletCoordB = select(waveletCoordSample(backCell, 1), cell, wPhase == wPeriod / 2u);
+    waveletCoordStore(cellI, 0, waveletCoordA);
+    waveletCoordStore(cellI, 1, waveletCoordB);
   }
   let macCormack = u.transport_controls.x > 1.5;
   let macCormackScalars = u.transport_controls.x > 2.5;
@@ -7541,7 +7570,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // Wavelet turbulence: velocity-derived, so it stays on the stored value
   // under the staggered reading (like confinement); the fold below scales it
   // by the time step with every other increment.
-  if (waveletOn()) { vel = vel + waveletCorrection(cellI); }
+  if (waveletOn()) { vel = vel + waveletCorrection(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep); }
   vel = vel + oracleActivityCurl;
   vel = vel + oracleActivityConfinement * (0.22 + smoke * 0.24 + heat * 0.32 + flame * 0.20);
   vel = vel + bonfireReferenceConfinement * bonfireScene * bonfireDetailForcesAblation;
