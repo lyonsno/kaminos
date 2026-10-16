@@ -522,6 +522,37 @@ try {
   const recheckGone = await vantageOk('recheck', '--anchor', redAnchor);
   check('and a recheck of its anchor says it is no longer in the scene', recheckGone.result.now === 'missing' && recheckGone.result.status === null, recheckGone.result);
 
+  report.phase = 'link'; save();
+  // Tabs left open in the background must not hold the browser's few connections to the server (six per
+  // host over HTTP/1.1), or the next page cannot load. Seven background tabs and one more page share one
+  // browser profile, as a person's tabs do. Notes are off for these tabs, so only the vantage link is measured.
+  const linkedNow = async () => (await (await fetch(new URL('/api/vantage/pages', options.origin))).json()).pages.filter(item => item.connected).map(item => item.id);
+  const shared = await browser.newContext({viewport: {width: 800, height: 600}});
+  const tabUrl = new URL('/index.html?notes=0', options.origin).href;
+  try {
+    const before = await linkedNow();
+    for (let i = 0; i < 7; i++) {
+      const tab = await shared.newPage();
+      await tab.addInitScript(() => {
+        Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
+        Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+      });
+      await tab.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 30000});
+    }
+    await new Promise(done => setTimeout(done, 1500));
+    const withBackground = await linkedNow();
+    const fresh = await shared.newPage(), started = Date.now();
+    const loaded = await fresh.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 15000}).then(() => true, () => false);
+    const loadMs = Date.now() - started;
+    let afterFresh = await linkedNow();
+    for (const until = Date.now() + 15000; loaded && afterFresh.length <= withBackground.length && Date.now() < until; afterFresh = await linkedNow()) {
+      await new Promise(done => setTimeout(done, 200));
+    }
+    report.effective.link = {backgroundTabs: 7, linkedBefore: before, linkedWithBackground: withBackground, loaded, loadMs, linkedAfterFresh: afterFresh};
+    check('seven background tabs hold no vantage link, so another page on the same server still loads and links',
+      withBackground.length === before.length && loaded && afterFresh.length === before.length + 1, report.effective.link);
+  } finally { await shared.close(); }
+
   report.phase = 'remove'; save();
   await vantageOk('remove');
   const remaining = await page.evaluate(() => window.kaminosSceneObjectDebugState().some(object => object.id === 'vantage-bebop'));
