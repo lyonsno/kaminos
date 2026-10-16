@@ -29,6 +29,7 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
     throw new Error('Unsupported flame source identity');
   }
+  if(record.type===FLAME_EMITTER_TYPE&&Object.hasOwn(record,'emissionEnabled')&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be boolean');
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
@@ -36,6 +37,7 @@ function normalizeSceneObjectRecord(record) {
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
+    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled!==false}:{}),
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     source: record.source ?? null,
     type: record.type ?? 'glb',
