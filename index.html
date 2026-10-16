@@ -3876,6 +3876,7 @@ import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './sce
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import { installCommandSearch } from './scene-command-search.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
@@ -11929,6 +11930,51 @@ async function initScene() {
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
     overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection});
   window.kaminosPolyEdit=polyEdit.api;
+  window.kaminosCommandSearch=installCommandSearch({document,viewport:viewportEl,button:document.getElementById('authoring-search'),
+    blocked:()=>{
+      const edit=scenePlacementTools.edits.state();
+      if(authoringBusy||sceneSaveBlockedByFailedRestore)return 'Finish the scene document action first';
+      if(vantageCaptureHeld)return 'The agent sub is taking a picture';
+      if(edit.active||edit.replaying||scenePlacementTools.edits.isSettling())return 'Finish or cancel the current edit first';
+      if(transformGizmoDragging||transformControls.dragging||sceneNavigation.state().gesture||(controls.state??-1)!==-1)return 'Finish navigating or dragging first';
+      if(viewPie?.state()||polyEdit?.active())return 'Finish the view menu or leave polygon Edit Mode first';
+      if(window.kaminosSelection.boxing?.())return 'Finish box selection first';
+      if(greenroomPreviewIsActive()||splatCorrectionMode)return 'Finish preview or correction first';
+      if(document.querySelector('.file-name-prompt,dialog[open],[aria-modal="true"]:not(#scene-command-search section)'))return 'Finish the open dialog first';
+      return null;
+    },onError:error=>setInfo(error.message),commands:()=>{
+      const edits=scenePlacementTools.edits,state=edits.state(),selection=readSceneSelection();
+      const objectReason=()=>sceneSelection.ids.length?null:'Select an object first';
+      const transformReason=()=>selectedPlacementEntry()?null:'Select an object or the Fire & smoke domain first';
+      const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
+      const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
+      const result=[
+        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        command('add.camera','Add','Camera',()=>addAuthoredCamera()),
+        command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
+        command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
+        command('add.fire','Add','Fire & Smoke',()=>openFirstFlameFieldDialog(),{aliases:['flame','emitter','volume','source','burner']}),
+        command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
+        ...[['translate','Move','G'],['rotate','Rotate','R'],['scale','Scale','S']].map(([mode,label,shortcut])=>command('transform.'+mode,'Transform',label,()=>{if(!scenePlacementTools.start(mode))throw Error('Could not start transform');},{shortcut,disabled:transformReason})),
+        command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:objectReason}),
+        command('object.delete','Object','Delete',()=>removeSelectedSceneObjects(),{aliases:['remove'],disabled:objectReason}),
+        command('object.group','Object','Group Selection',()=>groupSelectedObjects(),{disabled:objectReason}),
+        command('object.ungroup','Object','Unparent Selection',()=>ungroupSelectedObjects(),{aliases:['ungroup','detach'],disabled:objectReason}),
+        command('selection.box','Select','Box Select',()=>window.kaminosSelection.box(),{shortcut:'B'}),
+        command('selection.all','Select','Select All',()=>window.kaminosSelection.all(),{shortcut:'A'}),
+        command('selection.clear','Select','Deselect All',()=>window.kaminosSelection.clear(),{aliases:['clear selection'],shortcut:'Alt A'}),
+        command('view.selected','View','Frame Selected',()=>cameraViewAction('selected'),{aliases:['focus','zoom selection'],shortcut:'F',disabled:selectedReason}),
+        command('view.all','View','Frame All',()=>{sceneCameras.leave();if(frameObjects(sceneObjectsForFraming(sceneObjects),camera,controls))markDirty();},{aliases:['home'],shortcut:'Home'}),
+        ...[['front','Front','Numpad 1'],['back','Back','Ctrl Numpad 1'],['right','Right','Numpad 3'],['left','Left','Ctrl Numpad 3'],['top','Top','Numpad 7'],['bottom','Bottom','Ctrl Numpad 7']].map(([id,label,shortcut])=>command('view.'+id,'View',label,()=>cameraViewAction(id),{shortcut})),
+        command('history.undo','Edit','Undo',()=>edits.undo(),{shortcut:'⌘/Ctrl Z',disabled:()=>state.undoCount?null:'Nothing to undo'}),
+        command('history.redo','Edit','Redo',()=>edits.redo(),{shortcut:'⌘/Ctrl Shift Z',disabled:()=>state.redoCount?null:'Nothing to redo'}),
+        command('view.overlays','View','Toggle Overlays',()=>window.kaminosViewportSettings.set({overlays:!viewportDisplay.overlays}),{aliases:['helpers','outlines'],shortcut:'Shift Alt Z'}),
+        command('view.gizmos','View','Toggle Transform Gizmos',()=>window.kaminosViewportSettings.set({gizmos:!viewportDisplay.gizmos}),{aliases:['handles'],shortcut:'Ctrl ~'}),
+        command('document.save','Scene','Save',()=>window.saveScene(),{aliases:['file','composition']}),
+        command('document.open','Scene','Open Saved Scene…',()=>window.openSavedScene(),{aliases:['load','file','composition']}),
+      ];return result;
+    }});
+
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));

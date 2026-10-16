@@ -27,6 +27,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <nav class="workspace-switch" aria-label="Workspace"><button type="button" data-workspace-mode="authoring">Authoring</button><button type="button" data-workspace-mode="workbench">Workbench</button></nav>
     <div id="authoring-document-actions" aria-label="Document commands"></div>
     <div class="authoring-header-spacer"></div>
+    <button type="button" id="authoring-search" title="Search commands (Space over viewport or F3)">Search · F3</button>
     <button type="button" data-workbench-tab="assets" title="Import assets and browse the full workbench">Assets</button>
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
