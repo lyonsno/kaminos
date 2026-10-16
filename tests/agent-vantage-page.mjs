@@ -650,19 +650,21 @@ test('a default picture of a very large scene still returns its picture and map'
 });
 
 // installAgentVantage over a fake page: the panel map refresh runs on a timer.
-function installedPage({subs = [], drawnAt = null, water = false} = {}) {
-  const intervals = [], painted = [];
+function installedPage({subs = [], drawnAt = null, water = false, glance = null} = {}) {
+  const intervals = [], painted = [], classes = [];
   const element = tag => {
     const node = new FakeElement(tag), parts = {};
     node.querySelector = selector => (parts[selector] ??= element(selector === 'canvas' ? 'canvas' : 'span'));
-    node.classList = {add() {}, remove() {}};
+    node.classList = {add: name => classes.push(name), remove() {}};
+    node.toDataURL = () => 'data:image/png;base64,';
     node.getContext = () => new Proxy({}, {get: (_, key) => (key === 'measureText' ? () => ({width: 0}) : () => {
       if (key === 'drawImage') painted.push(node);
     }), set: () => true});
     return node;
   };
   const document = {visibilityState: 'visible', head: {append() {}}, getElementById: () => null, createElement: element};
-  const window = {setInterval: (fn, ms) => intervals.push({fn, ms}), clearInterval() {}, crypto: {randomUUID: () => 'test'}};
+  const window = {setInterval: (fn, ms) => intervals.push({fn, ms, cleared: false}) - 1, clearInterval: id => { if (intervals[id]) intervals[id].cleared = true; },
+    crypto: {randomUUID: () => 'test'}, ImageData: class { constructor(data, width, height) { Object.assign(this, {data, width, height}); } }};
   let bounds = 0, projection = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
   const entries = Array.from({length: 3}, (_, i) => {
     const object = new THREE.Group(), update = object.updateWorldMatrix.bind(object);
@@ -680,9 +682,9 @@ function installedPage({subs = [], drawnAt = null, water = false} = {}) {
     entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
     writeView() {}, viewport, hostCanvas, busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
-    idPass, water: () => water});
+    idPass, glance, water: () => water});
   const refresh = intervals.find(item => item.ms === 400).fn;
-  return {vantage, refresh, painted, entries, idPass, map: viewport.children[0].querySelector('canvas'),
+  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
     set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
 }
@@ -1432,4 +1434,43 @@ test('a glance names what it drew from the scene as it stood when drawn, not aft
   assert.deepEqual(shot.objects.inView.map(object => object.id), ['centre'], 'named from the scene as it was drawn');
   assert.equal(shot.view.fov, drawnFov, 'the view reported is the one drawn');
   assert.equal(shot.aspect, 1600 / 900);
+});
+
+// --- live view in the sub's panel ------------------------------------------------
+
+test('a live sub view draws small glances into the panel while on, never over a frame still in flight', async () => {
+  const draws = [], readbacks = [];
+  const glance = {draw(options) {
+    draws.push(options);
+    return {ready: new Promise(done => readbacks.push(() => done({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})))};
+  }};
+  const page = installedPage({subs: [BEBOP], glance});
+  const on = await page.vantage.run('live', {on: true, fps: 4});
+  assert.deepEqual([on.live.on, on.live.fps, on.live.pilot], [true, 4, 'bebop']);
+  const timer = page.intervals.find(item => item.ms === 250 && !item.cleared);
+  assert.ok(timer, 'four frames a second');
+  timer.fn(); timer.fn();
+  assert.equal(draws.length, 1, 'a frame still being read back is not drawn over');
+  assert.deepEqual(draws[0].hide, ['vantage-bebop'], 'the sub is not in its own view');
+  assert.equal(draws[0].width, 320);
+  readbacks[0](); await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.dataset.frame, '1', 'the frame reaches the panel');
+  assert.equal(page.live.hidden, false);
+  timer.fn();
+  assert.equal(draws.length, 2);
+  const off = await page.vantage.run('live', {on: false});
+  assert.equal(off.live.on, false);
+  assert.equal(timer.cleared, true, 'off stops the timer');
+  assert.ok(off.live.frames >= 1 && Number.isFinite(off.live.drawMs), 'and reports what the view cost');
+});
+
+test('a live view needs a sub, and a page that can draw a second view', async () => {
+  await assert.rejects(() => installedPage({glance: {draw() {}}}).vantage.run('live', {on: true}), error => error.phase === 'no-sub');
+  await assert.rejects(() => installedPage({subs: [BEBOP]}).vantage.run('live', {on: true}), error => error.phase === 'live');
+});
+
+test('a new picture appears in the panel without a flash', async () => {
+  const page = installedPage({subs: [BEBOP], glance: {draw: options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})})}});
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.ok(!page.classes.includes('flash'));
 });

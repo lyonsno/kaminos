@@ -513,6 +513,12 @@ const COMMANDS = {
   burst: args => ({pilot: pilotArg(args), count: count(args.count, 'count', 6), interval: positive(args.interval, 'interval', 250),
     settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64), cell: count(args.cell, 'cell', 480, 64),
     annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)}),
+  live: args => {
+    if (typeof args.on !== 'boolean') throw new Error('Live needs on: true or false');
+    const fps = args.fps ?? 4;
+    if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Live fps is between 0.5 and 15');
+    return {pilot: pilotArg(args), on: args.on, fps};
+  },
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),
   pick: args => {
