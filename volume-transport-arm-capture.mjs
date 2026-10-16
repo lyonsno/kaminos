@@ -318,7 +318,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], fluidBandStats: arm.fluidBandStats || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], fluidBandStats: arm.fluidBandStats || [], waveletBandEnergy: arm.waveletBandEnergy || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
