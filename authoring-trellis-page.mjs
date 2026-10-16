@@ -18,6 +18,9 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
   if(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function')
     throw TypeError('TRELLIS page finishing needs mesh cleanup and UV providers');
+  // Optional: the caller's texture size (the model default is 1024) and a bake provider
+  // (material-bake.js runs it in a worker).
+  if(finishing.bakeMaterial!==undefined&&typeof finishing.bakeMaterial!=='function')throw TypeError('the texture bake provider must be a function');
   if(decoderActivationStorage!==undefined&&!['f32','f16'].includes(decoderActivationStorage))throw TypeError('f32 or f16 decoder activation storage');
   if(decoderActivationStorage==='f16'&&appGpu.device?.features?.has?.('shader-f16')===false)throw Error('f16 decoder activations need shader-f16 on the page device');
   const manifest=decoderActivationStorage?structuredClone(source):source;
@@ -55,6 +58,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
       postprocessMesh:mesh=>run.withForeground('trellis-mesh-cleanup',()=>finishing.postprocessMesh(mesh)),
       unwrapMesh:mesh=>run.withForeground('trellis-uv-unwrap',()=>finishing.unwrapMesh(mesh)),
+      textureSize:finishing.textureSize,
+      bakeMaterial:finishing.bakeMaterial&&(input=>run.withForeground('trellis-texture-bake',()=>finishing.bakeMaterial(input))),
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
     const finished=await asset.run();

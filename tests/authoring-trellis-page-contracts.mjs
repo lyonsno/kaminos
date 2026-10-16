@@ -185,3 +185,21 @@ test('scene frames are served while checkpoints load and while the mesh is clean
   await running;
   assert.deepEqual(seen,{loading:1,cleaning:2,unwrapping:3},'a frame is served inside each CPU span, not only at route finish');
 });
+
+test('the caller chooses the texture size and the bake provider; the bake runs in a foreground window',async()=>{
+  const f=fixture();let seen;const windows=[];
+  f.deps.createTrellisAssetAdapter=options=>{seen=options;return {async run(){await options.bakeMaterial({textureSize:options.textureSize});return {glb};},dispose(){}};};
+  const host=f.deps.createTrellisSharedHost;
+  f.deps.createTrellisSharedHost=async args=>{const h=await host(args);const begin=h.beginRun;
+    h.beginRun=async o=>{const run=await begin(o);run.withForeground=(phase,work)=>{windows.push(phase);return work();};return run;};return h;};
+  const baked=[];
+  await call(f,{finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m,textureSize:4096,bakeMaterial:async input=>{baked.push(input.textureSize);return {};}}});
+  assert.equal(seen.textureSize,4096);
+  assert.deepEqual(baked,[4096],'the caller\'s bake provider receives the bake');
+  assert.ok(windows.includes('trellis-texture-bake'),'scene frames run while the textures bake');
+  const g=fixture();let plain;g.deps.createTrellisAssetAdapter=options=>{plain=options;return {async run(){return {glb};},dispose(){}};};
+  await call(g);
+  assert.equal(plain.textureSize,undefined,'without a choice the model default (1024) applies');
+  assert.equal(plain.bakeMaterial,undefined,'without a provider the model bakes on its own');
+  await assert.rejects(call(fixture(),{finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m,bakeMaterial:'worker'}}),/bake provider/);
+});

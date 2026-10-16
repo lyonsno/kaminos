@@ -27300,8 +27300,8 @@ function setupAuthoringAssets(){
   let u2netRunner=null;
   const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase,onInput}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
-    const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
-      import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
+    const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper},{createBrowserMaterialBaker}]=await Promise.all([
+      import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js'),import('./models/trellis2/material-bake.js')]);
     const pack=await createTrellisPageCheckpoints({config:config.trellisPage});
     // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
     // Generate step's prepared image) prepared here by the model's own browser kernel.
@@ -27337,8 +27337,11 @@ function setupAuthoringAssets(){
     try{
       const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
-        // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
-        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
+        // Stop reaches the finishing providers too (cleanup, UV and the texture bake in workers where
+        // supported). Textures bake at 4096 (Noah, 2026-10-16): at 1024 most faces of a dense mesh get
+        // only a neighbour's colour.
+        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal}),
+          textureSize:4096,bakeMaterial:createBrowserMaterialBaker({WorkerClass:Worker,signal})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
           input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
