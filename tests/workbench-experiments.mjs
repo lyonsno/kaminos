@@ -63,3 +63,54 @@ test('duplicate identity, import errors and invalid factories fail with source c
   await assert.rejects(openExperiment({id:'missing',title:'Missing',create:()=>({operations:{}})},{host:{}}),/read/);
   await assert.rejects(openExperiment({id:'bad',title:'Bad',create:()=>({read(){},operations:{start:3}})},{host:{}}),/start/);
 });
+
+async function mountedMaterial() {
+  const {default:definition}=await import('../experiments/material-study.experiment.mjs');
+  const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+  class Element extends EventTarget {
+    constructor(tag){super();this.tagName=tag;this.children=[];this.style={};this.classList={add(){},remove(){}};this.captures=0;this.ownerDocument=doc;}
+    append(...children){for(const child of children){child.parentNode=this;this.children.push(child);}}
+    setAttribute(){}
+    setPointerCapture(){this.captures++;}
+    hasPointerCapture(){return false;}
+    focus(){doc.activeElement=this;this.fire('focus');}
+    blur(){doc.activeElement=null;this.fire('blur');}
+    select(){}
+    fire(type,init={}){const e=new Event(type,{cancelable:true,bubbles:true});for(const [k,v] of Object.entries(init))Object.defineProperty(e,k,{value:v});this.dispatchEvent(e);return e;}
+    dispatchEvent(e){super.dispatchEvent(e);if(e.bubbles)this.parentNode?.dispatchEvent(e);return !e.defaultPrevented;}
+  }
+  const doc=new EventTarget();doc.createElement=tag=>new Element(tag);doc.defaultView={};
+  globalThis.document=doc;globalThis.window=new EventTarget();
+  const records=[];const session={attach:async()=>({id:'material'}),readView:()=>({}),redraw(){},dispose(){}};
+  const owner=await definition.create({host:{scene:{open:async()=>session},controls:{installNumberDrag:installRelativeNumberDrag}},inputs:{},record:r=>records.push(r)});
+  const panel=new Element('div');owner.mount({root:panel,document:doc,invoke:async(op,value)=>owner.operations[op](value)});
+  const flatten=el=>[el,...el.children.flatMap(flatten)];
+  const input=flatten(panel).find(el=>el.tagName==='input');
+  const grip=flatten(panel).find(el=>el!==input&&el.style.cursor==='ew-resize');
+  return {owner,panel,input,grip,records,close(){delete globalThis.document;delete globalThis.window;}};
+}
+
+test('material numeric editing preserves caret clicks while its separate grip scrubs',async()=>{
+  const f=await mountedMaterial();try {
+    f.input.focus();f.input.readOnly=false;
+    const event=f.input.fire('pointerdown',{button:0,pointerId:1,clientX:10,clientY:0});
+    assert.equal(event.defaultPrevented,false,'focused editing must keep native caret and selection');
+    f.grip.fire('pointerdown',{button:0,pointerId:2,clientX:10,clientY:0});
+    f.grip.fire('pointermove',{pointerId:2,clientX:40,clientY:0});
+    f.grip.fire('pointerup');
+    assert.ok(f.owner.read().roughness>.6,'deliberate grip drag must update roughness');
+  } finally {f.close();}
+});
+
+test('material numeric drafts do not apply empty zero or erase a decimal during typing',async()=>{
+  const f=await mountedMaterial();try {
+    f.input.focus();f.input.readOnly=false;
+    f.input.value='';f.input.fire('input');await Promise.resolve();
+    assert.equal(f.owner.read().roughness,.6,'empty draft must not apply zero');assert.equal(f.records.length,0);
+    f.input.value='0.';f.input.fire('input');await Promise.resolve();
+    assert.equal(f.input.value,'0.','typing must preserve an unfinished decimal');
+    f.input.value='0.35';f.input.fire('input');await Promise.resolve();assert.equal(f.owner.read().roughness,.35);
+    f.input.value='';f.input.fire('input');f.input.blur();assert.equal(f.input.value,'0.35','blur restores the accepted value');
+    f.input.focus();f.input.value='0';f.input.fire('input');await Promise.resolve();assert.equal(f.owner.read().roughness,0,'explicit zero remains valid');
+  } finally {f.close();}
+});
