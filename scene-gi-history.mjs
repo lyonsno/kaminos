@@ -1,5 +1,5 @@
 import {Node,RenderTarget,NodeMaterial,QuadMesh,Matrix4,Vector2,HalfFloatType,UnsignedByteType,RGBAFormat,RedFormat,NearestFilter,RendererUtils,TSL} from './lib/three.webgpu.js';
-const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context}=TSL;
+const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context,reference}=TSL;
 
 // Reproject estimated diffuse lighting and visibility, leaving current-frame
 // geometry and direct lighting untouched. Two alternating MRTs avoid history
@@ -64,8 +64,8 @@ export default class SceneGIHistory extends Node {
       const coords=uv();surface.assign(vec4(0));
       let depth=this.depth.sample(coords).r;
       if(builder.renderer.logarithmicDepthBuffer===true) {
-        const z=logarithmicDepthToViewZ(depth,uniform(this.camera.near),uniform(this.camera.far));
-        depth=viewZToPerspectiveDepth(z,uniform(this.camera.near),uniform(this.camera.far));
+        const z=logarithmicDepthToViewZ(depth,reference('near','float',this.camera),reference('far','float',this.camera));
+        depth=viewZToPerspectiveDepth(z,reference('near','float',this.camera),reference('far','float',this.camera));
       }
       visibility.assign(this.ao.sample(coords).r);irradiance.assign(this.gi.sample(coords).rgb);
       If(depth.lessThan(1),()=>{
