@@ -16,5 +16,16 @@ try {
  input.fire('pointercancel');assert.equal(live,3);assert.equal(input.value,'3');assert.equal(commits,0,'cancel restores without rebuilding');
  input.fire('pointerdown',{button:0,pointerId:2,clientX:0,clientY:0});input.fire('pointermove',{pointerId:2,clientX:6,clientY:0});input.fire('pointerup');
  assert.equal(commits,1,'one widget per input, one commit per drag');assert.equal(live,9);
+ const even=new Control();even.ownerDocument=doc;even.value='0';even.min='0';even.max='32';even.step='2';
+ installRenderingNumberControl(even);
+ const values=[];even.addEventListener('input',()=>values.push(Number(even.value)));
+ even.fire('pointerdown',{button:0,pointerId:3,clientX:0,clientY:0});even.fire('pointermove',{pointerId:3,clientX:5,clientY:0});even.fire('pointerup');
+ assert.ok(values.every(value=>value%2===0),'scrubbing preserves the former range step');
+ for(const value of ['', '1.5', '33', '-2']) {
+   const count=values.length,last=even.value;even.value=value;even.fire('input');
+   assert.equal(values.length,count,'invalid typed edits must not reach live handlers');
+   even.fire('change');assert.equal(even.value,last,'invalid commit restores the last valid value');
+ }
+ even.value='6';even.fire('input');even.fire('change');assert.equal(values.at(-1),6);
 }finally{delete globalThis.document;delete globalThis.window;}
 console.log('PASS Rendering scrubs preserve live handlers, commit on release and restore cancellation');

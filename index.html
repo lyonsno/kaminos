@@ -167,7 +167,7 @@ canvas { display: block; }
 #rendering-fire-shadow-controls > label { display:block; margin:12px 0; font-size:11px; color:#a6b2b5; }
 #rendering-fire-shadow-controls select { display:block; width:100%; margin-top:5px; background:#15191a; color:#e6ecee; border:1px solid #405158; padding:6px; }
 #rendering-panel-content .authoring-number-wrap { min-width:65px; }
-#rendering-panel-content .slider-row .slider-val, #rendering-panel-content .slider-row output { display:none; }
+#rendering-panel-content .slider-row:has(.authoring-number-wrap) .slider-val, #rendering-panel-content .slider-row:has(.authoring-number-wrap) output { display:none; }
 #rendering-fire-shadow-controls .authoring-number-wrap { display:flex; margin:6px 0; }
 #rendering-panel-content .authoring-number-wrap input { width:100%; background:#15191a; color:#e6ecee; border:1px solid #405158; }
 #rendering-fire-shadow-controls p, #rendering-fire-shadow-controls [role="status"] { font-size:11px; line-height:1.5; color:#a6b2b5; }
@@ -13438,7 +13438,6 @@ function setRightPanelTab(name) {
   }
   if (name === 'rendering') refreshRenderingControls();
 }
-installRenderingNumberControls(document.getElementById('rendering-panel-content'));
 for (const name of ['rendering', 'mix']) {
   document.getElementById(`right-tab-${name}`).addEventListener('click', () => setRightPanelTab(name));
 }
@@ -22996,6 +22995,7 @@ function updateBackground() {
 // --- AO Controls ---
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
+installRenderingNumberControls(document.getElementById('rendering-panel-content'));
 function readSceneGIControls() { return structuredClone(sceneGISettings); }
 function setSceneGIControls(value, {preserveInput=null}={}) {
   const settings = resolveSceneGIControlState(value);
