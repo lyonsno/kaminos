@@ -18,10 +18,13 @@ export function bindRangeNumber(source,input) {
     source.value=input.value;forward('input');
   });
   input.addEventListener('change',()=>{sync(true);forward('change');});
-  for(const type of ['focusin','focusout'])input.addEventListener(type,()=>forward(type));
+  for(const type of ['focusin','beforeinput','blur'])input.addEventListener(type,()=>forward(type));
   input.addEventListener('pointercancel',()=>{forward('pointercancel');sync(true);});
   input.addEventListener('keydown',event=>{
-    if(['Enter','Escape'].includes(event.key))source.dispatchEvent(new KeyboardEvent('keydown',{key:event.key,bubbles:true}));
+    if(['Enter','Escape'].includes(event.key)) {
+      source.dispatchEvent(new KeyboardEvent('keydown',{key:event.key,bubbles:true}));
+      input.blur?.();
+    }
   });
   source.addEventListener('input',()=>sync());source.addEventListener('change',()=>sync());
   sync(true);
@@ -43,7 +46,7 @@ export function installLegacyRangeFields({root,installNumberDrag,beforeEdit=()=>
     // that owner rather than gaining a second conflicting edit binding.
     if(paired)continue;
     const doc=source.ownerDocument,input=doc.createElement('input');
-    input.type='number';input.id=source.id+'-scrub';input.className='legacy-range-number';
+    input.type='number';input.id='legacy-number-'+source.id;input.className='legacy-range-number';
     const label=row.querySelector('label'),labelText=label?.textContent?.trim()||source.getAttribute('aria-label')||source.id;
     input.setAttribute('aria-label',labelText);input.step='any';
     for(const key of ['min','max','disabled'])input[key]=source[key];
