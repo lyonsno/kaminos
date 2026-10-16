@@ -3881,6 +3881,7 @@ import {installExperimentWorkspace} from './experiment-workspace.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
 import {createInvestigationEntry} from './investigation-entry.mjs';
 import {createWorkbenchFrameService,createWorkbenchSceneHost,disposeOwnedSceneTree} from './workbench-scene-host.mjs';
+import {createSceneResourceFinalizers} from './scene-resource-finalizers.mjs';
 import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, checkedSceneLightRecord, sceneLightRuntimeRecipe } from './scene-rim-light.mjs';
 
 import {checkedPose} from './scene-edit-session.mjs';
@@ -4385,6 +4386,7 @@ let sceneNavigation = null;
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
 const sceneMembershipDisposers = new WeakMap();
+const sceneResourceFinalizers=createSceneResourceFinalizers({onError:error=>{console.error('Experiment resource retirement failed',error);setInfo('Experiment cleanup failed: '+error.message);}});
 let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
@@ -5447,6 +5449,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  if(sceneResourceFinalizers.has(object))return sceneResourceFinalizers.retire(object);
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
@@ -10510,6 +10513,14 @@ function membershipEditTargetId(id) {
   return `@scene-membership:${encodeURIComponent(id)}`;
 }
 
+// This permits in-document Undo of a retained producer body without pretending
+// it has a saved source recipe. Scene serialization keeps its existing rules.
+function canRetainSceneObjectRecord(record) {
+  if(isReloadableSceneObjectRecord(record))return true;
+  const entry=sceneObjects.find(row=>row.id===record?.id)||sceneMembershipRetainedObjects.get(record?.id);
+  return Boolean(entry&&sceneResourceFinalizers.canRestore(entry.object));
+}
+
 function releaseUnreferencedSceneMembershipObjects() {
   for (const [id, entry] of sceneMembershipRetainedObjects) {
     const editId = membershipEditTargetId(id);
@@ -10528,7 +10539,7 @@ function sceneObjectMembershipSnapshot(id) {
   if (index < 0) return null;
   const entry = sceneObjects[index];
   const record = serializeSceneObject(entry);
-  if (!isReloadableSceneObjectRecord(record)) return null;
+  if (!canRetainSceneObjectRecord(record)) return null;
   return {
     record,
     index,
@@ -10543,7 +10554,7 @@ function sceneObjectMembershipSnapshot(id) {
 function checkedSceneObjectMembership(value, id) {
   if (value == null) return null;
   if (!value || typeof value !== 'object' || !value.record || value.record.id !== id
-      || !isReloadableSceneObjectRecord(value.record)
+      || !canRetainSceneObjectRecord(value.record)
       || !Number.isInteger(value.index) || value.index < 0 || !Array.isArray(value.groups)
       || value.groups.some(group => !group || typeof group.id !== 'string'
         || !Number.isInteger(group.groupIndex) || group.groupIndex < 0
@@ -10687,7 +10698,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   }
   scene.remove(entry.object);
   if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
-  const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
+  const retainForMembershipHistory = (['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type)||sceneResourceFinalizers.has(entry.object)) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
     && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
@@ -11930,9 +11941,11 @@ async function initScene() {
       const hasMembershipHistory=Boolean(scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(handle.id))
         || scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(handle.id)));
       return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:hasMembershipHistory,
-        disposeTree:root=>disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
+        disposeTree:root=>sceneResourceFinalizers.has(root)?sceneResourceFinalizers.retire(root):disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
     },
     redraw:()=>window._kaminosDirty?.(),onFrame:workbenchSceneFrames.onFrame,
+    onBeforeRender:workbenchSceneFrames.onBeforeRender,finalizers:sceneResourceFinalizers,
+    getGpu:()=>sharedGpu?{renderer,device:sharedGpu.device,adapter:sharedGpu.adapter,scene,camera,controls}:null,
   });
   window.kaminosWorkbenchSceneState=()=>{
     const info=renderer.backend.adapter?.info;
@@ -11979,6 +11992,7 @@ async function initScene() {
     // running. Keep the previous presented frame until both consumers have
     // current inputs; do not submit retired medium resources or unlit fill.
     if (window.__kaminosSceneRadiance && !window.__kaminosSceneRadiance.canRender()) return false;
+    if(!workbenchSceneFrames.beforeRender())return false;
     const t0 = performance.now();
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
@@ -26063,7 +26077,7 @@ function setupSelectionTransforms(){
 function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
 function checkSelectionMembership(raw){
   const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
-  const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
+  const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!canRetainSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
   for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
   checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
 }

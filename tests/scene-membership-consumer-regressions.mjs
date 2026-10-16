@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import { createSceneEdits } from '../scene-edit-session.mjs';
 import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
+import {createSceneResourceFinalizers} from '../scene-resource-finalizers.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const membershipStart = html.indexOf('function membershipEditTargetId(');
@@ -46,6 +47,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
     sceneMembershipEditTargets: new Set(),
     sceneMembershipRetainedObjects: new Map(),
     sceneMembershipDisposers: new WeakMap(),
+    sceneResourceFinalizers:{has:()=>false,canRestore:()=>false},
     activeSceneObjectId: null,
     activeSceneGroupId: null,
     currentMesh: null,
@@ -271,4 +273,19 @@ test('removing one selected member prunes it before a surviving selection is pro
  context.renderSceneObjectList=()=>{for(const id of context.sceneSelection.ids)assert.ok(sceneObjects.some(entry=>entry.id===id),`Selection projection references removed ${id}`);};
  assert.doesNotThrow(()=>vm.runInContext("removeSceneObjectInternal('copy-a',{recordHistory:false,preserveForMembershipHistory:true})",context));
  assert.deepEqual(Array.from(context.sceneSelection.ids),['copy-b']);assert.ok(sceneObjects.some(entry=>entry.id==='copy-b'));
+});
+
+
+test('producer-only resources survive Delete/Undo/Redo and finalize exactly once after history releases them',async()=>{
+ const {context,edits,sceneObjects,scene}=makeSceneContext();
+ const object=repairedMesh();let finalizations=0;
+ context.sceneResourceFinalizers=createSceneResourceFinalizers();
+ context.sceneResourceFinalizers.register(object,root=>{assert.equal(root,object);++finalizations;});
+ sceneObjects.push(makeRecord('stone',object,{type:'experiment',source:null}));scene.add(object);
+ assert.equal(vm.runInContext("removeSceneObjectInternal('stone')",context),true);
+ assert.equal(finalizations,0,'Delete must keep the producer allocation while Undo owns it');
+ await edits.undo();assert.equal(sceneObjects[0]?.object,object);
+ await edits.redo();assert.equal(finalizations,0);
+ edits.clear();await context.sceneResourceFinalizers.pending(object);assert.equal(finalizations,1);
+ assert.equal(object.geometry.disposed,false,'the host must not double-dispose producer-owned Three resources');
 });

@@ -36,9 +36,10 @@ export function createOwnerSceneSession(hooks) {
     return task;
   }
 
-  function onFrame(callback) {
+  function subscribe(kind,callback) {
     active();
-    if (typeof callback !== 'function') throw TypeError('Frame callback must be callable');
+    if (typeof callback !== 'function') throw TypeError('Scene callback must be callable');
+    if(typeof hooks[kind]!=='function')throw Error(`Scene host ${kind} is unavailable`);
     const entry = {enabled: true, unsubscribe: null};
     function cancel() {
       if (!entry.enabled) return;
@@ -47,8 +48,8 @@ export function createOwnerSceneSession(hooks) {
     }
     entry.cancel = cancel; frames.add(entry);
     try {
-      const unsubscribe = hooks.onFrame(frame => {if (!disposed && entry.enabled) callback(frame);});
-      if (typeof unsubscribe !== 'function') throw Error('Scene host onFrame must return unsubscribe');
+      const unsubscribe = hooks[kind](frame => {if (!disposed && entry.enabled) return callback(frame);});
+      if (typeof unsubscribe !== 'function') throw Error(`Scene host ${kind} must return unsubscribe`);
       entry.unsubscribe = unsubscribe;
       if (!entry.enabled || disposed) unsubscribe();
     } catch (error) {cancel(); throw error;}
@@ -71,7 +72,9 @@ export function createOwnerSceneSession(hooks) {
     readView() {active(); return structuredClone(hooks.readView());},
     setView(view) {active(); return structuredClone(hooks.setView(structuredClone(view)));},
     redraw() {active(); return hooks.redraw();},
-    onFrame,
+    onFrame:callback=>subscribe('onFrame',callback),
+    onBeforeRender:callback=>subscribe('onBeforeRender',callback),
+    gpu(){active();if(typeof hooks.gpu!=='function')throw Error('Scene host GPU access is unavailable');return hooks.gpu();},
     dispose() {
       if (!disposed) {
         disposed = true;

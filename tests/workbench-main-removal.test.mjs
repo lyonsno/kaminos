@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createSceneEdits} from '../scene-edit-session.mjs';
 import {disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
+import {createSceneResourceFinalizers} from '../scene-resource-finalizers.mjs';
 const source=fs.readFileSync(process.env.KAMINOS_REMOVAL_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 function actual(name){const a=source.indexOf('function '+name+'('),b=source.indexOf('\n}\n',a);assert.ok(a>=0&&b>a);return source.slice(a,b+2);}
 const a=source.indexOf('    removeObject:handle=>{',source.indexOf('workbenchSceneHost=createWorkbenchSceneHost('));
@@ -21,7 +22,7 @@ function fixture(){
  const edits=createSceneEdits({read:()=>pose,write(){}}),rows=[{id:'owned',type:'glb',object:owned},{id:'borrowed',type:'glb',object:borrowed}];
  const c={scene,sceneObjects:rows,sceneGroups:[],sceneSelection:{ids:[],activeId:null},activeSceneObjectId:null,activeSceneGroupId:null,currentMesh:null,transformControls:null,sceneCameras:null,
   FLAME_EMITTER_ID:'flame',LOCAL_LIQUID_EMITTER_TYPE:'liquid',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural',RIM_LIGHT_ID:'rim',hybridSplatOverlayState:{},splatCorrectionMode:null,
-  sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
+  sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),sceneResourceFinalizers:createSceneResourceFinalizers(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
   pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){c.activeSceneObjectId=id;},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
  };
  vm.createContext(c);vm.runInContext(['membershipEditTargetId','releaseUnreferencedSceneMembershipObjects','pruneSceneSelection','removeSceneObjectInternal','disposeObjectTree'].map(actual).join('\n')+'\n'+adapter,c);

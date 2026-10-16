@@ -6059,6 +6059,31 @@ try {
     await runForgeHostLiveRegistryScenario(ws);
   } else if (scenario === 'forge-host-smoke-chamber-routing') {
     await runForgeHostSmokeChamberRoutingScenario(ws);
+  } else if (scenario === 'shared-gpu-host') {
+    phase='scenario-shared-gpu-host';
+    lastEvidence.gpuHost=await evaluate(ws,`(async()=>{
+      const entry=window.kaminosWorkbenchExperiments,fixture=window.kaminosGpuHostFixture;
+      if(entry?.state().id!=='shared-gpu-host-fixture'||!fixture)throw Error('Actual shared GPU fixture did not mount');
+      const initial=fixture.read();
+      if(initial.backend!=='webgpu'||!initial.deviceMatches||initial.adapter.isFallbackAdapter!==false||!initial.mounted||initial.publications<1)throw Error('Native shared GPU/publication contract absent: '+JSON.stringify(initial));
+      const queueValue=await entry.invoke('queueRoundTrip');
+      if(queueValue!==0x12345678)throw Error('Borrowed device did not execute the requested queue copy');
+      window.removeSceneObject(initial.id);
+      if(fixture.read().mounted||fixture.read().finalizations)throw Error('Delete retired a history-owned producer');
+      await window.kaminosSceneEdits.undo();
+      if(!fixture.read().mounted||fixture.read().uuid!==initial.uuid)throw Error('Undo did not restore the same producer root');
+      return {initial,queueValue,restored:fixture.read()};
+    })()`);
+    lastEvidence.gpuHost.capture=await capturePngScreenshot(ws,siblingPngPath('-restored'));
+    lastEvidence.gpuHost.terminal=await evaluate(ws,`(async()=>{
+      const fixture=window.kaminosGpuHostFixture;
+      window.removeSceneObject(fixture.read().id);
+      await window.kaminosWorkbenchExperiments.close();
+      if(fixture.read().finalizations)throw Error('Entry close destroyed a history-retained producer');
+      window.kaminosSceneEdits.clear();await fixture.retired();
+      if(fixture.read().finalizations!==1||fixture.read().mounted)throw Error('Final producer retirement was not exact');
+      return fixture.read();
+    })()`);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {
