@@ -196,3 +196,13 @@ test('the printed reply command survives the shell with the server intact, even 
     assert.deepEqual(args, ['tools/notes.mjs', '--server', server, 'reply', ROOT_ID, 'answer', '--as', 'water-agent']);
   }
 });
+
+test('a notification outcome is kept with the note and is not a delivery', () => {
+  const events = [...conversation(), {schema: NOTES_SCHEMA, seq: 90, type: 'notified', at: '2026-10-16T12:00:00.000Z', author: 'kaminos', via: 'server',
+    notes: [ROOT_ID], recipient: 'far-agent', ok: false, detail: 'notify command exited 3'}];
+  const state = foldNotes(events);
+  assert.deepEqual(state.issues, []);
+  const note = state.notes.get(ROOT_ID);
+  assert.deepEqual(note.receipts.notified['far-agent'], {at: '2026-10-16T12:00:00.000Z', seq: 90, ok: false, detail: 'notify command exited 3'});
+  assert.ok(!('far-agent' in note.receipts.delivered));
+});

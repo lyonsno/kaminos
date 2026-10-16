@@ -279,6 +279,7 @@ def http_contracts():
                     time.sleep(0.1)
             assert status == 200 and listing["events"] == [] and listing["root"] == str(root.resolve()), (status, listing)
             assert listing["pageAuthor"] == "noah" and listing["schema"] == "kaminos.notes.v1", listing
+            assert call(port, "GET", "/api/notes/participants")[1]["notifies"] is False, "no notify command, no notifying"
 
             stream = Stream(port, "page-aaaaaaaa")
             assert stream.status == 200, stream.status
@@ -408,11 +409,157 @@ def presence_stream_contracts():
                 process.kill()
 
 
+def directory_and_notify_contracts():
+    """A server can be given a directory of people to offer in the @ list, and a
+    command to run when a note is for someone who is not listening. Kaminos
+    knows nothing about where either comes from."""
+    port = free_port()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        people = tmp / "people.json"
+        people.write_text(json.dumps({"people": [{"name": "far-agent", "about": "works elsewhere"}, {"name": "bad name"}]}))
+        notify = tmp / "notify.py"
+        notify.write_text(
+            "import json, os, sys\n"
+            "body = json.load(sys.stdin)\n"
+            "name = os.environ['KAMINOS_NOTES_RECIPIENT']\n"
+            "(__import__('pathlib').Path(sys.argv[1]) / f'notified-{name}.json').write_text(json.dumps(\n"
+            "    {'recipient': name, 'note': body['note']['id'], 'text': body['note']['text'], 'server': os.environ.get('KAMINOS_NOTES_SERVER'),\n"
+            "     'listening': body['listening'], 'listeningEnv': os.environ.get('KAMINOS_NOTES_LISTENING')}))\n"
+            "sys.exit(3 if name == 'late-agent' else 0)\n")
+        process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                   env={**os.environ, "KAMINOS_BIND_HOST": "127.0.0.1", "KAMINOS_NOTES_ROOT": str(tmp / "notes"),
+                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah", "KAMINOS_NOTES_DIRECTORY": str(people),
+                                        "KAMINOS_NOTES_NOTIFY": f"{sys.executable} {notify} {tmp}"})
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    call(port, "GET", "/api/notes")
+                    break
+                except OSError:
+                    if time.monotonic() > deadline or process.poll() is not None:
+                        raise AssertionError(process.stderr.read().decode() if process.poll() is not None else "serve.py did not start")
+                    time.sleep(0.1)
+
+            status, body = call(port, "GET", "/api/notes/participants")
+            rows = {row["name"]: row for row in body["participants"]}
+            assert status == 200 and rows["far-agent"]["sources"] == ["directory"], body
+            assert body["notifies"] is True, "the page is told a notify command is configured"
+            assert rows["far-agent"]["about"] == "works elsewhere" and rows["far-agent"]["listening"] is False, rows["far-agent"]
+            assert "bad name" not in rows, sorted(rows)
+            people.write_text(json.dumps({"people": [{"name": "far-agent"}, {"name": "late-agent", "kind": "person"}]}))
+            status, body = call(port, "GET", "/api/notes/participants")
+            rows = {row["name"]: row for row in body["participants"]}
+            assert rows["late-agent"]["kind"] == "person", "the directory is read as it is now"
+
+            # Every recipient's command runs, told whether that recipient's wait was active;
+            # whoever runs the server decides what a listening recipient needs.
+            waiting = {}
+            listener = threading.Thread(target=lambda: waiting.update(call(port, "GET", "/api/notes/wait?as=near-agent&timeout=20", timeout=30)[1]))
+            listener.start()
+            for _ in range(100):
+                if any(row["name"] == "near-agent" for row in call(port, "GET", "/api/notes/presence")[1]["listeners"]):
+                    break
+                time.sleep(0.05)
+            status, note = call(port, "POST", "/api/notes", {"kind": "note", "text": "both of you, look", "to": ["far-agent", "near-agent"],
+                                                             "anchor": {"kind": "scene"}, "author": "writer-agent"})
+            assert status == 200, note
+            listener.join(30)
+            assert [item["id"] for item in waiting.get("notes", [])] == [note["id"]], waiting
+            far = tmp / "notified-far-agent.json"
+            for _ in range(200):
+                if far.exists():
+                    break
+                time.sleep(0.05)
+            told = json.loads(far.read_text())
+            assert told == {"recipient": "far-agent", "note": note["id"], "text": "both of you, look", "server": f"http://127.0.0.1:{port}",
+                            "listening": False, "listeningEnv": "0"}, told
+            near = tmp / "notified-near-agent.json"
+            for _ in range(200):
+                if near.exists():
+                    break
+                time.sleep(0.05)
+            assert json.loads(near.read_text())["listening"] is True and json.loads(near.read_text())["listeningEnv"] == "1"
+
+            status, note2 = call(port, "POST", "/api/notes", {"kind": "note", "text": "late one", "to": ["late-agent"],
+                                                              "anchor": {"kind": "scene"}, "author": "writer-agent"})
+            outcomes = {}
+            for _ in range(200):
+                events = call(port, "GET", "/api/notes")[1]["events"]
+                outcomes = {(event["notes"][0], event["recipient"]): event for event in events if event["type"] == "notified"}
+                if len(outcomes) >= 3:
+                    break
+                time.sleep(0.05)
+            assert outcomes[(note["id"], "far-agent")]["ok"] is True, outcomes
+            failed = outcomes[(note2["id"], "late-agent")]
+            assert failed["ok"] is False and "3" in failed["detail"], failed
+            assert outcomes[(note["id"], "near-agent")]["ok"] is True, outcomes
+
+            # Being notified is not being handed the note: far-agent's wait still gets it.
+            status, got = call(port, "GET", "/api/notes/wait?as=far-agent&timeout=5", timeout=15)
+            assert [item["id"] for item in got["notes"]] == [note["id"]], got
+        finally:
+            process.terminate()
+            try:
+                process.wait(10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+
+def notify_timing_contracts(notes):
+    """A wait that just ended is not listening, whatever the presence display
+    smooths over; and a note that was saved is notified even if its author's
+    response cannot be written."""
+    with tempfile.TemporaryDirectory() as tmp:
+        clock = [1000.0]
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah", clock=lambda: clock[0])
+        http = notes.NotesHttp(log, source=lambda: {"origin": "http://127.0.0.1:1"}, notify=["true"])
+        calls = []
+        http._run_notify = lambda note, name, server, listening: calls.append((note["id"], name, listening))
+        log.claim("near-agent", timeout=0)
+        note = log.post({"kind": "note", "text": "x", "to": ["near-agent"], "anchor": {"kind": "scene"}, "author": "writer-agent"}, origin=CLI)
+        http._notify_recipients(note)
+        for _ in range(100):
+            if calls:
+                break
+            time.sleep(0.02)
+        assert calls == [(note["id"], "near-agent", False)], calls
+
+        class Broken:
+            def write(self, data):
+                raise BrokenPipeError("client went away")
+        class Handler:
+            headers = {"Content-Type": "application/json", "Content-Length": "0"}
+            client_address = ("127.0.0.1", 5)
+            wfile = Broken()
+            def send_response(self, *args): pass
+            def send_header(self, *args): pass
+            def end_headers(self): pass
+        body = json.dumps({"kind": "note", "text": "y", "to": ["far-agent"], "anchor": {"kind": "scene"}, "author": "writer-agent"}).encode()
+        handler = Handler()
+        handler.headers = {"Content-Type": "application/json", "Content-Length": str(len(body))}
+        handler.rfile = __import__("io").BytesIO(body)
+        calls.clear()
+        try:
+            http.post(handler, {})
+        except OSError:
+            pass
+        for _ in range(100):
+            if calls:
+                break
+            time.sleep(0.02)
+        assert [name for _, name, _ in calls] == ["far-agent"], calls
+
+
 if __name__ == "__main__":
     notes = load_notes()
     log_contracts(notes)
     follow_up_contracts(notes)
     participant_contracts(notes)
+    notify_timing_contracts(notes)
     http_contracts()
     presence_stream_contracts()
+    directory_and_notify_contracts()
     print("notes server contracts passed")

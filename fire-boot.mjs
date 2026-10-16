@@ -22,3 +22,17 @@ export function fireAtBoot(params,hash=new URLSearchParams()){
   if(hash.get('scene'))return {boot:true,reason:'saved scene'};
   return {boot:false,reason:'no fire in this page'};
 }
+
+// One boot of the fluid route per page, started either at load (fireAtBoot) or on demand when
+// a person adds fire to a scene that started without it. A failed boot can be tried again.
+export function createFluidBoot(init){
+  if(typeof init!=='function')throw TypeError('fluid route initializer required');
+  let pending=null,reason=null;
+  return {
+    ensure(why){
+      if(!pending){reason=why;pending=Promise.resolve().then(init).catch(error=>{pending=null;reason=null;throw error;});}
+      return pending;
+    },
+    state:()=>({started:!!pending,reason}),
+  };
+}

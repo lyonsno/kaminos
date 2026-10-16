@@ -34,3 +34,16 @@ test('a saved-scene address boots the fluid, since the scene may hold fire',()=>
  assert.equal(fireAtBoot(new URLSearchParams('fire=off'),new URLSearchParams('scene=saved.json')).boot,false,'fire=off still wins');
  assert.equal(fireAtBoot(new URLSearchParams(''),new URLSearchParams('authoring=1')).boot,false,'an empty Authoring page stays without fluid');
 });
+
+test('the fluid route boots once, at load or on demand when fire is added, and a failed boot can retry',async()=>{
+ const {createFluidBoot}=await import('../fire-boot.mjs');
+ let calls=0;const boot=createFluidBoot(async()=>{calls++;return 'route';});
+ assert.deepEqual(boot.state(),{started:false,reason:null},'an ordinary page has not booted the fluid');
+ const [a,b]=await Promise.all([boot.ensure('add flame'),boot.ensure('add flame')]);
+ assert.equal(a,'route');assert.equal(b,'route');assert.equal(calls,1,'concurrent asks share one boot');
+ assert.deepEqual(boot.state(),{started:true,reason:'add flame'});
+ let fail=true;const flaky=createFluidBoot(async()=>{if(fail){fail=false;throw Error('no adapter');}return 'ok';});
+ await assert.rejects(flaky.ensure('add flame'),/no adapter/);
+ assert.equal(flaky.state().started,false,'a failed boot is not remembered');
+ assert.equal(await flaky.ensure('add flame'),'ok');
+});

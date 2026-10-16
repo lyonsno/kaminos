@@ -3948,7 +3948,7 @@ import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
-import {fireAtBoot} from './fire-boot.mjs';
+import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -19886,7 +19886,11 @@ function reportKaminosVolumeRouteInitFailure(error) {
   setInfo(`Volume route initialization failed: ${message}`);
 }
 
+// The fluid boots once per page (fire-boot.mjs createFluidBoot): at load when the URL asks for
+// fire, or when fire is added to a scene that started without it.
+window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { started: false, reason: null };
 async function initKaminosVolumeRoute() {
+  initKaminosVolumeRoute.boot ??= createFluidBoot(async () => {
   if (compositionSetupError) throw compositionSetupError;
   window.__kaminosVolumeControlStepsMadeContinuous = [];
   const params = new URLSearchParams(window.location.search);
@@ -22068,6 +22072,8 @@ async function initKaminosVolumeRoute() {
   recordVolumeSettingsPresetApplied();
   recordFlameSettingsProblems();
   setInterval(refreshVolumeReadout, 500);
+  });
+  return initKaminosVolumeRoute.boot.ensure(window.__kaminosFireBoot?.boot ? window.__kaminosFireBoot.reason : 'add flame');
 }
 
 // --- File Input Handling ---
@@ -22499,6 +22505,9 @@ async function addFirstFlameField(presetId,{signal}={}) {
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
   if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
+  // A scene that started without fire boots the fluid route now (fire-boot.mjs).
+  if(!volumePrototype){authoringBusy=true;try{await initKaminosVolumeRoute();}finally{authoringBusy=false;}signal?.throwIfAborted();}
+  if(!volumePrototype)throw Error('The fluid simulation did not start; the flame cannot be added');
   const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
   authoringBusy=true;
   let settings;
@@ -27449,11 +27458,12 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
-  // The frame owner models borrow frames from: the fire scene's volume prototype when
-  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  // The frame owner models borrow frames from: the fire scene's volume prototype while it
+  // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
+  // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
   let appFrameSource=null;
   const frameOwner=()=>{
-    if(volumePrototype?.foregroundGpuContext){
+    if(volumePrototype?.foregroundGpuContext?.().active){
       // A fire scene took over: the app owner stops requesting frames.
       if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
       return volumePrototype;
