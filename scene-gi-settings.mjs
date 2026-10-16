@@ -1,12 +1,14 @@
 export function resolveSceneGISettings(value = {}) {
-  const settings = {mode:'gtao', view:'scene', gain:10, radius:4, thickness:.3, slices:3, steps:8, denoise:3};
+  // Noah's saved goodcheapgisettings3slices3stepskiln scene, October14.
+  const settings = {mode:'combined', view:'scene', gain:3.5, radius:8.364843749999999,
+    thickness:6.806132812500005, slices:3, steps:3, denoise:16, resolutionScale:1};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   if (!['gtao','combined'].includes(settings.mode)) throw new Error('Invalid scene GI mode');
   if (!['scene','ao','gi','incoming'].includes(settings.view)) throw new Error('Invalid scene GI view');
-  for (const key of ['gain','radius','thickness','slices','steps','denoise']) {
+  for (const key of ['gain','radius','thickness','slices','steps','denoise','resolutionScale']) {
     if (!Number.isFinite(settings[key]) || settings[key] < 0) throw new Error(`Invalid scene GI ${key}`);
   }
-  for (const key of ['radius','thickness','slices','steps']) {
+  for (const key of ['radius','thickness','slices','steps','resolutionScale']) {
     if (settings[key] === 0) throw new Error(`Scene GI ${key} must be positive`);
   }
   for (const key of ['slices','steps']) {
@@ -21,7 +23,7 @@ export function sceneGIReceives(material) {
 }
 
 export function resolveSceneGIEstimatorSettings(value = {}) {
-  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:0,depthPhi:.1,normalPhi:5,lumaPhi:5};
+  const settings = {expFactor:2,screenSpaceSampling:false,linearThickness:false,backfaceLighting:0.18003906250000004,depthPhi:.1,normalPhi:5,lumaPhi:5};
   for (const key of Object.keys(settings)) if (Object.hasOwn(value,key)) settings[key]=value[key];
   for (const key of ['expFactor','depthPhi','normalPhi','lumaPhi']) {
     if (!Number.isFinite(settings[key]) || settings[key] <= 0) throw new Error(`Invalid scene GI ${key}`);

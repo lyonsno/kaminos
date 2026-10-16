@@ -26,39 +26,52 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
   const rawAO = effect.getAONode(), rawGI = effect.getGINode();
   let settings = resolveSceneGISettings();
   let estimator = resolveSceneGIEstimatorSettings();
-  const gain = uniform(settings.gain), filtered = uniform(true,'bool'), viewMode = uniform(0,'int');
-  const visibility = filtered.select(texture(aoTexture.value,screenUV).r,texture(rawAO.value,screenUV).r).clamp(0,1);
-  const irradianceOverPi = filtered.select(texture(giTexture.value,screenUV).rgb,texture(rawGI.value,screenUV).rgb).mul(gain);
-  const ao = mix(float(1),visibility,aoIntensity.min(1)).div(float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(visibility))));
-  const beauty = pass(scene,camera);
-  beauty.name = 'SSGI material receiving';
-  beauty.contextNode = context({
-    ...builtinAOContext(ao).getFlowContextData(),
-    getOutput(node,{material}) {
-      // Match Three's diffuseContribution, including mapped/node metalness.
-      const diffuseReceiver = diffuseColor.rgb.mul(metalness.oneMinus());
-      const received = sceneGIReceives(material) ? irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)) : vec3(0);
-      return mix(vec4(node.rgb.add(received),node.a),vec4(received,node.a),float(viewMode.equal(2)));
-    },
-  });
-  const setup = beauty.setup;
-  beauty.setup = function(builder) {
-    aoTexture.build(builder); giTexture.build(builder);
-    return setup.call(this,builder);
-  };
-  // The receiving pass owns producer scheduling. Diagnostics read its resolved
-  // textures without pulling the producer graph into isolated conditional scopes.
-  const aoView = vec4(visibility,visibility,visibility,1);
-  const surface = texture(depth.value,screenUV).r.lessThan(1);
-  const receivedView = vec4(beauty.rgb.mul(surface),1);
-  const incomingView = vec4(irradianceOverPi.mul(surface),1);
-  const combinedOutput = mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
+  const gain = uniform(settings.gain), viewMode = uniform(0,'int');
+  // Different scheduling graphs make Off an actual bypass. Keep compiled routes
+  // alive across toggles because Three bindings can still reference their RTs.
+  const routes = new Map();
+  const filterFrames = {ao:0,gi:0};
+  for (const [name,node] of [['ao',aoTexture],['gi',giTexture]]) {
+    const update = node.updateBefore;
+    node.updateBefore = function(frame) { const result=update.call(this,frame); filterFrames[name]++; return result; };
+  }
+  function route() {
+    const filtered=settings.denoise>0;
+    if(routes.has(filtered))return routes.get(filtered);
+    const aoInput=filtered?aoTexture:rawAO, giInput=filtered?giTexture:rawGI;
+    const visibility=texture(aoInput.value,screenUV).r.clamp(0,1);
+    const irradianceOverPi=texture(giInput.value,screenUV).rgb.mul(gain);
+    const ao=mix(float(1),visibility,aoIntensity.min(1)).div(float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(visibility))));
+    const beauty=pass(scene,camera);
+    beauty.name='SSGI material receiving '+(filtered?'filtered':'raw');
+    beauty.contextNode=context({
+      ...builtinAOContext(ao).getFlowContextData(),
+      getOutput(node,{material}) {
+        const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
+        const received=sceneGIReceives(material)?irradianceOverPi.mul(diffuseReceiver).mul(receiveWeight(material)):vec3(0);
+        return mix(vec4(node.rgb.add(received),node.a),vec4(received,node.a),float(viewMode.equal(2)));
+      },
+    });
+    const setup=beauty.setup;
+    beauty.setup=function(builder) {
+      // Building only the selected producers excludes filter dispatches in raw mode.
+      aoInput.build(builder);giInput.build(builder);
+      return setup.call(this,builder);
+    };
+    const aoView=vec4(visibility,visibility,visibility,1);
+    const surface=texture(depth.value,screenUV).r.lessThan(1);
+    const receivedView=vec4(beauty.rgb.mul(surface),1);
+    const incomingView=vec4(irradianceOverPi.mul(surface),1);
+    const output=mix(mix(mix(beauty,aoView,float(viewMode.equal(1))),receivedView,float(viewMode.equal(2))),incomingView,float(viewMode.equal(3)));
+    const result={beauty,output};routes.set(filtered,result);return result;
+  }
   let frames = 0;
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
-    depth, source, beauty,
-    output() { return combinedOutput; },
+    depth, source,
+    get beauty() { return route().beauty; },
+    output() { return route().output; },
     setSettings(value) {
       const next = resolveSceneGISettings(value);
       if(next.view==='gi')scene.traverseVisible(object=>{
@@ -69,7 +82,9 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       settings = next;
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
-      gain.value = settings.gain; filtered.value = settings.denoise > 0;
+      gain.value = settings.gain;
+      effect.resolutionScale=settings.resolutionScale;
+      aoTexture.setResolutionScale(settings.resolutionScale);giTexture.setResolutionScale(settings.resolutionScale);
       viewMode.value = ['scene','ao','gi','incoming'].indexOf(settings.view);
       aoFilter.radius.value = giFilter.radius.value = settings.denoise;
     },
@@ -84,7 +99,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
     },
     async readback(renderer,kind='incoming') {
       if (!['incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
-      const target=kind==='receiving'?beauty.renderTarget:effect._ssgiRenderTarget;
+      const target=kind==='receiving'?route().beauty.renderTarget:effect._ssgiRenderTarget;
       const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,kind==='receiving'?0:1);
       let sum=0,max=0,nonzero=0,finite=true;
       for(let i=0;i<data.length;i++)if(i%4<3){const v=DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
@@ -96,7 +111,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
       temporal:false,source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
-      sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:beauty.renderTarget.samples,
+      sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
+      filtering:settings.denoise>0,filterFrames:{...filterFrames},
       standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
       viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
   };
