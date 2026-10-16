@@ -10,7 +10,7 @@ test('the actual domain helper retires when its field is absent and survives tog
   const scene=new THREE.Scene(),selectionCaptureSuspended=false,viewportHelpersVisible=true;
   const viewportDisplay={domains:true,domainOpacity:1,domainWidth:1},transformControls=null;
   const acceptedFlameDomainPose=()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]});
-  const domainTransformForPose=()=>({translation:[0,0,0],scale:1}),flameDomainTopY=()=>3,styleHelperLines=()=>{};
+  const domainTransformForPose=()=>({translation:[0,0,0],scale:1}),flameDomainTopY=()=>3,styleHelperLines=()=>{},styleSimulationDomainGuide=()=>{};
   const document={getElementById:()=>null},window={_kaminosDirty:()=>{}};
   const a=source.indexOf('function refreshFlameDomainPreview()'),b=source.indexOf('function writeFlameDomainPreview',a);
   const refresh=eval('('+source.slice(a,b)+')');refresh();assert.equal(flameDomainGuide.visible,true);
