@@ -9,6 +9,7 @@ import {NOTES_SCHEMA} from '../notes-core.mjs';
 const VIEW = {position: [0, 1, 4], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000};
 
 function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture, avatarOf, ownView} = {}) {
+  // Like the page, every selection change is a new selection object.
   const app = {
     posted: [], receipts: [], view: structuredClone(VIEW), writes: [], selections: [], scene: 'bench.kaminos.json',
     entries: [{id: 'cube', label: 'Cube', type: 'procedural-mesh'}, {id: 'lamp', label: 'Lamp', type: 'light'},
@@ -38,6 +39,7 @@ function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture,
     title: () => 'Kaminos',
     avatarOf,
     ...(ownView ? {ownView: () => ownView(app)} : {}),
+    selectionToken: () => app.selected,
   });
   return {app, session};
 }
@@ -303,4 +305,14 @@ test('going to a point note selects the object the point is on', () => {
   assert.deepEqual(app.selections, ['cube']);
   assert.equal(result.object, 'cube');
   assert.equal(result.present, true);
+});
+
+test('leaving the object and coming back drops a picked point, even unseen', async () => {
+  const {app, session} = fakePage({selected: {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'}});
+  session.hello({author: 'noah', lastSeq: 0});
+  session.setPoint({kind: 'point', id: 'cube', label: 'Cube', local: [0, 0, 0], point: [1, 2, 3]});
+  app.selected = {ids: ['lamp'], memberIds: ['lamp'], activeId: 'lamp'};
+  app.selected = {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'};
+  await session.post({text: 'later', attachPicture: false});
+  assert.deepEqual(app.posted[0].anchor, {kind: 'object', id: 'cube', label: 'Cube'});
 });
