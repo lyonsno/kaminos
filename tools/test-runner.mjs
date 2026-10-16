@@ -152,6 +152,22 @@ function browserVersion(executable, timeoutMs) {
   }
 }
 
+// A node_modules that links to another worktree's install is shared with every
+// worktree that links to the same place, and npm ci run through the link
+// empties it for all of them.
+function nodeModulesLink(root) {
+  const dir = path.join(root, 'node_modules');
+  try {
+    if (!lstatSync(dir).isSymbolicLink()) return { path: dir, linkTarget: null };
+    return { path: dir, linkTarget: realpathSync.native(dir) };
+  } catch { return { path: dir, linkTarget: null }; }
+}
+
+function npmRemedy(link) {
+  if (!link.linkTarget) return 'Run npm ci.';
+  return `node_modules here is a shared install at ${link.linkTarget}, linked from other worktrees; npm ci here empties it for all of them. Run npm ci in ${path.dirname(link.linkTarget)}, which owns it, or replace this link with an install of your own (remove the link, then npm ci).`;
+}
+
 async function checkDependencies(root) {
   const manifestPath = path.join(root, 'package.json');
   if (!existsSync(manifestPath)) return { declared: [], missing: [], mismatched: [], installed: {}, checked: 0, integrityVerified: false, lockfileSha256: null };
@@ -613,10 +629,11 @@ export async function runSuite({
     report.effective.quarantineSha256 = quarantine.sha256;
 
     report.failurePhase = 'dependencies';
+    report.effective.nodeModules = nodeModulesLink(root);
     report.effective.dependencies = await checkDependencies(root);
     const { missing, mismatched } = report.effective.dependencies;
     if (missing.length || mismatched.length) {
-      throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). Run npm ci.`), { phase: 'dependencies' });
+      throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). ${npmRemedy(report.effective.nodeModules)}`), { phase: 'dependencies' });
     }
 
     // The Python check reports and goes on: what it finds is a warning with
@@ -813,6 +830,8 @@ function summarize({ report, reportPath }) {
   if (warned.length) lines.push(`warnings:\n  ${warned.join('\n  ')}`);
   // The browser line follows the counts line and any warnings.
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
+  const shared = report.effective?.nodeModules?.linkTarget;
+  if (shared) lines.push(`node_modules: shared install at ${shared}; do not run npm ci here`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
