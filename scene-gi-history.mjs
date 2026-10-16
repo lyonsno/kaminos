@@ -10,7 +10,7 @@ export default class SceneGIHistory extends Node {
     super('vec4');
     Object.assign(this,{ao,gi,depth,normal,camera});
     this.updateBeforeType=NodeUpdateType.FRAME;
-    this.resolutionScale=1;this.frames=0;this.size=[1,1];this.resetReason='initial';
+    this.resolutionScale=1;this.frames=0;this.pendingFrames=0;this.size=[1,1];this.resetReason='initial';
     this.valid=uniform(false);this.weight=uniform(.9);this.resolution=uniform(new Vector2(1,1));
     this.previousView=uniform(new Matrix4());this.previousProjection=uniform(new Matrix4());
     this.currentWorld=uniform(camera.matrixWorld);this.inverseProjection=uniform(camera.projectionMatrixInverse);
@@ -33,7 +33,14 @@ export default class SceneGIHistory extends Node {
   }
   getAONode(){return this.outputAO;}
   getGINode(){return this.outputGI;}
-  reset(reason='explicit'){this.valid.value=false;this.resetReason=reason;}
+  requestFrames(){
+    // After N accepted blends, at most weight^N of the initial estimate remains.
+    // This is a first-estimate influence bound, not a noise-convergence claim.
+    const weight=this.weight.value;
+    this.pendingFrames=weight===0?1:1+Math.ceil(Math.log(.01)/Math.log(weight));
+  }
+  needsFrame(){return this.pendingFrames>0;}
+  reset(reason='explicit'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
   renderFrame(renderer,width,height) {
     if(width!==this.size[0]||height!==this.size[1]) {
       for(const target of this.targets)target.setSize(width,height);
@@ -48,7 +55,7 @@ export default class SceneGIHistory extends Node {
     this.oldAO.value=target.textures[0];this.oldGI.value=target.textures[1];this.oldSurface.value=target.textures[2];
     this.previousView.value.copy(this.camera.matrixWorldInverse);
     this.previousProjection.value.copy(this.camera.projectionMatrix);
-    this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;
+    this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;this.pendingFrames=Math.max(0,this.pendingFrames-1);
   }
   updateBefore(frame) {
     const {renderer}=frame;
