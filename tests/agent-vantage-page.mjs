@@ -1627,12 +1627,13 @@ test('watch draws a strip from the sub\'s own camera over its window, never borr
   assert.equal(state.holds, before.holds, 'nothing of the operator\'s is held');
   assert.equal(state.writes.length, before.writes, 'the operator\'s view is never written');
   assert.equal(state.composed.length, before.composed, 'nor is the viewport pictured');
-  assert.deepEqual(clock.renders.map(render => render.at), [0, 500, 1000, 1500, 2000], 'a frame on each tick of the window, its ends included');
-  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500, 2000]);
+  assert.deepEqual(clock.renders.map(render => render.at), [0, 500, 1000, 1500], 'a frame at the start of each interval of the window');
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500]);
+  assert.equal(host.now(), 2000, 'the watch holds its whole window');
   assert.ok(clock.renders.every(render => render.hide.includes('vantage-bebop')), 'the sub is not in its own view');
   assert.ok(strip.frames.every(frame => frame.pickMap && frame.optics), 'every frame keeps its own pick map and camera');
   assert.equal(strip.images[0].name, 'sheet');
-  assert.deepEqual(strip.images.slice(1).map(image => image.name), ['frame-1', 'frame-2', 'frame-3', 'frame-4', 'frame-5']);
+  assert.deepEqual(strip.images.slice(1).map(image => image.name), ['frame-1', 'frame-2', 'frame-3', 'frame-4']);
   assert.ok(strip.omitted.some(item => /fire/.test(item)), 'it says what its frames leave out');
 });
 
@@ -1641,8 +1642,8 @@ test('watch follows the sub as it moves, naming each frame from its own view', a
   const original = state.cameras[0].transform.position.slice();
   watchClock(host, state, {onSleep: () => { state.cameras[0].transform.position[0] += 1; }});
   const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
-  assert.deepEqual(strip.frames.map(frame => frame.view.position[0] - original[0]), [0, 1, 2], 'each frame is drawn from where the sub was then');
-  assert.notDeepEqual(strip.frames[0].optics, strip.frames[2].optics);
+  assert.deepEqual(strip.frames.map(frame => frame.view.position[0] - original[0]), [0, 1], 'each frame is drawn from where the sub was then');
+  assert.notDeepEqual(strip.frames[0].optics, strip.frames[1].optics);
 });
 
 test('watch ends at the named page event, after one more frame, and keeps what the event said', async () => {
@@ -1694,4 +1695,49 @@ test('a page that cannot draw a second view, or listen for events, refuses a wat
 test('the installed page hears watch events as kaminos: window events', () => {
   const source = readFileSync(new URL('../agent-vantage.mjs', import.meta.url), 'utf8');
   assert.match(source, /addEventListener\(`kaminos:\$\{name\}`/, 'tools announce events with window.dispatchEvent(new CustomEvent(`kaminos:<name>`, {detail}))');
+});
+
+test('a window shorter than one frame interval is still watched to its end, and an event in it gets its frame', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  const quiet = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, map: false});
+  assert.deepEqual(quiet.frames.map(frame => frame.atMs), [0]);
+  assert.equal(quiet.ended, 'window');
+  assert.equal(host.now(), 1000, 'it listens until the deadline');
+  let clock;
+  clock = watchClock(host, state, {drawMs: 0});
+  host.sleep = async ms => { clock.advance(Math.min(ms, 500)); if (host.now() >= 500) clock.emit('settled', {}); };
+  const heard = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+  assert.equal(heard.ended, 'event', 'an event between the last tick and the deadline still ends the watch');
+  assert.deepEqual(heard.frames.map(frame => frame.atMs), [0, 500], 'with the frame after it');
+});
+
+test('a timer that wakes past the deadline draws nothing late, and counts the ticks it missed', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  let first = true;
+  host.sleep = async ms => { clock.advance(first ? ms + 3500 : ms); first = false; };
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0], 'no frame is drawn outside the window');
+  assert.equal(strip.missedTicks, 3, 'the ticks at 500, 1000 and 1500 ms were missed');
+  assert.equal(strip.ended, 'window');
+});
+
+test('each watch frame records its own size, which can change if the viewport is resized', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state, {onSleep: () => { state.size = {width: 900, height: 1600}; }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false, maxSize: 320});
+  assert.deepEqual(strip.frames.map(frame => [frame.image.width, frame.image.height]), [[320, 180], [180, 320]]);
+});
+
+test('an event detail that plain data cannot carry unchanged is reported, not altered', async () => {
+  for (const detail of [{pieces: 2, affected: new Map([['body', 'arch']])}, {speed: NaN}, {done() {}}, {when: new Date(0)}, [1, undefined], {big: 10n}]) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.equal(strip.event.name, 'settled');
+    assert.equal(strip.event.detail, null, `${String(Object.keys(detail))} is not carried`);
+    assert.equal(typeof strip.event.detailError, 'string');
+  }
 });
