@@ -1,9 +1,15 @@
 name: tests
 
+# Advisory: no step here blocks a push or a landing. Problems surface as
+# warnings on the run and in its summary; the run itself stays green.
 on:
   push:
-    branches: [main, 'cc/operlocutor-*', 'land/**']
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   suite:
@@ -22,6 +28,8 @@ jobs:
       - run: python3 -m pip install numpy pillow
       - run: npm ci
       - name: serve.py answers within 10 s
+        id: serve
+        continue-on-error: true
         run: |
           python3 -u serve.py 18499 > serve-startup.log 2>&1 &
           pid=$!
@@ -33,7 +41,34 @@ jobs:
           kill $pid || true
           cat serve-startup.log
           test "$up" = 1
-      - run: node tools/test-runner.mjs --report test-results/report.json
+      - name: suite
+        id: suite
+        continue-on-error: true
+        run: node tools/test-runner.mjs --report test-results/report.json
+      - name: warnings
+        if: always()
+        env:
+          SERVE: ${{ steps.serve.outcome }}
+          SUITE: ${{ steps.suite.outcome }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const out = [];
+            if (process.env.SERVE !== "success") out.push("serve.py did not answer within 10 s");
+            let r = null;
+            try { r = JSON.parse(fs.readFileSync("test-results/report.json", "utf8")); } catch {}
+            if (!r) out.push(`no suite report (suite step ${process.env.SUITE})`);
+            else {
+              for (const f of r.newFailures || []) out.push(`new failure: ${f}`);
+              for (const f of r.staleQuarantine || []) out.push(`stale quarantine: ${f}`);
+              for (const w of r.warnings || []) out.push(`warning: ${typeof w === "string" ? w : (w.message || JSON.stringify(w))}`);
+            }
+            const lines = out.map(l => l.replace(/\r?\n/g, " "));
+            for (const line of lines) console.log(`::warning::${line}`);
+            const c = r && r.counts;
+            const head = c ? `executed ${c.executed}, passed ${c.passed}, known ${c.knownFailures}, new ${c.newFailures}, not run ${c.notRun}` : "no report";
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `### Tests (advisory)\n\n${head}\n\n${lines.map(l => `- ${l}`).join("\n")}\n`);
+          '
       - if: always()
         uses: actions/upload-artifact@v4
         with:

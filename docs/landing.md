@@ -2,7 +2,7 @@
 
 ## Status
 
-Since 2026-10-14 the `tests` workflow is disabled and main has no required check; force pushes and deletions are still refused. In that state this tool cannot get a CI run and is not the landing route: land as `AGENTS.md` says. A CI gate comes back only after a pilot in which lanes land through it in their real work without added overhead. The rest of this page describes the tool for that pilot.
+Since 2026-10-14 main has no required check; force pushes and deletions are still refused. The `tests` workflow runs on pushes to main as advisory only: new failures, stale quarantine entries and runner warnings appear as warnings on the run and in its summary, and the run itself stays green. It no longer runs on `land/**` refs, so this tool cannot get a CI run and is not the landing route: land as `AGENTS.md` says. A CI gate comes back only after a pilot in which lanes land through it in their real work without added overhead. The rest of this page describes the tool for that pilot.
 
 Lanes land by fast-forwarding `main` to their branch tip; there are no pull requests. On 2026-10-13 main went red because a lane pushed a commit to `main` that had never had a green run of the `tests` workflow for that exact commit. `tools/land.mjs` makes that push conditional.
 
