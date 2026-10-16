@@ -32,7 +32,7 @@ try{
  for(const row of report.effective.negatives){assert.equal(row.valid,false);assert.equal(row.installedCount,0);}
  assert.equal(report.effective.overlay.rendered,true);assert.ok(report.effective.overlay.solidCells>0);
  assert.deepEqual(report.effective.overlay.lifecycle,['enabled','moved','disabled','recreated']);
- await page.screenshot({path:path.join(out,'gpu-overlay.png')});
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
+ await page.screenshot({path:path.join(out,'gpu-overlay.png')});
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
 finally{await browser?.close();await save();}

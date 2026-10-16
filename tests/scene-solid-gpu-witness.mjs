@@ -6,7 +6,7 @@ const source=fs.readFileSync(new URL('../tools/scene-solid-gpu-witness.mjs',impo
 const block=source.slice(source.indexOf(" assert.equal(report.effective.backend"),source.indexOf("report.status='passed'"));
 const good=()=>({errors:[],effective:{backend:'WebGPU',results:[16,32].flatMap(height=>['rotated-solid','open-plane','independent-union','removal','domain-transform'].map(name=>{
  const expected=Array(16*height*16).fill(0);expected[31]=1;return {name,height,expected,actual:[...expected],different:[],receipt:{backend:'gpu'}};
-}))}});
+})),negatives:[{name:'outside-volume',valid:false,installedCount:0},{name:'occluded-source',valid:false,installedCount:0}],overlay:{rendered:true,solidCells:1,lifecycle:['enabled','moved','disabled','recreated']}}});
 const crossRealmAssert={...assert,deepEqual:(a,b,message)=>assert.deepEqual(JSON.parse(JSON.stringify(a)),JSON.parse(JSON.stringify(b)),message)};
 const check=report=>vm.runInNewContext(block,{report,assert:crossRealmAssert});
 check(good());
@@ -16,5 +16,8 @@ for(const [name,change] of [
  ['blank',r=>r.effective.results[0].actual.fill(0)],
  ['wrong raw signal with dishonest diff list',r=>{r.effective.results[0].actual[32]=1;}],
  ['duplicate rows',r=>{r.effective.results[1]=r.effective.results[0];}],
+ ['missing GPU negatives',r=>{r.effective.negatives=[];}],
+ ['invalid mask still installed',r=>{r.effective.negatives[0].installedCount=1;}],
+ ['overlay not rendered',r=>{r.effective.overlay.rendered=false;}],
  ['runtime errors',r=>r.errors.push('validation failed')]
 ]){const r=good();change(r);assert.throws(()=>check(r),undefined,name+' must fail');}
