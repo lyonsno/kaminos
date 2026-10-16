@@ -1678,3 +1678,57 @@ test('an event detail that plain data cannot carry unchanged is reported, not al
     assert.equal(typeof strip.event.detailError, 'string');
   }
 });
+
+test('an event at or after the deadline does not count, even while a draw is still finishing', async () => {
+  {
+    const {state, host} = await launched();
+    const clock = watchClock(host, state, {drawMs: 0});
+    host.sleep = async ms => { clock.advance(ms); if (host.now() >= 1000) clock.emit('settled', {}); };
+    const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+    assert.equal(strip.ended, 'window', 'an event exactly at the deadline is outside the window');
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0]);
+  }
+  {
+    const {state, host} = await launched();
+    const clock = watchClock(host, state, {drawMs: 0});
+    let release;
+    const draw = host.renderView;
+    host.renderView = options => {
+      const drawn = draw(options);
+      return {ready: new Promise(done => { release = () => done(drawn.ready); })};
+    };
+    const pending = createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+    await new Promise(done => setImmediate(done));
+    clock.advance(1200);
+    clock.emit('settled', {pieces: 2});
+    release();
+    const strip = await pending;
+    assert.equal(strip.ended, 'window', 'an event heard after the deadline, while a readback was outstanding, does not count');
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0]);
+  }
+});
+
+test('event detail is copied once from its own data, and what cannot be copied is reported without losing the event', async () => {
+  let reads = 0;
+  const changing = {get pieces() { return ++reads === 1 ? 2 : () => 3; }};
+  const unsupported = [Object.assign([1, 2], {callback() {}}), changing, {pieces: 2, [Symbol('affected')]: new Map([['body', 'arch']])},
+    new Proxy({}, {ownKeys() { throw new Error('trap'); }})];
+  for (const detail of unsupported) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.equal(strip.ended, 'event', 'the event still ends the watch');
+    assert.equal(strip.event.atMs, 500);
+    assert.equal(strip.event.detail, null);
+    assert.equal(typeof strip.event.detailError, 'string');
+  }
+  const shared = {at: [1, 2]}, bare = Object.assign(Object.create(null), {pieces: 2});
+  for (const [detail, expected] of [[{a: shared, b: shared}, {a: {at: [1, 2]}, b: {at: [1, 2]}}], [bare, {pieces: 2}]]) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.deepEqual(strip.event.detail, expected);
+  }
+});
