@@ -48,6 +48,7 @@ function fixture({ holdActivation = false } = {}) {
     validateVolumeSettingsPresetIndex() {},
     activeSceneComposition: null, authoringBusy: false, sceneSaveBlockedByFailedRestore: false,
     scenePlacementTools: { edits }, firstFlameFieldState: () => field,
+    ensureKaminosVolumeRoute: async () => {},
     loadAuthoredFlameBasin: () => new Promise((resolve, reject) => { pending = { resolve: () => resolve(settings), reject }; }),
     COMPOSITION_SCHEMA: 'scene-composition', FLAME_EMITTER_ID: 'flame-emitter',
     setActiveSceneObject() {}, setInfo() {},
@@ -64,7 +65,7 @@ function fixture({ holdActivation = false } = {}) {
 test('selection change and a second Add cannot steal cancellation from pending activation', async () => {
   const f = fixture({ holdActivation: true });
   await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
-  const first = f.button.onclick({ target: f.button }); f.pending().resolve();
+  const first = f.button.onclick({ target: f.button }); await new Promise(setImmediate); f.pending().resolve();
   await new Promise(setImmediate);
   assert.equal(f.edits.state().active.id, '@first-flame-field');
   assert.equal(f.mounts(), 1);
@@ -78,7 +79,7 @@ test('selection change and a second Add cannot steal cancellation from pending a
   assert.equal(f.edits.state().undoCount, 0, 'abandoned creation must not commit');
   assert.equal(f.mounts(), 1, 'a second handler must not begin another activation');
   await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
-  const retry = f.button.onclick({ target: f.button }); f.pending().resolve();
+  const retry = f.button.onclick({ target: f.button }); await new Promise(setImmediate); f.pending().resolve();
   await new Promise(setImmediate);
   assert.equal(f.select.disabled, true);
   assert.equal(f.button.disabled, true);
@@ -92,6 +93,7 @@ for (const lateResult of ['resolve', 'reject']) {
     const f = fixture();
     await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
     const first = f.button.onclick({ target: f.button });
+    await new Promise(setImmediate);
     assert.equal(f.context.authoringBusy, true);
     f.dialog.close(); assert.equal(f.dialog.removed, true);
     if (lateResult === 'resolve') f.pending().resolve();
@@ -105,7 +107,7 @@ for (const lateResult of ['resolve', 'reject']) {
     assert.equal(f.context.authoringBusy, false);
     assert.equal(f.status.textContent, '', 'detached dialog must not receive a late error');
     await f.context.openDialog(); f.select.value = 'saved-immersed-basin';
-    const retry = f.button.onclick({ target: f.button }); f.pending().resolve(); await retry;
+    const retry = f.button.onclick({ target: f.button }); await new Promise(setImmediate); f.pending().resolve(); await retry;
     assert.equal(f.read().sourcePresent, true);
     assert.equal(f.mounts(), 1);
     assert.equal(f.edits.state().undoCount, 1);

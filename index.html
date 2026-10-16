@@ -4012,6 +4012,7 @@ let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
 let vantageCaptureHeld = false;
 let volumePrototype = null;
+let volumeRouteInitialization = null;
 let annularBurner = null;
 let burnerRecipe = null;
 let burnerError = null;
@@ -19687,6 +19688,11 @@ function reportKaminosVolumeRouteInitFailure(error) {
   setInfo(`Volume route initialization failed: ${message}`);
 }
 
+function ensureKaminosVolumeRoute() {
+  // Startup and an explicit Add share one initialization, including a failure:
+  // retrying a partly installed route would duplicate its listeners/resources.
+  return volumeRouteInitialization ??= initKaminosVolumeRoute();
+}
 async function initKaminosVolumeRoute() {
   if (compositionSetupError) throw compositionSetupError;
   window.__kaminosVolumeControlStepsMadeContinuous = [];
@@ -22296,10 +22302,14 @@ async function addFirstFlameField(presetId,{signal}={}) {
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
   if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
-  const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
   authoringBusy=true;
-  let settings;
-  try{settings=await loadAuthoredFlameBasin(presetId);}finally{authoringBusy=false;}
+  let settings,before,ledger;
+  try{
+    await ensureKaminosVolumeRoute();
+    signal?.throwIfAborted();
+    before=JSON.stringify(firstFlameFieldState());ledger=JSON.stringify(scenePlacementTools.edits.state());
+    settings=await loadAuthoredFlameBasin(presetId);
+  }finally{authoringBusy=false;}
   signal?.throwIfAborted();
   if(JSON.stringify(firstFlameFieldState())!==before||JSON.stringify(scenePlacementTools.edits.state())!==ledger)throw Error('Scene changed while loading the flame basin; add it again');
   if(settings.domControls['volume-emitter-source-law'].value!=='immersed-source')throw Error('Choose an immersed-source basin for a placeable scene emitter');
@@ -27182,7 +27192,7 @@ sceneInitialization.then(() => {
   // ordinary scene starts without it; the app is then the frame owner models borrow.
   const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
   window.__kaminosFireBoot = fireBoot;
-  const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
+  const volumeLoaded = fireBoot.boot ? ensureKaminosVolumeRoute() : Promise.resolve(null);
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
@@ -27252,7 +27262,7 @@ sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  if (fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1))).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  if (fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1))).boot) ensureKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
