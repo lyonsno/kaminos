@@ -49,4 +49,11 @@ assert.equal(unwrapped,1,'adapter must hand the surface to the caller-selected U
 assert.equal(uvResult.mesh.uvMetadata.route,'adapter-selected-uv');
 withUV.dispose();
 assert.throws(()=>createTrellisAssetAdapter({...base,unwrapMesh:true}),/UV provider/);
+// ... and its texture bake (e.g. the worker-backed browser baker).
+let baked=0;const withBake=createTrellisAssetAdapter({...base,bakeMaterial:async input=>{baked++;
+  const {bakeTrellisMaterialTextures}=await import('../trellis-material.js');return bakeTrellisMaterialTextures(input);}});
+await withBake.run();
+assert.equal(baked,1,'adapter must hand the bake to the caller-selected texture bake provider');
+withBake.dispose();
+assert.throws(()=>createTrellisAssetAdapter({...base,bakeMaterial:true}),/bake provider/);
 console.log('Requested finishing executes before UV/export; processed geometry and provenance compose, and failure cannot silently export raw geometry.');
