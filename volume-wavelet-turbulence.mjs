@@ -33,6 +33,17 @@ export const WAVELET_TURBULENCE_DEFAULTS = Object.freeze({ gain: 0, octaves: 2 }
 // Octaves at 4 and 2 cells; a third would sit at one cell, below Nyquist.
 export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2] });
 
+// Band estimator (measured on unit curl fields, see the contracts). The kernel
+// stores L1 = box3(v) and L2 = box3(L1) in a pre-pass; the resolved band it
+// reads is E = L3 − L4 with L3 the 27-tap stride-2 box of L2 and L4 the
+// stride-4 box of L2. Its amplitude response peaks at 0.40 around 8–11 cells
+// and is 0.13 at the first synthesized octave (4 cells), so the closure feeds
+// its own estimator at a few percent, not at unity.
+export const WAVELET_ESTIMATOR_GAIN = 0.40;
+export const WAVELET_ESTIMATOR_CENTRE_CELLS = 9.5;
+// High-pass (v − L1) amplitude response of the synthesized detail field, by
+// octave count: what the kernel reads back of a pattern it injected.
+export const WAVELET_DETAIL_HIGHPASS_GAIN = Object.freeze([0.503, 0.648]);
 // Measured rms of the raw curl of the three-potential gradient noise at unit
 // frequency (see the contracts); divides the curl so one octave at weight one
 // has unit rms velocity.
@@ -129,10 +140,18 @@ export function waveletDetailVelocity(p, octaves) {
   return out;
 }
 
-// Amplitude of the first synthesised octave given the resolved mid band's
-// specific kinetic energy (½|v_band|²): one octave below it on the slope.
+// Amplitude of the first synthesised octave (4 cells) from the estimator
+// band's measured specific kinetic energy (½|E|²): undo the estimator gain,
+// then walk the Kolmogorov slope from the band's centre down to 4 cells.
+export const WAVELET_TARGET_PER_ROOT_ENERGY = (WAVELET_BASE_WAVELENGTH_CELLS / WAVELET_ESTIMATOR_CENTRE_CELLS) ** (-WAVELET_BAND_SLOPE) / WAVELET_ESTIMATOR_GAIN;
 export function waveletTargetAmplitude(energy) {
-  return energy <= 0 ? 0 : Math.sqrt(2 * energy) * WAVELET_LACUNARITY ** WAVELET_BAND_SLOPE;
+  return energy <= 0 ? 0 : Math.sqrt(2 * energy) * WAVELET_TARGET_PER_ROOT_ENERGY;
+}
+// rms of the unit detail field for n octaves (octaves add in quadrature).
+export function waveletDetailRms(octaves) {
+  let s = 0;
+  for (let i = 0; i < octaves; i++) s += waveletOctaveWeight(i) ** 2;
+  return Math.sqrt(s);
 }
 
 // Cross-fade between the two advected coordinate sets. Set A resets at phase
@@ -144,43 +163,43 @@ export function waveletBlendWeights(simStepCount) {
 }
 
 // ---- Evidence: velocity band energies -----------------------------------
-// Specific kinetic energy of a readback velocity field split into the bands the
-// closure reasons about, with the same seven-point axis means the kernel uses
-// (clamped at the box; solids are not excluded here). sub = v - mean1 (scales
-// under ~4 cells), mid = mean1 - mean2 (~4-8 cells), large = mean2. The
-// Kolmogorov expectation for the sub band from the mid band is one octave
-// down in amplitude per synthesized octave: E_sub/E_mid = sum_i 2^(-5/3 i).
-export function kolmogorovSubBandRatio(octaves) {
-  let r = 0;
-  for (let i = 1; i <= octaves; i++) r += WAVELET_LACUNARITY ** (2 * WAVELET_BAND_SLOPE * i);
-  return r;
-}
-export function velocityBandEnergies(values, dims, { stride = 16, offset = 0 } = {}) {
+// Specific kinetic energy of a readback velocity field split the way the kernel
+// splits it (clamped at the box; solids are not excluded here): sub = v − L1
+// (under ~4 cells), near = L1 − L2, mid = L3 − L4 (the estimator band, ~8–11
+// cells), large = L4. kolmogorovSubEnergy is the energy the closure would hold
+// in the synthesized band at equilibrium (½ A² rms² per cell, averaged), from
+// the same per-cell estimator the kernel uses.
+export function velocityBandEnergies(values, dims, { stride = 16, offset = 0, octaves = WAVELET_TURBULENCE_DEFAULTS.octaves } = {}) {
   const [nx, ny, nz] = dims, cells = nx * ny * nz;
   if (values.length < cells * stride) throw new Error(`velocity readback holds ${values.length} floats, ${cells * stride} expected`);
   const index = (x, y, z) => (Math.min(nz - 1, Math.max(0, z)) * ny + Math.min(ny - 1, Math.max(0, y))) * nx + Math.min(nx - 1, Math.max(0, x));
   const at = (x, y, z, k) => values[index(x, y, z) * stride + offset + k];
-  // L1: the 3x3x3 box mean (the kernel's pre-pass), then L2: L1 and its six
-  // neighbours at distance two.
-  const l1 = new Float32Array(cells * 3);
-  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) for (let k = 0; k < 3; k++) {
-    let acc = 0;
-    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) acc += at(x + dx, y + dy, z + dz, k);
-    l1[index(x, y, z) * 3 + k] = acc / 27;
-  }
-  const l1At = (x, y, z, k) => l1[index(x, y, z) * 3 + k];
-  let total = 0, sub = 0, mid = 0, large = 0, hash = 0x811c9dc5;
+  const box = (src, s) => {
+    const out = new Float32Array(cells * 3);
+    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) for (let k = 0; k < 3; k++) {
+      let acc = 0;
+      for (let dz = -s; dz <= s; dz += s) for (let dy = -s; dy <= s; dy += s) for (let dx = -s; dx <= s; dx += s) acc += src(x + dx, y + dy, z + dz, k);
+      out[index(x, y, z) * 3 + k] = acc / 27;
+    }
+    return out;
+  };
+  const reader = arr => (x, y, z, k) => arr[index(x, y, z) * 3 + k];
+  const l1 = box(at, 1), l2 = box(reader(l1), 1), l3 = box(reader(l2), 2), l4 = box(reader(l2), 4);
+  const detailRms2 = waveletDetailRms(octaves) ** 2;
+  let total = 0, sub = 0, near = 0, mid = 0, large = 0, kolmogorov = 0, hash = 0x811c9dc5;
   const bits = new Uint32Array(values.buffer, values.byteOffset, values.length);
   for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+    const i = index(x, y, z) * 3;
+    let band = 0;
     for (let k = 0; k < 3; k++) {
-      const v = at(x, y, z, k), m1 = l1At(x, y, z, k);
-      const m2 = (m1 + l1At(x + 2, y, z, k) + l1At(x - 2, y, z, k) + l1At(x, y + 2, z, k) + l1At(x, y - 2, z, k) + l1At(x, y, z + 2, k) + l1At(x, y, z - 2, k)) / 7;
-      total += v * v; sub += (v - m1) ** 2; mid += (m1 - m2) ** 2; large += m2 * m2;
+      const v = at(x, y, z, k), m1 = l1[i + k], m2 = l2[i + k], m3 = l3[i + k], m4 = l4[i + k];
+      total += v * v; sub += (v - m1) ** 2; near += (m1 - m2) ** 2; mid += (m3 - m4) ** 2; large += m4 * m4; band += (m3 - m4) ** 2;
       hash = Math.imul(hash ^ bits[index(x, y, z) * stride + offset + k], 0x01000193) >>> 0;
     }
+    kolmogorov += 0.5 * waveletTargetAmplitude(0.5 * band) ** 2 * detailRms2;
   }
   const n = cells;
-  return { cells: n, total: 0.5 * total / n, sub: 0.5 * sub / n, mid: 0.5 * mid / n, large: 0.5 * large / n, subOverMid: mid > 0 ? sub / mid : null, velocityHash: hash.toString(16).padStart(8, '0') };
+  return { cells: n, total: 0.5 * total / n, sub: 0.5 * sub / n, near: 0.5 * near / n, mid: 0.5 * mid / n, large: 0.5 * large / n, kolmogorovSubEnergy: kolmogorov / n, octaves, velocityHash: hash.toString(16).padStart(8, '0') };
 }
 
 // ---- WGSL ---------------------------------------------------------------
@@ -190,6 +209,8 @@ const WAVELET_BAND_SLOPE: f32 = -0.8333333;
 const WAVELET_BASE_WAVELENGTH_CELLS: f32 = ${WAVELET_BASE_WAVELENGTH_CELLS.toFixed(1)};
 const WAVELET_LACUNARITY: f32 = ${WAVELET_LACUNARITY.toFixed(1)};
 const WAVELET_CURL_RMS: f32 = ${WAVELET_CURL_RMS};
+const WAVELET_TARGET_PER_ROOT_ENERGY: f32 = ${WAVELET_TARGET_PER_ROOT_ENERGY.toFixed(6)};
+const WAVELET_DETAIL_HIGHPASS_GAIN = array<f32, 2>(${WAVELET_DETAIL_HIGHPASS_GAIN.join(', ')});
 const WAVELET_OCTAVE_OFFSETS = array<vec3<f32>, 3>(${OCTAVE_OFFSETS.map(o => `vec3<f32>(${o.join(', ')})`).join(', ')});
 const WAVELET_POTENTIAL_OFFSETS = array<vec3<f32>, 3>(${POTENTIAL_OFFSETS.map(o => `vec3<f32>(${o.join(', ')})`).join(', ')});
 
@@ -248,9 +269,9 @@ fn waveletDetail(p: vec3<f32>, octaves: u32) -> vec3<f32> {
   return out;
 }
 
-// First-octave amplitude from the resolved mid band's specific kinetic energy.
+// First-octave amplitude from the estimator band's specific kinetic energy.
 fn waveletTargetAmplitude(energy: f32) -> f32 {
-  return select(sqrt(2.0 * max(energy, 0.0)) * pow(WAVELET_LACUNARITY, WAVELET_BAND_SLOPE), 0.0, energy <= 0.0);
+  return select(sqrt(2.0 * max(energy, 0.0)) * WAVELET_TARGET_PER_ROOT_ENERGY, 0.0, energy <= 0.0);
 }
 
 // Cross-fade weight of coordinate set A at this step; set B carries the rest.

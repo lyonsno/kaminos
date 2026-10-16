@@ -17,7 +17,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
-import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies, kolmogorovSubBandRatio } from './volume-wavelet-turbulence.mjs';
+import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -3992,38 +3992,38 @@ fn waveletCoordSample(p: vec3<f32>, setIndex: i32) -> vec3<f32> {
   let c11 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 1), setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 1, 1), setIndex), f.x);
   return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
 }
-// The low-passed velocity L1 = 3x3x3 box mean of the stored velocity (solids
-// excluded), written by csWaveletLowPass into the upper half of forceDelta
-// before the step so every cell can read its neighbours' L1 without a race
-// with the step's own force writes (lower half). Its Nyquist gain is 1/27, so
-// the energy estimate below cannot be fed by the synthesized band itself.
-fn waveletLowPassLoad(c: vec3<i32>) -> vec3<f32> {
+// Low-passed velocity planes written before the step (volume-wavelet-turbulence.mjs):
+// L1 = 3x3x3 box mean of the stored velocity (solids excluded) in forceDelta
+// planes 3–5, L2 = box mean of L1 in planes 6–8. Two pre-passes, so every cell
+// reads its neighbours' means without racing the step's own force writes
+// (planes 0–2). The resolved band the closure measures is L3 − L4, the
+// stride-2 and stride-4 boxes of L2 (response 0.40 around 8–11 cells, 0.13 at
+// the first synthesized octave), so the closure cannot feed its own amplitude.
+fn waveletPlaneLoad(c: vec3<i32>, plane: i32) -> vec3<f32> {
   let cc = vec3<i32>(clampCell(c));
   return vec3<f32>(
-    textureLoad(forceDelta, cc + vec3<i32>(0, 0, 3 * i32(GRID))).x,
-    textureLoad(forceDelta, cc + vec3<i32>(0, 0, 4 * i32(GRID))).x,
-    textureLoad(forceDelta, cc + vec3<i32>(0, 0, 5 * i32(GRID))).x);
+    textureLoad(forceDelta, cc + vec3<i32>(0, 0, plane * i32(GRID))).x,
+    textureLoad(forceDelta, cc + vec3<i32>(0, 0, (plane + 1) * i32(GRID))).x,
+    textureLoad(forceDelta, cc + vec3<i32>(0, 0, (plane + 2) * i32(GRID))).x);
 }
-fn waveletLowPassStore(c: vec3<i32>, v: vec3<f32>) {
-  textureStore(forceDelta, c + vec3<i32>(0, 0, 3 * i32(GRID)), vec4<f32>(v.x, 0.0, 0.0, 0.0));
-  textureStore(forceDelta, c + vec3<i32>(0, 0, 4 * i32(GRID)), vec4<f32>(v.y, 0.0, 0.0, 0.0));
-  textureStore(forceDelta, c + vec3<i32>(0, 0, 5 * i32(GRID)), vec4<f32>(v.z, 0.0, 0.0, 0.0));
+fn waveletPlaneStore(c: vec3<i32>, plane: i32, v: vec3<f32>) {
+  textureStore(forceDelta, c + vec3<i32>(0, 0, plane * i32(GRID)), vec4<f32>(v.x, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, (plane + 1) * i32(GRID)), vec4<f32>(v.y, 0.0, 0.0, 0.0));
+  textureStore(forceDelta, c + vec3<i32>(0, 0, (plane + 2) * i32(GRID)), vec4<f32>(v.z, 0.0, 0.0, 0.0));
 }
-// L2: the cell's L1 and its six neighbours at distance two (solids excluded),
-// so L1 - L2 is the resolved four-to-eight-cell band.
-fn waveletWideMean(c: vec3<i32>) -> vec3<f32> {
-  var acc = waveletLowPassLoad(c);
-  var n = 1.0;
-  for (var a = 0; a < 6; a = a + 1) {
-    var o = vec3<i32>(0);
-    o[a / 2] = select(-2, 2, (a & 1) == 0);
-    let nc = c + o;
-    if (!sceneSolidAt(nc)) {
-      acc = acc + waveletLowPassLoad(nc);
-      n = n + 1.0;
+fn waveletLowPassLoad(c: vec3<i32>) -> vec3<f32> { return waveletPlaneLoad(c, 3); }
+fn waveletLevel2Load(c: vec3<i32>) -> vec3<f32> { return waveletPlaneLoad(c, 6); }
+// 27-tap box of L2 at the given stride.
+fn waveletLevel2Box(c: vec3<i32>, s: i32) -> vec3<f32> {
+  var acc = vec3<f32>(0.0);
+  for (var dz = -1; dz <= 1; dz = dz + 1) {
+    for (var dy = -1; dy <= 1; dy = dy + 1) {
+      for (var dx = -1; dx <= 1; dx = dx + 1) {
+        acc = acc + waveletLevel2Load(c + vec3<i32>(dx, dy, dz) * s);
+      }
     }
   }
-  return acc / n;
+  return acc / 27.0;
 }
 // Trilinear read of L1 at a cell-space position (the characteristic's foot).
 fn waveletLowPassSample(p: vec3<f32>) -> vec3<f32> {
@@ -4036,35 +4036,40 @@ fn waveletLowPassSample(p: vec3<f32>) -> vec3<f32> {
   let c11 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 1, 1)), waveletLowPassLoad(i0 + vec3<i32>(1, 1, 1)), f.x);
   return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
 }
-// The closure, deficit-fill form: the sub band the transported velocity
-// carries (transported − L1 at the same foot, so transport and the band
-// agree) is compared with the Kolmogorov amplitude expected from the resolved
-// band at that foot; where it falls short, synthesized detail (on this step's
-// advected coordinates) fills the deficit, never above the expectation and
-// never removing structure the flow already carries. The fold multiplies the
-// return by the time step, so the per-step blend is 1 − (1 − gain)^dt.
-// (The first form relaxed toward the target with the sub band taken at the
-// destination cell of the old field; under a backtrace of several cells per
-// step that injected the inverted old sub band and ran away to the velocity
-// bound: capture wavelet-evidence-2, 2026-10-16.)
+// The closure. At the characteristic's foot the resolved band L3 − L4 gives the
+// Kolmogorov amplitude A of the 4-cell octave; the synthesized pattern d (this
+// step's advected coordinates) is relaxed into the transported velocity along
+// its own direction only: the high-pass component of the transported velocity
+// along d is driven to what a pattern of amplitude A reads back as (gain g),
+// so the pattern's amplitude settles at A and nothing orthogonal to it is
+// touched. Transported velocity and L1 are both taken at the foot, so transport
+// and the band agree. The fold multiplies the return by the time step; the
+// per-step blend is 1 − (1 − gain)^dt.
+// (Two earlier forms on this branch failed the live capture: relaxing the
+// destination cell's old sub band ran away under a multi-cell backtrace, and a
+// magnitude-deficit gate stayed shut because the grid's own small-scale
+// content already exceeds the Kolmogorov amplitude: wavelet-evidence-2/-3.)
 fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>, coordB: vec3<f32>, timeStep: f32) -> vec3<f32> {
   let footCell = vec3<i32>(clampCell(vec3<i32>(floor(foot))));
-  let band = waveletLowPassLoad(footCell) - waveletWideMean(footCell);
+  let band = waveletLevel2Box(footCell, 2) - waveletLevel2Box(footCell, 4);
   let amplitude = waveletTargetAmplitude(0.5 * dot(band, band));
   if (amplitude <= 0.0) { return vec3<f32>(0.0); }
-  let octaves = u32(max(u.wavelet_turbulence.y, 1.0));
+  let octaves = clamp(u32(u.wavelet_turbulence.y), 1u, 2u);
   let period = u32(max(u.wavelet_turbulence.z, 2.0));
   let wa = waveletBlendA(u32(u.wavelet_turbulence.w), period);
   var detail = vec3<f32>(0.0);
   if (wa > 0.0) { detail = detail + wa * waveletDetail(coordA, octaves); }
   if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(coordB, octaves); }
-  let carried = length(transported - waveletLowPassSample(foot));
-  let deficit = clamp(1.0 - carried / amplitude, 0.0, 1.0);
+  let dd = dot(detail, detail);
+  if (dd < 1e-12) { return vec3<f32>(0.0); }
+  let highPass = transported - waveletLowPassSample(foot);
+  let readGain = WAVELET_DETAIL_HIGHPASS_GAIN[octaves - 1u];
+  let carried = dot(highPass, detail) / (dd * readGain);
   let blend = stepBlend(clamp(u.wavelet_turbulence.x, 0.0, 1.0));
-  return blend / max(timeStep, 1e-6) * amplitude * deficit * detail;
+  return blend / max(timeStep, 1e-6) * (amplitude - carried) * detail;
 }
 
-// Pre-pass: L1 for every cell, dispatched before the step while the closure is on.
+// Pre-pass 1: L1 for every cell, dispatched before the step while the closure is on.
 @compute @workgroup_size(4, 4, 4)
 fn csWaveletLowPass(@builtin(global_invocation_id) gid: vec3<u32>) {
   seatGridShape();
@@ -4085,7 +4090,25 @@ fn csWaveletLowPass(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
     }
   }
-  waveletLowPassStore(c, acc / max(n, 1.0));
+  waveletPlaneStore(c, 3, acc / max(n, 1.0));
+}
+// Pre-pass 2: L2 = box mean of L1 (solid cells already hold their fluid neighbours' mean).
+@compute @workgroup_size(4, 4, 4)
+fn csWaveletLowPass2(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
+    return;
+  }
+  let c = vec3<i32>(gid);
+  var acc = vec3<f32>(0.0);
+  for (var dz = -1; dz <= 1; dz = dz + 1) {
+    for (var dy = -1; dy <= 1; dy = dy + 1) {
+      for (var dx = -1; dx <= 1; dx = dx + 1) {
+        acc = acc + waveletLowPassLoad(c + vec3<i32>(dx, dy, dz));
+      }
+    }
+  }
+  waveletPlaneStore(c, 6, acc / 27.0);
 }
 // (It holds gain x rate, the expansion target; the pressure kernels bind the
 // fluid-front read layout, which carries no uniform.)
@@ -12085,6 +12108,7 @@ export function createKaminosVolumePrototype({
   let computePipeline = null;
   let faceForcesPipeline = null;
   let waveletLowPassPipeline = null;
+  let waveletLowPass2Pipeline = null;
   let transportPredictPipeline = null;
   let transportPredictBindGroupLayout = null;
   let sceneSolidTexture = null;
@@ -12384,11 +12408,11 @@ export function createKaminosVolumePrototype({
   const joinedGhostView = index => joinedGhostTextures[index].createView({ dimension: '3d' });
   let forceDeltaTexture = null;
   // The step's force increment (three components along depth); while the
-  // wavelet closure is on, three more planes carry the pre-pass low-passed
-  // velocity (volume-wavelet-turbulence.mjs).
+  // wavelet closure is on, six more planes carry the pre-pass low-passed
+  // velocity levels L1 and L2 (volume-wavelet-turbulence.mjs).
   function allocateForceDeltaTexture() {
     forceDeltaTexture?.destroy();
-    const planes = waveletSidecarFull ? 6 : 3;
+    const planes = waveletSidecarFull ? 9 : 3;
     forceDeltaTexture = device.createTexture({
       label: `kaminos force increment ${gridSize}x${gridHeight}x${gridSize}x${planes}`,
       size: [gridSize, gridHeight, gridSize * planes],
@@ -14517,6 +14541,11 @@ export function createKaminosVolumePrototype({
       label: `kaminos wavelet turbulence low-pass compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: transportPipelineLayout,
       compute: { module: shader, entryPoint: 'csWaveletLowPass', constants: computePipelineConstants },
+    });
+    waveletLowPass2Pipeline = device.createComputePipeline({
+      label: `kaminos wavelet turbulence low-pass 2 compute pipeline ${gridShapeLabel(gridSize)}`,
+      layout: transportPipelineLayout,
+      compute: { module: shader, entryPoint: 'csWaveletLowPass2', constants: computePipelineConstants },
     });
     transportPredictPipeline = device.createComputePipeline({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor compute pipeline ${gridShapeLabel(gridSize)}`,
@@ -17467,15 +17496,17 @@ export function createKaminosVolumePrototype({
       predictor.end();
     }
     if (state.waveletTurbulence?.effective?.admitted && waveletSidecarFull) {
-      if (!waveletLowPassPipeline) throw new Error('wavelet low-pass pipeline unavailable');
-      // L1 of the step's source velocity, before the step reads it.
-      const lowPass = encoder.beginComputePass({ label: 'kaminos wavelet low-pass pass' });
-      lowPass.setPipeline(waveletLowPassPipeline);
-      lowPass.setBindGroup(0, fluidBindGroup());
-      lowPass.setBindGroup(3, transportPredictBindGroup);
+      if (!waveletLowPassPipeline || !waveletLowPass2Pipeline) throw new Error('wavelet low-pass pipelines unavailable');
+      // L1 then L2 of the step's source velocity, before the step reads them.
       const lowPassWorkgroups = Math.ceil(gridSize / 4);
-      lowPass.dispatchWorkgroups(lowPassWorkgroups, Math.ceil(gridHeight / 4), lowPassWorkgroups);
-      lowPass.end();
+      for (const [label, pipeline] of [['kaminos wavelet low-pass pass', waveletLowPassPipeline], ['kaminos wavelet low-pass 2 pass', waveletLowPass2Pipeline]]) {
+        const lowPass = encoder.beginComputePass({ label });
+        lowPass.setPipeline(pipeline);
+        lowPass.setBindGroup(0, fluidBindGroup());
+        lowPass.setBindGroup(3, transportPredictBindGroup);
+        lowPass.dispatchWorkgroups(lowPassWorkgroups, Math.ceil(gridHeight / 4), lowPassWorkgroups);
+        lowPass.end();
+      }
     }
     const pass = encoder.beginComputePass({
       label: 'kaminos fluid sim pass',
@@ -28087,9 +28118,9 @@ export function createKaminosVolumePrototype({
         staging.unmap();
         if (values.length !== dims[0] * dims[1] * dims[2] * 16) return { status: 'invalid', reason: 'readback-size-mismatch', ...snapshot };
         // The copy is a snapshot of the step it was encoded at; stepping may continue while it maps.
-        const bands = velocityBandEnergies(values, dims);
-        if (![bands.total, bands.sub, bands.mid, bands.large].every(Number.isFinite)) return { status: 'invalid', reason: 'nonfinite-band-energy', ...snapshot };
-        return { status: 'sampled', ...snapshot, ...bands, kolmogorovSubOverMid: kolmogorovSubBandRatio(snapshot.wavelet?.octaves ?? 2) };
+        const bands = velocityBandEnergies(values, dims, { octaves: snapshot.wavelet?.octaves ?? 2 });
+        if (![bands.total, bands.sub, bands.near, bands.mid, bands.large, bands.kolmogorovSubEnergy].every(Number.isFinite)) return { status: 'invalid', reason: 'nonfinite-band-energy', ...snapshot };
+        return { status: 'sampled', ...snapshot, ...bands };
       } finally { staging.destroy(); }
     },
     // The step the bound ghost snapshots were written for.
