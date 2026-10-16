@@ -535,6 +535,24 @@ try {
     const rect = [...document.querySelectorAll('canvas')].find(node => node.getBoundingClientRect().width > 300)?.getBoundingClientRect();
     return rect ? {x: rect.left + rect.width * 0.35, y: rect.top + rect.height * 0.5} : null;
   });
+  // The sub's panel shows another camera: an Alt-click there pins nothing.
+  const hudCanvas = await page.evaluate(() => {
+    const node = [...document.querySelectorAll('#agent-vantage-hud canvas')].find(item => item.getBoundingClientRect().width > 20);
+    const rect = node?.getBoundingClientRect();
+    return rect ? {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2} : null;
+  });
+  if (hudCanvas) {
+    await page.evaluate(() => { document.querySelector('.kn-status').textContent = ''; });
+    await page.keyboard.down('Alt');
+    await page.mouse.click(hudCanvas.x, hudCanvas.y);
+    await page.keyboard.up('Alt');
+    await sleep(600);
+    const afterHud = {line: await page.textContent('.kn-compose .kn-anchor'), status: await page.textContent('.kn-status')};
+    check("Alt-click on the sub's panel pins nothing", !/a point of/.test(afterHud.line) && !/Pinned/.test(afterHud.status), afterHud);
+  } else {
+    report.notExercised.push({phase: 'point-anchor', reason: "the sub's panel had no canvas to click"});
+  }
+  await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   await page.keyboard.down('Alt');
   await page.mouse.click(canvas.x, canvas.y);
   await page.keyboard.up('Alt');
@@ -547,7 +565,8 @@ try {
   const spot = (await log()).filter(event => event.type === 'note' && event.text === 'this exact spot').at(-1);
   const local = spot?.anchor?.local ?? [];
   check('the note is stored on a point of that object, inside it', spot?.anchor?.kind === 'point' && spot.anchor.id === red
-    && local.length === 3 && local.every(value => Math.abs(value) <= 0.51) && spot.anchor.point?.length === 3, {anchor: spot?.anchor});
+    && local.length === 3 && local.every(value => Math.abs(value) <= 0.51) && spot.anchor.point?.length === 3
+    && Array.isArray(spot.anchor.path) && spot.anchor.path.every(Number.isInteger), {anchor: spot?.anchor});
   await sleep(400);
   const pinAt = async () => page.evaluate(id => {
     const pin = document.querySelector(`[data-pin="point:${id}"]`);
@@ -562,6 +581,17 @@ try {
   const after = await pinAt();
   check('the pin moves with its object', before && after && after.x - before.x > 20, {before, after});
   await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), red);
+  // A point picked, then the selection left and returned while Notes was closed: the point is gone.
+  await page.keyboard.down('Alt');
+  await page.mouse.click(canvas.x, canvas.y);
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => /a point of/.test(document.querySelector('.kn-compose .kn-anchor')?.textContent ?? ''), null, {timeout: 10000}).catch(() => {});
+  await page.click('.kn-close');
+  await page.evaluate(([id, other]) => { window.kaminosSelection.set([other], other); window.kaminosSelection.set([id], id); }, [red, lateAvatar]);
+  await page.click('.kn-toggle');
+  await sleep(700);
+  const returned = await page.textContent('.kn-compose .kn-anchor');
+  check('leaving the object and coming back drops the picked point', /"Witness red"/.test(returned) && !/a point of/.test(returned), {returned});
 
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);

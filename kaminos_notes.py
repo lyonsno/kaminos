@@ -130,9 +130,11 @@ def checked_point_anchor(raw):
             raise NotesError(400, "request", "A point anchor face is a face index")
         anchor["face"] = raw["face"]
     if raw.get("path") is not None:
-        if not isinstance(raw["path"], str):
-            raise NotesError(400, "request", "A point anchor path is the mesh path inside the object")
-        anchor["path"] = raw["path"]
+        # Child indices from the object down to the mesh; [] is the object itself.
+        path = raw["path"]
+        if not isinstance(path, list) or not all(isinstance(index, int) and not isinstance(index, bool) and index >= 0 for index in path):
+            raise NotesError(400, "request", "A point anchor path is the list of child indices down to the mesh")
+        anchor["path"] = list(path)
     if raw.get("geometry") is not None:
         if not isinstance(raw["geometry"], dict):
             raise NotesError(400, "request", "A point anchor geometry is an object")
