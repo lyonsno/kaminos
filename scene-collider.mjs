@@ -1,7 +1,7 @@
 import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE} from './scene-fire-domain.mjs';
 
 export const SCENE_COLLIDER_SOURCE_ID='authored-fire-solids';
-export const canCollideWithFire=record=>['glb','pbr','procedural-mesh'].includes(record?.type);
+export const canCollideWithFire=record=>['glb','pbr','procedural-mesh','experiment-mesh'].includes(record?.type);
 export function checkedObjectCollision(record,value=record?.collision) {
   if(value==null)return null;
   if(!canCollideWithFire(record))throw Error('Fire collision requires a mesh object');

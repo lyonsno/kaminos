@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {checkFuseMaterialEvidence} from './fuse-witness-contracts.mjs';
 
 const [origin,out]=process.argv.slice(2);if(!origin||!out)throw Error('Usage: fuse-witness.mjs <origin> <output>');
 await fs.mkdir(out,{recursive:true});
@@ -21,11 +22,12 @@ try{
   await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='curved-fuse'||window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed'));
   const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));
   assert.equal(startup.error,undefined,JSON.stringify(startup));assert.equal(startup.state.id,'curved-fuse');report.effectiveUrl=page.url();
-  report.sources=[];for(const name of ['fuse-core.mjs','fuse-gpu.mjs','experiments/sinter/curved-fuse.experiment.mjs','volume-core.js','lib/three.webgpu.js']){
+  report.sources=[];for(const name of ['fuse-core.mjs','fuse-gpu.mjs','tools/fuse-material-fixture.mjs','experiments/sinter/curved-fuse.experiment.mjs','volume-core.js','lib/three.webgpu.js']){
     const served=await(await page.request.get(origin+'/'+name)).body(),local=await fs.readFile(path.join(report.repoRoot,name)),sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(served),sha(local),name);report.sources.push({name,sha256:sha(served)});
   }
   report.effective=await page.evaluate(()=>({backend:window.__kaminosVolumePrototype.debugState().backend,gi:window.kaminosSceneGIDebugState(),controls:Object.fromEntries(['volume-resolution','volume-grid-height-ratio','volume-steps','volume-immersed-radius'].map(id=>[id,document.getElementById(id).value]))}));
   assert.match(report.effective.backend,/WebGPU/);assert.equal(Number(report.effective.controls['volume-resolution']),32);assert.equal(Number(report.effective.controls['volume-grid-height-ratio']),1);assert.equal(Number(report.effective.controls['volume-steps']),28);assert.equal(Number(report.effective.controls['volume-immersed-radius']),.1);assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
+  report.phase='material-conformance';await save();report.material=await page.evaluate(async()=>{const m=await import('/tools/fuse-material-fixture.mjs');return m.runFuseMaterialConformance();});await save();checkFuseMaterialEvidence(report.material);
   const invoke=(name,input)=>page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input});
   async function sample(name){
     const raw=await invoke('sample');await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify(raw));
