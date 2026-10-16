@@ -35,7 +35,7 @@ export function renderFireShadowBatch({scene,shadows}) {
 
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
 // temporary state even when a face fails, and keep actual material sidedness.
-export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,RendererUtils=THREE.RendererUtils}) {
+export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,sharedPreparation=true,RendererUtils=THREE.RendererUtils}) {
   const state=RendererUtils.resetRendererAndSceneState(renderer,scene);
   const culling=[],autoUpdate=scene.matrixWorldAutoUpdate;
   try {
@@ -45,7 +45,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
     if(casters)casters.forEach(disableCulling);else scene.traverseVisible(disableCulling);
     // Caller has updated world matrices for this capture batch. CubeCamera
     // still updates each face camera; only redundant scene walks are omitted.
-    scene.matrixWorldAutoUpdate=false;
+    if(sharedPreparation)scene.matrixWorldAutoUpdate=false;
     scene.overrideMaterial=material;
     renderer.setClearColor(new THREE.Color(far,far,far),1);
     renderer.setRenderObjectFunction((...args)=>{
@@ -63,7 +63,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   }
 }
 
-export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',filterCoordinates,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits)}) {
+export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNode,normalNode,requested=false,resolution=512,sourceRadius=()=>Math.sqrt(11),sourceSizeNode=null,shadowSoftness=0,shadowSampling='fixed',filterCoordinates,screenAligned=true,sharedPreparation=true,blockerSamples=9,filterSamples=16,filterPattern=createShadowFilterPattern(filterSamples,renderer.backend?.device?.limits)}) {
   validateShadowQuality({resolution,blockerSamples,filterSamples},renderer.backend?.device?.limits);
   if(!Number.isInteger(resolution)||resolution<=0) throw new Error('fire-shadow-resolution-must-be-positive-integer');
   const validateSoftness=value=>{if(!Number.isFinite(value)||value<0)throw Error('shadow softness must be finite and nonnegative');return value;};
@@ -108,12 +108,12 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   return shadowSample.r;
   };
   const shadowDistance=sampleDepth(direction),hardVisibility=step(distance.sub(bias),shadowDistance);
-  const filterDifferential=THREE.TSL.dFdx(direction).toVar();
-  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,blockerSamples,filterSamples,filterPattern});
+  const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
+  const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
-    prepareSampling(){filterDifferential.toStack();},
+    prepareSampling(){filterDifferential?.toStack();},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
     visibility,
     resource() {
@@ -136,8 +136,8 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         const {extent,casters}=prepared??prepareShadowScene(scene);
         const radius=sourceRadius();if(!Number.isFinite(radius)||radius<0)throw new Error('finite source radius required');
         const far=extent.length()+radius+.01;
-        for(const camera of cubeCamera.children)if(camera.far!==far){camera.far=far;camera.updateProjectionMatrix();}
-        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters});
+        for(const camera of cubeCamera.children)if(!sharedPreparation||camera.far!==far){camera.far=far;camera.updateProjectionMatrix();}
+        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation});
         effective.value=1;status.effective=true;status.reason=null;
         status.renderCount++;status.meshCount=casters.length;status.far=far;
       } catch(error) {status.reason=String(error.message);throw error;}

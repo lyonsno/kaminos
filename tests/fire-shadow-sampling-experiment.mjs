@@ -15,6 +15,12 @@ assert.throws(()=>result.operations.setPoints(0),/point count/);records.length=0
 assert.equal(result.operations.setSampling('fixed').effective,'fixed');assert.equal(records.length,1);assert.equal(redraws,1);
 assert.throws(()=>result.operations.setSampling('blur'),/sampling/);assert.equal(result.read().effective,'fixed');
 assert.equal(result.operations.setSoftness(.5).softness,.5);
+assert.equal(typeof result.operations.setShadowComparison,'function');
+assert.throws(()=>result.operations.setShadowComparison({grain:'world'}),/no shadow comparison/);
+win.__kaminosSceneRadiance.setShadowComparison=value=>{state={...state,shadowImplementation:value.implementation,shadowGrain:value.grain,shadowWorldCellSize:value.worldCellSize};};
+assert.equal(result.operations.setShadowComparison({grain:'world'}).shadowComparison.grain,'world');
+assert.equal(result.operations.setShadowComparison({implementation:'legacy'}).shadowComparison.grain,'world','implementation comparison preserves grain choice');
+assert.throws(()=>result.operations.setShadowComparison({worldCellSize:0}),/cell size/);
 win.__kaminosSceneRadiance=null;assert.equal(result.read().available,false);
 assert.throws(()=>result.operations.setSampling('complementary'),/no hybrid/);
 await result.dispose();assert.equal(disposed,1);

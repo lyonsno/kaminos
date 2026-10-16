@@ -38,7 +38,7 @@ export const FILTER_DISK=shadowDisk(16);
 // Fixed sample pattern, no temporal history or additional cube rendering.
 // Compare taps against the receiver plane: using the center's radial distance
 // at every tap would treat a tilted floor as a sphere and cause grazing acne.
-export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,blockerSamples=9,filterSamples=16,filterPattern=null}) {
+export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sourceRadius,softness,hardVisibility,complementary,filterCoordinates=THREE.TSL.screenCoordinate,filterDifferential=null,screenAligned=true,blockerSamples=9,filterSamples=16,filterPattern=null}) {
   if(filterPattern&&filterPattern.count!==filterSamples)throw Error('shadow filter pattern count mismatch');
   const blockers=shadowDisk(blockerSamples,true),samples=shadowDisk(filterSamples),{bands,sectors}=shadowStrata(filterSamples);
   const {Fn,If,float,vec2,vec3,dFdx,screenCoordinate}=THREE.TSL;
@@ -50,9 +50,12 @@ export function radialSoftVisibility({sampleDepth,delta,normal,distance,bias,sou
     const tangent=axis.cross(direction).normalize(),plane=normal.dot(delta);
     // Align filter strata with the receiver-to-screen differential, while the
     // circular angular support and blocker search stay exactly the same.
-    const differential=filterDifferential??dFdx(direction),projected=differential.sub(direction.mul(direction.dot(differential)));
-    const magnitude2=projected.dot(projected);
-    const filterTangent=complementary.and(magnitude2.greaterThan(1e-12)).select(projected.div(magnitude2.max(1e-12).sqrt()),tangent);
+    let filterTangent=tangent;
+    if(screenAligned){
+      const differential=filterDifferential??dFdx(direction),projected=differential.sub(direction.mul(direction.dot(differential)));
+      const magnitude2=projected.dot(projected);
+      filterTangent=complementary.and(magnitude2.greaterThan(1e-12)).select(projected.div(magnitude2.max(1e-12).sqrt()),tangent);
+    }
     const phaseX=filterCoordinates.x.floor().mod(4),phaseY=filterCoordinates.y.floor().mod(4);
     const tap=(xy,width,basis=tangent)=>{
       const bitangent=direction.cross(basis);

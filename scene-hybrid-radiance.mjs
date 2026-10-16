@@ -7,7 +7,7 @@ import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
-import {validateShadowSampling} from './fire-shadow-sampling.mjs';
+import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
@@ -22,9 +22,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
   const paired=uniform(false,'bool');let pointSampling='all';
+  let comparison=validateShadowComparison();
+  const worldCellSize=uniform(comparison.worldCellSize);
   let points,external,lights,irradiance;
   function buildPoints(count){
-  const filterPattern=createShadowFilterPattern(filterSamples,device.limits);
+  const sharedPreparation=comparison.implementation==='shared';
+  const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
+  const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?positionWorld.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL);
   points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
   external=new THREE.ExternalTexture(points.texture);
   external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
@@ -32,8 +36,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const filterCoordinates=paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,blockerSamples,filterSamples,filterPattern});
+    const filterCoordinates=grain?.coordinates??paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
@@ -42,12 +46,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   });
   const currentLights=lights;
   irradiance=Fn(()=>{
+    grain?.bits.toStack();
     // Derivatives must be evaluated in uniform flow, before source selection.
     for(const light of currentLights)light.shadow.prepareSampling?.();
     const sum=vec3(0).toVar();
     const add=indices=>{for(const i of indices)sum.addAssign(currentLights[i].irradiance.mul(2));};
     if(count===4)If(paired,()=>{
-      If(screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
+      If(grain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
     }).Else(()=>{for(const light of currentLights)sum.addAssign(light.irradiance);});
     else for(const light of currentLights)sum.addAssign(light.irradiance);
     return sum.mul(surfaceGain);
@@ -103,7 +108,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       // surface points; the gather owns that once-scattered source and gain.
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed'});
       const reduction=points.encode(gather.transportSource());
-      renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow)});
+      if(comparison.implementation==='shared')renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow)});
+      else for(const light of lights)light.shadow.render();
       frame={...frame,pointRegions:reduction,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});
@@ -121,6 +127,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     pointSampling=sampling;paired.value=sampling==='paired';
   }
   return {
+    setShadowComparison(value){
+      const next=validateShadowComparison({...comparison,...value});
+      if(disposed)throw Error('hybrid lighting disposed');
+      const rebuild=next.implementation!==comparison.implementation||next.grain!==comparison.grain;
+      comparison=next;worldCellSize.value=next.worldCellSize;
+      if(rebuild){valid=false;releasePoints();buildPoints(pointCount);status.status='awaiting-source';for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;}
+    },
     setGain(value){gain=nonnegative(value);},setSurfaceGain(value){surfaceGain.value=nonnegative(value);},
     setSurfaceScattering(value){surfaceScattering=!!value;},setSourceSoftness(value){sourceSoftness=validateSourceSoftness(value);},
     setSmokeMode(value){if(!['distributed','legacy'].includes(value))throw new Error('unknown smoke mode');smokeMode=value;},
@@ -144,7 +157,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // Host restores these controls for both routes. Record but never pretend
     // they affect point surfaces; the prototype UI marks them inapplicable.
     setReceiverSpacing(value){status.receiverSpacingRequested=value;},setSurfaceReconstruction(value){status.surfaceReconstructionRequested=value;},setEditing(){},
-    debugState(){return {...status,pointSampling,evaluatedPointCount:pointSampling==='paired'?2:pointCount,capturedPointCount:pointCount,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
+    debugState(){return {...status,shadowImplementation:comparison.implementation,shadowGrain:comparison.grain,shadowWorldCellSize:comparison.worldCellSize,pointSampling,evaluatedPointCount:pointSampling==='paired'?2:pointCount,capturedPointCount:pointCount,gain,sourceTransform,sourceSoftness,smokeMode,surfaceScattering,surfaceGain:surfaceGain.value,frame,shadows:lights.map(l=>l.shadow.debugState())};},
     canRender(){const source=prototype.sceneVolumeSourceField();return !disposed&&valid&&source.status==='encoded'&&source.generation===frame?.generation&&source.frame===frame?.frame;},
     readback(){if(!gather)throw new Error('hybrid not encoded');return gather.readback();},
     readPointRegions(){if(!valid)throw Error('hybrid source not current');return points.readback();},

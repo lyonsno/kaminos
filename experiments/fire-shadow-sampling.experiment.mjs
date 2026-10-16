@@ -1,4 +1,4 @@
-import {validateShadowSampling} from '../fire-shadow-sampling.mjs';
+import {validateShadowSampling,validateShadowComparison} from '../fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from '../fire-source-quadrature.mjs';
 import {DEFAULT_SHADOW_QUALITY,validateShadowQuality} from '../fire-shadow-quality.mjs';
 
@@ -7,17 +7,22 @@ export default {
   async create({host,inputs,record,updateInputs=()=>{}}) {
     const session=await host.scene.open(),document=host.controls.document,win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput;
+    let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
-    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality})});
+    const persist=()=>updateInputs({...inputs,sampling:requested,...(requestedPoints===null?{}:{points:requestedPoints,pointSampling:requestedPointSampling}),...(requestedQuality===null?{}:{shadowQuality:requestedQuality}),...(requestedComparison===null?{}:{shadowComparison:requestedComparison})});
     const source=()=>{const value=win.__kaminosSceneRadiance;if(!value?.setShadowSampling)throw Error('This scene has no hybrid fire shadow consumer');return value;};
-    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
+    const read=()=>{const state=win.__kaminosSceneRadiance?.debugState();return {requested,available:!!state?.shadowSampling,effective:state?.shadowSampling??null,softness:state?.shadowSoftness??null,points:state?.pointCount??null,pointSampling:state?.pointSampling??null,evaluatedPoints:state?.evaluatedPointCount??null,capturedPoints:state?.capturedPointCount??null,shadowComparison:state?.shadowImplementation===undefined?null:{implementation:state.shadowImplementation,grain:state.shadowGrain,worldCellSize:state.shadowWorldCellSize},shadowQuality:state?.shadowResolution===undefined?null:{resolution:state.shadowResolution,blockerSamples:state.blockerSamples,filterSamples:state.filterSamples},maxShadowResolution:state?.maxShadowResolution??null,shadows:state?.shadows??[],bounceGain:win.kaminosSceneGIDebugState?.().gain??null};};
     const sync=()=>{
       const state=read();
+      const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
+      if(implementationSelector)implementationSelector.value=comparison.implementation;
+      if(grainSelector)grainSelector.value=comparison.grain;
+      if(cellInput){cellInput.value=String(comparison.worldCellSize);cellInput.disabled=comparison.grain!=='world';}
       if(selector)selector.value=state.effective??requested;
       if(pointSelector)pointSelector.value=state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1);
       for(const {key,slider,number} of qualityControls){
@@ -26,7 +31,7 @@ export default {
         if(key==='resolution'&&state.maxShadowResolution)number.max=String(state.maxShadowResolution);
       }
       const quality=state.shadowQuality;
-      if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
+      if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.shadowComparison?`${comparison.implementation} / ${comparison.grain} grain`:'comparison unavailable'} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
     };
     const apply=(points,mode)=>{
       validateSourceQuadrature(points,mode);
@@ -44,11 +49,17 @@ export default {
       applyQuality(value);requestedQuality={...read().shadowQuality};persist();sync();session.redraw();
       const effective=read();record({kind:'fire-shadow.quality',phase:'applied',requested:value,effective});return effective;
     };
-    const stop=session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);if(requestedQuality!==null)applyQuality(requestedQuality);sync();stop();}});
+    const applyComparison=value=>{if(!source().setShadowComparison)throw Error('This runtime has no shadow comparison consumer');source().setShadowComparison(value);};
+    const setShadowComparison=value=>{
+      const next=validateShadowComparison({...read().shadowComparison,...requestedComparison,...value});
+      applyComparison(next);requestedComparison=next;persist();sync();session.redraw();
+      const effective=read();record({kind:'fire-shadow.comparison',phase:'applied',requested:next,effective});return effective;
+    };
+    const stop=session.onFrame(()=>{if(win.__kaminosSceneRadiance?.setShadowSampling){source().setShadowSampling(requested);if(requestedPoints!==null)apply(requestedPoints,requestedPointSampling);if(requestedQuality!==null)applyQuality(requestedQuality);if(requestedComparison!==null)applyComparison(requestedComparison);sync();stop();}});
     return {
       read,
       operations:{
-        setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
+        setShadowComparison,setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
         setQuadrature,setPoints(value){return setQuadrature({points:value});},
         setSampling(value){validateShadowSampling(value);source().setShadowSampling(value);requested=value;persist();sync();session.redraw();const effective=read();record({kind:'fire-shadow.sampling',phase:'applied',requested:value,effective});return effective;},
         setSoftness(value){if(!Number.isFinite(value)||value<0)throw Error('finite nonnegative softness required');source().setShadowSoftness(value);sync();session.redraw();return read();},
@@ -65,6 +76,20 @@ export default {
         for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
         pointSelector.addEventListener('change',()=>invoke('setQuadrature',{points:pointSelector.value==='4-paired'?4:Number(pointSelector.value),pointSampling:pointSelector.value==='4-paired'?'paired':'all'}).catch(error=>{sync();status.textContent=error.message;}));
         pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel,label);
+        const comparisonControl=(text,choices,key)=>{
+          const row=document.createElement('label');row.textContent=text;
+          const select=document.createElement('select');select.setAttribute('aria-label',text);
+          for(const [value,title] of choices){const option=document.createElement('option');option.value=value;option.textContent=title;select.append(option);}
+          select.addEventListener('change',()=>invoke('setShadowComparison',{[key]:select.value}).catch(error=>{sync();status.textContent=error.message;}));
+          row.append(select);panel.append(row);return select;
+        };
+        implementationSelector=comparisonControl('Capture implementation',[['shared','Shared preparation + uniform offsets'],['legacy','Before optimization — per-source preparation + arithmetic']],'implementation');
+        grainSelector=comparisonControl('Shadow grain placement',[['ordered','Ordered screen pattern — baseline'],['screen','Scrambled screen grain'],['world','Scrambled world-space grain']],'grain');
+        const cellRow=document.createElement('label');cellRow.textContent='World grain cell size';
+        cellInput=document.createElement('input');cellInput.type='number';cellInput.min='0.000001';cellInput.step='any';cellInput.setAttribute('aria-label','World grain cell size');
+        cellInput.addEventListener('change',()=>invoke('setShadowComparison',{worldCellSize:Number(cellInput.value)}).catch(error=>{sync();status.textContent=error.message;}));
+        cellRow.append(cellInput);panel.append(cellRow);
+        const grainHelp=document.createElement('p');grainHelp.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. World cells are measured in scene units and stay in the world as objects move. Scrambling trades the ordered coverage of neighboring pixels for irregular grain; it is not a denoiser. Use complementary sampling to compare filter grain.';panel.append(grainHelp);
         const heading=document.createElement('h3');heading.textContent='Surface shadow cost';panel.append(heading);
         for(const [key,text,max,help] of [
           ['resolution','Shadow cube resolution',1024,'Pixels per cube face. Lower values reduce capture size and shadow detail.'],
