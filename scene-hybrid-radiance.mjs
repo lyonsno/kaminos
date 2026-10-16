@@ -1,6 +1,6 @@
 import * as THREE from './lib/three.webgpu.js';
 import {cloneSceneRadianceMaterial} from './scene-radiance.mjs';
-import {createFireLightFieldShadow} from './fire-light-field-shadow.mjs';
+import {createFireLightFieldShadow,renderFireShadowBatch} from './fire-light-field-shadow.mjs';
 import {createLocalSceneVisibility} from './scene-local-visibility.mjs';
 import {createVolumeGather,lightingDirections} from './scene-volume-gather.mjs';
 import {createPointRegions} from './scene-point-regions.mjs';
@@ -10,6 +10,7 @@ import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
+import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
@@ -23,6 +24,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const paired=uniform(false,'bool');let pointSampling='all';
   let points,external,lights,irradiance;
   function buildPoints(count){
+  const filterPattern=createShadowFilterPattern(filterSamples,device.limits);
   points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
   external=new THREE.ExternalTexture(points.texture);
   external.image={width:count,height:2};external.format=THREE.RGBAFormat;external.type=THREE.FloatType;
@@ -31,7 +33,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
     const filterCoordinates=paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
-    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,blockerSamples,filterSamples});
+    const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*Math.sqrt(11),sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,blockerSamples,filterSamples,filterPattern});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
     const delta=position.sub(positionWorld).div(scale),distance2=delta.dot(delta);
@@ -101,7 +103,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       // surface points; the gather owns that once-scattered source and gain.
       frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed'});
       const reduction=points.encode(gather.transportSource());
-      for(const light of lights)light.shadow.render();
+      renderFireShadowBatch({scene,shadows:lights.map(light=>light.shadow)});
       frame={...frame,pointRegions:reduction,surfaceTransport:status.surfaceTransport,previewStale:false};
       prototype.setSceneDistributedLightFrame(smokeMode==='distributed'?{texture:gather.smoke,...frame}:null);
       valid=true;status.status='submitted-awaiting-presentation';delete status.error;onStatus({...status});

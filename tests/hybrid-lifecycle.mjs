@@ -8,7 +8,7 @@ const passes=[],uploads=[],pipelines=[];
 let failPass=null,failSource=null;
 const consumedSources=[];
 const pipeline={getBindGroupLayout(){return {};}};
-const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
+const device={limits:{maxUniformBufferBindingSize:65536,maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024,maxTextureDimension3D:256,maxComputeWorkgroupsPerDimension:65535},
  queue:{writeBuffer(buffer,offset,data){uploads.push([buffer.label,new Float32Array(data)]);},submit(){}},
  createBuffer({label}){return {label,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(){return {};},createComputePipeline(descriptor){pipelines.push(descriptor.label);return pipeline;},createBindGroup({entries}){const source=entries.find(e=>e.binding===5)?.resource?.source;if(source===failSource&&source)throw Error('injected source binding failure');return {source};},
@@ -19,8 +19,11 @@ const prototype={setSceneMediumSource(){},setSceneSourceFrameConsumer(fn){consum
 const renderer={library:new THREE.StandardNodeLibrary(),backend:{get(){return {};}}},scene=new THREE.Scene();
 const geometry=new THREE.BoxGeometry(),material=new THREE.MeshStandardMaterial({color:0xaaff88});
 const mesh=new THREE.Mesh(geometry,material);mesh.castShadow=true;scene.add(mesh);
-const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({fixture:true}),dispose(){}})});
+const patterns=[],batches=[];
+const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
+assert.equal(patterns[0].route,'uniform');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
+assert.equal(batches[0],batches[1]);
 assert.equal(mount.debugState().frame.pointRegions.partition,'energy');
 const twoSourceMaterialKey=mesh.material.customProgramCacheKey();
 mount.setPointCount(1);assert.equal(mount.canRender(),false,'changed source layout must await current reduction');consume(field);
@@ -28,6 +31,8 @@ assert.notEqual(mesh.material.customProgramCacheKey(),twoSourceMaterialKey,'repl
 assert.equal(mount.debugState().pointCount,1);assert.equal(mount.debugState().shadows.length,1);
 mount.setPointCount(2);consume(field);assert.equal(mount.debugState().pointCount,2);assert.equal(mount.debugState().shadows.length,2);
 mount.setPointCount(4);consume(field);
+assert(patterns.slice(-4).every(p=>p===patterns.at(-1)),'all four sources share pattern storage');
+assert(batches.slice(-4).every(b=>b===batches.at(-1)),'all four fresh captures share current preparation');
 assert.equal(mount.debugState().frame.pointRegions.partition,'energy','four regions must partition emission, not empty geometric bands');
 assert.equal(mount.debugState().shadows.length,4);
 mount.setPointSampling('paired');consume(field);
@@ -39,6 +44,7 @@ consume(field);
 assert.equal(mount.debugState().shadowResolution,128);
 assert.equal(mount.debugState().blockerSamples,3);
 assert.equal(mount.debugState().filterSamples,8);
+assert.equal(patterns.at(-1).count,8,'changed quality must rebuild the pattern at its actual tap count');
 assert.notEqual(mesh.material.customProgramCacheKey(),priorQualityKey);
 const qualityKey=mesh.material.customProgramCacheKey();
 mount.setShadowQuality({resolution:128});
