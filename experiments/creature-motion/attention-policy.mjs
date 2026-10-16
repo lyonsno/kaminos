@@ -149,8 +149,9 @@ export function createAttentionPolicy(options = {}) {
   }
 
   function applyUpdate({time, observations, invalidatedIds}) {
-    const observationsById = new Map(observations.map((observation) => [observation.id, observation]));
     const invalidated = new Set(invalidatedIds);
+    observations = observations.filter((observation) => !invalidated.has(observation.id));
+    const observationsById = new Map(observations.map((observation) => [observation.id, observation]));
 
     if (current && invalidated.has(current.id)) {
       current = null;
@@ -237,6 +238,9 @@ export function createAttentionPolicy(options = {}) {
       if (snapConfig === null || typeof snapConfig !== 'object') {
         throw new Error('snapshot.config must be an object');
       }
+      for (const key of ['minDwellSeconds', 'switchMargin', 'defaultMemorySeconds']) {
+        if (!isFiniteNumber(snapConfig[key])) throw new Error(`snapshot.config.${key} is required`);
+      }
       const validatedConfig = validateConfig(snapConfig);
       if (snapCurrent !== null && typeof snapCurrent !== 'object') {
         throw new Error('snapshot.current must be null or an object');
@@ -244,10 +248,23 @@ export function createAttentionPolicy(options = {}) {
       if (snapLastTime !== null && !isFiniteNumber(snapLastTime)) {
         throw new Error('snapshot.lastTime must be null or a finite number');
       }
+      let validatedCurrent = null;
+      if (snapCurrent !== null) {
+        validateObservation(snapCurrent, new Set());
+        if (!isFiniteNumber(snapCurrent.memorySeconds) || snapCurrent.memorySeconds < 0
+          || !isFiniteNumber(snapCurrent.acquiredAt) || !isFiniteNumber(snapCurrent.lastObservedAt)
+          || snapLastTime === null || snapCurrent.acquiredAt > snapCurrent.lastObservedAt
+          || snapCurrent.lastObservedAt > snapLastTime
+          || !Number.isFinite(snapCurrent.lastObservedAt + snapCurrent.memorySeconds)) {
+          throw new Error('snapshot.current has invalid memory or time fields');
+        }
+        validatedCurrent = cloneRemembered(snapCurrent);
+      }
+      // Finish validation and cloning before changing any live policy field.
       config.minDwellSeconds = validatedConfig.minDwellSeconds;
       config.switchMargin = validatedConfig.switchMargin;
       config.defaultMemorySeconds = validatedConfig.defaultMemorySeconds;
-      current = cloneRemembered(snapCurrent);
+      current = validatedCurrent;
       lastTime = snapLastTime;
     },
 
