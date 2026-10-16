@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/lyonsno/moge-webgpu",
+  "revision": "adc63fd297757c14103b63845ec2a2775c23cc39",
+  "buildCommand": "npm run build:lib",
+  "artifact": "dist-lib/moge-inference.js",
+  "sha256": "4bf7375e0bfdd2cccdb7fe2b6a3c46bcc9412692c68eb36d0eabef63b081cbc0"
+}
