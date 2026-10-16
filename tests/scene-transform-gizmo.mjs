@@ -39,3 +39,8 @@ test('the visible X rotation arc and its picker share the same half-circle',()=>
  const visiblePoint=new THREE.Vector3(Math.cos(.6)*.5,Math.sin(.6)*.5,0).applyAxisAngle(new THREE.Vector3(0,1,0),Math.PI/2).applyMatrix4(grip.matrixWorld).project(f.camera);
  f.gizmo.pointerHover(visiblePoint);assert.equal(f.gizmo.axis,'X');
 });
+
+test('changing World to Local invalidates projected handles without requiring camera motion',()=>{
+ const f=fixture();f.object.rotation.z=.7;f.scene.updateMatrixWorld(true);f.gizmo.pointerHover(f.point('X',.56));
+ f.gizmo.setSpace('local');f.scene.updateMatrixWorld(true);f.gizmo.pointerHover(f.point('X',.56));assert.equal(f.gizmo.axis,'X');
+});

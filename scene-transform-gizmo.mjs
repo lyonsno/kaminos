@@ -1,5 +1,5 @@
 import {BoxGeometry, BufferGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute,
- Mesh, MeshBasicMaterial, Raycaster, RingGeometry, TorusGeometry, Vector3} from 'three';
+ Mesh, MeshBasicMaterial, RingGeometry, TorusGeometry, Vector3} from 'three';
 import {TransformControls} from 'three/addons/controls/TransformControls.js';
 
 // Presentation adapter for the pinned Three r171 controller. Keep its drag plane,
@@ -11,20 +11,17 @@ const planeAxes={XY:[0,1],YZ:[1,2],XZ:[0,2]};
 const point=(axis,t)=>axes[axis].map(v=>v*t);
 function material(name,opacity=1){return new MeshBasicMaterial({color:colors[name],opacity,transparent:true,depthTest:false,depthWrite:false,toneMapped:false,fog:false,side:DoubleSide});}
 function orient(geometry,axis){if(axis==='X')geometry.rotateZ(-Math.PI/2);if(axis==='Z')geometry.rotateX(Math.PI/2);return geometry;}
-function handle(name,geometry,path,{closed=false,fill=false,margin=7,opacity=1,priority=1}={}){
+function handle(name,geometry,path,{closed=false,fill=false,hull=false,margin=7,opacity=1,priority=1}={}){
  const mesh=new Mesh(geometry,material(name,opacity));mesh.name=name;mesh.renderOrder=Infinity;
- mesh.userData.grip={path,closed,fill,margin,priority,opacity,samples:new Float64Array(path.length*2)};
+ mesh.userData.grip={path,closed,fill,hull,margin,priority,opacity,samples:new Float64Array(path.length*2)};
  return mesh;
 }
 function axisGrips(mode,axis){
  const shaft=orient(new CylinderGeometry(.006,.006,.38,8).translate(0,.31,0),axis);
  const tip=mode==='translate'?orient(new CylinderGeometry(0,.036,.12,16).translate(0,.56,0),axis):orient(new BoxGeometry(.075,.075,.075).translate(0,.56,0),axis);
- const direction=new Vector3(...axes[axis]),side=new Vector3(...axes[axis==='X'?'Y':'X']);
- const outline=mode==='translate'?[direction.clone().multiplyScalar(.62).toArray(),direction.clone().multiplyScalar(.50).addScaledVector(side,.036).toArray(),direction.clone().multiplyScalar(.50).addScaledVector(side,-.036).toArray()]:[.52,.60].flatMap(t=>[-.04,.04].map(s=>direction.clone().multiplyScalar(t).addScaledVector(side,s).toArray()));
- // Tip outline for distance/containment follows the visible grip, not a cone
- // extending over nearby scene objects. The shaft itself has a pixel margin.
- if(mode==='scale')outline.splice(2,2,outline[3],outline[2]);
- return [handle(axis,shaft,[point(axis,.12),point(axis,.50)]),handle(axis,tip,outline,{closed:true,fill:true})];
+ const direction=new Vector3(...axes[axis]),side=new Vector3(...axes[axis==='X'?'Y':'X']),up=new Vector3().crossVectors(direction,side);
+ const outline=mode==='translate'?[point(axis,.62),...Array.from({length:16},(_,i)=>direction.clone().multiplyScalar(.50).addScaledVector(side,.036*Math.cos(i*Math.PI/8)).addScaledVector(up,.036*Math.sin(i*Math.PI/8)).toArray())]:[-1,1].flatMap(x=>[-1,1].flatMap(y=>[-1,1].map(z=>[x,y,z].map((v,i)=>v*.0375+(i==='XYZ'.indexOf(axis)?.56:0)))));
+ return [handle(axis,shaft,[point(axis,.12),point(axis,.50)]),handle(axis,tip,outline,{closed:true,fill:true,hull:true})];
 }
 function planeGrip(name){
  const [a,b]=planeAxes[name],path=[[.23,.23],[.35,.23],[.35,.35],[.23,.35]].map(([x,y])=>{const p=[0,0,0];p[a]=x;p[b]=y;return p;});
@@ -55,6 +52,12 @@ function distanceToGrip(x,y,samples,closed,fill){
  }
  return inside?0:distance;
 }
+function convexHull(samples){
+ const points=Array.from({length:samples.length/2},(_,i)=>[samples[i*2],samples[i*2+1]]).sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+ const cross=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+ const half=points=>{const out=[];for(const p of points){while(out.length>1&&cross(out.at(-2),out.at(-1),p)<=0)out.pop();out.push(p);}return out;};
+ return [...half(points).slice(0,-1),...half([...points].reverse()).slice(0,-1)].flat();
+}
 
 export class SceneTransformControls extends TransformControls {
  constructor(camera,canvas=null){
@@ -77,10 +80,9 @@ export class SceneTransformControls extends TransformControls {
     const active=grip.name===this.axis;
     grip.material.color.setHex(active?0xffffff:colors[grip.name]);grip.material.opacity=active?1:settings.opacity;
    }
+   this._paintOverlay();
   };
   this._pickPoint=new Vector3();
-  this._visibleRaycaster=new Raycaster();
-  this._visibleHits=[];
   const down=this._onPointerDown;
   this._onPointerDown=event=>{
    if(!this.enabled||event.button!==0)return;
@@ -88,8 +90,55 @@ export class SceneTransformControls extends TransformControls {
    // Ordinary scene clicks must not be captured by a gizmo they missed.
    if(this.axis!==null)down(event);
   };
-  if(canvas){this.domElement=canvas;this.connect();}
+  if(canvas){
+   this.domElement=canvas;
+   // This is an editor layer, above the native volume canvas. It borrows the
+   // existing helper's camera updates; there is no renderer or RAF of its own.
+   if(canvas.parentElement&&canvas.ownerDocument?.createElementNS){
+    this._overlay=canvas.ownerDocument.createElementNS('http://www.w3.org/2000/svg','svg');
+    this._overlay.id='transform-gizmo-overlay';this._overlay.setAttribute('aria-hidden','true');
+    Object.assign(this._overlay.style,{position:'absolute',pointerEvents:'none',zIndex:'8',overflow:'hidden'});
+    canvas.parentElement.append(this._overlay);
+    for(const group of Object.values(this._gizmo.gizmo))for(const grip of group.children)grip.material.visible=false;
+   }
+   this.connect();
+  }
  }
+
+ _projectedGrips(rect){
+  const key=[this.mode,this.space,this.size,this.showX,this.showY,this.showZ,rect.width,rect.height,...this.camera.projectionMatrix.elements,...this.camera.matrixWorldInverse.elements,...this.object.matrixWorld.elements].join(',');
+  if(key===this._projectionKey)return this._projections;
+  this._projectionKey=key;const result=[];
+  for(const grip of this._gizmo.gizmo[this.mode].children){
+   if(!grip.visible)continue;
+   const settings=grip.userData.grip;let clipped=false;
+   for(let i=0;i<settings.path.length;i++){
+    const p=this._pickPoint.fromArray(settings.path[i]).applyMatrix4(grip.matrixWorld).project(this.camera);
+    if(!Number.isFinite(p.x+p.y+p.z)||p.z<-1||p.z>1){clipped=true;break;}
+    settings.samples[i*2]=(p.x+1)*rect.width/2;settings.samples[i*2+1]=(1-p.y)*rect.height/2;
+   }
+   if(!clipped)result.push({grip,points:settings.hull?convexHull(settings.samples):settings.samples});
+  }
+  return this._projections=result;
+ }
+
+ _paintOverlay(){
+  if(!this._overlay)return;
+  const visible=!!(this.enabled&&this.object&&this.getHelper().visible);
+  this._overlay.style.display=visible?'block':'none';if(!visible)return;
+  const rect=this.domElement.getBoundingClientRect(),parent=this.domElement.parentElement.getBoundingClientRect();
+  if(!(rect.width>0&&rect.height>0))return;
+  const layout=[rect.left-parent.left,rect.top-parent.top,rect.width,rect.height].join(',');
+  if(layout!==this._overlayLayout){this._overlayLayout=layout;Object.assign(this._overlay.style,{left:(rect.left-parent.left)+'px',top:(rect.top-parent.top)+'px',width:rect.width+'px',height:rect.height+'px'});this._overlay.setAttribute('viewBox',`0 0 ${rect.width} ${rect.height}`);}
+  const paths=this._projectedGrips(rect).map(({grip,points})=>{
+   const {closed,fill,opacity}=grip.userData.grip,active=grip.name===this.axis,color=active?'#ffffff':'#'+grip.material.color.getHexString();
+   const d=Array.from({length:points.length/2},(_,i)=>(i?'L':'M')+points[i*2].toFixed(2)+' '+points[i*2+1].toFixed(2)).join(' ')+(closed?' Z':'');
+   return `<path d="${d}" fill="${fill&&grip.name!=='XYZ'&&grip.name!=='XYZE'?color:'none'}" fill-opacity="${active?Math.max(.55,opacity):opacity}" stroke="${color}" stroke-width="${active?2.5:1.8}" stroke-linejoin="round"/>`;
+  }).join('');
+  if(paths!==this._overlayPaths){this._overlayPaths=paths;this._overlay.innerHTML=paths;}
+ }
+
+ dispose(){this._overlay?.remove();super.dispose();}
 
  pointerHover(pointer){
   if(this.dragging)return;
@@ -98,24 +147,13 @@ export class SceneTransformControls extends TransformControls {
   if(!(rect?.width>0&&rect?.height>0)){this.axis=null;return;}
   // Picking sees the latest camera/target even before the next render frame.
   this.getHelper().updateMatrixWorld(true);
-  this._visibleRaycaster.setFromCamera(pointer,this.camera);
   const x=(pointer.x+1)*rect.width/2,y=(1-pointer.y)*rect.height/2;let best=null;
-  for(const grip of this._gizmo.gizmo[this.mode].children){
-   if(!grip.visible)continue;
-   const {path,samples,closed,fill,margin,priority}=grip.userData.grip;let clipped=false;
-   for(let i=0;i<path.length;i++){
-    const p=this._pickPoint.fromArray(path[i]).applyMatrix4(grip.matrixWorld).project(this.camera);
-    if(!Number.isFinite(p.x+p.y+p.z)||p.z<-1||p.z>1){clipped=true;break;}
-    samples[i*2]=(p.x+1)*rect.width/2;samples[i*2+1]=(1-p.y)*rect.height/2;
-   }
-   if(clipped)continue;
-   this._visibleHits.length=0;
-   this._visibleRaycaster.intersectObject(grip,false,this._visibleHits);
-   // Actual drawn triangles remain hittable at every camera angle and UI
-   // scale. The screen path adds a small CSS-pixel margin around thin grips.
-   const distance=this._visibleHits.length?0:distanceToGrip(x,y,samples,closed,fill);
+  for(const {grip,points} of this._projectedGrips(rect)){
+   const {closed,fill,margin,priority}=grip.userData.grip;
+   const distance=distanceToGrip(x,y,points,closed,fill);
    if(distance<=margin&&(!best||distance<best.distance-1e-5||(Math.abs(distance-best.distance)<1e-5&&priority<best.priority)))best={axis:grip.name,distance,priority};
   }
   this.axis=best?.axis??null;
+  this._paintOverlay();
  }
 }
