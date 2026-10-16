@@ -1,7 +1,8 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import {resolveSceneGIControlState} from '../scene-gi-settings.mjs';
-assert.equal(resolveSceneGIControlState().temporal,false,'saved tuned profile must retain its original temporal behavior');
+assert.equal(resolveSceneGIControlState().temporal,true,'Noah accepted temporal GI as the fresh-scene default');
+assert.equal(resolveSceneGIControlState({temporal:false}).temporal,false,'an explicit saved temporal setting remains authoritative');
 assert.equal(resolveSceneGIControlState({temporal:true,temporalWeight:.8}).temporalWeight,.8);
 for(const value of [{temporal:1},{temporalWeight:1},{temporalWeight:-1},{temporalWeight:NaN}])assert.throws(()=>resolveSceneGIControlState(value));
 const {default:History}=await import('../scene-gi-history.mjs');
@@ -37,6 +38,7 @@ for(const enabled of [true,false]) {
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
     isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
+    syncViewportQuality(){},syncViewportRendererSize(){},fireProxySync:null,
     sceneGI:{needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
     renderSceneFrame(){draws++;remaining--;},
   };

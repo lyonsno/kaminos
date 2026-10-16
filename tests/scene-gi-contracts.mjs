@@ -5,11 +5,12 @@ assert.ok(html.includes('id="scene-gi-mode"'), 'operator must be able to select 
 const { resolveSceneGISettings, sceneGIReceives } = await import('../scene-gi-settings.mjs');
 const defaults = resolveSceneGISettings();
 assert.equal(defaults.mode, 'combined');
-assert.equal(defaults.gain, 3.5);
-assert.equal(defaults.radius, 8.364843749999999);
-assert.equal(defaults.thickness, 6.806132812500005);
+assert.equal(defaults.gain, 5);
+assert.equal(defaults.radius, 20);
+assert.equal(defaults.thickness, 7);
 assert.equal(defaults.steps, 3);
-assert.equal(defaults.denoise, 16);
+assert.equal(defaults.slices, 3);
+assert.equal(defaults.denoise, 1);
 assert.equal(defaults.resolutionScale, 1);
 assert.equal(resolveSceneGISettings({resolutionScale:.5}).resolutionScale,.5);
 for (const resolutionScale of [0,-1,NaN,Infinity]) assert.throws(()=>resolveSceneGISettings({resolutionScale}));
