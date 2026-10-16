@@ -85,7 +85,7 @@ export function foldNotes(events) {
     switch (event?.type) {
       case 'note': {
         if (!NOTE_ID_PATTERN.test(String(event.id))) { issues.push({seq: event.seq, problem: 'note without a valid id'}); break; }
-        const note = {...event, replies: [], receipts: {delivered: {}, seen: {}}, resolved: false};
+        const note = {...event, replies: [], receipts: {delivered: {}, seen: {}, notified: {}}, resolved: false};
         if (event.parent) {
           const parent = notes.get(event.parent);
           if (!parent) { issues.push({seq: event.seq, problem: `reply to unknown note ${event.parent}`}); break; }
@@ -104,6 +104,10 @@ export function foldNotes(events) {
         break;
       case 'seen':
         known(event, note => { note.receipts.seen[event.author] = {at: event.at, seq: event.seq}; });
+        break;
+      case 'notified':
+        // The server ran its notify command for someone not listening; this is not a delivery.
+        known(event, note => { note.receipts.notified[event.recipient] = {at: event.at, seq: event.seq, ok: event.ok, detail: event.detail}; });
         break;
       case 'resolved':
       case 'reopened':

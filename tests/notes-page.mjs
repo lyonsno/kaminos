@@ -168,7 +168,7 @@ test('a mention of someone unknown stays text; the preview says who a note will 
   session.hello({author: 'noah', lastSeq: 0});
   session.setParticipants([{name: 'notes-agent', listening: true}, {name: 'noah', kind: 'person'}, {name: 'idle-agent', listening: false}]);
   assert.deepEqual(session.preview({text: '@notes-agent can we add @mentions? @idle-agent', to: ''}),
-    {recipients: ['notes-agent', 'idle-agent'], listening: ['notes-agent'], unknown: ['mentions']});
+    {recipients: ['notes-agent', 'idle-agent'], listening: ['notes-agent'], notified: [], unknown: ['mentions']});
   await session.post({text: '@notes-agent can we add @mentions?', attachPicture: false});
   assert.deepEqual(app.posted[0].to, ['notes-agent']);
   await session.post({text: 'for you', to: 'brand-new-agent', attachPicture: false});
@@ -269,4 +269,14 @@ test('a sub that takes the camera during the picture and keeps it never becomes 
   assert.ok(!('view' in body.context), 'the borrowed view is not recorded as the person\'s');
   assert.equal(body.picture, null);
   assert.match(body.context.pictureIssue, /kept the viewport camera/);
+});
+
+test('when the server notifies people who are not listening, the preview says who will be notified', () => {
+  const {session} = fakePage();
+  session.hello({author: 'noah', lastSeq: 0});
+  session.setParticipants([{name: 'near-agent', listening: true}, {name: 'far-agent', listening: false}], {notifies: true});
+  assert.deepEqual(session.preview({text: '@near-agent @far-agent look'}),
+    {recipients: ['near-agent', 'far-agent'], listening: ['near-agent'], notified: ['far-agent'], unknown: []});
+  session.setParticipants([{name: 'near-agent', listening: true}, {name: 'far-agent', listening: false}]);
+  assert.deepEqual(session.preview({text: '@far-agent'}).notified, [], 'without a notify command nobody is notified');
 });

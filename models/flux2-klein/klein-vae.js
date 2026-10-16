@@ -392,6 +392,8 @@ export class KleinVaeDecoder {
     this.out = null;
   }
   release() { this.releaseWork(); this.prepped?.destroy(); this.prepped = null; }
+  // Free everything, weights included; the instance is unusable afterwards.
+  destroy() { this.release(); this.wbuf?.destroy(); this.bn?.destroy(); this.wbuf = null; this.bn = null; }
 
   // Live preview: x0 = latents - sigma * velocity for packed latents of latH x latW tokens, written
   // as decoder-space channels-last [2h*2w][32] f32 into `out`.

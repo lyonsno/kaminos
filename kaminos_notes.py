@@ -21,7 +21,9 @@ import os
 import re
 import secrets
 import select
+import shlex
 import socket
+import subprocess
 import struct
 import threading
 import time
@@ -68,6 +70,21 @@ def checked_name(value, what):
     if not NAME.match(name):
         raise NotesError(400, "request", f"{what} {value!r} is not a usable name: use letters, digits, dots, dashes or underscores")
     return name
+
+
+def directory_from_file(path):
+    """People to offer in the @ list, from a JSON file: {"people": [{"name",
+    "about", "kind", "avatar"}]} or a bare list of names or such objects."""
+    data = json.loads(Path(path).read_text())
+    people = data.get("people") if isinstance(data, dict) else data
+    if not isinstance(people, list):
+        raise ValueError("a directory is {\"people\": [...]} or a list")
+    return people
+
+
+def notify_command(text):
+    """The notify command as an argument list, from a shell-style string."""
+    return shlex.split(text) if text and text.strip() else None
 
 
 def iso(seconds):
@@ -322,6 +339,14 @@ class NotesLog:
 
         return self._append(build)
 
+    def notified(self, note_id, recipient, ok, detail=""):
+        """Record that the server's notify command ran for a recipient."""
+        def build(seq):
+            event = self._stamp(seq, "notified", "kaminos", {"via": "server"})
+            event.update({"notes": [note_id], "recipient": recipient, "ok": bool(ok), "detail": detail})
+            return event
+        return self._append(build)
+
     # --- waiting agents ----------------------------------------------------
     def _pending(self, name):
         return [event for event in self._events
@@ -477,8 +502,11 @@ class NotesLog:
             authors = sorted({event.get("author") for event in self._events if event.get("type") == "note" and event.get("author")})
         for author in authors:
             add(author, "wrote")
-        for name in directory or ():
-            add(name, "directory")
+        for entry in directory or ():
+            if isinstance(entry, dict):
+                add(entry.get("name"), "directory", about=entry.get("about"), kind=entry.get("kind"), avatar=entry.get("avatar"))
+            else:
+                add(entry, "directory")
         listening = {row["name"] for row in self.presence()["listeners"]}
         for row in people.values():
             row["listening"] = row["name"] in listening
@@ -497,8 +525,8 @@ class NotesHttp:
     """The /api/notes routes. They answer only this machine at the server's own
     address: local tools without an Origin, or this server's own pages."""
 
-    def __init__(self, log, *, source, directory=lambda: []):
-        self.log, self.source, self.directory = log, source, directory
+    def __init__(self, log, *, source, directory=lambda: [], notify=None):
+        self.log, self.source, self.directory, self.notify = log, source, directory, notify
         self._pages, self._lock = {}, threading.Lock()
 
     def handle(self, handler, method, path):
@@ -604,7 +632,48 @@ class NotesHttp:
 
     def post(self, handler, query):
         body = self._body(handler)
-        self._json(handler, self.log.post(body, origin=self._origin(handler)))
+        # Who was waiting when the note was posted; a waiting agent's wait ends as it takes the note.
+        active = self._active_waits()
+        note = self.log.post(body, origin=self._origin(handler))
+        try:
+            self._json(handler, note)
+        finally:
+            # The note is saved; its recipients are notified even if this response fails.
+            self._notify_recipients(note, active)
+
+    def _directory_version(self):
+        try:
+            rows = list(self.directory() or [])
+        except Exception:
+            rows = ["unavailable"]
+        return hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+    def _active_waits(self):
+        # An active wait, not the presence display's short grace after one ends.
+        return {row["name"] for row in self.log.presence(detail=True)["listeners"] if row.get("waitingNow")}
+
+    def _notify_recipients(self, note, active=None):
+        """Run the notify command once per recipient, with the note on stdin and
+        whether that recipient's wait was active right then. What a listening
+        recipient needs is the command's decision. The outcome is logged; the
+        note still waits for that recipient's next wait."""
+        if not self.notify or note.get("kind") == "ref":
+            return
+        active = self._active_waits() if active is None else active
+        server = self.source().get("origin")
+        for name in note.get("recipients") or []:
+            threading.Thread(target=self._run_notify, args=(note, name, server, name in active), daemon=True).start()
+
+    def _run_notify(self, note, name, server, listening):
+        payload = json.dumps({"schema": NOTES_SCHEMA, "recipient": name, "server": server, "listening": listening, "note": note})
+        env = {**os.environ, "KAMINOS_NOTES_RECIPIENT": name, "KAMINOS_NOTES_NOTE_ID": note["id"], "KAMINOS_NOTES_SERVER": server or "",
+               "KAMINOS_NOTES_LISTENING": "1" if listening else "0"}
+        try:
+            done = subprocess.run(self.notify, input=payload, text=True, capture_output=True, env=env)
+            ok, detail = done.returncode == 0, ("" if done.returncode == 0 else f"notify command exited {done.returncode}: {done.stderr.strip()[-500:]}")
+        except OSError as error:
+            ok, detail = False, f"notify command could not run: {error}"
+        self.log.notified(note["id"], name, ok, detail)
 
     def receipt(self, handler, query):
         body = self._body(handler)
@@ -617,7 +686,7 @@ class NotesHttp:
             directory, problem = [], f"directory unavailable: {error}"
         else:
             problem = None
-        self._json(handler, {"schema": NOTES_SCHEMA, "participants": self.log.participants(directory=directory),
+        self._json(handler, {"schema": NOTES_SCHEMA, "participants": self.log.participants(directory=directory), "notifies": bool(self.notify),
                              **({"directoryProblem": problem} if problem else {})})
 
     def register(self, handler, query):
@@ -685,7 +754,7 @@ class NotesHttp:
             quiet_since = time.monotonic()
             while True:
                 events = self.log.wait_events(after, 1.0)
-                presence = {**self.log.presence(), "pages": self._pages_now(), "participantsVersion": self.log.participants_version()}
+                presence = {**self.log.presence(), "pages": self._pages_now(), "participantsVersion": f"{self.log.participants_version()}:{self._directory_version()}"}
                 if events:
                     after = events[-1]["seq"]
                     handler.wfile.write(self._event("events", {"events": events}, event_id=after))

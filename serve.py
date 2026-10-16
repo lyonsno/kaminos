@@ -58,7 +58,13 @@ def notes_http():
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             log = module.NotesLog(module.default_root(), page_author=module.default_page_author())
-            _NOTES = module.NotesHttp(log, source=lambda: {"origin": f"http://127.0.0.1:{PORT}", **volume_settings_server_source()})
+            # KAMINOS_NOTES_DIRECTORY names a JSON file of people to offer in the
+            # @ list; KAMINOS_NOTES_NOTIFY is a command run, with the note on
+            # stdin, for each recipient not listening when a note is posted.
+            people = os.environ.get("KAMINOS_NOTES_DIRECTORY")
+            _NOTES = module.NotesHttp(log, source=lambda: {"origin": f"http://127.0.0.1:{PORT}", **volume_settings_server_source()},
+                                      directory=(lambda: module.directory_from_file(people)) if people else (lambda: []),
+                                      notify=module.notify_command(os.environ.get("KAMINOS_NOTES_NOTIFY", "")))
         return _NOTES
 
 

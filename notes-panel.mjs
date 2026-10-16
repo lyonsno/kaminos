@@ -13,7 +13,7 @@ const involves = (note, name) => { let found = false; walk(note, item => { if (i
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
   href = () => '', title = () => '', avatarOf = null, ownView = async () => true}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
-  let participants = [];
+  let participants = [], notifies = false;
   const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
     ...participants.filter(person => person.listening).map(person => person.name)]);
   // Who a note reaches: names in the To field, and @mentions of people known here.
@@ -117,7 +117,8 @@ export function createNotesSession({transport, selection, entries, readView, wri
       return notices;
     },
     setPresence(next) { presence = next; changed(); },
-    setParticipants(list) { participants = Array.isArray(list) ? list : []; changed(); },
+    setParticipants(list, {notifies: notifying = false} = {}) { participants = Array.isArray(list) ? list : []; notifies = !!notifying; changed(); },
+    notifies() { return notifies; },
     // The scene object that stands for an agent: the avatar it registered, else
     // what the vantage says, else the sub piloted under its name. Null when
     // none of these is in the scene.
@@ -139,7 +140,9 @@ export function createNotesSession({transport, selection, entries, readView, wri
       const {recognized, unknown} = addresseesIn(text, participants.map(person => person.name));
       const recipients = [...new Set([...explicit, ...recognized])].filter(name => name !== author);
       const listening = listeningNow();
-      return {recipients, listening: recipients.filter(name => listening.has(name)), unknown};
+      // With a notify command, the server tells each recipient who is not listening.
+      return {recipients, listening: recipients.filter(name => listening.has(name)),
+        notified: notifies ? recipients.filter(name => !listening.has(name)) : [], unknown};
     },
     suggestions(query) {
       const listening = listeningNow();
@@ -390,6 +393,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   const deliveryText = note => (note.recipients ?? []).map(name => {
     if (note.receipts.seen[name]) return `${name}: seen`;
     if (note.receipts.delivered[name]) return `${name}: delivered`;
+    const told = note.receipts.notified?.[name];
+    if (told) return `${name}: ${told.ok ? 'notified' : 'notify failed'}`;
     if (listeningNames().includes(name)) return `${name}: listening`;
     if (pageAuthors().includes(name)) return `${name}: page open`;
     return `${name}: not seen yet`;
@@ -532,9 +537,9 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       }
     });
   }
-  const reachText = ({recipients, listening, unknown}, {reply = false} = {}) => {
+  const reachText = ({recipients, listening, notified = [], unknown}, {reply = false} = {}) => {
     const parts = [];
-    const named = recipients.map(name => `@${name}${listening.includes(name) ? ' (listening)' : ''}`).join(', ');
+    const named = recipients.map(name => `@${name}${listening.includes(name) ? ' (listening)' : notified.includes(name) ? ' (will be notified)' : ''}`).join(', ');
     if (reply) parts.push(named ? `Goes to this conversation and ${named}` : '');
     else parts.push(named ? `Reaches ${named}` : 'Reaches no one in particular: anyone reading this scene will see it');
     if (unknown.length) parts.push(`${unknown.map(name => `@${name}`).join(', ')} ${unknown.length === 1 ? "isn't anyone known here, so it stays" : "aren't anyone known here, so they stay"} text`);
@@ -552,7 +557,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   let participantsTimer = 0;
   const refreshParticipants = () => window.fetch(`${endpoint}/participants`, {cache: 'no-store'})
     .then(response => response.ok ? response.json() : null)
-    .then(data => { if (data) session.setParticipants(data.participants ?? []); })
+    .then(data => { if (data) session.setParticipants(data.participants ?? [], {notifies: !!data.notifies}); })
     .catch(() => {});
   const refreshParticipantsSoon = () => { window.clearTimeout(participantsTimer); participantsTimer = window.setTimeout(refreshParticipants, 150); };
 
@@ -746,7 +751,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       focusThread = note.id;
       const waiting = listeningNames();
       const reach = note.recipients.length
-        ? note.recipients.map(name => `${name} ${waiting.includes(name) ? 'is listening' : 'will see it at its next check'}`).join('; ')
+        ? note.recipients.map(name => `${name} ${waiting.includes(name) ? 'is listening' : session.notifies() ? 'will be notified' : 'will see it at its next check'}`).join('; ')
         : 'not addressed: anyone reading this scene will see it';
       say(`Posted ${note.id}. ${reach}.`);
     } catch (error) {
