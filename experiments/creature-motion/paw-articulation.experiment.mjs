@@ -11,6 +11,10 @@ export default {
   const session=await host.scene.open(),root=new THREE.Group();root.name='Paw articulation · old left / corrected right';
   let runtimes=[],index=0,joint=paws[0],angle=0,asset,disposed=false,request=0,select,slider,output,status;
   const rest=new Map();
+  const ground=host.controls.document.getElementById('composition-ground-height');
+  const oldGround=ground?.value;let referenceGround;
+  function seatGround(){if(ground){referenceGround=String(Math.min(...runtimes.map(r=>r.mesh.geometry.boundingBox.min.y))-.05);ground.value=referenceGround;ground.dispatchEvent(new Event('change'));}}
+  function restoreGround(){if(ground&&ground.value===referenceGround){ground.value=oldGround;ground.dispatchEvent(new Event('change'));}}
   function sync(){if(select)select.value=joint;if(slider)slider.value=String(angle);if(output)output.textContent=`${angle}°`;}
   function apply(){
    for(const [i,runtime] of runtimes.entries()){
@@ -40,7 +44,7 @@ export default {
      for(const name of paws)rest.set(i+':'+name,runtime.bones.get(name).quaternion.clone());
      root.add(runtime.group);
     }
-    apply();
+    apply();seatGround();
    }catch(error){if(status)status.textContent=error.message;throw error;}
    return read();
   }
@@ -76,8 +80,8 @@ export default {
      neutral.onclick=()=>invoke('pose',{joint,angle:0}).catch(failed);frame.onclick=()=>invoke('frame').catch(failed);
      panel.append(description,casts,select,slider,output,neutral,frame,status);sync();
     },
-    async dispose(){disposed=true;request++;await session.dispose();runtimes.forEach(r=>r.dispose());},
+    async dispose(){disposed=true;request++;restoreGround();await session.dispose();runtimes.forEach(r=>r.dispose());},
    };
-  }catch(error){await session.dispose();runtimes.forEach(r=>r.dispose());throw error;}
+  }catch(error){restoreGround();await session.dispose();runtimes.forEach(r=>r.dispose());throw error;}
  },
 };

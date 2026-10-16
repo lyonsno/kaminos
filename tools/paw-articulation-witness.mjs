@@ -15,6 +15,7 @@ try{
  profile=mkdtempSync(join(tmpdir(),'marionette-paw-cft-'));report.effectiveExecutable=executable;report.profile=profile;
  report.phase='browser';context=await chromium.launchPersistentContext(profile,{headless:true,executablePath:executable,viewport:{width:1600,height:1100},args:['--use-mock-keychain','--password-store=basic','--no-first-run']});
  page=context.pages()[0]??await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
+ report.runtime=await(await page.request.get(new URL('/api/runtime-config',url).href)).json();assert.equal(report.runtime.source.repoRoot,realpathSync(args.root));persist();
  report.phase='load';await page.goto(url.href,{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='marionette/paw-articulation');
  report.runtime=await page.evaluate(async()=>await(await fetch('/api/runtime-config')).json());assert.equal(report.runtime.source.repoRoot,realpathSync(args.root));
@@ -39,6 +40,12 @@ try{
  assert.equal((await read()).angle,-25);await capture('fore-paw-flex');
  const held=await read();await assert.rejects(()=>invoke('pose',{joint:'wrong-joint',angle:20}));assert.equal((await read()).angle,held.angle);
  await page.getByRole('button',{name:'Neutral',exact:true}).click();const reset=await read();assert.deepEqual(reset.geometry,neutral.geometry);
+ report.casts=[];
+ for(let i=1;i<setup.casts.length;i++){
+  await invoke('cast',i);const current=await read();assert.equal(current.cast,i);assert.equal(current.bodies[1].caseSha256,setup.casts[i].candidate.case_sha256);
+  assert.ok(current.geometry.every(a=>a.length>0&&a.every(Number.isFinite)));writeFileSync(join(out,'cast-'+i+'.json'),JSON.stringify(current));
+  await capture('cast-'+i+'-neutral');await invoke('pose',{joint:'hindlimb-left-toe',angle:25});await capture('cast-'+i+'-flex');report.casts.push({cast:i,bodies:current.bodies});
+ }
  report.phase='reopen';await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='marionette/paw-articulation');
  assert.deepEqual((await read()).bodies.map(b=>b.bones),[28,32]);await capture('reopened');
  report.phase='close';await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
