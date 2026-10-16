@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor,
+import {NOTES_SCHEMA, normalizeName, parseAddressees, checkedAnchor, checkedPost, foldNotes, notesFor, pointStatusText,
   parseRef, formatRef, noteLink, describeNote, mentionQueryAt, rankParticipants, completeMention, addresseesIn} from '../notes-core.mjs';
 
 const at = seq => `2026-10-14T18:${String(seq).padStart(2, '0')}:00.000Z`;
@@ -231,4 +231,15 @@ test('an agent reading a point note is told the object, the point on it and how 
   const text = describeNote(foldNotes(events), 'kn-dddddddddddd', {root: '/tmp/n'});
   assert.match(text, /point on object "Straight boom arm" \(boom-arm\)/);
   assert.match(text, /point: world \[1\.2, 3\.4, 0\.5\], in the object's frame \[0\.1, 0\.25, -0\.5\], normal \[0, 1, 0\], picked exact/);
+});
+
+test("a point note says what became of the geometry it was on", () => {
+  assert.equal(pointStatusText({now: 'present', status: 'same'}), '');
+  assert.equal(pointStatusText({now: 'present', status: 'likely-same'}), '');
+  assert.equal(pointStatusText({now: 'present', status: 'edited'}), 'edited since this note');
+  assert.equal(pointStatusText({now: 'present', status: 'replaced'}), 'geometry replaced since this note');
+  assert.equal(pointStatusText({now: 'missing', status: null}), 'no longer in the scene');
+  assert.equal(pointStatusText({now: 'mesh-missing', status: null}), 'its mesh is gone');
+  assert.equal(pointStatusText({now: 'present', status: 'unverified'}), '');
+  assert.equal(pointStatusText(null), '');
 });

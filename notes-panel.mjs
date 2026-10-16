@@ -2,7 +2,7 @@
 // agent by name, and read the answers where you are looking. The session
 // (createNotesSession) is separate from the DOM (installNotes) so it can be
 // tested without a browser. See docs/notes.md.
-import {addresseesIn, checkedAnchor, checkedPost, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
+import {addresseesIn, checkedAnchor, checkedPost, pointStatusText, completeMention, foldNotes, formatRef, mentionQueryAt, mentionsIn, notesFor, parseAddressees,
   rankParticipants} from './notes-core.mjs';
 
 export {mentionsIn};
@@ -284,7 +284,7 @@ export async function capturePicture({capture, document}) {
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
   sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
-  ownView = async () => true, pickAt = null, pickCanvas = () => null, selectionToken = () => null}) {
+  ownView = async () => true, pickAt = null, pickCanvas = () => null, selectionToken = () => null, recheck = null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -576,6 +576,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   // its focus, caret, attach choice and Send state through presence changes,
   // receipts and new notes; only a card's notes and actions are redrawn.
   const cards = new Map();
+  const pointStatus = new Map();
   const cardsHost = element(document, 'div');
   const empty = element(document, 'div', 'kn-empty', 'No notes on this scene yet. Select something and say what you see.');
   threads.append(empty, cardsHost);
@@ -642,7 +643,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   function fillCard(entry, thread) {
     entry.card.dataset.resolved = String(thread.resolved);
     entry.card.dataset.focus = String(thread.id === focusThread);
-    entry.on.textContent = `On ${anchorText(thread.anchor)}${thread.subject?.scene && thread.subject.scene !== (sceneFile() || null) ? ` in ${thread.subject.scene}` : ''}`;
+    const changedSince = pointStatusText(pointStatus.get(thread.id)?.result);
+    entry.on.textContent = `On ${anchorText(thread.anchor)}${thread.subject?.scene && thread.subject.scene !== (sceneFile() || null) ? ` in ${thread.subject.scene}` : ''}${changedSince ? ` \u00b7 ${changedSince}` : ''}`;
     entry.body.replaceChildren(noteNode(thread, 0));
     const threadId = thread.id;
     const button = (label, handler, title) => {
@@ -670,7 +672,8 @@ export function installNotes({THREE, document, window, viewport, camera, entries
 
   const signatureOf = thread => {
     const known = new Set(session.participants.map(person => person.name));
-    const parts = [thread.resolved, thread.id === focusThread, session.author, listeningNames().join(','), pageAuthors().join(','), sceneFile() || ''];
+    const parts = [thread.resolved, thread.id === focusThread, session.author, listeningNames().join(','), pageAuthors().join(','), sceneFile() || '',
+      pointStatusText(pointStatus.get(thread.id)?.result)];
     // An @name becomes a button once that someone is known here.
     walk(thread, note => parts.push(note.seq, Object.keys(note.receipts.seen).join(','), Object.keys(note.receipts.delivered).join(','),
       mentionsIn(note.text).filter(name => known.has(name)).join(',')));
@@ -804,6 +807,21 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   const box = new THREE.Box3(), point = new THREE.Vector3();
   let frame = 0, placedAt = -Infinity;
   // About fifteen times a second: pins follow the camera without costing a frame.
+  // What became of the geometry under each point note, from the host's scene
+  // recheck: about once a second per note, and the card updates when it changes.
+  function checkPoint(note, now) {
+    if (!recheck) return;
+    const known = pointStatus.get(note.id);
+    if (known?.pending || (known && now - known.at < 1000)) return;
+    pointStatus.set(note.id, {...known, pending: true, at: now});
+    Promise.resolve().then(() => recheck({id: note.anchor.id, path: note.anchor.path ?? [], identity: note.anchor.geometry ?? null}))
+      .then(result => result, () => null)
+      .then(result => {
+        const before = pointStatusText(known?.result);
+        pointStatus.set(note.id, {result, at: now, pending: false});
+        if (pointStatusText(result) !== before) render();
+      });
+  }
   function placePins(now) {
     frame = window.requestAnimationFrame(placePins);
     if (now - placedAt < 66) return;
@@ -849,6 +867,7 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     // object's current placement applied to the point in its own frame.
     for (const note of session.threads()) {
       if (note.resolved || note.anchor?.kind !== 'point') continue;
+      checkPoint(note, now);
       const entry = entries().find(item => item.id === note.anchor.id);
       if (!entry?.object) continue;
       entry.object.updateMatrixWorld();
@@ -865,7 +884,9 @@ export function installNotes({THREE, document, window, viewport, camera, entries
         pins.append(pin);
       }
       pin.textContent = '\u2022';
-      pin.title = `Note on a point of "${note.anchor.label}"`;
+      const changedSince = pointStatusText(pointStatus.get(note.id)?.result);
+      pin.title = `Note on a point of "${note.anchor.label}"${changedSince ? `: ${changedSince}` : ''}`;
+      pin.dataset.status = changedSince ? 'changed' : 'same';
       pin.style.left = `${((point.x + 1) / 2) * width}px`;
       pin.style.top = `${((1 - point.y) / 2) * height}px`;
     }
