@@ -289,11 +289,14 @@ export async function unwrapTrellisMesh(mesh,{WorkerClass=globalThis.Worker}={})
 // Shared by the live decoder consumer and retained-field finishing. A finishing
 // provider owns copied CPU mesh arrays; a failed provider never becomes a raw
 // geometry fallback. Its receipt stays attached to the emitted GLB geometry.
+// bakeMaterial, if given (material-bake.js), bakes the textures in place of the
+// built-in calling-thread bake, e.g. in a worker; its result is checked the same.
 export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,textureSize=1024,
-  WorkerClass,unwrapMesh,provenance={},onPhase=()=>{}}={}){
+  WorkerClass,unwrapMesh,bakeMaterial,provenance={},onPhase=()=>{}}={}){
   validateSurface(mesh,false);
   if(unwrapMesh!==undefined&&typeof unwrapMesh!=='function')throw TypeError('explicit UV provider must be a function');
   if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
+  if(bakeMaterial!==undefined&&typeof bakeMaterial!=='function')throw TypeError('texture bake provider must be a function');
   if(postprocessMesh){
     await onPhase({phase:'post-model-mesh-postprocess'});
     const inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
@@ -319,16 +322,21 @@ export async function finishTrellisMesh(mesh,{postprocessMesh,materialFields,tex
     if(unwrapped.vertices[unwrapped.triangles[i]*3+axis]!==mesh.vertices[mesh.triangles[i]*3+axis])
       throw Error('UV provider changed ordered triangle geometry');
   await onPhase({phase:'post-model-texture-bake'});
-  const textures=bakeTrellisMaterialTextures({...unwrapped,...materialFields,textureSize});
+  const bakeInput={vertices:unwrapped.vertices,triangles:unwrapped.triangles,uvs:unwrapped.uvs,...materialFields,textureSize};
+  const textures=bakeMaterial?await bakeMaterial(bakeInput):bakeTrellisMaterialTextures(bakeInput);
+  if(textures?.width!==textureSize||textures.height!==textureSize||!(textures.baseColor instanceof Uint8Array)||
+    !(textures.metallicRoughness instanceof Uint8Array)||textures.baseColor.length!==textureSize**2*4||
+    textures.metallicRoughness.length!==textureSize**2*4)throw Error('complete baked textures required from the texture bake provider');
   await onPhase({phase:'post-model-pbr-glb'});
   const glb=await encodeTrellisPbrGLB(unwrapped,{textures,provenance});
   return {glb,mesh:unwrapped,textures};
 }
 
 export function createTrellisAssetAdapter({runtime,geometry,material,textureSize=1024,WorkerClass,
-  postprocessMesh,unwrapMesh,provenance={},onPhase=()=>{}}){
+  postprocessMesh,unwrapMesh,bakeMaterial,provenance={},onPhase=()=>{}}){
   if(postprocessMesh!==undefined&&typeof postprocessMesh!=='function')throw TypeError('mesh postprocess provider must be a function');
   if(unwrapMesh!==undefined&&typeof unwrapMesh!=='function')throw TypeError('explicit UV provider must be a function');
+  if(bakeMaterial!==undefined&&typeof bakeMaterial!=='function')throw TypeError('texture bake provider must be a function');
   const a=material?.features,b=material?.coordinates,n=a?.shape?.[0];
   if(!runtime?.readTensor||!a?.buffer||!b?.buffer||a.dtype!=='f32'||b.dtype!=='i32'||!(a.usage&U.storage)||!(b.usage&U.storage)||
     !Number.isSafeInteger(n)||n<1||JSON.stringify(a.shape)!==JSON.stringify([n,6])||JSON.stringify(b.shape)!==JSON.stringify([n,3])||
@@ -344,7 +352,7 @@ export function createTrellisAssetAdapter({runtime,geometry,material,textureSize
         if(mesh.status!=='surface')throw Error('learned geometry has no surface; no asset');
         await enter('post-model-material-readback');const raw=await runtime.readTensor(a),coords=await runtime.readTensor(b);
         if(!(raw instanceof ArrayBuffer)||!(coords instanceof ArrayBuffer)||raw.byteLength!==a.byteLength||coords.byteLength!==b.byteLength)throw Error('complete material readback required');
-        const finished=await finishTrellisMesh(mesh,{postprocessMesh,unwrapMesh,WorkerClass,textureSize,provenance,
+        const finished=await finishTrellisMesh(mesh,{postprocessMesh,unwrapMesh,bakeMaterial,WorkerClass,textureSize,provenance,
           materialFields:{features:new Float32Array(raw),coordinates:new Int32Array(coords),resolution:material.resolution},
           onPhase:e=>enter(e.phase)});
         output={...finished,handoff:{phase:'post-model-asset-consumer',input:'exact borrowed learned decoder tensors; no NPZ or fixture replacement',

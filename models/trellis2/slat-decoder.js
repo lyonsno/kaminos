@@ -85,8 +85,13 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
   }
   if (plan.mode === 'texture' && (!Array.isArray(guideSubdivisions) || guideSubdivisions.length !== plan.subdivisionLevels)) throw TypeError('resident complete learned shape subdivision guide required for texture');
   if (plan.mode === 'shape' && guideSubdivisions !== undefined) throw TypeError('shape uses learned subdivision, not replacement guide');
+  // Snapshot descriptor identity, not tensor bytes. Replay and execution must
+  // refer to the same complete caller-owned guide buffers, including later levels.
+  if (guideSubdivisions) guideSubdivisions = Object.freeze([...guideSubdivisions]);
   const ops = createSLatDecoderKernelOps(runtime), parameters = {};let disposed = false, running = false, state = 'new', output, convNeXtBlocksExecuted = 0;
-  const outputs = {};
+  const outputs = {}, inputs = Object.freeze({ sample: sampleTensor, coordinates: coordinateTensor,
+    ...(guideSubdivisions ? { guideSubdivisions } : {}) });
+  let boundary, failureContext;
   for (const name of ['features', 'coordinates', 'subdivisions']) Object.defineProperty(outputs, name, { enumerable: true, get: () => output?.[name] });
   try {
     for (const [name, shape] of Object.entries(shapes)) {
@@ -99,25 +104,34 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
     const linear = (key, input, to, half, invocation) => ops.linear(input, parameters[key + '.weight'], parameters[key + '.bias'], to, half, invocation),
       conv = (key, input, neighbors, to, invocation) => ops.conv(input, neighbors, parameters[key + '.weight'], parameters[key + '.bias'], to, invocation),
       norm = (key, input, to, half, eps, invocation) => ops.norm(input, parameters[key + '.weight'], parameters[key + '.bias'], to, half, eps, invocation);
-    return Object.freeze({ plan, runtime, routeId: route.routeId, inputs: Object.freeze({ sample: sampleTensor, coordinates: coordinateTensor }), outputs: Object.freeze(outputs),
+    return Object.freeze({ plan, runtime, routeId: route.routeId, inputs, outputs: Object.freeze(outputs),
+      // Resident diagnostic handles only: no copies/readbacks and no replacement
+      // result. A caller must retain bytes before disposing this decoder/route.
+      get failureContext() { return disposed ? undefined : failureContext; },
       async run(invocation) {
         if (disposed) throw Error('learned decoder disposed');if (running) throw Error('learned decoder in use');
         if (state !== 'new') throw Error(state === 'failed' ? 'failed learned decoder is poisoned' : 'single learned decode already completed');
         running = true;state = 'running';
         try {
+          boundary = { operation: 'input-allocation', level: null, rows: plan.tokenRows,
+            resolution: plan.resolution, coordinates: coordinateTensor };
           let rows = plan.tokenRows, resolution = plan.resolution, coordinates = coordinateTensor,
             current = feature('initial-projected', [rows, plan.channels[0]]), neighbors;
           const subdivisions = [], levels = [];
+          boundary.operation = 'input-projection';boundary.features = current;
           await linear('from_latent', sampleTensor, current, true, invocation);
+          boundary.operation = 'input-neighbors';
           neighbors = (!plan.structureOnly || plan.subdivisionLevels) ? await ops.neighbors(coordinates, resolution, invocation) : undefined;
           for (let level = 0; level < plan.channels.length; level++) {
             if (plan.structureOnly && level === plan.subdivisionLevels) break;
+            boundary = { operation: 'level-allocation', level, rows, resolution, coordinates, features: current };
             const channels = plan.channels[level], blocks = plan.numBlocks[level],
               next = blocks ? feature('next-state', [rows, channels]) : undefined,
               normalized = (blocks || level < plan.subdivisionLevels) ? feature('normalized', [rows, channels]) : undefined,
               mlp = blocks ? feature('expanded-mlp', [rows, channels * 4]) : undefined;
             let other = next;
             for (let block = 0; block < blocks; block++) {
+              boundary.operation = 'convnext-block';boundary.block = block;boundary.features = current;
               const key = `blocks.${level}.${block}`;
               await conv(key + '.conv', current, neighbors, other, invocation);
               await norm(key + '.norm', other, normalized, true, 1e-6, invocation);
@@ -128,20 +142,25 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
               [current, other] = [other, current];convNeXtBlocksExecuted++;
             }
             levels.push({ rows, resolution, channels, blocksExecuted: blocks });
-            if (level === plan.subdivisionLevels) { await ops.settle();ops.release(other);ops.release(normalized);ops.release(mlp);break; }
+            if (level === plan.subdivisionLevels) { boundary.operation = 'level-settlement';await ops.settle();ops.release(other);ops.release(normalized);ops.release(mlp);break; }
+            boundary.operation = 'subdivision-logits';boundary.features = current;
             const key = `blocks.${level}.${blocks}`, co = plan.channels[level + 1],
               convolved = feature('pre-subdivision', [rows, co * 8]);
             let logits;
             if (plan.predSubdiv) { logits = ops.allocate('subdivision-logits', [rows, 8]);await linear(key + '.to_subdiv', current, logits, true, invocation); }
             else { logits = guideSubdivisions[level];if (!admitted(logits, [rows, 8], 'f32')) throw TypeError('matching resident shape subdivision rows required'); }
             subdivisions.push(logits);
+            boundary.subdivisionLogits = logits;boundary.operation = 'subdivision-prepare';
             await norm(key + '.norm1', current, normalized, true, 1e-6, invocation);
             await ops.silu(normalized, table, normalized, invocation);
             await conv(key + '.conv1', normalized, neighbors, convolved, invocation);
+            boundary.operation = 'subdivision-count';
             const { count, prefix } = await ops.subdivision(logits, invocation),
               expanded = feature('child-features', [count, co]), skip = feature('child-skip', [count, co]),
               nextCoordinates = ops.allocate('child-coordinates', [count, 3], 'i32');
+            boundary.operation = 'subdivision-scatter';boundary.childCount = count;
             await ops.scatter(coordinates, current, convolved, logits, prefix, nextCoordinates, expanded, skip, invocation);
+            boundary.operation = 'subdivision-refine';
             const nextNeighbors = await ops.neighbors(nextCoordinates, resolution * 2, invocation),
               activated = feature('child-activated', [count, co]), result = feature('child-result', [count, co]);
             await ops.norm(expanded, undefined, undefined, activated, true, 1e-6, invocation);
@@ -153,6 +172,8 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
             current = result;coordinates = nextCoordinates;neighbors = nextNeighbors;rows = count;resolution *= 2;
           }
           let normalized, features;
+          boundary = { operation: 'terminal-projection', level: levels.length - 1,
+            rows, resolution, coordinates, features: current };
           if (!plan.structureOnly) {
             normalized = ops.allocate('terminal-normalized', current.shape);features = ops.allocate('decoded-features', [rows, plan.outChannels]);
             await ops.norm(current, undefined, undefined, normalized, false, 1e-5, invocation);
@@ -168,9 +189,14 @@ function* constructSLatDecoder({ route, config, weights, siluTable, sampleTensor
             convNeXtBlocksExecuted, convolutionsExecuted: ops.convolutionsExecuted, metadataReadbackBytes: ops.metadataReadbackBytes,
             featureBytesToCPUDuringServing: 0, coordinateBytesToCPUDuringServing: 0, arithmetic: plan.arithmetic, activationStorage:plan.activationStorage, resolution, structureOnly: plan.structureOnly });
           state = 'completed';return output;
-        } catch (error) { state = 'failed';output = undefined;throw error; } finally { running = false; }
+        } catch (error) {
+          state = 'failed';output = undefined;
+          failureContext = Object.freeze({ ...boundary, mode: plan.mode, plan, inputs,
+            error: Object.freeze({ name: error?.name ?? 'Error', message: error?.message ?? String(error) }) });
+          throw error;
+        } finally { running = false;boundary = undefined; }
       },
-      dispose() { if (running) throw Error('learned decoder in use');if (disposed) return;disposed = true;ops.dispose(); }
+      dispose() { if (running) throw Error('learned decoder in use');if (disposed) return;disposed = true;failureContext = undefined;ops.dispose(); }
     });
   } catch (error) { ops.dispose();throw error; }
 }

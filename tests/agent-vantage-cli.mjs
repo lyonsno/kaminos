@@ -264,3 +264,18 @@ test('glance asks the page for the sub\'s own view and keeps the picture', async
   assert.deepEqual(received[0].body.args, {pilot: 'bebop', maxSize: 640, annotate: false, map: true});
   assert.ok(readdirSync(out).some(name => name.endsWith('-look-glance.png')));
 });
+
+test('live turns the sub\'s live view on and off', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, {ok: true, id: 'c', command: 'live', page: {id: 'page-a'}, elapsedMs: 1,
+    result: {schema: 'kaminos.agent-vantage.v1', kind: 'live', live: {on: body.args.on, pilot: 'bebop', fps: body.args.fps ?? 4, frames: 0, skipped: 0, drawMs: null}}}]);
+  t.after(() => server.close());
+  const on = await run(['--server', url, 'live', 'on', '--fps', '6']);
+  assert.equal(on.code, 0, on.stderr);
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', on: true, fps: 6});
+  assert.match(on.stdout, /live view on/);
+  const off = await run(['--server', url, 'live', 'off']);
+  assert.equal(off.code, 0, off.stderr);
+  assert.equal(received[1].body.args.on, false);
+  const bad = await run(['--server', url, 'live', 'maybe']);
+  assert.equal(bad.code, 2);
+});

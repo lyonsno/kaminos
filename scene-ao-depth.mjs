@@ -10,6 +10,8 @@ export function configureMaterialSideAODepth(aoPass, { scene, camera, depthRT, d
       scene.overrideMaterial = depthMaterial;
       renderer.setRenderTarget(depthRT);
       renderer.setRenderObjectFunction((...args) => {
+        // Proxy previews are viewport presentation, not scene occlusion.
+        if (args[0]?.userData?.kaminosProxyPreview) return;
         const previousSide = depthMaterial.side;
         depthMaterial.side = args[4].side;
         try {

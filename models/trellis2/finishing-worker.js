@@ -1,6 +1,7 @@
 // One run of a browser finishing step in a module worker, ended by its result
 // or by the caller's Stop. An already-aborted signal starts no worker; Stop
-// terminates the worker and rejects with AbortError.
+// terminates the worker and rejects with AbortError. Messages carrying
+// `progress` go to onProgress and do not end the run.
 export function abortError(signal){
   const reason=signal?.reason;
   return reason?.name==='AbortError'?reason:new DOMException('finishing stopped','AbortError');
@@ -10,7 +11,7 @@ export function admitSignal(signal){
   if(signal!==undefined&&!(signal instanceof AbortSignal))throw TypeError('signal must be an AbortSignal');
 }
 
-export function runFinishingWorker({WorkerClass,url,message,transfer,signal,label}){
+export function runFinishingWorker({WorkerClass,url,message,transfer,signal,label,onProgress}){
   return new Promise((resolve,reject)=>{
     if(signal?.aborted)return reject(abortError(signal));
     const id=Math.random().toString(36).slice(2),worker=new WorkerClass(url,{type:'module'});
@@ -20,6 +21,7 @@ export function runFinishingWorker({WorkerClass,url,message,transfer,signal,labe
     signal?.addEventListener('abort',onAbort,{once:true});
     worker.onmessage=({data})=>{
       if(data?.id!==id)return settle(reject,Error(label+' worker response identity mismatch'));
+      if(Object.hasOwn(data,'progress')){if(!settled)onProgress?.(data.progress);return;}
       if(data.ok!==true)return settle(reject,Error(label+' worker failed: '+data.error));
       settle(resolve,data);
     };

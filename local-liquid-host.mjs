@@ -7,6 +7,7 @@ import {
   KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA as FRAME_SCHEMA,
 } from './finger-fluid-webgpu-core.js';
 import { normalizeLocalLiquidSetup, localLiquidInletPacket } from './local-liquid-setup.mjs';
+import { localLiquidPresentationPlan } from './local-liquid-presentation.mjs';
 
 const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
@@ -68,7 +69,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
-  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false;
+  let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false, presentationMode='full', proxyStepEvery=1;
   const onGpuError=event=>{failure=event.error?.message || 'Host WebGPU error';};
   device.addEventListener('uncapturederror',onGpuError);
   device.lost.then(info=>{if(!disposed)failure=info.message || 'Host WebGPU device lost';});
@@ -106,8 +107,13 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
-      if (advance && !paused) solver.step(1/60);
-      renderEnvironment();
+      const plan=localLiquidPresentationPlan(presentationMode);
+      // Proxy presentation may refresh the sim every Nth frame (opt-in, default
+      // every frame): the step is the solver's own fixed 1/60, so fewer steps
+      // slow the water rather than coarsening it.
+      const stepThisFrame = plan.liquidComposite || proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0;
+      if (advance && !paused && stepThisFrame) solver.step(1/60);
+      if (plan.environment) renderEnvironment();
       // The host color attachment is linear HDR even if another consumer
       // replaced the scene graph since the preceding water frame.
       if(pipeline.outputColorTransform){pipeline.outputColorTransform=false;pipeline.needsUpdate=true;}
@@ -115,6 +121,15 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
+      if (!plan.liquidComposite) {
+        // Proxy presentation: the scene render above already drew any proxy
+        // layer; present it without the depth render or liquid composite.
+        renderer.setRenderTarget(previousTarget); presentation.render();
+        frameCount++;
+        lastFrame={frameId:`local-liquid-${frameCount}`,width,height,presentation:'proxy',route:ROUTE,submittedByHost:true,presentedByHost:true,
+          displayTransform:'host-render-pipeline',simulationTimePolicy:proxyStepEvery>1?`one-fixed-1/60-step-every-${proxyStepEvery}-rendered-frames`:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
+        return;
+      }
       scene.overrideMaterial=depthMaterial; scene.background=null;
       renderer.setRenderObjectFunction((...args)=>{
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
@@ -141,7 +156,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
-      lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,
+      lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,presentation:'full',
         environmentSource:environmentSource.uuid,environmentGeneration,
         route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
         simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
@@ -192,9 +207,16 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       authored=next;
     },
     setPaused(value){paused=Boolean(value);return paused;},
+    // Full is the retained refraction composite; Proxy skips the liquid passes
+    // so a proxy layer in the scene stands in for the water.
+    setPresentation(mode){localLiquidPresentationPlan(mode);presentationMode=mode;return presentationMode;},
+    get presentation(){return presentationMode;},
+    setProxyStepEvery(n){if(!Number.isInteger(n)||n<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=n;return proxyStepEvery;},
+    get proxyStepEvery(){return proxyStepEvery;},
+    interfaceRecordDescriptor:()=>(disposed||failure?null:solver.getInterfaceRecordDescriptor()),
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
-      frameCount,paused,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
+      frameCount,paused,presentation:presentationMode,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
       linearSceneColorInput:pipeline.outputColorTransform===false,lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);

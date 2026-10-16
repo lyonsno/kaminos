@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import {
   SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
@@ -173,3 +175,6 @@ assert.ok(Math.abs(rope[5] - Math.sin(1)) < 1e-6);
 assert.deepEqual(Array.from(rope.slice(16, 24)), [1, 0, 1, 0, 1, 0, 1, 0], 'pointer tail must remain unrotated');
 
 console.log('sam3.1 memory attention phase-program contracts passed');
+const readbackContracts = spawnSync(process.execPath, ['--experimental-vm-modules', fileURLToPath(new URL('./sam31-memory-readback-fixture.mjs', import.meta.url))], { encoding: 'utf8' });
+assert.equal(readbackContracts.status, 0, readbackContracts.stderr || readbackContracts.stdout);
+console.log(readbackContracts.stdout.trim());
