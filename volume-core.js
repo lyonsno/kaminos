@@ -1200,8 +1200,6 @@ function normalizeRuntimeQuality(value) {
   if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
   if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
-  // Viewport Preview: a lighter raymarch with the simulation untouched.
-  if (normalized === 'preview') return 'preview';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
 }
@@ -1216,7 +1214,7 @@ function runtimeQualityEffectiveFromPressure(requested, gpuPressure) {
   return 'live_high';
 }
 
-function applyRuntimeQualityControls(controls = {}) {
+export function applyRuntimeQualityControls(controls = {}) {
   const requested = normalizeRuntimeQuality(controls.runtimeQualityRequested);
   const gpuPressure = clampFinite(controls.gpuPressure, 0, 1, 0);
   const effective = runtimeQualityEffectiveFromPressure(requested, gpuPressure);
@@ -1253,9 +1251,10 @@ function applyRuntimeQualityControls(controls = {}) {
     floor('occupancySkip', 0.45);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
-  } else if (effective === 'preview') {
-    Object.assign(next, applyPreviewQualityCaps(next).controls);
   }
+  // Viewport Preview composes with whichever tier is in effect: it caps the
+  // raymarch only, so the tier's simulation settings stand.
+  if (next.viewportPreview === true) Object.assign(next, applyPreviewQualityCaps(next).controls);
   return next;
 }
 
@@ -1268,6 +1267,7 @@ function runtimeQualityReceipt(controls = {}) {
     identity: 'volume-runtime-quality-ladder-v0',
     requested,
     effective,
+    viewportPreview: controls.viewportPreview === true,
     reason,
     gpuPressure,
     knobs: {

@@ -35,3 +35,22 @@ test('quality is a validated viewport preference with a toolbar toggle', () => {
  assert.match(VIEWPORT_QUALITY_TOGGLE_HTML, /data-quality="preview"/);
  assert.doesNotMatch(VIEWPORT_QUALITY_TOGGLE_HTML, /\bid=/, 'each toolbar gets its own instance');
 });
+
+import {applyRuntimeQualityControls} from '../volume-core.js';
+test('Preview composes with the routed runtime tier and keeps its simulation settings', () => {
+ const authored = {raySteps: 160, renderScale: 1, pressureIterations: 3, pressureStrategy: 'spatial_tiers', adaptiveRays: 0.65};
+ const cases = [
+  {requested: 'auto', gpuPressure: 0.8, tier: 'holdover'},
+  {requested: 'auto', gpuPressure: 0.95, tier: 'impostor'},
+  {requested: 'live_high', gpuPressure: 0, tier: 'live_high'},
+ ];
+ for (const {requested, gpuPressure, tier} of cases) {
+  const full = applyRuntimeQualityControls({...authored, runtimeQualityRequested: requested, gpuPressure});
+  const preview = applyRuntimeQualityControls({...authored, runtimeQualityRequested: requested, gpuPressure, viewportPreview: true});
+  assert.equal(full.runtimeQualityEffective, tier);
+  assert.equal(preview.runtimeQualityEffective, tier, `${tier}: Preview keeps the routed tier`);
+  assert.equal(preview.pressureIterations, full.pressureIterations, `${tier}: Preview does not change pressure iterations`);
+  assert.equal(preview.pressureStrategy, full.pressureStrategy, `${tier}: Preview does not change the pressure strategy`);
+  assert.ok(preview.raySteps <= 12 && preview.renderScale <= 0.5, `${tier}: Preview caps the raymarch`);
+ }
+});

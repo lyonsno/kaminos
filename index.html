@@ -3981,16 +3981,17 @@ function syncViewportDisplayControls() {
 // on the runtime ladder's preview tier (see preview-quality.mjs). Applied
 // when the preference changes; the simulation is not touched.
 let appliedViewportQuality=null;
-function syncViewportQuality() {
+function syncViewportQuality(syncRendererSize) {
  const quality=viewportDisplay.quality;
  if(quality===appliedViewportQuality)return;
  appliedViewportQuality=quality;
  renderer?.setPixelRatio(previewScenePixelRatio(quality,window.devicePixelRatio));
+ syncRendererSize?.();
  if(volumePrototype)volumePrototype.setControls(readVolumeControls());
  window._kaminosDirty?.();
 }
 window.kaminosViewportQualityState=()=>({quality:viewportDisplay.quality,applied:appliedViewportQuality,scenePixelRatio:renderer?.getPixelRatio?.()??null,devicePixelRatio:window.devicePixelRatio,
- volume:volumePrototype?(()=>{const d=volumePrototype.debugState();return {runtimeQualityEffective:d.runtimeQualityEffective??d.controls?.runtimeQualityEffective??null,raySteps:d.controls?.raySteps??null,renderScale:d.controls?.renderScale??null,pressureIterations:d.controls?.pressureIterations??null,canvas:[d.width,d.height],resets:d.fluidStateResetCount};})():null});
+ volume:volumePrototype?(()=>{const d=volumePrototype.debugState();return {runtimeQualityEffective:d.runtimeQualityEffective??d.controls?.runtimeQualityEffective??null,viewportPreview:d.controls?.viewportPreview===true,raySteps:d.controls?.raySteps??null,renderScale:d.controls?.renderScale??null,pressureIterations:d.controls?.pressureIterations??null,pressureStrategy:d.controls?.pressureStrategy??null,canvas:[d.width,d.height],resets:d.fluidStateResetCount};})():null});
 // Wireframe is a view preference over mesh content, applied only around the
 // viewport render (see renderSceneFrame). Like Blender's default it is
 // see-through: dark translucent edges without depth writes, so edge density
@@ -11780,6 +11781,7 @@ async function initScene() {
     hasAoPass: !!aoPass,
     hasAoIntensity: !!aoIntensity,
     rawPipelineActive: false,
+    depthTarget: depthRT ? [depthRT.width, depthRT.height] : null,
     radius: aoPass?.radius?.value ?? null,
     intensity: aoIntensity?.value ?? null,
     scale: aoPass?.scale?.value ?? null,
@@ -11793,15 +11795,22 @@ async function initScene() {
     const w = Math.max(1, vp.clientWidth);
     const h = Math.max(1, vp.clientHeight);
     const currentSize = renderer.getSize(new THREE.Vector2());
-    if (currentSize.x === w && currentSize.y === h) return;
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h);
+    if (currentSize.x !== w || currentSize.y !== h) {
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      needsRender = true;
+      idleFrames = 0;
+      cameraAuthoring?.refresh();
+    }
+    // The AO depth target follows the drawing buffer, which also changes with
+    // the pixel ratio (viewport Preview), not only with the CSS size.
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
-    needsRender = true;
-    idleFrames = 0;
-    cameraAuthoring?.refresh();
+    const depthWidth = Math.round(size.x * aoResScale), depthHeight = Math.round(size.y * aoResScale);
+    if (depthRT.width !== depthWidth || depthRT.height !== depthHeight) {
+      depthRT.setSize(depthWidth, depthHeight);
+      needsRender = true;
+    }
   }
   window.addEventListener('resize', syncViewportRendererSize);
   const viewportResizeObserver = new ResizeObserver(syncViewportRendererSize);
@@ -12146,7 +12155,7 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     // Outside any render: a quality change resizes render targets.
-    syncViewportQuality();
+    syncViewportQuality(syncViewportRendererSize);
     controls.update();
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
@@ -16616,7 +16625,6 @@ function normalizeVolumeRuntimeQuality(value) {
   if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
   if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
-  if (normalized === 'preview') return 'preview';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
 }
@@ -16682,8 +16690,11 @@ function applyVolumeRuntimeQualityLadder(controls) {
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
     changed.push('pressureStrategy', 'pressureIterations');
-  } else if (effective === 'preview') {
-    // Viewport Preview: fewer ray steps and a lower render scale only.
+  }
+  // Viewport Preview composes with whichever tier is in effect: it caps the
+  // raymarch only, so the tier's simulation settings stand.
+  const viewportPreview = next.viewportPreview === true;
+  if (viewportPreview) {
     const preview = applyPreviewQualityCaps(next);
     Object.assign(next, preview.controls);
     changed.push(...preview.changed);
@@ -16692,6 +16703,7 @@ function applyVolumeRuntimeQualityLadder(controls) {
     identity: 'volume-runtime-quality-ladder-v0',
     requested,
     effective,
+    viewportPreview,
     reason: next.runtimeQualityReason,
     gpuPressure,
     changedControls: [...new Set(changed)].sort(),
@@ -19068,7 +19080,8 @@ function readVolumeControls() {
     lifecycleEffect: routedVolumeLifecycleEffect,
     lifecycleT: routedVolumeLifecycleT,
     quenchVapor: routedVolumeQuenchVapor,
-    runtimeQualityRequested: viewportDisplay.quality === 'preview' ? 'preview' : routedVolumeRuntimeQuality,
+    runtimeQualityRequested: routedVolumeRuntimeQuality,
+    viewportPreview: viewportDisplay.quality === 'preview',
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
     pressureIterations: pressureConfig.pressureIterations,

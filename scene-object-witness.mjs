@@ -1063,7 +1063,7 @@ async function runViewportPreviewQualityScenario(ws) {
   const state = () => evaluate(ws, 'window.kaminosViewportQualityState()');
   evidence.frozenStep = await freeze(true);
   await settleViewportFrames(ws, 1200);
-  evidence.full = { state: await state(), display: await displayIdentity(ws) };
+  evidence.full = { state: await state(), display: await displayIdentity(ws), ao: await evaluate(ws, `({ depth: window.kaminosAODebugState?.()?.depthTarget ?? null, scene: (() => { const c = document.getElementById('kaminos-host-renderer-canvas'); return c ? [c.width, c.height] : null; })() })`) };
   const fullShot = await capturePngScreenshot(ws, siblingPngPath('-full'));
   await clickQuality('preview');
   await settleViewportFrames(ws, 1500);
@@ -1071,14 +1071,32 @@ async function runViewportPreviewQualityScenario(ws) {
   const previewShot = await capturePngScreenshot(ws, siblingPngPath('-preview'));
   const f = evidence.full.state, p = evidence.preview.state;
   check(p.quality === 'preview' && p.scenePixelRatio === 1, `Preview did not render the scene at pixel ratio 1: ${JSON.stringify(p)}`);
-  check(p.volume?.runtimeQualityEffective === 'preview' && p.volume.raySteps <= 12 && p.volume.renderScale <= 0.5, `the fire did not take the preview tier: ${JSON.stringify(p.volume)}`);
-  check(p.volume?.pressureIterations === f.volume?.pressureIterations && p.volume?.resets === f.volume?.resets, `Preview changed the simulation: ${JSON.stringify({ full: f.volume, preview: p.volume })}`);
+  check(p.volume?.viewportPreview === true && p.volume.raySteps <= 12 && p.volume.renderScale <= 0.5, `the fire raymarch was not capped in Preview: ${JSON.stringify(p.volume)}`);
+  check(p.volume?.runtimeQualityEffective === f.volume?.runtimeQualityEffective, `Preview replaced the routed runtime tier: ${JSON.stringify({ full: f.volume?.runtimeQualityEffective, preview: p.volume?.runtimeQualityEffective })}`);
+  check(p.volume?.pressureIterations === f.volume?.pressureIterations && p.volume?.pressureStrategy === f.volume?.pressureStrategy && p.volume?.resets === f.volume?.resets, `Preview changed the simulation: ${JSON.stringify({ full: f.volume, preview: p.volume })}`);
+  // The AO depth target follows the scene's drawing buffer in both directions,
+  // including a viewport resize made while in Preview.
+  const aoDepth = () => evaluate(ws, `({ depth: window.kaminosAODebugState?.()?.depthTarget ?? null, scene: (() => { const c = document.getElementById('kaminos-host-renderer-canvas'); return c ? [c.width, c.height] : null; })() })`);
+  const ratio = a => a.depth && a.scene ? [a.depth[0] / a.scene[0], a.depth[1] / a.scene[1]] : null;
+  evidence.aoDepth = { full: evidence.full.ao, preview: await aoDepth() };
+  const fullRatio = ratio(evidence.aoDepth.full), previewRatio = ratio(evidence.aoDepth.preview);
+  check(fullRatio && previewRatio && Math.abs(previewRatio[0] - fullRatio[0]) < 0.01 && Math.abs(previewRatio[1] - fullRatio[1]) < 0.01,
+    `the AO depth target did not follow the Preview scene resolution: ${JSON.stringify(evidence.aoDepth)}`);
+  const metrics = await evaluate(ws, '({ w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio })');
+  await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', { width: metrics.w - 40, height: metrics.h, deviceScaleFactor: metrics.dpr, mobile: false });
+  await settleViewportFrames(ws, 800);
+  evidence.aoDepth.previewResized = await aoDepth();
   await clickQuality('full');
   await settleViewportFrames(ws, 1500);
   evidence.restored = { state: await state(), display: await displayIdentity(ws) };
-  const r = evidence.restored.state;
+  evidence.aoDepth.restored = await aoDepth();
+  const r = evidence.restored.state, restoredRatio = ratio(evidence.aoDepth.restored);
   check(r.quality === 'full' && r.scenePixelRatio === f.scenePixelRatio && r.volume?.raySteps === f.volume?.raySteps && r.volume?.renderScale === f.volume?.renderScale && r.volume?.resets === f.volume?.resets,
     `Full did not restore the live settings: ${JSON.stringify({ full: f, restored: r })}`);
+  check(restoredRatio && Math.abs(restoredRatio[0] - fullRatio[0]) < 0.01 && Math.abs(restoredRatio[1] - fullRatio[1]) < 0.01,
+    `after a resize in Preview, Full kept a stale AO depth target: ${JSON.stringify(evidence.aoDepth)}`);
+  await wsRequest(ws, 'Emulation.clearDeviceMetricsOverride');
+  await settleViewportFrames(ws, 600);
   await freeze(false);
   const windowMs = Number(args.get('--window-ms') || 3000);
   const measure = async quality => {
