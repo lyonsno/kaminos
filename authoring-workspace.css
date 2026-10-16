@@ -298,3 +298,6 @@ body.has-assets-panel #authoring-assets:has(#asset-generate:not([hidden])) #asse
 #authoring-assets .asset-entry span{font-size:11px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:center;}
 #authoring-assets .asset-entry small{font-size:9.5px;}
 #authoring-assets .asset-entry[data-in-scene=true]::after{content:'In scene';position:absolute;top:6px;left:6px;font-size:9px;padding:1px 5px;border-radius:8px;background:rgba(60,110,80,.85);color:#e3f3e8;}
+.viewport-shading { display:flex; border:1px solid #3a3b3f; border-radius:5px; overflow:hidden; }
+.viewport-shading button { border-radius:0 !important; border:0 !important; }
+.viewport-shading button[aria-pressed=true] { color:#eee !important; background:#3d3f44 !important; }

@@ -2842,6 +2842,7 @@ const INTERFACE_RECORD_FLOATS = 20;
 const INTERFACE_RECORD_BYTES = INTERFACE_RECORD_FLOATS * 4;
 const INTERFACE_COUNTER_WORDS = 10;
 const INTERFACE_COUNTER_BYTES = INTERFACE_COUNTER_WORDS * 4;
+export const KAMINOS_FINGER_FLUID_INTERFACE_RECORD_DESCRIPTOR_SCHEMA = 'kaminos.finger-fluid.interface-record-descriptor.v0';
 const LIQUID_FIRE_CONTACT_RECORD_FLOATS = 32;
 const LIQUID_FIRE_CONTACT_RECORD_BYTES = LIQUID_FIRE_CONTACT_RECORD_FLOATS * 4;
 const LIQUID_FIRE_CONTACT_HEADER_WORDS = 20;
@@ -15815,6 +15816,27 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
+  // Read-only access for proxy presentation consumers: the surface records each
+  // step already compacts. Consumers copy them into their own buffers; nothing
+  // here changes solver state, step order or bindings.
+  function getInterfaceRecordDescriptor() {
+    return {
+      schema: KAMINOS_FINGER_FLUID_INTERFACE_RECORD_DESCRIPTOR_SCHEMA,
+      device,
+      recordsBuffer: interfaceRecordsBuffer,
+      countersBuffer: interfaceCountersBuffer,
+      recordFloats: INTERFACE_RECORD_FLOATS,
+      recordBytes: INTERFACE_RECORD_BYTES,
+      counterBytes: INTERFACE_COUNTER_BYTES,
+      activeCountCounterIndex: 0,
+      capacity: safeParticleCount,
+      fields: { positionId: 0, velocityConfidence: 4, normalCurvature: 8, thicknessContactWetnessMaterial: 12, stabilityAgeSource: 16 },
+      visibleParticleRadius: safeVisibleParticleRadius,
+      writeTick: Math.max(0, frameIndex - 1),
+      writeStage: 'compacted-after-velocity-update-each-step',
+    };
+  }
+
   function getParticleOwnershipDescriptor() {
     const supportContact = createFingerFluidSupportContactIdentity(
       movingHillSupportProvider,
@@ -16704,6 +16726,7 @@ export async function createWebGPUFingerFluidSolver({
     setAnalyticCarrierOpticalGeometry,
     clearAnalyticCarrierOpticalGeometry,
     getLiquidFireContactDescriptor,
+    getInterfaceRecordDescriptor,
     setReflectionMeshPhaseForWitness,
     getParticleOwnershipDescriptor,
     getDebugState,

@@ -1,11 +1,13 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import experiment from '../experiments/fire-shadow-sampling.experiment.mjs';
+import * as shadowSettings from '../experiments/fire-shadow-sampling.experiment.mjs';
 import {openExperiment} from '../workbench-experiments.mjs';
 let state={shadowSampling:'fixed',shadowSoftness:1,pointCount:1,shadows:[]},callback,removed=0,disposed=0,redraws=0;
 const win={__kaminosSceneRadiance:{debugState:()=>({...state}),setShadowSampling:value=>state.shadowSampling=value,setShadowSoftness:value=>state.shadowSoftness=value},kaminosSceneGIDebugState:()=>({gain:10})};
 const session={onFrame:fn=>{callback=fn;return()=>removed++;},redraw:()=>redraws++,dispose:async()=>disposed++};
 const records=[];
+assert.equal(typeof shadowSettings.createFireShadowSettings,'function','ordinary Scene Rendering must use the same controller without opening an experiment');
 const result=await experiment.create({host:{controls:{document:{defaultView:win}},scene:{open:async()=>session}},inputs:{sampling:'complementary'},record:value=>records.push(value)});
 assert.equal(result.read().effective,'fixed','state must describe actual runtime before deferred mount');
 callback();assert.equal(result.read().effective,'complementary');assert.equal(removed,1);
@@ -15,6 +17,12 @@ assert.throws(()=>result.operations.setPoints(0),/point count/);records.length=0
 assert.equal(result.operations.setSampling('fixed').effective,'fixed');assert.equal(records.length,1);assert.equal(redraws,1);
 assert.throws(()=>result.operations.setSampling('blur'),/sampling/);assert.equal(result.read().effective,'fixed');
 assert.equal(result.operations.setSoftness(.5).softness,.5);
+assert.equal(typeof result.operations.setShadowComparison,'function');
+assert.throws(()=>result.operations.setShadowComparison({grain:'world'}),/no shadow comparison/);
+win.__kaminosSceneRadiance.setShadowComparison=value=>{state={...state,shadowImplementation:value.implementation,shadowGrain:value.grain,shadowWorldCellSize:value.worldCellSize};};
+assert.equal(result.operations.setShadowComparison({grain:'world'}).shadowComparison.grain,'world');
+assert.equal(result.operations.setShadowComparison({implementation:'legacy'}).shadowComparison.grain,'world','implementation comparison preserves grain choice');
+assert.throws(()=>result.operations.setShadowComparison({worldCellSize:0}),/cell size/);
 win.__kaminosSceneRadiance=null;assert.equal(result.read().available,false);
 assert.throws(()=>result.operations.setSampling('complementary'),/no hybrid/);
 await result.dispose();assert.equal(disposed,1);
