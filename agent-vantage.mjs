@@ -680,10 +680,11 @@ export function installVantageHud({document, viewport}) {
   root.id = 'agent-vantage-hud';
   root.dataset.vantageIgnore = '';
   root.hidden = true;
-  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-live" width="320" height="180" hidden aria-label="What the sub sees, live"></canvas><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><img alt="Latest picture from the agent sub" hidden>';
+  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><canvas class="vantage-live" width="320" height="180" hidden aria-label="What the sub sees, live"></canvas><img alt="Latest picture from the agent sub" hidden>';
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'click', 'dblclick', 'wheel']) root.addEventListener(type, event => event.stopPropagation());
   const mapCanvas = root.querySelector('canvas'), liveCanvas = root.querySelector('.vantage-live'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
-  let dismissed = false, liveFrames = 0;
+  // While the live view runs it stands in for the last picture, which returns when it stops.
+  let dismissed = false, liveFrames = 0, hasPicture = false, liveOn = false;
   const show = () => { root.hidden = dismissed || (mapCanvas.hidden && picture.hidden && liveCanvas.hidden); };
   root.querySelector('button').addEventListener('click', () => { dismissed = true; show(); });
   viewport.append(root);
@@ -702,16 +703,19 @@ export function installVantageHud({document, viewport}) {
     // A new picture simply appears: no flash, nothing that pulls attention.
     shutter({kind, label, image}) {
       picture.src = image.dataUrl;
-      picture.hidden = false;
+      hasPicture = true;
+      picture.hidden = liveOn;
       title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
       show();
     },
     live(frame, ImageData) {
-      if (!frame) { liveCanvas.hidden = true; show(); return; }
+      if (!frame) { liveOn = false; liveCanvas.hidden = true; picture.hidden = !hasPicture; show(); return; }
       if (liveCanvas.width !== frame.width || liveCanvas.height !== frame.height) { liveCanvas.width = frame.width; liveCanvas.height = frame.height; }
       liveCanvas.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
       liveCanvas.dataset.frame = String(++liveFrames);
+      liveOn = true;
       liveCanvas.hidden = false;
+      picture.hidden = true;
       show();
     },
     dispose() { root.remove(); },

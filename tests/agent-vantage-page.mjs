@@ -684,7 +684,7 @@ function installedPage({subs = [], drawnAt = null, water = false, glance = null}
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
     idPass, glance, water: () => water});
   const refresh = intervals.find(item => item.ms === 400).fn;
-  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'),
+  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
     set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
 }
@@ -1473,4 +1473,19 @@ test('a new picture appears in the panel without a flash', async () => {
   const page = installedPage({subs: [BEBOP], glance: {draw: options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})})}});
   await page.vantage.run('glance', {map: false, maxSize: 64});
   assert.ok(!page.classes.includes('flash'));
+});
+
+test('while the live view runs it takes the last picture\'s place, so the panel does not grow', async () => {
+  const frame = options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})});
+  const page = installedPage({subs: [BEBOP], glance: {draw: frame}});
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.equal(page.picture.hidden, false);
+  await page.vantage.run('live', {on: true, fps: 4});
+  page.intervals.find(item => item.ms === 250 && !item.cleared).fn();
+  await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.hidden, false);
+  assert.equal(page.picture.hidden, true, 'the live view stands in for the last picture');
+  await page.vantage.run('live', {on: false});
+  assert.equal(page.live.hidden, true);
+  assert.equal(page.picture.hidden, false, 'and the last picture returns when it stops');
 });
