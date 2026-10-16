@@ -2281,15 +2281,32 @@ def scene_library_import_basin(document, scene_store):
         return {'kind': 'basin', 'presetId': preset_id, 'status': 'present'}
     except FileNotFoundError:
         pass
-    # The consumer store is the observed scenes/basins sibling layout. Copy
-    # only its verified immutable artifact, leaving aliases and source untouched.
-    source_store = Path(scene_store).parent / 'basins'
-    read_volume_settings_preset(source_store, preset_id)
-    source = source_store / 'presets' / f'{preset_id}.json'
-    destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
-    _atomic_write_json(destination, json.loads(source.read_text()))
-    read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
-    return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported'}
+    # Look beside the scene first (the observed scenes/basins consumer layout),
+    # then in this machine's basin library and default preset store, which a
+    # lane server with a private store and no shared library cannot otherwise
+    # see. Copy only the verified immutable artifact, leaving aliases and
+    # source untouched.
+    candidates = [Path(scene_store).parent / 'basins', SHARED_BASIN_STORE_DEFAULT, VOLUME_SETTINGS_STORE_DEFAULT]
+    searched = []
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        source_store = Path(candidate).expanduser()
+        if source_store in searched:
+            continue
+        searched.append(source_store)
+        source = source_store / 'presets' / f'{preset_id}.json'
+        if not source.is_file():
+            continue
+        read_volume_settings_preset(source_store, preset_id)
+        destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
+        _atomic_write_json(destination, json.loads(source.read_text()))
+        read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
+        return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported', 'from': str(source_store)}
+    raise FileNotFoundError(
+        f"volume settings preset not found: {preset_id} (looked in this server's stores and "
+        + ', '.join(str(store) for store in searched) + ')'
+    )
 
 
 def scene_library_stores():
