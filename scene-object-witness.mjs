@@ -1097,6 +1097,52 @@ async function runViewportPreviewQualityScenario(ws) {
   assert.deepEqual(failures, [], `viewport preview checks failed:\n- ${failures.join('\n- ')}`);
 }
 
+// What bounds a Preview frame: arms inside Preview against the Preview
+// baseline, with app CPU ms per frame and the grid/solver identity recorded.
+async function runPreviewBoundScenario(ws) {
+  phase = 'scenario-preview-bound';
+  const evidence = lastEvidence.previewBound = { windows: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
+  evidence.identity = await evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { gridDims: window.__kaminosVolumeGridDimensions ?? null, gridSize: d.gridSize ?? null,
+    pressureSolver: d.pressureSolver ? { solver: d.pressureSolver.solver ?? d.pressureSolver.effective ?? null, iterations: d.pressureSolver.iterations ?? null } : null,
+    pressureIterations: d.controls?.pressureIterations ?? null, pressureIterationRequested: d.pressureIterationRequested ?? null, timeStep: window.__kaminosVolumePrototype.joinedProducerState?.()?.timeStep ?? null,
+    lightField: { requested: d.fireLightFieldRequested ?? null, grid: d.fireLightFieldGrid ?? null, rounds: d.fireLightFieldPropagationRounds ?? null } }; })()`);
+  evidence.display = await displayIdentity(ws);
+  const setAo = on => `(() => { const t = document.getElementById('ao-toggle'); if (t.checked !== ${on}) t.click(); return t.checked; })()`;
+  const base = `(() => { window.kaminosViewportSettings.set({ quality: 'preview', fire: 'full' }); window.__kaminosVolumePrototype.setSimulationPaused(false); window.kaminosFireLightFieldSetShadowsEnabled?.(true); ${setAo(true)}; return true; })()`;
+  const arms = {
+    'preview': 'true',
+    'preview-sim-paused': 'window.__kaminosVolumePrototype.setSimulationPaused(true)',
+    'preview-fire-proxy': `window.kaminosViewportSettings.set({ fire: 'proxy' })`,
+    'preview-ao-off': setAo(false),
+    'preview-fire-shadows-off': 'window.kaminosFireLightFieldSetShadowsEnabled?.(false) ?? null',
+    'preview-fire-proxy-paused-ao-shadows-off': `(window.kaminosViewportSettings.set({ fire: 'proxy' }), window.__kaminosVolumePrototype.setSimulationPaused(true), ${setAo(false)}, window.kaminosFireLightFieldSetShadowsEnabled?.(false))`,
+  };
+  const windowMs = Number(args.get('--window-ms') || 3000);
+  const measure = async name => {
+    await evaluate(ws, base); await evaluate(ws, arms[name]);
+    return evaluate(ws, `(async () => { let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
+      await new Promise(r => setTimeout(r, 1800)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
+      const el = document.getElementById('fps-counter'), cpu = []; const sampler = setInterval(() => { const m = /([0-9.]+)ms app CPU/.exec(el?.textContent || ''); if (m) cpu.push(Number(m[1])); }, 250);
+      const rafs = []; let last = performance.now(), on = true; const raf = t => { if (!on) return; rafs.push(t - last); last = t; requestAnimationFrame(raf); }; requestAnimationFrame(raf);
+      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(); await new Promise(r => setTimeout(r, ${windowMs}));
+      const b = read(), v1 = window.__kaminosVolumePrototype.debugState(), s = (performance.now() - t0) / 1000; stop = true; on = false; clearInterval(sampler);
+      cpu.sort((x, y) => x - y); rafs.sort((x, y) => x - y);
+      return { name: ${JSON.stringify(name)}, appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s,
+        appCpuMsMedian: cpu.length ? cpu[Math.floor(cpu.length / 2)] : null, rafMsMedian: rafs.length ? rafs[Math.floor(rafs.length / 2)] : null, rafCount: rafs.length,
+        rafP90: rafs.length ? rafs[Math.floor(rafs.length * 0.9)] : null, rafOver20ms: rafs.filter(x => x > 20).length, fireTiming: v1.timing ?? null }; })()`, { timeoutMs: windowMs + 30000 });
+  };
+  if (args.get('--arms')) { const keep = new Set(['preview', ...args.get('--arms').split(',')]); for (const k of Object.keys(arms)) if (!keep.has(k)) delete arms[k]; }
+  const names = Object.keys(arms).filter(n => n !== 'preview');
+  for (let round = 0; round < Number(args.get('--rounds') || 2); round++) {
+    for (const name of round % 2 ? [...names].reverse() : names) for (const arm of round % 2 ? [name, 'preview'] : ['preview', name]) evidence.windows.push({ round, ...(await measure(arm)) });
+  }
+  await evaluate(ws, base);
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -6960,6 +7006,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'preview-bound') {
+    await runPreviewBoundScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {
     await runViewportPreviewQualityScenario(ws);
   } else if (scenario === 'fire-slow-motion-probe') {
