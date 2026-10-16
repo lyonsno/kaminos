@@ -21,6 +21,9 @@ node tools/vantage.mjs orbit "Flame source" --azimuth 35 --elevation 18
 node tools/vantage.mjs snap --annotate         # picture plus a labeled copy
 node tools/vantage.mjs burst --count 6 --interval 250   # contact sheet of motion
 node tools/vantage.mjs peek                    # the person's own view, as displayed
+node tools/vantage.mjs glance                  # the sub's view from its own camera; your view is never borrowed
+node tools/vantage.mjs watch --seconds 8 --until cut-complete   # a film strip until a tool says it is done
+node tools/vantage.mjs live on                 # a small live view from the sub in its panel
 ```
 
 `node tools/vantage.mjs --help` lists every command. A target is an object id, a label or a unique part of one, `selection` for whatever is selected in the page, or `X Y Z`. Pictures go to `--out` (default `~/.local/state/kaminos/vantage/<pilot>`), one PNG per image beside one JSON record. `--pilot NAME` gives each agent its own sub. When several tabs on the same server are linked, the most recently focused visible tab answers; `--page ID` (or a unique prefix, from `pages`) chooses one.
@@ -49,6 +52,22 @@ A capture refuses instead of returning the wrong picture when:
 A pictured canvas without a frame counter is listed under `unverifiedLayers`.
 
 A command waits for the page for `--timeout` seconds. If the page never took it, it is withdrawn and will not run later. If the page took it but did not answer, the CLI says its outcome is unknown.
+
+## The sub's own view
+
+`glance`, `watch` and `live` draw the scene from the sub's own camera into their own targets, with the exact matrices of the sub's view, through the page's tone mapping and colour space. The person's view is never borrowed or held, so these can run while someone works. A glance draws the scene's meshes, lights and background. It leaves out the fire volume, local water and ambient occlusion, and says so in `omitted`; `snap` draws every layer. Each glance keeps a pick map with depth, drawn in the same task with the same matrices.
+
+`watch` is a film strip: a glance on each tick of a window (`--seconds`, default 5; `--fps`, default 2; 320 pixels on the long side). Each frame is drawn from wherever the sub is at that moment and keeps its own view, camera, pick map and named objects, so `pick X Y --picture RECORD.json --frame N` works on any frame. Depth is kept only with `--depth`. `--frames` keeps each frame as its own picture beside the contact sheet. Draws never stack. A frame that runs past its tick moves the next frame to the following tick, and the record counts the ticks missed (`missedTicks`). Other vantage commands wait until the watch ends.
+
+`--until EVENT` ends the strip one frame after the page announces `kaminos:EVENT`, so the last frame shows what followed. A tool announces something that happened with:
+
+```js
+window.dispatchEvent(new CustomEvent('kaminos:cut-complete', {detail: {pieces: 2}}));
+```
+
+The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data. Without the event, the strip ends with its window (`ended: "window"`).
+
+`live on` draws a small glance into the sub's panel on a timer (`--fps`, default 4) in place of the last picture, until `live off`. A tick is skipped while the tab is hidden, while a picture holds the camera, or while the previous frame is still being read back. `live off` reports the frames drawn, the ticks skipped and the last draw time.
 
 ## Map and sketch
 
@@ -103,7 +122,7 @@ A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pi
 
 ## Limits
 
-- A picture borrows the viewport, so the person's view switches to the sub for a couple of frames per snap and for the whole duration of a burst.
+- `snap` and `burst` borrow the viewport, so the person's view switches to the sub for a couple of frames per snap and for the whole duration of a burst. `glance`, `watch` and `live` never do, but they leave out the fire volume, local water and ambient occlusion.
 - Pictures use the viewport's resolution and aspect, downscaled to `--max-size` (default 1280 pixels on the long side).
 - "In view" is decided from bounding boxes. Something nearer may hide an object, and helper glyphs such as emitters report their glyph bounds.
 - DOM overlays such as labels and panels are not pictured; canvases are.

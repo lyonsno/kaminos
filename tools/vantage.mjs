@@ -27,6 +27,9 @@ Commands
   glance [--annotate] [--max-size PX] [--no-map] [--name NAME]   the sub's view from its own camera: your view is never
                              borrowed; the scene's meshes, lights and background, without the fire volume, local water or AO
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
+  watch [--seconds S] [--fps N] [--until EVENT] [--frames] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
+                             a film strip from the sub's own camera over S seconds (default 5, 2 fps, 320 px); your view
+                             is never borrowed. --until ends it one frame after the page event kaminos:EVENT
   live on|off [--fps N]      a small live view from the sub's own camera in the operator's sub panel (default 4 fps)
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
@@ -48,13 +51,13 @@ Options
   --page ID        page id or unique prefix (default: the focused visible page)
   --pilot NAME     which sub (default $KAMINOS_VANTAGE_PILOT or ${DEFAULT_PILOT})
   --out DIR        picture directory (default $KAMINOS_VANTAGE_OUT or ~/.local/state/kaminos/vantage/<pilot>)
-  --timeout S      seconds to wait for the page (default 30; bursts add their duration)
+  --timeout S      seconds to wait for the page (default 30; bursts and watches add their duration)
   --json           print the full JSON record instead of a summary`;
 
 const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map', 'now', 'depth']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
   'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
-  'from', 'picture', 'frame', 'fps', 'anchor']);
+  'from', 'picture', 'frame', 'fps', 'anchor', 'seconds', 'until']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -102,6 +105,9 @@ function commandArgs(command, rest, options, pilot) {
     case 'burst': return defined({pilot, count: number(options.count), interval: number(options.interval), settle: number(options.settle),
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
+    case 'watch': return defined({pilot, seconds: number(options.seconds), fps: number(options.fps), until: options.until,
+      maxSize: number(options['max-size']), cell: number(options.cell), frames: options.frames, map: options['no-map'] ? false : undefined,
+      depth: options.depth === true});
     case 'map': return defined({size: number(options.size)});
     case 'live':
       if (rest.length !== 1 || !['on', 'off'].includes(rest[0])) throw new Exit(2, 'live needs on or off');
@@ -127,9 +133,9 @@ function pickArgs(rest, options, pilot) {
   try { record = JSON.parse(readFileSync(options.picture, 'utf8')); }
   catch (error) { throw new Exit(2, `Cannot read the picture record ${options.picture}: ${error.message}`); }
   const result = record.result ?? record, frame = options.frame === undefined ? null : Number(options.frame);
-  if (frame !== null && !(Number.isInteger(frame) && frame >= 1)) throw new Exit(2, '--frame counts burst frames from 1');
-  // A burst keeps a pick map per frame; without --frame, its first frame's.
-  const source = frame !== null ? result.frames?.[frame - 1] : result.kind === 'burst' ? result.frames?.[0] : result;
+  if (frame !== null && !(Number.isInteger(frame) && frame >= 1)) throw new Exit(2, '--frame counts burst and watch frames from 1');
+  // A burst or watch keeps a pick map per frame; without --frame, its first frame's.
+  const source = frame !== null ? result.frames?.[frame - 1] : ['burst', 'watch'].includes(result.kind) ? result.frames?.[0] : result;
   const optics = frame === null ? result.optics : source?.optics;
   if (!optics) throw new Exit(2, frame === null ? `${options.picture} records no camera; take the picture again with this version` : `${options.picture} has no frame ${frame} with a camera`);
   const {width, height} = result.image ?? {};
@@ -299,6 +305,10 @@ function summarize(command, record) {
     if (elsewhere.length) lines.push(`  elsewhere ${elsewhere.map(o => `${o.label} ${fmt(o.distance)} m ${bearing(o.bearing)}`).join(' · ')}`);
     if (result.objects?.occlusion === 'not-tested') lines.push('  (in view means inside the frame by bounds; something nearer may hide it)');
     if (result.frames) lines.push(`  frames    ${result.frames.map(frame => `+${Math.round(frame.atMs)} ms`).join(', ')}`);
+    if (result.kind === 'watch') {
+      lines.push(`  ended     ${result.ended === 'event' ? `one frame after kaminos:${result.event?.name} at +${Math.round(result.event?.atMs)} ms` : `at the end of its ${result.requested?.seconds ?? "?"} s window`}${result.missedTicks ? `; ${result.missedTicks} ticks missed while frames were drawn` : ''}`);
+      if (result.event?.detail != null) lines.push(`  event     ${JSON.stringify(result.event.detail)}`);
+    }
     const maps = result.frames ? result.frames : [result];
     const kept = maps.filter(item => item.pickMap).length, failed = maps.find(item => item.pickMapError), deep = maps.filter(item => item.pickMap?.depth).length;
     lines.push(`  pick map  ${kept === maps.length ? `kept${maps.length > 1 ? ` for all ${maps.length} frames` : ''}${deep === maps.length ? ' with depth' : deep ? `, depth for ${deep}` : ', no depth'}: pick on a pixel with --picture` : `${kept} of ${maps.length}${failed ? `: ${failed.pickMapError}` : ''}`}`);
@@ -340,7 +350,7 @@ async function main(argv) {
   catch (error) { throw new Exit(2, error.message); }
   const timeout = Number(options.timeout ?? 30);
   if (!(timeout > 0)) throw new Exit(2, '--timeout must be a positive number of seconds');
-  const extra = checked.command === 'burst' ? checked.args.count * checked.args.interval / 1000 : 0;
+  const extra = checked.command === 'burst' ? checked.args.count * checked.args.interval / 1000 : checked.command === 'watch' ? checked.args.seconds : 0;
   const body = {command: checked.command, args: checked.args, timeoutMs: Math.round((timeout + extra) * 1000), ...(options.page ? {page: options.page} : {})};
   const sentAt = new Date().toISOString();
   const {status, payload} = await request(server, 'POST', '/api/vantage/command', body);

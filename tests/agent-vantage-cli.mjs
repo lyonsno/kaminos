@@ -310,3 +310,14 @@ test('a pick saved before identities were kept carries none, so its recheck cann
   assert.equal(result.code, 0, result.stderr);
   assert.deepEqual(received[0].body.args, {id: 'beam', path: [0], identity: null}, 'the status wrapper is not an identity');
 });
+
+test('watch asks for a strip over its window and waits that long beyond the usual timeout', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const result = await run(['--server', url, '--out', out, 'watch', '--seconds', '12', '--fps', '3', '--until', 'cut-complete', '--frames']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(received[0].body.command, 'watch');
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', seconds: 12, fps: 3, until: 'cut-complete', maxSize: 320, cell: 240, frames: true, map: true, depth: false});
+  assert.equal(received[0].body.timeoutMs, 42000);
+});
