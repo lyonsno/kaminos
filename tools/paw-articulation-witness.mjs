@@ -42,9 +42,15 @@ try{
  await page.getByRole('button',{name:'Neutral',exact:true}).click();const reset=await read();assert.deepEqual(reset.geometry,neutral.geometry);
  report.casts=[];
  for(let i=1;i<setup.casts.length;i++){
-  await invoke('cast',i);const current=await read();assert.equal(current.cast,i);assert.equal(current.bodies[1].caseSha256,setup.casts[i].candidate.case_sha256);
+  await invoke('cast',i);await invoke('pose',{joint:'hindlimb-left-toe',angle:0});
+  const current=await read();assert.equal(current.cast,i);assert.equal(current.angle,0);assert.equal(current.bodies[1].caseSha256,setup.casts[i].candidate.case_sha256);
   assert.ok(current.geometry.every(a=>a.length>0&&a.every(Number.isFinite)));writeFileSync(join(out,'cast-'+i+'.json'),JSON.stringify(current));
-  await capture('cast-'+i+'-neutral');await invoke('pose',{joint:'hindlimb-left-toe',angle:25});await capture('cast-'+i+'-flex');report.casts.push({cast:i,bodies:current.bodies});
+  await capture('cast-'+i+'-neutral');await invoke('pose',{joint:'hindlimb-left-toe',angle:25});
+  const flex=await read();assert.equal(flex.angle,25);assert.ok(flex.geometry.every(a=>a.every(Number.isFinite)));
+  assert.ok(flex.geometry[1].some((v,k)=>Math.abs(v-current.geometry[1][k])>1e-5),'Flex must differ from this cast neutral');
+  writeFileSync(join(out,'cast-'+i+'-flex.json'),JSON.stringify(flex));await capture('cast-'+i+'-flex');
+  await invoke('pose',{joint:'hindlimb-left-toe',angle:0});const restored=await read();assert.equal(restored.angle,0);assert.deepEqual(restored.geometry,current.geometry);
+  report.casts.push({cast:i,bodies:current.bodies,neutralAngle:current.angle,flexAngle:flex.angle,restoredAngle:restored.angle});
  }
  report.phase='reopen';await page.reload({waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='marionette/paw-articulation');
  assert.deepEqual((await read()).bodies.map(b=>b.bones),[28,32]);await capture('reopened');
