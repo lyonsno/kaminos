@@ -5,6 +5,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 
 const bridgeUrl = new URL('../volume-dense-cue-splat-bridge.mjs', import.meta.url);
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
@@ -122,18 +123,29 @@ assert.deepEqual((await listProfiles()).filter(dir => !profilesBefore.includes(d
 
 // Removing the profile must never replace the bridge's own error: a stub
 // browser leaves an unremovable subdirectory in the profile and never opens
-// a DevTools port, and the report must still carry the DevTools failure.
+// a DevTools port, and the report must still carry the DevTools failure. The
+// bridge is given a port the system just handed out, so it cannot attach to a
+// browser some other process opened on a random port, and a short DevTools
+// wait, so the case does not sit through the full default wait.
+const freePort = await new Promise((resolvePort, rejectPort) => {
+  const server = createServer();
+  server.once('error', rejectPort);
+  server.listen(0, '127.0.0.1', () => { const { port } = server.address(); server.close(() => resolvePort(port)); });
+});
 const stubRecord = join(root, 'stub-user-data-dir.txt');
 const stubBrowser = join(root, 'stub-browser.sh');
 await writeFile(stubBrowser, `#!/bin/sh
-for arg in "$@"; do case "$arg" in --user-data-dir=*) dir="\${arg#--user-data-dir=}";; esac; done
+for arg in "$@"; do case "$arg" in --user-data-dir=*) dir="\${arg#--user-data-dir=}";; --remote-debugging-port=*) port="\${arg#--remote-debugging-port=}";; esac; done
 printf '%s' "$dir" > "$KAMINOS_BRIDGE_STUB_RECORD"
+printf '%s' "$port" > "$KAMINOS_BRIDGE_STUB_RECORD.port"
 mkdir -p "$dir/locked" && : > "$dir/locked/file" && chmod 000 "$dir/locked"
 exit 0
 `, { mode: 0o755 });
 const launchOut = join(root, 'launch-failure-report.json');
-const launch = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', launchOut],
+const launchStarted = Date.now();
+const launch = spawnSync(process.execPath, [bridgeUrl.pathname, '--input', inputPath, '--out', launchOut, '--debug-port', String(freePort), '--devtools-wait-ms', '750'],
   { encoding: 'utf8', env: bridgeEnv({ KAMINOS_CHROME: stubBrowser, KAMINOS_BRIDGE_STUB_RECORD: stubRecord }) });
+const launchMs = Date.now() - launchStarted;
 const stubProfile = await readFile(stubRecord, 'utf8');
 await chmod(join(stubProfile, 'locked'), 0o700);
 await rm(stubProfile, { recursive: true, force: true });
@@ -141,6 +153,9 @@ assert.equal(launch.status, 2, launch.stderr || launch.stdout);
 const launchReport = JSON.parse(await readFile(launchOut, 'utf8'));
 assert.equal(launchReport.failurePhase, 'browser-capture');
 assert.match(launchReport.error, /Chrome DevTools endpoint did not open/, 'the bridge error survives a failed profile removal');
+assert.match(launchReport.error, new RegExp(`port ${freePort} within 750 ms`), 'the DevTools failure names the port and the wait');
+assert.equal(await readFile(`${stubRecord}.port`, 'utf8'), String(freePort), 'the browser is launched on the reserved port');
+assert.ok(launchMs < 8000, `the stub case waits the requested 750 ms, not the default wait; took ${launchMs} ms`);
 assert.ok(stubProfile.startsWith(privateTmp), `the profile is created under the temp root, got ${stubProfile}`);
 assert.match(launch.stderr, /could not remove browser profile/, 'a failed removal is reported with its path');
 

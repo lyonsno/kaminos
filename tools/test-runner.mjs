@@ -20,7 +20,8 @@
 // Warnings never fail a run: what the Python dependency check finds, and any
 // line a test writes beginning `kaminos-test-warning: `, are listed in the
 // report and printed once in the summary. The command line, not runSuite,
-// appends one line per run to a run ledger (see docs/testing.md).
+// appends a start line and a finish line per run to a run ledger (see
+// docs/testing.md), so a run that never finishes still shows.
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -47,7 +48,7 @@ const ENTRY_SEPARATOR = ' | ';
 // starts a line too, as a terminal shows it after progress output.
 export const TEST_WARNING_PREFIX = 'kaminos-test-warning: ';
 const TEST_WARNING_LINE = /(^|[\r\n])kaminos-test-warning: ([^\r\n]*)/g;
-export const RUN_LEDGER_SCHEMA = 'kaminos.test-run-ledger.v1';
+export const RUN_LEDGER_SCHEMA = 'kaminos.test-run-ledger.v2';
 // node:test files run with the spec reporter on stdout for the log and this
 // module's reporter writing structured events beside it. Signatures for such
 // files come from the events, never from the human-readable output.
@@ -230,7 +231,7 @@ function startRemedy(root, python) {
 // nothing else. Whenever the file declares anything they are checked before
 // anything runs, whatever tests are selected, in the runner's python with
 // one importlib.metadata call by distribution name (pillow, not PIL): Node
-// tests spawn python3 too, so a narrowed run must refuse as well. Installed
+// tests spawn python3 too, so a narrowed run is warned as well. Installed
 // means the package metadata is recorded, not that the package imports.
 const DISTRIBUTION_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 const PYTHON_DEPENDENCY_PROBE = [
@@ -776,19 +777,32 @@ async function writeArgumentFailure(argv, error) {
   await fs.writeFile(reportPath, `${JSON.stringify({ schema: REPORT_SCHEMA, ok: false, failurePhase: 'arguments', error: error.message, argv }, null, 2)}\n`);
 }
 
-// The run ledger: one JSON line per command-line run, appended to
-// KAMINOS_RUN_LEDGER, or ~/.local/state/kaminos/test-runs.jsonl by default;
-// KAMINOS_RUN_LEDGER=off turns it off. runSuite never writes it.
+// The run ledger: JSON lines appended to KAMINOS_RUN_LEDGER, or
+// ~/.local/state/kaminos/test-runs.jsonl by default; KAMINOS_RUN_LEDGER=off
+// turns it off. runSuite never writes it. Each command-line run appends a
+// `start` line before it parses its arguments and a `finish` line, with the
+// same runId, when it ends: a start with no finish is a run that was killed
+// or crashed. An argument failure is a finish in the `arguments` phase.
 export function runLedgerPath(env = process.env) {
   if (env.KAMINOS_RUN_LEDGER === 'off') return null;
   if (env.KAMINOS_RUN_LEDGER) return path.resolve(env.KAMINOS_RUN_LEDGER);
   return path.join(os.homedir(), '.local', 'state', 'kaminos', 'test-runs.jsonl');
 }
 
-export function runLedgerEntry({ report, reportPath }, { durationMs }) {
+export function runLedgerStart(argv, { runId, cwd = process.cwd(), pid = process.pid } = {}) {
+  const index = argv.indexOf('--root');
+  const root = path.resolve(cwd, index >= 0 && argv[index + 1] ? argv[index + 1] : '.');
+  let branch = null;
+  try { branch = execFileSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null; } catch {}
+  return { schema: RUN_LEDGER_SCHEMA, event: 'start', runId, timestamp: new Date().toISOString(), root, branch, pid, argv };
+}
+
+export function runLedgerEntry({ report, reportPath }, { durationMs, runId = null }) {
   const effective = report.effective || {};
   return {
     schema: RUN_LEDGER_SCHEMA,
+    event: 'finish',
+    runId,
     timestamp: report.finishedAt || new Date().toISOString(),
     root: effective.root ?? null,
     branch: effective.git?.branch ?? null,
@@ -806,28 +820,42 @@ export function runLedgerEntry({ report, reportPath }, { durationMs }) {
   };
 }
 
-// Appends this run to the ledger; a ledger that cannot be written is a
-// warning on the run, never a failure.
-async function appendRunLedger(result, { durationMs, env = process.env }) {
+// Appends one line to the ledger and returns null, or, when the ledger cannot
+// be written, the warning message: never a failure.
+async function appendLedgerLine(entry, what, env = process.env) {
   const ledger = runLedgerPath(env);
-  if (!ledger) return;
+  if (!ledger) return null;
   try {
     await fs.mkdir(path.dirname(ledger), { recursive: true });
-    await fs.appendFile(ledger, `${JSON.stringify(runLedgerEntry(result, { durationMs }))}\n`);
+    await fs.appendFile(ledger, `${JSON.stringify(entry)}\n`);
+    return null;
   } catch (error) {
-    result.report.warnings ||= [];
-    result.report.warnings.push({ source: 'run-ledger', test: null, message: `could not append this run to ${ledger}: ${firstLine(error?.message || error)}` });
-    try { await fs.writeFile(result.reportPath, `${JSON.stringify(result.report, null, 2)}\n`); } catch {}
+    return `could not append ${what} to ${ledger}: ${firstLine(error?.message || error)}`;
   }
+}
+
+// Appends this run's finish line. A ledger that could not be written is one
+// warning on the report: the finish line's, or else the start line's.
+async function appendRunLedger(result, { durationMs, runId, startWarning = null, env = process.env }) {
+  const failed = await appendLedgerLine(runLedgerEntry(result, { durationMs, runId }), 'this run', env);
+  const messages = [failed || startWarning].filter(Boolean);
+  if (!messages.length) return;
+  result.report.warnings ||= [];
+  for (const message of messages) result.report.warnings.push({ source: 'run-ledger', test: null, message });
+  try { await fs.writeFile(result.reportPath, `${JSON.stringify(result.report, null, 2)}\n`); } catch {}
 }
 
 const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (invokedAsMain) {
   const argv = process.argv.slice(2);
+  const runId = crypto.randomUUID();
+  const startWarning = await appendLedgerLine(runLedgerStart(argv, { runId }), "this run's start");
   let args;
   try { args = parseArgs(argv); } catch (error) {
     console.error(error.message);
+    if (startWarning) console.error(`warning: ${startWarning}`);
     await writeArgumentFailure(argv, error);
+    await appendLedgerLine({ schema: RUN_LEDGER_SCHEMA, event: 'finish', runId, timestamp: new Date().toISOString(), ok: false, failurePhase: 'arguments', error: error.message, argv }, 'this run');
     process.exit(2);
   }
   args.reportPath ||= path.resolve(os.tmpdir(), `kaminos-test-run-${Date.now()}`, 'report.json');
@@ -835,7 +863,7 @@ if (invokedAsMain) {
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const started = Date.now();
   const result = await runSuite({ ...args, abortSignal: controller.signal });
-  await appendRunLedger(result, { durationMs: Date.now() - started });
+  await appendRunLedger(result, { durationMs: Date.now() - started, runId, startWarning });
   console.log(summarize(result));
   process.exit(result.report.failurePhase === 'interrupted' ? 130 : result.ok ? 0 : 1);
 }

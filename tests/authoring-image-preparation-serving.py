@@ -11,9 +11,10 @@ import hashlib,json,io
 try:
     from PIL import Image
 except ModuleNotFoundError:
-    # CI installs Pillow, so a missing one there is a real failure; locally the test steps aside.
+    # CI installs Pillow, so a missing one there is a real failure; locally the test steps aside,
+    # and says so as a runner warning, so the skip reaches the report and the run ledger.
     if os.environ.get('CI'):raise
-    print('SKIP: Pillow is not installed for this python3; CI runs this test');sys.exit(0)
+    print('kaminos-test-warning: Pillow is not installed for this python3, so this test was skipped; CI runs it');sys.exit(0)
 from authoring_image_preparation import prepare
 
 with TemporaryDirectory() as directory:

@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { RUN_LEDGER_SCHEMA } from '../tools/test-runner.mjs';
 import { PASS, fixture, manifestOf, run, readReport, scopedEnv, CLI, cliEnv, stubPython } from './test-runner-fixtures.mjs';
 
 // Warnings: a test reports something worth fixing that should not fail the
@@ -56,7 +57,7 @@ test("a failing test's warning lines stay out of its failure signature, for a pl
 const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
 const ledgerLines = async file => (await fs.readFile(file, 'utf8')).split('\n').filter(Boolean);
 
-test('the command line appends one line per run to the run ledger with what the run did, and names the interpreter on its summary line', async t => {
+test('the command line appends a start line before it runs and a finish line with what the run did, and names the interpreter on its summary line', async t => {
   const f = await fixture(t, { files: { 'a.mjs': "console.log('kaminos-test-warning: first line of a warning');\n", 'b.mjs': PASS },
     manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' }, 'tests/b.mjs': { kind: 'node' } }) });
   assert.equal(git(f.root, 'init', '-q', '-b', 'ledger-branch').status, 0);
@@ -67,9 +68,21 @@ test('the command line appends one line per run to the run ledger with what the 
   const res = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath, '--only', 'tests/a.mjs'], { encoding: 'utf8', env: cliEnv(f) });
   assert.equal(res.status, 0, res.stdout + res.stderr);
   const lines = await ledgerLines(ledger);
-  assert.equal(lines.length, 2, lines.join('\n'));
+  assert.equal(lines.length, 3, lines.join('\n'));
   assert.equal(lines[0], '{"earlier":"run"}');
-  const entry = JSON.parse(lines[1]);
+  const start = JSON.parse(lines[1]);
+  const entry = JSON.parse(lines[2]);
+  assert.equal(start.schema, RUN_LEDGER_SCHEMA);
+  assert.equal(start.event, 'start');
+  assert.equal(start.root, f.root);
+  assert.equal(start.branch, 'ledger-branch');
+  assert.ok(Number.isInteger(start.pid) && start.pid > 0, String(start.pid));
+  assert.deepEqual(start.argv, ['--root', f.root, '--report', f.reportPath, '--only', 'tests/a.mjs']);
+  assert.ok(!Number.isNaN(Date.parse(start.timestamp)), start.timestamp);
+  assert.equal(entry.schema, RUN_LEDGER_SCHEMA);
+  assert.equal(entry.event, 'finish');
+  assert.equal(typeof start.runId, 'string');
+  assert.equal(entry.runId, start.runId, 'the finish line names the run its start line opened');
   assert.ok(!Number.isNaN(Date.parse(entry.timestamp)), entry.timestamp);
   assert.equal(entry.root, f.root);
   assert.equal(entry.branch, 'ledger-branch');
@@ -92,7 +105,7 @@ test('without KAMINOS_RUN_LEDGER the ledger goes under HOME with its directory c
   const first = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { cwd: f.root, encoding: 'utf8', env: cliEnv(f, { KAMINOS_RUN_LEDGER: undefined }) });
   assert.equal(first.status, 0, first.stdout + first.stderr);
   assert.ok(first.stdout.split('\n')[0].endsWith(`; python ${venvPython} (venv)`), first.stdout);
-  const [entry] = await ledgerLines(defaultLedger);
+  const [, entry] = await ledgerLines(defaultLedger);
   assert.equal(JSON.parse(entry).selection, 'full');
   assert.deepEqual(JSON.parse(entry).python, { executable: venvPython, source: 'venv' });
   const off = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { cwd: f.root, encoding: 'utf8', env: cliEnv(f, { KAMINOS_RUN_LEDGER: 'off' }) });
@@ -102,7 +115,7 @@ test('without KAMINOS_RUN_LEDGER the ledger goes under HOME with its directory c
   scopedEnv(t, 'KAMINOS_RUN_LEDGER', undefined);
   scopedEnv(t, 'KAMINOS_PYTHON', undefined);
   assert.equal((await run(f)).ok, true);
-  assert.equal((await ledgerLines(defaultLedger)).length, 1, 'only the first command-line run was recorded');
+  assert.equal((await ledgerLines(defaultLedger)).length, 2, 'only the first command-line run was recorded, as a start and a finish line');
 });
 
 test('a run ledger that cannot be written is a warning, never a failure', async t => {
@@ -120,4 +133,44 @@ test('a run ledger that cannot be written is a warning, never a failure', async 
   const report = await readReport(f);
   assert.equal(report.ok, true);
   assert.equal(report.warnings.filter(w => w.source === 'run-ledger').length, 1);
+});
+
+test('a command line with bad arguments records its start and a finish in the arguments phase, and still exits 2', async t => {
+  const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
+  const ledger = path.join(f.root, 'run-ledger.jsonl');
+  const res = spawnSync(process.execPath, [CLI, '--root', f.root, '--no-such-flag'], { encoding: 'utf8', env: cliEnv(f) });
+  assert.equal(res.status, 2, res.stdout + res.stderr);
+  const [start, finish, ...rest] = (await ledgerLines(ledger)).map(line => JSON.parse(line));
+  assert.deepEqual(rest, []);
+  assert.equal(start.event, 'start');
+  assert.equal(start.root, f.root);
+  assert.equal(finish.event, 'finish');
+  assert.equal(finish.runId, start.runId);
+  assert.equal(finish.ok, false);
+  assert.equal(finish.failurePhase, 'arguments');
+  assert.match(finish.error, /unknown argument --no-such-flag/);
+  assert.deepEqual(finish.argv, ['--root', f.root, '--no-such-flag']);
+});
+
+test('a run killed with SIGKILL leaves its start line and no finish, so the kill is visible rather than silent', async t => {
+  const f = await fixture(t, { files: { 'slow.mjs': "setTimeout(() => {}, 60000);\n" }, manifest: manifestOf({ 'tests/slow.mjs': { kind: 'node' } }) });
+  const ledger = path.join(f.root, 'run-ledger.jsonl');
+  // Its own process group, so the kill takes the runner and its test together.
+  const child = spawn(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f), stdio: 'ignore', detached: true });
+  const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({ code, signal })));
+  t.after(() => { try { process.kill(-child.pid, 'SIGKILL'); } catch {} });
+  const deadline = Date.now() + 20000;
+  let lines = [];
+  while (Date.now() < deadline) {
+    lines = await ledgerLines(ledger).catch(() => []);
+    if (lines.length) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  assert.equal(lines.length, 1, 'the start line is written before the run');
+  process.kill(-child.pid, 'SIGKILL');
+  assert.deepEqual(await exited, { code: null, signal: 'SIGKILL' });
+  const entries = (await ledgerLines(ledger)).map(line => JSON.parse(line));
+  assert.deepEqual(entries.map(e => e.event), ['start']);
+  assert.equal(entries[0].pid, child.pid);
+  assert.equal(entries[0].root, f.root);
 });
