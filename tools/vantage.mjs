@@ -27,6 +27,7 @@ Commands
   glance [--annotate] [--max-size PX] [--no-map] [--name NAME]   the sub's view from its own camera: your view is never
                              borrowed; the scene's meshes, lights and background, without the fire volume, local water or AO
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
+  live on|off [--fps N]      a small live view from the sub's own camera in the operator's sub panel (default 4 fps)
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
   pick X Y [--from sub|operator]      what the renderer draws at a point of the view now; X and Y are fractions from the top left
@@ -51,7 +52,7 @@ Options
 const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map', 'now', 'depth']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
   'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
-  'from', 'picture', 'frame']);
+  'from', 'picture', 'frame', 'fps']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -100,6 +101,9 @@ function commandArgs(command, rest, options, pilot) {
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
     case 'map': return defined({size: number(options.size)});
+    case 'live':
+      if (rest.length !== 1 || !['on', 'off'].includes(rest[0])) throw new Exit(2, 'live needs on or off');
+      return defined({pilot, on: rest[0] === 'on', fps: number(options.fps)});
     case 'sketch': return {};
     case 'pick': return pickArgs(rest, options, pilot);
     default: return {};
@@ -221,6 +225,10 @@ function summarize(command, record) {
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
     lines.push(`  record    ${record.recordPath}`);
     lines.push(`  ${(result.sketch?.objects ?? []).length} objects, ${(result.sketch?.fields ?? []).length} fields, ${(result.sketch?.subs ?? []).length} subs`);
+  } else if (command === 'live') {
+    const live = result.live ?? {};
+    lines.push(live.on ? `live view on: ${live.pilot}, ${live.fps} fps, in the sub panel` : 'live view off');
+    if (Number.isFinite(live.frames)) lines.push(`  ${live.frames} frames drawn, ${live.skipped ?? 0} ticks skipped${Number.isFinite(live.drawMs) ? `, last draw ${live.drawMs.toFixed(1)} ms` : ''}`);
   } else if (command === 'sketch') {
     const list = value => Array.isArray(value) ? value : [];
     lines.push(`${list(result.objects).length} objects, ${list(result.fields).length} fields`);
