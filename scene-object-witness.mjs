@@ -10,6 +10,7 @@ import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
+import { ambientGpuLabel, createGpuUtilizationSampler, windowUtilization } from './gpu-utilization.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -39,6 +40,16 @@ let browserVersion = null;
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+// Frame-rate scenarios sample whole-device GPU utilization for the run: an
+// ambient reading before the browser starts, then each measurement window's
+// share by its wall-clock bounds.
+const GPU_RATE_SCENARIOS = new Set(['viewport-wire-cost', 'preview-cost', 'viewport-preview-quality', 'preview-bound']);
+let gpuSampler = null;
+
+function withGpuWindow(result) {
+  return { ...result, gpu: windowUtilization(gpuSampler, result?.windowEpoch) };
 }
 
 function writeReport(report) {
@@ -915,14 +926,14 @@ async function runViewportWireCostScenario(ws) {
     await new Promise(r => setTimeout(r, 800));
     const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
     const cpu = []; const el = document.getElementById('fps-counter');
-    const a = read(), t0 = performance.now();
+    const a = read(), t0 = performance.now(), e0 = Date.now();
     const sampler = setInterval(() => { const m = /([0-9.]+)ms app CPU/.exec(el?.textContent || ''); if (m) cpu.push(Number(m[1])); }, 250);
     await new Promise(r => setTimeout(r, ${windowMs}));
     clearInterval(sampler); stop = true;
     const b = read(), seconds = (performance.now() - t0) / 1000;
     cpu.sort((x, y) => x - y);
-    return { mode: '${mode}', fps: (b - a) / seconds, cpuMsMedian: cpu.length ? cpu[Math.floor(cpu.length / 2)] : null, lastRender: window.kaminosViewportShadingDebugState()?.lastRender ?? null };
-  })()`, { timeoutMs: windowMs + 30000 });
+    return { mode: '${mode}', fps: (b - a) / seconds, cpuMsMedian: cpu.length ? cpu[Math.floor(cpu.length / 2)] : null, lastRender: window.kaminosViewportShadingDebugState()?.lastRender ?? null, windowEpoch: [e0, Date.now()] };
+  })()`, { timeoutMs: windowMs + 30000 }).then(withGpuWindow);
   for (let round = 0; round < Number(args.get('--rounds') || 3); round++) {
     for (const mode of round % 2 ? ['wireframe', 'solid'] : ['solid', 'wireframe']) evidence.windows.push({ round, ...(await measure(mode)) });
   }
@@ -981,7 +992,7 @@ async function runPreviewCostScenario(ws) {
     return evaluate(ws, `(async () => {
       let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
       await new Promise(r => setTimeout(r, 1800));
-      const v0 = window.__kaminosVolumePrototype.debugState(), app0 = window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0, t0 = performance.now();
+      const v0 = window.__kaminosVolumePrototype.debugState(), app0 = window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0, t0 = performance.now(), e0 = Date.now();
       const gpu = []; let sampling = true;
       (async () => { while (sampling) { const p = await window.kaminosFireLightFieldGpuProfile(); if (typeof p?.renderTimestampMs === 'number' && p.renderTimestampMs > 0) gpu.push(p.renderTimestampMs); await new Promise(r => setTimeout(r, 150)); } })();
       await new Promise(r => setTimeout(r, ${windowMs}));
@@ -992,8 +1003,8 @@ async function runPreviewCostScenario(ws) {
         renderGpuMsMedian: gpu.length ? gpu[Math.floor(gpu.length / 2)] : null, renderGpuSamples: gpu.length,
         presentation: v1.volumePresentationReceipt?.application?.compositionEffective ?? null, giMode: window.kaminosSceneGIDebugState?.()?.effectiveMode ?? null,
         aoIntensity: window.kaminosViewportShadingDebugState?.()?.aoIntensity ?? null, fire: window.kaminosFireProxyDebugState?.()?.display, pacing: v1.proxyPacing ?? null,
-        raySteps: v1.controls?.raySteps ?? null, renderScale: v1.controls?.renderScale ?? null, canvas: [v1.width ?? null, v1.height ?? null] };
-    })()`, { timeoutMs: windowMs + 40000 });
+        raySteps: v1.controls?.raySteps ?? null, renderScale: v1.controls?.renderScale ?? null, canvas: [v1.width ?? null, v1.height ?? null], windowEpoch: [e0, Date.now()] };
+    })()`, { timeoutMs: windowMs + 40000 }).then(withGpuWindow);
   };
   const names = Object.keys(arms).filter(n => n !== 'baseline');
   for (let round = 0; round < Number(args.get('--rounds') || 2); round++) {
@@ -1086,6 +1097,10 @@ async function runViewportPreviewQualityScenario(ws) {
   await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', { width: metrics.w - 40, height: metrics.h, deviceScaleFactor: metrics.dpr, mobile: false });
   await settleViewportFrames(ws, 800);
   evidence.aoDepth.previewResized = await aoDepth();
+  const resizedRatio = ratio(evidence.aoDepth.previewResized);
+  check(evidence.aoDepth.previewResized.scene?.[0] < evidence.aoDepth.preview.scene?.[0], `the viewport resize in Preview did not reach the scene: ${JSON.stringify(evidence.aoDepth)}`);
+  check(resizedRatio && Math.abs(resizedRatio[0] - fullRatio[0]) < 0.01 && Math.abs(resizedRatio[1] - fullRatio[1]) < 0.01,
+    `after a resize in Preview, the AO depth target did not follow the scene: ${JSON.stringify(evidence.aoDepth)}`);
   await clickQuality('full');
   await settleViewportFrames(ws, 1500);
   evidence.restored = { state: await state(), display: await displayIdentity(ws) };
@@ -1103,9 +1118,9 @@ async function runViewportPreviewQualityScenario(ws) {
     await evaluate(ws, `window.kaminosViewportSettings.set({ quality: '${quality}' }); true`);
     return evaluate(ws, `(async () => { let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
       await new Promise(r => setTimeout(r, 1800)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
-      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(); await new Promise(r => setTimeout(r, ${windowMs}));
+      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(), e0 = Date.now(); await new Promise(r => setTimeout(r, ${windowMs}));
       const b = read(), v1 = window.__kaminosVolumePrototype.debugState(), s = (performance.now() - t0) / 1000; stop = true;
-      return { quality: '${quality}', appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s }; })()`, { timeoutMs: windowMs + 30000 });
+      return { quality: '${quality}', appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s, windowEpoch: [e0, Date.now()] }; })()`, { timeoutMs: windowMs + 30000 }).then(withGpuWindow);
   };
   for (let round = 0; round < Number(args.get('--rounds') || 3); round++) {
     for (const quality of round % 2 ? ['preview', 'full'] : ['full', 'preview']) evidence.rates.push({ round, ...(await measure(quality)) });
@@ -1146,12 +1161,12 @@ async function runPreviewBoundScenario(ws) {
       await new Promise(r => setTimeout(r, 1800)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
       const el = document.getElementById('fps-counter'), cpu = []; const sampler = setInterval(() => { const m = /([0-9.]+)ms app CPU/.exec(el?.textContent || ''); if (m) cpu.push(Number(m[1])); }, 250);
       const rafs = []; let last = performance.now(), on = true; const raf = t => { if (!on) return; rafs.push(t - last); last = t; requestAnimationFrame(raf); }; requestAnimationFrame(raf);
-      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(); await new Promise(r => setTimeout(r, ${windowMs}));
+      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(), e0 = Date.now(); await new Promise(r => setTimeout(r, ${windowMs}));
       const b = read(), v1 = window.__kaminosVolumePrototype.debugState(), s = (performance.now() - t0) / 1000; stop = true; on = false; clearInterval(sampler);
       cpu.sort((x, y) => x - y); rafs.sort((x, y) => x - y);
       return { name: ${JSON.stringify(name)}, appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s,
         appCpuMsMedian: cpu.length ? cpu[Math.floor(cpu.length / 2)] : null, rafMsMedian: rafs.length ? rafs[Math.floor(rafs.length / 2)] : null, rafCount: rafs.length,
-        rafP90: rafs.length ? rafs[Math.floor(rafs.length * 0.9)] : null, rafOver20ms: rafs.filter(x => x > 20).length, fireTiming: v1.timing ?? null }; })()`, { timeoutMs: windowMs + 30000 });
+        rafP90: rafs.length ? rafs[Math.floor(rafs.length * 0.9)] : null, rafOver20ms: rafs.filter(x => x > 20).length, fireTiming: v1.timing ?? null, windowEpoch: [e0, Date.now()] }; })()`, { timeoutMs: windowMs + 30000 }).then(withGpuWindow);
   };
   if (args.get('--arms')) { const keep = new Set(['preview', ...args.get('--arms').split(',')]); for (const k of Object.keys(arms)) if (!keep.has(k)) delete arms[k]; }
   const names = Object.keys(arms).filter(n => n !== 'preview');
@@ -6951,6 +6966,16 @@ try {
     throw new Error(`CDP debug port already in use before launch: ${port}`);
   }
 
+  if (GPU_RATE_SCENARIOS.has(scenario) && !args.get('--no-gpu-sampling')) {
+    phase = 'sampling-ambient-gpu';
+    gpuSampler = createGpuUtilizationSampler();
+    gpuSampler.start();
+    const ambientFrom = Date.now();
+    await delay(Number(args.get('--gpu-ambient-ms') || 3000));
+    const ambient = gpuSampler.summarize({ from: ambientFrom, to: Date.now() });
+    lastEvidence.gpuAmbient = { ...ambient, ...ambientGpuLabel(ambient), note: 'whole-device utilization before the witness browser started' };
+  }
+
   phase='validating-browser';
   const [launchWidth, launchHeight] = (args.get('--window') || '1468x960').split('x').map(Number);
   browserLaunch=fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:launchWidth,height:launchHeight});
@@ -7168,4 +7193,5 @@ try {
 } finally {
   try { ws?.close?.(); } catch {}
   chromeProcess?.kill('SIGTERM');
+  await gpuSampler?.stop();
 }
