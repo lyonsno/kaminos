@@ -77,8 +77,13 @@ export function boxSelect(selection,mesh,{projected,visible,rect,through=false,m
 
 // Select Linked (Ctrl+L): everything connected to the current selection.
 export function selectLinkedComponents(selection,mesh,{delimit=0,flags=null,barrier=null}={}) {
-  const seeds=new Set();
-  for(let f=0;f<mesh.faceCount;f++)for(let c=3*f;c<3*f+3;c++)if(selection.vertices[mesh.cornerVertex[c]])seeds.add(f);
+  // In face mode it grows from the selected faces, as Blender's does; growing from their
+  // vertices would leak across a delimit through faces that merely share a corner.
+  const seeds=new Set(),fromFaces=selection.mode==='face'&&selection.faces.some(Boolean);
+  for(let f=0;f<mesh.faceCount;f++){
+    if(fromFaces){if(selection.faces[f])seeds.add(f);continue;}
+    for(let c=3*f;c<3*f+3;c++)if(selection.vertices[mesh.cornerVertex[c]])seeds.add(f);
+  }
   const linked=selectLinkedFaces(mesh,[...seeds],{delimit,flags,barrier});
   const asFaces=flush(mesh,'face',linked);
   return flush(mesh,selection.mode,asFaces[key(selection.mode)],selection.active);

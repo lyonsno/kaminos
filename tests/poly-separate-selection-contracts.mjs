@@ -3,7 +3,7 @@
 // both keep the source material and node placement, and nothing is lost or invented.
 import assert from 'node:assert/strict';
 import {encodeGlb,parseGlb,readTrianglePrimitives} from '../poly-glb-io.mjs';
-import {separateSelection} from '../poly-separate-selection.mjs';
+import {moveOrigin,separateSelection} from '../poly-separate-selection.mjs';
 
 // A strip of two quads (four triangles) placed by a rotating, moving node.
 const positions=new Float32Array([0,0,0, 1,0,0, 2,0,0, 0,1,0, 1,1,0, 2,1,0]),uvs=new Float32Array([0,0, .5,0, 1,0, 0,1, .5,1, 1,1]);
@@ -46,3 +46,22 @@ assert.throws(()=>separateSelection(glb,mask,{geometry:{positions:moved,indices}
 assert.throws(()=>separateSelection(glb,Uint8Array.from([1,0,1])),/covers 3 faces but the GLB has 4/);
 assert.throws(()=>separateSelection(glb,new Uint8Array(4)),/Select faces to separate/);
 assert.throws(()=>separateSelection(glb,Uint8Array.from([1,1,1,1])),/nothing would remain/);
+
+// Origin to Selection: the chosen point becomes the object's origin. The geometry is untouched;
+// the node moves by the opposite of the returned offset, so with the object moved by that offset
+// every vertex stays where it was in the world.
+{
+  const apply=(m,[x,y,z])=>[0,1,2].map(r=>m[r]*x+m[4+r]*y+m[8+r]*z+m[12+r]);
+  const point=[1.5,.5,0],moved=moveOrigin(glb,point,{geometry,source:{sha256:'abc',url:'u'}});
+  assert.deepEqual(moved.offset,apply(matrix,point),'the offset is the chosen point in the object frame');
+  const [after]=readTrianglePrimitives(moved.bytes),node=after.worldMatrices[0];
+  assert.deepEqual(apply(node,point).map(v=>Math.round(v*1e9)/1e9+0),[0,0,0],'the chosen point now sits on the origin');
+  for(let v=0;v<6;v++){
+    const p=[...positions.subarray(3*v,3*v+3)],before=apply(matrix,p),now=apply(node,p).map((x,k)=>x+moved.offset[k]);
+    assert.deepEqual(now.map(x=>Math.round(x*1e9)),before.map(x=>Math.round(x*1e9)),`vertex ${v} does not move`);
+  }
+  assert.deepEqual(corners(after),corners({positions,indices}),'the triangles themselves are unchanged, corner for corner');
+  assert.deepEqual(moved.receipt.operations,[{op:'origin',to:'selection',point}]);
+  assert.throws(()=>moveOrigin(glb,[0,NaN,0]),/finite point/);
+}
+

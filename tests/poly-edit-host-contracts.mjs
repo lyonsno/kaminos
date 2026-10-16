@@ -11,9 +11,10 @@ const document=Object.assign(new EventTarget(),{body,activeElement:body});
 const viewport={contains:()=>false,matches:()=>false,getBoundingClientRect:()=>({left:0,top:0})};
 const canvas={getBoundingClientRect:()=>({left:0,top:0,right:400,bottom:400,width:400,height:400})};
 const helper={visible:true},gizmo={visible:true,enabled:true,getHelper:()=>helper},infos=[];let blocked=false,selected='mesh-1',present=true,separations=0,finishSeparate=null,separateFails=false;
+let origins=0;const origin=()=>{origins++;return Promise.resolve();};
 const slices=[];const slice=plane=>{slices.push(plane);return Promise.resolve();};
 const separate=()=>{separations++;if(separateFails)return Promise.reject(Error('Select faces to separate'));return new Promise(resolve=>{finishSeparate=resolve;});};
-const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate,slice});
+const {active,api}=installPolyEditMode({document,viewport,canvas,camera,objectFor:id=>present&&id==='mesh-1'?object:null,selectedId:()=>selected,setInfo:t=>infos.push(t),blocked:()=>blocked,gizmo,separate,slice,origin});
 const key=(code,init={})=>{
   const event=new Event('keydown',{cancelable:true}),fields={key:code==='Tab'?'Tab':code==='Escape'?'Escape':code.replace(/^(Key|Digit)/,'').toLowerCase(),code,target:body,ctrlKey:false,metaKey:false,altKey:false,shiftKey:false,...init};
   for(const [name,value] of Object.entries(fields))Object.defineProperty(event,name,{value});
@@ -74,6 +75,13 @@ assert.ok(Math.abs(Math.abs(slices[0].normal[1])-1)<1e-6,'along the drawn line: 
 assert.equal(api.read().counts.vertices,8,'the drag was the cut line, not a box selection');
 key('KeyK');key('Escape');drag(0,200,400,200);await new Promise(r=>setTimeout(r));
 assert.equal(slices.length,1,'Escape disarms it; the next drag is a box again');
+key('Tab');
+
+// Shift+S puts the origin on the selection, through the app.
+event=key('KeyS',{shiftKey:true});assert.ok(!event.defaultPrevented,'outside Edit Mode Shift+S is not ours');
+key('Tab');event=key('KeyS',{shiftKey:true});await new Promise(r=>setTimeout(r));
+assert.ok(event.defaultPrevented);assert.equal(origins,1,'Shift+S sets the origin once');
+key('KeyS');assert.equal(origins,1,'plain S is not Origin to Selection');
 key('Tab');
 
 selected=null;key('Tab');assert.equal(active(),false);assert.match(infos.at(-1),/Select a mesh/);

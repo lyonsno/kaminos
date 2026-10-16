@@ -16,14 +16,25 @@ function compact(attribute,width){
   for(let i=0;i<attribute.count;i++)for(let k=0;k<width;k++)out[i*width+k]=attribute[get[k]](i);
   return out;
 }
+// Edges where the material changes: Select Linked stops there, so a cut cap selects on its own.
+function materialBarrier(kernel,faceMaterial){
+  const barrier=new Uint8Array(kernel.edgeCount);
+  for(let e=0;e<kernel.edgeCount;e++){
+    const first=faceMaterial[kernel.edgeCorners[kernel.edgeFaceOffsets[e]]/3|0];
+    for(let i=kernel.edgeFaceOffsets[e]+1;i<kernel.edgeFaceOffsets[e+1];i++)if(faceMaterial[kernel.edgeCorners[i]/3|0]!==first){barrier[e]=1;break;}
+  }
+  return barrier;
+}
 function triangleMeshes(root){const found=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)found.push(o);});return found;}
 // Every primitive of the object edits as one face set, in order, each with its own block of
 // vertices: the same order the GLB side merges primitives in, so face indices agree.
 function mergedArrays(meshes){
+  const materials=[...new Set(meshes.map(m=>m.material))];
   const parts=meshes.map(m=>{const g=m.geometry,count=g.attributes.position.count;return {positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):Uint32Array.from({length:count},(_,i)=>i),count};});
   const join=(key,width)=>parts.every(p=>p[key])?Float32Array.from(parts.flatMap(p=>[...p[key]])):null;
   let base=0;const indices=Uint32Array.from(parts.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.count;return out;}));
-  return {positions:join('positions',3),normals:join('normals',3),uvs:join('uvs',2),indices};
+  const faceMaterial=Uint8Array.from(meshes.flatMap((m,i)=>Array(parts[i].indices.length/3).fill(materials.indexOf(m.material))));
+  return {positions:join('positions',3),normals:join('normals',3),uvs:join('uvs',2),indices,faceMaterial,materialCount:materials.length};
 }
 
 export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
@@ -106,7 +117,7 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
       const materialStates=meshes.flatMap(m=>[m.material].flat()).map(material=>({material,transparent:material.transparent,opacity:material.opacity,depthWrite:material.depthWrite}));
-      edit={object,mesh,objectId,arrays,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
+      edit={object,mesh,objectId,arrays,kernel,barrier:arrays.materialCount>1?materialBarrier(kernel,arrays.faceMaterial):null,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
       rebuildOverlay();return result();
     },
     exit(){
@@ -135,9 +146,9 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
         const component=componentAt(at.x,at.y);if(!component)return result();
         const field={vertex:'vertices',edge:'edges',face:'faces'}[component.kind];
         const seed=edit.selection[field][component.index]?edit.selection:clickComponent(edit.selection,edit.kernel,component,{extend:true});
-        return commit(selectLinkedComponents(seed,edit.kernel));
+        return commit(selectLinkedComponents(seed,edit.kernel,{barrier:edit.barrier}));
       }
-      return commit(selectLinkedComponents(edit.selection,edit.kernel));
+      return commit(selectLinkedComponents(edit.selection,edit.kernel,{barrier:edit.barrier}));
     },
     setThrough(on){need();if(typeof on!=='boolean')throw Error('X-ray must be true or false');edit.through=on;rebuildOverlay();return result();},
     selection:()=>need().selection,
@@ -148,6 +159,13 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const a=localRay(x0,y0),b=localRay(x1,y1),p1=a.origin.clone().add(a.direction),p2=b.origin.clone().add(b.direction);
       const normal=p1.sub(a.origin).cross(p2.sub(a.origin)).normalize();
       return {point:a.origin.toArray(),normal:normal.toArray()};
+    },
+    // Where Origin to Selection puts the pivot: the median of the selected vertices, in the mesh frame.
+    selectionMedian(){
+      const {selection,kernel}=need(),q=kernel.vertexPositions,sum=[0,0,0];let n=0;
+      for(let v=0;v<kernel.vertexCount;v++)if(selection.vertices[v]){for(let k=0;k<3;k++)sum[k]+=q[3*v+k];n++;}
+      if(!n)throw Error('Select something to put the origin on');
+      return sum.map(x=>x/n);
     },
     // What Separate needs: the selected faces, and the triangles they were selected on.
     selectedFaceMask:()=>Uint8Array.from(need().selection.faces),
