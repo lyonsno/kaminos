@@ -169,8 +169,9 @@ test('kernel: the closure fills the deficit of the transported sub band at the f
   assert.match(body, /let highPass = transported - waveletLowPassSample\(foot\);/, 'the sub band is the transported velocity against L1 at the same foot');
   assert.match(body, /let carried = dot\(highPass, detail\) \/ \(dd \* readGain\);/, 'only the component along the pattern is read');
   assert.match(body, /let blend = stepBlend\(clamp\(u\.wavelet_turbulence\.x, 0\.0, 1\.0\)\);/);
-  assert.match(body, /let target = amplitude \* max\(u\.wavelet_turbulence\.z, 0\.0\);/, 'strength multiplies the Kolmogorov amplitude');
-  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* max\(target - carried, 0\.0\) \* detail;/, 'one-sided fill along the pattern; the fold restores the per-step blend');
+  assert.match(body, /let fillTo = amplitude \* max\(u\.wavelet_turbulence\.z, 0\.0\);/, 'strength multiplies the Kolmogorov amplitude');
+  assert.doesNotMatch(body, /\blet (target|set|meta|active|smooth)\b/, 'no WGSL reserved words as locals');
+  assert.match(body, /return blend \/ max\(timeStep, 1e-6\) \* max\(fillTo - carried, 0\.0\) \* detail;/, 'one-sided fill along the pattern; the fold restores the per-step blend');
   assert.match(body, /waveletBlendA\(u32\(u\.wavelet_turbulence\.w\), WAVELET_COHERENCE_PERIOD_STEPS\)/);
   assert.doesNotMatch(body, /readSlot\(/, 'no destination-cell old-field term');
   assert.match(core, /if \(waveletOn\(\)\) \{ vel = vel \+ waveletCorrection\(backCell, velTransported, waveletCoordA, waveletCoordB, timeStep\); \}/);

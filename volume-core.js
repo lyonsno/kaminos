@@ -4069,9 +4069,9 @@ fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>,
   let highPass = transported - waveletLowPassSample(foot);
   let readGain = WAVELET_DETAIL_HIGHPASS_GAIN[octaves - 1u];
   let carried = dot(highPass, detail) / (dd * readGain);
-  let target = amplitude * max(u.wavelet_turbulence.z, 0.0);
+  let fillTo = amplitude * max(u.wavelet_turbulence.z, 0.0);
   let blend = stepBlend(clamp(u.wavelet_turbulence.x, 0.0, 1.0));
-  return blend / max(timeStep, 1e-6) * max(target - carried, 0.0) * detail;
+  return blend / max(timeStep, 1e-6) * max(fillTo - carried, 0.0) * detail;
 }
 
 // Pre-pass 1: L1 for every cell, dispatched before the step while the closure is on.
