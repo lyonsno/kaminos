@@ -1548,6 +1548,37 @@ async function runLocalLiquidPerformanceScenario(ws) {
   await evaluate(ws,`document.getElementById('local-liquid-performance').scrollIntoView({block:'center'})`);
 }
 
+async function runAuthoredWaterPreviewScenario(ws) {
+  phase='authored-water-initial-preview';
+  lastEvidence.waterPreview=await evaluate(ws,`(async()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    for(let i=0;i<240&&!window.kaminosWaterSources;i++)await wait(125);
+    const api=window.kaminosWaterSources;if(!api)throw Error('Water source API missing');
+    document.getElementById('scene-add-menu-trigger').click();document.querySelector('[data-scene-add="water-emitter"]').click();
+    for(let i=0;i<240&&!api.read().selected;i++)await wait(125);
+    const first=api.read();if(!first.selected||first.runtime)throw Error('Add must start with unallocated particles');
+    if(first.selected.initialPreview?.kind!=='initial_particles'||!first.selected.initialPreview.visible)throw Error('Actual initial particle rendering is missing');
+    const fields=document.getElementById('water-source-property-slot'),width=fields.querySelector('[data-width]'),samples=fields.querySelector('[data-samples]');
+    if(fields.querySelector('[data-apply]')||document.querySelector('[data-simulation-apply]'))throw Error('Water properties still require Apply');
+    samples.value='12';samples.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&api.read().selected.initialPreview.particleCount!==1728;i++)await wait(50);
+    if(api.read().selected.initialPreview.particleCount!==1728)throw Error('Input did not automatically rebuild all initial particles');
+    const accepted=structuredClone(api.read().selected);
+    width.value='0';width.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&!fields.querySelector('[data-source-error]').textContent;i++)await wait(50);
+    if(!fields.querySelector('[data-source-error]').textContent||api.read().selected.settings.drop.width!==accepted.settings.drop.width)throw Error('Invalid draft changed the accepted source');
+    width.value='.6';width.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&api.read().selected.settings.drop.width!==.6;i++)await wait(50);
+    const edited=api.read();if(edited.selected.settings.drop.width!==.6||edited.selected.initialPreview.particleCount!==1728||fields.querySelector('[data-source-error]').textContent)throw Error('Automatic edit did not recover');
+    await window.kaminosSceneEdits.undo();
+    if(api.read().selected.settings.drop.width!==accepted.settings.drop.width)throw Error('Automatic edit did not enter ordinary Undo');
+    await window.kaminosSceneEdits.redo();if(api.read().selected.settings.drop.width!==.6)throw Error('Redo did not restore edited preview');
+    window.kaminosSetCameraDebugPose({position:[1.4,1.8,1.5],target:[0,1,0]});window.selectSceneObject(first.selected.id);window.kaminosFrameSelected();
+    const final=api.read();if(final.runtime)throw Error('Preview allocated or stepped water');
+    return {first,accepted,edited,final,source:await(await fetch('/api/runtime-config')).json()};
+  })()`,{timeoutMs:60000});
+}
+
 async function runAuthoredWaterDropScenario(ws) {
   phase='authored-water-ordinary-add';
   lastEvidence.authoredWater=await evaluate(ws,`(async()=>{
@@ -1566,17 +1597,17 @@ async function runAuthoredWaterDropScenario(ws) {
     window.kaminosSetSceneObjectTransform(id,{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]});
     const width=fields.querySelector('[data-width]'),samples=fields.querySelector('[data-samples]');
     width.value='.6';width.dispatchEvent(new Event('input',{bubbles:true}));samples.value='24';samples.dispatchEvent(new Event('input',{bubbles:true}));
-    await fields.querySelector('[data-apply]').onclick();
+    await new Promise(r=>setTimeout(r,400));
     const current=window.kaminosWaterSources.read();if(current.selected.settings.drop.width!==.6)throw Error('Source property edit was not applied');
     if(current.runtime)throw Error('Editing the initial preview allocated a solver');
     const mode=fields.querySelector('[data-mode]');mode.value='continuous';mode.onchange();
     if(fields.querySelector('[data-flow]').hidden)throw Error('Continuous source properties did not appear');
-    mode.value='finite_drop';mode.onchange();await fields.querySelector('[data-apply]').onclick();
+    mode.value='finite_drop';mode.onchange();await new Promise(r=>setTimeout(r,400));
     window.kaminosWaterSources.selectSimulation();
     if(document.getElementById('selected-water-simulation-properties').hidden)throw Error('Water simulation selection has no properties');
     const simulationFields=document.getElementById('water-simulation-property-slot');
     if(!simulationFields?.querySelector('[data-passes]')||!document.getElementById('authoring-inspector').contains(simulationFields))throw Error('Editable simulation settings are missing from right inspector');
-    simulationFields.querySelector('[data-passes]').value='2';simulationFields.querySelector('[data-passes]').dispatchEvent(new Event('input',{bubbles:true}));await simulationFields.querySelector('[data-simulation-apply]').onclick();
+    simulationFields.querySelector('[data-passes]').value='2';simulationFields.querySelector('[data-passes]').dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));
     if(window.kaminosWaterSources.read().simulation.settings.densityIterations!==2)throw Error('Right simulation Apply did not edit accepted passes');
     window.selectSceneObject(id);window.kaminosFrameSelected();
     const before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
@@ -1589,14 +1620,14 @@ async function runAuthoredWaterDropScenario(ws) {
       window.__kaminosSetActiveTab('assets');
       if(${JSON.stringify(context)}==='authoring')document.querySelector('[data-workspace-mode="authoring"]').click();
       const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]'),before=window.kaminosWaterSources.read().selected.settings;
-      bound.value='4';bound.dispatchEvent(new Event('input',{bubbles:true}));await fields.querySelector('[data-apply]').onclick();
+      bound.value='4';bound.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));
       const alert=fields.querySelector('[data-source-error]');
       if(!alert?.textContent.includes('positive extents')||!alert.getClientRects().length)throw Error('Source rejection explanation is not visible beside properties');
       if(JSON.stringify(window.kaminosWaterSources.read().selected.settings)!==JSON.stringify(before))throw Error('Rejected source changed accepted settings');
       alert.scrollIntoView({block:'center'});return {context:${JSON.stringify(context)},error:alert.textContent,visible:true,accepted:before};
     })()`);lastEvidence.authoredWater.rejections.push(rejection);
     await capturePngScreenshot(ws,siblingPngPath('-error-'+context));
-    await evaluate(ws,`(async()=>{const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]');bound.value='-1';bound.dispatchEvent(new Event('input',{bubbles:true}));await fields.querySelector('[data-apply]').onclick();if(fields.querySelector('[data-source-error]').textContent)throw Error('Valid source Apply did not clear rejection');})()`);
+    await evaluate(ws,`(async()=>{const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]');bound.value='-1';bound.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));if(fields.querySelector('[data-source-error]').textContent)throw Error('Valid source Apply did not clear rejection');})()`);
   }
   await evaluate(ws,`window.kaminosWaterSources.selectSimulation()`);
   await capturePngScreenshot(ws,siblingPngPath('-simulation'));
@@ -6128,10 +6159,12 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  if(['authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
+  if(['authored-water-preview','authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
   else assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'startup-empty') {
+  if (scenario === 'authored-water-preview') {
+    await runAuthoredWaterPreviewScenario(ws);
+  } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);

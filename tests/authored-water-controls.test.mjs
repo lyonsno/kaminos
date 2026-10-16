@@ -11,14 +11,14 @@ function fixture({sourceRoot=null,simulationRoot=null}={}){
  const source=(id,width)=>({id,label:id,settings:{mode:'finite_drop',rate:1200,baseRadius:.08,strength:1.15,drop:{width,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}});
  let selected=source('A',.5),runtime=null,hold=null;const edits=[];
  const api={read:()=>({selected,runtime}),edit:(id,settings)=>{edits.push({id,settings});return hold??Promise.resolve();},add(){},release(){},pause(){}};
- const controls=mountAuthoredWaterControls({document,root:{prepend(){}},sourceRoot,simulationRoot,controls:{installNumberDrag:()=>({stop(){}})},api});
+ const controls=mountAuthoredWaterControls({schedule:()=>1,cancel(){},document,root:{prepend(){}},sourceRoot,simulationRoot,controls:{installNumberDrag:()=>({stop(){}})},api});
  return {controls,input,edits,api,select(id,width){selected=source(id,width);controls.refresh();},draftWidth(width){input('[data-width]').value=width;input('[data-width]').listeners.input();},setRuntime(value){runtime=value;},hold(p){hold=p;}};
 }
 {
- const f=fixture();f.draftWidth(.75);f.select('B',1);assert.equal(Number(f.input('[data-width]').value),1,'Source B must not inherit source A pending amount');await f.input('[data-apply]').onclick();assert.equal(f.edits[0].id,'B');assert.equal(f.edits[0].settings.drop.width,1);
+ const f=fixture();f.draftWidth(.75);f.select('B',1);assert.equal(Number(f.input('[data-width]').value),1,'Source B must not inherit source A pending amount');f.draftWidth(1.25);await f.controls.flush();assert.equal(f.edits[0].id,'B');assert.equal(f.edits[0].settings.drop.width,1.25);
 }
 {
- const f=fixture();let complete;f.hold(new Promise(r=>complete=r));f.draftWidth(.75);const pending=f.input('[data-apply]').onclick();f.select('B',1);f.draftWidth(1.25);complete();await pending;assert.equal(Number(f.input('[data-width]').value),1.25,'Old action completion must preserve a newer source draft');
+ const f=fixture();let complete;f.hold(new Promise(r=>complete=r));f.draftWidth(.75);const pending=f.controls.flush();f.select('B',1);f.draftWidth(1.25);complete();await pending;assert.equal(Number(f.input('[data-width]').value),1.25,'Old action completion must preserve a newer source draft');
  f.setRuntime({paused:true,step:12,particleCount:4096});f.controls.refreshStatus();assert.match(f.input('[data-state]').textContent,/tick 12/);assert.equal(Number(f.input('[data-width]').value),1.25,'Clock refresh must not rewrite draft');
 }
 console.log('Source drafts retain identity and current playback status does not overwrite pending edits');
@@ -89,19 +89,19 @@ for(const applied of ['finite_drop','continuous'])for(const action of ['pause','
  const original=f.api.read;f.api.read=()=>{const s=original();return {...s,selected:{...s.selected,settings:{...s.selected.settings,mode:applied}}};};f.controls.refresh();
  f.input('[data-mode]').value=pending;f.input('[data-mode]').onchange();f.draftWidth(.75);
  const check=()=>{assert.equal(f.input('[data-mode]').value,pending);assert.equal(f.input('[data-drop]').hidden,pending!=='finite_drop','Visible fields must follow the retained pending mode');assert.equal(f.input('[data-flow]').hidden,pending!=='continuous');assert.equal(Number(f.input('[data-width]').value),.75);};
- check();await f.input('[data-'+action+']').onclick();check();
+ check();await f.input('[data-'+action+']').onclick();if(action==='pause')check();else {assert.equal(f.edits.at(-1).settings.mode,pending);assert.equal(f.edits.at(-1).settings.drop.width,.75);}
 }
 
 {
  const children=[],f=fixture({simulationRoot:{append(node){children.push(node);}}});
  assert.ok(children.includes(f.input('[data-simulation]')),'Selected simulation properties own the live editable settings, not just a link to the left tool');
  let passes=2;const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,selected:true,settings:{densityIterations:passes}}});f.api.editSimulation=patch=>{passes=patch.densityIterations;};f.controls.refresh();
- assert.equal(Number(f.input('[data-passes]').value),2);f.input('[data-passes]').value=5;f.input('[data-passes]').listeners.input();await f.input('[data-simulation-apply]').onclick();assert.equal(passes,5);f.controls.refresh();assert.equal(Number(f.input('[data-passes]').value),5);
+ assert.equal(Number(f.input('[data-passes]').value),2);f.input('[data-passes]').value=5;f.input('[data-passes]').listeners.input();await f.controls.flush();assert.equal(passes,5);f.controls.refresh();assert.equal(Number(f.input('[data-passes]').value),5);
 }
 
 {
  const f=fixture();f.hold(Promise.reject(Error('Drop world bounds must have positive extents')));
- await f.input('[data-apply]').onclick();assert.match(f.input('[data-source-error]').textContent??'',/positive extents/,'Rejected source Apply must explain failure beside source properties when Fluid is hidden');
- f.hold(null);await f.input('[data-apply]').onclick();assert.equal(f.input('[data-source-error]').textContent,'','A valid source Apply clears source feedback');
+ f.draftWidth(.75);await f.controls.flush();assert.match(f.input('[data-source-error]').textContent??'',/positive extents/,'Rejected source Apply must explain failure beside source properties when Fluid is hidden');
+ f.hold(null);await f.controls.flush();assert.equal(f.input('[data-source-error]').textContent,'','A valid source Apply clears source feedback');
  f.api.release=()=>{throw Error('Release failed');};await f.input('[data-release]').onclick();assert.equal(f.input('[data-run-error]').textContent,'Release failed','Run rejection stays with left playback actions');
 }
