@@ -1,8 +1,9 @@
 <!doctype html><meta charset="utf-8"><title>GPU Scene Solid Conformance</title>
 <script type="module">
-import * as THREE from '../lib/three.core.js';
+import * as THREE from '../lib/three.webgpu.js';
 import {createGpuSceneSolidProducer} from '../scene-solid-gpu.mjs';
 import {createSceneSolidGeometryCache} from '../volume-scene-solid.mjs';
+import {createGpuCollisionVoxelMesh} from '../scene-collision-debug.mjs';
 window.runSolidConformance=async()=>{
  const adapter=await navigator.gpu.requestAdapter();if(!adapter)throw Error('No WebGPU adapter');
  const device=await adapter.requestDevice(),errors=[];device.addEventListener('uncapturederror',e=>errors.push(e.error.message));
@@ -27,8 +28,37 @@ window.runSolidConformance=async()=>{
    }
    gpu.destroy();
   }
-  await device.queue.onSubmittedWorkDone();if(errors.length)throw Error(errors.join('\n'));
-  return {backend:'WebGPU',adapter:adapter.info,results,errors};
+  const gpu=createGpuSceneSolidProducer(device,{grid:16,gridHeight:16});
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(.7,.7,.7)),transform={translate:[0,0,0],scale:1};
+  const submit=()=>{const e=device.createCommandEncoder();gpu.encode(e);device.queue.submit([e.finish()]);};
+  async function installedCount(){
+   const b=device.createBuffer({size:256*16*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+   try{const e=device.createCommandEncoder();e.copyTextureToBuffer({texture:gpu.texture},{buffer:b,bytesPerRow:256,rowsPerImage:16},[16,16,16]);device.queue.submit([e.finish()]);await b.mapAsync(GPUMapMode.READ);
+    const a=new Uint32Array(b.getMappedRange());let count=0;for(let z=0;z<16;z++)for(let y=0;y<16;y++)for(let x=0;x<16;x++)count+=a[x+64*(y+16*z)]!==0;return count;
+   }finally{b.unmap();b.destroy();}
+  }
+  const negatives=[];
+  mesh.position.x=4;gpu.update([{id:'box',object:mesh}],transform);submit();
+  let sampled=await gpu.snapshot();negatives.push({name:'outside-volume',valid:sampled.valid,counts:sampled.counts,installedCount:await installedCount()});
+  mesh.position.x=0;gpu.update([{id:'box',object:mesh}],transform);submit();sampled=await gpu.snapshot();
+  gpu.setSourceSupport(Uint32Array.from(sampled.cells));submit();sampled=await gpu.snapshot();
+  negatives.push({name:'occluded-source',valid:sampled.valid,counts:sampled.counts,installedCount:await installedCount()});
+  gpu.setSourceSupport(new Uint32Array(16**3));submit();
+  const canvas=document.createElement('canvas');canvas.width=384;canvas.height=384;document.body.append(canvas);
+  const renderer=new THREE.WebGPURenderer({canvas,device,antialias:false});await renderer.init();renderer.setSize(384,384);
+  const scene=new THREE.Scene();scene.background=new THREE.Color(.015,.02,.025);
+  const camera=new THREE.PerspectiveCamera(45,1,.01,10);camera.position.set(1.8,1.4,2);camera.lookAt(0,0,0);
+  const makeOverlay=()=>createGpuCollisionVoxelMesh(THREE,renderer,{texture:gpu.texture,dimensions:[16,16,16],transform});
+  const release=o=>{scene.remove(o);o.userData.disposeGpuSolid();o.geometry.dispose();o.material.dispose();};
+  let overlay=makeOverlay();scene.add(overlay);await renderer.renderAsync(scene,camera);
+  mesh.position.x=.3;gpu.update([{id:'box',object:mesh}],transform);submit();await renderer.renderAsync(scene,camera);
+  release(overlay);overlay=makeOverlay();scene.add(overlay);await renderer.renderAsync(scene,camera);
+  await device.queue.onSubmittedWorkDone();
+  const overlayCount=(await gpu.snapshot()).cells.reduce((a,b)=>a+b,0);
+  // Leave the inspected frame painted, then release only owned GPU resources.
+  release(overlay);renderer.dispose();gpu.destroy();
+  if(errors.length)throw Error(errors.join('\n'));
+  return {backend:'WebGPU',adapter:adapter.info,results,negatives,overlay:{rendered:true,solidCells:overlayCount,lifecycle:['enabled','moved','disabled','recreated']},errors};
  }finally{device.destroy();}
 };
 window.fixtureLoaded=true;

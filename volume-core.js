@@ -13247,7 +13247,7 @@ export function createKaminosVolumePrototype({
         sceneSolidGpu.encode(encoder);device.queue.submit([encoder.finish()]);
         sceneSolidRevisionKey=maskKey;
         state.sceneSolidGeometryBuilds=(state.sceneSolidGeometryBuilds||0)+geometry.builds;
-        state.sceneCollision={requested:true,effective:'mesh-voxel-solid',backend:'gpu',sourceId,reason:null,
+        state.sceneCollision={requested:true,effective:'submitted-unverified',backend:'gpu',sourceId,reason:null,
           geometryRevision:geometry.revision,grid:gridSize,triangleCount:geometry.triangleCount,members:geometry.members,
           solidCellCount:null,blockedFaceCount:null,surfaceCellCount:null,interiorCellCount:null,
           sourceSupport:null,validation:'gpu-resident-unread',emitterBackWallCells:backWall.cells.length,
@@ -17480,7 +17480,10 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyFrame = state.frameCount;
     // The full grid shape (grid × gridHeight × grid), snapshotted with the copy (IS-06).
     pressureResidualCopyCells = gridSize * gridHeight * gridSize;
-    pressureResidualCopyFluidCells = pressureResidualCopyCells - (state.sceneCollision?.solidCellCount ?? 0);
+    const solidCount=state.sceneCollision?.solidCellCount;
+    // The resident GPU validator has no generation-linked population readback in this probe.
+    pressureResidualCopyFluidCells = state.sceneCollision?.backend!=='gpu'&&Number.isInteger(solidCount)
+      ? pressureResidualCopyCells-solidCount : null;
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
     pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease, state.immersedSource);
   }
@@ -17532,8 +17535,8 @@ export function createKaminosVolumePrototype({
           maxAfter = Math.max(maxAfter, partials[at + 3]);
         }
         return {
-          before: { meanAbs: sumBefore / Math.max(1, fluidCells), maxAbs: maxBefore },
-          after: { meanAbs: sumAfter / Math.max(1, fluidCells), maxAbs: maxAfter },
+          before: { meanAbs: fluidCells===null?null:sumBefore / Math.max(1, fluidCells), sumAbs:sumBefore, maxAbs: maxBefore },
+          after: { meanAbs: fluidCells===null?null:sumAfter / Math.max(1, fluidCells), sumAbs:sumAfter, maxAbs: maxAfter },
           meanReduction: sumAfter > 0 ? sumBefore / sumAfter : null,
         };
       };
@@ -17559,7 +17562,8 @@ export function createKaminosVolumePrototype({
         grid,
         cells,
         fluidCells,
-        solidCells: cells - fluidCells,
+        solidCells: fluidCells===null?null:cells - fluidCells,
+        populationAuthority:fluidCells===null?'unavailable-resident-gpu-population':'copy-time-cpu-mask',
         workgroups: workgroupCount,
         solver,
         // compact: backward divergence the converged solve targets; wide: the
@@ -17570,7 +17574,7 @@ export function createKaminosVolumePrototype({
         blockedFaceFlux: { sumAbs: blockedFaceAbsSum, maxAbs: blockedFaceMaxAbs },
         vorticity: {
           identity: 'enstrophy-before-projection-v0',
-          enstrophyMean: enstrophySum / Math.max(1, fluidCells),
+          enstrophyMean: fluidCells===null?null:enstrophySum / Math.max(1, fluidCells),
           enstrophySum,
           maxAbs: vorticityPeak,
         },
@@ -27245,6 +27249,7 @@ export function createKaminosVolumePrototype({
       const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,
         members:state.sceneCollision.members.map(m=>({...m,...snapshot.members.find(s=>s.id===m.id)})),
         effective:snapshot.valid?'mesh-voxel-solid':'off',reason:snapshot.valid?null:snapshot.counts[0]===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support',validation:'explicit-gpu-snapshot'};
+      state.sceneCollision=runtime;
       return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {

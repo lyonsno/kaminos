@@ -14,7 +14,7 @@ try{
  const page=await browser.newPage();page.setDefaultTimeout(0);page.on('pageerror',e=>report.errors.push(String(e)));
  page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
  report.phase='load';await save();await page.goto(origin+'/tools/scene-solid-gpu-fixture.html');await page.waitForFunction(()=>window.fixtureLoaded);
- report.sources=[];for(const name of ['scene-solid-gpu.mjs','volume-scene-solid.mjs','tools/scene-solid-gpu-fixture.html']){
+ report.sources=[];for(const name of ['scene-solid-gpu.mjs','volume-scene-solid.mjs','scene-collision-debug.mjs','lib/three.webgpu.js','tools/scene-solid-gpu-fixture.html']){
   const actual=await(await page.request.get(origin+'/'+name)).body(),expected=await fs.readFile(path.join(report.repoRoot,name));
   const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(actual),sha(expected),name);report.sources.push({name,sha256:sha(actual)});
  }
@@ -28,6 +28,11 @@ try{
   assert.equal(result.expected.length,16*result.height*16);assert.ok(result.expected.some(Boolean));
   assert.equal(result.actual.length,result.expected.length);assert.deepEqual(result.actual,result.expected,id+' raw occupancy');assert.deepEqual(result.different,[],id);
  }
+ assert.deepEqual(report.effective.negatives.map(r=>r.name),['outside-volume','occluded-source']);
+ for(const row of report.effective.negatives){assert.equal(row.valid,false);assert.equal(row.installedCount,0);}
+ assert.equal(report.effective.overlay.rendered,true);assert.ok(report.effective.overlay.solidCells>0);
+ assert.deepEqual(report.effective.overlay.lifecycle,['enabled','moved','disabled','recreated']);
+ await page.screenshot({path:path.join(out,'gpu-overlay.png')});
  assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack??error);process.exitCode=1;}
 finally{await browser?.close();await save();}
