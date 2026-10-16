@@ -3719,6 +3719,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const text=!enabled?'Scene collisions off'
     : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
+    : collision.effective==='submitted-unverified'?'GPU solid field submitted · validation not read'
     : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?'Active · GPU solid field':`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;

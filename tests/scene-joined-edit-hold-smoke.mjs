@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
 import {spawn} from 'node:child_process';
 import {launchChrome,sourceIdentity} from '../models/flux2-klein/cdp-harness.mjs';
-import {assertResidentMotion} from '../tools/joined-resident-witness.mjs';
+import {assertResidentMotion,assertSmokeServerIdentity,assertSmokeServerAlive,sampleAcceptedCollision} from '../tools/joined-resident-witness.mjs';
 const [url,out,mode='held',storeSource]=process.argv.slice(2);assert(out,'evidence directory required');
 assert(['held','resident'].includes(mode),'unknown motion route');
 await fs.mkdir(out,{recursive:true});
@@ -23,36 +23,45 @@ try{
   server.stdout.on('data',b=>{report.serverLog+=b;});server.stderr.on('data',b=>{report.serverLog+=b;});
   serverExit=new Promise(r=>{server.once('error',e=>{serverError=e;r();});server.once('exit',r);});
   while(true){
-   if(serverError)throw serverError;if(server.exitCode!==null)throw Error('witness server exited: '+report.serverLog);
-   try{const r=await fetch(new URL('/api/runtime-config',url));if(r.ok)break;}catch{}
+   assertSmokeServerAlive(server,serverError,report.serverLog);
+   const response=await fetch(new URL('/api/runtime-config',url)).catch(()=>null);
+   assertSmokeServerAlive(server,serverError,report.serverLog);
+   if(response?.ok){
+    report.runtime=await response.json();
+    assertSmokeServerAlive(server,serverError,report.serverLog);
+    assertSmokeServerIdentity(report.runtime,{root:resolve('.'),rev:report.source.rev},report.stores);
+    break;
+   }
    await new Promise(r=>setTimeout(r,100));
   }
  }
- report.runtime=await (await fetch(new URL('/api/runtime-config',url))).json();
- assert.equal(report.runtime.source.repoRoot,resolve('.'));assert.equal(report.runtime.source.commit,report.source.rev);
+ report.runtime??=await (await fetch(new URL('/api/runtime-config',url))).json();
+ assertSmokeServerAlive(server,serverError,report.serverLog);
+ assertSmokeServerIdentity(report.runtime,{root:resolve('.'),rev:report.source.rev},report.stores);
  report.executable='/Users/noahlyons/.local/state/kaminos/browser-cache/cft154-verified-0930/chrome/mac_arm-154.0.8037.92/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
  browser=await launchChrome(report.executable,['--use-angle=metal','--window-size=1200,900'],report,{profileDir:out+'/profile'});
  report.phase='load';await save();
  await browser.navigate(url,'Boolean(window.__kaminosVolumePrototype && window.kaminosSceneAuthoring && window.kaminosSceneEdits)');
- await browser.evaluate(`window.__editWait=(target,loaded=false)=>new Promise((resolve,reject)=>{const tick=()=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)return reject(Error(s.error));if(s.simStepCount>=target&&(!loaded||(s.sceneCollision?.effective==='mesh-voxel-solid'&&s.joinedExterior?.admitted&&s.joinedRendering?.enabled)))return resolve(s);requestAnimationFrame(tick);};tick();})`);
+ await browser.evaluate(`window.__sampleAcceptedCollision=${sampleAcceptedCollision.toString()};window.__editWait=(target,loaded=false)=>new Promise((resolve,reject)=>{const tick=()=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)return reject(Error(s.error));if(s.simStepCount>=target&&(!loaded||(['submitted-unverified','mesh-voxel-solid'].includes(s.sceneCollision?.effective)&&s.joinedExterior?.admitted&&s.joinedRendering?.enabled)))return resolve(s);requestAnimationFrame(tick);};tick();})`);
  await browser.evaluate('window.__editWait(15,true).then(()=>window.__kaminosVolumePrototype.setSimulationPaused(true))');
- report.before=await browser.evaluate('window.__kaminosVolumePrototype.debugState()');
+ report.before=await browser.evaluate(mode==='resident'?'window.__sampleAcceptedCollision(window.__kaminosVolumePrototype)':'window.__kaminosVolumePrototype.debugState()');
  assert(report.before.joinedExterior?.admitted);assert(report.before.joinedRendering?.enabled);assert.equal(report.before.sceneCollision?.effective,'mesh-voxel-solid');
  report.scene=await browser.evaluate('window.kaminosSceneAuthoring.read()');
  const target=report.scene.objects.find(o=>o.type==='procedural-mesh'&&o.collision?.enabled);assert(target,'no marked obstacle');report.target=target;
  const evaluate=browser.evaluate,step=async count=>evaluate(`window.__editWait(window.__kaminosVolumePrototype.debugState().simStepCount+${count})`);
+ const collisionStep=async count=>{const state=await step(count);return mode==='resident'?evaluate('window.__sampleAcceptedCollision(window.__kaminosVolumePrototype)'):state;};
  const shot=async name=>{const r=await browser.send('Page.captureScreenshot',{format:'png'});assert(r.result?.data,'missing frame');await fs.writeFile(out+'/'+name+'.png',Buffer.from(r.result.data,'base64'));};
  await evaluate(`window.__kaminosSetActiveTab('volume');window.kaminosSetCameraDebugPose({position:[0,2,10],target:[0,2,0]});window._kaminosDirty();window.kaminosSceneEdits.begin(${JSON.stringify(target.id)},'Edit hold witness');window.__kaminosVolumePrototype.setSimulationPaused(false)`);
  report.phase='drag';await save();report.previews=[];
  for(const dx of [.05,.1,.15]){
   const pose={...target.transform,position:target.transform.position.map((v,a)=>v+(a===0?dx:0))};
   await evaluate(`window.kaminosSceneEdits.preview(${JSON.stringify(pose)})`);
-  report.previews.push(await step(3));
+  report.previews.push(await collisionStep(3));
  }
  if(mode==='resident')for(const [i,s] of report.previews.entries())assertResidentMotion(i?report.previews[i-1]:report.before,s);
  else for(const s of report.previews){assert.equal(s.joinedEditing?.held,true);assert.equal(s.joinedExterior.steps,report.before.joinedExterior.steps);assert.equal(s.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds);assert.equal(s.joinedRendering.enabled,true);assert.equal(s.joinedExterior.generation,report.before.joinedExterior.generation);}
  await shot(mode==='resident'?'drag-resident':'drag-held');
- report.phase='commit';await save();await evaluate('window.kaminosSceneEdits.commit()');report.placed=await step(3);
+ report.phase='commit';await save();await evaluate('window.kaminosSceneEdits.commit()');report.placed=await collisionStep(3);
  assert.equal(report.placed.joinedEditing.held,false);assert.equal(report.placed.joinedEditing.pending,false);
  assert(report.placed.joinedExterior.steps>report.before.joinedExterior.steps);
  if(mode==='held')assert.equal(report.placed.sceneSolidGeometryBuilds,report.before.sceneSolidGeometryBuilds+1);
@@ -60,10 +69,10 @@ try{
  assert.equal(report.placed.joinedExterior.generation,report.before.joinedExterior.generation);
  report.phase='cancel';await save();
  await evaluate(`window.kaminosSceneEdits.begin(${JSON.stringify(target.id)},'Cancel witness');window.kaminosSceneEdits.preview(${JSON.stringify(target.transform)})`);
- report.cancelHeld=await step(3);
+ report.cancelHeld=await collisionStep(3);
  if(mode==='resident')assertResidentMotion(report.placed,report.cancelHeld);
  else{assert.equal(report.cancelHeld.joinedEditing.held,true);assert.equal(report.cancelHeld.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);}
- await evaluate('window.kaminosSceneEdits.cancel()');report.cancelled=await step(3);
+ await evaluate('window.kaminosSceneEdits.cancel()');report.cancelled=await collisionStep(3);
  if(mode==='held')assert.equal(report.cancelled.sceneSolidGeometryBuilds,report.placed.sceneSolidGeometryBuilds);
  else assertResidentMotion(report.cancelHeld,report.cancelled);
  assert.equal(report.cancelled.joinedEditing.pending,false);

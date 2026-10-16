@@ -5,7 +5,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {joinedBoundaryUniformValues,resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig} from '../volume-core.js';
 import {fireCollisionEdit} from '../scene-collider.mjs';
-import {resolveJoinedExteriorGeometry} from '../volume-joined-exterior.mjs';
+import {resolveJoinedExteriorGeometry,createJoinedExterior} from '../volume-joined-exterior.mjs';
 const source=readFileSync(process.env.KAMINOS_EDIT_SOURCE||new URL('../volume-core.js',import.meta.url),'utf8');
 const body=name=>{const start=source.indexOf(`  function ${name}(`);assert(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4);};
 
@@ -72,6 +72,54 @@ test('a stale live exterior snapshot prevents both predictors and queues reseedi
  step();assert.equal(calls.fine,0);assert.equal(calls.outer,0);assert.equal(calls.pressure,0);
  assert.equal(ctx.state.joinedGhosts.reason,'stale-ghost-generation');assert.equal(queued.length,1);
  queued.shift()();assert.equal(ctx.state.joinedGhosts.generation,7);step();assert.equal(calls.fine,1);
+});
+
+test('real exterior refusal survives fallback collision restoration, then an independent repair rejoins',()=>{
+ const {ctx,calls,queued,step,prepare}=fixture();
+ globalThis.GPUBufferUsage={STORAGE:1,COPY_SRC:2,COPY_DST:4,UNIFORM:8};
+ globalThis.GPUTextureUsage={STORAGE_BINDING:1,TEXTURE_BINDING:2,COPY_DST:4};
+ globalThis.GPUShaderStage={COMPUTE:1};
+ const resource=o=>({...o,destroy(){},createView(){return {};}});
+ const pass=()=>({setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}});
+ ctx.device={limits:{maxTextureDimension3D:2048,maxBufferSize:2**30,maxStorageBufferBindingSize:2**30,maxComputeWorkgroupsPerDimension:65535},
+  queue:{writeBuffer(){},writeTexture(){},submit(){}},createBuffer:resource,
+  createTexture:o=>resource({...o,width:o.size[0],height:o.size[1],depthOrArrayLayers:o.size[2]}),
+  createShaderModule:o=>o,createBindGroupLayout:o=>o,createPipelineLayout:o=>o,createBindGroup:o=>o,
+  createComputePipeline:o=>({...o,getBindGroupLayout:()=>({})}),
+  createCommandEncoder:()=>({beginComputePass:pass,finish:()=>({})})};
+ const wall={side:'+x',gap:1000};
+ const adapter=createJoinedExterior(ctx.device,{coarseResolution:4,residentSolids:true,wall});
+ ctx.joinedExterior=adapter;ctx.gridHeight=4;
+ ctx.encoder.clearBuffer=()=>{};ctx.encoder.copyBufferToBuffer=()=>{};
+ ctx.state.joinedBoundary={requested:true,admitted:true};
+ ctx.state.joinedEditing={held:false,pending:false};
+ ctx.controlsSnapshot={pressureSolver:'converged-open-top',projection:1,emitterSourceLaw:'immersed-source',immersedSourceEnabled:true};
+ Object.assign(ctx,{resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig,getSceneEditing:()=>null});
+ let allocation=1,mask={revision:'authored-cube',cells:new Uint8Array(64)},rebuilds=0;
+ ctx.joinedProducerSnapshot=()=>({dims:[4,4,4],pitch:.5,allocation,fluidBuffers:[{},{}],fluidBuffer:{size:4096,usage:1},fluidReadIndex:0,timeStep:{dtScale:1,backtraceScale:1},
+  lowerFaceTexture:{width:4,height:4,depthOrArrayLayers:3,dimension:'2d',format:'r32float',usage:3,mipLevelCount:1,sampleCount:1,createView:()=>({})},
+  burnRateTexture:resource({dimension:'3d',format:'r32float',usage:1,width:4,height:4,depthOrArrayLayers:4}),solidMask:mask,ghosts:{textures:Object.fromEntries(['a','b'].map(k=>[k,resource({dimension:'3d',format:'rgba32float',usage:1,width:5,height:9,depthOrArrayLayers:5})]))}});
+ // The real rebuild destroys the collision producer; the next collision refresh
+ // reconstructs the same authored mask. Exercise those transitions, not just
+ // adapter.deferRetry in isolation.
+ ctx.rebuildFluidState=()=>{rebuilds++;allocation++;mask=null;};
+ ctx.refreshSceneCollision=()=>{mask={revision:'authored-cube',cells:new Uint8Array(64)};};
+ ctx.applyJoinedGhostGeometry=g=>{ctx.joinedGhostGeometry=g;ctx.rebuildFluidState();};
+ vm.runInContext(body('refreshJoinedBoundary'),ctx);
+ assert.equal(prepare().reason,'wall-outside-exterior');
+ for(let i=0;i<4;i++){step();while(queued.length)queued.shift()();}
+ assert.equal(rebuilds,1,'restoring the fallback mask must not readmit and rebuild each frame');
+ assert.equal(calls.fine,4,'fine flame must continue while optional exterior is refused');
+ assert.equal(ctx.state.joinedBoundary.admitted,false);
+ // A distinct allocation with a repaired wall must still readmit, prepare and
+ // seed the actual exterior before the next joined predictor.
+ wall.gap=0;allocation++;step();assert.equal(queued.length,1);
+ queued.shift()();assert.equal(ctx.state.joinedBoundary.admitted,true);
+ assert.equal(ctx.state.joinedEditing.pending,false);
+ assert.equal(ctx.state.joinedGhosts.generation,ctx.state.simStepCount);
+ step();while(queued.length)queued.shift()();step();
+ assert(adapter.receipt().steps>0,'repaired exterior must advance');
+ adapter.destroy();
 });
 test('resident mesh dragging is live while domain and source edits retain their hold',()=>{
  const {ctx}=fixture();ctx.joinedExterior.residentSolids=true;ctx.state.joinedEditing={held:false,pending:false};

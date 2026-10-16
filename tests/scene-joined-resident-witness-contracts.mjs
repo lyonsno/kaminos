@@ -1,7 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assertResidentMotion} from '../tools/joined-resident-witness.mjs';
+import {assertResidentMotion,sampleAcceptedCollision} from '../tools/joined-resident-witness.mjs';
 const state=()=>({simStepCount:10,sceneCollision:{effective:'mesh-voxel-solid',backend:'gpu',geometryRevision:'a'},
  joinedBoundary:{admitted:true},joinedRendering:{enabled:true},joinedEditing:{held:false,pending:false},
  joinedExterior:{admitted:true,pressureTopology:'fixed-resident-mask',generation:1,topologyGeneration:1,steps:10,solids:{fine:'a'}}});
@@ -14,4 +14,13 @@ test('resident motion witness refuses fallback, stale motion, rebuild and held e
   s=>s.joinedExterior.solids.fine='a',s=>delete s.joinedExterior.solids]){
   const bad=structuredClone(after);mutate(bad);assert.throws(()=>assertResidentMotion(before,bad));
  }
+});
+test('snapshot admission rejects stale, rejected and replaced GPU collision evidence',async()=>{
+ const accepted={effective:'mesh-voxel-solid',backend:'gpu',validation:'explicit-gpu-snapshot',geometryRevision:3};
+ const api={sampleSceneCollisionMask:async()=>({status:'sampled',runtime:accepted}),debugState:()=>({sceneCollision:accepted})};
+ assert.equal((await sampleAcceptedCollision(api)).sceneCollision,accepted);
+ for(const result of [{status:'stale'},{status:'sampled',runtime:{...accepted,effective:'off'}},{status:'sampled',runtime:{...accepted,backend:'cpu'}}])
+  await assert.rejects(sampleAcceptedCollision({...api,sampleSceneCollisionMask:async()=>result}),/not accepted/);
+ for(const changed of [{...accepted,effective:'submitted-unverified'},{...accepted,geometryRevision:4}])
+  await assert.rejects(sampleAcceptedCollision({...api,debugState:()=>({sceneCollision:changed})}),/changed/);
 });
