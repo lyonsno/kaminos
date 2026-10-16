@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as vantage from '../agent-vantage.mjs';
-import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
+import {createVantagePilot, createCommandPump, installAgentVantage, connectVantageLink} from '../agent-vantage.mjs';
 import {poseAxes, poseLookingAt, rayThrough} from '../agent-vantage-core.mjs';
 import * as core from '../agent-vantage-core.mjs';
 import {createSceneCameras, cameraViewFromRecord} from '../scene-camera.mjs';
@@ -1592,4 +1592,75 @@ test('recheck answers unverified when the kept identity cannot support a compari
   mesh.geometry.attributes.position.setX(0, 5); mesh.geometry.attributes.position.needsUpdate = true;
   assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity: partial}), {now: 'present', status: 'unverified'},
     'an identity missing what an edit would change cannot say same');
+});
+
+// --- the link: a hidden tab lets go of its connection ------------------------------------------
+
+// A fake browser for the page's link: EventSources it opened, its timers and
+// posts, and a document whose visibility the test changes.
+function linkHarness({visible = true} = {}) {
+  const sources = [], timers = [], posts = [], listeners = {document: {}, window: {}};
+  class FakeEventSource {
+    static CLOSED = 2;
+    constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
+    addEventListener(type, fn) { (this.handlers[type] ??= []).push(fn); }
+    close() { this.closed = true; this.readyState = 2; }
+    emit(type, event = {}) { for (const fn of this.handlers[type] ?? []) fn(event); }
+  }
+  const on = bag => (type, fn) => { (bag[type] ??= []).push(fn); };
+  const off = bag => (type, fn) => { bag[type] = (bag[type] ?? []).filter(item => item !== fn); };
+  const document = {visibilityState: visible ? 'visible' : 'hidden', title: 'Kaminos', hasFocus: () => true,
+    addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
+  const window = {EventSource: FakeEventSource, location: {href: 'http://127.0.0.1:8484/index.html'},
+    fetch: async (url, init) => { posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null}); return {status: 200}; },
+    setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
+  const show = state => { document.visibilityState = state; for (const fn of [...(listeners.document.visibilitychange ?? [])]) fn(); };
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  return {sources, timers, posts, document, window, show, settle, live: () => sources.filter(source => !source.closed)};
+}
+const linked = (h, run = async () => ({})) => connectVantageLink({window: h.window, document: h.document, endpoint: '/api/vantage', pageId: 'page-test', run});
+
+test('a tab opened in the background does not link until it is shown, and a hidden tab lets go of its link', async () => {
+  const h = linkHarness({visible: false}), link = linked(h);
+  assert.equal(h.sources.length, 0, 'a background tab holds none of the browser\'s few connections to the server');
+  h.show('visible');
+  assert.equal(h.live().length, 1, 'shown, it links');
+  h.show('hidden'); await h.settle();
+  assert.equal(h.live().length, 0, 'hidden with nothing in hand, it lets go');
+  h.show('visible');
+  assert.equal(h.live().length, 1, 'and links again when shown');
+  assert.equal(h.sources.length, 2);
+  link.close();
+  assert.equal(h.live().length, 0);
+});
+
+test('a tab hidden while it runs a command keeps its link until it has answered', async () => {
+  const h = linkHarness();
+  let finish;
+  linked(h, () => new Promise(resolve => { finish = resolve; }));
+  h.sources[0].emit('command', {data: JSON.stringify({id: 'c1', command: 'watch', args: {}, expiresAt: Date.now() + 60000})});
+  await h.settle();
+  h.show('hidden'); await h.settle();
+  assert.equal(h.live().length, 1, 'the server would fail a command whose page let go of its link');
+  finish({kind: 'watch'}); await h.settle();
+  assert.ok(h.posts.some(post => post.url.endsWith('/reply') && post.body.id === 'c1' && post.body.ok === true), 'the answer is sent');
+  assert.equal(h.live().length, 0, 'then the hidden tab lets go');
+});
+
+test('a link that dropped retries only while the tab is shown, and never opens a second stream', async () => {
+  const h = linkHarness(), link = linked(h);
+  h.sources[0].readyState = 2;
+  h.sources[0].emit('error');
+  await h.settle();
+  assert.equal(h.timers.length, 1, 'a retry is scheduled');
+  h.show('hidden'); await h.settle();
+  h.timers[0].fn();
+  assert.equal(h.live().filter(source => source !== h.sources[0]).length, 0, 'a retry while hidden does not link');
+  h.show('visible');
+  h.timers[0].fn();
+  assert.equal(h.sources.filter(source => source.readyState !== 2).length, 1, 'shown, one stream, however many retries fire');
+  link.close();
+  h.show('hidden'); h.show('visible');
+  assert.equal(h.sources.filter(source => source.readyState !== 2).length, 0, 'a closed link stays closed');
 });

@@ -111,7 +111,7 @@ A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pi
 
 ## Transport
 
-`serve.py` relays commands. A page holds one server-sent-events link at `/api/vantage/link` and posts replies to `/api/vantage/reply`; the terminal posts to `/api/vantage/command` and waits for that page's reply. The vantage endpoints answer only this machine at the server's own address, refuse requests from other sites, and accept only JSON. Arguments are validated by `agent-vantage-core.mjs` in both the CLI and the page.
+`serve.py` relays commands. A page holds one server-sent-events link at `/api/vantage/link` and posts replies to `/api/vantage/reply`; the terminal posts to `/api/vantage/command` and waits for that page's reply. A page holds its link only while its tab is shown. A browser keeps few connections to one server (six over HTTP/1.1), and each open stream holds one, so tabs left open in the background would stop the next Kaminos page on that server from loading. A tab opened in the background links when it is first shown. A tab that is hidden lets go of its link once it has answered the command it is running, and links again when shown. A hidden tab is therefore not listed by `pages` and cannot be sent commands; pictures needed the tab shown anyway. The vantage endpoints answer only this machine at the server's own address, refuse requests from other sites, and accept only JSON. Arguments are validated by `agent-vantage-core.mjs` in both the CLI and the page.
 
 `agent-vantage-witness.mjs` exercises the whole route in an independent Chromium with the real CLI. It checks:
 

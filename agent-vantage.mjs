@@ -765,17 +765,25 @@ export function createCommandPump({run, reply, now = () => Date.now()}) {
       return pumping;
     },
     idle: () => pumping ?? Promise.resolve(),
+    busy: () => pumping !== null,
   };
 }
 
 export function connectVantageLink({window, document, endpoint, pageId, run, onStatus = () => {}}) {
   let source = null, closed = false, retry = null;
   const post = (path, body) => window.fetch(endpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
-  const facts = () => ({page: pageId, visible: document.visibilityState === 'visible', focused: document.hasFocus(), href: window.location.href, title: document.title});
-  const presence = () => { if (!closed) post('/presence', facts()).catch(() => {}); };
+  const hidden = () => document.visibilityState !== 'visible';
+  const facts = () => ({page: pageId, visible: !hidden(), focused: document.hasFocus(), href: window.location.href, title: document.title});
+  const presence = () => { if (!closed && source) post('/presence', facts()).catch(() => {}); };
   const pump = createCommandPump({run, reply: answer => post('/reply', {page: pageId, ...answer})});
+  // The link is held only while the tab is shown. A browser keeps few connections
+  // to one server (six over HTTP/1.1), and every open stream holds one, so tabs
+  // left open in the background would stop the next page from loading at all.
+  // A hidden tab lets go once it has answered what it holds: the server fails the
+  // commands of a page that drops its link.
   function open() {
-    if (closed) return;
+    if (closed || hidden() || (source && source.readyState !== window.EventSource.CLOSED)) return;
+    window.clearTimeout(retry);
     const url = new URL(`${endpoint}/link`, window.location.href), now = facts();
     for (const [key, value] of Object.entries({page: pageId, href: now.href, title: now.title, visible: now.visible ? '1' : '0', focused: now.focused ? '1' : '0'})) url.searchParams.set(key, value);
     source = new window.EventSource(url);
@@ -796,7 +804,20 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
       }, () => { retry = window.setTimeout(open, 5000); });
     });
   }
-  document.addEventListener('visibilitychange', presence);
+  async function rest() {
+    while (source && hidden() && !closed) {
+      if (!pump.busy()) {
+        source.close();
+        source = null;
+        window.clearTimeout(retry);
+        onStatus({state: 'resting', pageId});
+        return;
+      }
+      await pump.idle();
+    }
+  }
+  const follow = () => { presence(); if (hidden()) rest(); else open(); };
+  document.addEventListener('visibilitychange', follow);
   window.addEventListener('focus', presence);
   window.addEventListener('blur', presence);
   const heartbeat = window.setInterval(presence, 15000);
@@ -808,7 +829,7 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
       source?.close();
       window.clearTimeout(retry);
       window.clearInterval(heartbeat);
-      document.removeEventListener('visibilitychange', presence);
+      document.removeEventListener('visibilitychange', follow);
       window.removeEventListener('focus', presence);
       window.removeEventListener('blur', presence);
     },
