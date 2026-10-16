@@ -1,4 +1,4 @@
-export function attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,mountControls=true,
+export function attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,mountControls=true,posePresentation=null,
  now=()=>performance.now(),dirty=()=>globalThis.window?._kaminosDirty?.(),isMounted=()=>Boolean(runtime?.group?.parent)}) {
  if(!runtime?.group?.isObject3D||!(runtime.bones instanceof Map)||typeof runtime.update!=='function'||!mountRoot||!document)throw Error('Given motion requires the actual live Bone/deformer runtime and controls mount');
  for(const name of ['motionSha256','frameSha256','caseSha256'])if(!/^[a-f0-9]{64}$/i.test(source?.[name]??''))throw Error('Given motion source identity is incomplete');
@@ -21,14 +21,15 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  function edited(){if(!expected)return false;const current=matrices();return differs(current.actor,expected.actor)||current.bones.some((b,i)=>differs(b.matrix,expected.bones[i].matrix));}
  function refresh(){const derived=source.presentation?.mode&&source.presentation.mode!=='source';output.textContent=status==='restored'?'Restored starting pose · not a generated frame':`${status} · ${derived?'derived repeat sample':'source frame'} ${frame+1}/${adapter.frames} · ${(frame/adapter.fps).toFixed(3)} s${edited()?' · edited after pose':''}`;range.value=String(frame);failure.textContent=error??'';}
  function apply(index){
-  active();const pose=adapter.frame(index),before=matrices();
+  active();const pose=adapter.frame(index),before=matrices(),presentationBefore=posePresentation?.capture();
   // Validate all handles/matrices before changing any actual Bone.
   for(const b of pose.bones){const bone=runtime.bones.get(b.name);if(bone.parent?.isBone?bone.parent.name!==b.parent:b.parent!==null)throw Error('Live Bone parent differs from given tree');}
   try{
-   assign(group,base.clone().multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)).elements);
+   const actorMatrix=base.clone().multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)).toArray();
+   assign(group,posePresentation?posePresentation.apply({...pose,actorMatrix}):actorMatrix);
    for(const b of pose.bones)assign(runtime.bones.get(b.name),b.localMatrix);
    group.updateMatrixWorld(true);original.call(runtime);frame=index;expected=matrices();error=null;
-  }catch(failure){assign(group,before.actor);for(const b of before.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);try{original.call(runtime);}catch{}error=failure.message;status='failed';throw failure;}
+  }catch(failure){if(posePresentation)posePresentation.rollback(presentationBefore);assign(group,before.actor);for(const b of before.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);try{original.call(runtime);}catch{}error=failure.message;status='failed';throw failure;}
   refresh();dirty();return read();
  }
  function read(){if(!disposed&&!mounted()){status='removed';startedAt=null;}return {status,frame:status==='restored'?null:frame,time:status==='restored'?null:frame/adapter.fps,frames:adapter.frames,fps:adapter.fps,source:structuredClone(source),
@@ -37,7 +38,7 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  function play(){active();if(status==='restored')seek(0);if(status==='held')return read();if(status!=='playing'){startedAt=now();startedFrame=frame;status='playing';refresh();dirty();}return read();}
  function pause(){active();if(status==='restored')return read();status=frame===adapter.frames-1?'held':'paused';startedAt=null;refresh();dirty();return read();}
  function replay(){seek(0);return play();}
- function restore(){active();assign(group,initial.actor);for(const b of initial.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);original.call(runtime);status='restored';frame=0;startedAt=null;expected=matrices();error=null;refresh();dirty();return read();}
+ function restore(){active();const pose={actorMatrix:initial.actor,bones:initial.bones.map(b=>({name:b.name,parent:runtime.bones.get(b.name).parent?.isBone?runtime.bones.get(b.name).parent.name:null,localMatrix:b.matrix}))};assign(group,posePresentation?posePresentation.apply(pose):initial.actor);for(const b of initial.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);original.call(runtime);status='restored';frame=0;startedAt=null;expected=matrices();error=null;refresh();dirty();return read();}
  function tick(timestamp=now()){
   if(disposed)return false;
   if(!mounted()){status='removed';startedAt=null;return false;}

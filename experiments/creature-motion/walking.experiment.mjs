@@ -10,12 +10,15 @@ import {createSkinCaseSelection,validateSkinCaseChoices} from './skin-case-selec
 import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
 import {createWanderMotion,wanderAreaInPlacement} from './wander-motion.mjs';
+import {createLiveActorRoot} from './live-actor-root.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.actor_root!==undefined&&!['spawn','live'].includes(inputs.actor_root))throw Error('Unknown creature scene-root mode');
+ if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
@@ -42,7 +45,7 @@ async function checkRecipeView(view,current){
  try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
 }
 
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const choices=checkRecipeInputs(inputs);
  const data=await loadSources(inputs),document=host.controls.document;
@@ -59,6 +62,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
  let session,runtime,asset,floor,floorAsset,pathGuide,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
+ const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
+ const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1;
  const relatedAssets=[];
@@ -68,9 +74,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
-  transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
+  transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined},
+  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
@@ -82,6 +88,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   geometry.computeBoundingBox();
   if(!pathGuide){pathGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0x55cbd7,depthTest:true}));pathGuide.name='Creature motion path';Object.assign(pathGuide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosHelperKind:'paths'});pathGuide.visible=false;placement.add(pathGuide);}
   else{const old=pathGuide.geometry;pathGuide.geometry=geometry;old.dispose();}
+  liveRoot?.guide();
  }
  async function ensureArea(transform){
   if(areaRoot?.parent)return;
@@ -95,7 +102,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function syncArea(){
   if(!wander)return true;
   if(!areaRoot?.parent){actionError='Wander area was removed; current pose is held';unsubscribe();player.pause();refresh();return false;}
-  try{const area=wanderAreaInPlacement({THREE,areaRoot,placement}),key=JSON.stringify(area);if(key!==areaKey){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
+  try{const area=wanderAreaInPlacement({THREE,areaRoot,placement:authoredPlacement()}),key=JSON.stringify(area);if(key!==areaKey){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
   catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}
  }
  function presentWander(delta,playing){
@@ -139,15 +146,22 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const vertices=Array.from(runtime.syncCpuGeometry().attributes.position.array);
   return {...read(),geometrySource:'cpu-current-pose',placementMatrix:placement.matrixWorld.toArray(),rootMatrix:runtime.group.matrixWorld.toArray(),vertices,boneWorld:[...runtime.bones].map(([name,bone])=>({name,matrix:bone.matrixWorld.toArray()}))};
  }
+ function pose({bones=[]}={}){
+  if(disposed||!placement.parent)throw Error('Creature pose is no longer mounted');
+  if(!Array.isArray(bones)||bones.some(name=>!runtime.bones.has(name)))throw Error('Unknown live creature Bone');
+  placement.updateMatrixWorld(true);
+  return {hostId:asset.id,space:'scene-world',source:structuredClone(source),rootMatrix:placement.matrixWorld.toArray(),bodyMatrix:runtime.group.matrixWorld.toArray(),bones:bones.map(name=>({name,matrix:runtime.bones.get(name).matrixWorld.toArray()}))};
+ }
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
-  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,now:()=>clock,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>clock,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
   placement.add(runtime.group);
-  asset=await session.attach(placement,{owned:true,metadata:{fileName:'Creature',source:inputs.case,label:'Creature'}});
+  placement.name=inputs.label??'Creature';
+  asset=await session.attach(placement,{owned:true,metadata:{fileName:placement.name,source:inputs.case,label:placement.name}});
   player=makePlayer();
   if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:loadSkin,onApplied:state=>{
    chosenInputs={...chosenInputs,case:state.current.case,case_sha256:state.current.case_sha256};source.caseSha256=state.current.case_sha256;
@@ -188,9 +202,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     unsubscribe();player.pause();
     if(input.kind==='preview'){wander=null;actionError=null;mode='source';cycle=0;source.presentation.mode=mode;source.presentation.action='preview';player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}
     await ensureArea();active();
-    const area=wanderAreaInPlacement({THREE,areaRoot,placement});
+    const frame=authoredPlacement(),area=wanderAreaInPlacement({THREE,areaRoot,placement:frame});
     if(!wander){
-     placement.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),point=placement.worldToLocal(root.getWorldPosition(new THREE.Vector3()));
+     placement.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),point=frame.worldToLocal(root.getWorldPosition(new THREE.Vector3()));
      const first=adapter.frame(0).bones.find(b=>b.parent===null).worldMatrix,last=adapter.frame(adapter.frames-1).bones.find(b=>b.parent===null).worldMatrix;
      wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
     }
@@ -237,8 +251,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
   host.scene.refreshPresentation?.(asset);
-  if(globalThis.window)window.kaminosWalkingCreature=inspect;
-  return {read,operations,dispose,mount({root,invoke,reopen=recipe=>{
+  if(publishInspector&&globalThis.window)window.kaminosWalkingCreature=inspect;
+  return {read,inspect,pose,operations,dispose,mount({root,invoke,reopen=recipe=>{
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();
