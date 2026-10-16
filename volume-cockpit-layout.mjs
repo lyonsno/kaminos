@@ -415,7 +415,7 @@ const ORGANIZED_GROUPS = [
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
-  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|common-gas-transport|wavelet-turbulence|wavelet-octaves)$/],
+  ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|wavelet-turbulence|wavelet-octaves|common-gas-transport)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
   ['shell', 'Shell renderer', /^volume-shell-.+/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],

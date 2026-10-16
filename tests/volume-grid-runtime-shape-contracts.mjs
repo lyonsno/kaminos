@@ -117,6 +117,7 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     EMISSIVE_TRANSPORT_WGSL: (await import('../volume-emissive-transport.mjs')).EMISSIVE_TRANSPORT_WGSL,
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
     SOOT_BURNOUT_WGSL: (await import('../volume-physics-appearance.mjs')).SOOT_BURNOUT_WGSL,
+    WAVELET_TURBULENCE_WGSL: (await import('../volume-wavelet-turbulence.mjs')).WAVELET_TURBULENCE_WGSL,
   };
   assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());
   const seen = [];

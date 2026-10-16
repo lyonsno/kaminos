@@ -3974,22 +3974,22 @@ fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
 fn waveletOn() -> bool {
   return u.wavelet_turbulence.x > 0.0;
 }
-fn waveletCoordLoad(c: vec3<i32>, set: i32) -> vec3<f32> {
-  return textureLoad(waveletCoordSrc, vec3<i32>(clampCell(c)) + vec3<i32>(0, 0, set * i32(GRID)), 0).xyz;
+fn waveletCoordLoad(c: vec3<i32>, setIndex: i32) -> vec3<f32> {
+  return textureLoad(waveletCoordSrc, vec3<i32>(clampCell(c)) + vec3<i32>(0, 0, setIndex * i32(GRID)), 0).xyz;
 }
-fn waveletCoordStore(c: vec3<i32>, set: i32, coord: vec3<f32>) {
-  textureStore(waveletCoordDst, c + vec3<i32>(0, 0, set * i32(GRID)), vec4<f32>(coord, 0.0));
+fn waveletCoordStore(c: vec3<i32>, setIndex: i32, coord: vec3<f32>) {
+  textureStore(waveletCoordDst, c + vec3<i32>(0, 0, setIndex * i32(GRID)), vec4<f32>(coord, 0.0));
 }
-// Trilinear read of a coordinate set at a cell-space position (values live at
+// Trilinear read of one coordinate set at a cell-space position (values live at
 // cell centres).
-fn waveletCoordSample(p: vec3<f32>, set: i32) -> vec3<f32> {
+fn waveletCoordSample(p: vec3<f32>, setIndex: i32) -> vec3<f32> {
   let q = p - vec3<f32>(0.5);
   let i0 = vec3<i32>(floor(q));
   let f = q - floor(q);
-  let c00 = mix(waveletCoordLoad(i0, set), waveletCoordLoad(i0 + vec3<i32>(1, 0, 0), set), f.x);
-  let c10 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 0), set), waveletCoordLoad(i0 + vec3<i32>(1, 1, 0), set), f.x);
-  let c01 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 0, 1), set), waveletCoordLoad(i0 + vec3<i32>(1, 0, 1), set), f.x);
-  let c11 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 1), set), waveletCoordLoad(i0 + vec3<i32>(1, 1, 1), set), f.x);
+  let c00 = mix(waveletCoordLoad(i0, setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 0, 0), setIndex), f.x);
+  let c10 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 0), setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 1, 0), setIndex), f.x);
+  let c01 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 0, 1), setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 0, 1), setIndex), f.x);
+  let c11 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 1), setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 1, 1), setIndex), f.x);
   return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
 }
 // Mean of the stored velocity over the cell and its six neighbours at
@@ -12969,9 +12969,10 @@ export function createKaminosVolumePrototype({
     for (const buffer of quenchBuffers) buffer.destroy();
     for (const texture of reactantTextures) texture.destroy();
     reactantTextures = [];
+    reactantSidecarFull = false;
     for (const texture of waveletTextures) texture.destroy();
     waveletTextures = [];
-    reactantSidecarFull = false;
+    waveletSidecarFull = false;
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';

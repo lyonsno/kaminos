@@ -74,8 +74,8 @@ test('cockpit: the staggering select with help, snapshot, listener, route restor
   assert.match(index, /staggered — NOT ADMITTED \(\$\{/, 'a refused request is named');
   const control = schema.controls.find(c => c.key === 'volume-velocity-staggering');
   assert.deepEqual(control, { key: 'volume-velocity-staggering', param: 'volume_velocity_staggering', tagName: 'SELECT', type: 'select-one', additiveDefault: 'collocated', additiveSinceControlCount: 235 });
-  assert.equal(schema.controlCount, 255);
-  assert.equal(schema.controls.length, 255);
+  assert.equal(schema.controlCount, 257);
+  assert.equal(schema.controls.length, 257);
 });
 
 test('the capture carries the staggering receipt and its check cannot be satisfied by a refused or absent receipt', () => {
