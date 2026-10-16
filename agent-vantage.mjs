@@ -327,6 +327,13 @@ export function createVantagePilot(host) {
         image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },
 
+    // A small live view from the sub's own camera in the operator's panel, while on.
+    live({pilot, on, fps}) {
+      if (on) requireSub(pilot);
+      if (!host.live) fail('live', 'This page cannot draw a second view of its scene');
+      return {schema: VANTAGE_SCHEMA, kind: 'live', live: on ? host.live.start({pilot, fps}) : host.live.stop()};
+    },
+
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
       const record = requireSub(pilot);
       admitCapture();
@@ -658,9 +665,7 @@ const HUD_STYLE = `
 #agent-vantage-hud button{background:none;border:0;color:#9aa3ad;cursor:pointer;font:inherit;padding:0 2px}
 #agent-vantage-hud img,#agent-vantage-hud canvas{display:block;width:100%;height:auto}
 #agent-vantage-hud [hidden]{display:none}
-#agent-vantage-hud .vantage-map{border-bottom:1px solid rgba(95,211,200,.25)}
-#agent-vantage-hud.flash{animation:agent-vantage-flash .6s ease-out}
-@keyframes agent-vantage-flash{from{box-shadow:0 0 0 3px rgba(56,242,224,.9)}to{box-shadow:0 6px 18px rgba(0,0,0,.35)}}`;
+#agent-vantage-hud .vantage-map,#agent-vantage-hud .vantage-live{border-bottom:1px solid rgba(95,211,200,.25)}`;
 
 // Shows the operator a live map of where everyone is looking, and each
 // picture the sub takes, so both see the same image.
@@ -675,11 +680,16 @@ export function installVantageHud({document, viewport}) {
   root.id = 'agent-vantage-hud';
   root.dataset.vantageIgnore = '';
   root.hidden = true;
-  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><img alt="Latest picture from the agent sub" hidden>';
+  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><canvas class="vantage-live" width="320" height="180" hidden aria-label="What the sub sees, live"></canvas><img alt="Latest picture from the agent sub" hidden>';
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'click', 'dblclick', 'wheel']) root.addEventListener(type, event => event.stopPropagation());
-  const mapCanvas = root.querySelector('canvas'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
-  let dismissed = false;
-  const show = () => { root.hidden = dismissed || (mapCanvas.hidden && picture.hidden); };
+  const mapCanvas = root.querySelector('canvas'), liveCanvas = root.querySelector('.vantage-live'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
+  // While the live view runs it stands in for the last picture, which returns when it stops.
+  // The header always names what the panel shows: the live view, else the last picture, else the map.
+  let dismissed = false, liveFrames = 0, hasPicture = false, liveOn = false, pictureTitle = '', liveTitle = '';
+  const show = () => {
+    title.textContent = liveOn ? liveTitle : hasPicture ? pictureTitle : mapCanvas.hidden ? 'Sub' : 'Sub · map';
+    root.hidden = dismissed || (mapCanvas.hidden && picture.hidden && liveCanvas.hidden);
+  };
   root.querySelector('button').addEventListener('click', () => { dismissed = true; show(); });
   viewport.append(root);
   return {
@@ -690,19 +700,27 @@ export function installVantageHud({document, viewport}) {
         const context = mapCanvas.getContext('2d');
         context.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
         context.drawImage(canvas, 0, 0, mapCanvas.width, mapCanvas.height);
-        if (picture.hidden) title.textContent = 'Sub · map';
       }
       show();
     },
+    // A new picture simply appears: no flash, nothing that pulls attention.
     shutter({kind, label, image}) {
       picture.src = image.dataUrl;
-      picture.hidden = false;
-      title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
-      dismissed = false;
+      hasPicture = true;
+      picture.hidden = liveOn;
+      pictureTitle = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
       show();
-      root.classList.remove('flash');
-      void root.offsetWidth;
-      root.classList.add('flash');
+    },
+    live(frame, ImageData, label = 'Sub') {
+      if (!frame) { liveOn = false; liveCanvas.hidden = true; picture.hidden = !hasPicture; show(); return; }
+      if (liveCanvas.width !== frame.width || liveCanvas.height !== frame.height) { liveCanvas.width = frame.width; liveCanvas.height = frame.height; }
+      liveCanvas.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
+      liveCanvas.dataset.frame = String(++liveFrames);
+      liveTitle = `${label} · live`;
+      liveOn = true;
+      liveCanvas.hidden = false;
+      picture.hidden = true;
+      show();
     },
     dispose() { root.remove(); },
   };
@@ -1013,7 +1031,41 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     coordinateSystem,
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
+    live: glance ? {start: options => startLive(options), stop: () => stopLive()} : null,
   });
+  // The live view: a small glance from the sub's camera on a timer. A tick is
+  // skipped while the tab is hidden, while a picture holds the camera, or while
+  // the previous frame is still being read back, so it never queues work.
+  // One live draw at most is ever in flight, whichever stream issued it.
+  let live = null, liveInFlight = false;
+  const clock = () => window.performance?.now?.() ?? Date.now();
+  const liveState = () => (live ? {on: true, pilot: live.pilot, fps: live.fps, frames: live.frames, skipped: live.skipped, drawMs: live.drawMs} : {on: false});
+  const liveTick = () => {
+    if (!live) return;
+    if (liveInFlight || document.visibilityState !== 'visible' || pilot.isCapturing()) { live.skipped++; return; }
+    const record = cameras.read().cameras.find(item => item.id === vantageCameraId(live.pilot));
+    if (!record) { stopLive(); return; }
+    const ratio = viewport.clientWidth / viewport.clientHeight || 16 / 9, width = 320, height = Math.max(1, Math.round(width / ratio));
+    const optics = opticsOfView(cameraViewFromRecord(record, ratio, 3), ratio, {coordinateSystem});
+    const started = clock(), current = live;
+    let view;
+    try { view = glance.draw({optics, width, height, hide: [record.id]}); }
+    catch { current.skipped++; return; }
+    liveInFlight = true;
+    current.drawMs = clock() - started;
+    view.ready.then(frame => { if (live === current) { hud.live(frame, window.ImageData, record.label); current.frames++; } }, () => { current.skipped++; })
+      .finally(() => { liveInFlight = false; });
+  };
+  function startLive({pilot: name, fps}) {
+    stopLive();
+    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
+    return liveState();
+  }
+  function stopLive() {
+    const state = liveState();
+    if (live) { window.clearInterval(live.timer); live = null; hud.live(null); }
+    return {...state, on: false};
+  }
   glyph();
   const glyphTimer = window.setInterval(glyph, 1000);
   // Keep the operator's map current while a sub is in the scene; repaint
@@ -1041,7 +1093,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
     pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
-    dispose() { window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
+    dispose() { stopLive(); window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }
 
