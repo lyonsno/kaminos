@@ -69,6 +69,7 @@ with TemporaryDirectory() as directory:
     assert copied.exists(), "the verified basin artifact is copied into this server's own store"
     assert serve.read_volume_settings_preset(own / "basins", PRESET_ID)["presetId"] == PRESET_ID
     assert not (own / "basins" / "aliases").exists() or not any((own / "basins" / "aliases").iterdir()), "aliases are not imported"
+    assert reply["basin"]["from"].endswith("share/basins"), reply["basin"]
 
 # 2. The basin is only in the machine's default preset store.
 with TemporaryDirectory() as directory:
@@ -87,6 +88,7 @@ with TemporaryDirectory() as directory:
     reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
     assert status == 400, (reply, status)
     assert not (own / "basins" / "presets" / OBSERVED.name).exists(), "a tampered basin is never copied"
+    assert "content hash mismatch" in reply["error"], reply
 
 # 4. Nowhere on the machine: the import refuses and says where it looked.
 with TemporaryDirectory() as directory:
@@ -94,5 +96,48 @@ with TemporaryDirectory() as directory:
     reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
     assert status == 400, (reply, status)
     assert "not found" in reply["error"] and "basins" in reply["error"], reply
+
+# 5. A corrupt copy beside the scene does not block the verified library copy.
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    own, store_id = arrange(root, library_artifact=OBSERVED.read_text())
+    sibling = root / "bench" / "basins" / "presets"
+    sibling.mkdir(parents=True)
+    tampered = json.loads(OBSERVED.read_text())
+    control = next(iter(tampered["preset"]["domControls"].values()))
+    control["value"] = "tampered-after-hashing"
+    control.pop("rawValue", None)
+    (sibling / OBSERVED.name).write_text(json.dumps(tampered))
+    reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
+    assert status == 200, (reply, status)
+    assert reply["basin"]["from"].endswith("share/basins"), reply["basin"]
+    assert serve.read_volume_settings_preset(own / "basins", PRESET_ID)["presetId"] == PRESET_ID
+
+# 6. The bytes copied are the bytes verified: a source that changes after it
+#    is read cannot put unverified content into this server's store.
+with TemporaryDirectory() as directory:
+    root = Path(directory)
+    own, store_id = arrange(root, library_artifact=OBSERVED.read_text())
+    source = root / "share" / "basins" / "presets" / OBSERVED.name
+    swapped = json.loads(OBSERVED.read_text())
+    control = next(iter(swapped["preset"]["domControls"].values()))
+    control["value"] = "swapped-after-verification"
+    control.pop("rawValue", None)
+    # Verification that opens the file sees the original; any later
+    # read_text/read_bytes of the source sees swapped content.
+    real_read_bytes, real_read_text = Path.read_bytes, Path.read_text
+    swapped_text = json.dumps(swapped)
+    def racing_read_bytes(self):
+        return swapped_text.encode() if self == source else real_read_bytes(self)
+    def racing_read_text(self, *args, **kwargs):
+        return swapped_text if self == source else real_read_text(self, *args, **kwargs)
+    Path.read_bytes, Path.read_text = racing_read_bytes, racing_read_text
+    try:
+        reply, status = post({"store": store_id, "name": "carousel.kaminos.json"})
+    finally:
+        Path.read_bytes, Path.read_text = real_read_bytes, real_read_text
+    copied = own / "basins" / "presets" / OBSERVED.name
+    if copied.exists():
+        assert serve.read_volume_settings_preset(own / "basins", PRESET_ID)["presetId"] == PRESET_ID, "only verified bytes may be stored"
 
 print("scene library import basin library contracts passed")

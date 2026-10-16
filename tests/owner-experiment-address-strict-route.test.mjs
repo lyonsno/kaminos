@@ -35,6 +35,14 @@ test('changing and then closing the experiment keeps the basin address strict', 
   assert.doesNotThrow(() => validateVolumeSettingsPresetTarget(receipt, closed.searchParams));
 });
 
+test('an address written by the old code, with experiment keys in the basin query, still admits', () => {
+  const legacy = new URL(basinPage);
+  legacy.searchParams.set('experiment', 'fixture/owner');
+  legacy.searchParams.set('experiment_inputs', JSON.stringify(inputs));
+  assert.doesNotThrow(() => validateVolumeSettingsPresetTarget(receipt, legacy.searchParams));
+  assert.deepEqual(readOwnerExperimentAddress(legacy), {id: 'fixture/owner', inputsText: JSON.stringify(inputs)});
+});
+
 test('an ordinary page keeps its shareable experiment query', () => {
   const ordinary = new URL(writeOwnerExperimentAddress('http://localhost/index.html?workspace=workbench', {id: 'fixture/owner', inputs}));
   assert.equal(ordinary.searchParams.get('experiment'), 'fixture/owner');

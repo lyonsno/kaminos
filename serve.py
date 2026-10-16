@@ -2350,7 +2350,7 @@ def scene_library_import_basin(document, scene_store):
     # see. Copy only the verified immutable artifact, leaving aliases and
     # source untouched.
     candidates = [Path(scene_store).parent / 'basins', SHARED_BASIN_STORE_DEFAULT, VOLUME_SETTINGS_STORE_DEFAULT]
-    searched = []
+    searched, rejected = [], []
     for candidate in candidates:
         if candidate is None:
             continue
@@ -2361,11 +2361,25 @@ def scene_library_import_basin(document, scene_store):
         source = source_store / 'presets' / f'{preset_id}.json'
         if not source.is_file():
             continue
-        read_volume_settings_preset(source_store, preset_id)
+        # Verify the exact bytes that will be stored, read once: a source that
+        # changes after verification cannot put unverified content here. A
+        # copy that fails verification is skipped for the next location.
+        data = source.read_bytes()
+        try:
+            with tempfile.TemporaryDirectory() as staging:
+                staged = Path(staging) / 'presets' / source.name
+                staged.parent.mkdir(parents=True)
+                staged.write_bytes(data)
+                read_volume_settings_preset(Path(staging), preset_id)
+        except ValueError as error:
+            rejected.append(f'{source_store}: {error}')
+            continue
         destination = VOLUME_SETTINGS_STORE / 'presets' / source.name
-        _atomic_write_json(destination, json.loads(source.read_text()))
+        _atomic_write_json(destination, json.loads(data))
         read_volume_settings_preset(VOLUME_SETTINGS_STORE, preset_id)
         return {'kind': 'basin', 'presetId': preset_id, 'status': 'imported', 'from': str(source_store)}
+    if rejected:
+        raise ValueError(f'volume settings preset artifact content hash mismatch or invalid for {preset_id}: ' + '; '.join(rejected))
     raise FileNotFoundError(
         f"volume settings preset not found: {preset_id} (looked in this server's stores and "
         + ', '.join(str(store) for store in searched) + ')'
