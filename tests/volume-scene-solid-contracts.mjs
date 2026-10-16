@@ -73,9 +73,10 @@ function shaderFunction(name) {
   assert.ok(start >= 0, `${name} must exist`);
   return shader.slice(start, shader.indexOf('\n}', start) + 2);
 }
-// sampleFluidSlotMasked wraps sampleFluidSlotMaskedFine with the joined-boundary
-// exterior blend; the solid-corner exclusion lives in the fine sampler.
-for (const name of ['sampleFrontFieldMasked', 'sampleFluidSlotMaskedFine', 'samplePredictSlot']) {
+// sampleFluidSlotMasked is the expanded read of sampleFluidSlotMaskedWith, which
+// carries the stored flag through the slot seam, excludes solid corners, then
+// blends to the joined-boundary exterior.
+for (const name of ['sampleFrontFieldMasked', 'sampleFluidSlotMaskedWith', 'samplePredictSlot']) {
   const body = shaderFunction(name);
   assert.match(body, /sceneSolidAt\(sampleCell\)/, `${name} must exclude solid interpolation corners`);
   assert.match(body, /weightSum/, `${name} must renormalize fluid-side sample weights`);
@@ -90,7 +91,8 @@ for (const name of ['readSlot', 'readFrontField', 'sampleFrontField', 'sampleFlu
 // the inflow sampler itself is masked.
 assert.match(shaderFunction('csTransportPredict'), /sampleFluidSlot(Masked|Inflow)\(/,
   'the actual predictor must consume wall-aware transport samples');
-assert.match(shaderFunction('sampleFluidSlotInflow'), /sampleFluidSlotMasked\(cellCenter, slot\)/,
+assert.match(shaderFunction('sampleFluidSlotInflow'), /return sampleFluidSlotInflowWith\(cellCenter, slot, false\);/);
+assert.match(shaderFunction('sampleFluidSlotInflowWith'), /sampleFluidSlotMaskedWith\(cellCenter, slot, stored\)/,
   'the inflow transport sampler is composed over the masked sampler');
 assert.match(shaderFunction('slotExtrema'), /sceneSolidAt\(sampleCell\)/,
   'MacCormack limiter must exclude masked solid corners from its source envelope');
