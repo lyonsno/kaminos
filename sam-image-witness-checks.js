@@ -66,3 +66,79 @@ export function validateSamConsumerExport(exported, { kind, width, height, mask,
   check(foregroundPixels > 0 && foregroundPixels < mask.length, 'export lacks a discriminating foreground/background selection');
   return { width, height, foregroundPixels, exactPixels: true };
 }
+
+export function validateSamApplicationForeground(evidence, invocationId) {
+  check(evidence?.sameDevice === true && evidence?.sameRendererDevice === true, 'application device mismatch');
+  const foreground = evidence.runtime?.applicationForegroundEvidence;
+  const routeId = 'sam3.resident-model-owner.webgpu-local.v0';
+  check(foreground?.routeId === routeId && foreground.status === 'idle' && foreground.error === null,
+    'missing or unsettled application foreground evidence');
+  const run = foreground.lastRun;
+  check(run?.runId === invocationId && run.routeId === routeId, 'application foreground belongs to another run or route');
+  check(run.status === 'succeeded' && run.pendingRequestCount === 0, 'application foreground handback failed');
+  check(Array.isArray(run.receipts) && run.receipts.some(receipt => receipt.status === 'completed'
+    && receipt.metadata?.renderer === 'kaminos-app'),
+    'no completed application foreground callback');
+  check(run.receipts.every(receipt => receipt.runId === invocationId && receipt.routeId === routeId
+    && receipt.failure === null), 'application foreground receipt failed or belongs to another run');
+  const frames = run.receipts.filter(row => row.status === 'completed' && row.metadata?.renderer === 'kaminos-app')
+    .map(samApplicationFrameObservation);
+  check(frames.some(frame => frame.drawn), 'no new application scene draw inside this run');
+  return { runId: invocationId, routeId, completedCallbacks: frames.length,
+    renderedCallbacks: frames.filter(frame => frame.drawn).length, skippedCallbacks: frames.filter(frame => !frame.drawn).length,
+    authority: 'application-callback-and-queue-settlement-not-presented-frame-cadence' };
+}
+
+export function validateSamApplicationFrame(receipt) {
+  const frame = samApplicationFrameObservation(receipt);
+  check(frame.drawn, 'application scene draw was skipped for this callback');
+  return frame;
+}
+
+function samApplicationFrameObservation(receipt) {
+  check(receipt?.status === 'completed' && receipt.failure === null, 'application frame callback failed');
+  const result = receipt.result, before = result?.sceneFrameCountBefore, after = result?.sceneFrameCountAfter;
+  check(Number.isSafeInteger(before) && before >= 0 && Number.isSafeInteger(after) && after >= before
+    && result.sceneFrameCount === after, 'application callback lacks per-request scene draw counts');
+  const drawn = after > before;
+  check(result.sceneDrawn === drawn && result.sceneAuthority === (drawn
+    ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'),
+  'application scene draw identity contradicts its frame counts');
+  return { drawn, before, after, authority: result.sceneAuthority };
+}
+
+export function validateSamExportProvenance(provenance, { kind, source, output, indices, width, height }) {
+  const expected = {
+    schema: 'kaminos.sam3-mask-export.v1', kind,
+    sourceImage: source.source, sourceImageSha256: source.sha256, sourceArtifactId: source.artifactId,
+    sourceResolution: [width, height], promptText: output.promptText, promptSha256: output.promptSha256,
+    invocationId: output.invocationId, indices, maskResolution: [output.width, output.height],
+    effectiveRouteId: output.effectiveRouteId, outputAuthority: output.outputAuthority,
+    verificationState: output.verificationState,
+  };
+  check(provenance && typeof provenance === 'object', 'persisted PNG has no mask provenance');
+  for (const [key, value] of Object.entries(expected)) {
+    const actual = provenance[key];
+    check(Array.isArray(value) ? Array.isArray(actual) && actual.length === value.length
+      && actual.every((entry, index) => entry === value[index]) : actual === value,
+    `persisted PNG provenance ${key} mismatch`);
+  }
+  return { invocationId: provenance.invocationId, sourceImageSha256: provenance.sourceImageSha256,
+    indices: [...provenance.indices], authority: 'persisted-PNG-metadata-matched-to-live-source-and-selection' };
+}
+
+export function validateSamNativeSourceHandoff({ selected, source, mode, maskPanelActive }, expectedSha256) {
+  check(selected?.kind === 'image' && typeof selected.source === 'string' && selected.source.length > 0,
+    'no selected library image at Masks entry');
+  check(selected.sha256 === expectedSha256 && source?.sha256 === expectedSha256
+    && source.source === selected.source, 'Masks opened a different source than the selected library image');
+  check(mode === 'workbench' && maskPanelActive === true, 'selected-image Masks action did not open the mask tools');
+  return { source: source.source, sha256: source.sha256, entry: 'asset-open-masks',
+    authority: 'actual-Authoring-selected-image-action-and-loaded-source' };
+}
+
+export function validateSamMaskControls(state) {
+  check(state.mode === 'workbench' && state.tab === 'masks', 'Masks workspace or tab is not active');
+  check(state.promptVisible === true && state.runVisible === true && state.runDisabled === false
+    && state.failed === false, 'Masks prompt/run controls are unavailable');
+}

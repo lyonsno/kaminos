@@ -1,14 +1,26 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync, createWriteStream, realpathSync } from 'node:fs';
 import { resolve, join, basename } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { validateSamConsumerInteraction } from './sam-image-witness-checks.js';
+import { validateSamConsumerInteraction, validateSamApplicationForeground, validateSamMaskControls } from './sam-image-witness-checks.js';
 import { persistSamCaptureObservation, persistSamEvidenceArtifact, writeSamTerminalFailure } from './sam-image-witness-report.mjs';
-export { validateSamConsumerInteraction, validateSamConsumerExport } from './sam-image-witness-checks.js';
+export { validateSamConsumerInteraction, validateSamConsumerExport, validateSamApplicationForeground,
+  validateSamExportProvenance, validateSamNativeSourceHandoff, validateSamApplicationFrame,
+  validateSamMaskControls } from './sam-image-witness-checks.js';
+
+export function resolveSamWitnessBrowser(requestedPath) {
+  const requested = resolve(requestedPath), effective = realpathSync(requested);
+  const executable = basename(effective);
+  const independent = ['Google Chrome for Testing', 'Chromium', 'chrome-headless-shell', 'headless_shell'].includes(executable)
+    || (executable === 'chrome' && effective.includes('/ms-playwright/'));
+  assert.ok(!effective.split('/').includes('Google Chrome.app') && independent,
+    `headless work requires an independent browser executable; requested=${requested}, effective=${effective}`);
+  return { requested, effective };
+}
 
 export function validateSamConsumerOutput(output, { prompt, empty, previousId, cache }) {
   assert.ok(output, 'missing live output');
@@ -35,7 +47,8 @@ async function main() {
     'out-dir': { type: 'string' }, 'expected-commit': { type: 'string' },
     'model-root': { type: 'string' }, image: { type: 'string' }, 'second-image': { type: 'string' },
     baseline: { type: 'string' }, port: { type: 'string', default: '18622' },
-    playwright: { type: 'string' }, chrome: { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+    'app-host': { type: 'boolean', default: false },
+    playwright: { type: 'string' }, chrome: { type: 'string' },
   } });
   const root = fileURLToPath(new URL('.', import.meta.url));
   const out = resolve(values['out-dir']);
@@ -43,6 +56,8 @@ async function main() {
   const report = { schema: 'kaminos.sam-image-consumer.v0', status: 'running', sourceRoot: root,
     requestedCommit: values['expected-commit'], failurePhase: 'source-identity', runs: [], captures: [],
     startedAt: new Date().toISOString(), errors: [] };
+  report.consumerRoute = values['app-host'] ? 'native-application-selected-image' : 'legacy-image-tools';
+  report.hostRoute = 'existing-python-HTTP-mount; browser-native-model; not-Node-or-fresh-checkout-admission';
   const saveReport = () => writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2));
   let server, browser, page;
   let lastTrustedEvidence = null;
@@ -56,7 +71,9 @@ async function main() {
     report.effectiveCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     assert.equal(report.effectiveCommit, values['expected-commit'], 'source revision mismatch');
     assert.equal(execFileSync('git', ['diff', '--name-only', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(), '', 'uncommitted source changes');
-    for (const field of ['model-root', 'image', 'playwright']) assert.ok(values[field], `missing --${field}`);
+    for (const field of ['model-root', 'image', 'playwright', 'chrome']) assert.ok(values[field], `missing --${field}`);
+    report.browser = resolveSamWitnessBrowser(values.chrome);
+    report.browserExecutable = report.browser.effective;
     report.modelManifestSha256 = createHash('sha256').update(readFileSync(join(values['model-root'], 'tensor-manifest.json'))).digest('hex');
     report.inputs = {};
     for (const field of ['image', 'second-image']) if (values[field]) {
@@ -72,7 +89,7 @@ async function main() {
     server.stdout.pipe(serverLog, { end: false }); server.stderr.pipe(serverLog, { end: false });
     server.once('error', failRuntime);
     server.once('exit', code => failRuntime(new Error(`server exited: ${code}`)));
-    const url = `http://127.0.0.1:${values.port}/?sam=1&commit=${report.effectiveCommit}`;
+    const url = `http://127.0.0.1:${values.port}/?${values['app-host'] ? '' : 'sam=1&'}commit=${report.effectiveCommit}`;
     const waitServer = async () => {
       for (;;) {
         try { const response = await fetch(new URL('/api/runtime-config', url)); if (response.ok) return response.json(); }
@@ -85,16 +102,24 @@ async function main() {
     assert.equal(report.runtimeConfig.sam3?.mounted, true, 'model is not mounted');
     report.failurePhase = 'browser-launch'; saveReport();
     const { chromium } = await import(pathToFileURL(resolve(values.playwright)).href);
-    browser = await checked(chromium.launch({ executablePath: values.chrome, headless: true, timeout: 0,
+    browser = await checked(chromium.launch({ executablePath: report.browser.effective, headless: true, timeout: 0,
       args: ['--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU,WebGPUDeveloperFeatures', '--disable-extensions'],
     }));
+    report.browser.version = browser.version(); report.browser.headless = true; saveReport();
     browser.once('disconnected', () => failRuntime(new Error('browser disconnected')));
     page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
     page.setDefaultTimeout(0); page.setDefaultNavigationTimeout(0);
     page.on('pageerror', error => { report.errors.push(error.message); failRuntime(error); });
+    page.on('console', message => {
+      if (message.type() === 'warning' && message.text().startsWith('Masks unavailable')) {
+        failRuntime(new Error(message.text()));
+      }
+    });
     report.failurePhase = 'host-load'; saveReport();
     await checked(page.goto(url, { waitUntil: 'load' }));
-    await checked(page.waitForFunction(() => Boolean(window.kaminosSamImageTools)));
+    if (values['app-host']) {
+      await checked(page.waitForFunction(() => Boolean(window.kaminosAssets && window.kaminosAppGpu)));
+    } else await checked(page.waitForFunction(() => Boolean(window.kaminosSamImageTools)));
     await checked(page.evaluate(() => {
       const transfers = new Map();
       window.__samEvidenceTransfers = transfers;
@@ -106,6 +131,17 @@ async function main() {
       };
     }));
     report.effectiveUrl = page.url();
+    if (values['app-host']) {
+      report.applicationHost = await checked(page.evaluate(async () => {
+        if (typeof window.kaminosAppGpu !== 'function') throw new Error('native application GPU host is absent');
+        const app = await window.kaminosAppGpu();
+        const session = await app.session();
+        if (session.device !== app.device || session.queue !== app.queue) throw new Error('application session device mismatch');
+        window.__samWitnessApplicationHost = app;
+        window.__samWitnessApplicationSession = session;
+        return { sameBorrowedSessionDevice: true, snapshot: app.snapshot() };
+      }));
+    }
 
     async function persistBrowserTransfer(label, descriptor) {
       const reference = await persistSamEvidenceArtifact({ outDir: out, label,
@@ -122,6 +158,26 @@ async function main() {
       lastTrustedEvidence = reference;
       await checked(page.evaluate(transferId => window.__samEvidenceTransfers.delete(transferId), descriptor.transferId));
       return reference;
+    }
+
+    async function assertMaskControls(label) {
+      const state = await checked(page.evaluate(() => ({ mode: window.kaminosWorkspace?.state().mode,
+        tab: document.querySelector('.tab.active')?.dataset.tab,
+        failed: document.getElementById('sam-image-status').dataset.failed === 'true',
+        status: document.getElementById('sam-image-status').textContent,
+        source: window.kaminosSamImageTools?.progress().source || null })));
+      state.promptVisible = await checked(page.locator('#sam-image-prompt').isVisible());
+      state.runVisible = await checked(page.locator('#sam-image-run').isVisible());
+      state.runDisabled = await checked(page.locator('#sam-image-run').isDisabled());
+      report.controlObservations ||= [];
+      const observation = { label, state, validation: 'pending' };
+      report.controlObservations.push(observation); saveReport();
+      try { validateSamMaskControls(state); observation.validation = 'passed'; saveReport(); }
+      catch (error) {
+        observation.screenshot = join(out, `${label}-unavailable-controls.png`);
+        await checked(page.screenshot({ path: observation.screenshot })); saveReport();
+        throw error;
+      }
     }
 
     async function capture(name) {
@@ -211,7 +267,8 @@ async function main() {
     let previousId = null;
     async function run(label, prompt, cache, empty = false, baseline = null, inputKey = 'image') {
       report.failurePhase = label; saveReport();
-      await page.locator('#sam-image-prompt').fill(prompt);
+      await assertMaskControls(label);
+      await checked(page.locator('#sam-image-prompt').fill(prompt));
       await page.evaluate(() => {
         window.samFrameTimes = [];
         const tick = time => { window.samFrameTimes.push(time); window.samFrameHandle = requestAnimationFrame(tick); };
@@ -245,6 +302,8 @@ async function main() {
       const interaction = validateSamConsumerInteraction(interactionEvidence, output.invocationId);
       assert.equal(interactionEvidence.source.sha256, report.inputs[inputKey].sha256);
       const evidence = await persistBrowserTransfer(`${label}-runtime`, evidenceTransfer.archive);
+      const applicationForeground = values['app-host']
+        ? validateSamApplicationForeground(JSON.parse(readFileSync(evidence.path, 'utf8')), output.invocationId) : null;
       const comparison = baseline ? { exactMasks: true, exactScoresAndBoxes: true, exactSelectedLogits: true } : null;
       if (baseline) {
         assert.deepEqual(output.instances.map(i => i.index), baseline.instances.map(i => i.index));
@@ -260,7 +319,7 @@ async function main() {
       const boundaries = [interaction.start, ...duringInference, interaction.end];
       const gaps = boundaries.slice(1).map((time, index) => time - boundaries[index]);
       report.runs.push({ label, witnessWallMilliseconds: performance.now() - start,
-        inferenceWallMilliseconds: interaction.end - interaction.start, output, evidence, comparison, interaction, cadence,
+        inferenceWallMilliseconds: interaction.end - interaction.start, output, evidence, comparison, interaction, cadence, applicationForeground,
         longestBrowserCallbackGapMs: Math.max(...gaps),
         cadenceAuthority: 'browser-rAF-and-input-to-GPU-submit-not-physical-display-timing' });
       saveReport(); await capture(label);
@@ -295,8 +354,9 @@ async function main() {
         assert.deepEqual(readFileSync(downloadedPath), bytes, 'download is not the persisted export');
         download = { path: downloadedPath, filename: saved.suggestedFilename() };
       }
-      const inspection = await checked(page.evaluate(async ({ entry, kind }) => {
-        const { validateSamConsumerExport } = await import('./sam-image-witness-checks.js');
+      const inspection = await checked(page.evaluate(async ({ entry, kind, appHost }) => {
+        const { validateSamConsumerExport, validateSamExportProvenance } = await import('./sam-image-witness-checks.js');
+        const { readPngProvenance } = await import('./authoring-image-generation.mjs');
         const { createSam3SourceMask } = await import('./webgpu-inference-kit/src/sam.js');
         const tools = window.kaminosSamImageTools, output = tools.output(), source = tools.progress().source;
         const selection = document.getElementById('sam-image-instances').value;
@@ -311,6 +371,7 @@ async function main() {
           const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
           const context = canvas.getContext('2d'); context.drawImage(image, 0, 0);
           return { width: canvas.width, height: canvas.height, mimeType: response.headers.get('content-type'), sha256,
+            provenance: readPngProvenance(new Uint8Array(bytes)),
             pixels: context.getImageData(0, 0, canvas.width, canvas.height).data };
         }
         const sourceImage = await pixels(source.source), exported = await pixels(entry.source);
@@ -321,9 +382,22 @@ async function main() {
           kind, width: sourceImage.width, height: sourceImage.height, sourcePixels: sourceImage.pixels,
           mask: createSam3SourceMask(output, indices, sourceImage.width, sourceImage.height), libraryEntry,
         });
+        let handoff = null;
+        if (appHost) {
+          validateSamExportProvenance(exported.provenance, { kind, source, output, indices,
+            width: sourceImage.width, height: sourceImage.height });
+          const selected = window.kaminosAssets?.read().selected;
+          if (window.kaminosWorkspace?.state().mode !== 'authoring' || selected?.source !== entry.source || selected.kind !== 'image') {
+            throw new Error('saved PNG did not become the selected Authoring image');
+          }
+          validateSamExportProvenance(selected.maskProvenance, { kind, source, output, indices,
+            width: sourceImage.width, height: sourceImage.height });
+          if (document.getElementById('asset-generate')?.hidden !== false) throw new Error('saved image did not return to Generate');
+          handoff = { selected, mode: 'authoring', view: 'generate' };
+        }
         return { comparison, indices, invocationId: output.invocationId, promptText: output.promptText,
-          sourceImage: source.source, libraryEntry, sha256: exported.sha256 };
-      }, { entry, kind }));
+          sourceImage: source.source, libraryEntry, sha256: exported.sha256, provenance: exported.provenance, handoff };
+      }, { entry, kind, appHost: values['app-host'] }));
       assert.equal(inspection.sha256, sha256);
       report.exports ||= [];
       report.exports.push({ kind, label, path, sha256, entry, download, inspection }); saveReport();
@@ -336,20 +410,64 @@ async function main() {
         assert.equal(object.image.assetSource, entry.source);
         assert.equal(object.image.width, inspection.comparison.width);
         assert.equal(object.image.height, inspection.comparison.height);
-        assert.deepEqual(object.image.maskProvenance, { sourceImage: inspection.sourceImage,
-          promptText: inspection.promptText, invocationId: inspection.invocationId, indices: inspection.indices });
+        for (const [key, value] of Object.entries({ sourceImage: inspection.sourceImage,
+          promptText: inspection.promptText, invocationId: inspection.invocationId, indices: inspection.indices })) {
+          assert.deepEqual(object.image.maskProvenance[key], value);
+        }
         await checked(page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))));
         const scenePath = join(out, `${label}-scene.png`);
         await checked(page.screenshot({ path: scenePath }));
         report.captures.push({ name: `${label}-scene`, path: scenePath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
       }
+      if (values['app-host']) {
+        const handoffPath = join(out, `${label}-authoring.png`);
+        await checked(page.screenshot({ path: handoffPath }));
+        report.captures.push({ name: `${label}-authoring`, path: handoffPath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
+        await checked(page.evaluate(() => window.__kaminosSetActiveTab('masks')));
+      }
     }
 
     report.failurePhase = 'image-ingress'; saveReport();
     // The accepted source bytes keep numerical parity while the name exercises export persistence.
-    await checked(page.locator('#sam-image-file').setInputFiles({ name: `${'a'.repeat(245)}.jpg`,
-      mimeType: 'image/jpeg', buffer: readFileSync(values.image) }));
+    const sourceFile = { name: `${'a'.repeat(245)}.jpg`, mimeType: 'image/jpeg', buffer: readFileSync(values.image) };
+    if (values['app-host']) {
+      await checked(page.evaluate(() => {
+        window.kaminosWorkspace.setMode('authoring');
+        window.kaminosAssets.open('browse');
+      }));
+      await checked(page.locator('#asset-file').setInputFiles(sourceFile));
+      await checked(page.waitForFunction(() => {
+        const state = window.kaminosAssets.read();
+        if (state.error) throw new Error(state.error);
+        return Boolean(state.selected);
+      }));
+      report.nativeSourceSelection = await checked(page.evaluate(async () => {
+        const selected = window.kaminosAssets.read().selected;
+        const response = await fetch('/api/assets?kind=image');
+        if (!response.ok) throw new Error('native image library could not be read');
+        const library = await response.json();
+        if (!library.entries.some(entry => entry.id === selected.id && entry.sha256 === selected.sha256)) {
+          throw new Error('selected source image is not persisted in the library');
+        }
+        return selected;
+      }));
+      const selectionPath = join(out, 'selected-library-image.png');
+      await checked(page.screenshot({ path: selectionPath }));
+      report.captures.push({ name: 'selected-library-image', path: selectionPath, visualInspection: 'pending-owner-pixel-read' }); saveReport();
+      await checked(page.locator('#asset-open-masks').click());
+      await checked(page.waitForFunction(() => window.kaminosSamImageTools
+        && !window.kaminosSamImageTools.progress().busy));
+      await assertMaskControls('selected-image-mask-entry');
+      report.nativeSourceHandoff = await checked(page.evaluate(async sha256 => {
+        const { validateSamNativeSourceHandoff } = await import('./sam-image-witness-checks.js');
+        return validateSamNativeSourceHandoff({ selected: window.kaminosAssets.read().selected,
+          source: window.kaminosSamImageTools.progress().source, mode: window.kaminosWorkspace.state().mode,
+          maskPanelActive: document.querySelector('.tab.active')?.dataset.tab === 'masks' }, sha256);
+      }, report.inputs.image.sha256));
+      saveReport();
+    } else await checked(page.locator('#sam-image-file').setInputFiles(sourceFile));
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+    await assertMaskControls('image-ingress');
     await capture('source-desktop');
     const baseline = values.baseline ? JSON.parse(readFileSync(values.baseline, 'utf8')) : null;
     await run('cold-wheel', 'wheel', 'miss', false, baseline?.visualEvidence.output);
@@ -363,7 +481,7 @@ async function main() {
     await saveExport('mask', 'windows-single-mask');
     assert.ok(Buffer.byteLength(report.exports.at(-1).entry.name) > 255, 'long export name not exercised');
     await page.locator('#sam-image-instances').selectOption('all');
-    await saveExport('cutout', 'windows-all-cutout', true);
+    await saveExport('cutout', 'windows-all-cutout', !values['app-host']);
     await page.locator('[data-tab="masks"]').click();
     await page.setViewportSize({ width: 390, height: 844 });
     report.failurePhase = 'windows-mobile'; saveReport();
@@ -414,10 +532,39 @@ async function main() {
     assert.equal(await page.locator('#sam-image-run').isDisabled(), true);
     await page.locator('#sam-image-file').setInputFiles(values.image);
     await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+    await assertMaskControls('recovered-source');
     await capture('recovered-source');
+    if (values['app-host']) {
+      report.failurePhase = 'model-unload-application-handback'; saveReport();
+      await checked(page.locator('#sam-image-unload').click());
+      await checked(page.waitForFunction(() => !window.kaminosSamImageTools.progress().busy));
+      assert.equal(await page.locator('#sam-image-status').innerText(), 'Model unloaded');
+      report.applicationAfterUnload = await checked(page.evaluate(async () => {
+        const { validateSamApplicationFrame } = await import('./sam-image-witness-checks.js');
+        const app = await window.kaminosAppGpu(), session = await app.session();
+        if (app !== window.__samWitnessApplicationHost || session !== window.__samWitnessApplicationSession) {
+          throw new Error('SAM unload replaced the application host or session');
+        }
+        if (window.kaminosSamImageTools.evidence().runtime !== null) throw new Error('SAM model remained resident after unload');
+        const before = app.snapshot();
+        if (before.foreground.disposed || before.foreground.activeRun) throw new Error('application foreground was disposed or held');
+        const receipt = await app.requester({ requestId: `sam-unload-app-check:${crypto.randomUUID()}`,
+          metadata: { renderer: 'kaminos-app', purpose: 'model-unload-handback' },
+          run(service) {
+            if (service.device !== app.device || service.queue !== app.queue) throw new Error('handback device mismatch');
+            return { status: 'submitted' };
+          } }).completion;
+        await app.queue.onSubmittedWorkDone();
+        const sceneRender = validateSamApplicationFrame(receipt);
+        return { before, after: app.snapshot(), receipt, sceneRender, sameHost: true, sameSession: true,
+          authority: 'application-frame-callback-and-queue-settlement-not-presentation' };
+      }));
+      saveReport();
+    }
     report.status = 'captured'; report.failurePhase = null;
     report.checks = { numericalRegression: baseline ? 'passed' : 'not-requested', inputDuringInference: 'passed',
-      persistedExports: 'passed', visualAndInteractionQuality: 'pending-owner-inspection' };
+      persistedExports: 'passed', applicationComposition: values['app-host'] ? 'captured-pending-owner-inspection' : 'not-requested',
+      visualAndInteractionQuality: 'pending-owner-inspection' };
   } catch (error) {
     report.status = 'failed'; report.error = String(error.stack || error); process.exitCode = 1;
     const transport = error?.evidenceTransport || null;

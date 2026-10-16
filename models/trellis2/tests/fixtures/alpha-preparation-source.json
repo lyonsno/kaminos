@@ -1,0 +1,334 @@
+{
+  "schema": "trellis2.alpha-preparation-source.v0",
+  "source": {
+    "commit": "1201553c339008eb5e10ab6131acc11ab7cd0158",
+    "moduleSha256": "2622afae8c5a9581ded6e6bbabcde31fb2a012f50ac6a154e3747c1af625d9cb",
+    "pillow": "12.3.0",
+    "numpy": "2.5.4",
+    "modelCalls": 0,
+    "route": "preprocess_image_with_provenance(input-alpha) / PIL RGB LANCZOS512",
+    "pattern": "channel=(37*x+101*y+79*c+17*variant)%256; alpha-table and margins in generator"
+  },
+  "cases": [
+    {
+      "name": "odd-center",
+      "width": 7,
+      "height": 8,
+      "variant": 1,
+      "inputRgbaSha256": "2a36a44bd3275141681e2fd3b9deb68f4e3848de96c2b3edff3fe1d8dc3054dd",
+      "encodedPngSha256": "a977d99f316c15c4ed67569939aad7d359aaedbd15f8cc0268953afc91b5c949",
+      "encodedPngBytes": 154,
+      "foregroundPixels": 24,
+      "foregroundBbox": [
+        0,
+        0,
+        6,
+        7
+      ],
+      "crop": {
+        "center_xy": [
+          3.0,
+          3.5
+        ],
+        "source_extent": 7,
+        "bbox_xyxy": [
+          0.0,
+          0.5,
+          6.0,
+          6.5
+        ]
+      },
+      "scaledSize": [
+        7,
+        8
+      ],
+      "croppedSize": [
+        6,
+        6
+      ],
+      "croppedRgbSha256": "4f8f1ab96b444f26882a34cec06eccde953e3fb168d902f2ac41a09d1c2dd20d",
+      "preparedRgbSha256": "bee9490f8e2ad4ebc90b84bd29a872ecb1d838b66fb7a78c729fed4c9f397dca",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "even-center",
+      "width": 8,
+      "height": 9,
+      "variant": 2,
+      "inputRgbaSha256": "2775e709349f249fbdc83e4b099cd5446981116991b37a5a581edbee13b19004",
+      "encodedPngSha256": "dd2dc65ce90411a102ed557c3023fa4b3c0d2c176ae5f88ce316cc470a8a9d72",
+      "encodedPngBytes": 173,
+      "foregroundPixels": 24,
+      "foregroundBbox": [
+        1,
+        0,
+        7,
+        7
+      ],
+      "crop": {
+        "center_xy": [
+          4.0,
+          3.5
+        ],
+        "source_extent": 7,
+        "bbox_xyxy": [
+          1.0,
+          0.5,
+          7.0,
+          6.5
+        ]
+      },
+      "scaledSize": [
+        8,
+        9
+      ],
+      "croppedSize": [
+        6,
+        6
+      ],
+      "croppedRgbSha256": "448bc72f70230e316006fb4f63fa8444722811cc59d2f31efc300a329790d9ac",
+      "preparedRgbSha256": "c3fd1e759b2164f76116624f345537d0738e07b771dbe81620a9ed59d7a1aeb8",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "wide-padding",
+      "width": 15,
+      "height": 4,
+      "variant": 3,
+      "inputRgbaSha256": "33bb51a28f0b6c895ed09b2e65813c40f1b7357f3e72ab1974b512029267c742",
+      "encodedPngSha256": "dd5c4e962a3ef308b0eedca7c8c3a59e83560479eda7fbfe47311ce9a373ab05",
+      "encodedPngBytes": 125,
+      "foregroundPixels": 18,
+      "foregroundBbox": [
+        0,
+        1,
+        13,
+        3
+      ],
+      "crop": {
+        "center_xy": [
+          6.5,
+          2.0
+        ],
+        "source_extent": 13,
+        "bbox_xyxy": [
+          0.5,
+          -4.0,
+          12.5,
+          8.0
+        ]
+      },
+      "scaledSize": [
+        15,
+        4
+      ],
+      "croppedSize": [
+        12,
+        12
+      ],
+      "croppedRgbSha256": "fde819a5c861d0648b02cf0b2b1013411dfb63e9541496f6345a3b35f2a731f5",
+      "preparedRgbSha256": "9daf3b04667597c373a230284b0f1f1e76e7d6fe783bd44427f4a6a7b1241ea0",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "tall-padding",
+      "width": 4,
+      "height": 15,
+      "variant": 4,
+      "inputRgbaSha256": "71d5c73934229df8565a6715907d493505970730fd0a456f101eb5ec2e28777a",
+      "encodedPngSha256": "f84e19571402a22b8bcd8568117a66038e97a804dd4e3d4ffc7276a32fd97420",
+      "encodedPngBytes": 191,
+      "foregroundPixels": 18,
+      "foregroundBbox": [
+        1,
+        0,
+        3,
+        13
+      ],
+      "crop": {
+        "center_xy": [
+          2.0,
+          6.5
+        ],
+        "source_extent": 13,
+        "bbox_xyxy": [
+          -4.0,
+          0.5,
+          8.0,
+          12.5
+        ]
+      },
+      "scaledSize": [
+        4,
+        15
+      ],
+      "croppedSize": [
+        12,
+        12
+      ],
+      "croppedRgbSha256": "dea4834b7adffe0260fa9067e3bc36faa27ca858bed9c9508525d1a3aca69c91",
+      "preparedRgbSha256": "d3e3f2e27f3b4d43b48a92d3d290c759814c8517c0146cbd895548485e5458c3",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "threshold-and-rounding",
+      "width": 13,
+      "height": 11,
+      "variant": 5,
+      "inputRgbaSha256": "56e09d98499ed55a1fc7198037dabfd4d3b0484c2e6e20bf94e005529120c92e",
+      "encodedPngSha256": "0338577030cbd7b7c5d79208a092fbe1c10b3ea5cf9d9dfe245379bc712dfe0c",
+      "encodedPngBytes": 170,
+      "foregroundPixels": 61,
+      "foregroundBbox": [
+        0,
+        0,
+        12,
+        10
+      ],
+      "crop": {
+        "center_xy": [
+          6.0,
+          5.0
+        ],
+        "source_extent": 12,
+        "bbox_xyxy": [
+          0.0,
+          -1.0,
+          12.0,
+          11.0
+        ]
+      },
+      "scaledSize": [
+        13,
+        11
+      ],
+      "croppedSize": [
+        12,
+        12
+      ],
+      "croppedRgbSha256": "3c97b2442d15bd011f1cc5e09169ec2cfad9c557dceb86caa75e84a0fce264c2",
+      "preparedRgbSha256": "f7ff1ab57366e415d75c094eb8e5cb59f9fb427991cceec8ca9a8aec1ebeec72",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "rgb-downscale",
+      "width": 519,
+      "height": 523,
+      "variant": 6,
+      "inputRgbaSha256": "909bd18dd5925b30acd6e629359914dfb86f133242bb336391d0c7859c9c8dec",
+      "encodedPngSha256": "701d456e19dc76d93940430cf6edef65933ba8fe5f7aee78b68be94716c80bdf",
+      "encodedPngBytes": 10318,
+      "foregroundPixels": 115439,
+      "foregroundBbox": [
+        1,
+        1,
+        517,
+        521
+      ],
+      "crop": {
+        "center_xy": [
+          259.0,
+          261.0
+        ],
+        "source_extent": 520,
+        "bbox_xyxy": [
+          -1.0,
+          1.0,
+          519.0,
+          521.0
+        ]
+      },
+      "scaledSize": [
+        519,
+        523
+      ],
+      "croppedSize": [
+        520,
+        520
+      ],
+      "croppedRgbSha256": "6d2d250a7f068e0c31ab6825e006b104fe43b4fdb9f75cd606afc4eee287bf48",
+      "preparedRgbSha256": "c47b11b8cef7b7a5f7ebe061cce6be4be250471a6ef94be99863e52998cef565",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "rgba-max-side-downscale",
+      "width": 1031,
+      "height": 1025,
+      "variant": 7,
+      "inputRgbaSha256": "542977f014572360b1f93a5166f712e00fa702e8ac2a1ecd828b0e2758775a7b",
+      "encodedPngSha256": "84eb58f411b65c0ea77545a8fe2efb5f82c5b81773f83011c8ff9f2914a433dd",
+      "encodedPngBytes": 35429,
+      "foregroundPixels": 297906,
+      "foregroundBbox": [
+        0,
+        0,
+        1023,
+        1017
+      ],
+      "crop": {
+        "center_xy": [
+          511.5,
+          508.5
+        ],
+        "source_extent": 1023,
+        "bbox_xyxy": [
+          0.5,
+          -2.5,
+          1022.5,
+          1019.5
+        ]
+      },
+      "scaledSize": [
+        1024,
+        1018
+      ],
+      "croppedSize": [
+        1022,
+        1022
+      ],
+      "croppedRgbSha256": "8a44d8bd45116fbf6b1ec6ff106b820c16467840eb1077f7582a5146a5011780",
+      "preparedRgbSha256": "c242283009752a29e7d815eda235bc040996ec6c628e98d7d38ec4b4497b86a5",
+      "preparedByteLength": 786432
+    },
+    {
+      "name": "thin-max-side-downscale",
+      "width": 1057,
+      "height": 13,
+      "variant": 8,
+      "inputRgbaSha256": "7a6be8dc978ff702700b9c40f79905b5f48de95184bf273305ee606327908823",
+      "encodedPngSha256": "33c33d7b74bf39dd481d9d7174ec5f57f75afd81ed0b5d74fd6875592465eabf",
+      "encodedPngBytes": 594,
+      "foregroundPixels": 2648,
+      "foregroundBbox": [
+        1,
+        0,
+        1023,
+        10
+      ],
+      "crop": {
+        "center_xy": [
+          512.0,
+          5.0
+        ],
+        "source_extent": 1022,
+        "bbox_xyxy": [
+          1.0,
+          -506.0,
+          1023.0,
+          516.0
+        ]
+      },
+      "scaledSize": [
+        1024,
+        12
+      ],
+      "croppedSize": [
+        1022,
+        1022
+      ],
+      "croppedRgbSha256": "1937da5310f8923048d1dd62913bd740fa59d8009af330bac6021aa8afa795c6",
+      "preparedRgbSha256": "97dfc37147a4000e54cd951c2a753b56c3796ed49606af8a31fa7ca02cee420a",
+      "preparedByteLength": 786432
+    }
+  ]
+}

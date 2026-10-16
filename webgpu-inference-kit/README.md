@@ -177,6 +177,21 @@ In one measured run on an M4 Max in Chrome, **SHARP generated 1,179,648 Gaussian
 
 Together, these examples show how model ports can expose useful scheduling boundaries, preserve their outputs, and make room for the application around them.
 
+## GPU Timing
+
+Per-kernel GPU timing is opt-in. Existing callers allocate no timing resources and encode no timestamp writes unless they explicitly request `gpuTiming: true` (or a timing options object) when creating a runtime. A session route accepts the same option through `runtimeOptions`:
+
+```js
+const route = await session.registerRoute({
+  routeId: "example.image-to-output.webgpu-local.v0",
+  runtimeOptions: { gpuTiming: true },
+});
+```
+
+The device must expose `timestamp-query`; otherwise the timing summary reports `unavailable`. Call `await route.runtime.settleGpuTiming()` before reading completed `gpuMs` / `gpuStatus` stage records and the `gpuTiming` profile summary. Wall-clock stage timing stays separate. Invalid timestamps remain visibly invalid; observer failures are counted separately as `listenerErrors`.
+
+Each physical timestamp pair is used once per query set. Exhausted sets retire after their readbacks settle, then a replacement begins the next epoch. That rollover can delay admission of the next kernel, so compare timing-enabled and timing-disabled execution when evaluating application performance. The standalone timer is exported as `createWebGpuGpuTimer`; explicit `true`, `"auto"`, and options objects enable it, while omitted options, `null`, `false` and `"off"` leave it disabled.
+
 ## Continue Porting
 
 - Follow [Getting Started](./docs/getting-started.md) to run a complete minimal WebGPU model port with one reusable route and two queued invocations.

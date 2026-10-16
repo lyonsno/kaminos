@@ -46,11 +46,14 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   const shot=document.createElement('details');shot.id='scene-camera-settings';shot.open=true;shot.innerHTML='<summary>Camera &amp; output</summary>';shot.append(byId('authoring-camera-properties'));byId('authoring-composition-slot').after(shot);
   const cameraButton=document.createElement('button');cameraButton.type='button';cameraButton.id='authoring-camera';cameraButton.textContent='Camera';cameraButton.onclick=()=>{setContext('scene');shot.open=true;shot.scrollIntoView({block:'nearest'});};byId('authoring-frame').before(cameraButton);
   const viewportSettings=byId('authoring-viewport-settings');
+  for(const [key,text,checked] of [['bones','Bones',true],['paths','Motion paths',false]]){
+    const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.id='viewport-show-'+key;input.checked=checked;label.append(input,document.createTextNode(' '+text));byId('viewport-show-helpers').parentElement.before(label);
+  }
   document.addEventListener('pointerdown',event=>{
     if(!viewportSettings.contains(event.target))viewportSettings.open=false;
     if(!byId('authoring-presets').contains(event.target))byId('authoring-presets').open=false;
   },true);
-  for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints'])byId('viewport-show-'+key).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
+  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints'])byId('viewport-show-'+key).addEventListener('change',event=>document.defaultView.kaminosViewportSettings.set({[key]:event.target.checked}));
   for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){
     const input=byId('viewport-'+key),api=document.defaultView.kaminosViewportSettings;let before;
     const start=()=>{before=api.read()[key];};input.addEventListener('focusin',start);

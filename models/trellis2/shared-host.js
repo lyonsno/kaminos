@@ -1,7 +1,7 @@
 import {createWebGpuInferenceSession,createWebGpuForegroundService} from '../../webgpu-inference-kit/src/core.js';
 import {GENERATION_ROUTE} from './sparse-generation-witness-checks.js';
 
-const boundPrototypes=new WeakSet();
+const boundOwners=new WeakSet();
 const throwIfStopped=signal=>{
   if(!signal?.aborted)return;
   const reason=signal.reason;
@@ -13,25 +13,36 @@ const throwIfStopped=signal=>{
 // the scene/device/session; this bridge owns only its route and frame-service
 // connection. It does not request a device, run a fixture model, or claim frame
 // latency. Consume resident fields before finish releases the owned route.
-export async function createTrellisSharedHost({sharedGpu,host,prototype,session:providedSession,sessionId}={}){
-  const device=sharedGpu?.device,queue=sharedGpu?.queue,context=prototype?.foregroundGpuContext?.();
+export async function createTrellisSharedHost({appGpu,sharedGpu,host,prototype,session:providedSession,sessionId}={}){
+  const application=appGpu!==undefined;
+  if(application&&(sharedGpu!==undefined||host!==undefined||prototype!==undefined||providedSession!==undefined||sessionId!==undefined))
+    throw Error('one app-owned or legacy TRELLIS host source required');
+  if(application){
+    if(!appGpu||typeof appGpu.beginRun!=='function'||!appGpu.session)
+      throw Error('actual app device/session/foreground run owner required');
+    providedSession=appGpu.session;
+  }
+  const device=application?appGpu.device:sharedGpu?.device,queue=application?appGpu.queue:sharedGpu?.queue,
+    context=application?null:prototype?.foregroundGpuContext?.(),owner=application?appGpu:prototype;
   if(!device||queue!==device.queue||typeof queue.submit!=='function'||typeof queue.onSubmittedWorkDone!=='function')
     throw Error('TRELLIS requires the same host device and exact queue with completion observation');
-  if(host?.device!==device||context?.device!==device||context?.queue!==queue)
-    throw Error('TRELLIS shared host/renderer device or queue mismatch');
-  if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')
-    throw Error('TRELLIS foreground service requires the actual ordinary renderer');
-  if(typeof host.setForegroundServiceActive!=='function'||typeof host.runForegroundFrame!=='function'||
-    typeof prototype.setForegroundOpportunityRequester!=='function')throw Error('actual host foreground bridge required');
-  if(boundPrototypes.has(prototype))throw Error('TRELLIS foreground bridge already owns this renderer connection');
+  if(!application){
+    if(host?.device!==device||context?.device!==device||context?.queue!==queue)
+      throw Error('TRELLIS shared host/renderer device or queue mismatch');
+    if(context.renderer!=='ordinary-volume'||context.productFrameOwner!=='prototype')
+      throw Error('TRELLIS foreground service requires the actual ordinary renderer');
+    if(typeof host.setForegroundServiceActive!=='function'||typeof host.runForegroundFrame!=='function'||
+      typeof prototype.setForegroundOpportunityRequester!=='function')throw Error('actual host foreground bridge required');
+  }
+  if(boundOwners.has(owner))throw Error('TRELLIS foreground bridge already owns this host connection');
   if(providedSession&&(providedSession.device!==device||providedSession.queue!==queue))
     throw Error('provided inference session must borrow the same host device and queue');
   if(providedSession?.snapshot().routes.some(r=>r.routeId===GENERATION_ROUTE))
     throw Error('provided session already has a TRELLIS route');
-  const name=sharedGpu.adapter?.info?.description||sharedGpu.adapter?.info?.device||sharedGpu.adapter?.info?.vendor;
+  const name=sharedGpu?.adapter?.info?.description||sharedGpu?.adapter?.info?.device||sharedGpu?.adapter?.info?.vendor;
   if(!providedSession&&(!sessionId||!name))throw Error('explicit session id and observed host adapter identity required');
   // Reserve before the asynchronous session factory yields.
-  boundPrototypes.add(prototype);
+  boundOwners.add(owner);
   let session,foreground,connecting=false;
   let active=null,disposed=false;
   const assertOpen=()=>{if(disposed)throw Error('TRELLIS host bridge disposed');};
@@ -45,12 +56,14 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
   try{
     session=providedSession??await createWebGpuInferenceSession({
       sessionId,adapter:sharedGpu.adapter,device,queue,adapterName:name,deviceOwnership:'borrowed'});
-    foreground=createWebGpuForegroundService({routeId:GENERATION_ROUTE,device,queue});
-    connecting=true;
-    prototype.setForegroundOpportunityRequester(requestForegroundOpportunity);
-    host.setForegroundServiceActive(true);
+    if(!application){
+      foreground=createWebGpuForegroundService({routeId:GENERATION_ROUTE,device,queue});
+      connecting=true;
+      prototype.setForegroundOpportunityRequester(requestForegroundOpportunity);
+      host.setForegroundServiceActive(true);
+    }
   }catch(error){
-    boundPrototypes.delete(prototype);
+    boundOwners.delete(owner);
     const failures=[];
     for(const cleanup of [
       ()=>connecting&&prototype.setForegroundOpportunityRequester(null),
@@ -62,8 +75,9 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
     throw error;
   }
   return Object.freeze({
-    device,queue,session,requestForegroundOpportunity,
-    snapshot(){return{session:session.snapshot(),foreground:foreground.snapshot(),disposed,
+    device,queue,session,...(!application?{requestForegroundOpportunity}:{}),
+    snapshot(){return{session:session.snapshot(),foreground:foreground?.snapshot()??null,
+      foregroundOwnership:application?'application':'bridge',disposed,
       activeRun:active?{runId:active.runId,status:active.status,error:active.error}:null};},
     async beginRun({runId,signal}={}){
       assertOpen();if(active)throw Error('TRELLIS host has an active or held run');
@@ -73,7 +87,10 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
       const state={runId,status:'starting',error:null};active=state;
       let frameRun,route;
       try{
-        frameRun=await foreground.beginRun(runId);
+        frameRun=await(application?appGpu.beginRun(runId,{routeId:GENERATION_ROUTE}):foreground.beginRun(runId));
+        if(application&&(frameRun?.routeId!==GENERATION_ROUTE||typeof frameRun.withForeground!=='function'||
+          typeof frameRun.finish!=='function'||!frameRun.foregroundOpportunities))
+          throw Error('application foreground run must carry the actual TRELLIS model route identity');
         const opportunities=frameRun.foregroundOpportunities;
         route=await session.registerRoute({routeId:GENERATION_ROUTE,runtimeOptions:{
           kernel:{profile:'trellis2-shared-host-v0'},foregroundOpportunities:{...opportunities,
@@ -90,7 +107,12 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
           try{await frameRun.finish();active=null;}catch(secondary){
             throw new AggregateError([error,secondary],'TRELLIS route admission and foreground settlement failed');
           }
-        }else if(!foreground.snapshot().activeRun)active=null;
+        }else if(application||!foreground.snapshot().activeRun){
+          // No application run handle was delivered and no model route was
+          // admitted. The app still owns any held/busy foreground service;
+          // clearing our local admission does not certify app settlement.
+          active=null;
+        }
         throw error;
       }
       const activeInvocations=new Set(),pendingReads=new Set();let readSequence=0;
@@ -166,10 +188,12 @@ export async function createTrellisSharedHost({sharedGpu,host,prototype,session:
     async dispose(){
       if(disposed)return;
       if(active)throw Error('finish the active or held TRELLIS run before disposal');
-      await foreground.dispose();
-      prototype.setForegroundOpportunityRequester(null);host.setForegroundServiceActive(false);
+      if(!application){
+        await foreground.dispose();
+        prototype.setForegroundOpportunityRequester(null);host.setForegroundServiceActive(false);
+      }
       if(!providedSession){await session.drain();session.close();}
-      boundPrototypes.delete(prototype);disposed=true;
+      boundOwners.delete(owner);disposed=true;
     },
   });
 }

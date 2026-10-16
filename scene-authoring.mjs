@@ -31,7 +31,7 @@ export function normalizeSceneCapture(value) {
   return clone(value);
 }
 
-export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null, owner = null) {
+export function compositionRestoreUrl(composition, sceneFile, origin, workspace = null, owner = null, {note = null} = {}) {
   const state = normalizeComposition(composition);
   if (!sceneFile || /[/\\]/.test(sceneFile)) throw new Error('Saved scene filename is required');
   const target = new URL(state ? '/volume-settings-preset.html' : '/', origin);
@@ -42,6 +42,8 @@ export function compositionRestoreUrl(composition, sceneFile, origin, workspace 
     if (typeof owner.id !== 'string' || typeof owner.inputsText !== 'string') throw new Error('Owner setup requires an experiment id and serialized inputs');
     hash.set('experiment', owner.id);hash.set('experiment_inputs', owner.inputsText);
   }
+  // A Kaminos note being opened (docs/notes.md) rides along to the scene.
+  if (note) hash.set('note', note);
   hash.set('authoring', '1');
   hash.set('scene', sceneFile);
   target.hash = hash.toString();
@@ -55,7 +57,7 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   if (workspace !== null) hash.set('workspace',workspace);
   const forwarded = new URLSearchParams();
   for (const [key, value] of hash) {
-    if (['workspace', 'authoring', 'scene', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
+    if (['workspace', 'authoring', 'scene', 'note', 'experiment', 'experiment_inputs', 'composition_module_url', 'volume_collision', 'rendering_source_xyz', 'rendering_source_gain', 'rendering_surface_gain', 'rendering_surface_scattering', 'rendering_receiver_spacing', 'rendering_angular_pattern', 'rendering_directions', 'rendering_match_camera'].includes(key)
       || key.startsWith('volume_light_field') || JOINED_ROUTE_KEYS.includes(key)) forwarded.set(key, value);
   }
   url.hash = forwarded.toString();

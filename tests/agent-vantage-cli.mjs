@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {execFile} from 'node:child_process';
-import {mkdtempSync, readFileSync, readdirSync, rmSync} from 'node:fs';
+import {mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -130,4 +130,152 @@ test('map writes the painted map, and pictures can leave it out', async t => {
   assert.equal(sketch.code, 0, sketch.stderr);
   assert.equal(received.at(-1).body.command, 'sketch');
   assert.match(sketch.stdout, /Centre box/);
+});
+
+const pickReply = args => ({ok: true, id: 'c2', command: 'pick', page: {id: 'page-aaaaaaaa', title: 'Kaminos'}, elapsedMs: 3,
+  result: {schema: 'kaminos.agent-vantage.v1', kind: 'pick', from: args.pictured ? 'picture' : args.optics ? 'camera' : 'vantage-bebop', at: args.at,
+    referent: args.pictured ? 'pictured' : 'rendered', ray: {origin: [0, 1, 6], direction: [0, -0.1, -1]},
+    hit: args.pictured?.n === 0 ? null : {id: 'kiln', label: 'Kiln', type: 'glb', authority: 'approximate', now: 'present', distance: 5.52,
+      point: [0.2, 0.45, 0.5], local: [0.2, 0.05, 0.5], normal: [0, 0, 1], pointBasis: 'recast',
+      surface: {path: [0, 2], mesh: 'Beam', face: 17, instance: null}, geometry: {status: 'same'}},
+    ...(args.pictured?.n === 0 ? {drawn: {kind: 'nothing'}} : {}),
+    unresolved: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', distance: 4.1, reason: 'simulation fields are drawn outside the pick map'}],
+    fields: [{id: 'flame-field', label: 'Fire & smoke', type: 'simulation-domain', enter: 4.1, exit: 6.3}]}});
+
+test('pick sends picture fractions and says what the ray hits', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  t.after(() => server.close());
+  const result = await run(['--server', url, 'pick', '0.5', '0.25']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.25]});
+  assert.match(result.stdout, /Kiln/);
+  assert.match(result.stdout, /Beam/);
+  assert.match(result.stdout, /Fire & smoke/);
+  const pixels = await run(['--server', url, 'pick', '640', '360']);
+  assert.equal(pixels.code, 2, 'pixels need the picture they belong to');
+  assert.match(pixels.stderr, /--picture/);
+});
+
+// A kept picture's pick map: 4x2 pixels. The top row shows nothing, then the kiln; the bottom row shows instance 1 of the rocks.
+const matrix = value => Array.from({length: 16}, (_, i) => (i % 5 === 0 ? value : 0));
+const kilnRow = {n: 3, id: 'kiln', label: 'Kiln', type: 'glb', path: [0, 2], mesh: 'Beam', matrixWorld: matrix(1), root: matrix(1), geometry: {uuid: 'g'}};
+const rocksRow = {n: 5, id: 'rocks', label: 'Rocks', type: 'glb', path: [0], mesh: null, matrixWorld: matrix(2), root: matrix(2), geometry: {uuid: 'r'},
+  instances: {1: matrix(4)}};
+const pickMap = (objects, runs) => ({schema: 'kaminos.vantage-pick-map.v1', width: 4, height: 2, runs, objects,
+  clouds: [{id: 'plume', label: 'Plume', type: 'splat', bounds: {min: [0, 0, 0], max: [1, 1, 1]}}], fields: [], water: false});
+
+test('pick on a kept picture looks the pixel up in its pick map and sends what the picture drew there', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const optics = {projection: Array.from({length: 16}, (_, i) => i / 10), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1) / 10)};
+  const frameOptics = {projection: Array.from({length: 16}, () => 2), viewInverse: Array.from({length: 16}, () => 3)};
+  const recordPath = path.join(out, 'burst.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'burst', image: {width: 1280, height: 720}, optics,
+    frames: [{index: 0, optics, pickMap: pickMap([kilnRow], '0 0 2 3 0 2 0 0 4')},
+      {index: 1, optics: frameOptics, pickMap: pickMap([rocksRow], '0 0 4 5 1 4')}]}}));
+  const first = await run(['--server', url, 'pick', '960', '180', '--picture', recordPath]);
+  assert.equal(first.code, 0, first.stderr);
+  const {geometry, ...kiln} = kilnRow;
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.875, 0.25], optics,
+    pictured: {...kiln, geometry, instance: 0, pixel: [3, 0]}, scene: {clouds: pickMap([], '').clouds, fields: [], water: false}},
+    'a burst without --frame is its first frame; the kiln drew that pixel, picked through its centre');
+  assert.match(first.stdout, /Kiln/);
+  assert.match(first.stdout, /the picture drew/);
+  const second = await run(['--server', url, 'pick', '0', '720', '--picture', recordPath, '--frame', '2']);
+  assert.equal(second.code, 0, second.stderr);
+  const sent = received[1].body.args;
+  assert.deepEqual(sent.optics, frameOptics, '--frame picks from that frame of a burst');
+  assert.equal(sent.pictured.id, 'rocks');
+  assert.equal(sent.pictured.instance, 1);
+  assert.deepEqual(sent.pictured.instanceMatrix, matrix(4), 'the instance travels with the matrix it was drawn with');
+  assert.equal(sent.pictured.instances, undefined, 'not the whole table');
+  const empty = await run(['--server', url, 'pick', '10', '10', '--picture', recordPath]);
+  assert.equal(empty.code, 0, empty.stderr);
+  assert.deepEqual(received[2].body.args.pictured, {n: 0, instance: 0, pixel: [0, 0]}, 'where the picture drew nothing, that is the answer');
+  assert.match(empty.stdout, /drew nothing/);
+});
+
+test('a picture kept without a pick map is refused unless today\'s scene is asked for', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const optics = {projection: Array.from({length: 16}, (_, i) => i + 1), viewInverse: Array.from({length: 16}, (_, i) => -(i + 1))};
+  const recordPath = path.join(out, 'old.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'snap', image: {width: 100, height: 100}, optics,
+    scenePose: [{id: 'kiln', root: matrix(1), meshes: []}]}}));
+  const refused = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath]);
+  assert.equal(refused.code, 2);
+  assert.match(refused.stderr, /pick map/);
+  assert.match(refused.stderr, /--now/, 'it says how to cast that camera into the scene as it is now');
+  assert.equal(received.length, 0);
+  const now = await run(['--server', url, 'pick', '50', '50', '--picture', recordPath, '--now']);
+  assert.equal(now.code, 0, now.stderr);
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', from: 'sub', at: [0.5, 0.5], optics});
+  assert.match(now.stdout, /draws there now/);
+});
+
+test('a picture\'s depth is kept as a file beside it, and a pick reads the depth at its pixel', async t => {
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  // Depth for a 4x2 map: 9.5 where the kiln was drawn, nothing elsewhere.
+  const depths = new Float32Array(8); depths[2] = 9.5; depths[3] = 9.75;
+  const bytes = Buffer.alloc(32); depths.forEach((value, i) => bytes.writeFloatLE(value, i * 4));
+  const map = {...pickMap([kilnRow], '0 0 2 3 0 2 0 0 4'), depth: {encoding: 'float32le-base64', unit: 'view-depth', width: 4, height: 2, data: bytes.toString('base64')}};
+  const {server, received, url} = await fakeServer((request, body) => [200, body.command === 'pick' ? pickReply(body.args)
+    : {...snapReply(body.command, body.args), result: {...snapReply(body.command, body.args).result, image: {width: 1280, height: 640},
+      optics: {projection: Array(16).fill(1), viewInverse: Array(16).fill(2)}, pickMap: map}}]);
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const snap = await run(['--server', url, '--out', out, 'snap', '--name', 'kiln']);
+  assert.equal(snap.code, 0, snap.stderr);
+  const depthFile = readdirSync(out).find(name => name.endsWith('-depth.f32'));
+  assert.ok(depthFile, 'the depth is written as its own file');
+  assert.deepEqual(readFileSync(path.join(out, depthFile)), bytes);
+  const recordPath = path.join(out, readdirSync(out).find(name => name.endsWith('.json')));
+  const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+  assert.equal(record.result.pickMap.depth.data, undefined, 'the record keeps a path, not the data');
+  assert.equal(record.result.pickMap.depth.path, path.join(out, depthFile));
+  const picked = await run(['--server', url, 'pick', '1000', '100', '--picture', recordPath]);
+  assert.equal(picked.code, 0, picked.stderr);
+  const sent = received.at(-1).body.args;
+  assert.equal(sent.pictured.depth, 9.75, 'the depth the picture drew at pixel 3, 0');
+  assert.deepEqual(sent.pictured.pixel, [3, 0]);
+  rmSync(path.join(out, depthFile));
+  const lost = await run(['--server', url, 'pick', '1000', '100', '--picture', recordPath]);
+  assert.equal(lost.code, 2, 'a picture whose depth file is gone is not picked as if it had none');
+  assert.match(lost.stderr, /depth/);
+});
+
+test('a burst keeps depth only when asked', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  t.after(() => server.close());
+  await run(['--server', url, 'burst', '--count', '2']);
+  assert.equal(received.at(-1).body.args.depth, false);
+  await run(['--server', url, 'burst', '--count', '2', '--depth']);
+  assert.equal(received.at(-1).body.args.depth, true);
+});
+
+test('glance asks the page for the sub\'s own view and keeps the picture', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const result = await run(['--server', url, '--out', out, 'glance', '--max-size', '640', '--name', 'look']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(received[0].body.command, 'glance');
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', maxSize: 640, annotate: false, map: true});
+  assert.ok(readdirSync(out).some(name => name.endsWith('-look-glance.png')));
+});
+
+test('live turns the sub\'s live view on and off', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, {ok: true, id: 'c', command: 'live', page: {id: 'page-a'}, elapsedMs: 1,
+    result: {schema: 'kaminos.agent-vantage.v1', kind: 'live', live: {on: body.args.on, pilot: 'bebop', fps: body.args.fps ?? 4, frames: 0, skipped: 0, drawMs: null}}}]);
+  t.after(() => server.close());
+  const on = await run(['--server', url, 'live', 'on', '--fps', '6']);
+  assert.equal(on.code, 0, on.stderr);
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', on: true, fps: 6});
+  assert.match(on.stdout, /live view on/);
+  const off = await run(['--server', url, 'live', 'off']);
+  assert.equal(off.code, 0, off.stderr);
+  assert.equal(received[1].body.args.on, false);
+  const bad = await run(['--server', url, 'live', 'maybe']);
+  assert.equal(bad.code, 2);
 });

@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {compositionRestoreUrl,forwardCompositionHash} from '../scene-authoring.mjs';
 import * as ownerAddress from '../owner-experiment-entry.mjs';
+import {fireAtBoot} from '../fire-boot.mjs';
+import {createSceneOwnerControls} from '../scene-owner-controls.mjs';
 const html=fs.readFileSync(process.env.KAMINOS_RECOVERY_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('sceneInitialization.then(() => {'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
 const tail=html.slice(start,end);
@@ -23,7 +25,7 @@ async function startup(url,{matching=false}={}){
  const location={href:url.href,search:url.search,hash:url.hash,origin:url.origin,replace:value=>redirects.push(value)};
  const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
  initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
- initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,json:async()=>({})}),
+ fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,json:async()=>({})}),
  async loadSceneFile(){loads++;c.sceneSaveBlockedByFailedRestore=false;},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
  vm.createContext(c);vm.runInContext(tail,c);for(let i=0;i<5;i++)await flush();return {redirects,loads,admissions,owners,rejection,blocked:c.sceneSaveBlockedByFailedRestore};
 }
@@ -31,7 +33,7 @@ function destination(recovery){const url=new URL(recovery),target='http://localh
 async function openActualEntry(url){
  let opened=null,onChange;
  const location={href:url.href,search:url.search,hash:url.hash};
- const c={URL,URLSearchParams,JSON,...ownerAddress,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
+ const c={URL,URLSearchParams,JSON,...ownerAddress,createSceneOwnerControls,sceneOwnerControls:null,selectedPlacementEntry:()=>null,ownerExperimentEntry:null,document:{getElementById:()=>({})},installRelativeNumberDrag(){},workbenchViewerReady:Promise.resolve(),workbenchSceneHost:{open(){}},setActiveTab(){},refreshWorkbenchAssetPresentation(){},location,history:{state:null,replaceState(_state,_title,value){const u=new URL(String(value));Object.assign(location,{href:u.href,search:u.search,hash:u.hash});}},window:{},
  async installOwnerExperimentEntry(options){onChange=options.onChange;return {async open(id,inputs){opened={id,inputs};}};}};
  vm.createContext(c);vm.runInContext(entry,c);await c.installOwnerWorkbenchEntry();return {opened,close:()=>onChange({id:null,inputs:null}),location};
 }

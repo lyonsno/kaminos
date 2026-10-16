@@ -25,6 +25,10 @@ export async function runTrellisAdapter(values){
   await persist();
   try{
     if(!configPath)throw Error('TRELLIS setup required: set KAMINOS_TRELLIS_CONFIG to the local model configuration');
+    // Express asks Greenroom for its quick lane; every submission declares its class so a
+    // quick-eligible route never jumps the line unless asked.
+    const serviceClass=values.serviceClass??process.env.KAMINOS_TRELLIS_SERVICE_CLASS??'normal';
+    if(!['normal','quick'].includes(serviceClass))throw Error('Greenroom service class must be normal or quick');
     const configRaw=await fs.readFile(configPath),c=validateLocalGenerationConfig(JSON.parse(configRaw)),bytes=await fs.readFile(input);
     state.config={path:path.resolve(configPath),sha256:hash(configRaw),source:c.expectedCommit};
     state.inputSha256=hash(bytes);
@@ -32,11 +36,11 @@ export async function runTrellisAdapter(values){
       argv=[process.execPath,path.join(c.repoRoot,'models/trellis2/generate-image.mjs'),
         '--config',path.resolve(configPath),'--expected-config-sha256',state.config.sha256,
         '--input',input,'--expected-input-sha256',state.inputSha256,'--output',output,'--report',childReport,'--run-id',runId],
-      command={schema:'gpu-greenroom.command.v1',agent_id:'kaminos-generate',repo_root:c.repoRoot,cwd:c.repoRoot,
+      command={schema:'gpu-greenroom.command.v2',service_class:serviceClass,agent_id:'kaminos-generate',repo_root:c.repoRoot,cwd:c.repoRoot,
         env:{PYTHONDONTWRITEBYTECODE:'1'},output_dir:work,route_identity:'TRELLIS2 queued browser-WebGPU / CPU source finishing',
         timeout:null,output_class:'final',argv};
     await fs.writeFile(manifestPath,JSON.stringify(command,null,2)+'\n');
-    state.command={manifestPath,argv,queueDir:c.queueDir,greenroomBin:c.greenroomBin,childReport};
+    state.command={manifestPath,argv,queueDir:c.queueDir,greenroomBin:c.greenroomBin,childReport,serviceClass};
     state.phase='queue-submission';await persist();
     const proc=spawn(c.greenroomBin,['--queue-dir',c.queueDir,'submit-command','--manifest',manifestPath],{stdio:['ignore','pipe','pipe']});
     let stdout='',stderr='';proc.stdout.on('data',b=>stdout+=b);proc.stderr.on('data',b=>stderr+=b);
@@ -72,6 +76,10 @@ export async function runTrellisAdapter(values){
           }finally{await file.close();}
         }catch(error){if(error.code!=='ENOENT')throw error;}
         if(['done','failed','cancelled'].includes(bucket)){
+          // A job cancelled before it started has no receipt; that is a stop, not lost evidence.
+          if(bucket==='cancelled'&&!(await fs.stat(path.join(dir,'receipt.json')).catch(()=>null))){
+            state.terminal={status:'cancelled',receiptPath:null,receipt:null};throw Error('queued TRELLIS generation cancelled while waiting');
+          }
           terminal=JSON.parse(await fs.readFile(path.join(dir,'receipt.json')));
           state.terminal={status:bucket,receiptPath:path.join(dir,'receipt.json'),receipt:terminal};break;
         }
@@ -79,7 +87,12 @@ export async function runTrellisAdapter(values){
       await wait(1000);
     }
     if(terminal.job_id!==job.job_id||terminal.exit_code!==0||state.terminal.status!=='done')
-      throw Error('queued TRELLIS generation '+state.terminal.status+': '+(terminal.error_message??terminal.failure_phase??terminal.exit_code));
+    {
+      // The queued generation's own report says why it stopped; the queue receipt only has the exit.
+      let child=null;try{child=JSON.parse(await fs.readFile(childReport));}catch{}
+      const reason=child?.ok===false&&child.error?.message?` (${child.phase?child.phase+': ':''}${child.error.message})`:'';
+      throw Error('queued TRELLIS generation '+state.terminal.status+': '+(terminal.error_message??terminal.failure_phase??terminal.exit_code)+reason);
+    }
     if(terminal.status!=='done'||terminal.effective_cwd!==command.cwd||terminal.output_dir!==command.output_dir||
       terminal.effective_timeout!==null||JSON.stringify(terminal.effective_argv)!==JSON.stringify(argv))
       throw Error('Greenroom executed a different command, directory or timeout; requested generation was not exercised');
@@ -105,7 +118,7 @@ export async function runTrellisAdapter(values){
   return state;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const {values}=parseArgs({options:Object.fromEntries(['input','output','report','config'].map(k=>[k,{type:'string'}]))});
-  const result=await runTrellisAdapter(values);console.log(JSON.stringify({ok:result.ok,phase:result.phase,error:result.error,artifact:result.artifact}));
+  const {values}=parseArgs({options:Object.fromEntries(['input','output','report','config','service-class'].map(k=>[k,{type:'string'}]))});
+  const result=await runTrellisAdapter({...values,serviceClass:values['service-class']});console.log(JSON.stringify({ok:result.ok,phase:result.phase,error:result.error,artifact:result.artifact}));
   process.exitCode=result.ok?0:1;
 }

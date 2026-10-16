@@ -8,10 +8,14 @@ export function readOwnerExperimentAddress({search='',hash=''}={}) {
  return {id:params.get('experiment'),inputsText:params.get('experiment_inputs')??'{}'};
 }
 
+// A saved-basin page's query is a strict settings-preset recipe that admission
+// validates exactly, so its owner setup lives in the hash; ordinary pages keep
+// a shareable query.
 export function writeOwnerExperimentAddress(href,{id,inputs}) {
  const url=new URL(href),hash=new URLSearchParams(url.hash.slice(1));
  for(const key of ['experiment','experiment_inputs']){url.searchParams.delete(key);hash.delete(key);}
- if(id){url.searchParams.set('experiment',id);url.searchParams.set('experiment_inputs',JSON.stringify(inputs));}
+ const target=url.searchParams.has('settings_preset')?hash:url.searchParams;
+ if(id){target.set('experiment',id);target.set('experiment_inputs',JSON.stringify(inputs));}
  url.hash=hash.toString();return url.href;
 }
 

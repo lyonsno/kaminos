@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createWorkbenchSceneHost,createWorkbenchFrameService} from '../workbench-scene-host.mjs';
+import {fireAtBoot} from '../fire-boot.mjs';
 const source=fs.readFileSync(process.env.KAMINOS_STARTUP_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
 const a=source.indexOf('sceneInitialization.then(() => {'),b=source.indexOf('</script>',a);assert.ok(a>=0&&b>a);
 const tail=source.slice(a,b);
@@ -17,7 +18,7 @@ function fixture({saved=true,authoring=true,restoreFailure=false,silentFailure=f
  const host=createWorkbenchSceneHost({scene,camera:new THREE.PerspectiveCamera(),controls:{target:new THREE.Vector3()},loadAsset(){throw Error('fixture attaches a real Three root');},registerObject(root,metadata){const row={id:'owned',object:root,...metadata};rows.push(row);return row;},findObject:root=>rows.find(r=>r.object===root),removeObject:handle=>{scene.remove(handle.root);rows.splice(rows.findIndex(r=>r.id===handle.id),1);},redraw(){},onFrame:frames.onFrame});
  const c={URLSearchParams,Promise,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location:{search:'?experiment=fixture'}},location:{hash:saved?(authoring?'#authoring=1&scene=saved.json':'#workspace=workbench&scene=saved.json'):'',search:'?experiment=fixture'},console:{error(){}},File:class{},sceneSaveBlockedByFailedRestore:false,
   initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
-  initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
+  fireAtBoot,initKaminosVolumeRoute:()=>volume,reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({}),fetch:async()=>({ok:true,json:async()=>({})}),
   async loadSceneFile(){events.push('restore started');await restore;if(restoreFailure)throw Error('saved restoration rejected');if(silentFailure){events.push('restore refused');return;}for(const row of rows){scene.remove(row.object);row.object.geometry?.dispose();}rows.length=0;c.sceneSaveBlockedByFailedRestore=false;events.push('restore completed');},
   resolveWorkbenchViewerReady(){events.push('viewer ready');resolveReady();},rejectWorkbenchViewerReady(error){events.push('viewer failed');rejectReady(error);},
   async installOwnerWorkbenchEntry(){await ready;ownerCount++;session=host.open();const root=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());await session.attach(root,{owned:true});session.onFrame(()=>{});events.push('owner attached');},

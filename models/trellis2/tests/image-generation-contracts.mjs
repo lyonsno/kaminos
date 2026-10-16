@@ -35,6 +35,13 @@ failStage='decoder-layernorm';const failed=serving.createTrellisImageGenerationA
 await assert.rejects(failed.run(invocation),/injected/);assert.equal(failed.state,'failed');assert.equal(failed.outputs,undefined);
 assert.equal(failed.phase,'learned-cascade-support');assert.equal(failed.noiseInputs.sparse.values.length,32768);
 failed.dispose();await assert.rejects(failed.run(invocation),/disposed/);
+failStage='decoder-child-counts';
+const failedGeometry=serving.createTrellisImageGenerationAdapter({...options,pipelineType:'512',meshResolution:64});
+await assert.rejects(failedGeometry.run(invocation),/image generation injected failure/);
+assert.ok(failedGeometry.decoderFailureContext,'whole image caller must expose the failed geometry boundary before release');
+assert.equal(failedGeometry.decoderFailureContext.mode,'shape');
+assert.ok(failedGeometry.conditioning.buffer&&!failedGeometry.conditioning.buffer.destroyed);
+failedGeometry.dispose();assert.equal(failedGeometry.decoderFailureContext,undefined);
 failStage=undefined;let checkpointLoadObserved=false;
 const stagedLoads=[],modelInputs=Object.fromEntries(Object.entries(models).map(([role,m])=>[role,{config:m.config,identity:m.identity}]));
 const staged=serving.createTrellisImageGenerationAdapter({...options,models:undefined,modelInputs,

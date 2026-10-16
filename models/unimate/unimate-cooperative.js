@@ -12,7 +12,7 @@
 
 import { tensorFloat32Bytes } from './unimate-weights.js';
 import { UniMateDenoiser } from './unimate-denoiser.js';
-import { KleinDutyScheduler } from '../flux2-klein/klein-duties.js';
+import { WebGpuCommandDutyScheduler } from '../../webgpu-inference-kit/src/command-duty-scheduler.js';
 import { assertEvaluated } from './unimate-drift.js';
 
 const SU = GPUBufferUsage;
@@ -102,4 +102,8 @@ export function createCooperativeCfgDrift(device, denoiser, scheduler, { prompts
   return drift;
 }
 
-export { KleinDutyScheduler as UniMateDutyScheduler };
+export class UniMateDutyScheduler extends WebGpuCommandDutyScheduler {
+  constructor(device, options = {}) {
+    super(device, { label: 'unimate', model: 'unimate', ...options });
+  }
+}

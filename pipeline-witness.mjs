@@ -1097,7 +1097,7 @@ async function runLiveModelAdapter(outputPath, stage) {
   effectiveRoute.adapterReport = adapterReportSummary(adapterReport, effectiveRoute);
   effectiveRoute.pipelineScheduler = pipelineSchedulerEvidence(adapterReport, effectiveRoute);
   if (procResult.error || procResult.status !== 0) {
-    const message = procResult.error?.message || `live model adapter exited ${procResult.status}`;
+    const message = procResult.error?.message || `live model adapter exited ${procResult.status}${adapterReport?.error?.message ? `: ${adapterReport.error.message}` : ''}`;
     const error = new Error(message);
     effectiveRoute.truthBoundary = 'requested live SHARP adapter failed; no fixture fallback was used';
     recordFailedStage(stage, outputPath, effectiveRoute, error);

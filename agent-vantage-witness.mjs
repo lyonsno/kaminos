@@ -8,7 +8,7 @@
 //   node agent-vantage-witness.mjs --origin http://127.0.0.1:8317 --out DIR \
 //     --playwright /path/to/playwright-core/index.mjs --browser /path/to/chrome-for-testing
 import {execFile} from 'node:child_process';
-import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
@@ -68,6 +68,26 @@ function colors(file) {
   return {width, height, red: red / total, blue: blue / total, yellow: yellow / total, varied};
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
+// Where a picture's red pixels are and where its pick map says the red box was
+// drawn: how much they overlap, and how far apart their centres lie.
+function mapAgreement(file, pickMap, n) {
+  const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+  const ids = new Uint16Array(pickMap.width * pickMap.height), runs = pickMap.runs.split(' ').map(Number);
+  for (let i = 0, at = 0; i < runs.length; at += runs[i + 2], i += 3) ids.fill(runs[i], at, at + runs[i + 2]);
+  if (width !== pickMap.width || height !== pickMap.height) return {width, height, map: [pickMap.width, pickMap.height], sized: false};
+  let red = 0, mapped = 0, both = 0, rx = 0, ry = 0, mx = 0, my = 0;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * channels, r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      const isRed = r > 70 && r > 1.6 * g && r > 1.6 * b, isMapped = ids[y * width + x] === n;
+      if (isRed) { red++; rx += x; ry += y; }
+      if (isMapped) { mapped++; mx += x; my += y; }
+      if (isRed && isMapped) both++;
+    }
+  }
+  return {sized: true, red, mapped, redInMap: red ? both / red : 0, mapInRed: mapped ? both / mapped : 0,
+    centreGap: red && mapped ? Math.hypot(rx / red - mx / mapped, ry / red - my / mapped) / width : 1};
+}
 // The map paints the sub's cone teal and the operator's white over a dark ground.
 function mapColors(file) {
   const {channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
@@ -179,6 +199,110 @@ try {
   const peekColors = colors(imageOf(peek, 'peek'));
   report.effective.peek = {route: peek.result.route, colors: peekColors};
   check('peek shows the operator view of the blue box', peekColors.blue > 0.05 && peekColors.red < 0.005, peekColors);
+
+  report.phase = 'pick'; save();
+  // Every picture keeps a pick map: the renderer's record of which object it drew at each pixel.
+  const redRow = snapRed.result.pickMap?.objects?.find(row => row.id === scene.red);
+  check('the red snap keeps a pick map that names the red box', !!redRow, {pickMapError: snapRed.result.pickMapError ?? null,
+    objects: snapRed.result.pickMap?.objects?.map(row => row.id ?? row.name)});
+  const depthFile = snapRed.result.pickMap?.depth?.path, depthBytes = depthFile ? statSync(depthFile).size : 0;
+  check('the red snap keeps its depth beside it, one float per pixel, and records the camera\'s far plane',
+    depthBytes === snapRed.result.pickMap.width * snapRed.result.pickMap.height * 4 && Number.isFinite(snapRed.result.optics?.far),
+    {depthFile, depthBytes, far: snapRed.result.optics?.far});
+  const agreement = mapAgreement(imageOf(snapRed, 'snap'), snapRed.result.pickMap, redRow?.n);
+  report.effective.pickMapAgreement = agreement;
+  check('the pick map lies over the picture: its red box is where the picture is red', agreement.sized && agreement.redInMap > 0.97
+    && agreement.mapInRed > 0.6 && agreement.centreGap < 0.01, agreement);
+  // A pixel of a kept picture, picked later, names what that picture drew.
+  const middle = record => [String(record.result.image.width / 2), String(record.result.image.height / 2)];
+  const pickRed = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  check('a pick on the red snap names the red box the picture drew under its centre', pickRed.result.from === 'picture'
+    && pickRed.result.referent === 'pictured' && pickRed.result.hit?.id === scene.red && pickRed.result.hit.authority === 'exact'
+    && pickRed.result.hit.point?.length === 3, {hit: pickRed.result.hit});
+  // The red box is a unit box at (0, 0.5, 0): the sub sees its front face, z = 0.5.
+  const onRedFace = point => !!point && Math.abs(point[2] - 0.5) < 2e-3 && Math.abs(point[0]) < 0.5 && point[1] > 0 && point[1] < 1;
+  check('its point is the one the picture drew, from its depth, on the red box\'s front face, and the mesh agrees with it',
+    pickRed.result.hit?.pointBasis === 'depth' && pickRed.result.hit.surfaceBasis === 'recast-agrees' && onRedFace(pickRed.result.hit.point),
+    {point: pickRed.result.hit?.point, pointBasis: pickRed.result.hit?.pointBasis, surfaceBasis: pickRed.result.hit?.surfaceBasis});
+  const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
+  check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it from its depth',
+    pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.pointBasis === 'depth'
+    && Math.abs((pickBlue.result.hit.point?.[2] ?? 0) - 0.5) < 2e-3 && pickBlue.result.hit.normal?.length === 3, {hit: pickBlue.result.hit});
+  const pickNothing = await vantageOk('pick', '0.5', '0.02', '--from', 'operator');
+  check('a pick above everything names no scene object', pickNothing.result.hit === null, {hit: pickNothing.result.hit, drawn: pickNothing.result.drawn});
+  // The red box moves after the picture; a pick on that picture still names it, cast where the picture drew it.
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, -3]}), scene.red);
+  const pickMoved = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
+  const samePoint = (a, b) => !!a && !!b && a.every((value, i) => Math.abs(value - b[i]) < 1e-6);
+  check('after the red box moves, a pick on the old picture still names it, with the point the picture drew',
+    pickMoved.result.hit?.id === scene.red && pickMoved.result.hit.authority === 'exact' && pickMoved.result.hit.now === 'present'
+    && pickMoved.result.hit.geometry?.status === 'same' && samePoint(pickMoved.result.hit.point, pickRed.result.hit.point),
+    {hit: pickMoved.result.hit, before: pickRed.result.hit.point});
+  const capturing = await page.evaluate(async () => ({now: window.kaminosAgentVantage.capturing(), idle: await window.kaminosAgentVantage.idle().then(() => true)}));
+  check('the page says when no picture holds the camera', capturing.now === false && capturing.idle === true, capturing);
+
+  report.phase = 'glance'; save();
+  // The sub's view from its own camera: the operator's view is never borrowed.
+  const beforeGlance = await page.evaluate(() => ({camera: window.kaminosCameraDebugState(), view: window.kaminosAgentVantage.capturing()}));
+  const glance = await vantageOk('glance', '--name', 'glance');
+  const afterGlance = await page.evaluate(() => window.kaminosCameraDebugState());
+  const glanceColors = colors(imageOf(glance, 'glance'));
+  report.effective.glance = {route: glance.result.route, colors: glanceColors, omitted: glance.result.omitted};
+  check('a glance shows the red box from the sub\'s own camera', glance.result.route === 'own-camera' && glanceColors.varied && glanceColors.red > 0.05, glanceColors);
+  check('and the operator\'s camera never moved', ['position', 'target'].every(key => beforeGlance.camera[key].every((v, i) => Math.abs(v - afterGlance[key][i]) < 1e-12)),
+    {before: beforeGlance.camera, after: afterGlance});
+  // Same sub pose as the red snap: the glance should match the borrowed picture's colour pixel for pixel, within a few
+  // levels (no ambient occlusion). A glance missing tone mapping differed by about 17 levels on average.
+  const glanceMatch = (() => {
+    const snapPx = decodeScreenshotPngRgb(readFileSync(imageOf(snapRed, 'snap'))), glancePx = decodeScreenshotPngRgb(readFileSync(imageOf(glance, 'glance')));
+    let total = 0, count = 0;
+    for (let y = 0; y < snapPx.height; y += 2) {
+      for (let x = 0; x < snapPx.width; x += 2) {
+        const i = (y * snapPx.width + x) * snapPx.channels;
+        const gx = Math.min(glancePx.width - 1, Math.floor((x + 0.5) * glancePx.width / snapPx.width)), gy = Math.min(glancePx.height - 1, Math.floor((y + 0.5) * glancePx.height / snapPx.height));
+        const j = (gy * glancePx.width + gx) * glancePx.channels;
+        for (let c = 0; c < 3; c++) total += Math.abs(snapPx.pixels[i + c] - glancePx.pixels[j + c]);
+        count += 3;
+      }
+    }
+    return {meanAbsoluteDifference: total / count};
+  })();
+  report.effective.glanceVersusSnap = glanceMatch;
+  check('the glance matches the borrowed snap of the same view in colour and exposure', glanceMatch.meanAbsoluteDifference < 6, glanceMatch);
+  const pickGlance = await vantageOk('pick', ...middle(glance), '--picture', glance.recordPath);
+  check('a pick on the glance names the red box, at the point the glance drew', pickGlance.result.hit?.id === scene.red && pickGlance.result.hit.pointBasis === 'depth'
+    && Math.abs(pickGlance.result.hit.point[2] - 0.5) < 2e-3, {hit: pickGlance.result.hit});
+
+  report.phase = 'live'; save();
+  // The live view in the sub's panel: frames arrive, they show the sub's view, and the operator's frame rate holds.
+  const frameRate = () => page.evaluate(async () => {
+    const start = window.kaminosSceneObjectDebugState ? performance.now() : 0, frames = await new Promise(done => {
+      let count = 0; const until = performance.now() + 3000;
+      const step = () => { count++; if (performance.now() < until) requestAnimationFrame(step); else done(count); };
+      requestAnimationFrame(step);
+    });
+    return frames / ((performance.now() - start) / 1000);
+  });
+  const fpsOff = await frameRate();
+  const liveOn = await vantageOk('live', 'on', '--fps', '4');
+  const fpsOn = await frameRate();
+  const liveFrame = await page.evaluate(() => {
+    const canvas = document.querySelector('#agent-vantage-hud .vantage-live');
+    if (!canvas || canvas.hidden) return {shown: false};
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let red = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] > 70 && data[i] > 1.6 * data[i + 1] && data[i] > 1.6 * data[i + 2]) red++;
+    return {shown: true, frame: Number(canvas.dataset.frame), red: red / (data.length / 4), width: canvas.width, height: canvas.height};
+  });
+  const panelShot = path.join(out, 'live-panel.png');
+  await page.locator('#agent-vantage-hud').screenshot({path: panelShot});
+  report.artifacts.push(panelShot);
+  const liveOff = await vantageOk('live', 'off');
+  report.effective.live = {fpsOff, fpsOn, frame: liveFrame, state: liveOff.result.live};
+  check('the live view puts frames from the sub\'s camera in its panel', liveOn.result.live.on && liveFrame.shown && liveFrame.frame >= 8 && liveFrame.red > 0.02, liveFrame);
+  check('and the operator\'s frame rate holds while it runs', fpsOn >= 0.8 * fpsOff, {fpsOff, fpsOn});
+  check('live off stops it and reports what it cost', liveOff.result.live.on === false && liveOff.result.live.frames >= 8 && Number.isFinite(liveOff.result.live.drawMs), liveOff.result.live);
 
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
@@ -376,6 +500,18 @@ try {
   check('the sketch carries the projection the camera frame renders with',
     !!framedBefore && !!framedAfter && framedBefore.some((value, i) => Math.abs(value - framedAfter[i]) > 1e-6), {framedBefore, framedAfter});
   check('a frame zoom alone repaints the map panel', panelBefore !== panelAfter, {changed: panelBefore !== panelAfter});
+
+  report.phase = 'pick-after-removal'; save();
+  // The red box is removed: the old picture still names what it drew, and today's sub view does not show it.
+  await page.evaluate(id => window.removeSceneObject(id), scene.red);
+  await page.waitForTimeout(300);
+  const pickGone = await vantageOk('pick', ...middle(snapRed), '--picture', snapRed.recordPath);
+  const liveGone = await vantageOk('pick', '0.5', '0.5');
+  check('after the red box is removed, the old picture still names it, says it is gone, and keeps the point it drew',
+    pickGone.result.hit?.id === scene.red && pickGone.result.hit.now === 'missing' && pickGone.result.hit.pointBasis === 'depth'
+    && samePoint(pickGone.result.hit.point, pickRed.result.hit.point), {hit: pickGone.result.hit});
+  check('and a live pick through the same sub view no longer names it', liveGone.result.referent === 'rendered' && liveGone.result.hit?.id !== scene.red,
+    {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
 
   report.phase = 'remove'; save();
   await vantageOk('remove');

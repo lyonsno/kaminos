@@ -4,11 +4,11 @@ import {createControlSlots} from './authoring-workspace.mjs';
 // existing owners. Release these slots before another workspace acquires them.
 export function installExperimentWorkspace({document, title, subtitle, instruments, instrumentTitle=title, instrumentHelp='',
   setup, inspector, investigation=null, detailNodes=[], runNodes=[],
-  sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[]}) {
+  sceneActions, navigation, tools, openTool, frame, toolPanels=[], extraPanels=[],sceneOutline=null}) {
   const make=(tag,id,html)=>{const node=document.createElement(tag);node.id=id;node.innerHTML=html;return node;};
   const left=make('aside','experiment-instruments',`<div class="experiment-panel-heading"><h2></h2><p></p></div>
     <div class="experiment-instruments-body"><details id="experiment-browser"><summary>Tools</summary><div><input type="search" aria-label="Find a workbench" placeholder="Find a tool…"><div class="experiment-browser-list"></div></div></details>
-    <div id="experiment-owner-slot"></div><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
+    <div id="experiment-scene-slot" hidden></div><div id="experiment-owner-slot"></div><div id="experiment-tool-slot"></div><section id="experiment-setup-slot"></section><section id="experiment-investigation-slot" aria-label="Investigation" hidden></section><h3 id="experiment-tuning-title"></h3><p id="experiment-tuning-help"></p><div id="experiment-instrument-slot"></div>
     <details id="experiment-details"><summary>Runtime details</summary><div id="experiment-detail-slot"></div></details></div>`);
   left.querySelector('h2').textContent=title;left.querySelector('p').textContent=subtitle;
   const toolbar=make('nav','experiment-toolbar',`<strong></strong><div id="experiment-add-slot"></div><span class="experiment-toolbar-spacer"></span>
@@ -41,7 +41,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   });
   byId('experiment-frame').onclick=frame;
   document.addEventListener('pointerdown',event=>{if(!byId('experiment-browser').contains(event.target))byId('experiment-browser').open=false;},true);
-  let active=false;
+  let active=false,ownerControlsActive=false;
   const text=(id,value)=>{const node=byId(id);if(node.textContent!==value)node.textContent=value;};
   const investigationSlot=byId('experiment-investigation-slot');
   let investigationTool='finger-fluid-bench';
@@ -57,6 +57,7 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
   const api={
     setInvestigation,
     hasControls:()=>controlsMounted,
+    setOwnerControlsActive(value){ownerControlsActive=Boolean(value);api.setTool(selectedTool);},
     setTool(id){
       selectedTool=id;
       const fluid=id==='finger-fluid-bench', label=tools.find(tool=>tool.id===id)?.label||id;
@@ -67,6 +68,20 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
       investigationSlot.hidden=selectedTool!==investigationTool||!investigationSlot.firstChild;
       byId('experiment-tool-slot').hidden=fluid&&controlsMounted;
       run.hidden=!active||!fluid;
+      const objectScene=ownerControlsActive&&id==='assets';
+      byId('experiment-owner-slot').hidden=objectScene;
+      byId('experiment-scene-slot').hidden=!objectScene;
+      if(objectScene){
+        left.querySelector('h2').textContent='Scene';left.querySelector('p').textContent='Objects in this scene';
+        toolbar.querySelector('strong').textContent='Scene';
+        byId('experiment-tool-slot').hidden=true;
+      }
+      // Reuse the actual outliner node. Authoring owns its placement outside
+      // Workbench; mode switching moves that same node through its existing slots.
+      if(active&&sceneOutline){
+        const destination=objectScene?byId('experiment-scene-slot'):byId('authoring-inspector-tree-slot');
+        if(destination&&sceneOutline.parentNode!==destination)destination.append(sceneOutline);
+      }
       left.querySelectorAll('[data-workbench]').forEach(button=>button.setAttribute('aria-current',String(button.dataset.workbench===id)));
     },
     setControls({instruments,setup,detailNodes=[],runNodes=[],instrumentTitle='',instrumentHelp=''}){

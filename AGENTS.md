@@ -101,3 +101,11 @@ of substituting the generic fire route or a different renderer.
   gates. Interactive inference and operator workbenches should share the
   accepted runtime kernels while excluding CPU oracles, reference tensors, and
   proof-only readbacks from the serving path.
+
+## Talking With The Person At The Page
+
+Use Kaminos notes to discuss work with the person at the page. Resolve incoming
+references and inspect their attached context; answer in the same thread. When
+participating in a Workbench session, establish notes reachability through the
+supported integration. See [docs/notes.md](docs/notes.md) for setup, delivery
+behavior, and recovery.

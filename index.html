@@ -3899,12 +3899,14 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 import { installSceneNavigation } from './scene-navigation.mjs';
 import { frameBox, frameObjects, frameSceneObjectRecord, sceneObjectsForFraming } from './scene-frame-selected.mjs';
-import { assetArrivalFramingWindow, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
+import { appendArrivalPivot, arrivalObstacleBoxes, assetArrivalFramingWindow, chooseAppendAnchor, computeAssetArrivalFraming, computeAssetArrivalPlacement, resolveAssetArrivalMode } from './asset-arrival.mjs';
 import { promptForFileName, sanitizeFileStem } from './scene-file-names.mjs';
 import { exportCloneInWorld } from './scene-export.mjs';
 import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
+import { installPolyEditMode } from './poly-edit-host.mjs';
+import { separateSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -3913,7 +3915,11 @@ import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-came
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
 import {installAgentVantage} from './agent-vantage.mjs';
+import {createIdPass} from './agent-vantage-ids.mjs';
+import {createGlance} from './agent-vantage-glance.mjs';
+import * as TSL from 'three/tsl';
 import {installCameraAuthoring} from './authoring-cameras.mjs';
+import {installNotes} from './notes-panel.mjs';
 import {installViewPie} from './view-navigation-pie.mjs';
 import {installExperimentWorkspace} from './experiment-workspace.mjs';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from './owner-experiment-entry.mjs';
@@ -3924,17 +3930,27 @@ import { RIM_LIGHT_ID, rimRecipePose, rimRecipeFromPose, checkedRimRecipe, check
 import {checkedPose} from './scene-edit-session.mjs';
 import {createAuthoringAssets,installAuthoringAssets} from './authoring-assets.mjs';
 import {createSf3dAuthoringGeneration} from './authoring-generation.mjs';
+import {createTrellisAuthoringGeneration,installMeshModelChoice,withExpressSnapshot} from './authoring-trellis-generation.mjs';
+import {createTrellisPageAuthoringGeneration,prepareImageForTrellis,describeTrellisInput} from './authoring-trellis-page.mjs';
+import {readPipelineRunStream,pipelineRunOutputArtifacts,pipelineArtifactIsLoadableMesh,pipelineRunReadUrlForPath} from './authoring-pipeline-result.mjs';
+import {installGenerateLayout} from './authoring-generate-layout.mjs';
+import {installBrowseLayout} from './authoring-browse-layout.mjs';
+import {createAppFrameSource} from './app-frame-source.mjs';
+import {createAppGpuHost} from './app-gpu-host.mjs';
+import {fireAtBoot} from './fire-boot.mjs';
+import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
-import {checkedViewportDisplay,viewportShortcut} from './viewport-display-settings.mjs';
+import {checkedViewportDisplay,viewportShortcut,syncSceneHelperVisibility} from './viewport-display-settings.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
+import {createSceneOwnerControls} from './scene-owner-controls.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
-let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null;
+let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -3984,7 +4000,7 @@ function escapeHtml(s) {
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
-let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null;
+let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
@@ -3992,7 +4008,7 @@ function attachViewportGizmo(target) {
   transformControls.enabled=viewportGizmosVisible;
 }
 function syncViewportDisplayControls() {
- for(const key of ['overlays','gizmos','outlines','bounds','helpers','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
+ for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
 }
 window.kaminosViewportSettings={
@@ -4008,6 +4024,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
+let polyEdit = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
 const authoringParameterTargets = new Map();
@@ -6762,6 +6779,7 @@ function updateTransformInspector() {
   const fields = document.getElementById('transform-inspector-fields');
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
+  sceneOwnerControls?.update();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
   inspector.dataset.selectionCount=String(sceneSelection.ids.length);
@@ -6811,6 +6829,7 @@ function refreshWorkbenchAssetPresentation(handle) {
   row.object.updateMatrixWorld(true);
   const selected=selectedPlacementEntry(),selectionMatched=selected?.id===row.id&&selected.object===row.object;
   if(selectionMatched)updateTransformInspector();
+  updateSelectionFeedback();
   window._kaminosDirty?.();
   return {id:row.id,transform:sceneObjectTransformState(row.object),selectionMatched};
 }
@@ -7069,7 +7088,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie');
+  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, .playback-controls, .scene-owner-playback');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -7079,7 +7098,7 @@ function viewportEventIsInsideCanvas(event) {
 }
 
 function handleViewportPointerDown(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   viewportPointerDown = {
     x: event.clientX,
     y: event.clientY,
@@ -7088,7 +7107,7 @@ function handleViewportPointerDown(event) {
 }
 
 function handleViewportSelectionClick(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (event.type === 'click' && viewportSuppressedClick) {
     const age = performance.now() - viewportSuppressedClick.at;
     const distance = Math.hypot(event.clientX - viewportSuppressedClick.x, event.clientY - viewportSuppressedClick.y);
@@ -7141,7 +7160,7 @@ function handleViewportSelectionClick(event) {
 }
 
 function handleViewportDoubleClick(event) {
-  if (vantageCaptureHeld || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
+  if (vantageCaptureHeld || polyEdit?.active() || event.button !== 0 || viewportEventHitsInteractiveOverlay(event) || !viewportEventIsInsideCanvas(event)) return;
   if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) return;
   const picked = pickSceneObjectFromViewportPointer(event);
   const record = picked?.type === 'splat' ? picked : selectedSplatRecord();
@@ -10745,6 +10764,7 @@ window.removeSceneObject = function(id) {
 };
 
 function shouldIgnoreSceneObjectDeleteShortcut(e) {
+  if (polyEdit?.active()) return true;
   const target = e.target;
   const tagName = target?.tagName;
   if (tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
@@ -10879,8 +10899,23 @@ async function ensureSamImageTools() {
   samImageToolsPromise = (async () => {
     await sceneInitialization;
     const { createSamImageTools } = await import('./sam-image-tools.js');
-    const inferenceSession = samHostContext?.inferenceSession || { device: renderer.backend.device };
+    // SAM borrows the app GPU host (app-gpu-host.mjs): its session, and the host itself as
+    // the foreground service, so SAM's detector runs on the page's one service. A host that
+    // fails is reported as itself; the legacy session serves only a page with no app host.
+    const appGpu = window.kaminosAppGpu ? await window.kaminosAppGpu() : null;
+    const inferenceSession = appGpu ? await appGpu.session() : (samHostContext?.inferenceSession || { device: renderer.backend.device });
     samImageTools = createSamImageTools({ inferenceSession, rendererDevice: renderer.backend.device, config: samHostConfig,
+      ...(appGpu ? { foregroundService: appGpu } : {}),
+      // A saved mask or cutout becomes the selected image in Authoring, ready for Generate.
+      async onAsset(entry) {
+        // Back to Authoring's Generate with the saved mask or cutout selected. SAM calls
+        // this for an uploaded source too; that stays in Masks for its prompt.
+        if (!window.kaminosAssets || !entry?.maskProvenance) return;
+        if (window.kaminosWorkspace?.state?.().mode !== 'authoring') window.kaminosWorkspace?.setMode?.('authoring');
+        const refreshed = await window.kaminosAssets.open('generate');
+        if (refreshed === false) throw new Error(window.kaminosAssets.read().error || 'Authoring asset refresh did not complete');
+        window.kaminosAssets.select({ ...entry, kind: 'image', root: entry.root_id || 'image-inbox', label: entry.name });
+      },
       async onScene(entry, provenance) {
         await showImagePlane(entry.source, { clear: false, metadata: { source: entry.source, fileName: entry.name,
           label: entry.display?.title || entry.name, image: { maskProvenance: provenance } } });
@@ -11328,7 +11363,9 @@ async function initScene() {
       ...(hasCompositionDeviceAcquisition ? {acquireDevice: compositionModule.acquireSharedGpuDevice} : {}),
       // A mounted SAM host borrows the same device, so its kit requirements
       // (all adapter features and limits) compose into the one acquisition.
-      hostRequirements: samHostConfig?.mounted ? samHostDeviceRequirements : null,
+      // Authoring text-to-image (FLUX.2 klein) needs shader-f16 and the adapter's
+      // buffer/workgroup limits on that same device; requesting them allocates nothing.
+      hostRequirements: sharedDeviceHostRequirements({ sam: samHostConfig?.mounted ? samHostDeviceRequirements : null }),
     });
     sharedGpuFailureReason = null;
   } catch (error) {
@@ -11825,7 +11862,7 @@ async function initScene() {
     write: applyAuthoredScenePose,
     object: id => id==='@flame-domain'?flameDomainEditObject():id==='@selection-transform'?selectionTransformProxy():id?.startsWith('@group:') ? groupProxy(sceneGroups.find(group=>`@group:${group.id}`===id)) : sceneObjects.find(item => item.id === id)?.object,
     refresh: () => { updateTransformInspector(); markDirty(); },
-    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode,
+    allowed: () => !viewPie?.state() && !greenroomPreviewIsActive() && !splatCorrectionMode && !polyEdit?.active(),
     busy: () => authoringBusy,
     viewHeld: () => vantageCaptureHeld ? 'The agent sub is taking a picture' : null,
     frameSelected: window.kaminosFrameSelected,
@@ -11916,6 +11953,13 @@ async function initScene() {
   window.kaminosSceneCameras=sceneCameras;
   const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
+  // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
+  polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,
+    objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible?record.object:null;},
+    selectedId:()=>selectedSceneObjectEntry()?.id??null,
+    blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection});
+  window.kaminosPolyEdit=polyEdit.api;
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
@@ -12054,6 +12098,8 @@ async function initScene() {
       if (!foregroundServiceActive || insideForegroundFrame) throw new Error('invalid foreground scene frame state');
       insideForegroundFrame = true;
       sceneRenderedForVolume = false;
+      // Per request: a draw that renderSceneFrame skipped leaves the count unchanged.
+      const sceneFrameCountBefore = sceneFrameCount;
       try {
         // The ordinary depth provider runs after the volume updates controls
         // and camera, preserving identical camera state for prepass/raymarch.
@@ -12064,7 +12110,9 @@ async function initScene() {
           fireLightFieldPass?.update();
           renderSceneFrame();
         }
-        return {...result, sceneFrameCount, sceneAuthority:'three-render-returned-inside-service-not-presentation'};
+        const sceneDrawn = sceneFrameCount > sceneFrameCountBefore;
+        return {...result, sceneFrameCount, sceneFrameCountBefore, sceneFrameCountAfter: sceneFrameCount, sceneDrawn,
+          sceneAuthority: sceneDrawn ? 'three-render-returned-inside-service-not-presentation' : 'scene-draw-skipped-this-request'};
       } finally { insideForegroundFrame = false; }
     },
     async presentGlb(glb, {runId, sha256}) {
@@ -12098,6 +12146,18 @@ async function initScene() {
     for(const [object] of hidden)object.visible=false;
     return ()=>{for(const [object,visible] of hidden)object.visible=visible;if(all){if(helper)helper.visible=helperVisible;selectionCaptureSuspended=false;selectionFeedback?.suspend(false);updateSelectionFeedback();}window._kaminosDirty?.();};
   };
+  // A pick map draws only the scene: editor drawing and the named objects are hidden for that one
+  // synchronous draw and put back exactly, without touching selection feedback.
+  // `bridges` also hides the fire billboard the volume bridge aims at the operator's camera, for draws from another camera.
+  const hideEditorObjectsForIdPass=({hide=[],bridges=false}={})=>{
+    const hidden=[],keep=object=>{if(object?.visible)hidden.push(object);};
+    scene.traverse(object=>{if(object.userData.kaminosEditorHelper||object.userData.kaminosEditorOnly||(bridges&&object.userData.kaminosVolumeBridge))keep(object);});
+    for(const entry of sceneObjects)if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type)||entry.id===RIM_LIGHT_ID)keep(entry.object);
+    for(const id of hide)keep(sceneObjects.find(entry=>entry.id===id)?.object);
+    keep(transformControls?.getHelper());for(const box of selectionBoxes.values())keep(box);
+    for(const object of hidden)object.visible=false;
+    return ()=>{for(const object of hidden)object.visible=true;};
+  };
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
   const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
   // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
@@ -12107,16 +12167,42 @@ async function initScene() {
   // picture still ends. Dialogs, toolbars and the sub panel keep working. Selection, box selection and
   // framing also check the flag themselves.
   const holdViewportForVantage=()=>{if(authoringBusy)throw new Error('A scene document action is running');if(vantageCaptureHeld)throw new Error('Another vantage capture is in progress');vantageCaptureHeld=true;const button=document.getElementById('composition-capture');button.disabled=true;const types=['pointerdown','mousedown','click','dblclick'],wait=event=>{const target=event.target;if(target?.tagName==='CANVAS'&&viewportEl.contains(target)&&!target.closest?.('[data-vantage-ignore]')){event.preventDefault();event.stopImmediatePropagation();}};for(const type of types)window.addEventListener(type,wait,{capture:true});return ()=>{for(const type of types)window.removeEventListener(type,wait,{capture:true});vantageCaptureHeld=false;button.disabled=false;};};
-  const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
+  const vantageCameraMatrices=()=>{camera.updateMatrixWorld();return {projection:camera.projectionMatrix.toArray(),viewInverse:camera.matrixWorldInverse.toArray(),near:camera.near,far:camera.far,coordinateSystem:camera.coordinateSystem,reversedDepth:!!camera.reversedDepth};};
   const vantageTargets=()=>activeSceneComposition&&flameDomainGuide?.box&&!flameDomainGuide.box.isEmpty()?[{id:'flame-field',label:'Fire & smoke',type:'simulation-domain',bounds:{min:flameDomainGuide.box.min.toArray(),max:flameDomainGuide.box.max.toArray()}}]:[];
   try{
+    const idPass=createIdPass({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
+    const glance=createGlance({THREE,TSL,renderer,scene,hideEditorObjects:hideEditorObjectsForIdPass,cameraLayers:()=>camera.layers.mask});
     const agentVantage=installAgentVantage({THREE,document,window,edits:scenePlacementTools.edits,cameras:sceneCameras,entries:()=>sceneObjects,
       selection:()=>window.kaminosSelection?.read()?.memberIds??[],readView:readAuthoredCameraView,writeView:writeAuthoredCameraView,
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
       redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
+      idPass,glance,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
-    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run};
+    // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera.
+    window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,idle:agentVantage.idle};
   }catch(error){console.error('Agent vantage unavailable',error);}
+  // Notes: say something on the thing you mean and get answers where you look
+  // (notes-panel.mjs, tools/notes.mjs, docs/notes.md). ?notes=0 leaves them off.
+  const pageQuery=new URLSearchParams(location.search);
+  if(pageQuery.get('notes')!=='0'){
+    try{
+      // A sub's picture borrows the viewport camera; a note waits for it back so
+      // it records the person's own view. A minute without it gives up.
+      const viewportOwnForNotes=async({waiting}={})=>{if(!vantageCaptureHeld)return true;waiting?.();
+        for(const until=performance.now()+60000;performance.now()<until;){await new Promise(resolve=>setTimeout(resolve,50));if(!vantageCaptureHeld)return true;}return false;};
+      // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
+      const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition?volumePrototype?.canvasElement?.()??null:null,document,label:'note'});};
+      const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
+        selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
+        readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
+        sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
+        linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
+        avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')],ownView:viewportOwnForNotes});
+      window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
+    }catch(error){console.error('Notes unavailable',error);}
+  }
   animate();
 }
 
@@ -12477,18 +12563,38 @@ function applyAssetArrival(object, mode) {
   object.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(object, true);
   if (box.isEmpty()) return null;
-  const placement = computeAssetArrivalPlacement({
+  const groundY = groundPlane ? groundPlane.position.y : 0;
+  const place = anchor => computeAssetArrivalPlacement({
     bounds: { min: box.min.toArray(), max: box.max.toArray() },
-    rootPosition: object.position.toArray(),
-    groundY: groundPlane ? groundPlane.position.y : 0,
-    anchor: mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0],
+    rootPosition: object.position.toArray(), groundY, anchor,
   });
+  let anchor = mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0];
+  let placement = place(anchor), spot = null;
   if (!placement) return null;
+  if (mode === 'append') {
+    // Land beside what is already there, not inside it.
+    const footprint = [placement.bounds.max[0] - placement.bounds.min[0], placement.bounds.max[2] - placement.bounds.min[2]];
+    const obstacles = appendArrivalObstacles();
+    spot = chooseAppendAnchor({ footprint, pivot: appendArrivalPivot(obstacles, anchor), obstacles,
+      viewDirection: camera && controls ? camera.position.clone().sub(controls.target).toArray() : [0, 0, 1] });
+    if (spot.anchor[0] !== anchor[0] || spot.anchor[1] !== anchor[1]) { anchor = spot.anchor; placement = place(anchor); }
+  }
   object.scale.multiplyScalar(placement.scale);
   object.position.fromArray(placement.position);
-  const leveling = levelObjectOnArrival(object, mode === 'append' && controls ? [controls.target.x, controls.target.z] : [0, 0]);
-  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0 };
+  const leveling = levelObjectOnArrival(object, anchor);
+  object.userData.kaminosAssetArrival = { mode, scale: placement.scale, sourceDiagonal: placement.sourceDiagonal, leveledDeg: leveling?.tiltDeg ?? 0, ...(spot ? { spot: spot.reason, anchor } : {}) };
   return placement;
+}
+
+// Floor footprints an appended asset must not land inside: scene objects other than
+// cameras and lights, and the fire's simulation box.
+function appendArrivalObstacles() {
+  const box3 = object => { const box = new THREE.Box3().setFromObject(object, true); return box.isEmpty() ? null : { min: box.min.toArray(), max: box.max.toArray() }; };
+  const domainBox = flameDomainGuide?.box && !flameDomainGuide.box.isEmpty() ? { min: flameDomainGuide.box.min.toArray(), max: flameDomainGuide.box.max.toArray() } : null;
+  return arrivalObstacleBoxes({
+    objects: sceneObjects.filter(entry => entry.object).map(entry => ({ type: entry.type, visible: entry.object.visible, box: box3(entry.object) })),
+    domain: { active: !!activeSceneComposition, box: domainBox },
+  });
 }
 
 // Arrivals that are clearly a few degrees off their base (Snap Ground's rule)
@@ -12709,6 +12815,7 @@ function installSharedWorkbench() {
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
     inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
@@ -12719,7 +12826,8 @@ function installSharedWorkbench() {
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag},scene:{
+  sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
   }};
@@ -16902,8 +17010,11 @@ function applyVolumeScenePreset(scene, options = {}) {
 // Applies the committed default basin with its exact saved values (unlike the
 // in-code operator presets, which round numbers). Controls added to the page
 // after the export keep their page defaults, as a server schema projection does.
-async function applyDefaultVolumeSmokeBasin(routeParams) {
-  const response = await fetch(DEFAULT_VOLUME_SMOKE_BASIN_URL, { cache: 'no-store' });
+// The semantic flame basin (fire-boot.mjs) is applied the same way as the default
+// smoke basin, on routes that ask for fire without a named recipe.
+function applySemanticFlameBasin(routeParams, basin) { return applyDefaultVolumeSmokeBasin(routeParams, basin); }
+async function applyDefaultVolumeSmokeBasin(routeParams, url = DEFAULT_VOLUME_SMOKE_BASIN_URL) {
+  const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`default volume basin unavailable: ${response.status}`);
   const artifact = await response.json();
   const preset = artifact?.preset;
@@ -16935,7 +17046,7 @@ async function applyDefaultVolumeSmokeBasin(routeParams) {
     }
   }
   activeCanonicalVolumeMacroPreset = '';
-  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: DEFAULT_VOLUME_SMOKE_BASIN_URL, applied, missing };
+  const receipt = { presetId: artifact.presetId, label: artifact.initialLabel || null, source: url, applied, missing };
   window.__kaminosDefaultVolumeSmokeBasin = receipt;
   return receipt;
 }
@@ -19765,6 +19876,8 @@ async function initKaminosVolumeRoute() {
     !params.get('volume_tall_preset') &&
     !params.get('volume_canonical_preset');
   if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
+  // Fire asked for without a named recipe: the semantic flame basin (fire-boot.mjs).
+  else { const semantic = fireAtBoot(params).basin; if (semantic) await applySemanticFlameBasin(params, semantic); }
   await admitVolumeSettingsPresetRoute(params);
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
@@ -26046,7 +26159,7 @@ function installSceneConstruction() {
   document.getElementById('object-ungroup').onclick=()=>{try{window.kaminosSceneAuthoring.ungroup(activeSceneGroupId);}catch(error){setInfo(error.message);}};
   edits.subscribe(syncSceneDataInspector);
   document.addEventListener('keydown',event=>{
-    if(event.shiftKey&&event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest?.('input,textarea,select,[contenteditable=true]')){
+    if(!polyEdit?.active()&&event.shiftKey&&event.key.toLowerCase()==='d'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.target.closest?.('input,textarea,select,[contenteditable=true]')){
       event.preventDefault();try{duplicateSceneSelection(activeSceneObjectId||activeSceneGroupId,{interactive:true});}catch(error){setInfo(error.message);}
     }
   },true);
@@ -26106,6 +26219,7 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
 function updateSelectionFeedback(){
+  syncSceneHelperVisibility(sceneObjects.map(entry=>entry.object),viewportDisplay,selectionCaptureSuspended);
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
   const ids=new Set(sceneSelectionMembers());
@@ -26179,6 +26293,50 @@ function removeSelectedSceneObjects(){
   scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Remove ${ids.length} selected`);
   setInfo(`Removed ${ids.length} selected · Undo restores`);return true;
 }
+// Separate > Selection (P in Edit Mode). Both pieces are stored as content-addressed derived GLBs
+// first; then one membership edit swaps the original for them, so undo, redo, save and reopen
+// treat it like any other scene change. The original is retained for undo, not rewritten.
+async function storeDerivedMesh(bytes){
+  const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:bytes});
+  const receipt=await response.json();if(!response.ok)throw Error(receipt.error||'Mesh storage failed');
+  if(receipt.schema!=='kaminos.generated-mesh.v0'||receipt.sha256!==digest||receipt.bytes!==bytes.byteLength||receipt.source!==`/api/read?root=generated-meshes&path=${digest}.glb`)throw Error('Mesh storage returned a different source');
+  return receipt;
+}
+async function separatePolySelection(){
+  assertSceneConstructionAvailable();
+  const editing=polyEdit?.api.read();if(!editing?.editing)throw Error('Separate works in Edit Mode: select a mesh and press Tab');
+  const id=editing.objectId,entry=sceneObjects.find(o=>o.id===id);
+  if(entry?.type!=='glb'||!entry.source)throw Error('Separate works on GLB meshes for now');
+  const mask=polyEdit.api.selectedFaceMask(),geometry=polyEdit.api.geometry(),token=sceneMutationToken;
+  if(!mask.some(Boolean))throw Error('Select faces to separate');
+  setInfo('Separating…');
+  const response=await fetch(entry.source);if(!response.ok)throw Error(`Could not read the mesh source (${response.status})`);
+  const sourceBytes=new Uint8Array(await response.arrayBuffer());
+  const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const label=entry.label||'Mesh',partLabel=`${label}.001`;
+  const {part,rest}=separateSelection(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});
+  const [partStored,restStored]=await Promise.all([storeDerivedMesh(part.bytes),storeDerivedMesh(rest.bytes)]);
+  if(token!==sceneMutationToken||polyEdit.api.read().objectId!==id)throw Error('The scene changed while separating; nothing was changed');
+  assertSceneConstructionAvailable();
+  polyEdit.api.exit();
+  const before=checkSelectionMembership(readSelectionMembership()),original=before.objects.find(o=>o.id===id);
+  const restId=makeSceneObjectId('mesh'),partId=makeSceneObjectId('mesh');
+  // Derivation ancestry rides in assetOrigin; the source's own origin and generation become its parent.
+  const record=(newId,stored,name,piece)=>{const {generation,...kept}=structuredClone(original);return {...kept,id:newId,source:stored.source,fileName:`${name}.glb`,label:name,createdAt:new Date().toISOString(),
+    assetOrigin:{...piece.receipt,sha256:stored.sha256,parent:{objectId:id,sha256,assetOrigin:original.assetOrigin??null,generation:generation??null}}};};
+  const after=structuredClone(before);
+  after.objects.splice(after.objects.findIndex(o=>o.id===id),1,record(restId,restStored,label,rest),record(partId,partStored,partLabel,part));
+  for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?[restId,partId]:[member]);
+  after.selection={...after.selection,ids:[partId,restId],activeId:restId};after.field=null;
+  for(const target of [id,restId,partId])compoundRetentionTargets.set(target,'@selection-membership');
+  await writeSelectionMembership(after);
+  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`Separate ${part.faces} faces`);
+  // As in Blender, editing continues on what remains; the separated part is selected alongside it.
+  polyEdit.api.enter(restId);
+  setInfo(`Separated ${part.faces} faces into ${partLabel} · Undo restores`);
+  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partSource:partStored.source,restSource:restStored.source};
+}
 function duplicateSelectedSceneObjects({interactive=false}={}){
   assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
   if(members.some(id=>!canDuplicateObject(sceneObjects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
@@ -26221,7 +26379,7 @@ function installSelectionInput(){
   function beginBox(){if(vantageCaptureHeld){setInfo('The agent sub is taking a picture');return;}if(scenePlacementTools.edits.state().active)return;if(box)return;box={start:null,prior:controls.enabled};setInfo('Box selection · LMB adds · MMB removes · Escape cancels');}
   window.kaminosSelection.box=beginBox;window.kaminosSelection.boxing=()=>!!box;
   document.addEventListener('keydown',event=>{
-    if(viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
+    if(polyEdit?.active()||viewPie?.state()||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||(event.altKey&&event.key.toLowerCase()!=='a')||greenroomPreviewIsActive()||scenePlacementTools.state().modal)return;
     if(box&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();stopBox();return;}
     if(event.key.toLowerCase()==='b'){event.preventDefault();beginBox();}
     if(event.key.toLowerCase()==='a'){event.preventDefault();event.altKey?window.kaminosSelection.clear():window.kaminosSelection.all();}
@@ -27172,8 +27330,11 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
-
-  const volumeLoaded = initKaminosVolumeRoute();
+  // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
+  // ordinary scene starts without it; the app is then the frame owner models borrow.
+  const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
+  window.__kaminosFireBoot = fireBoot;
+  const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
@@ -27196,7 +27357,8 @@ sceneInitialization.then(() => {
       const preset = new URLSearchParams(location.search).get('settings_preset');
       if(preset!==plan.composition.flame.presetId){
         setInfo('Opening the saved flame recipe…');
-        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location)));
+        location.replace(compositionRestoreUrl(plan.composition,sceneFile,location.origin,new URLSearchParams(location.search).get('workspace') ?? hash.get('workspace'),readOwnerExperimentAddress(location),
+          {note:new URLSearchParams(location.search).get('note') ?? hash.get('note')}));
         return startupSceneRedirect;
       }
     }
@@ -27242,7 +27404,7 @@ sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
   restoreSettings();
-  initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
+  if (fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1))).boot) initKaminosVolumeRoute().catch(reportKaminosVolumeRouteInitFailure);
   initWorldChambersRoute();
   initKaminosFingerFluidBenchRoute();
   initKaminosFingerJuiceHostRoute();
@@ -27251,15 +27413,179 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
+  // The frame owner models borrow frames from: the fire scene's volume prototype when
+  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  let appFrameSource=null;
+  const frameOwner=()=>{
+    if(volumePrototype?.foregroundGpuContext){
+      // A fire scene took over: the app owner stops requesting frames.
+      if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
+      return volumePrototype;
+    }
+    const device=sharedGpu?.device;
+    if(!device||!compositionHost||compositionHost.device!==device)return null;
+    return appFrameSource||=createAppFrameSource({device,queue:device.queue});
+  };
+  window.kaminosAppFrameSource=()=>appFrameSource?.debugState()||null;
+  const foregroundHandoff=()=>{
+    const owner=frameOwner();
+    if(!owner||!compositionHost)return null;
+    if(authoringForegroundHandoff?.prototype!==owner)authoringForegroundHandoff={prototype:owner,handoff:createForegroundHandoff({prototype:owner,host:compositionHost})};
+    return authoringForegroundHandoff.handoff;
+  };
+  // One GPU host for the page (app-gpu-host.mjs): models borrow its session and run
+  // through its foreground service. SAM, UniMate and SuperMat consumers take it too.
+  // Reserved before the first await, so concurrent first callers share the one host; a
+  // failed construction clears the reservation and the next call retries.
+  let appGpuPending=null;
+  const appGpuHost=()=>{
+    if(appGpuPending)return appGpuPending;
+    if(!sharedGpu?.device||!compositionHost)return Promise.resolve(null);
+    appGpuPending=(async()=>{
+      const kit=await import('./webgpu-inference-kit/src/core.js');
+      return createAppGpuHost({sharedGpu,host:compositionHost,kit,frameOwner,
+        install:async requester=>{const handoff=foregroundHandoff();if(!handoff)throw Error('no frame owner');if(!handoff.has('app'))handoff.install('app',requester);await handoff.activate('app');}});
+    })();
+    appGpuPending.catch(()=>{appGpuPending=null;});
+    return appGpuPending;
+  };
+  window.kaminosAppGpu=appGpuHost;
   const request=async url=>{const response=await fetch(url,{cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error||`Assets HTTP ${response.status}`);return data;};
+  // Which mesh model is running, kept here: the services' own read() consults these
+  // blocked() checks, so asking each other for status would recurse.
+  let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
+  const meshBusy=model=>meshRunning[model];
+  const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
+  // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
+  const persistGeneratedMesh=async(glb,generation,label,suffix)=>{
+    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',glb)),b=>b.toString(16).padStart(2,'0')).join('');
+    const response=await fetch('/api/ingest-mesh',{method:'POST',headers:{'Content-Type':'model/gltf-binary'},body:glb});const saved=await response.json();
+    if(!response.ok||saved.sha256!==sha256||saved.bytes!==glb.byteLength)throw Error(saved.error||'Generated mesh storage returned a different artifact');
+    const result={source:saved.source,sha256,name:`${label} · ${suffix}.glb`,generation:{...generation,sha256,bytes:glb.byteLength}};
+    const originResponse=await fetch('/api/mesh-generation-origin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(result)});const origin=await originResponse.json();
+    if(!originResponse.ok||origin.result?.sha256!==sha256||origin.result?.generation?.runId!==generation.runId)throw Error(origin.error||'Generation origin storage returned a different result');
+    return result;
+  };
+  // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
+  // server's mounted checkpoint package. pixels:'package' uses the package's own prepared
+  // image as the caller input until browser image preparation exists.
+  // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
+  const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
+  let u2netRunner=null;
+  const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase,onInput}={})=>{
+    const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
+    const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
+      import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
+    const pack=await createTrellisPageCheckpoints({config:config.trellisPage});
+    // pixels:'package' (the stand-in), or an alpha image (a saved SAM cutout, or the
+    // Generate step's prepared image) prepared here by the model's own browser kernel.
+    let pixelValues=pixels==='package'?await pack.fetchTensor(pack.manifest.image.pixelTensor):pixels,preparation=null,imageSha256=pixels==='package'?pack.manifest.image.pixelValuesSha256:null;
+    const appGpu=await appGpuHost();if(!appGpu)throw Error('TRELLIS in this page needs the app GPU host');
+    if(image){
+      // In the page, no server step: real alpha goes to the alpha preparation, an opaque photo
+      // through browser U2Net first (weights from the shop's hosted package).
+      const [{prepareTrellisAlphaRgba},{normalizePreparedTrellisRgb},{removeForegroundU2Net}]=await Promise.all([
+        import('./models/trellis2/alpha-preparation.js'),import('./models/trellis2/generation-inputs.js'),import('./models/u2net/rembg-u2net.js')]);
+      const response=await fetch(image.source,{signal});if(!response.ok)throw Error(`TRELLIS input image HTTP ${response.status}`);
+      const blob=await response.blob(),bytes=new Uint8Array(await blob.arrayBuffer());
+      imageSha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+      const prepared=await prepareImageForTrellis({bytes,type:blob.type||undefined,signal,prepareTrellisAlphaRgba,
+        removeForegroundU2Net:async options=>{
+          // One model at a time on the page device: U2Net holds the app run while it segments,
+          // yielding scene frames and Stop between its GPU segments (foreground: the run).
+          const run=await appGpu.beginRun(`u2net-${crypto.randomUUID()}`,{routeId:'u2net.foreground-removal'});
+          try{return await removeForegroundU2Net({...options,foreground:run});}finally{await run.finish();}
+        },
+        runner:()=>u2netRunner??=(async()=>{const {loadU2NetPackage,createU2NetRunner}=await import('./models/u2net/u2net-webgpu.js');
+          return createU2NetRunner({device:appGpu.device,...await loadU2NetPackage(U2NET_PACKAGE_URL)});})()});
+      pixelValues=normalizePreparedTrellisRgb(prepared);preparation={source:image.source,...prepared.provenance};
+      // What TRELLIS actually used, kept and shown: the image itself, or the saved U2Net cutout.
+      const used=await describeTrellisInput({image,cutout:prepared.cutout,label,encode:async({rgba,width,height})=>{
+        const canvas=new OffscreenCanvas(width,height);canvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba),width,height),0,0);
+        return (await canvas.convertToBlob({type:'image/png'})).arrayBuffer();}});
+      preparation.used=used;if(used.kind==='cutout')preparation.cutoutSource=used.source;if(used.error)preparation.cutoutSaveError=used.error;
+      await onInput?.(used);
+    }
+    // Caller pixels without an image are identified by their own bytes.
+    imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
+    try{
+      const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
+        // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
+        finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
+        provenance:{checkpointManifestSha256:pack.manifestSha256,
+          input:image?`alpha image prepared in the page: ${image.source}`:pixels==='package'?'checkpoint package prepared pixels (Python-prepared stand-in), not a selected image':'caller-prepared pixels'}});
+      const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
+        receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
+        uv:result.uv,material:result.material};
+      return {glb:result.glb,generation,label,timing:result.timing};
+    }catch(error){
+      // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
+      if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
+        input:{pixels:pixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
+      throw error;
+    }
+  };
+  // Page TRELLIS is reserved from the first step (config, input, preparation, U2Net) to its
+  // end, so the picker, Stop routing, SF3D, Klein and the queued route all see it.
+  const trellisPageRun=async options=>{
+    if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
+    meshRunning.trellisPage=true;redraw();
+    try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
+  };
+  // Witness hook: run in the page and save the GLB.
+  window.kaminosTrellisPage=async options=>{const out=await trellisPageRun(options);return {...await persistGeneratedMesh(out.glb,out.generation,out.label,'TRELLIS'),timing:out.timing};};
+  // The Generate drawer's "TRELLIS 2 · this page" target: the prepared cutout, on this page's GPU.
+  let trellisPageAvailability=null,authoringTrellisPageGenerator=null;
+  const trellisPage=()=>{
+    if(!authoringTrellisPageGenerator){
+      fetch('/api/runtime-config',{cache:'no-store'}).then(r=>r.json()).then(config=>{
+        trellisPageAvailability=config.trellisPage?.mounted?(sharedGpu?.device?{status:'available'}:{status:'unavailable',message:'TRELLIS in this page needs WebGPU'})
+          :{status:'unavailable',message:'This server mounts no TRELLIS checkpoint package (KAMINOS_TRELLIS_CHECKPOINT_ROOT)'};redraw();
+      }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
+      authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
+        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
+        runPage:trellisPageRun,persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS')});
+    }
+    return authoringTrellisPageGenerator;
+  };
+  const trellis=()=>{
+    if(!authoringTrellisGenerator){
+      fetch('/api/pipeline-manifest',{cache:'no-store'}).then(r=>r.json()).then(manifest=>{
+        trellisAvailability=manifest.pipelines?.find(route=>route.id==='trellis-image-to-mesh-webgpu-v0')?.availability||{status:'unavailable',message:'This server has no TRELLIS route'};redraw();
+      }).catch(error=>{trellisAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
+      authoringTrellisGenerator=createTrellisAuthoringGeneration({availability:()=>trellisAvailability,changed:()=>redraw(),
+        express:()=>authoringMeshModel?.express()===true,
+        cancelJob:async job=>{const response=await fetch('/api/gpu-queue-cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job})});const value=await response.json();if(!response.ok)throw Error(value.error||'cancel failed');return value;},
+        queuePosition:async job=>{const response=await fetch('/api/gpu-queue-position?'+new URLSearchParams({job}),{cache:'no-store'});const value=await response.json();if(!response.ok)throw Error(value.error||'queue position unavailable');return value;},
+        blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
+        runPipeline:async(payload,{onProgress})=>readPipelineRunStream(await fetch('/api/run-pipeline',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify(payload)}),onProgress),
+        meshUrl:result=>{const artifact=pipelineRunOutputArtifacts(result).find(pipelineArtifactIsLoadableMesh);return artifact?pipelineRunReadUrlForPath(result,artifact.path):null;},
+        fetchBytes:async url=>{const response=await fetch(url);if(!response.ok)throw Error(`TRELLIS mesh HTTP ${response.status}`);return response.arrayBuffer();},
+        persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS'),
+      });
+      authoringTrellisGenerator={...authoringTrellisGenerator,run:withExpressSnapshot(tracked('trellis',authoringTrellisGenerator.run),()=>authoringMeshModel?.express()===true)};
+    }
+    return authoringTrellisGenerator;
+  };
   const generation=()=>{
-    if(!authoringGenerator)authoringGenerator=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:volumePrototype,host:compositionHost}),changed:()=>redraw(),blocked:()=>{
-      if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
-      return null;
-    }});
+    if(authoringMeshModel?.value()==='trellis')return trellis();
+    if(authoringMeshModel?.value()==='trellis-page')return trellisPage();
+    if(!authoringGenerator){
+      // SF3D installs its kiln foreground requester through a recording view so an
+      // image run can borrow the kiln and hand it back before the next mesh run.
+      const sf3dBlocked=()=>{
+        if(compositionModule)return 'This scene has another inference/performance host. Use its existing generation controls.';
+        if(authoringImageGenerator?.busy())return 'An image is generating. Generate the mesh when it is saved.';
+        if(meshBusy('trellis')||meshBusy('trellisPage'))return 'TRELLIS is generating.';
+        return null;
+      };
+      const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
+      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))};
+    }
     return authoringGenerator;
   };
-  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>authoringAssetsUI?.render(state),
+  authoringAssets=createAuthoringAssets({request,prepareImage:createImagePreparation(),generator:generation,nameForSource:source=>sceneObjects.find(entry=>entry.source===source)?.label,changed:state=>{authoringAssetsUI?.render(state);authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();},
     uploadImage:async file=>{
       const response=await fetch('/api/ingest-image?'+new URLSearchParams({name:file.name}),{method:'POST',body:await file.arrayBuffer()});const value=await response.json();
       if(!response.ok||value.schema!=='kaminos.asset-ingest.v0'||value.kind!=='image'||!value.entry?.source)throw Error(value.error||'Image storage failed');return value.entry;
@@ -27269,8 +27595,24 @@ function setupAuthoringAssets(){
       const response=await fetch(entry.source);if(!response.ok)throw Error(`Mesh source HTTP ${response.status}`);
       return importSceneMesh(new File([await response.arrayBuffer()],entry.name||'asset.glb',{type:'model/gltf-binary'}),{generation:entry.generation||null,label:entry.label,assetOrigin:entry.assetOrigin||null});
     }});
-  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>authoringAssetsUI.render(authoringAssets.read());
-  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state()};
+  authoringAssetsUI=installAuthoringAssets({document,controller:authoringAssets,edits:scenePlacementTools.edits});redraw=()=>{authoringMeshModel?.render();authoringAssetsUI.render(authoringAssets.read());authoringImageUI?.render();authoringGenerateLayout?.render();authoringBrowseLayout?.render();};
+  authoringMeshModel=installMeshModelChoice({document,busy:()=>meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringTrellisPageGenerator?.busy()===true,changed:()=>{if(authoringMeshModel?.value()==='trellis')trellis();if(authoringMeshModel?.value()==='trellis-page')trellisPage();redraw();},trellisState:()=>authoringTrellisGenerator?.read()||null});
+  authoringImageGenerator=createKleinAuthoringImageGeneration({
+    context:()=>({sharedGpu,prototype:frameOwner(),host:compositionHost,handoff:foregroundHandoff()}),
+    appHost:appGpuHost,
+    // A locally mounted weight package (KAMINOS_KLEIN_WEIGHTS_ROOT) spares each port's
+    // browser cache a 3 GB download; otherwise the published package is used.
+    weights:async()=>{const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};return config.klein?.mounted?config.klein.weightsUrl:KLEIN_PUBLISHED_WEIGHTS;},
+    deliver:async file=>{const entry=await authoringAssets.upload(file);authoringAssets.prepare().catch(error=>console.warn('Generated image preparation failed',error));return entry;},
+    changed:()=>redraw(),
+    blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
+  });
+  // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
+  authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
+  const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
+  authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(sceneObjects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
+  authoringGenerateLayout=installGenerateLayout({document,openMasks,selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
+  window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
 
 </script>

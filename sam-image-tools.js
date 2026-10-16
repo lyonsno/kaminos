@@ -1,9 +1,10 @@
 import { createSam3BrowserImageRuntime, createSam3SourceMask } from './webgpu-inference-kit/src/sam.js';
 import { createSamWorkbenchForeground } from './webgpu-inference-kit/smokes/sam-workbench-foreground.js';
+import { withPngProvenance } from './authoring-image-generation.mjs';
 
 const COLORS = [[50, 203, 222], [233, 184, 78], [208, 115, 185], [129, 217, 137]];
 
-export function createSamImageTools({ inferenceSession, rendererDevice, config, onAsset, onScene }) {
+export function createSamImageTools({ inferenceSession, rendererDevice, foregroundService, config, onAsset, onScene }) {
   const el = id => document.getElementById(`sam-image-${id}`);
   const canvas = el('canvas');
   const picker = el('instances');
@@ -62,12 +63,13 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
     }
     foreground?.setImage(display, { resetView: false });
   }
-  async function ingest(blob, name) {
+  async function ingest(blob, name, maskProvenance = null) {
     const response = await fetch(`/api/ingest-image?${new URLSearchParams({ name })}`, { method: 'POST', body: blob });
     const result = await response.json();
     if (!response.ok || !result.entry) throw new Error(result.error || `Image save failed: ${response.status}`);
-    onAsset?.(result.entry);
-    return result.entry;
+    const entry = maskProvenance ? { ...result.entry, maskProvenance } : result.entry;
+    await onAsset?.(entry);
+    return entry;
   }
   async function open(input, metadata = {}) {
     if (busy) throw new Error('An image operation is in progress');
@@ -114,7 +116,7 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   }
   function createRuntime() {
     return createSam3BrowserImageRuntime({
-      baseUrl: window.location.href, inferenceSession,
+      baseUrl: window.location.href, inferenceSession, foregroundService,
       commit: new URL(window.location.href).searchParams.get('commit') || null,
       onExecutionContext({ device }) { executionDevice = device; },
       yield: metadata => foreground.yield(metadata),
@@ -177,8 +179,17 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
       const stem = (source.name || 'image').replace(/\.[^.]+$/, '');
       const prompt = output.promptText.replace(/[^A-Za-z0-9_-]+/g, '-');
       const name = `${stem}-${prompt}-${picker.value}-${kind}.png`;
-      const entry = await ingest(blob, name);
-      if (addToScene) await onScene?.(entry, { sourceImage: source.source, promptText: output.promptText, invocationId: output.invocationId, indices });
+      const provenance = {
+        schema: 'kaminos.sam3-mask-export.v1', kind,
+        sourceImage: source.source, sourceImageSha256: source.sha256,
+        sourceArtifactId: source.artifactId, sourceResolution: [width, height],
+        promptText: output.promptText, promptSha256: output.promptSha256,
+        invocationId: output.invocationId, indices,
+        maskResolution: [output.width, output.height], effectiveRouteId: output.effectiveRouteId,
+        outputAuthority: output.outputAuthority, verificationState: output.verificationState,
+      };
+      const entry = await ingest(await withPngProvenance(blob, provenance), name, provenance);
+      if (addToScene) await onScene?.(entry, provenance);
       else {
         const link = document.createElement('a'); link.href = entry.source; link.download = name; link.click();
       }
@@ -198,7 +209,16 @@ export function createSamImageTools({ inferenceSession, rendererDevice, config, 
   };
   for (const kind of ['mask', 'cutout']) el(`save-${kind}`).onclick = () => void save(kind).catch(() => {});
   el('add-cutout').onclick = () => void save('cutout', true).catch(() => {});
-  el('unload').onclick = async () => { const previous = runtime; runtime = null; controls(); await previous?.close(); status('Model unloaded'); };
+  el('unload').onclick = async () => {
+    if (busy || !runtime) return;
+    busy = true; controls();
+    try {
+      await runtime.close();
+      runtime = null;
+      status('Model unloaded');
+    } catch (error) { fail(error); }
+    finally { busy = false; controls(); }
+  };
   const drop = event => {
     if (!active) return;
     event.preventDefault(); event.stopPropagation();
