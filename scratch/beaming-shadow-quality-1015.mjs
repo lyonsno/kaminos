@@ -4,10 +4,12 @@ import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {visualWork,assertCapturePixels} from '../visual-work.mjs';
 import {decodeScreenshotPngRgb} from '../screenshot-png-rgb.mjs';
-const [out,store,origin,sceneFile]=process.argv.slice(2);
+const [out,store,origin,sceneFile,exerciseMode='quality']=process.argv.slice(2);
+if(!['quality','shared-capture'].includes(exerciseMode))throw Error('unknown quality exercise');
 if(!out||!store||!origin||!sceneFile)throw Error('explicit output, store, origin and scene required');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'identity',repoRoot:process.cwd(),origin,store,sceneFile,errors:[],claim:'lighting-budget control exercise; no timing or cold-scene-recovery claim'};
+report.exerciseMode=exerciseMode;
 const write=()=>fs.writeFile(out+'/quality.json',JSON.stringify(report,null,2));
 await write();let context,page;
 try{
@@ -26,7 +28,8 @@ try{
  page.on('console',message=>{if(message.type()==='error'&&!message.text().startsWith('Failed to load resource:'))report.errors.push(message.text());});
  const hdr=await fs.readFile('/Users/noahlyons/.local/state/kaminos/modal-scene-solids-1013/evidence/studio_small_09_1k.hdr');
  await page.route('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',r=>r.fulfill({status:200,contentType:'application/octet-stream',body:hdr,headers:{'Access-Control-Allow-Origin':'*'}}));
- const owner={id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling:'complementary',points:4,pointSampling:'paired'})};
+ const baseline=exerciseMode==='shared-capture'?{resolution:36,blockerSamples:4,filterSamples:2}:{resolution:256,blockerSamples:9,filterSamples:16};
+ const owner={id:'fire-shadow-sampling',inputsText:JSON.stringify({sampling:'complementary',points:4,pointSampling:'paired',shadowQuality:baseline})};
  const observe=async quality=>{
   await page.waitForFunction(q=>{
    const l=window.__kaminosSceneRadiance,s=l?.debugState();
@@ -51,7 +54,6 @@ try{
  };
  report.phase='open';
  report.visual=await visualWork({page,origin,repoRoot:process.cwd(),sceneStore:store+'/scenes',basinStore:store+'/basins',sceneFile,workspace:'workbench',owner,out,exercise:async()=>{
-  const baseline={resolution:256,blockerSamples:9,filterSamples:16};
   await observe(baseline);
   await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=200);
   await page.evaluate(()=>window.__kaminosVolumePrototype.setSimulationPaused(true));
@@ -72,6 +74,30 @@ try{
    row.image=name+'.png';report.rows.push(row);await write();
   };
   report.phase='baseline';await capture('baseline',baseline);
+  if(exerciseMode==='shared-capture'){
+   report.claim='native shared-capture/uniform compilation and current geometry exercise; no performance or LOD claim';
+   const first=report.rows[0];
+   assert(first.lighting.shadows.every(s=>s.filterPattern?.route==='uniform'&&s.filterPattern.bytes===512),'uniform route not effective');
+   report.phase='move-caster';
+   const target=await page.evaluate(()=>{
+    const objects=window.kaminosSceneAuthoring.read().objects;
+    const target=objects.find(o=>o.geometry?.kind==='box');
+    if(!target)throw Error('saved scene has no box caster');
+    const before=structuredClone(target.transform),after=structuredClone(before);after.position[0]+=.15;
+    window.kaminosSetSceneObjectTransform(target.id,after);
+    return {id:target.id,before,after};
+   });
+   report.movement=target;
+   await capture('moved-caster',baseline);
+   const actual=await page.evaluate(id=>window.kaminosSceneObjectDebugState().find(o=>o.id===id).transform,target.id);
+   assert.deepEqual(actual,target.after);
+   assert(report.rows.at(-1).lighting.shadows.every((s,i)=>s.renderCount>first.lighting.shadows[i].renderCount),'moving caster must produce fresh captures');
+   await page.evaluate(({id,before})=>window.kaminosSetSceneObjectTransform(id,before),target);
+   report.phase='restore-caster';await capture('restored-caster',baseline);
+   const after=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSceneVolumeSource());
+   assert.deepEqual(after.values,before.values);report.sourceUnchanged=true;
+   report.handoff=report.rows.at(-1).url;return {url:report.handoff};
+  }
   report.phase='human-controls';
   for(const [label,value] of [['Shadow cube resolution',128],['Blocker-search samples',5],['Soft-shadow samples',8]]){
    await page.locator('input[type=range][aria-label="'+label+'"]').evaluate((element,value)=>{element.value=String(value);element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));},value);
