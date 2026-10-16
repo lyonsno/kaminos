@@ -1598,8 +1598,8 @@ test('recheck answers unverified when the kept identity cannot support a compari
 
 // A fake browser for the page's link: EventSources it opened, its timers and
 // posts, and a document whose visibility the test changes.
-function linkHarness({visible = true} = {}) {
-  const sources = [], timers = [], posts = [], listeners = {document: {}, window: {}};
+function linkHarness({visible = true, outstanding = []} = {}) {
+  const sources = [], timers = [], posts = [], listeners = {document: {}, window: {}}, server = {outstanding};
   class FakeEventSource {
     static CLOSED = 2;
     constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
@@ -1612,12 +1612,16 @@ function linkHarness({visible = true} = {}) {
   const document = {visibilityState: visible ? 'visible' : 'hidden', title: 'Kaminos', hasFocus: () => true,
     addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
   const window = {EventSource: FakeEventSource, location: {href: 'http://127.0.0.1:8484/index.html'},
-    fetch: async (url, init) => { posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null}); return {status: 200}; },
+    fetch: async (url, init) => {
+      posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null});
+      const body = String(url).endsWith('/rest') ? {ok: true, outstanding: server.outstanding} : {ok: true};
+      return {status: 200, ok: true, json: async () => body};
+    },
     setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: () => 0, clearInterval() {},
     addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
   const show = state => { document.visibilityState = state; for (const fn of [...(listeners.document.visibilitychange ?? [])]) fn(); };
   const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
-  return {sources, timers, posts, document, window, show, settle, live: () => sources.filter(source => !source.closed)};
+  return {sources, timers, posts, server, document, window, show, settle, live: () => sources.filter(source => !source.closed)};
 }
 const linked = (h, run = async () => ({})) => connectVantageLink({window: h.window, document: h.document, endpoint: '/api/vantage', pageId: 'page-test', run});
 
@@ -1663,4 +1667,44 @@ test('a link that dropped retries only while the tab is shown, and never opens a
   link.close();
   h.show('hidden'); h.show('visible');
   assert.equal(h.sources.filter(source => source.readyState !== 2).length, 0, 'a closed link stays closed');
+});
+
+test('a hidden tab answers what the server already sent it before letting go, and the server sends it nothing more', async () => {
+  const h = linkHarness({outstanding: [{id: 'c2', expiresAt: Date.now() + 60000}]}), ran = [];
+  linked(h, async (command, args) => { ran.push(command); return {kind: command}; });
+  h.show('hidden'); await h.settle();
+  assert.ok(h.posts.some(post => post.url.endsWith('/rest') && post.body.page === 'page-test'), 'it asks the server to rest it');
+  assert.equal(h.live().length, 1, 'c2 was sent before the server knew, so the tab waits for it');
+  h.sources[0].emit('command', {data: JSON.stringify({id: 'c2', command: 'status', args: {}, expiresAt: Date.now() + 60000})});
+  await h.settle();
+  assert.deepEqual(ran, ['status'], 'the command runs');
+  assert.ok(h.posts.some(post => post.url.endsWith('/reply') && post.body.id === 'c2'), 'and is answered');
+  assert.equal(h.live().length, 0, 'then the tab lets go');
+});
+
+test('a tab shown again while resting keeps its link and tells the server it is visible', async () => {
+  const h = linkHarness({outstanding: [{id: 'c3', expiresAt: Date.now() + 60000}]});
+  linked(h);
+  h.show('hidden'); await h.settle();
+  h.show('visible'); await h.settle();
+  assert.equal(h.live().length, 1);
+  assert.equal(h.sources.length, 1, 'the same stream');
+  assert.equal(h.posts.filter(post => post.url.endsWith('/presence')).at(-1).body.visible, true, 'so the server chooses it again');
+});
+
+test('a command the server sent but that never arrives holds a hidden tab only until it expires', async () => {
+  const h = linkHarness({outstanding: [{id: 'c4', expiresAt: Date.now() - 1}]});
+  linked(h);
+  h.show('hidden'); await h.settle();
+  assert.equal(h.live().length, 0);
+});
+
+test('the link witness credits only the eighth page\'s own link, never a background tab\'s', async () => {
+  const {restingTabsVerdict} = await import('../agent-vantage-witness-checks.mjs');
+  const backgroundIds = ['page-b1', 'page-b2'];
+  assert.equal(restingTabsVerdict({backgroundIds, freshId: 'page-fresh', connectedIds: ['page-main', 'page-fresh']}).ok, true);
+  const credited = restingTabsVerdict({backgroundIds, freshId: 'page-fresh', connectedIds: ['page-main', 'page-b2']});
+  assert.equal(credited.ok, false, 'a background tab that linked cannot stand in for the eighth page');
+  assert.match(credited.reasons.join(' '), /page-b2/);
+  assert.equal(restingTabsVerdict({backgroundIds, freshId: null, connectedIds: ['page-main']}).ok, false, 'an eighth page that never installed is not a pass');
 });

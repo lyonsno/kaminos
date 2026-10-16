@@ -41,6 +41,9 @@ class _Page:
         self.connected_at = clock()
         self.last_seen = clock()
         self.focus_order = 0
+        # A page whose tab was hidden is letting go of its link: it is sent and
+        # chosen for nothing until it is shown again or closes.
+        self.resting = False
 
 
 class _Pending:
@@ -49,6 +52,7 @@ class _Pending:
         self.done = threading.Event()
         self.reply = None
         self.failure = None
+        self.expires_at = None
 
 
 class VantageBroker:
@@ -99,7 +103,7 @@ class VantageBroker:
                 if link.closed:
                     raise LinkClosed()
                 page = self._pages.get(link.page_id)
-                while page is not None and page.link is link and page.queue:
+                while page is not None and page.link is link and page.queue and not page.resting:
                     message = page.queue.popleft()
                     if message["id"] in self._pending:
                         page.last_seen = self._clock()
@@ -119,7 +123,32 @@ class VantageBroker:
                 return False
             page.last_seen = self._clock()
             self._update(page, meta)
+            if page.meta.get("visible"):
+                page.resting = False
+                self._lock.notify_all()
             return True
+
+    def rest(self, page_id):
+        """A page whose tab was hidden asks to let go of its link. It is sent and
+        chosen for nothing more. A command still queued for it fails at once: it
+        never reached the page, so it did not run. Commands already taken for
+        delivery are returned, with when each stops being wanted, so the page can
+        answer them before it closes its link. None for a page that is not linked."""
+        with self._lock:
+            page = self._pages.get(page_id)
+            if page is None or page.link is None:
+                return None
+            page.resting = True
+            queued = [message["id"] for message in page.queue]
+            page.queue.clear()
+            for command_id in queued:
+                pending = self._pending.pop(command_id, None)
+                if pending is not None:
+                    pending.failure = VantageError(409, "page-hidden", "The Kaminos tab was hidden before it received the command, so the command did not run")
+                    pending.done.set()
+            self._lock.notify_all()
+            return [{"id": command_id, "expiresAt": pending.expires_at}
+                    for command_id, pending in self._pending.items() if pending.page_id == page_id]
 
     def reply(self, page_id, command_id, payload):
         with self._lock:
@@ -149,9 +178,9 @@ class VantageBroker:
         with self._lock:
             target = self._select(page)
             pending = _Pending(target.id)
+            pending.expires_at = int((self._wall() + timeout) * 1000)
             self._pending[command_id] = pending
-            target.queue.append({"id": command_id, "command": command, "args": args,
-                                 "expiresAt": int((self._wall() + timeout) * 1000)})
+            target.queue.append({"id": command_id, "command": command, "args": args, "expiresAt": pending.expires_at})
             self._lock.notify_all()
             described = self._describe(target, self._clock())
         started = self._clock()
@@ -212,12 +241,17 @@ class VantageBroker:
         return sorted(self._pages.values(), key=rank, reverse=True)
 
     def _select(self, requested):
-        connected = [page for page in self._ranked() if page.link is not None]
+        linked = [page for page in self._ranked() if page.link is not None]
+        connected = [page for page in linked if not page.resting]
         if requested:
-            matches = [page for page in connected if page.id == requested] or [page for page in connected if page.id.startswith(requested)]
+            named = lambda pages: [page for page in pages if page.id == requested] or [page for page in pages if page.id.startswith(requested)]
+            matches = named(connected)
             if len(matches) > 1:
                 raise VantageError(409, "select", f"Page \"{requested}\" is ambiguous: {', '.join(page.id for page in matches)}")
             if not matches:
+                hidden = named(linked)
+                if hidden:
+                    raise VantageError(409, "page-hidden", f"Page {hidden[0].id}'s tab is hidden; show it to send it commands")
                 raise VantageError(404, "select", f"No connected Kaminos page matches \"{requested}\"")
             return matches[0]
         if not connected:
@@ -227,5 +261,5 @@ class VantageBroker:
     def _describe(self, page, now):
         return {"id": page.id, "href": page.meta.get("href"), "title": page.meta.get("title"),
                 "visible": page.meta.get("visible"), "focused": page.meta.get("focused"),
-                "connected": page.link is not None, "lastSeenAgoMs": round((now - page.last_seen) * 1000),
+                "connected": page.link is not None, "resting": page.resting, "lastSeenAgoMs": round((now - page.last_seen) * 1000),
                 "pendingCommands": sum(1 for pending in self._pending.values() if pending.page_id == page.id)}

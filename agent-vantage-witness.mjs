@@ -13,6 +13,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
 import {poseLookingAt} from './agent-vantage-core.mjs';
+import {restingTabsVerdict} from './agent-vantage-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/vantage.mjs');
@@ -529,8 +530,10 @@ try {
   const linkedNow = async () => (await (await fetch(new URL('/api/vantage/pages', options.origin))).json()).pages.filter(item => item.connected).map(item => item.id);
   const shared = await browser.newContext({viewport: {width: 800, height: 600}});
   const tabUrl = new URL('/index.html?notes=0', options.origin).href;
+  // Each page is known by its own vantage page id once its vantage is installed.
+  const vantageId = tab => tab.waitForFunction(() => window.kaminosAgentVantage?.pageId, null, {timeout: 30000}).then(handle => handle.jsonValue(), () => null);
   try {
-    const before = await linkedNow();
+    const backgroundIds = [];
     for (let i = 0; i < 7; i++) {
       const tab = await shared.newPage();
       await tab.addInitScript(() => {
@@ -538,19 +541,22 @@ try {
         Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
       });
       await tab.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 30000});
+      backgroundIds.push(await vantageId(tab));
     }
     await new Promise(done => setTimeout(done, 1500));
     const withBackground = await linkedNow();
     const fresh = await shared.newPage(), started = Date.now();
     const loaded = await fresh.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 15000}).then(() => true, () => false);
-    const loadMs = Date.now() - started;
+    const loadMs = Date.now() - started, freshId = loaded ? await vantageId(fresh) : null;
     let afterFresh = await linkedNow();
-    for (const until = Date.now() + 15000; loaded && afterFresh.length <= withBackground.length && Date.now() < until; afterFresh = await linkedNow()) {
+    for (const until = Date.now() + 15000; freshId && !afterFresh.includes(freshId) && Date.now() < until; afterFresh = await linkedNow()) {
       await new Promise(done => setTimeout(done, 200));
     }
-    report.effective.link = {backgroundTabs: 7, linkedBefore: before, linkedWithBackground: withBackground, loaded, loadMs, linkedAfterFresh: afterFresh};
-    check('seven background tabs hold no vantage link, so another page on the same server still loads and links',
-      withBackground.length === before.length && loaded && afterFresh.length === before.length + 1, report.effective.link);
+    const early = restingTabsVerdict({backgroundIds, freshId: 'not-yet-open', connectedIds: withBackground});
+    const verdict = restingTabsVerdict({backgroundIds, freshId, connectedIds: afterFresh});
+    report.effective.link = {backgroundIds, linkedWithBackground: withBackground, loaded, loadMs, freshId, linkedAfterFresh: afterFresh, verdict};
+    check('seven background tabs hold no vantage link, so another page on the same server still loads and links its own',
+      backgroundIds.every(Boolean) && !early.reasons.some(reason => /background/.test(reason)) && loaded && verdict.ok, report.effective.link);
   } finally { await shared.close(); }
 
   report.phase = 'remove'; save();

@@ -775,12 +775,22 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
   const hidden = () => document.visibilityState !== 'visible';
   const facts = () => ({page: pageId, visible: !hidden(), focused: document.hasFocus(), href: window.location.href, title: document.title});
   const presence = () => { if (!closed && source) post('/presence', facts()).catch(() => {}); };
-  const pump = createCommandPump({run, reply: answer => post('/reply', {page: pageId, ...answer})});
+  // Ids this page has answered, and whoever is waiting to hear of the next answer.
+  const answered = new Set(), waiters = new Set();
+  const pump = createCommandPump({run, reply: answer => {
+    answered.add(answer.id);
+    for (const wake of waiters) wake();
+    waiters.clear();
+    return post('/reply', {page: pageId, ...answer});
+  }});
   // The link is held only while the tab is shown. A browser keeps few connections
   // to one server (six over HTTP/1.1), and every open stream holds one, so tabs
   // left open in the background would stop the next page from loading at all.
-  // A hidden tab lets go once it has answered what it holds: the server fails the
-  // commands of a page that drops its link.
+  // A hidden tab lets go only once nothing it was sent is unanswered, because the
+  // server fails the commands of a page that drops its link. It asks the server
+  // to rest it: the server sends it nothing more, fails at once what was still
+  // queued for it (not run), and lists what it had already sent, which the page
+  // answers, or lets expire, before it closes the stream.
   function open() {
     if (closed || hidden() || (source && source.readyState !== window.EventSource.CLOSED)) return;
     window.clearTimeout(retry);
@@ -804,17 +814,34 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
       }, () => { retry = window.setTimeout(open, 5000); });
     });
   }
+  let resting = false;
+  const stillHidden = () => source && hidden() && !closed;
+  async function askToRest() {
+    try {
+      const response = await post('/rest', {page: pageId});
+      return response.ok ? (await response.json()).outstanding ?? [] : null;
+    } catch { return null; }
+  }
   async function rest() {
-    while (source && hidden() && !closed) {
-      if (!pump.busy()) {
+    if (resting) return;
+    resting = true;
+    try {
+      while (stillHidden()) {
+        if (pump.busy()) { await pump.idle(); continue; }
+        // A server that cannot rest a page (an older one) answers null; the page then lets go when idle.
+        const outstanding = await askToRest();
+        if (!stillHidden()) { presence(); return; }
+        const waiting = () => (outstanding ?? []).some(item => !answered.has(item.id) && Date.now() < item.expiresAt);
+        while (waiting() && stillHidden()) await new Promise(wake => { waiters.add(wake); window.setTimeout(wake, 250); });
+        if (!stillHidden()) { presence(); return; }
+        if (pump.busy()) continue;
         source.close();
         source = null;
         window.clearTimeout(retry);
         onStatus({state: 'resting', pageId});
         return;
       }
-      await pump.idle();
-    }
+    } finally { resting = false; }
   }
   const follow = () => { presence(); if (hidden()) rest(); else open(); };
   document.addEventListener('visibilitychange', follow);

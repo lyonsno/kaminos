@@ -3870,6 +3870,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_reply()
         elif parsed.path == "/api/vantage/presence":
             self.handle_vantage_presence()
+        elif parsed.path == "/api/vantage/rest":
+            self.handle_vantage_rest()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
             notes_http().handle(self, "POST", self.path)
         else:
@@ -3981,6 +3983,17 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         if body is not None:
             known = vantage_bridge()[1].presence(str(body.get("page") or ""), body)
             self.send_json({"ok": known}, 200 if known else 404)
+
+    def handle_vantage_rest(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            outstanding = vantage_bridge()[1].rest(str(body.get("page") or ""))
+            if outstanding is None:
+                self.send_json({"ok": False, "phase": "select", "error": "No linked Kaminos page has that id"}, 404)
+            else:
+                self.send_json({"ok": True, "outstanding": outstanding})
 
     def handle_vantage_reply(self):
         if not self._vantage_allowed():

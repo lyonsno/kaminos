@@ -143,6 +143,49 @@ def broker_contracts():
     broker.detach(link)
     assert broker.pages() == [], "a closed page leaves no routing record"
 
+    # A page going hidden rests: it is sent and chosen for nothing more, a command still queued for it
+    # fails at once without running, and a command already taken for delivery is listed for the page to answer.
+    broker = bridge.VantageBroker()
+    resting = broker.attach("page-rrrrrrrr", {"visible": True, "focused": True})
+    outcomes = {}
+
+    def submit_as(name, command):
+        try:
+            outcomes[name] = broker.submit(command, {}, page="page-rrrrrrrr", timeout=5)
+        except bridge.VantageError as error:
+            outcomes[name] = error
+
+    sent_worker = threading.Thread(target=submit_as, args=("sent", "status"))
+    sent_worker.start()
+    sent, deadline = None, time.monotonic() + 3
+    while sent is None and time.monotonic() < deadline:
+        sent = broker.next_message(resting, 0.05)
+    assert sent and sent["command"] == "status", sent
+    queued_worker = threading.Thread(target=submit_as, args=("queued", "move"))
+    queued_worker.start()
+    deadline = time.monotonic() + 3
+    while broker.pages()[0]["pendingCommands"] < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    outstanding = broker.rest("page-rrrrrrrr")
+    assert [item["id"] for item in outstanding] == [sent["id"]], outstanding
+    assert outstanding[0]["expiresAt"] == sent["expiresAt"], "the page learns how long the sent command is wanted"
+    queued_worker.join(3)
+    assert isinstance(outcomes.get("queued"), bridge.VantageError) and outcomes["queued"].phase == "page-hidden", outcomes.get("queued")
+    assert broker.next_message(resting, 0.01) is None, "a resting page is sent nothing"
+    assert broker.pages()[0]["resting"] is True
+    try:
+        broker.submit("status", {}, timeout=0.2)
+        raise AssertionError("a resting page must not be chosen")
+    except bridge.VantageError as error:
+        assert error.phase == "select", error.phase
+    assert broker.reply("page-rrrrrrrr", sent["id"], {"ok": True, "result": {"kind": "status"}}) is True, "what it was sent, it still answers"
+    sent_worker.join(3)
+    assert outcomes["sent"]["ok"] is True, outcomes["sent"]
+    assert broker.rest("page-unknown0") is None, "an unknown page has nothing to rest"
+    assert broker.presence("page-rrrrrrrr", {"visible": True}) is True
+    assert broker.pages()[0]["resting"] is False, "shown again, it is chosen again"
+    broker.detach(resting)
+
 
 def main():
     broker_contracts()
@@ -232,6 +275,13 @@ def main():
             wait_until(lambda: len(connected_pages(port)) == 2, "closed page still listed as connected")
             status, body = call(port, "GET", "/api/vantage/pages")
             assert len(body["pages"]) == 2, "closed pages are forgotten rather than accumulating"
+
+            status, body = call(port, "POST", "/api/vantage/rest", {"page": "page-aaaaaaaa"})
+            assert status == 200 and body["ok"] is True and body["outstanding"] == [], (status, body)
+            status, body = call(port, "POST", "/api/vantage/command", {"command": "status", "args": {}, "page": "page-aaa"})
+            assert status == 409 and body["phase"] == "page-hidden" and "page-aaaaaaaa" in body["error"], ("a resting page is not chosen, and says why", status, body)
+            status, body = call(port, "POST", "/api/vantage/rest", {"page": "page-zzzzzzzz"})
+            assert status == 404 and body["ok"] is False, (status, body)
         finally:
             for page in pages:
                 page.close()
