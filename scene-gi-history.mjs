@@ -50,7 +50,9 @@ export default class SceneGIHistory extends Node {
     this.previousProjection.value.copy(this.camera.projectionMatrix);
     this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;
   }
-  updateBefore({renderer}) {
+  updateBefore(frame) {
+    const {renderer}=frame;
+    frame.updateBeforeNode(this.gi.passNode);
     const state=RendererUtils.resetRendererState(renderer);
     try {
       const size=renderer.getDrawingBufferSize(new Vector2());
