@@ -6,9 +6,9 @@ export function createOwnerSceneSession(hooks) {
   }
   const controller = new AbortController();
   const objects = new Map(), attaching = new Set(), pending = new Set(), frames = new Set(), cleanupErrors = [];
-  let disposed = false, disposal;
-  const active = () => {if (disposed) throw Error('Scene session is disposed');};
-  const context = Object.freeze({signal: controller.signal, isCurrent: () => !disposed});
+  let disposed = false, retired = false, disposal;
+  const active = () => {if (disposed||retired) throw Error('Scene session is disposed or retired');};
+  const context = Object.freeze({signal: controller.signal, isCurrent: () => !disposed&&!retired});
 
   async function remove(handle) {
     if (!handle.owned) return;
@@ -24,7 +24,7 @@ export function createOwnerSceneSession(hooks) {
     if (objects.has(handle.root)) throw Error('Scene root is already in this session');
     // Preserve actual roots/clips, but freeze the custody fields against caller edits.
     handle = Object.freeze({...handle});
-    if (disposed) {await remove(handle); throw Error('Scene session is disposed');}
+    if (disposed||retired) {await remove(handle); throw Error('Scene session is disposed or retired');}
     objects.set(handle.root, handle);
     return handle;
   }
@@ -48,12 +48,19 @@ export function createOwnerSceneSession(hooks) {
     }
     entry.cancel = cancel; frames.add(entry);
     try {
-      const unsubscribe = hooks[kind](frame => {if (!disposed && entry.enabled) return callback(frame);});
+      const unsubscribe = hooks[kind](frame => {if (!disposed && !retired && entry.enabled) return callback(frame);});
       if (typeof unsubscribe !== 'function') throw Error(`Scene host ${kind} must return unsubscribe`);
       entry.unsubscribe = unsubscribe;
       if (!entry.enabled || disposed) unsubscribe();
     } catch (error) {cancel(); throw error;}
     return cancel;
+  }
+
+  function retireProducer() {
+    if(retired)return;
+    retired=true;
+    controller.abort();
+    for(const entry of [...frames]){try{entry.cancel();}catch(error){cleanupErrors.push(error);}}
   }
 
   return Object.freeze({
@@ -64,7 +71,13 @@ export function createOwnerSceneSession(hooks) {
       const task = acquire(ctx => {
         if (objects.has(root)) throw Error('Scene root is already in this session');
         if (typeof options.owned !== 'boolean') throw Error('Attachment must explicitly choose owned or borrowed');
-        return hooks.attach(root, options, ctx);
+        const attachment={...options};
+        if(options.finalize!==undefined){
+          if(typeof options.finalize!=='function')throw Error('Producer finalizer must be callable');
+          const finalize=options.finalize;
+          attachment.finalize=retiredRoot=>{retireProducer();return finalize(retiredRoot);};
+        }
+        return hooks.attach(root, attachment, ctx);
       });
       task.then(() => attaching.delete(root), () => attaching.delete(root));
       return task;

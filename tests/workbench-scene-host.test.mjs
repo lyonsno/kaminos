@@ -98,3 +98,21 @@ test('owned producer attachment transfers final resource cleanup without a secon
  const session=host.open();await session.attach(root,{owned:true,finalize:value=>{assert.equal(value,root);++calls;}});
  assert.equal(finalizers.canRestore(root),true);await session.dispose();await session.dispose();assert.equal(calls,1);
 });
+
+test('final retirement cancels producer scheduling and publication even while its session is open',async()=>{
+ const h=harness(),finalizers=createSceneResourceFinalizers(),root=new THREE.Group();let destroyed=false,ticks=0,publishes=0;
+ const service=createWorkbenchFrameService({onError:error=>{throw error;}});
+ const host=createWorkbenchSceneHost({scene:h.scene,camera:h.camera,controls:h.controls,loadAsset:async()=>{},
+  registerObject:h.register,findObject:value=>[...h.rows.values()].find(row=>row.object===value),
+  removeObject:handle=>{h.scene.remove(handle.root);h.rows.delete(handle.id);return finalizers.retire(handle.root);},
+  finalizers,redraw(){},onFrame:service.onFrame,onBeforeRender:service.onBeforeRender});
+ const session=host.open();await session.attach(root,{owned:true,finalize:()=>{destroyed=true;}});
+ session.onFrame(()=>{if(destroyed)throw Error('tick used retired allocation');++ticks;});
+ session.onBeforeRender(()=>{if(destroyed)throw Error('publication used retired allocation');++publishes;});
+ service.tick(0);assert.equal(service.beforeRender(),true);
+ root.removeFromParent();await finalizers.retire(root); // The app's scene-replacement finalizer boundary.
+ service.tick(10);assert.equal(service.beforeRender(),true,'retiring the old producer must leave replacement draws usable');
+ assert.equal(ticks,1);assert.equal(publishes,1);assert.equal(service.state().publicationSubscriptions,0);
+ assert.throws(()=>session.onBeforeRender(()=>{}),/retired|disposed/);
+ await session.dispose();
+});

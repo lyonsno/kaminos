@@ -224,3 +224,15 @@ test('operation switching recalculates from the gesture-start pose and local axi
   assert.deepEqual(rotated.scale, original.scale);
   assert.ok(rotated.rotation.some((value, index) => Math.abs(value - original.rotation[index]) > .1));
 });
+
+test('history membership queries inspect detached snapshots in both directions without mutating history',()=>{
+ const edits=createSceneEdits({read:()=>null,write(){}});let value={objects:[{id:'stone'}]};
+ edits.register('@selection-membership',{read:()=>value,check:next=>next,write:next=>{value=next;}});
+ const before=clone(value);value={objects:[{id:'stone'},{id:'other'}]};
+ edits.recordApplied('@selection-membership',before,value);
+ assert.equal(edits.hasHistoryEntry('@selection-membership',entry=>entry.before.objects.some(row=>row.id==='stone')),true);
+ assert.equal(edits.hasHistoryEntry('@selection-membership',entry=>entry.after.objects.some(row=>row.id==='absent')),false);
+ edits.hasHistoryEntry('@selection-membership',entry=>{entry.before.objects=[];return true;});
+ edits.undo();assert.deepEqual(value,before);assert.equal(edits.hasHistoryEntry('@selection-membership',entry=>entry.before.objects.length===1),true);
+ edits.clear();assert.equal(edits.hasHistoryEntry('@selection-membership',()=>true),false);
+});

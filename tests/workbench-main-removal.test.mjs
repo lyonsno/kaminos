@@ -25,7 +25,7 @@ function fixture(){
   sceneMembershipRetainedObjects:new Map(),sceneMembershipDisposers:new WeakMap(),sceneResourceFinalizers:createSceneResourceFinalizers(),compoundRetentionTargets:new Map(),scenePlacementTools:{edits,finish(){}},disposeOwnedSceneTree,
   pruneSceneGroups(){},renderSceneObjectList(){},updateTransformInspector(){},setActiveSceneObject(id){c.activeSceneObjectId=id;},setInfo(){},window:{_kaminosDirty(){}},proceduralMeshes:new Map(),disposeSceneSpotLight(){throw Error('unexpected light');},setSceneSelection(){throw Error('unexpected selection');},setActiveSceneGroup(){throw Error('unexpected group');},
  };
- vm.createContext(c);vm.runInContext(['membershipEditTargetId','releaseUnreferencedSceneMembershipObjects','pruneSceneSelection','removeSceneObjectInternal','disposeObjectTree'].map(actual).join('\n')+'\n'+adapter,c);
+ vm.createContext(c);vm.runInContext(['membershipEditTargetId','sceneObjectHasMembershipHistory','releaseUnreferencedSceneMembershipObjects','pruneSceneSelection','removeSceneObjectInternal','disposeObjectTree'].map(actual).join('\n')+'\n'+adapter,c);
  edits.subscribe(c.releaseUnreferencedSceneMembershipObjects);
  return {c,edits,owned,borrowed,texture,geometry,material,disposed,close:()=>c.closeOwned({id:'owned',root:owned})};
 }
@@ -49,4 +49,23 @@ test('owner release protects resources held by another Undo root and borrowed sc
  f.edits.register(id,{allowMissing:true,check:value=>value,read:()=>present,write:value=>{present=value;}});f.edits.recordApplied(id,null,1,'Retain other root');
  f.c.sceneMembershipRetainedObjects.set('retained',{id:'retained',type:'glb',object:retained});
  f.close();assert.equal(f.c.sceneMembershipRetainedObjects.has('owned'),false);assert.equal(f.c.sceneMembershipRetainedObjects.has('retained'),true);assert.equal(f.material.map,f.texture);assert.ok(!f.disposed.some(v=>['geometry','material','texture'].includes(v)));assert.ok(f.disposed.includes('uniqueGeometry'));
+});
+
+test('whole-scene history for another object retains a producer through session close and replay',async()=>{
+ const f=fixture(),entry=f.c.sceneObjects[0];entry.type='experiment';entry.source=null;
+ let finalizations=0;f.c.sceneResourceFinalizers.register(f.owned,()=>{++finalizations;});
+ let snapshot={objects:[{id:'owned'},{id:'borrowed'}]};
+ f.edits.register('@selection-membership',{read:()=>snapshot,check:value=>value,write:value=>{
+  snapshot=value;
+  if(value.objects.some(row=>row.id==='owned')&&!f.c.sceneObjects.includes(entry)){
+   assert.equal(f.c.sceneMembershipRetainedObjects.get('owned')?.object,f.owned);
+   f.c.sceneObjects.push(entry);f.c.scene.add(f.owned);
+  }
+ }});
+ const before=structuredClone(snapshot);snapshot={objects:[{id:'owned'}]};
+ f.edits.recordApplied('@selection-membership',before,snapshot,'Remove unrelated comparison');
+ f.close();await Promise.resolve();assert.equal(finalizations,0,'a whole-scene snapshot is a real producer reference');
+ assert.equal(f.c.sceneMembershipRetainedObjects.get('owned')?.object,f.owned);
+ await f.edits.undo();assert.equal(f.owned.parent,f.c.scene);await f.edits.redo();assert.equal(f.owned.parent,f.c.scene);
+ f.close();f.edits.clear();await f.c.sceneResourceFinalizers.pending(f.owned);assert.equal(finalizations,1);
 });

@@ -7,13 +7,14 @@ export default {
   const geometry=new BoxGeometry(.8,.8,.8),material=new MeshStandardMaterial({color:0x35aeb3,roughness:.3}),root=new Mesh(geometry,material);
   root.name='GPU producer body';root.position.y=.4;
   const buffer=gpu.device.createBuffer({label:'host-conformance-allocation',size:4,usage:GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});
-  let publications=0,finalizations=0,retirement=null;
+  let publications=0,frames=0,finalizations=0,retirement=null;
   const asset=await session.attach(root,{owned:true,metadata:{label:root.name},finalize:()=>retirement??=(async()=>{
    await gpu.device.queue.onSubmittedWorkDone();geometry.dispose();material.dispose();buffer.destroy();++finalizations;
   })()});
-  session.onBeforeRender(()=>{++publications;});
+  session.onFrame(()=>{if(finalizations)throw Error('Frame used retired producer');++frames;});
+  session.onBeforeRender(()=>{if(finalizations)throw Error('Publication used retired producer');++publications;});
   session.setView({position:[2,1.5,3],target:[0,.3,0]});
-  const read=()=>({id:asset.id,uuid:root.uuid,mounted:root.parent===gpu.scene,publications,finalizations,
+  const read=()=>({id:asset.id,uuid:root.uuid,mounted:root.parent===gpu.scene,frames,publications,finalizations,
    backend:gpu.backend,deviceMatches:gpu.renderer.backend.device===gpu.device,
    adapter:Object.fromEntries(['vendor','architecture','device','description','isFallbackAdapter'].map(key=>[key,gpu.adapter.info[key]??null]))});
   // Preserve the fixture's terminal state after the entry has been closed.

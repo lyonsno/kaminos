@@ -108,7 +108,8 @@ const api = await createMyProducer({host: session.gpu(), participation: 'produce
 const remaining = new Set(api.roots);
 for (const root of api.roots) {
   await session.attach(root, {owned: true, metadata: {label: root.name},
-    finalize(retiredRoot) {
+    async finalize(retiredRoot) {
+      await api.quiesce();
       remaining.delete(retiredRoot);
       if (!remaining.size) return api.dispose();
     }});
@@ -122,7 +123,11 @@ await session.dispose();
 The finalizer owns the complete producer allocation, including its Three
 resources; the app never combines it with generic tree disposal. Use it for
 resources owned exclusively by these roots. It runs exactly once on final
-retirement, including ordinary Delete or scene replacement. In-document Undo
+retirement, including ordinary Delete or scene replacement. Before invoking any
+producer finalizer, the session cancels all its frame/publication subscriptions,
+rejects further acquisitions/subscriptions and cancels pending loads. Use one
+scene session per independently scheduled producer. The finalizer must quiesce
+input and drain producer work before allocation cleanup, as in the example. In-document Undo
 keeps the actual producer root/resources alive until scene history releases
 its references; closing a session may therefore finish before final resource
 retirement. A retained object can reappear quiescent after closing its experiment.

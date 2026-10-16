@@ -6094,6 +6094,35 @@ try {
       if(fixture.read().finalizations!==1||fixture.read().mounted)throw Error('Final producer retirement was not exact');
       return fixture.read();
     })()`);
+    lastEvidence.gpuHost.wholeSceneHistory=await evaluate(ws,`(async()=>{
+      const entry=window.kaminosWorkbenchExperiments;await entry.open('shared-gpu-host-fixture');
+      const fixture=window.kaminosGpuHostFixture,before=fixture.read();
+      const other=await window.kaminosSceneAuthoring.addMesh('box');
+      window.kaminosSelection.set([other],other);await window.kaminosSelection.remove();
+      await entry.close();
+      if(fixture.read().finalizations)throw Error('Unrelated selection history did not retain producer');
+      await window.kaminosSceneEdits.undo();
+      if(!fixture.read().mounted||fixture.read().uuid!==before.uuid)throw Error('Unrelated Undo lost retained producer');
+      await window.kaminosSceneEdits.redo();
+      window.removeSceneObject(before.id);window.kaminosSceneEdits.clear();await fixture.retired();
+      if(fixture.read().finalizations!==1)throw Error('Whole-scene retained producer finalization was not exact');
+      return fixture.read();
+    })()`);
+    lastEvidence.gpuHost.sceneReplacement=await evaluate(ws,`(async()=>{
+      const entry=window.kaminosWorkbenchExperiments;await entry.open('shared-gpu-host-fixture');
+      const fixture=window.kaminosGpuHostFixture,initial=fixture.read();
+      const text=['o Replacement','v -0.4 0 0','v 0.4 0 0','v 0 0.8 0','f 1 2 3'].join(String.fromCharCode(10));
+      const data=new DataTransfer();data.items.add(new File([text],'replacement.obj',{type:'text/plain'}));
+      document.getElementById('append-import-toggle').checked=false;
+      document.getElementById('viewport').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}));
+      await fixture.retired();
+      while(!(window.kaminosSceneObjectDebugState()||[]).some(row=>row.fileName==='replacement.obj'))await new Promise(resolve=>requestAnimationFrame(resolve));
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const terminal=fixture.read(),draw=window.__kaminosRenderSceneForInspection();
+      if(!draw.drawn||terminal.finalizations!==1||terminal.mounted||window.kaminosWorkbenchSceneState().publicationSubscriptions!==0)throw Error('Scene replacement left a retired producer active or blocked rendering');
+      if(entry.state().id!=='shared-gpu-host-fixture')throw Error('Replacement test did not retain the open experiment boundary');
+      await entry.close();return {initial,terminal,draw};
+    })()`);
   } else if (scenario === 'viewport-click-select-deselect') {
     await runViewportClickSelectDeselectScenario(ws);
   } else if (scenario === 'splat-viewport-empty-deselect') {

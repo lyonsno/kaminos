@@ -10513,6 +10513,15 @@ function membershipEditTargetId(id) {
   return `@scene-membership:${encodeURIComponent(id)}`;
 }
 
+function sceneObjectHasMembershipHistory(id) {
+  const edits=scenePlacementTools?.edits;
+  if(!edits)return false;
+  if(edits.hasHistoryEntry(membershipEditTargetId(id))||edits.hasHistoryEntry(compoundRetentionTargets.get(id)))return true;
+  const entry=sceneObjects.find(row=>row.id===id)||sceneMembershipRetainedObjects.get(id);
+  return Boolean(entry&&sceneResourceFinalizers.has(entry.object)&&edits.hasHistoryEntry('@selection-membership',
+    history=>[history.before,history.after].some(value=>value?.objects?.some(record=>record.id===id))));
+}
+
 // This permits in-document Undo of a retained producer body without pretending
 // it has a saved source recipe. Scene serialization keeps its existing rules.
 function canRetainSceneObjectRecord(record) {
@@ -10523,8 +10532,7 @@ function canRetainSceneObjectRecord(record) {
 
 function releaseUnreferencedSceneMembershipObjects() {
   for (const [id, entry] of sceneMembershipRetainedObjects) {
-    const editId = membershipEditTargetId(id);
-    if (scenePlacementTools?.edits?.hasHistoryEntry(editId)||scenePlacementTools?.edits?.hasHistoryEntry(compoundRetentionTargets.get(id))) continue;
+    if (sceneObjectHasMembershipHistory(id)) continue;
     sceneMembershipRetainedObjects.delete(id);
     if (!sceneObjects.some(record => record.id === id && record.object === entry.object)) {
       const disposeTree = sceneMembershipDisposers.get(entry.object) || disposeObjectTree;
@@ -10700,7 +10708,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
   if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
   const retainForMembershipHistory = (['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE].includes(entry.type)||sceneResourceFinalizers.has(entry.object)) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
-    && (scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(id))||scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(id)))
+    && sceneObjectHasMembershipHistory(id)
     && (preserveForMembershipHistory || scenePlacementTools.edits.state().replaying)
   ));
   if (retainForMembershipHistory) {
@@ -11938,8 +11946,7 @@ async function initScene() {
     removeObject:handle=>{
       const row=sceneObjects.find(row=>row.id===handle.id);
       if(!row||row.object!==handle.root)return false;
-      const hasMembershipHistory=Boolean(scenePlacementTools?.edits.hasHistoryEntry(membershipEditTargetId(handle.id))
-        || scenePlacementTools?.edits.hasHistoryEntry(compoundRetentionTargets.get(handle.id)));
+      const hasMembershipHistory=sceneObjectHasMembershipHistory(handle.id);
       return removeSceneObjectInternal(handle.id,{recordHistory:false,preserveForMembershipHistory:hasMembershipHistory,
         disposeTree:root=>sceneResourceFinalizers.has(root)?sceneResourceFinalizers.retire(root):disposeOwnedSceneTree(root,[scene,...[...sceneMembershipRetainedObjects.values()].map(row=>row.object)],[scene.environment,scene.background])});
     },
