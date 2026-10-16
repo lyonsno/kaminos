@@ -86,9 +86,12 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
 
   // A world-space ray from a client point, expressed in the mesh's own frame.
   function localRay(x,y){
-    const rect=canvas.getBoundingClientRect(),ndc=new Vector3((x-rect.left)/rect.width*2-1,-((y-rect.top)/rect.height)*2+1,.5);
-    const origin=new Vector3().setFromMatrixPosition(camera.matrixWorld),toward=ndc.unproject(camera),direction=toward.sub(origin).normalize();
-    if(camera.isOrthographicCamera){origin.set(ndc.x,ndc.y,-1).unproject(camera);direction.set(0,0,-1).transformDirection(camera.matrixWorld);}
+    const rect=canvas.getBoundingClientRect(),nx=(x-rect.left)/rect.width*2-1,ny=-((y-rect.top)/rect.height)*2+1;
+    // Orthographic rays are parallel, each starting at its own pixel; perspective rays leave the eye.
+    // (unproject changes the vector it is called on, so each ray gets a fresh one.)
+    const origin=new Vector3(),direction=new Vector3();
+    if(camera.isOrthographicCamera){origin.set(nx,ny,-1).unproject(camera);direction.set(0,0,-1).transformDirection(camera.matrixWorld);}
+    else{origin.setFromMatrixPosition(camera.matrixWorld);direction.set(nx,ny,.5).unproject(camera).sub(origin).normalize();}
     const inverse=new Matrix4().copy(edit.mesh.matrixWorld).invert();
     return new Ray(origin,direction).applyMatrix4(inverse);
   }
@@ -115,11 +118,15 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   function visibility(projected,rect){
     const {kernel,mesh}=edit,q=kernel.vertexPositions,visible=new Uint8Array(kernel.vertexCount);
     const inverse=new Matrix4().copy(mesh.matrixWorld).invert(),eye=new Vector3().setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inverse);
+    // Orthographic views look along one direction: each vertex is tested from straight in front of it.
+    const parallel=camera.isOrthographicCamera,view=new Vector3(0,0,-1).transformDirection(camera.matrixWorld).transformDirection(inverse);
+    let span=1;if(parallel){let lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(let i=0;i<q.length;i++){lo[i%3]=Math.min(lo[i%3],q[i]);hi[i%3]=Math.max(hi[i%3],q[i]);}span=2*Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2])+1e-6;}
     const x0=Math.min(rect.x0,rect.x1),x1=Math.max(rect.x0,rect.x1),y0=Math.min(rect.y0,rect.y1),y1=Math.max(rect.y0,rect.y1);
     for(let i=0;i<kernel.vertexCount;i++){
       const x=projected[2*i],y=projected[2*i+1];if(!(x>=x0&&x<=x1&&y>=y0&&y<=y1))continue;
-      const target=new Vector3(q[3*i],q[3*i+1],q[3*i+2]),direction=target.clone().sub(eye),distance=direction.length();direction.normalize();
-      const hit=edit.bvh.raycastFirst(new Ray(eye.clone(),direction),DoubleSide);
+      const target=new Vector3(q[3*i],q[3*i+1],q[3*i+2]),origin=parallel?target.clone().addScaledVector(view,-span):eye;
+      const direction=target.clone().sub(origin),distance=direction.length();direction.normalize();
+      const hit=edit.bvh.raycastFirst(new Ray(origin.clone(),direction),DoubleSide);
       visible[i]=!hit||hit.distance>=distance*(1-1e-4)?1:0;
     }
     return visible;

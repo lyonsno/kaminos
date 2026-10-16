@@ -131,3 +131,21 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   again.setMode('face');assert.equal(again.selectAll('select').counts.faces,12);again.exit();
 }
 
+// Orthographic views: occlusion looks along the view direction, not from a point.
+{
+  // Off to the left, looking straight down -z: from this eye the back-left corners are reached
+  // without entering the cube, but in an orthographic view they sit behind the front-left ones.
+  const ortho=new THREE.OrthographicCamera(-6,6,6,-6,.01,100);ortho.position.set(-4,0,5);ortho.updateMatrixWorld(true);
+  const cube=new THREE.Group();cube.add(new THREE.Mesh(seamCube(),new THREE.MeshStandardMaterial()));cube.updateMatrixWorld(true);
+  const flat=createPolyEditMode({camera:ortho,canvas});flat.enter(cube,{objectId:'ortho'});
+  assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,4,'only the four front corners are visible');
+  flat.setThrough(true);assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,8);flat.setThrough(false);
+  // Clicks and slice lines go through the pixel in an orthographic view too.
+  flat.setMode('face');const front=flat.screenOf([0,0,1]);
+  const hit=flat.click(front.x,front.y);assert.ok([8,9].includes(hit.active.index),`the front face under the cursor, got ${hit.active.index}`);
+  const level=flat.planeFromLine(front.x-50,front.y,front.x+50,front.y);
+  assert.ok(Math.abs(Math.abs(level.normal[1])-1)<1e-9,'a level line cuts level');
+  assert.ok(Math.abs(level.normal[1]*level.point[1])<1e-9,'through the height the line was drawn at');
+  flat.exit();
+}
+
