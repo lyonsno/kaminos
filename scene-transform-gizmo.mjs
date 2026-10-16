@@ -94,8 +94,8 @@ export class SceneTransformControls extends TransformControls {
    this.domElement=canvas;
    // This is an editor layer, above the native volume canvas. It borrows the
    // existing helper's camera updates; there is no renderer or RAF of its own.
-   if(canvas.parentElement&&canvas.ownerDocument?.createElementNS){
-    this._overlay=canvas.ownerDocument.createElementNS('http://www.w3.org/2000/svg','svg');
+   if(canvas.parentElement&&canvas.ownerDocument?.createElement){
+    this._overlay=canvas.ownerDocument.createElement('canvas');
     this._overlay.id='transform-gizmo-overlay';this._overlay.setAttribute('aria-hidden','true');
     Object.assign(this._overlay.style,{position:'absolute',pointerEvents:'none',zIndex:'8',overflow:'hidden'});
     canvas.parentElement.append(this._overlay);
@@ -129,15 +129,26 @@ export class SceneTransformControls extends TransformControls {
   const rect=this.domElement.getBoundingClientRect(),parent=this.domElement.parentElement.getBoundingClientRect();
   if(!(rect.width>0&&rect.height>0))return;
   const layout=[rect.left-parent.left,rect.top-parent.top,rect.width,rect.height].join(',');
-  if(layout!==this._overlayLayout){this._overlayLayout=layout;Object.assign(this._overlay.style,{left:(rect.left-parent.left)+'px',top:(rect.top-parent.top)+'px',width:rect.width+'px',height:rect.height+'px'});this._overlay.setAttribute('viewBox',`0 0 ${rect.width} ${rect.height}`);}
+  const width=this.domElement.width||Math.round(rect.width),height=this.domElement.height||Math.round(rect.height);
+  if(layout!==this._overlayLayout||this._overlay.width!==width||this._overlay.height!==height){
+   this._overlayLayout=layout;Object.assign(this._overlay.style,{left:(rect.left-parent.left)+'px',top:(rect.top-parent.top)+'px',width:rect.width+'px',height:rect.height+'px'});
+   this._overlay.width=width;this._overlay.height=height;this._overlayPaths=null;
+  }
   const paths=this._projectedGrips(rect).map(({grip,points})=>{
-   const {closed,fill,opacity}=grip.userData.grip,active=grip.name===this.axis,color=active?'#ffffff':'#'+grip.material.color.getHexString();
-   const d=Array.from({length:points.length/2},(_,i)=>(i?'L':'M')+points[i*2].toFixed(2)+' '+points[i*2+1].toFixed(2)).join(' ')+(closed?' Z':'');
-   return `<path d="${d}" fill="${fill&&grip.name!=='XYZ'&&grip.name!=='XYZE'?color:'none'}" fill-opacity="${active?Math.max(.55,opacity):opacity}" stroke="${color}" stroke-width="${active?2.5:1.8}" stroke-linejoin="round"/>`;
-  }).join('');
-  if(paths!==this._overlayPaths){this._overlayPaths=paths;this._overlay.innerHTML=paths;}
+   const {closed,fill,opacity}=grip.userData.grip,active=grip.name===this.axis;
+   return {points:[...points],closed,fill:fill&&grip.name!=='XYZ'&&grip.name!=='XYZE',color:active?'#ffffff':'#'+grip.material.color.getHexString(),opacity:active?Math.max(.55,opacity):opacity,width:active?2.5:1.8};
+  });
+  const key=JSON.stringify(paths);if(key===this._overlayPaths)return;this._overlayPaths=key;
+  const context=this._overlay.getContext('2d');context.setTransform(1,0,0,1,0,0);context.clearRect(0,0,width,height);context.setTransform(width/rect.width,0,0,height/rect.height,0,0);context.lineJoin='round';
+  for(const path of paths){
+   context.beginPath();for(let i=0;i<path.points.length;i+=2)if(i)context.lineTo(path.points[i],path.points[i+1]);else context.moveTo(path.points[i],path.points[i+1]);
+   if(path.closed)context.closePath();
+   if(path.fill){context.globalAlpha=path.opacity;context.fillStyle=path.color;context.fill();}
+   context.globalAlpha=1;context.strokeStyle=path.color;context.lineWidth=path.width;context.stroke();
+  }
  }
 
+ getOverlay(){return this._overlay??null;}
  dispose(){this._overlay?.remove();super.dispose();}
 
  pointerHover(pointer){
