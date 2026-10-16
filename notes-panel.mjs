@@ -11,7 +11,7 @@ const walk = (note, visit) => { visit(note); for (const reply of note.replies) w
 const involves = (note, name) => { let found = false; walk(note, item => { if (item.author === name || (item.recipients ?? []).includes(name)) found = true; }); return found; };
 
 export function createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile, capture,
-  href = () => '', title = () => '', avatarOf = null, ownView = async () => true, selectionToken = () => null}) {
+  href = () => '', title = () => '', avatarOf = null, ownView = async () => true, selectionToken = () => null, sceneInstance = () => null}) {
   let author = null, liveAfter = Infinity, maxKnown = 0, events = [], folded = foldNotes([]), presence = {listeners: [], pages: []};
   let participants = [], notifies = false;
   const listeningNow = () => new Set([...(presence.listeners ?? []).filter(row => row.waiting).map(row => row.name),
@@ -84,7 +84,8 @@ export function createNotesSession({transport, selection, entries, readView, wri
         now = after;
       }
     }
-    const context = {...(own ? {view: now.view} : {}), selection: now.selection, page: {href: href(), title: title()}};
+    const instance = sceneInstance();
+    const context = {...(own ? {view: now.view} : {}), selection: now.selection, page: {href: href(), title: title()}, ...(instance ? {sceneInstance: instance} : {})};
     if (shot.issue) context.pictureIssue = shot.issue;
     const content = checkedPost({kind, text, to: addressees(text, to), parent,
       anchor: parent ? undefined : now.anchor, subject: {scene: now.scene}, context, picture: shot.picture ?? null});
@@ -284,7 +285,7 @@ export async function capturePicture({capture, document}) {
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
   sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
-  ownView = async () => true, pickAt = null, pickCanvas = () => null, selectionToken = () => null, recheck = null}) {
+  ownView = async () => true, pickAt = null, pickCanvas = () => null, selectionToken = () => null, recheck = null, sceneLoad = () => null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -302,8 +303,11 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   };
   transport.post = body => send(endpoint, body);
   transport.receipt = body => send(`${endpoint}/receipt`, body);
+  // This page and scene load: an unsaved scene's identity for its notes.
+  const thisSceneInstance = () => { const load = sceneLoad(); return load == null ? null : `${pageId}:${load}`; };
   const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
     capture: () => capturePicture({capture, document}), href: () => window.location.href, title: () => document.title, avatarOf, selectionToken,
+    sceneInstance: () => thisSceneInstance(),
     ownView: () => ownView({waiting: () => say("Waiting for a sub's picture to finish, so yours shows your view\u2026")})});
 
   // --- structure ---
@@ -868,7 +872,11 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     for (const note of session.threads()) {
       if (note.resolved || note.anchor?.kind !== 'point') continue;
       // Another scene's point is neither checked nor pinned against this one.
-      if (!pointInScene(note, sceneFile())) { pointStatus.delete(note.id); continue; }
+      if (!pointInScene(note, sceneFile(), thisSceneInstance())) {
+        // Its earlier answer is about another scene: clear it from the card too.
+        if (pointStatus.delete(note.id)) render();
+        continue;
+      }
       checkPoint(note, now);
       const entry = entries().find(item => item.id === note.anchor.id);
       if (!entry?.object) continue;

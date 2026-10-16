@@ -40,6 +40,7 @@ function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture,
     avatarOf,
     ...(ownView ? {ownView: () => ownView(app)} : {}),
     selectionToken: () => app.selected,
+    sceneInstance: () => app.sceneInstance ?? null,
   });
   return {app, session};
 }
@@ -315,4 +316,12 @@ test('leaving the object and coming back drops a picked point, even unseen', asy
   app.selected = {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'};
   await session.post({text: 'later', attachPicture: false});
   assert.deepEqual(app.posted[0].anchor, {kind: 'object', id: 'cube', label: 'Cube'});
+});
+
+test('a note records which load of an unsaved scene it was written in', async () => {
+  const {app, session} = fakePage();
+  app.sceneInstance = 'page-aaaa:7';
+  session.hello({author: 'noah', lastSeq: 0});
+  await session.post({text: 'here', attachPicture: false});
+  assert.equal(app.posted[0].context.sceneInstance, 'page-aaaa:7');
 });

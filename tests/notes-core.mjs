@@ -250,5 +250,11 @@ test('a point note is checked only in its own scene', () => {
   assert.equal(pointInScene(note, 'arm.kaminos.json'), true);
   assert.equal(pointInScene(note, 'kiln.kaminos.json'), false);
   assert.equal(pointInScene(note, ''), false);
-  assert.equal(pointInScene({subject: {scene: null}}, ''), true, 'an unsaved scene matches an unsaved scene');
+  // Two unsaved scenes are the same only with evidence: the same page and scene load.
+  const unsaved = {subject: {scene: null}, context: {sceneInstance: 'page-1:3'}};
+  assert.equal(pointInScene(unsaved, null, 'page-1:3'), true, 'the same unsaved scene, still open');
+  assert.equal(pointInScene(unsaved, null, 'page-1:4'), false, 'another scene loaded since');
+  assert.equal(pointInScene(unsaved, null, 'page-2:3'), false, 'another page');
+  assert.equal(pointInScene({subject: {scene: null}}, null, 'page-1:3'), false, 'no evidence, no match');
+  assert.equal(pointInScene({subject: {scene: 'arm.kaminos.json'}, context: {sceneInstance: 'x'}}, 'arm.kaminos.json', 'y'), true, 'a named scene matches by name');
 });
