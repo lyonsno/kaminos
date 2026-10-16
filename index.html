@@ -3903,6 +3903,7 @@ import {createSurfelProxyLayer} from './proxy-surfels.mjs';
 import {createInterfaceSurfelProducer,createProxySnapshotRegistry} from './proxy-snapshot.mjs';
 import {createFireSplatLayer} from './proxy-fire-splats.mjs';
 import {createFireProxySync} from './fire-proxy-sync.mjs';
+import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
@@ -3974,7 +3975,22 @@ function syncViewportDisplayControls() {
  for(const button of document.querySelectorAll('.viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
  for(const button of document.querySelectorAll('.viewport-water [data-water]'))button.setAttribute('aria-pressed',String(button.dataset.water===viewportDisplay.water));
  for(const button of document.querySelectorAll('.viewport-fire [data-fire]'))button.setAttribute('aria-pressed',String(button.dataset.fire===viewportDisplay.fire));
+ for(const button of document.querySelectorAll('.viewport-quality [data-quality]'))button.setAttribute('aria-pressed',String(button.dataset.quality===viewportDisplay.quality));
 }
+// Viewport Preview: the scene at device pixel ratio 1 and the fire's raymarch
+// on the runtime ladder's preview tier (see preview-quality.mjs). Applied
+// when the preference changes; the simulation is not touched.
+let appliedViewportQuality=null;
+function syncViewportQuality() {
+ const quality=viewportDisplay.quality;
+ if(quality===appliedViewportQuality)return;
+ appliedViewportQuality=quality;
+ renderer?.setPixelRatio(previewScenePixelRatio(quality,window.devicePixelRatio));
+ if(volumePrototype)volumePrototype.setControls(readVolumeControls());
+ window._kaminosDirty?.();
+}
+window.kaminosViewportQualityState=()=>({quality:viewportDisplay.quality,applied:appliedViewportQuality,scenePixelRatio:renderer?.getPixelRatio?.()??null,devicePixelRatio:window.devicePixelRatio,
+ volume:volumePrototype?(()=>{const d=volumePrototype.debugState();return {runtimeQualityEffective:d.runtimeQualityEffective??d.controls?.runtimeQualityEffective??null,raySteps:d.controls?.raySteps??null,renderScale:d.controls?.renderScale??null,pressureIterations:d.controls?.pressureIterations??null,canvas:[d.width,d.height],resets:d.fluidStateResetCount};})():null});
 // Wireframe is a view preference over mesh content, applied only around the
 // viewport render (see renderSceneFrame). Like Blender's default it is
 // see-through: dark translucent edges without depth writes, so edge density
@@ -3991,7 +4007,8 @@ function renderWithViewportShading(render) {
 }
 document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
  const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});
- const fire=event.target.closest?.('.viewport-fire [data-fire]');if(fire)window.kaminosViewportSettings.set({fire:fire.dataset.fire});});
+ const fire=event.target.closest?.('.viewport-fire [data-fire]');if(fire)window.kaminosViewportSettings.set({fire:fire.dataset.fire});
+ const quality=event.target.closest?.('.viewport-quality [data-quality]');if(quality)window.kaminosViewportSettings.set({quality:quality.dataset.quality});});
 // Proxy snapshots: CPU-resident, camera-independent payloads published per
 // source. The viewport proxy layer is one subscriber; maps, sketches and agents
 // can subscribe through window.kaminosProxySnapshots. A producer runs while any
@@ -12128,6 +12145,8 @@ async function initScene() {
 
   function animate() {
     requestAnimationFrame(animate);
+    // Outside any render: a quality change resizes render targets.
+    syncViewportQuality();
     controls.update();
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
@@ -16597,6 +16616,7 @@ function normalizeVolumeRuntimeQuality(value) {
   if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
   if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
+  if (normalized === 'preview') return 'preview';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
 }
@@ -16662,6 +16682,11 @@ function applyVolumeRuntimeQualityLadder(controls) {
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
     changed.push('pressureStrategy', 'pressureIterations');
+  } else if (effective === 'preview') {
+    // Viewport Preview: fewer ray steps and a lower render scale only.
+    const preview = applyPreviewQualityCaps(next);
+    Object.assign(next, preview.controls);
+    changed.push(...preview.changed);
   }
   next.runtimeQualityReceipt = {
     identity: 'volume-runtime-quality-ladder-v0',
@@ -19043,7 +19068,7 @@ function readVolumeControls() {
     lifecycleEffect: routedVolumeLifecycleEffect,
     lifecycleT: routedVolumeLifecycleT,
     quenchVapor: routedVolumeQuenchVapor,
-    runtimeQualityRequested: routedVolumeRuntimeQuality,
+    runtimeQualityRequested: viewportDisplay.quality === 'preview' ? 'preview' : routedVolumeRuntimeQuality,
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
     pressureIterations: pressureConfig.pressureIterations,

@@ -1028,6 +1028,75 @@ async function runFireSlowMotionProbeScenario(ws) {
   }
 }
 
+// What a frame measurement actually rasterises: viewport CSS size, device
+// pixel ratio, the scene renderer's pixels and the fire canvas's pixels.
+function displayIdentity(ws) {
+  return evaluate(ws, `(() => { const r = document.getElementById('kaminos-host-renderer-canvas')?.getBoundingClientRect(); const c = document.getElementById('kaminos-host-renderer-canvas');
+    const d = window.__kaminosVolumePrototype?.debugState?.();
+    return { devicePixelRatio: window.devicePixelRatio, viewportCss: r ? [Math.round(r.width), Math.round(r.height)] : null, scenePixels: c ? [c.width, c.height] : null,
+      scenePixelRatio: window.kaminosViewportQualityState?.()?.scenePixelRatio ?? null, fireCanvas: d ? [d.width, d.height] : null, raySteps: d?.controls?.raySteps ?? null, renderScale: d?.controls?.renderScale ?? null, grid: d?.gridSize ?? d?.controls?.resolution ?? null }; })()`);
+}
+
+// Viewport Preview: Full and Preview at one frozen state, the simulation
+// untouched by the switch, Full restored, then paired live frame rates.
+async function runViewportPreviewQualityScenario(ws) {
+  phase = 'scenario-viewport-preview-quality';
+  const failures = [], check = (condition, message) => { if (!condition) failures.push(message); };
+  const evidence = lastEvidence.viewportPreviewQuality = { failures, rates: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
+  evidence.camera = await evaluate(ws, `(() => { const domain = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
+    const topY = Array.isArray(dims) && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3, t = domain.translation, k = domain.scale;
+    const min = [t[0] - k, t[1] - k, t[2] - k], max = [t[0] + k, t[1] + topY * k, t[2] + k];
+    const target = min.map((v, i) => (v + max[i]) / 2), size = max.map((v, i) => v - min[i]), distance = Math.max(size[1], size[0]) * 1.4;
+    window.kaminosSetCameraDebugPose({ position: [target[0] + distance * 0.35, target[1] + size[1] * 0.1, target[2] + distance], target }); return { target }; })()`);
+  const freeze = on => evaluate(ws, `(() => { const r = window.__kaminosVolumePrototype; if (${on}) r.setSimulationPaused(true);
+    const el = document.getElementById('volume-look-freeze'); el.value = '${on ? 1 : 0}'; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+    if (!${on}) r.setSimulationPaused(false); return r.debugState().simStepCount; })()`);
+  const clickQuality = async value => {
+    const [point] = await evaluate(ws, `[...document.querySelectorAll('.viewport-quality')].filter(g => g.offsetParent !== null).map(g => { const r = g.querySelector('[data-quality="${value}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+    assert.ok(point, `Quality ${value} toggle is missing from the visible viewport toolbar`);
+    await dispatchMouseClick(ws, point);
+  };
+  const state = () => evaluate(ws, 'window.kaminosViewportQualityState()');
+  evidence.frozenStep = await freeze(true);
+  await settleViewportFrames(ws, 1200);
+  evidence.full = { state: await state(), display: await displayIdentity(ws) };
+  const fullShot = await capturePngScreenshot(ws, siblingPngPath('-full'));
+  await clickQuality('preview');
+  await settleViewportFrames(ws, 1500);
+  evidence.preview = { state: await state(), display: await displayIdentity(ws) };
+  const previewShot = await capturePngScreenshot(ws, siblingPngPath('-preview'));
+  const f = evidence.full.state, p = evidence.preview.state;
+  check(p.quality === 'preview' && p.scenePixelRatio === 1, `Preview did not render the scene at pixel ratio 1: ${JSON.stringify(p)}`);
+  check(p.volume?.runtimeQualityEffective === 'preview' && p.volume.raySteps <= 12 && p.volume.renderScale <= 0.5, `the fire did not take the preview tier: ${JSON.stringify(p.volume)}`);
+  check(p.volume?.pressureIterations === f.volume?.pressureIterations && p.volume?.resets === f.volume?.resets, `Preview changed the simulation: ${JSON.stringify({ full: f.volume, preview: p.volume })}`);
+  await clickQuality('full');
+  await settleViewportFrames(ws, 1500);
+  evidence.restored = { state: await state(), display: await displayIdentity(ws) };
+  const r = evidence.restored.state;
+  check(r.quality === 'full' && r.scenePixelRatio === f.scenePixelRatio && r.volume?.raySteps === f.volume?.raySteps && r.volume?.renderScale === f.volume?.renderScale && r.volume?.resets === f.volume?.resets,
+    `Full did not restore the live settings: ${JSON.stringify({ full: f, restored: r })}`);
+  await freeze(false);
+  const windowMs = Number(args.get('--window-ms') || 3000);
+  const measure = async quality => {
+    await evaluate(ws, `window.kaminosViewportSettings.set({ quality: '${quality}' }); true`);
+    return evaluate(ws, `(async () => { let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
+      await new Promise(r => setTimeout(r, 1800)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;
+      const a = read(), v0 = window.__kaminosVolumePrototype.debugState(), t0 = performance.now(); await new Promise(r => setTimeout(r, ${windowMs}));
+      const b = read(), v1 = window.__kaminosVolumePrototype.debugState(), s = (performance.now() - t0) / 1000; stop = true;
+      return { quality: '${quality}', appFps: (b - a) / s, fireFps: (v1.frameCount - v0.frameCount) / s, simStepsPerSecond: (v1.simStepCount - v0.simStepCount) / s }; })()`, { timeoutMs: windowMs + 30000 });
+  };
+  for (let round = 0; round < Number(args.get('--rounds') || 3); round++) {
+    for (const quality of round % 2 ? ['preview', 'full'] : ['full', 'preview']) evidence.rates.push({ round, ...(await measure(quality)) });
+  }
+  await evaluate(ws, `window.kaminosViewportSettings.set({ quality: 'full' }); true`);
+  evidence.shots = [fullShot, previewShot];
+  assert.deepEqual(failures, [], `viewport preview checks failed:\n- ${failures.join('\n- ')}`);
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -6819,11 +6888,14 @@ try {
   }
 
   phase='validating-browser';
-  browserLaunch=fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:1468,height:960});
+  const [launchWidth, launchHeight] = (args.get('--window') || '1468x960').split('x').map(Number);
+  browserLaunch=fluidBrowserLaunch({executable:chrome,debugPort:port,userDataDir,width:launchWidth,height:launchHeight});
   phase = 'launching-chrome';
   chromeProcess = spawn(browserLaunch.executable, [
     ...browserLaunch.args,
     ...(headless ? ['--headless=new'] : []),
+    // Retina-class runs: --device-scale-factor 2 renders like the operator's display.
+    ...(args.get('--device-scale-factor') ? [`--force-device-scale-factor=${Number(args.get('--device-scale-factor'))}`] : []),
     '--disable-gpu-sandbox', '--enable-unsafe-webgpu',
     '--enable-features=Vulkan,UseSkiaRenderer',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -6888,6 +6960,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'viewport-preview-quality') {
+    await runViewportPreviewQualityScenario(ws);
   } else if (scenario === 'fire-slow-motion-probe') {
     await runFireSlowMotionProbeScenario(ws);
   } else if (scenario === 'preview-cost') {

@@ -4,6 +4,7 @@ import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
@@ -1199,6 +1200,8 @@ function normalizeRuntimeQuality(value) {
   if (['live_low', 'low', 'degraded', 'throttled'].includes(normalized)) return 'live_low';
   if (['holdover', 'hold', 'paused', 'freeze', 'frozen'].includes(normalized)) return 'holdover';
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
+  // Viewport Preview: a lighter raymarch with the simulation untouched.
+  if (normalized === 'preview') return 'preview';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
 }
@@ -1250,6 +1253,8 @@ function applyRuntimeQualityControls(controls = {}) {
     floor('occupancySkip', 0.45);
     next.pressureStrategy = 'global';
     next.pressureIterations = 0;
+  } else if (effective === 'preview') {
+    Object.assign(next, applyPreviewQualityCaps(next).controls);
   }
   return next;
 }
