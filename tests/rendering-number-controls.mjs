@@ -1,6 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {installRenderingNumberControl} from '../rendering-number-controls.mjs';
+import {installRenderingNumberControl,installRenderingNumberControls} from '../rendering-number-controls.mjs';
+import {installRelativeNumberDrag} from '../scene-control-history.mjs';
 class Control extends EventTarget {
  constructor(){super();this.style={};this.type='range';this.value='3';this.min='1';this.max='';this.step='1';}
  setPointerCapture(){}hasPointerCapture(){return false;}
@@ -27,5 +28,14 @@ try {
    even.fire('change');assert.equal(even.value,last,'invalid commit restores the last valid value');
  }
  even.value='6';even.fire('input');even.fire('change');assert.equal(values.at(-1),6);
+ const gi=new Control();gi.ownerDocument=doc;gi.type='number';gi.value='5';gi.step='.1';gi.closest=selector=>selector==='#scene-gi-controls'?{}:null;
+ installRenderingNumberControls({querySelectorAll:()=>[gi]});
+ const historyScrub=installRelativeNumberDrag({input:gi,grip:gi,step:.1});
+ let giEvents=0;gi.addEventListener('input',()=>giEvents++);
+ gi.fire('pointerdown',{button:0,pointerId:4,clientX:0,clientY:0});gi.fire('pointermove',{pointerId:4,clientX:5,clientY:0});
+ assert.equal(giEvents,1,'GI retains its existing history-owned scrub without a second Rendering scrub');
+ historyScrub.stop();const released=gi.value;
+ gi.fire('pointermove',{pointerId:4,clientX:10,clientY:0});
+ assert.equal(gi.value,released,'history release stops all GI scrubbing');
 }finally{delete globalThis.document;delete globalThis.window;}
 console.log('PASS Rendering scrubs preserve live handlers, commit on release and restore cancellation');
