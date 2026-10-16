@@ -236,6 +236,7 @@ export function createVantagePilot(host) {
     if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) throw new Error(`${path} is ${value}`);
+      if (Object.is(value, -0)) throw new Error(`${path} is -0, which JSON carries as 0`);
       return value;
     }
     if (typeof value !== 'object') throw new Error(`${path} is a ${typeof value}`);
@@ -247,11 +248,13 @@ export function createVantagePilot(host) {
       if (typeof key === 'symbol') throw new Error(`${path} has a symbol key ${String(key)}`);
       if (array && key === 'length') continue;
       const where = array ? `${path}[${key}]` : `${path}.${key}`;
-      if (array && !(String(Number(key)) === key && Number.isInteger(Number(key)))) throw new Error(`${where} is not an array entry`);
+      // An array index is a canonical integer from 0 to 2^32 - 2; JSON drops any other key.
+      if (array && !(String(Number(key)) === key && Number.isInteger(Number(key)) && Number(key) >= 0 && Number(key) < 2 ** 32 - 1)) throw new Error(`${where} is not an array entry`);
       const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
       if (!('value' in descriptor)) throw new Error(`${where} is a getter`);
       if (!descriptor.enumerable) throw new Error(`${where} is not enumerable`);
-      copy[key] = plainCopy(descriptor.value, where, [...stack, value]);
+      // Defined, not assigned, so a key such as __proto__ stays an own data property.
+      Object.defineProperty(copy, key, {value: plainCopy(descriptor.value, where, [...stack, value]), enumerable: true, writable: true, configurable: true});
     }
     if (array && copy.length !== value.length) throw new Error(`${path} has missing entries`);
     if (array) for (let i = 0; i < copy.length; i++) if (!(i in copy)) throw new Error(`${path}[${i}] is missing`);
