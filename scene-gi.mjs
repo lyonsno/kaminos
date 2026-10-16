@@ -114,15 +114,15 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
     },
     resetHistory(reason) { history.reset(reason); },
     async readback(renderer,kind='incoming') {
-      if (!['incoming','receiving'].includes(kind)) throw new Error('Invalid GI readback kind');
-      const target=kind==='receiving'?route().beauty.renderTarget:settings.temporal?history.targets[1-history.writeIndex]:effect._ssgiRenderTarget;
+      if (!['incoming','receiving','estimate'].includes(kind)) throw new Error('Invalid GI readback kind');
+      const target=kind==='receiving'?route().beauty.renderTarget:kind==='incoming'&&settings.temporal?history.targets[1-history.writeIndex]:effect._ssgiRenderTarget;
       const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,kind==='receiving'?0:1);
       let sum=0,max=0,nonzero=0,finite=true;
       for(let i=0;i<data.length;i++)if(i%4<3){const v=DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
       const bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength),chunks=[];
       // Chunk only the JS call arguments, not the evidence. Preserve every byte.
       for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
-      return {kind,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
+      return {kind,source:kind==='receiving'?'receiving':kind==='incoming'&&settings.temporal?'temporal-result':'current-estimate',estimatorFrames:frames,historyFrames:history.frames,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
     },
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
       history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:34},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
