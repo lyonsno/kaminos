@@ -3,12 +3,22 @@ import {mkdirSync,readFileSync,writeFileSync,realpathSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
+export function matchSemantic(actual,expected,label='configuration'){
+ if(typeof expected==='number'){assert.ok(Number.isFinite(actual)&&Math.abs(actual-expected)<=1e-8*Math.max(1,Math.abs(expected)),`Wrong ${label}: ${actual} vs ${expected}`);return;}
+ if(Array.isArray(expected)){assert.ok(Array.isArray(actual),`Missing ${label}`);assert.equal(actual.length,expected.length,`Wrong ${label} shape`);expected.forEach((value,i)=>matchSemantic(actual[i],value,`${label}[${i}]`));return;}
+ if(expected&&typeof expected==='object'){assert.ok(actual&&typeof actual==='object',`Missing ${label}`);for(const [key,value]of Object.entries(expected))matchSemantic(actual[key],value,`${label}.${key}`);return;}
+ assert.equal(actual,expected,`Wrong ${label}`);
+}
+export function validateWorld(observed,world){for(const object of world.objects){const row=observed.find(row=>row.id===object.id);assert.ok(row,`Prepared world object missing: ${object.id}`);for(const field of ['source','type','transform','geometry','surface'])if(object[field]!=null)matchSemantic(row[field],object[field],`${object.id}.${field}`);}}
 export function validateActors(read,setup){
  assert.equal(read?.actors?.length,setup.actors.length,'Missing/extra creature');
  assert.equal(new Set(read.actors.map(a=>a.state.host.id)).size,setup.actors.length,'Overlaid/shared registration');
  for(const actor of setup.actors){const state=read.actors.find(a=>a.id===actor.id)?.state;assert.ok(state?.host?.id,'Missing actor registration');assert.notEqual(state.playback.status,'removed');
   for(const [field,key]of [['caseSha256','case_sha256'],['motionSha256','motion_sha256'],['frameSha256','frame_sha256']])assert.equal(state.source[field],actor.creature[key],`Wrong actor ${field}`);
-  assert.equal(state.deformation.requested,actor.creature.deformation??'cpu');assert.equal(state.deformation.effective,actor.creature.deformation==='gpu'?'webgpu-dense-dq':'cpu-reference','Silent deformation fallback');assert.equal(state.actorRoot.effective,'live-pelvis','Stale spawn root');}
+  assert.equal(state.deformation.requested,actor.creature.deformation??'cpu');assert.equal(state.deformation.effective,actor.creature.deformation==='gpu'?'webgpu-dense-dq':'cpu-reference','Silent deformation fallback');assert.equal(state.actorRoot.effective,'live-pelvis','Stale spawn root');
+  const transform=actor.creature.transform??{position:[0,0,0],quaternion:[0,0,0,1],scale:[1,1,1]};matchSemantic(state.actorRoot.authoredTransform.position,transform.position,'authored position');matchSemantic(state.actorRoot.authoredTransform.scale,transform.scale,'authored scale');matchSemantic(Math.abs(state.actorRoot.authoredTransform.quaternion.reduce((sum,v,i)=>sum+v*transform.quaternion[i],0)),1,'authored orientation');
+  assert.equal(state.action.kind,actor.creature.wander||actor.creature.action==='wander'?'wander':'preview');
+  if(actor.creature.wander){matchSemantic(state.action.area.transform,actor.creature.wander.area,'Wander area');matchSemantic(state.recipe.wander.motion,actor.creature.wander.motion,'Wander controller');}}
 }
 const hash=data=>createHash('sha256').update(data).digest('hex');
 export async function witness(args){
@@ -19,9 +29,10 @@ export async function witness(args){
   const {chromium}=await import(args.playwright),executable=realpathSync(args.chrome);assert.ok(!executable.includes('/Applications/Google Chrome.app/'),'Independent automation browser required');report.effectiveExecutable=executable;
   report.phase='browser';browser=await chromium.launch({headless:true,executablePath:executable,args:['--use-mock-keychain','--password-store=basic','--no-first-run']});report.browserVersion=browser.version();
   context=await browser.newContext({viewport:{width:1700,height:1120},recordVideo:{dir:join(out,'video'),size:{width:1700,height:1120}}});page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
-  report.phase='load';await page.goto(args.url,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.kaminosCreatureActors||window.kaminosWorkbenchExperimentError);assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperimentError??null),null);
+  report.phase='load';const worldResponse=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/api/read'&&url.searchParams.get('root')==='scenes';});await page.goto(args.url,{waitUntil:'domcontentloaded'});await page.waitForFunction(()=>window.kaminosCreatureActors||window.kaminosWorkbenchExperimentError);assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperimentError??null),null);
+  const response=await worldResponse;assert.equal(response.status(),200);report.effectiveWorld={url:response.url(),sha256:hash(await response.body())};assert.equal(report.effectiveWorld.sha256,report.worldSha256,'Browser restored different world bytes');matchSemantic(JSON.parse(new URL(page.url()).searchParams.get('experiment_inputs')),setup,'URL setup');
   report.effectiveUrl=page.url();report.runtime=await page.evaluate(async()=>await(await fetch('/api/runtime-config')).json());assert.equal(report.runtime.source.repoRoot,root);assert.equal(report.runtime.source.commit,args.commit);
-  report.source=[];for(const file of ['experiments/creature-motion/living-scene.experiment.mjs','experiments/creature-motion/walking.experiment.mjs','experiments/creature-motion/live-actor-root.mjs','experiments/creature-motion/given-palette-playback.mjs']){const response=await page.request.get(new URL('/'+file,page.url()).href);assert.equal(response.status(),200);const sha256=hash(await response.body());assert.equal(sha256,hash(readFileSync(join(root,file))));report.source.push({file,sha256});}
+  report.source=[];for(const file of ['experiments/creature-motion/living-scene.experiment.mjs','experiments/creature-motion/walking.experiment.mjs','experiments/creature-motion/live-actor-root.mjs','experiments/creature-motion/given-palette-playback.mjs','scene-object-pose-history.mjs','scene-edit-session.mjs','scene-placement-tools.mjs']){const response=await page.request.get(new URL('/'+file,page.url()).href);assert.equal(response.status(),200);const sha256=hash(await response.body());assert.equal(sha256,hash(readFileSync(join(root,file))));report.source.push({file,sha256});}
   const read=()=>page.evaluate(()=>window.kaminosCreatureActors.read()),invoke=(operation,input)=>page.evaluate(({operation,input})=>window.kaminosWorkbenchExperiments.invoke(operation,input),{operation,input});
   const settle=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   // Check the hit target, dispatch native pointer input, then observe domain
@@ -29,7 +40,7 @@ export async function witness(args){
   const click=async locator=>{const box=await locator.boundingBox();assert.ok(box,'Native control has no hit box');const point={x:box.x+box.width/2,y:box.y+box.height/2};assert.ok(await locator.evaluate((node,p)=>node.contains(document.elementFromPoint(p.x,p.y)),point),'Native control is occluded');await page.mouse.click(point.x,point.y);};
   const capture=async name=>{await settle();const image=join(out,name+'.png');await page.screenshot({path:image});report.captures.push(image);return image;};
   report.initial=await read();validateActors(report.initial,setup);report.registrations=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
-  for(const object of world.objects)assert.ok(report.registrations.some(row=>row.id===object.id),`Prepared world object missing: ${object.id}`);
+  validateWorld(report.registrations,world);
   const [a,b,c]=setup.actors.map(a=>a.id),rootBone=await page.evaluate(async setup=>{const r=await fetch(setup.actors[0].creature.case+'/manifest.json');return (await r.json()).bones.find(b=>b.parent===null).name;},setup);
   const poses=()=>page.evaluate(({ids,rootBone})=>Object.fromEntries(ids.map(id=>[id,window.kaminosCreatureActors.pose(id,{bones:[rootBone]})])),{ids:[a,b,c],rootBone});
   report.posesInitial=await poses();for(const pose of Object.values(report.posesInitial))for(const i of [12,13,14])assert.ok(Math.abs(pose.rootMatrix[i]-pose.bones[0].matrix[i])<1e-6,'Live handle does not follow actual root Bone');
@@ -47,6 +58,9 @@ export async function witness(args){
   const field=page.locator('input[data-transform-field="position.x"]');await field.click();await field.fill(String(next));await field.press('Enter');await settle();
   report.edited=await read();assert.ok(Math.abs(report.edited.actors.find(row=>row.id===a).state.transform.position[0]-next)<1e-6);assert.deepEqual(report.edited.actors.find(row=>row.id===b).state.actorRoot,report.neighbourContinued.actors.find(row=>row.id===b).state.actorRoot);
   await invoke('actor',{id:a,operation:'advance',input:{seconds:1/30}});report.afterEditAdvance=await poses();for(const i of [12,13,14])assert.ok(Math.abs(report.afterEditAdvance[a].rootMatrix[i]-report.afterEditAdvance[a].bones[0].matrix[i])<1e-6);
+  report.phase='ordinary-transform-history';report.beforeUndo=await read();await page.evaluate(()=>window.kaminosSceneEdits.undo());report.afterUndo=await read();const actorState=(read,id)=>read.actors.find(row=>row.id===id).state;
+  matchSemantic(actorState(report.afterUndo,a).actorRoot.authoredTransform,actorState(report.neighbourContinued,a).actorRoot.authoredTransform,'Undo authored placement');matchSemantic(actorState(report.afterUndo,a).action.motion,actorState(report.beforeUndo,a).action.motion,'Undo must retain current motion');
+  await page.evaluate(()=>window.kaminosSceneEdits.redo());report.afterRedo=await read();matchSemantic(actorState(report.afterRedo,a).actorRoot.authoredTransform,actorState(report.beforeUndo,a).actorRoot.authoredTransform,'Redo authored placement');matchSemantic(actorState(report.afterRedo,a).action.motion,actorState(report.beforeUndo,a).action.motion,'Redo must retain current motion');
   await page.evaluate(()=>window.kaminosViewportSettings.set({gizmos:true}));await capture('selected-live-handle');
   report.phase='cast-isolation';const before=await read(),oldB=before.actors.find(row=>row.id===b),choice=setup.actors[0].creature.choices.find(choice=>choice.attachment==='distributed'&&choice.case_sha256!==before.actors.find(row=>row.id===a).state.source.caseSha256);
   await page.getByLabel('Creature cast',{exact:true}).filter({visible:true}).selectOption(choice.cast);await page.waitForFunction(({id,sha})=>window.kaminosCreatureActors.read().actors.find(a=>a.id===id).state.source.caseSha256===sha,{id:a,sha:choice.case_sha256});

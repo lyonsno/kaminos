@@ -1,6 +1,9 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import {createGivenPaletteMotion} from '../experiments/creature-motion/given-palette-motion.mjs';
+import {createWalkingPoseAdapter} from '../experiments/creature-motion/walking-pose.mjs';
+import {createWanderMotion} from '../experiments/creature-motion/wander-motion.mjs';
 let module={};try{module=await import('../experiments/creature-motion/living-scene.experiment.mjs');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
 assert.equal(typeof module.createLivingScene,'function','Independent actors need a shared-scene composition, not the last-created creature singleton');
 class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}}
@@ -32,4 +35,10 @@ const reopened=await module.createLivingScene({host,inputs:recipe},deps);assert.
 await reopened.operations.add({id:'new',label:'New',creature:template});assert.equal(scene.children.length,2);
 await assert.rejects(()=>reopened.operations.add({id:'new',label:'Duplicate',creature:template}),/Duplicate actor/);
 await reopened.dispose();assert.equal(scene.children.length,0);
+const adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame}),walking=createWalkingPoseAdapter({THREE,adapter,blendFrames:0});
+const motion=createWanderMotion({THREE,adapter,walking,sourceKey:'a'.repeat(64)+':'+'b'.repeat(64),area:{center:[0,0],radii:[4,4],yaw:0},position:[0,0],direction:[0,1],seed:1}).snapshot();
+const saved={...template,action:'wander',play:false,transform:{position:[7,0,0],quaternion:[0,0,0,1],scale:[1,1,1]},wander:{area:{position:[7+1e-12,0,0],quaternion:[0,0,0,1],scale:[4,1,4]},motion}};
+const held=await module.createLivingScene({host,inputs:{actors:[{id:'held',label:'Held',creature:saved}]}},deps);
+assert.deepEqual(held.read().actors[0].state.recipe.wander.motion,motion,'Floating frame conversion consumed RNG/replanned a saved Wander setup');
+await held.dispose();
 console.log('Stable independent actor identity, source sharing, local clocks/poses/removal, truthful pose reads and retained cohort reconstruction');

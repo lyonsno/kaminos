@@ -11,6 +11,7 @@ import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
 import {createWanderMotion,wanderAreaInPlacement} from './wander-motion.mjs';
 import {createLiveActorRoot} from './live-actor-root.mjs';
+import {registerSceneObjectPoseHistory} from '../../scene-object-pose-history.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
@@ -63,6 +64,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  let session,runtime,asset,floor,floorAsset,pathGuide,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
+ const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
@@ -102,7 +104,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function syncArea(){
   if(!wander)return true;
   if(!areaRoot?.parent){actionError='Wander area was removed; current pose is held';unsubscribe();player.pause();refresh();return false;}
-  try{const area=wanderAreaInPlacement({THREE,areaRoot,placement:authoredPlacement()}),key=JSON.stringify(area);if(key!==areaKey){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
+  try{const area=wanderAreaInPlacement({THREE,areaRoot,placement:authoredPlacement()}),key=JSON.stringify(area),prior=areaKey?JSON.parse(areaKey):null;
+   const same=prior&&[...area.center,...area.radii,area.yaw].every((v,i)=>Math.abs(v-[...prior.center,...prior.radii,prior.yaw][i])<=1e-9*Math.max(1,Math.abs(v)));
+   if(!same){wander.setArea(area);areaKey=key;refreshGuide();}actionError=null;return true;}
   catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}
  }
  function presentWander(delta,playing){
@@ -133,7 +137,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');

@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
+import {createSceneEdits} from '../scene-edit-session.mjs';
+import {sceneObjectPoseHistory} from '../scene-object-pose-history.mjs';
 class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}}
 const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene(),callbacks=new Set();
 let body;
@@ -11,6 +13,14 @@ const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],restMatrix=[[1,0,0,1],[0,1,0,.
 const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([1,.5,0,2,.5,0,1,1.5,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[1,.5,0,6,.5,0,11,.5,0],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
 const transform={position:[7,0,-2],quaternion:[0,0,0,1],scale:[2,1,3]};
 const entry=await createWalkingCreature({host,inputs:{actor_root:'live',blend_frames:0,transform}},{loadSources:async()=>data});
+const edits=createSceneEdits({read:()=>({position:body.position.toArray(),rotation:[body.rotation.x,body.rotation.y,body.rotation.z],scale:body.scale.toArray()}),write:(_id,pose)=>{body.position.fromArray(pose.position);body.rotation.set(...pose.rotation);body.scale.fromArray(pose.scale);},history:()=>sceneObjectPoseHistory(body)});
+edits.apply('actor',{position:[13,.5,-2]});
+entry.operations.seek({frame:1});
+edits.undo();
+assert.ok(Math.abs(body.position.x-19)<1e-7,'Undo restored an old moving handle instead of the authored placement at the current pose');
+assert.equal(entry.read().recipe.transform.position[0],7);
+edits.redo();assert.ok(Math.abs(body.position.x-23)<1e-7);assert.equal(entry.read().recipe.transform.position[0],11);
+edits.undo();
 entry.operations.seek({frame:1});
 const pelvis=body.getObjectByName('pelvis'),rootPoint=()=>body.getWorldPosition(new THREE.Vector3()),bonePoint=()=>pelvis.getWorldPosition(new THREE.Vector3());
 assert.ok(rootPoint().distanceTo(bonePoint())<1e-7,'Selected actor root is left at spawn while its actual pelvis travels');
