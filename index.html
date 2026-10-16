@@ -3933,7 +3933,7 @@ import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
-import { separateSelection, sliceSelection } from './poly-separate-selection.mjs';
+import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
@@ -12200,7 +12200,7 @@ async function initScene() {
     objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
-    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection});
+    overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection,slice:slicePolySelection,origin:originToPolySelection});
   window.kaminosPolyEdit=polyEdit.api;
   const sceneCommandBlocked=()=>{
       const edit=scenePlacementTools.edits.state();
@@ -26655,41 +26655,67 @@ async function storeDerivedMesh(bytes){
 }
 const separatePolySelection=()=>splitPolyObject('Separate',(bytes,mask,options)=>separateSelection(bytes,mask,options));
 const slicePolySelection=plane=>splitPolyObject('Slice',(bytes,mask,options)=>sliceSelection(bytes,mask,plane,options));
-async function splitPolyObject(verb,split){
+// The edited object, its source bytes, and the swap of it for derived pieces: shared by every
+// Edit Mode operation that writes geometry.
+function polyEditTarget(verb){
   assertSceneConstructionAvailable();
   const editing=polyEdit?.api.read();if(!editing?.editing)throw Error(`${verb} works in Edit Mode: select a mesh and press Tab`);
   const id=editing.objectId,entry=sceneObjects.find(o=>o.id===id);
   if(entry?.type!=='glb'||!entry.source)throw Error(`${verb} works on GLB meshes for now`);
-  const mask=polyEdit.api.selectedFaceMask(),geometry=polyEdit.api.geometry(),token=sceneMutationToken;
-  if(!mask.some(Boolean))throw Error(`Select faces to ${verb.toLowerCase()}`);
-  setInfo(`${verb === 'Slice' ? 'Slicing' : 'Separating'}…`);
+  return {id,entry,geometry:polyEdit.api.geometry(),token:sceneMutationToken};
+}
+async function readPolySource(entry){
   const response=await fetch(entry.source);if(!response.ok)throw Error(`Could not read the mesh source (${response.status})`);
   const sourceBytes=new Uint8Array(await response.arrayBuffer());
-  const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  return {sourceBytes,sha256:Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',sourceBytes)),b=>b.toString(16).padStart(2,'0')).join('')};
+}
+// pieces: [{bytes, name, receipt, shift?}], shift moving the piece in its parent frame. The first
+// piece keeps editing, as Blender keeps editing what remains; all pieces end up selected.
+async function replacePolyObject({id,token,verb,sha256,pieces}){
+  const stored=await Promise.all(pieces.map(piece=>storeDerivedMesh(piece.bytes)));
+  if(token!==sceneMutationToken||polyEdit.api.read().objectId!==id)throw Error(`The scene changed during ${verb}; nothing was changed`);
+  assertSceneConstructionAvailable();
+  polyEdit.api.exit();
+  const before=checkSelectionMembership(readSelectionMembership()),original=before.objects.find(o=>o.id===id),ids=pieces.map(()=>makeSceneObjectId('mesh'));
+  // Derivation ancestry rides in assetOrigin; the source's own origin and generation become its parent.
+  const records=pieces.map((piece,i)=>{const {generation,...kept}=structuredClone(original);const transform=structuredClone(original.transform);if(piece.shift)transform.position=transform.position.map((v,k)=>v+piece.shift[k]);
+    return {...kept,id:ids[i],source:stored[i].source,fileName:`${piece.name}.glb`,label:piece.name,createdAt:new Date().toISOString(),transform,
+      assetOrigin:{...piece.receipt,sha256:stored[i].sha256,parent:{objectId:id,sha256,assetOrigin:original.assetOrigin??null,generation:generation??null}}};});
+  const after=structuredClone(before);
+  after.objects.splice(after.objects.findIndex(o=>o.id===id),1,...records);
+  for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?ids:[member]);
+  after.selection={...after.selection,ids:[...ids].reverse(),activeId:ids[0]};after.field=null;
+  for(const target of [id,...ids])compoundRetentionTargets.set(target,'@selection-membership');
+  await writeSelectionMembership(after);
+  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`${verb} ${original.label}`);
+  polyEdit.api.enter(ids[0]);
+  return {ids,stored};
+}
+async function splitPolyObject(verb,split){
+  const {id,entry,geometry,token}=polyEditTarget(verb),mask=polyEdit.api.selectedFaceMask();
+  if(!mask.some(Boolean))throw Error(`Select faces to ${verb.toLowerCase()}`);
+  setInfo(`${verb === 'Slice' ? 'Slicing' : 'Separating'}…`);
+  const {sourceBytes,sha256}=await readPolySource(entry);
   // Blender's naming: the new piece takes the next free .001, .002… after the base name.
   const label=entry.label||'Mesh',base=label.replace(/\.\d{3}$/,''),taken=new Set(sceneObjects.map(o=>o.label));
   let n=1;while(taken.has(`${base}.${String(n).padStart(3,'0')}`))n++;const partLabel=`${base}.${String(n).padStart(3,'0')}`;
   const {part,rest}=split(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});
-  const [partStored,restStored]=await Promise.all([storeDerivedMesh(part.bytes),storeDerivedMesh(rest.bytes)]);
-  if(token!==sceneMutationToken||polyEdit.api.read().objectId!==id)throw Error(`The scene changed during ${verb}; nothing was changed`);
-  assertSceneConstructionAvailable();
-  polyEdit.api.exit();
-  const before=checkSelectionMembership(readSelectionMembership()),original=before.objects.find(o=>o.id===id);
-  const restId=makeSceneObjectId('mesh'),partId=makeSceneObjectId('mesh');
-  // Derivation ancestry rides in assetOrigin; the source's own origin and generation become its parent.
-  const record=(newId,stored,name,piece)=>{const {generation,...kept}=structuredClone(original);return {...kept,id:newId,source:stored.source,fileName:`${name}.glb`,label:name,createdAt:new Date().toISOString(),
-    assetOrigin:{...piece.receipt,sha256:stored.sha256,parent:{objectId:id,sha256,assetOrigin:original.assetOrigin??null,generation:generation??null}}};};
-  const after=structuredClone(before);
-  after.objects.splice(after.objects.findIndex(o=>o.id===id),1,record(restId,restStored,label,rest),record(partId,partStored,partLabel,part));
-  for(const group of after.groups)group.objectIds=group.objectIds.flatMap(member=>member===id?[restId,partId]:[member]);
-  after.selection={...after.selection,ids:[partId,restId],activeId:restId};after.field=null;
-  for(const target of [id,restId,partId])compoundRetentionTargets.set(target,'@selection-membership');
-  await writeSelectionMembership(after);
-  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),`${verb} ${label}`);
-  // As in Blender, editing continues on what remains; the separated part is selected alongside it.
-  polyEdit.api.enter(restId);
+  const {ids:[restId,partId],stored:[restStored,partStored]}=await replacePolyObject({id,token,verb,sha256,pieces:[{bytes:rest.bytes,name:label,receipt:rest.receipt},{bytes:part.bytes,name:partLabel,receipt:part.receipt}]});
   setInfo(`${verb==='Slice'?'Sliced':'Separated'} ${part.faces} faces into ${partLabel}${part.capFaces!==undefined?` · caps ${part.capFaces} + ${rest.capFaces} faces${part.openChains||rest.openChains?` · ${part.openChains+rest.openChains} section chains left open`:''}`:''} · Undo restores`);
   return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partCapFaces:part.capFaces??0,restCapFaces:rest.capFaces??0,openChains:(part.openChains??0)+(rest.openChains??0),partSource:partStored.source,restSource:restStored.source};
+}
+// Origin to Selection (Shift+S): the selection's median becomes the object's origin, so it turns
+// about that point. The object moves by the offset, rotated and scaled by its transform, and the
+// mesh node moves back by the same amount, so nothing moves on screen.
+async function originToPolySelection(){
+  const {id,entry,geometry,token}=polyEditTarget('Origin to Selection'),point=polyEdit.api.selectionMedian();
+  setInfo('Setting origin…');
+  const {sourceBytes,sha256}=await readPolySource(entry),label=entry.label||'Mesh';
+  const moved=moveOrigin(sourceBytes,point,{geometry,name:label,source:{sha256,url:entry.source}});
+  const shift=new THREE.Vector3(...moved.offset).multiply(entry.object.scale).applyQuaternion(entry.object.quaternion).toArray();
+  const {ids:[newId]}=await replacePolyObject({id,token,verb:'Origin to Selection',sha256,pieces:[{bytes:moved.bytes,name:label,receipt:moved.receipt,shift}]});
+  setInfo(`Origin set to the selection on ${label} · Undo restores`);
+  return {id:newId,point,offset:moved.offset,shift};
 }
 function duplicateSelectedSceneObjects({interactive=false}={}){
   if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');

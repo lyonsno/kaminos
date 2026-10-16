@@ -11,6 +11,7 @@ import {bisectFaces,cutBarrier,extractFaces,sectionCap} from './poly-mesh-edit.m
 
 // The mesh's primitives edit as one face set, in order, each with its own vertex block, as
 // Edit Mode merges them. A derived part's second material is its cut cap, and stays one.
+// A null faceMask means the operation needs no face selection.
 function editedPrimitive(sourceBytes,faceMask,geometry) {
   const primitives=readTrianglePrimitives(sourceBytes);
   if(!primitives.length)throw Error('Edit Mode needs a GLB with a triangle mesh');
@@ -24,9 +25,9 @@ function editedPrimitive(sourceBytes,faceMask,geometry) {
   let base=0;const indices=Uint32Array.from(blocks.flatMap(p=>{const out=[...p.indices].map(i=>i+base);base+=p.positions.length/3;return out;}));
   const faceMaterial=Uint8Array.from(blocks.flatMap(p=>Array(p.indices.length/3).fill(materials.indexOf(p.material??0))));
   const arrays={positions:join('positions'),normals:join('normals'),uvs:join('uvs'),indices,faceMaterial},faces=indices.length/3;
-  if(faceMask.length!==faces)throw Error(`The selection covers ${faceMask.length} faces but the GLB has ${faces}`);
+  if(faceMask&&faceMask.length!==faces)throw Error(`The selection covers ${faceMask.length} faces but the GLB has ${faces}`);
   if(geometry)checkSameTriangles(arrays.positions,indices,geometry);
-  let selected=0;for(const s of faceMask)if(s)selected++;
+  let selected=0;for(const s of faceMask??[])if(s)selected++;
   return {primitive:{node:first.worldMatrices[0],materials},arrays,faces,selected};
 }
 function derived(sourceBytes,{node,materials},arrays,label,receipt) {
@@ -53,11 +54,14 @@ export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='P
   if(!selected)throw Error('Select the faces to slice, around where the cut goes');
   const cut=bisectFaces(arrays,faceMask,plane);
   if(!cut.cutVertices)throw Error('The line does not cross the selected faces');
-  const mesh=buildPolyMesh(cut.arrays),barrier=cutBarrier(mesh,cut.side),seeds=[];
-  for(let f=0;f<mesh.faceCount;f++)if(cut.side[f]>0)seeds.push(f);
-  const above=selectLinkedFaces(mesh,seeds,{barrier});
-  let aboveFaces=0;for(let f=0;f<mesh.faceCount;f++){if(above[f]&&cut.side[f]<0)throw Error('The cut does not separate the mesh: the two sides still join elsewhere. Select the whole junction, or move the line');aboveFaces+=above[f];}
-  const partAbove=aboveFaces<=mesh.faceCount-aboveFaces,partMask=partAbove?above:above.map(x=>1-x);
+  // Grow each side from its own faces along the cut. The smaller side is the part; everything
+  // else, including selected debris the cut never touches, stays with the remainder.
+  const mesh=buildPolyMesh(cut.arrays),barrier=cutBarrier(mesh,cut.side),seeds={1:[],[-1]:[]};
+  for(let f=0;f<mesh.faceCount;f++)if(cut.side[f])for(let c=3*f;c<3*f+3;c++)if(barrier[mesh.cornerEdge[c]]){seeds[cut.side[f]].push(f);break;}
+  const above=selectLinkedFaces(mesh,seeds[1],{barrier}),below=selectLinkedFaces(mesh,seeds[-1],{barrier});
+  let aboveFaces=0,belowFaces=0;
+  for(let f=0;f<mesh.faceCount;f++){if(above[f]&&below[f])throw Error('The cut does not separate the mesh: the two sides still join elsewhere. Select the whole junction, or move the line');aboveFaces+=above[f];belowFaces+=below[f];}
+  const partAbove=aboveFaces<=belowFaces,partMask=partAbove?above:below;
   const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',plane:{point:[...plane.point],normal:[...plane.normal]},selectedFaces:selected,sourceFaces:faces,cutVertices:cut.cutVertices};
   const piece=(pieceArrays,keep,label,side)=>{
     const cap=sectionCap(pieceArrays,arrays,faceMask,plane,{side,fill});
@@ -72,4 +76,19 @@ function checkSameTriangles(P,I,{positions:Q,indices:J}) {
   if(K.length!==I.length)throw Error(`The edited geometry has ${K.length/3} faces but the GLB has ${I.length/3}`);
   for(let c=0;c<I.length;c++)for(let k=0;k<3;k++)
     if(Math.fround(P[3*I[c]+k])!==Math.fround(Q[3*K[c]+k]))throw Error(`The edited geometry does not match the GLB at face ${Math.floor(c/3)}`);
+}
+
+// Origin to Selection: `point` (in the mesh frame) becomes the object's origin. The vertices are
+// unchanged; the node is moved back by `offset`, the point in the object frame, so moving the
+// object forward by the same offset (rotated and scaled by its transform) leaves the world alone.
+export function moveOrigin(sourceBytes,point,{geometry=null,name='Part',source=null}={}) {
+  if(!Array.isArray(point)||point.length!==3||!point.every(Number.isFinite))throw Error('Origin to Selection needs a finite point');
+  const {primitive,arrays}=editedPrimitive(sourceBytes,null,geometry);
+  const m=primitive.node??[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  const offset=[0,1,2].map(r=>m[r]*point[0]+m[4+r]*point[1]+m[8+r]*point[2]+m[12+r]);
+  const node=[...m];for(let r=0;r<3;r++)node[12+r]-=offset[r];
+  const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[{op:'origin',to:'selection',point:[...point]}]};
+  // A derived piece's primitives share one vertex block, which merging repeats; keep one copy.
+  const {part:compacted}=extractFaces(arrays,new Uint8Array(arrays.indices.length/3).fill(1));
+  return {bytes:derived(sourceBytes,{...primitive,node},compacted,name,receipt),offset,receipt};
 }

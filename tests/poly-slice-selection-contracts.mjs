@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import {encodeGlb,parseGlb,readTrianglePrimitives} from '../poly-glb-io.mjs';
 import {buildPolyMesh,polyMeshCensus} from '../poly-mesh-core.mjs';
-import {separateSelection,sliceSelection} from '../poly-separate-selection.mjs';
+import {moveOrigin,separateSelection,sliceSelection} from '../poly-separate-selection.mjs';
 
 // A closed column, 1 x 2 x 1, with a ring of vertices at y = 0, 1 and 2.
 const ring=y=>[[0,y,0],[1,y,0],[1,y,1],[0,y,1]],positions=Float32Array.from([0,1,2].flatMap(y=>ring(y).flat())),indices=[];
@@ -56,4 +56,27 @@ const capFaces=readTrianglePrimitives(again.rest.bytes).find(p=>p.material===1).
 assert.equal(capFaces,out.rest.capFaces+again.rest.capFaces,'the old cap stays cap, the new cap joins it');
 const someFaces=Uint8Array.from({length:columnFaces},(_,f)=>f===0?1:0);
 assert.equal(separateSelection(column,someFaces).part.faces,1,'Separate works on a sliced piece too');
+
+// Selected debris that the cut never touches stays where it is: a floating triangle above the
+// plane must not ride off with the part grown from the cut.
+{
+  const P=Float32Array.from([...positions,3,1.8,0,3.2,1.8,0,3,1.9,0]),J=Uint32Array.from([...I,12,13,14]);
+  const bin2=new Uint8Array(P.byteLength+J.byteLength);bin2.set(new Uint8Array(P.buffer),0);bin2.set(new Uint8Array(J.buffer),P.byteLength);
+  const withDebris=encodeGlb({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1,material:0}]}],materials:[{name:'paint'}],
+    buffers:[{byteLength:bin2.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:P.byteLength},{buffer:0,byteOffset:P.byteLength,byteLength:J.byteLength}],
+    accessors:[{bufferView:0,componentType:5126,count:15,type:'VEC3'},{bufferView:1,componentType:5125,count:J.length,type:'SCALAR'}]},bin2);
+  const cut=sliceSelection(withDebris,new Uint8Array(J.length/3).fill(1),{point:[0,1.5,0],normal:[0,1,0]});
+  const xRange=bytes=>{const x=readTrianglePrimitives(bytes)[0].positions.filter((_,i)=>i%3===0);return [Math.min(...x),Math.max(...x)];};
+  assert.deepEqual(xRange(cut.part.bytes),[0,1],'the part is the column top only; the floating triangle is not part of what the cut separated');
+  assert.equal(xRange(cut.rest.bytes)[1]>3,true,'the debris stays with the remainder');
+  const flipped=sliceSelection(withDebris,new Uint8Array(J.length/3).fill(1),{point:[0,1.5,0],normal:[0,-1,0]});
+  assert.deepEqual(xRange(flipped.part.bytes),[0,1],'with the plane facing the other way, the debris still stays behind');
+}
+
+// Re-writing a piece whose primitives share one vertex block keeps one copy of each vertex.
+{
+  const piece=out.rest.bytes,[first]=readTrianglePrimitives(piece),before=first.positions.length/3;
+  const [after]=readTrianglePrimitives(moveOrigin(piece,[0,1,0]).bytes);
+  assert.equal(after.positions.length/3,before,'Origin to Selection does not duplicate vertices');
+}
 

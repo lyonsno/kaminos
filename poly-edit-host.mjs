@@ -7,11 +7,11 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
-export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null}) {
+export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null}) {
   let separating=false,cutLine=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
-    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · K slice · Alt+Z x-ray`);
+    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · K slice · Shift+S origin · Alt+Z x-ray`);
   };
   const edit=createPolyEditMode({camera,canvas,onChange:()=>{hud();redraw();}});
   const rect=document.createElement?.('div');
@@ -58,6 +58,9 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(MODE_KEYS[event.code]&&!event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setMode(MODE_KEYS[event.code]));return;}
     if(event.code==='KeyA'&&!event.shiftKey){steal(event);attempt(()=>edit.selectAll(event.altKey?'deselect':'select'));return;}
     if(event.code==='KeyZ'&&event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setThrough(!edit.read().through));return;}
+    // Shift+S: Origin to Selection. Blender's Shift+S snap pie puts the 3D cursor there first;
+    // Kaminos has no 3D cursor, so the origin goes straight to the selection's median.
+    if(event.code==='KeyS'&&event.shiftKey&&!event.altKey&&origin){steal(event);runOnce(origin);return;}
     if(event.altKey||event.shiftKey)return;
     if(event.code==='KeyB'){steal(event);armBox();return;}
     // P: Separate > Selection. The app owns the scene change and its history; one runs at a time.
@@ -117,7 +120,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   const api=Object.freeze({
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
-    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),
+    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),
     selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),

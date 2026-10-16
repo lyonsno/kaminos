@@ -108,6 +108,13 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   assert.ok([10,11].includes(picked.active.index),`the front face is the second primitive's, merged after the first's 10 faces; got ${picked.active.index}`);
   assert.equal(two.selectAll('select').counts.faces,12,'all twelve faces, across both primitives');
   assert.deepEqual([...two.geometry().indices],[...rest,...front.map(i=>i+24)],'indices in primitive order, each primitive with its own vertex block');
+  // L stops where the material changes, so a cut cap can be picked on its own (Blender's Delimit: Material).
+  two.selectAll('deselect');two.click(200,200);
+  assert.equal(two.linked({at:{x:200,y:200}}).counts.faces,2,'L on the cap selects the cap, not the body it is welded to');
+  two.selectAll('deselect');two.click(200,200);
+  assert.equal(two.linked().counts.faces,2,'Ctrl+L from the cap face too');
+  assert.deepEqual(two.selectionMedian().map(v=>Math.round(v*1e6)/1e6),[0,0,1],'the median of the cap is the centre of the front face, in the mesh frame');
+  two.selectAll('deselect');assert.throws(()=>two.selectionMedian(),/Select something/);
   two.setThrough(true);assert.ok(bodyMaterial.transparent&&capMaterial.transparent,'x-ray fades every primitive');
   two.exit();assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent],[false,false],'and exit restores each');
   const apart=new Group();apart.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));apart.children[1].position.x=1;apart.updateMatrixWorld(true);
