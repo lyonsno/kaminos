@@ -52,7 +52,7 @@ export function installCommandSearch({ document, viewport, button, commands, blo
 `;
   document.head.append(style); document.body.append(backdrop);
   const input = backdrop.querySelector('input'), results = backdrop.querySelector('[role=listbox]'), status = backdrop.querySelector('[role=status]');
-  let opened = false, hover = false, previousFocus = null, matches = [], selected = 0, swallowRelease = false;
+  let opened = false, pointer = null, previousFocus = null, matches = [], selected = 0, swallowRelease = false;
   const consume = event => { event.preventDefault(); event.stopImmediatePropagation(); };
   const reason = command => command.disabled?.() || null;
   const catalogue = () => commands();
@@ -116,8 +116,12 @@ export function installCommandSearch({ document, viewport, button, commands, blo
   input.addEventListener('input', render);
   backdrop.querySelector('button').onclick = () => close();
   if (button) { button.setAttribute('aria-haspopup', 'dialog'); button.setAttribute('aria-expanded', 'false'); button.onclick = open; }
-  viewport.addEventListener('pointerenter', () => hover = true);
-  viewport.addEventListener('pointerleave', () => hover = false);
+  win.addEventListener('pointermove', event => { pointer = { x: event.clientX, y: event.clientY }; }, true);
+  const pointerInViewport = () => {
+    if (!pointer) return false;
+    const rect = viewport.getBoundingClientRect();
+    return pointer.x >= rect.left && pointer.x <= rect.right && pointer.y >= rect.top && pointer.y <= rect.bottom;
+  };
   // Window capture precedes the existing document-level modal/key handlers.
   win.addEventListener('keydown', event => {
     if (opened) {
@@ -129,7 +133,7 @@ export function installCommandSearch({ document, viewport, button, commands, blo
       else if (event.key === 'Tab') { event.preventDefault(); if (document.activeElement === input && !event.shiftKey) backdrop.querySelector('button').focus(); else input.focus(); }
       return;
     }
-    if (!commandSearchShortcut(event, { activeElement: document.activeElement, viewport, hover })) return;
+    if (!commandSearchShortcut(event, { activeElement: document.activeElement, viewport, hover: pointerInViewport() })) return;
     // Guarded gestures keep the event: search never takes their keyboard owner.
     if (blocked()) return;
     consume(event); open();
