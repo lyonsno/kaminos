@@ -3858,7 +3858,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
@@ -7068,7 +7068,7 @@ function handleViewportPointerDown(event) {
     x: event.clientX,
     y: event.clientY,
     pointerId: event.pointerId,
-    gizmo: !!(transformGizmoDragging || transformControls?.dragging || transformControls?.axis),
+    gizmo: !!(transformGizmoDragging || transformControls?.dragging || (transformControls?.enabled && transformControls.getHelper?.()?.visible && transformControls.axis)),
   };
 }
 

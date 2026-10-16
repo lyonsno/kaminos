@@ -95,3 +95,9 @@ test('same-object reselection keeps the installed component host in sole control
  api.exit();assert.deepEqual([c.transformControls.visible,c.transformControls.enabled,helper.visible],[true,true,true],'leaving component editing restores the prior object tool');
  assert.equal(c.transformControls.object,object);
 });
+
+test('a disabled hidden gizmo cannot block ordinary scene selection with its stale hover axis',()=>{
+ const c=pointerContext(),event={button:0,clientX:50,clientY:20,pointerId:1};
+ c.transformControls.enabled=false;c.transformControls.axis='X';c.transformControls.getHelper=()=>({visible:false});
+ c.handleViewportPointerDown(event);c.handleViewportSelectionClick({...event,type:'pointerup'});assert.equal(c.selection,true);
+});
