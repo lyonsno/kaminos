@@ -4,7 +4,7 @@ import {join,resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 export function matchSemantic(actual,expected,label='configuration'){
- if(typeof expected==='number'){assert.ok(Number.isFinite(actual)&&Math.abs(actual-expected)<=1e-8*Math.max(1,Math.abs(expected)),`Wrong ${label}: ${actual} vs ${expected}`);return;}
+ if(typeof expected==='number'){const continuous=/\b(position|rotation|quaternion|scale|center|radii|points|direction|elapsed|time|offset|distance|yaw|rate|orientation)\b/.test(label);if(!continuous)assert.equal(actual,expected,`Wrong discrete ${label}`);else assert.ok(Number.isFinite(actual)&&Math.abs(actual-expected)<=1e-8*Math.max(1,Math.abs(expected)),`Wrong ${label}: ${actual} vs ${expected}`);return;}
  if(Array.isArray(expected)){assert.ok(Array.isArray(actual),`Missing ${label}`);assert.equal(actual.length,expected.length,`Wrong ${label} shape`);expected.forEach((value,i)=>matchSemantic(actual[i],value,`${label}[${i}]`));return;}
  if(expected&&typeof expected==='object'){assert.ok(actual&&typeof actual==='object',`Missing ${label}`);for(const [key,value]of Object.entries(expected))matchSemantic(actual[key],value,`${label}.${key}`);return;}
  assert.equal(actual,expected,`Wrong ${label}`);
