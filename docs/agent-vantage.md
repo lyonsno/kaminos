@@ -118,7 +118,7 @@ Pictures kept without a pick map are refused. `--now` casts their camera into th
 
 To anchor something to a pick (a note's pin, for example), keep the hit's `id`, `surface.path`, `local`, `localNormal` and `geometry.identity`. `recheck --anchor FILE` (a note anchor or a saved pick) or `run('recheck', {id, path, identity})` says, without drawing, whether that mesh is still the geometry that was picked: `now` is `present`, `missing` or `mesh-missing`, and `status` is `same`, `edited` or `replaced` within the page load that picked it, `likely-same` or `replaced` from another load (vertex and index counts and sampled content decide), or `unverified` when the kept identity lacks a field the comparison reads or holds the wrong type there (a pick saved before identities were kept has none). A pictured pick keeps its map's identity even when the entry or mesh is gone, with a null status, so a later recheck can compare it if undo brings the entry back. The identity's uuid, attribute numbers and edit counts mean something only in the page load that recorded them; its counts and content samples survive a reload.
 
-A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
+A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera; `watching()` gives the pilot, the awaited event and the frames drawn while a watch runs, and null otherwise.
 
 ## Limits
 

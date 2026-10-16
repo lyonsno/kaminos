@@ -1818,3 +1818,14 @@ test('event detail keeps an own __proto__ key as data, and rejects array keys an
     assert.equal(typeof event.detailError, 'string');
   }
 });
+
+test('a page reader can see a watch in progress and how many frames it has drawn', async () => {
+  const {state, host} = await launched();
+  const pilot = createVantagePilot(host), seen = [];
+  watchClock(host, state, {onSleep: () => seen.push(pilot.watching())});
+  assert.equal(pilot.watching(), null);
+  await pilot.run('watch', {seconds: 1, fps: 2, until: 'settled', map: false});
+  assert.deepEqual(seen[0], {pilot: 'bebop', until: 'settled', frames: 1});
+  assert.equal(pilot.watching(), null, 'and that it has ended');
+  assert.match(readFileSync(new URL('../index.html', import.meta.url), 'utf8'), /watching:agentVantage\.watching/, 'window.kaminosAgentVantage.watching() is offered to page readers');
+});

@@ -325,7 +325,12 @@ try {
   };
   const watching = vantage('watch', '--seconds', '10', '--fps', '4', '--until', 'witness-fell', '--frames', '--name', 'watch');
   const during = await page.evaluate(async id => {
-    await new Promise(done => setTimeout(done, 400));
+    // Begin moving the box once the watch has drawn its first frame, however long the command took to arrive.
+    const begun = performance.now() + 30000;
+    while (!(window.kaminosAgentVantage.watching()?.frames >= 1)) {
+      if (performance.now() > begun) throw new Error('The watch never started');
+      await new Promise(done => setTimeout(done, 20));
+    }
     let frames = 0;
     const start = performance.now();
     await new Promise(done => {
