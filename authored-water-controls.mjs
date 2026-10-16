@@ -104,7 +104,7 @@ export function mountAuthoredWaterControls({document,root,sourceRoot=null,simula
  }
  function refreshCompatibility(s=api.read()){
   const status=s.simulation?.compatibility,plan=status?.match;
-  $('[data-compatibility]').hidden=!status||status.sourceCount<2;
+  $('[data-compatibility]').hidden=!status||(status.sourceCount<2&&status.compatible);
   $('[data-compatibility-status]').textContent=status?.compatible?'Drops share compatible sampling and container.':status?.message??'';
   $('[data-match-plan]').textContent=plan?.changes.length?`Use ${plan.referenceLabel}: spacing ${plan.spacing.toPrecision(5)}; ${plan.containerEnabled?'container walls on':'container walls off'}. `+plan.changes.map(c=>`${c.label}: world width ${c.previousWorldWidth.toPrecision(5)} → ${c.worldWidth.toPrecision(5)}, ${c.previousParticleCount.toLocaleString()} → ${c.particleCount.toLocaleString()} particles`).join('; ')+`. Total ${plan.particleCount.toLocaleString()} particles. Matching rounds widths to whole particle spacings and is undoable.`:status?.matchError??'';
   $('[data-match]').disabled=dirty||simulationDirty||!plan?.changes.length||!api.match;

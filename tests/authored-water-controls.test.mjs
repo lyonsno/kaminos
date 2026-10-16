@@ -113,3 +113,10 @@ for(const applied of ['finite_drop','continuous'])for(const action of ['pause','
  assert.equal(f.input('[data-pause]').disabled,true,'An incompatible initial setup cannot offer a false Play');assert.equal(f.input('[data-release]').disabled,true);assert.match(f.input('[data-compatibility-status]').textContent,/B.*spacing/);assert.match(f.input('[data-match-plan]').textContent,/0.63000 → 0.65000/);assert.equal(matched,0,'Showing the repair cannot change source amounts');
  await f.input('[data-match]').onclick();assert.equal(matched,1);assert.equal(f.input('[data-pause]').disabled,false);assert.equal(f.input('[data-release]').disabled,false);assert.equal(f.input('[data-match]').hidden,true);
 }
+
+{
+ const f=fixture(),read=f.api.read;let inside=false;
+ f.api.read=()=>({...read(),simulation:{present:true,compatibility:{compatible:inside,sourceCount:1,message:inside?'':'A: initial particles must fit the shared world bounds. Move the drop or enlarge the bounds.',matchError:'Move the drop or enlarge the bounds.'}}});f.controls.refresh();
+ assert.equal(f.input('[data-compatibility]').hidden,false,'SWCOMP-1: single-drop placement diagnosis must remain visible');assert.match(f.input('[data-compatibility-status]').textContent,/A:.*Move the drop/);assert.equal(f.input('[data-pause]').disabled,true);assert.equal(f.input('[data-match]').hidden,true);
+ inside=true;f.controls.refresh();assert.equal(f.input('[data-compatibility]').hidden,true);assert.equal(f.input('[data-pause]').disabled,false);
+}
