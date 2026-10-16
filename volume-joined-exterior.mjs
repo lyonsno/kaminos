@@ -15,6 +15,10 @@ export function resolveJoinedExteriorGeometry({fineDims,pitch,coarseResolution=3
     const config=outerSmokeConfig({grid:coarseResolution,extent:size,nearHeightRatio:fineDims[1]/fineDims[0],materialMode:reactant?'reactant-raw':'authored-raw',donorMode:'joined-full',pressureIterations:1});
     validateOuterSmokeDevice(config,{maxTextureDimension3D:Infinity,maxBufferSize:Infinity,maxStorageBufferBindingSize:Infinity,maxComputeWorkgroupsPerDimension:Infinity});
     const ratio=config.cellWidth/pitch,origin=config.min.map(v=>(-1-v)/config.cellWidth);
+    const fineMax=[1,2*fineDims[1]/fineDims[0]-1,1];
+    const end=fineMax.map((v,a)=>(v-config.min[a])/config.cellWidth);
+    if([...origin,...end].some(v=>Math.abs(v-Math.round(v))>1e-9))throw Error('fine box must be coarse-cell aligned');
+    if(origin.some((v,a)=>v<0||end[a]>config.shape[a]))throw Error('fine box must fit exterior');
     return {admitted:true,reason:null,config,shape:config.shape,origin,ratio,cellWidth:config.cellWidth,
       geometry:{shape:config.shape,min:config.min,cellWidth:config.cellWidth,fine:{min:[-1,-1,-1],max:[1,2*fineDims[1]/fineDims[0]-1,1],ratio}},
       ghosts:{originFine:config.min.map(v=>(v+1)/pitch),cellWidthFine:ratio,dims:config.shape,finePitchLocal:pitch,oxidizer:reactant?'passive-ambient-boundary':'unavailable'}};
@@ -41,20 +45,36 @@ export function joinedExteriorSolids(shape,wall){
   }
   return {shape:[...shape],cells,revision:JSON.stringify(wall)};
 }
-export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=null,budget=32,tolerance=1e-3}={}){
+export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=null,budget=32,tolerance=1e-3,residentSolids=false}={}){
   if(!Number.isInteger(budget)||budget<1)throw Error('positive integer budget required');
   let built=null,destroyed=false,paused=false,lastStep=null,generation=0,topologyGeneration=0;
+  let preparationFailure=null;
+  const admissionKey=p=>JSON.stringify([p.dims,p.pitch,p.reactant?.effective?.admitted===true]);
   const key=p=>JSON.stringify([p.dims,p.pitch,p.allocation,p.reactant?.effective?.admitted===true,p.reactant?.allocation??0]);
   const revision=p=>String(p.solidMask?.revision??'disabled');
   const clear=()=>{if(built)for(const r of [...built.owned,...(built.projectionOwned??[])])r.destroy?.();built=null;lastStep=null;};
   function projection(g,fineSolids,coarseSolids){
     const owned=[];
     try{
-      const layout=createCompositeProducerLayout({geometry:g.geometry,fineSolids,coarseSolids}),storage=createCompositeStorageLayout(layout.grid);
-      const solver=createCompositePCGGPU(device,layout.grid,{tolerance});owned.push(solver);
+      const layout=createCompositeProducerLayout({geometry:g.geometry,fineSolids,coarseSolids,fixedTopology:residentSolids}),storage=createCompositeStorageLayout(layout.grid);
+      const solver=createCompositePCGGPU(device,layout.grid,{tolerance,residentSolids});owned.push(solver);
       const intake=createCompositeProducerGPU(device,layout);owned.push(intake);
       return {layout,storage,solver,intake,projectionOwned:owned,bridges:[],pressureSteps:0};
     }catch(e){for(const r of owned)r.destroy?.();throw e;}
+  }
+  function maskTexture(shape,cells,owned){
+    const t=device.createTexture({label:'joined resident solid mask',size:shape,dimension:'3d',format:'r32uint',mipLevelCount:1,sampleCount:1,usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});owned.push(t);
+    writeMask(t,shape,cells);return t;
+  }
+  function writeMask(t,shape,cells){
+    if(!(cells instanceof Uint8Array)||cells.length!==shape.reduce((a,b)=>a*b,1))throw Error('fine solid coverage mismatch');
+    device.queue.writeTexture({texture:t},Uint32Array.from(cells,v=>Number(v!==0)),{bytesPerRow:shape[0]*4,rowsPerImage:shape[1]},shape);
+  }
+  function bindResident(b,p){
+    const fine=p.solidMask?.backend==='gpu'?p.solidMask.texture:b.fineMaskTexture;
+    // Validate before changing any current GPU data or revision identity.
+    b.solver.bindSolids({fine,coarse:b.coarseMaskTexture});
+    if(p.solidMask?.backend!=='gpu')writeMask(fine,p.dims,p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1)));
   }
   function prepare(p){
     if(destroyed)throw Error('joined exterior destroyed');
@@ -62,6 +82,11 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     if(built?.outer&&built.key===k){
       if(built.solidRevision===solidRevision)return {rebuilt:false,...built.summary};
       try{
+        if(residentSolids){
+          bindResident(built,p);built.solidRevision=solidRevision;built.layout.solidRevisions.fine=solidRevision;
+          built.summary.solids.fine=solidRevision;
+          return {rebuilt:false,topologyRebuilt:false,coefficients:'gpu-next-projection',...built.summary};
+        }
         const cells=p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1));
         if(!(cells instanceof Uint8Array)||cells.length!==built.fineCells.length)throw Error('fine solid coverage mismatch');
         const changed=cells.some((v,i)=>(v!==0)!==(built.fineCells[i]!==0));
@@ -77,7 +102,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
         built.solidRevision=solidRevision;built.layout.solidRevisions.fine=solidRevision;
         built.summary.solids.fine=solidRevision;
         return {rebuilt:false,topologyRebuilt:changed,...built.summary};
-      }catch(e){return {rebuilt:false,admitted:false,reason:e.message};}
+      }catch(e){if(residentSolids)preparationFailure={key:admissionKey(p),reason:e.message};return {rebuilt:false,admitted:false,reason:e.message};}
     }
     if(built?.key===k&&!built.outer)return {rebuilt:false,...built.summary};
     clear();generation++;
@@ -88,9 +113,15 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     try{
       if(p.fluidBuffers?.length!==2||!p.lowerFaceTexture||!p.burnRateTexture)throw Error('producer-resources-missing');
       const slab=resolveJoinedExteriorWall(wall,g);if(slab?.outside)throw Error('wall-outside-exterior');
+      if(p.solidMask?.backend==='gpu'&&!residentSolids)throw Error('compact pressure requires CPU solids; resident pressure required for GPU mask');
       const fineSolids={shape:p.dims,cells:p.solidMask?.cells??new Uint8Array(p.dims.reduce((a,b)=>a*b,1)),revision:String(p.solidMask?.revision??'disabled')};
       const coarseSolids=joinedExteriorSolids(g.shape,slab);
       projected=projection(g,fineSolids,coarseSolids);
+      if(residentSolids){
+        projected.fineMaskTexture=maskTexture(p.dims,fineSolids.cells,projected.projectionOwned);
+        projected.coarseMaskTexture=maskTexture(g.shape,coarseSolids.cells,projected.projectionOwned);
+        bindResident(projected,p);
+      }
       const {layout,storage}=projected;
       const outer=createOuterSmoke(device,g.config,p.dims[0],p.fluidBuffers,{reactantTextures:p.reactant?.textures,reactantEffective:p.reactant?.effective,physicsAppearance:p.physicsAppearance});owned.push(outer);
       const row=Math.ceil(g.shape[0]/256)*256,packed=new Uint8Array(row*g.shape[1]*g.shape[2]);
@@ -102,11 +133,11 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       const lowerExport=createCompositeLowerFaceGPU(device,{dims:p.dims,lowerBuffer:lower,lowerFaceTexture:p.lowerFaceTexture});
       const summary={admitted:true,route:JOINED_EXTERIOR_ROUTE,shape:g.shape,origin:g.origin,ratio:g.ratio,cellWidth:g.cellWidth,
         bounds:{min:g.config.min,max:g.config.max},cells:layout.grid.cells.length,faces:layout.grid.faces.length,budget,tolerance,
-        solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},materialMode:g.config.materialMode,lighting:'boundary-incident-continuation',reaction:'fine-only',forces:'exterior-linear-heat-lift-not-fine-force-parity'};
+        solids:{fine:fineSolids.revision,coarse:coarseSolids.revision,wall:slab},pressureTopology:residentSolids?'fixed-resident-mask':'compact-cpu-mask',boundaryVelocity:'stationary-zero',materialMode:g.config.materialMode,lighting:'boundary-incident-continuation',reaction:'fine-only',forces:'exterior-linear-heat-lift-not-fine-force-parity'};
       topologyGeneration++;
       built={key:k,owned,g,...projected,outer,lower,lowerExport,steps:0,summary,solidRevision,coarseSolids,fineCells:fineSolids.cells.slice()};
       return {rebuilt:true,...summary};
-    }catch(e){for(const r of [...owned,...(projected?.projectionOwned??[])])r.destroy?.();built={key:k,owned:[],summary:{admitted:false,reason:e.message}};return {rebuilt:true,...built.summary};}
+    }catch(e){for(const r of [...owned,...(projected?.projectionOwned??[])])r.destroy?.();built={key:k,owned:[],summary:{admitted:false,reason:e.message}};preparationFailure={key:admissionKey(p),reason:e.message};return {rebuilt:true,...built.summary};}
   }
   function seedGhosts(p){
     if(!built?.outer||!p.ghosts?.textures)return false;
@@ -137,7 +168,10 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
       return {status:'sampled',converged:r.converged,iterations:r.receipt.iterations,budget,maxDivergenceError:r.receipt.maxDivergenceError,steps:b.steps};
     }finally{paused=false;}
   }
-  return {prepare,seedGhosts,step,probe,matches:p=>Boolean(built?.outer&&built.key===key(p)&&built.solidRevision===revision(p)),
+  return {prepare,seedGhosts,step,probe,residentSolids,
+    canUpdateSolids:p=>Boolean(residentSolids&&built?.outer&&built.key===key(p)),
+    admission:p=>preparationFailure?.key===admissionKey(p)?{admitted:false,reason:preparationFailure.reason}:resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size,reactant:p.reactant?.effective?.admitted===true}),
+    matches:p=>Boolean(built?.outer&&built.key===key(p)&&built.solidRevision===revision(p)),
     get paused(){return paused;},get ghosts(){return built?.g?.ghosts??null;},get optical(){return built?.outer?.optical??null;},
     receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,generation,topologyGeneration,...built?.summary,steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
     async stats(){if(!built?.outer)return {status:'unprepared'};const b=built;paused=true;try{await device.queue.onSubmittedWorkDone();const values=await b.outer.readState();return {status:b===built?'sampled':'generation-changed',steps:b.steps,values:Array.from(values),receipt:b.outer.receipt()};}finally{paused=false;}},

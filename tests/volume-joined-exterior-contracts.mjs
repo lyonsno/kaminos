@@ -16,6 +16,11 @@ test('unsupported aspect and unresolved donor are refused',()=>{
  assert.equal(resolveJoinedExteriorGeometry({fineDims:[32,48,32],pitch:2/32}).admitted,false);
  assert.equal(resolveJoinedExteriorGeometry({fineDims:[32,32,32],pitch:2/32,coarseResolution:2,size:4}).admitted,false);
 });
+test('coarse alignment refusal happens before preparing the fine producer',()=>{
+ const g=resolveJoinedExteriorGeometry({fineDims:[32,32,32],pitch:2/32,coarseResolution:28,size:3});
+ assert.equal(g.admitted,false,'geometrically invalid join must not be admitted until its later build freezes fine stepping');
+ assert.match(g.reason,/align/);
+});
 test('side and roof slabs use physical fine bounds',()=>{
  const g=resolveJoinedExteriorGeometry({fineDims:[32,32,32],pitch:2/32,coarseResolution:32,size:2});
  assert.deepEqual(resolveJoinedExteriorWall({side:'+x',gap:2,thickness:2},g),{axis:0,at:26,thickness:2,side:'+x',gap:2,outside:false});

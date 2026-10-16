@@ -2,9 +2,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import * as core from '../volume-core.js';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const functionBody = name => { const start=source.indexOf(`  function ${name}(`); assert.ok(start>=0); return source.slice(start,source.indexOf('\n    }',start)+6); };
+function producerSnapshot() {
+  const ctx={state:{},controlsSnapshot:{},resolveTimeStepConfig:()=>({effective:{}}),resolveTransportConfig:()=>({effective:{scheme:'semi-lagrangian'}}),resolveJoinedBoundary:core.resolveJoinedBoundary,
+    gridSize:4,gridHeight:8,fluidBuffers:[{},{}],currentFluid:0,fluidAllocationGeneration:1,reactantAllocationGeneration:0,reactantSidecarFull:false,
+    frontBuffers:[{},{}],currentFront:0,burnRateTexture:{},sceneSolidGpu:null,sceneSolidCellsCpu:null,joinedLowerFaceTexture:{},joinedGhostGeometry:null,joinedGhostSynthetic:{heat:1},joinedGhostTextures:null};
+  vm.createContext(ctx);vm.runInContext(functionBody('joinedProducerSnapshot'),ctx);
+  return vm.runInContext('joinedProducerSnapshot()',ctx);
+}
 const shaderStart = source.indexOf('const WGSL = ');
 const shader = source.slice(source.indexOf('`', shaderStart) + 1, source.indexOf('`;\n', source.indexOf('`', shaderStart) + 1));
 
@@ -112,14 +121,14 @@ test('admission tracks control changes through the real API (JH-02)', () => {
   assert.equal(p.joinedProducerState().joined.requested, false, 'a release stays released');
 });
 
-test('the fine step stops before its own projection in joined mode; the producer state is exposed', () => {
-  const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
-  assert.match(sim, /    encodeAnalyticEmitterInjection\(encoder\);\n    if \(state\.joinedBoundary\?\.admitted\) \{\n      state\.simStepCount \+= 1;\n      updateSimCostLedger\(\);\n      return false;\n    \}\n    const finalTimestampWritten = encodePressureProjection\(encoder, \{/);
+test('the producer snapshot exposes the shared projection inputs', () => {
+  // Actual joined/standalone dispatch behavior is exercised in
+  // volume-joined-edit-hold.mjs, not frozen to the original hook's source text.
   assert.match(source, /    setJoinedBoundary\(request = \{\}\) \{/);
   assert.match(source, /    joinedProducerState\(\) \{/);
-  const api = source.slice(source.indexOf('    joinedProducerState() {'), source.indexOf('    joinedProducerState() {') + 2400);
+  const api = producerSnapshot();
   for (const field of ['dims', 'pitch', 'timeStep', 'transportScheme', 'fluidBuffer', 'fluidReadIndex', 'frontBuffer', 'burnRateTexture', 'solidMask', 'lowerFaceTexture', 'prescribedInlet']) {
-    assert.ok(new RegExp(`\\b${field}(:|,)`).test(api), `producer state exposes ${field}`);
+    assert.ok(Object.hasOwn(api,field), `producer state exposes ${field}`);
   }
 });
 
@@ -167,8 +176,7 @@ test('ghost admission: refused for the reactant law until the oxidizer ghost exi
   assert.deepEqual({ ...core.resolveJoinedGhosts({ geometry: g, reactantOn: false }) }, { bound: true, reason: null });
   assert.deepEqual({ ...core.resolveJoinedGhosts({ geometry: g, reactantOn: true }) }, { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' });
   assert.throws(() => core.resolveJoinedGhosts({ geometry: { ...g, cellWidthFine: 0 }, reactantOn: false }), /positive/);
-  const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
-  assert.match(sim, /if \(state\.joinedBoundary\?\.admitted && state\.joinedGhosts\?\.bound && !joinedGhostSynthetic && state\.joinedGhosts\.generation !== state\.simStepCount\) \{\n\s+state\.joinedGhosts\.reason = 'stale-ghost-generation';\n\s+return false;\n\s+\}/);
+  // Stale generation dispatch is exercised in volume-joined-edit-hold.mjs.
 });
 
 test('ghost reads: one exterior sample per transport call, blended beyond the last fine cell centre; MacCormack stays first order where the backtrace leaves the box', () => {
@@ -203,8 +211,7 @@ test('synthetic ghosts: a constant exterior for witnesses, receipted as syntheti
   assert.match(source, /    debugFillJoinedGhosts\(\{ heat = 0, soot = 0, fuel = 0, velocityLocal = \[0, 0, 0\] \} = \{\}\) \{/);
   const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
   assert.match(sim, /state\.joinedGhosts\?\.bound && !joinedGhostSynthetic && state\.joinedGhosts\.generation !== state\.simStepCount/);
-  const api = source.slice(source.indexOf('    joinedProducerState() {'), source.indexOf('    joinedProducerState() {') + 3000);
-  assert.match(api, /synthetic: joinedGhostSynthetic/);
+  assert.equal(producerSnapshot().ghosts.synthetic.heat,1);
   const capture = readFileSync(new URL('../volume-transport-arm-capture.mjs', import.meta.url), 'utf8');
   assert.match(capture, /if \(cid === '@joinedGhostsSynthetic'\) \{/);
   const { parseSyntheticGhosts } = await import('../volume-arm-capture-checks.mjs');
@@ -240,8 +247,10 @@ test('capture: a joined arm records an unmeasured residual instead of the freshn
 test('JG-01: a ghost allocation or geometry change invalidates the stamp and the synthetic provenance', () => {
   const alloc = source.slice(source.indexOf("      joinedGhostTextures = ['A', 'B'].map(name => {"), source.indexOf("      joinedGhostTextures = ['A', 'B'].map(name => {") + 1400);
   assert.match(alloc, /\n      \}\);\n      \/\/ Fresh ghost textures hold no exterior yet: the stamp and any synthetic\n      \/\/ provenance belong to the destroyed allocation \(review JG-01\)\.\n      joinedGhostSynthetic = null;\n      if \(state\.joinedGhosts\) state\.joinedGhosts = \{ \.\.\.state\.joinedGhosts, generation: -1 \};/);
-  const setter = source.slice(source.indexOf('    setJoinedGhosts(geometry = null) {'), source.indexOf('    setJoinedGhosts(geometry = null) {') + 1200);
-  assert.match(setter, /if \(state\.joinedGhosts\) state\.joinedGhosts = \{ \.\.\.state\.joinedGhosts, generation: -1 \};/);
+  const ctx={state:{joinedGhosts:{generation:7}},joinedGhostGeometry:null,joinedGhostSynthetic:{heat:1},device:null,resolveJoinedGhosts:core.resolveJoinedGhosts};
+  vm.createContext(ctx);vm.runInContext(functionBody('applyJoinedGhostGeometry'),ctx);
+  vm.runInContext('applyJoinedGhostGeometry(null)',ctx);
+  assert.equal(ctx.state.joinedGhosts.generation,-1);assert.equal(ctx.joinedGhostSynthetic,null);
 });
 
 test('JG-02: the synthetic arm fails unless the ghost route is admitted after resolution and at settlement', () => {

@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {joinedBoundaryUniformValues,resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig} from '../volume-core.js';
 import {fireCollisionEdit} from '../scene-collider.mjs';
+import {resolveJoinedExteriorGeometry} from '../volume-joined-exterior.mjs';
 const source=readFileSync(process.env.KAMINOS_EDIT_SOURCE||new URL('../volume-core.js',import.meta.url),'utf8');
 const body=name=>{const start=source.indexOf(`  function ${name}(`);assert(start>=0,name);return source.slice(start,source.indexOf('\n  }',start)+4);};
 
@@ -13,6 +14,7 @@ function fixture(){
  const geometry={dims:[4,8,4],originFine:[-2,-2,-2],cellWidthFine:2,finePitchLocal:.5};
  const ctx={state:{simStepCount:7,joinedBoundary:{admitted:true},joinedGhosts:{bound:true,generation:7},joinedEditing:{held:true,pending:false}},
   currentFluid:0,currentFront:0,currentQuench:0,gridSize:4,gridHeight:8,preparingJoinedExterior:false,
+  gpuThermalConsumer:null,encodeGpuThermalConsumer(){},
   joinedGhostSynthetic:null,joinedGhostGeometry:geometry,controlsSnapshot:{},computePipeline:{},transportPredictBindGroup:{},
   queueMicrotask:fn=>queued.push(fn),refreshSceneCollision(){},joinedEditingHeld(){return ctx.state.joinedEditing.held;},
   joinedProducerSnapshot:()=>({}),resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
@@ -41,12 +43,32 @@ test('placement waits for a current exterior snapshot before either predictor ad
  ctx.joinedExterior.matches=()=>true;step();assert.equal(calls.fine,1);assert.equal(calls.outer,1);assert.equal(calls.pressure,0);
  assert.equal(ctx.state.joinedGhosts.generation,8);
 });
-test('late queued preparation cannot rebuild into a newly started drag; refusal cannot resume stale state',()=>{
+test('late queued preparation cannot rebuild into a newly started drag; refusal restores standalone fine',()=>{
  const {ctx,calls,queued,step,prepare}=fixture();ctx.state.joinedEditing={held:false,pending:true};step();
  ctx.state.joinedEditing.held=true;queued.shift()();assert.equal(calls.prepare,0);
  ctx.state.joinedEditing.held=false;ctx.joinedExterior.prepare=()=>({admitted:false,reason:'unsupported-layout'});
- prepare();assert.equal(ctx.state.joinedEditing.pending,true);assert.equal(ctx.state.joinedEditing.reason,'unsupported-layout');
- step();assert.equal(calls.fine,0);assert.equal(calls.outer,0);
+ ctx.refreshJoinedBoundary=()=>{ctx.state.joinedBoundary={requested:true,admitted:false,reason:'unsupported-layout'};};
+ prepare();assert.equal(ctx.state.joinedEditing.pending,false);assert.equal(ctx.state.joinedEditing.reason,'unsupported-layout');
+ step();assert.equal(calls.fine,1);assert.equal(calls.pressure,1);assert.equal(calls.outer,0);
+});
+test('resident mask update completes before predictor without skipping the fine step',()=>{
+ const {ctx,calls,queued,step}=fixture();ctx.state.joinedEditing={held:false,pending:false};
+ ctx.joinedExterior.canUpdateSolids=()=>true;
+ step();assert.equal(calls.prepare,1);assert.equal(calls.fine,1);assert.equal(calls.outer,1);assert.equal(queued.length,0);
+});
+test('a stale live exterior snapshot prevents both predictors and queues reseeding',()=>{
+ const {ctx,calls,queued,step}=fixture();ctx.state.joinedEditing={held:false,pending:false};
+ ctx.joinedExterior.matches=()=>true;ctx.state.joinedGhosts.generation=6;
+ step();assert.equal(calls.fine,0);assert.equal(calls.outer,0);assert.equal(calls.pressure,0);
+ assert.equal(ctx.state.joinedGhosts.reason,'stale-ghost-generation');assert.equal(queued.length,1);
+ queued.shift()();assert.equal(ctx.state.joinedGhosts.generation,7);step();assert.equal(calls.fine,1);
+});
+test('resident mesh dragging is live while domain and source edits retain their hold',()=>{
+ const {ctx}=fixture();ctx.joinedExterior.residentSolids=true;ctx.state.joinedEditing={held:false,pending:false};
+ let id='cube';ctx.getSceneEditing=()=>({id});vm.runInContext(body('joinedEditingHeld'),ctx);
+ assert.equal(vm.runInContext('joinedEditingHeld()',ctx),false);
+ id='@flame-domain';assert.equal(vm.runInContext('joinedEditingHeld()',ctx),true);
+ id='flame-emitter';assert.equal(vm.runInContext('joinedEditingHeld()',ctx),true);
 });
 test('diagnostic readback pause still prevents fine stepping during a drag',()=>{
  const {ctx,calls,step}=fixture();ctx.joinedExterior.paused=true;step();assert.equal(calls.fine,0);
@@ -119,4 +141,19 @@ test('new drag from settled outside defers readmission until placement and cance
  ctx.controlsSnapshot.immersedSourceEnabled=false;refresh();editing=false;refresh();assert.equal(rebuilds,0);
  editing=true;ctx.controlsSnapshot.immersedSourceEnabled=true;refresh();assert.equal(rebuilds,0);
  editing=false;refresh();assert.equal(rebuilds,1);assert.equal(ctx.state.joinedBoundary.admitted,true);
+});
+test('unsupported exterior keeps the fine grid and request, then readmits a supported configuration',()=>{
+ let rebuilds=0;
+ const ctx={state:{joinedBoundary:{requested:true,admitted:false}},device:{},gridSize:32,gridHeight:48,
+  controlsSnapshot:{pressureSolver:'converged-open-top',projection:1,emitterSourceLaw:'immersed-source',immersedSourceEnabled:true},
+  getSceneEditing:()=>null,resolveJoinedBoundary,resolveImmersedSourceConfig,resolvePressureSolverConfig,
+  joinedExterior:{admission:p=>resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution:32,size:2})},
+  rebuildFluidState(){rebuilds++;}};
+ vm.createContext(ctx);vm.runInContext(body('refreshJoinedBoundary'),ctx);
+ vm.runInContext('refreshJoinedBoundary()',ctx);
+ assert.equal(ctx.state.joinedBoundary.requested,true);assert.equal(ctx.state.joinedBoundary.admitted,false);
+ assert.equal(ctx.state.joinedBoundary.effective,'standalone-fine');assert.match(ctx.state.joinedBoundary.reason,/exterior:/);
+ assert.equal(rebuilds,0);assert.equal(ctx.gridHeight,48,'adapter must not replace the selected fine grid');
+ ctx.gridHeight=64;vm.runInContext('refreshJoinedBoundary()',ctx);
+ assert.equal(ctx.state.joinedBoundary.admitted,true);assert.equal(rebuilds,1);
 });

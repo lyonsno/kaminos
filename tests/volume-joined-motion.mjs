@@ -41,6 +41,17 @@ test('revision-only movement allocates no GPU resources or pipelines',()=>{
   assert.deepEqual([resources.length,pipelines.length],counts);
   joined.destroy();
 });
+test('resident occupancy changes preserve pressure addresses, buffers and pipelines',()=>{
+  const {device,p,resources,pipelines}=fixture();
+  const joined=createJoinedExterior(device,{coarseResolution:4,residentSolids:true});
+  assert.equal(joined.prepare(p).admitted,true);const before=joined.receipt(),counts=[resources.length,pipelines.length];
+  p.solidMask={revision:'moving',cells:p.solidMask.cells.slice()};p.solidMask.cells[21]=1;
+  assert.equal(joined.prepare(p).admitted,true);
+  assert.equal(joined.receipt().cells,before.cells,'moving obstacle must not renumber pressure cells');
+  assert.equal(joined.receipt().topologyGeneration,before.topologyGeneration);
+  assert.deepEqual([resources.length,pipelines.length],counts,'moving obstacle must not allocate or compile');
+  joined.destroy();assert.ok(resources.every(r=>r.destroyed));
+});
 test('allocation changes still rebuild; malformed masks cannot replace a valid state',()=>{
   const {device,p}=fixture(),joined=createJoinedExterior(device,{coarseResolution:4});
   assert.equal(joined.prepare(p).admitted,true);const old=joined.optical;
@@ -49,4 +60,22 @@ test('allocation changes still rebuild; malformed masks cannot replace a valid s
   assert.equal(joined.optical,old);assert.equal(old.destroyed,false);
   p.allocation++;assert.equal(joined.prepare(p).admitted,true);
   assert.notEqual(joined.optical,old);assert.equal(old.destroyed,true);joined.destroy();
+});
+test('resident GPU masks remain producer-owned across revisions and disposal',()=>{
+  const {device,p,resources,pipelines}=fixture();
+  const texture=device.createTexture({size:p.dims,dimension:'3d',format:'r32uint',mipLevelCount:1,sampleCount:1,usage:GPUTextureUsage.TEXTURE_BINDING});
+  p.solidMask={backend:'gpu',texture,revision:'gpu-1',cells:null};
+  const joined=createJoinedExterior(device,{coarseResolution:4,residentSolids:true});
+  assert.equal(joined.prepare(p).admitted,true);const counts=[resources.length,pipelines.length];
+  device.queue.writeTexture=()=>{throw Error('GPU producer mask must not be replaced by a CPU upload');};
+  p.solidMask.revision='gpu-2';assert.equal(joined.prepare(p).admitted,true);
+  assert.deepEqual([resources.length,pipelines.length],counts);
+  joined.destroy();assert.equal(texture.destroyed,false,'consumer must not destroy producer-owned mask');texture.destroy();
+});
+test('resident preparation refusal is visible to admission without revoking other grid configurations',()=>{
+  const {device,p}=fixture(),joined=createJoinedExterior(device,{coarseResolution:4,residentSolids:true});
+  assert.equal(joined.prepare({...p,fluidBuffers:[]}).admitted,false);
+  assert.deepEqual(joined.admission(p),{admitted:false,reason:'producer-resources-missing'});
+  assert.equal(joined.admission({...p,dims:[8,8,8],pitch:.25}).admitted,true);
+  joined.destroy();
 });

@@ -12257,6 +12257,10 @@ export function createKaminosVolumePrototype({
       immersedAdmitted: Boolean(immersed.effective?.admitted),
       immersedReason: immersed.effective?.reason ?? null,
     });
+    if (next.admitted && joinedExterior?.admission) {
+      const exterior = joinedExterior.admission({dims:[gridSize,gridHeight,gridSize],pitch:2/gridSize,reactant:{effective:state.reactantCombustion?.effective}});
+      if (!exterior.admitted) Object.assign(next,{admitted:false,reason:`exterior:${exterior.reason}`,effective:'standalone-fine'});
+    }
     // Emitter previews can temporarily disable injection outside the box.
     // Keep the installed join allocation while the edit uses standalone fine
     // uniforms. Source admission remains truthful in the immersed config.
@@ -13238,7 +13242,8 @@ export function createKaminosVolumePrototype({
   function joinedEditingHeld() {
     const active = Boolean(joinedExterior && (state.joinedBoundary?.requested || state.joinedBoundary?.admitted));
     const edit = active && getSceneEditing?.();
-    const held = Boolean(edit);
+    const liveCollider = joinedExterior?.residentSolids && edit && !['@flame-domain','flame-emitter','@burner-controls','@selection-transform'].includes(edit.id);
+    const held = Boolean(edit && !liveCollider);
     const prior = state.joinedEditing;
     const pending = Boolean(active && (prior?.pending || (prior?.held && !held)));
     state.joinedEditing = {
@@ -13293,7 +13298,7 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
-      if (typeof device.createComputePipeline === 'function' && !state.joinedBoundary?.admitted) {
+      if (typeof device.createComputePipeline === 'function' && (!state.joinedBoundary?.admitted || joinedExterior?.residentSolids)) {
         if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
         const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
         const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
@@ -14229,7 +14234,13 @@ export function createKaminosVolumePrototype({
       for (let round = 0; round < 3; round++) {
         const snapshot = joinedProducerSnapshot();
         result = joinedExterior.prepare(snapshot);
-        if (!result.admitted) break;
+        if (!result.admitted) {
+          // A failed optional adapter must leave the established fine route
+          // usable. The exterior retains the refusal for this geometry/law.
+          refreshJoinedBoundary();
+          state.joinedEditing = {...state.joinedEditing,pending:false,fine:'standalone',reason:result.reason};
+          break;
+        }
         const g = joinedExterior.ghosts;
         const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal && joinedGhostGeometry.oxidizer === g.oxidizer;
         if (!same) { applyJoinedGhostGeometry(g); continue; }
@@ -17486,8 +17497,19 @@ export function createKaminosVolumePrototype({
     // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
     // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
     if (!editingHeld && state.joinedBoundary?.admitted && joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
-      if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-      return false;
+      const snapshot=joinedProducerSnapshot();
+      if (joinedExterior.canUpdateSolids?.(snapshot)) {
+        const updated=joinedExterior.prepare(snapshot);
+        state.joinedExterior=joinedExterior.receipt();
+        if (!updated.admitted) {
+          state.joinedExterior.lastSolidFailure=updated.reason;
+          if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+          return false;
+        }
+      } else {
+        if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
+        return false;
+      }
     }
     if (!editingHeld && state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
@@ -28119,7 +28141,8 @@ export function createKaminosVolumePrototype({
         syncJoinedRender();
         return { enabled: false };
       }
-      joinedExterior = createJoinedExterior(device, config);
+      joinedExterior = createJoinedExterior(device, {residentSolids:true,...config});
+      refreshJoinedBoundary();
       const prepared = prepareJoinedExterior();
       return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
     },
