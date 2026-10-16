@@ -55,16 +55,18 @@ export default {
       },
       mount({root: panel, document, invoke}) {
         const label = document.createElement('label'); label.textContent = 'Candidate roughness ';
-        slider = document.createElement('input'); slider.type = 'range';
-        slider.min = '0'; slider.max = '1'; slider.step = '0.01';
+        slider = document.createElement('input'); slider.type = 'number';
+        slider.min = '0'; slider.max = '1'; slider.step = 'any';
+        slider.className='transform-input';
         slider.setAttribute('aria-label', 'Candidate roughness');
-        value = document.createElement('output');
         const frame = document.createElement('button'); frame.type = 'button'; frame.textContent = 'Frame comparison';
         const status = document.createElement('div'); status.setAttribute('role', 'status');
         const failed = error => {sync(); status.textContent = error.message;};
         slider.addEventListener('input', () => invoke('setRoughness', Number(slider.value)).catch(failed));
         frame.addEventListener('click', () => invoke('frame').catch(failed));
-        label.append(slider, value); panel.append(label, frame, status); sync();
+        label.append(slider); panel.append(label, frame, status);
+        host.controls.installNumberDrag({input:slider,grip:label,step:.01});
+        sync();
       },
       dispose: () => session.dispose(),
     };
