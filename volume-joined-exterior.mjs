@@ -207,7 +207,7 @@ export function createJoinedExterior(device,{coarseResolution=32,size=2,wall=nul
     admission:p=>preparationFailure?.key===admissionKey(p)?{admitted:false,reason:preparationFailure.reason}:resolveJoinedExteriorGeometry({fineDims:p.dims,pitch:p.pitch,coarseResolution,size,reactant:p.reactant?.effective?.admitted===true}),
     matches:p=>Boolean(built?.outer&&built.key===key(p)&&built.solidRevision===revision(p)),
     get paused(){return paused;},get ghosts(){return built?.g?.ghosts??null;},get optical(){return built?.outer?.optical??null;},
-    receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,generation,topologyGeneration,...built?.summary,steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
+    receipt(){return {route:JOINED_EXTERIOR_ROUTE,coarseResolution,size,budget,tolerance,generation,topologyGeneration,...structuredClone(built?.summary),steps:built?.steps??0,lastStep,outer:built?.outer?.receipt()??null};},
     async stats(){if(!built?.outer)return {status:'unprepared'};const b=built;paused=true;try{await device.queue.onSubmittedWorkDone();const values=await b.outer.readState();return {status:b===built?'sampled':'generation-changed',steps:b.steps,values:Array.from(values),receipt:b.outer.receipt()};}finally{paused=false;}},
     destroy(){if(!destroyed){clear();destroyed=true;}}
   };

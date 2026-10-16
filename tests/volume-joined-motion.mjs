@@ -49,6 +49,7 @@ test('exterior authored geometry shares a resident mask between pressure and tra
   assert.equal(joined.prepare(p).admitted,true);
   assert.equal(joined.receipt().solids.scene.backend,'configured-wall');
   assert.equal(mask.destroyed,true,'last-object removal releases the producer and cannot retain its old output');
+  assert.equal(before.solids.scene.backend,'gpu','an earlier receipt must not change when a later pose removes geometry');
   assert.equal(joined.receipt().outer.solidRevision,joined.receipt().solids.coarse);
   joined.destroy();assert.ok(resources.every(r=>r.destroyed));
 });
