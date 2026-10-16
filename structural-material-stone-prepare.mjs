@@ -11,8 +11,9 @@ const { Manifold, Mesh } = wasm;
 export const STONE_PREPARATION_ROUTE = 'kaminos.imported-solid.grid-intersection.manifold-3.5.4.v0';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
+export function prepareStoneFromGlb(bytes, { size, cellSize, surfaceTolerance=0 } = {}) {
   const extracted = readArchGlbTriangles(bytes);
+  if(!Number.isFinite(surfaceTolerance)||surfaceTolerance<0)throw new Error('Finite nonnegative mechanical surface tolerance required');
   if (!Array.isArray(size) || size.length !== 3 || !size.every(n => Number.isFinite(n) && n > 0) || !(cellSize > 0) || !Number.isFinite(cellSize)) throw new Error('Positive specimen dimensions and physical cell size required');
   const jsonLength = bytes.readUInt32LE(12), gltf = JSON.parse(bytes.toString('utf8', 20, 20 + jsonLength));
   const binaryStart = 28 + jsonLength, primitive = gltf.meshes[0].primitives[0];
@@ -60,8 +61,13 @@ export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
   const own = value => { owned.add(value); return value; };
   const discard = value => { value.delete(); owned.delete(value); };
   try {
-    const solid = own(new Manifold(input));
-    if (!(solid.volume() > 0)) throw new Error('Imported source must admit a positive oriented solid');
+    const reference = own(new Manifold(input)), referenceVolume=reference.volume();
+    if (!(referenceVolume > 0)) throw new Error('Imported source must admit a positive oriented solid');
+    const solid=surfaceTolerance>0?own(reference.simplify(surfaceTolerance)):reference;
+    const preparedVolume=solid.volume(),relativeVolumeError=Math.abs(preparedVolume-referenceVolume)/referenceVolume;
+    if(!(Number.isFinite(preparedVolume)&&preparedVolume>0&&Number.isFinite(relativeVolumeError))||relativeVolumeError>.01)throw new Error('Mechanical surface approximation changes admitted volume by over one percent');
+    const componentVolumes=value=>{const parts=value.decompose();try{return parts.map(p=>p.volume());}finally{for(const p of parts)p.delete();}};
+    const mechanicalPreparation={route:surfaceTolerance>0?'manifold-3.5.4-simplify-within-tolerance-v1':'manifold-3.5.4-source-v1',sourceSha256:hash(bytes),surfaceTolerance,referenceVolume,preparedVolume,relativeVolumeError,referenceTriangles:reference.numTri(),preparedTriangles:solid.numTri(),referenceComponentVolumes:componentVolumes(reference),preparedComponentVolumes:componentVolumes(solid)};
     const grid = size.map(s => Math.ceil(s / cellSize)), spacing = size.map((s, a) => s / grid[a]);
     const cells = [], byGrid = new Map();
     for (let z = 0; z < grid[2]; z++) for (let y = 0; y < grid[1]; y++) for (let x = 0; x < grid[0]; x++) {
@@ -121,6 +127,7 @@ export function prepareStoneFromGlb(bytes, { size, cellSize } = {}) {
     }
     return { schema: STONE_PREPARATION_ROUTE, sourceSha256: hash(bytes), sourceTriangles: indices.length / 3, size, requestedCellSize: cellSize, spacing, grid,
       attributeSources:{tangent:hasTangents?'source':'three-computed-with-normal-basis-for-degenerate-uv'},
+      mechanicalPreparation,
       volume, totalVolume, seamMerges: input.mergeFromVert.length, cells, bonds,
       claim: 'homogeneous coarse cohesive cut volumes; box inertia/collision approximation; no hidden construction inference' };
   } finally { for (const value of owned) value.delete(); }
