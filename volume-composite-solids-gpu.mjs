@@ -15,22 +15,22 @@ export function createCompositeSolidsGPU(device,grid,{nodes,links,faces,flux,cel
 @group(0) @binding(0) var<storage,read> coords:array<vec4<u32>>;
 @group(0) @binding(1) var fine:texture_3d<u32>;
 @group(0) @binding(2) var coarse:texture_3d<u32>;
-@group(0) @binding(3) var<storage,read_write> active:array<u32>;
+@group(0) @binding(3) var<storage,read_write> activeCells:array<u32>;
 @group(0) @binding(4) var<storage,read_write> cells:array<f32>;
 @compute @workgroup_size(64) fn classify(@builtin(global_invocation_id) id:vec3<u32>){
   let i=id.x;if(i>=arrayLength(&coords)){return;}let q=coords[i];var solid=0u;
   if(q.w==1u){solid=textureLoad(fine,vec3<i32>(q.xyz),0).x;}else{solid=textureLoad(coarse,vec3<i32>(q.xyz),0).x;}
   let next=select(1u,0u,solid!=0u);
-  if(next==0u||active[i]!=next){cells[i*8u]=0.0;}
-  active[i]=next;
+  if(next==0u||activeCells[i]!=next){cells[i*8u]=0.0;}
+  activeCells[i]=next;
 }`, 'classify');
   const mask=pipeline('resident pressure face coefficients',/* wgsl */`
-@group(0) @binding(0) var<storage,read> active:array<u32>;
+@group(0) @binding(0) var<storage,read> activeCells:array<u32>;
 @group(0) @binding(1) var<storage,read_write> faces:array<vec4<f32>>;
 @group(0) @binding(2) var<storage,read_write> flux:array<f32>;
 @compute @workgroup_size(64) fn mask(@builtin(global_invocation_id) id:vec3<u32>){
-  let i=id.x;if(i>=arrayLength(&faces)){return;}let f=faces[i];var open=active[u32(f.x)]!=0u;
-  if(f.y>=0.0){open=open&&active[u32(f.y)]!=0u;}
+  let i=id.x;if(i>=arrayLength(&faces)){return;}let f=faces[i];var open=activeCells[u32(f.x)]!=0u;
+  if(f.y>=0.0){open=open&&activeCells[u32(f.y)]!=0u;}
   faces[i].z=select(0.0,f.w,open);if(!open){flux[i]=0.0;}
 }`, 'mask');
   const diagonal=pipeline('resident pressure diagonal',/* wgsl */`
