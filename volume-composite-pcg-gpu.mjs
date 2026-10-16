@@ -5,7 +5,7 @@ import {compositeDivergence,COMPOSITE_GRID_ID} from './volume-composite-grid.mjs
 // All iteration decisions stay on GPU. The explicit dispatch budget is still
 // encoded in full; converged solves skip arithmetic, not command submission.
 // readback adjudicates corrected face flux, independently of recursive residual.
-export function createCompositePCGGPU(device,grid,{tolerance=1e-5}={}){
+export function createCompositePCGGPU(device,grid,{tolerance=1e-5,uniformCounts=false}={}){
   if(!Number.isFinite(tolerance)||tolerance<=0||!Number.isFinite(Math.fround(tolerance))||Math.fround(tolerance)===0)throw new Error('positive float32 tolerance required');
   const n=grid.cells.length,m=grid.faces.length,groups=Math.ceil(n/64);
   if(!n||!m)throw new Error('PCG requires nonempty cells and faces');
@@ -19,6 +19,9 @@ export function createCompositePCGGPU(device,grid,{tolerance=1e-5}={}){
   const alloc=(label,size,data)=>{if(size>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw new Error(`${label} exceeds device capacity`);
     const b=device.createBuffer({label,size,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC|GPUBufferUsage.COPY_DST});owned.push(b);if(data)device.queue.writeBuffer(b,0,data);return b;};
   const shader=(label,code)=>{const s=device.createShaderModule({label,code});shaders.push(s);return s;};
+  // Opt-in assay: topology counts are data; arithmetic and dispatches stay identical.
+  const countsBuffer=(a,b=0)=>{const buffer=device.createBuffer({label:'PCG counts',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(buffer);device.queue.writeBuffer(buffer,0,new Uint32Array([a,b,0,0]));return buffer;};
+  const counts=uniformCounts?countsBuffer(n,m):null;
   let nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,control,partials;
   try{
     nodeBuffer=alloc('PCG nodes',nodes.byteLength,nodes);const packed=Float32Array.from(links);linkBuffer=alloc('PCG adjacency',packed.byteLength,packed);
@@ -33,7 +36,7 @@ fn combine(a:vec4<f32>,b:vec4<f32>)->vec4<f32>{return vec4<f32>(a.x+b.x,0.0,max(
 var<workgroup> scratch:array<vec4<f32>,64>;
 `;
   const main=shader('warm composite PCG',/* wgsl */`
-const N:u32=${n}u;const M:u32=${m}u;
+${uniformCounts?'@group(0) @binding(7) var<uniform> counts:vec4<u32>;':`const N:u32=${n}u;const M:u32=${m}u;`}
 struct Cell{p:f32,r:f32,d:f32,ad:f32,rhs:f32,expansion:f32,pad0:f32,pad1:f32}
 @group(0) @binding(0) var<storage,read> nodes:array<vec4<f32>>;
 @group(0) @binding(1) var<storage,read> links:array<vec4<f32>>;
@@ -83,24 +86,25 @@ fn product(i:u32,direction:bool)->f32{
 }
 @compute @workgroup_size(64) fn project(@builtin(global_invocation_id) id:vec3<u32>){
   let i=id.x;if(i<M&&ctrl[6]==0.0){let f=faces[i];var pb=0.0;if(f.y>=0.0){pb=cells[u32(f.y)].p;}flux[i]+=f.z*(cells[u32(f.x)].p-pb);}
-}`);
-  const layout=device.createBindGroupLayout({entries:Array.from({length:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding<3?'read-only-storage':'storage'}}))});
+}`.replace(/\b(N|M)\b/g,x=>uniformCounts?(x==='N'?'counts.x':'counts.y'):x));
+  const layout=device.createBindGroupLayout({entries:Array.from({length:uniformCounts?8:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding<3?'read-only-storage':'storage'}}))});
   const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const pipelines=Object.fromEntries(['recover','initialize','apply','update','measure','direction','project'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pl,compute:{module:main,entryPoint}})]));
-  const bind=device.createBindGroup({layout,entries:[nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,partials[0],control].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const bind=device.createBindGroup({layout,entries:[nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,partials[0],control,...(counts?[counts]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
   const reductions=[];let count=groups;
   for(let level=1;level<partials.length;level++){
     const s=shader('PCG hierarchical reduction',/* wgsl */`
 @group(0) @binding(0) var<storage,read> src:array<vec4<f32>>;
 @group(0) @binding(1) var<storage,read_write> dst:array<vec4<f32>>;
+${uniformCounts?'@group(0) @binding(2) var<uniform> counts:vec4<u32>;':''}
 ${common}
 @compute @workgroup_size(64) fn reduce(@builtin(global_invocation_id) id:vec3<u32>,@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) group:vec3<u32>){
-  var v=vec4<f32>(0.0);if(id.x<${count}u){v=src[id.x];}scratch[lane]=v;workgroupBarrier();
+  var v=vec4<f32>(0.0);if(id.x<${uniformCounts?'counts.x':`${count}u`}){v=src[id.x];}scratch[lane]=v;workgroupBarrier();
   for(var stride=32u;stride>0u;stride/=2u){if(lane<stride){scratch[lane]=combine(scratch[lane],scratch[lane+stride]);}workgroupBarrier();}
   if(lane==0u){dst[group.x]=scratch[0];}
 }`);
     const pipeline=device.createComputePipeline({layout:'auto',compute:{module:s,entryPoint:'reduce'}});
-    const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[partials[level-1],partials[level]].map((buffer,binding)=>({binding,resource:{buffer}}))});
+    const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[partials[level-1],partials[level],...(uniformCounts?[countsBuffer(count)]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
     count=Math.ceil(count/64);reductions.push({pipeline,group,count});
   }
   const decisions=shader('PCG scalar decisions',/* wgsl */`
@@ -122,7 +126,8 @@ fn fail(){ctrl[6]=1.0;ctrl[3]=0.0;}
   const intakeShader=shader('PCG target intake',/* wgsl */`
 @group(0) @binding(0) var<storage,read> expansion:array<f32>;
 @group(0) @binding(1) var<storage,read_write> cells:array<f32>;
-@compute @workgroup_size(64) fn intake(@builtin(global_invocation_id) id:vec3<u32>){if(id.x<${n}u){cells[id.x*8u+5u]=expansion[id.x];}}
+${uniformCounts?'@group(0) @binding(2) var<uniform> counts:vec4<u32>;':''}
+@compute @workgroup_size(64) fn intake(@builtin(global_invocation_id) id:vec3<u32>){if(id.x<${uniformCounts?'counts.x':`${n}u`}){cells[id.x*8u+5u]=expansion[id.x];}}
 `);
   const intake=device.createComputePipeline({layout:'auto',compute:{module:intakeShader,entryPoint:'intake'}}),cpuTarget=alloc('PCG CPU input target',n*4);
   let generation=0,encoded=-1,inputRoute='none',hasInput=false,destroyed=false,budget=0,warm=false,hasPressure=false;
@@ -130,7 +135,7 @@ fn fail(){ctrl[6]=1.0;ctrl[3]=0.0;}
   const validate=iterations=>{alive();if(!Number.isInteger(iterations)||iterations<0)throw new Error('explicit nonnegative iteration budget required');};
   const encode=(encoder,targetBuffer,iterations,reset)=>{
     if(reset){encoder.clearBuffer(cells);encoder.clearBuffer(control);}
-    const group=device.createBindGroup({layout:intake.getBindGroupLayout(0),entries:[targetBuffer,cells].map((buffer,binding)=>({binding,resource:{buffer}}))});
+    const group=device.createBindGroup({layout:intake.getBindGroupLayout(0),entries:[targetBuffer,cells,...(counts?[counts]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
     const pass=encoder.beginComputePass({label:'warm composite PCG'});
     const call=(pipeline,group,count)=>{pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(count);};
     const mainCall=(name,count=groups)=>call(pipelines[name],bind,count);
