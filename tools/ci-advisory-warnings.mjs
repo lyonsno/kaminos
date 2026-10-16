@@ -10,34 +10,42 @@
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const notRun = (step) => `${step} did not run (an earlier step failed)`;
-const firstLine = (text) => String(text ?? '').split('\n')[0];
+const firstLine = (text) => String(text ?? '').split(/\r?\n|\r/)[0];
+const stepNote = (step, outcome) => outcome === 'skipped' ? `${step} did not run (an earlier step failed)`
+  : outcome === 'cancelled' ? `${step} was cancelled` : null;
 
 export function advisoryWarnings({ report: r, serve, suite }) {
   const out = [];
-  if (serve === 'skipped') out.push(notRun('serve.py check'));
-  else if (serve !== 'success') out.push('serve.py did not answer within 10 s');
+  if (serve !== 'success') out.push(stepNote('serve.py check', serve) || 'serve.py did not answer within 10 s');
   if (!r) {
-    out.push(suite === 'skipped' ? notRun('suite') : `no suite report (suite step ${suite})`);
+    out.push(stepNote('suite', suite) || `no suite report (suite step ${suite})`);
   } else {
     if (r.failurePhase) out.push(`runner failed in phase ${r.failurePhase}: ${firstLine(r.error)}`);
-    const each = (label, items, show = (x) => x) => { for (const item of items || []) out.push(`${label}: ${show(item)}`); };
-    each('new failure', r.newFailures);
-    each('unsigned failure', (r.results || []).filter(x => x.outcome === 'unsigned-failure'), x => x.file);
-    each('changed failure signature', r.signatureChanged, x => x.file);
-    each('quarantined test now passes', r.staleQuarantine);
-    each('unclassified test file', r.unclassified);
-    each('invalid classification', r.invalid, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
-    each('invalid quarantine entry', r.invalidQuarantine, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
-    each('selector matched nothing', r.unmatchedSelectors);
-    each('browser launch reached by a test', r.browserLaunchAttempts, x => x.file);
-    each('test root neither run nor excluded', r.uncoveredTestRoots);
-    each('manifest entry for a missing file', r.orphans?.manifest);
-    each('quarantine entry for a missing file', r.orphans?.quarantine);
-    each('warning', r.warnings, w => (typeof w === 'string' ? w : w.message || JSON.stringify(w)));
+    const list = (field, value) => {
+      if (value === undefined || value === null) return [];
+      if (Array.isArray(value)) return value;
+      out.push(`report field ${field} is not a list`);
+      return [];
+    };
+    const each = (label, field, value, show = (x) => x) => { for (const item of list(field, value)) out.push(`${label}: ${show(item)}`); };
+    const counted = new Set(list('newFailures', r.newFailures));
+    each('new failure', 'newFailures', [...counted]);
+    each('unsigned failure', 'results', list('results', r.results).filter(x => x?.outcome === 'unsigned-failure' && !counted.has(x.file)), x => x.file);
+    each('changed failure signature', 'signatureChanged', list('signatureChanged', r.signatureChanged).filter(x => !counted.has(x?.file)), x => x.file);
+    each('quarantined test now passes', 'staleQuarantine', r.staleQuarantine);
+    each('unclassified test file', 'unclassified', r.unclassified);
+    each('invalid classification', 'invalid', r.invalid, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
+    each('invalid quarantine entry', 'invalidQuarantine', r.invalidQuarantine, x => (typeof x === 'string' ? x : x.file || JSON.stringify(x)));
+    each('selector matched nothing', 'unmatchedSelectors', r.unmatchedSelectors);
+    each('browser launch reached by a test', 'browserLaunchAttempts', r.browserLaunchAttempts, x => x.file);
+    each('test root neither run nor excluded', 'uncoveredTestRoots', r.uncoveredTestRoots);
+    each('manifest entry for a missing file', 'orphans.manifest', r.orphans?.manifest);
+    each('quarantine entry for a missing file', 'orphans.quarantine', r.orphans?.quarantine);
+    each('warning', 'warnings', r.warnings, w => (typeof w === 'string' ? w : w.message || JSON.stringify(w)));
     if (!out.length && suite !== 'success') out.push(`suite step ${suite} without a reason in its report`);
+    else if (!out.length && r.ok !== true) out.push('report is not ok without a reason the runner names');
   }
-  return out.map(line => line.replace(/\r?\n/g, ' '));
+  return out.map(line => line.replace(/\r?\n|\r/g, ' '));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {

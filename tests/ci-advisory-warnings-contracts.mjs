@@ -53,3 +53,31 @@ test('runner warnings are passed on when the report carries them, one line each'
   const report = { ...clean(), warnings: [{ message: 'pillow missing\nsecond line' }, 'plain'] };
   assert.deepEqual(advisoryWarnings({ report, ...ran }), ['warning: pillow missing second line', 'warning: plain']);
 });
+
+test('a field of the wrong shape is a warning, not a crash', () => {
+  const report = { ...clean(), ok: false, newFailures: { a: 1 } };
+  const w = advisoryWarnings({ report, serve: 'success', suite: 'failure' });
+  assert.ok(w.some(l => l.includes('newFailures') && l.includes('not a list')), w.join('\n'));
+});
+
+test('a report that is not ok still warns when the suite step succeeded', () => {
+  const w = advisoryWarnings({ report: { ...clean(), ok: false }, ...ran });
+  assert.equal(w.length, 1);
+  assert.match(w[0], /not ok/);
+});
+
+test('a carriage return never survives into a warning line', () => {
+  const report = { ...clean(), ok: false, failurePhase: 'execute', error: 'bad\rinjected' };
+  for (const line of advisoryWarnings({ report, serve: 'success', suite: 'failure' })) assert.ok(!/[\r\n]/.test(line), JSON.stringify(line));
+});
+
+test('a cancelled step is named as cancelled', () => {
+  assert.deepEqual(advisoryWarnings({ report: null, serve: 'cancelled', suite: 'cancelled' }),
+    ['serve.py check was cancelled', 'suite was cancelled']);
+});
+
+test('a failure counted as new is warned once, not again as unsigned or changed', () => {
+  const report = { ...clean(), ok: false, newFailures: ['tests/a.mjs'],
+    results: [{ file: 'tests/a.mjs', outcome: 'unsigned-failure' }], signatureChanged: [{ file: 'tests/a.mjs' }] };
+  assert.deepEqual(advisoryWarnings({ report, serve: 'success', suite: 'failure' }), ['new failure: tests/a.mjs']);
+});
