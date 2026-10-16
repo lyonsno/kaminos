@@ -54,14 +54,18 @@ test("a failing test's warning lines stay out of its failure signature, for a pl
 // Every command-line run in these contracts points HOME and KAMINOS_RUN_LEDGER
 // at the fixture, so none writes the real ledger.
 
-const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf8' });
+// The fixture repository runs none of the machine's git hooks, so a global
+// commit hook cannot fail this contract.
+const git = (cwd, ...args) => spawnSync('git', ['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args], { cwd, encoding: 'utf8' });
 const ledgerLines = async file => (await fs.readFile(file, 'utf8')).split('\n').filter(Boolean);
 
 test('the command line appends a start line before it runs and a finish line with what the run did, and names the interpreter on its summary line', async t => {
   const f = await fixture(t, { files: { 'a.mjs': "console.log('kaminos-test-warning: first line of a warning');\n", 'b.mjs': PASS },
     manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' }, 'tests/b.mjs': { kind: 'node' } }) });
-  assert.equal(git(f.root, 'init', '-q', '-b', 'ledger-branch').status, 0);
-  assert.equal(git(f.root, 'commit', '-q', '--allow-empty', '-m', 'fixture').status, 0);
+  const init = git(f.root, 'init', '-q', '-b', 'ledger-branch');
+  assert.equal(init.status, 0, init.stderr);
+  const commit = git(f.root, 'commit', '-q', '--allow-empty', '-m', 'fixture');
+  assert.equal(commit.status, 0, commit.stderr);
   const head = git(f.root, 'rev-parse', 'HEAD').stdout.trim();
   const ledger = path.join(f.root, 'run-ledger.jsonl');
   await fs.writeFile(ledger, '{"earlier":"run"}\n');
