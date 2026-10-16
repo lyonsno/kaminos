@@ -227,39 +227,40 @@ export function createVantagePilot(host) {
     return {view, sub, ratio, optics, seen, shot, item};
   }
 
-  // An event's detail is carried only when it is plain data that survives as
-  // sent: null, booleans, finite numbers, strings, arrays and plain objects.
-  // Anything else is reported by path, not altered.
-  const unsupportedIn = (value, path = 'detail', seen = new Set()) => {
-    if (value === null || typeof value === 'boolean' || typeof value === 'string') return null;
-    if (typeof value === 'number') return Number.isFinite(value) ? null : `${path} is ${value}`;
-    if (typeof value !== 'object') return `${path} is a ${typeof value}`;
-    if (seen.has(value)) return `${path} refers back to itself`;
-    seen.add(value);
-    if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) {
-        if (!(i in value) || value[i] === undefined) return `${path}[${i}] is missing`;
-        const inner = unsupportedIn(value[i], `${path}[${i}]`, seen);
-        if (inner) return inner;
-      }
-    } else {
-      const proto = Object.getPrototypeOf(value);
-      if (proto !== Object.prototype && proto !== null) return `${path} is a ${value.constructor?.name ?? 'non-plain object'}`;
-      if (typeof value.toJSON === 'function') return `${path} has its own toJSON`;
-      for (const key of Object.keys(value)) {
-        const inner = unsupportedIn(value[key], `${path}.${key}`, seen);
-        if (inner) return inner;
-      }
+  // An event's detail is carried only when it is plain data that copies as
+  // sent: null, booleans, finite numbers, strings, arrays and plain objects,
+  // read once from their own data properties. Anything else (getters, symbol
+  // keys, extra array properties, cycles, other objects) is reported by path,
+  // and the event itself is kept.
+  const plainCopy = (value, path, stack) => {
+    if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new Error(`${path} is ${value}`);
+      return value;
     }
-    seen.delete(value);
-    return null;
+    if (typeof value !== 'object') throw new Error(`${path} is a ${typeof value}`);
+    if (stack.includes(value)) throw new Error(`${path} refers back to itself`);
+    const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
+    if (array ? proto !== Array.prototype : proto !== Object.prototype && proto !== null) throw new Error(`${path} is a ${value.constructor?.name ?? 'non-plain object'}`);
+    const keys = Reflect.ownKeys(value), copy = array ? [] : {};
+    for (const key of keys) {
+      if (typeof key === 'symbol') throw new Error(`${path} has a symbol key ${String(key)}`);
+      if (array && key === 'length') continue;
+      const where = array ? `${path}[${key}]` : `${path}.${key}`;
+      if (array && !(String(Number(key)) === key && Number.isInteger(Number(key)))) throw new Error(`${where} is not an array entry`);
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (!('value' in descriptor)) throw new Error(`${where} is a getter`);
+      if (!descriptor.enumerable) throw new Error(`${where} is not enumerable`);
+      copy[key] = plainCopy(descriptor.value, where, [...stack, value]);
+    }
+    if (array && copy.length !== value.length) throw new Error(`${path} has missing entries`);
+    if (array) for (let i = 0; i < copy.length; i++) if (!(i in copy)) throw new Error(`${path}[${i}] is missing`);
+    return copy;
   };
   const eventDetail = detail => {
     if (detail === undefined || detail === null) return {detail: null};
-    let problem;
-    try { problem = unsupportedIn(detail); }
-    catch (error) { problem = error?.message || String(error); }
-    return problem ? {detail: null, detailError: `${problem}; only plain data is carried`} : {detail: structuredClone(detail)};
+    try { return {detail: plainCopy(detail, 'detail', [])}; }
+    catch (error) { return {detail: null, detailError: `${error?.message || String(error)}; only plain data is carried`}; }
   };
 
   const handlers = {
@@ -388,9 +389,11 @@ export function createVantagePilot(host) {
       const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000;
       let event = null, missedTicks = 0, wake = null;
       const heard = until ? new Promise(resolve => { wake = resolve; }) : null;
+      // An event counts only when it comes before the deadline.
       const stopListening = until ? host.listen(until, detail => {
-        if (event) return;
-        event = {name: until, atMs: host.now() - started, ...eventDetail(detail)};
+        const atMs = host.now() - started;
+        if (event || atMs >= windowMs) return;
+        event = {name: until, atMs, ...eventDetail(detail)};
         wake();
       }) : null;
       // Sleeps end early when the event comes.
