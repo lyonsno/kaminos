@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {checkedSelection} from '../scene-selection.mjs';
+import {installPolyEditMode} from '../poly-edit-host.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 function pointerContext(){const c={polyEdit:null,FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',vantageCaptureHeld:false,performance:{now:()=>100},viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:{dragging:false,axis:null},viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,greenroomPreviewIsActive:()=>false,pickFlameDomainFromViewportPointer:()=>false,pickWaterDomainFromViewportPointer:()=>false,pickSceneObjectFromViewportPointer:()=>({id:'source'}),selection:false,cleared:false,setActiveSceneObject(id,{extend}){c.selection=extend?!c.selection:true;},clearActiveSceneObjectSelection(){c.cleared=true;},setInfo(){},window:{_kaminosDirty(){}}};vm.createContext(c);vm.runInContext(grab('handleViewportPointerDown')+grab('handleViewportSelectionClick'),c);return c;}
@@ -75,4 +76,22 @@ test('object selection preserves Edit Mode only for the same sole object',()=>{
 });
 test('clearing the authored target also leaves its component editing mode',()=>{
  const c=selectionTargetContext();c.clearActiveSceneObjectSelection();assert.equal(c.editing,false);assert.equal(c.exits,1);assert.equal(c.activeSceneObjectId,null);
+});
+
+
+test('same-object reselection keeps the installed component host in sole control of the gizmo',()=>{
+ const c=selectionTargetContext(),object=new THREE.Group();object.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial()));object.updateMatrixWorld(true);c.sceneObjects[0].object=object;
+ const helper={visible:true};c.transformControls={object,visible:true,enabled:true,attach(target){this.object=target;this.visible=true;},detach(){this.object=undefined;this.visible=false;},getHelper:()=>helper,setSpace(){}};
+ c.selectionTransforms=null;c.viewportGizmosVisible=true;c.transformPreferences={orientation:'world'};
+ vm.runInContext(grab('attachViewportGizmo'),c);
+ const body={closest:()=>null},document=Object.assign(new EventTarget(),{body,activeElement:body});
+ const camera=new THREE.PerspectiveCamera(50,1,.01,100);camera.position.set(0,0,5);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+ const {api}=installPolyEditMode({document,viewport:{contains:()=>false,matches:()=>false},canvas:{getBoundingClientRect:()=>({left:0,top:0,right:400,bottom:400,width:400,height:400})},camera,objectFor:id=>c.sceneObjects.find(o=>o.id===id)?.object,selectedId:()=>c.activeSceneObjectId,gizmo:c.transformControls});
+ c.window.kaminosPolyEdit=api;api.enter('mesh');
+ assert.deepEqual([c.transformControls.visible,c.transformControls.enabled,helper.visible],[false,false,false]);
+ c.setSceneSelection(['mesh']);
+ assert.equal(api.active(),true,'reselecting the same object retains component editing');
+ assert.deepEqual([c.transformControls.visible,c.transformControls.enabled,helper.visible],[false,false,false],'same-object selection cannot revive the object tool');
+ api.exit();assert.deepEqual([c.transformControls.visible,c.transformControls.enabled,helper.visible],[true,true,true],'leaving component editing restores the prior object tool');
+ assert.equal(c.transformControls.object,object);
 });
