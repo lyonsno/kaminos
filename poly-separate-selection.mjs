@@ -7,7 +7,7 @@
 //   and both openings are capped: Bisect, Fill and Separate in one step.
 import {parseGlb,readTrianglePrimitives,writeDerivedGlb} from './poly-glb-io.mjs';
 import {buildPolyMesh,selectLinkedFaces} from './poly-mesh-core.mjs';
-import {bisectFaces,cutBarrier,extractFaces,sectionCap} from './poly-mesh-edit.mjs';
+import {bisectFaces,cutBarrier,extractFaces,followCut,sectionCap} from './poly-mesh-edit.mjs';
 
 // The mesh's primitives edit as one face set, in order, each with its own vertex block, as
 // Edit Mode merges them. A derived part's second material is its cut cap, and stays one.
@@ -52,7 +52,7 @@ export function separateSelection(sourceBytes,faceMask,{geometry=null,name='Part
 export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='Part',restName=`${name} remainder`,source=null,fill='outline'}={}) {
   const {primitive,arrays,faces,selected}=editedPrimitive(sourceBytes,faceMask,geometry);
   if(!selected)throw Error('Select the faces to slice, around where the cut goes');
-  const cut=bisectFaces(arrays,faceMask,plane);
+  const {mask:cutMask,followed}=followCut(arrays,faceMask,plane),cut=bisectFaces(arrays,cutMask,plane);
   if(!cut.cutVertices)throw Error('The line does not cross the selected faces');
   // Grow each side from its own faces along the cut. The smaller side is the part; everything
   // else, including selected debris the cut never touches, stays with the remainder.
@@ -62,9 +62,9 @@ export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='P
   let aboveFaces=0,belowFaces=0;
   for(let f=0;f<mesh.faceCount;f++){if(above[f]&&below[f])throw Error('The cut does not separate the mesh: the two sides still join elsewhere. Select the whole junction, or move the line');aboveFaces+=above[f];belowFaces+=below[f];}
   const partAbove=aboveFaces<=belowFaces,partMask=partAbove?above:below;
-  const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',plane:{point:[...plane.point],normal:[...plane.normal]},selectedFaces:selected,sourceFaces:faces,cutVertices:cut.cutVertices};
+  const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',plane:{point:[...plane.point],normal:[...plane.normal]},selectedFaces:selected,followedFaces:followed,sourceFaces:faces,cutVertices:cut.cutVertices};
   const piece=(pieceArrays,keep,label,side)=>{
-    const cap=sectionCap(pieceArrays,arrays,faceMask,plane,{side,fill});
+    const cap=sectionCap(pieceArrays,arrays,cutMask,plane,{side,fill});
     const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains}]};
     return {bytes:derived(sourceBytes,primitive,cap.arrays,label,receipt),faces:cap.arrays.indices.length/3,capFaces:cap.capFaces,openChains:cap.openChains,receipt};
   };

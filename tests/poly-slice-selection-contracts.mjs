@@ -38,8 +38,21 @@ assert.deepEqual(yRange(sliceSelection(glb,lower,plane).part.bytes),[0,.5]);
 assert.deepEqual(yRange(sliceSelection(glb,all,{point:[0,1.5,0],normal:[0,-1,0]}).part.bytes),[1.5,2]);
 
 // Refusals: a cut that leaves the sides joined elsewhere, a line that misses, nothing selected.
+// One wall is enough: the cut follows the line around the column.
 const oneWall=Uint8Array.from({length:faces},(_,f)=>f<2?1:0);
-assert.throws(()=>sliceSelection(glb,oneWall,plane),/does not separate the mesh/);
+assert.deepEqual(yRange(sliceSelection(glb,oneWall,plane).part.bytes),[0,.5]);
+// A loop the plane crosses in two places that do not touch: selecting one crossing cannot
+// separate it, and following the cut cannot reach the other.
+{
+  const L=Float32Array.from([0,0,0, 2,0,0, 2,2,0, 0,2,0, 0,0,1, 2,0,1, 2,2,1, 0,2,1]),Q=[];
+  for(let i=0;i<4;i++){const j=(i+1)%4;Q.push(i,j,j+4,i,j+4,i+4);}
+  const LI=Uint32Array.from(Q),lb=new Uint8Array(L.byteLength+LI.byteLength);lb.set(new Uint8Array(L.buffer),0);lb.set(new Uint8Array(LI.buffer),L.byteLength);
+  const loop=encodeGlb({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1}]}],
+    buffers:[{byteLength:lb.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:L.byteLength},{buffer:0,byteOffset:L.byteLength,byteLength:LI.byteLength}],
+    accessors:[{bufferView:0,componentType:5126,count:8,type:'VEC3'},{bufferView:1,componentType:5125,count:LI.length,type:'SCALAR'}]},lb);
+  // Faces 2 and 3 are the side at x = 2; faces 6 and 7 the side at x = 0.
+  assert.throws(()=>sliceSelection(loop,Uint8Array.from([0,0,1,1,0,0,0,0]),{point:[0,1,0],normal:[0,1,0]}),/does not separate the mesh/);
+}
 assert.throws(()=>sliceSelection(glb,all,{point:[0,5,0],normal:[0,1,0]}),/does not cross the selected faces/);
 assert.throws(()=>sliceSelection(glb,new Uint8Array(faces),plane),/Select the faces to slice/);
 
@@ -78,5 +91,14 @@ assert.equal(separateSelection(column,someFaces).part.faces,1,'Separate works on
   const piece=out.rest.bytes,[first]=readTrianglePrimitives(piece),before=first.positions.length/3;
   const [after]=readTrianglePrimitives(moveOrigin(piece,[0,1,0]).bytes);
   assert.equal(after.positions.length/3,before,'Origin to Selection does not duplicate vertices');
+}
+
+// A selection that misses a face crossing the line (a long triangle whose centre lies outside
+// the box) still cuts cleanly: the cut follows the line into crossing faces that touch it.
+{
+  const gappy=Uint8Array.from({length:faces},(_,f)=>f>=1&&f<8?1:0);
+  const cut=sliceSelection(glb,gappy,plane);
+  assert.deepEqual(yRange(cut.part.bytes),[0,.5]);assert.ok(closed(cut.part.bytes)&&closed(cut.rest.bytes),'both pieces close');
+  assert.equal(cut.part.receipt.operations[0].followedFaces,1,'the receipt says the cut followed one unselected face');
 }
 

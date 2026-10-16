@@ -69,6 +69,23 @@ function triangulateConvex(polygon,P,emit){
   if(area2(P,p[0],p[1],p[2])>tiny)emit(p[0],p[1],p[2]);
 }
 
+// Extend a cut selection along the cut: a face that crosses the plane and shares a vertex with
+// a face already being cut joins it, until the cut closes. A box selects faces by their centre,
+// so long triangles crossing the line can fall outside it and would hold the sides together.
+export function followCut(arrays,mask,plane,{epsilon}={}) {
+  checkedFaceMask(arrays,mask);
+  const cutPlane=checkedPlane(plane),mesh=buildPolyMesh(arrays),d=vertexDistances(mesh,cutPlane,epsilon??defaultEpsilon(arrays.positions));
+  const {cornerVertex:CV,vertexFaceOffsets:VO,vertexFaces:VF}=mesh,out=Uint8Array.from(mask),stack=[];
+  const crosses=f=>{let above=false,below=false;for(let c=3*f;c<3*f+3;c++){const x=d[CV[c]];above||=x>0;below||=x<0;}return above&&below;};
+  for(let f=0;f<mesh.faceCount;f++)if(out[f]&&crosses(f))stack.push(f);
+  let followed=0;
+  while(stack.length){
+    const f=stack.pop();
+    for(let c=3*f;c<3*f+3;c++){const v=CV[c];for(let i=VO[v];i<VO[v+1];i++){const g=VF[i];if(!out[g]&&crosses(g)){out[g]=1;followed++;stack.push(g);}}}
+  }
+  return {mask:out,followed};
+}
+
 // Cut the selected faces with a plane. Faces sharing a cut edge with the selection
 // absorb its cut point without being split, so no T-junction opens a crack.
 export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
