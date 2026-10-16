@@ -26,12 +26,27 @@ for(const rotated of [false,true])for(const share of [0,.4,1])for(const [right,u
  const look=createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:1,maxPitch:.7,neckShare:share});
  const out=look.apply(pose,{target:target.toArray(),placementMatrix:placement.toArray(),strength:1});
  assert.ok(alignment(out.pose,target)>alignment(pose,target)+.025,`actual muzzle direction must improve, not just report a signed angle (rotated=${rotated}, neckShare=${share})`);
- if(share===0)assert.ok(alignment(out.pose,target)>1-1e-9,'Unclamped head-only aim must actually point along the supplied direction');
+ assert.ok(alignment(out.pose,target)>1-1e-9,`Unclamped aim must actually point along the supplied direction (rotated=${rotated}, neckShare=${share})`);
  assert.deepEqual(pose,before,'aiming cannot mutate the baseline');
  for(const name of ['chest','leg'])assert.deepEqual(out.pose.bones.find(b=>b.name===name),pose.bones.find(b=>b.name===name),'chest and limb stay exactly unchanged');
  const head=out.pose.bones.find(b=>b.name==='head'),tip=out.pose.bones.find(b=>b.name==='head-end');
  const expectedTip=new THREE.Matrix4().fromArray(head.worldMatrix).multiply(new THREE.Matrix4().fromArray(tip.localMatrix));
  assert.ok(tip.worldMatrix.every((v,i)=>Math.abs(v-expectedTip.elements[i])<1e-9),'head descendants must follow the corrected head in cached world matrices');
 }
+}
+// Nearby targets: rotating the neck displaces the head, so the head's share of
+// the turn must aim from where the head actually ends up (review F1 fixture).
+{
+ const near=[matrix([0,0,0]),matrix([0,1,0]),matrix([0,0,1])],nearNames=['chest','neck','head'],nearParents=[null,'chest','neck'];
+ const world=new Map(),actor=new THREE.Matrix4();
+ const bones=nearNames.map((name,i)=>{const m=(nearParents[i]?world.get(nearParents[i]):actor).clone().multiply(near[i]);world.set(name,m);return {name,parent:nearParents[i],localMatrix:near[i].toArray(),worldMatrix:m.toArray(),skinMatrix:actor.toArray()};});
+ const pose={actorMatrix:actor.toArray(),bones},rigFrame={bones:nearNames.map((name,i)=>({name,parent:nearParents[i],restMatrix:rows(world.get(name))}))};
+ placement=new THREE.Matrix4();
+ for(const target of [[.1,1,1.1],[-.1,1,1.1],[.3,1.2,1.4],[.2,.9,1.5]].map(p=>new THREE.Vector3(...p)))for(const share of [.2,.4,.7]){
+  const look=createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:1,maxPitch:.7,neckShare:share});
+  const out=look.apply(pose,{target:target.toArray(),strength:1});
+  assert.ok(alignment(out.pose,target)>alignment(pose,target),`a nearby unclamped target must not turn the muzzle away (target=${target.toArray()}, neckShare=${share}, after=${alignment(out.pose,target)})`);
+  assert.ok(alignment(out.pose,target)>1-1e-9,`an unclamped nearby target is reached exactly from the displaced head (target=${target.toArray()}, neckShare=${share}, after=${alignment(out.pose,target)})`);
+ }
 }
 console.log('Actual muzzle direction improves through distinct neck/head frames and all descendant world transforms stay coherent');

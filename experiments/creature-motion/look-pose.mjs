@@ -54,7 +54,7 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   const headPosition=new THREE.Vector3().setFromMatrixPosition(headWorld);
   const headOrientation=decompose(headBone.worldMatrix).q;
   const targetInPose=new THREE.Vector3(...target).applyMatrix4(placement.clone().invert());
-  const offset=targetInPose.sub(headPosition);
+  const offset=targetInPose.clone().sub(headPosition);
   const distance=offset.length();
   if(!(distance>1e-4))return {...unmodified,reason:'target too near the head: original pose preserved'};
   const dirWorld=offset.multiplyScalar(1/distance);
@@ -70,24 +70,20 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
 
   const clampedYaw=Math.max(-maxYaw,Math.min(maxYaw,yaw))*strength;
   const clampedPitch=Math.max(-maxPitch,Math.min(maxPitch,pitch))*strength;
+  const fullYaw=Math.max(-maxYaw,Math.min(maxYaw,yaw)),fullPitch=Math.max(-maxPitch,Math.min(maxPitch,pitch));
 
-  // Build the bounded, strength-scaled correction once, in the shared
-  // forward/up/right basis, then distribute fractions across neck and head
-  // as local rotations via a fresh identity->correction slerp (no accumulation).
-  const yawQuat=new THREE.Quaternion().setFromAxisAngle(upOrtho,clampedYaw);
-  const pitchQuat=new THREE.Quaternion().setFromAxisAngle(rightLocal,-clampedPitch);
-  const fullCorrection=yawQuat.clone().multiply(pitchQuat).normalize();
+  // Build a bounded correction in the head's forward/up/right basis. Each joint
+  // gets a fresh identity->correction rotation (no accumulation).
   const identityQuat=new THREE.Quaternion();
-  // The correction was expressed in head-local axes. Neck has different
-  // animated/rest axes: conjugate the neck share into its own local frame.
+  const correctionOf=(y,p)=>new THREE.Quaternion().setFromAxisAngle(upOrtho,y).multiply(new THREE.Quaternion().setFromAxisAngle(rightLocal,-p)).normalize();
+  // The correction was expressed in head-local axes; neck has different
+  // animated/rest axes, so conjugate the neck's share into its own frame.
   const headInNeck=decompose(neckBone.worldMatrix).q.invert().multiply(headOrientation);
-  const neckCorrection=headInNeck.clone().multiply(identityQuat.clone().slerp(fullCorrection,neckShare)).multiply(headInNeck.clone().invert()).normalize();
-  const headCorrection=identityQuat.clone().slerp(fullCorrection,1-neckShare);
+  const neckShareOf=share=>headInNeck.clone().multiply(identityQuat.clone().slerp(correctionOf(fullYaw,fullPitch),share)).multiply(headInNeck.clone().invert()).normalize();
 
   const neckOriginal=decompose(neckBone.localMatrix);
   const headOriginal=decompose(headBone.localMatrix);
-  const neckLocalArray=compose(neckOriginal.p,neckOriginal.q.clone().multiply(neckCorrection).normalize(),neckOriginal.s);
-  const headLocalArray=compose(headOriginal.p,headOriginal.q.clone().multiply(headCorrection).normalize(),headOriginal.s);
+  const neckLocalWith=q=>compose(neckOriginal.p,neckOriginal.q.clone().multiply(q).normalize(),neckOriginal.s);
 
   // Any bone whose ancestor chain passes through neck (including neck and
   // head itself, and every descendant of head such as a head-end tip) moves;
@@ -98,16 +94,48 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
    while(walk!=null){if(walk===neck)return true;walk=byName.get(walk)?.parent??null;}
    return false;
   };
-  const resolvedWorld=new Map();
-  function worldOf(name){
-   if(resolvedWorld.has(name))return resolvedWorld.get(name);
-   const bone=byName.get(name);
-   if(!isDescendantOfNeck(name)){const world=new THREE.Matrix4().fromArray(bone.worldMatrix);resolvedWorld.set(name,world);return world;}
-   const local=name===neck?neckLocalArray:name===head?headLocalArray:bone.localMatrix;
-   const parentWorld=bone.parent==null?new THREE.Matrix4():worldOf(bone.parent);
-   const world=parentWorld.clone().multiply(new THREE.Matrix4().fromArray(local));
-   resolvedWorld.set(name,world);return world;
+  function resolver(locals){
+   const resolved=new Map();
+   return function worldOf(name){
+    if(resolved.has(name))return resolved.get(name);
+    const bone=byName.get(name);
+    if(!isDescendantOfNeck(name)){const world=new THREE.Matrix4().fromArray(bone.worldMatrix);resolved.set(name,world);return world;}
+    const parentWorld=bone.parent==null?new THREE.Matrix4():worldOf(bone.parent);
+    const world=parentWorld.clone().multiply(new THREE.Matrix4().fromArray(locals.get(name)??bone.localMatrix));
+    resolved.set(name,world);return world;
+   };
   }
+
+  // Rotating the neck moves the head whenever the neck-to-head offset is not
+  // along the rotation axis. Aim the head's remaining turn from where it
+  // actually ends up, within whatever angular budget the neck left over.
+  function distribute(share){
+   const neckFull=neckShareOf(share);
+   const displacedHead=resolver(new Map([[neck,neckLocalWith(neckFull)]]))(head);
+   const residualOffset=targetInPose.clone().sub(new THREE.Vector3().setFromMatrixPosition(displacedHead));
+   if(!(residualOffset.length()>1e-4))return {neckFull,headFull:identityQuat.clone(),reaches:false};
+   const d=residualOffset.normalize().applyQuaternion(decompose(displacedHead.toArray()).q.invert());
+   const rx=d.dot(rightLocal),ry=d.dot(upOrtho),rz=d.dot(forwardLocal);
+   const wantYaw=Math.atan2(rx,rz),wantPitch=Math.atan2(ry,Math.max(Math.hypot(rx,rz),1e-9));
+   const yawBudget=Math.max(0,maxYaw-share*Math.abs(fullYaw)),pitchBudget=Math.max(0,maxPitch-share*Math.abs(fullPitch));
+   const residualYaw=Math.max(-yawBudget,Math.min(yawBudget,wantYaw)),residualPitch=Math.max(-pitchBudget,Math.min(pitchBudget,wantPitch));
+   return {neckFull,headFull:correctionOf(residualYaw,residualPitch),reaches:residualYaw===wantYaw&&residualPitch===wantPitch};
+  }
+  // Near a target the neck can sweep the head past it. When the request is
+  // reachable head-only, give the neck the largest share (up to neckShare)
+  // that still lets the head finish the aim; beyond reach, keep neckShare.
+  let solution=distribute(neckShare);
+  if(!solution.reaches&&neckShare>0&&fullYaw===yaw&&fullPitch===pitch&&distribute(0).reaches){
+   let lo=0,hi=neckShare;
+   for(let i=0;i<24;i++){const mid=(lo+hi)/2;if(distribute(mid).reaches)lo=mid;else hi=mid;}
+   solution=distribute(lo);
+  }
+  const {neckFull,headFull}=solution;
+
+  // Strength blends both joints' corrections from identity.
+  const neckLocalArray=neckLocalWith(identityQuat.clone().slerp(neckFull,strength));
+  const headLocalArray=compose(headOriginal.p,headOriginal.q.clone().multiply(identityQuat.clone().slerp(headFull,strength)).normalize(),headOriginal.s);
+  const worldOf=resolver(new Map([[neck,neckLocalArray],[head,headLocalArray]]));
 
   const restMatrixOf=name=>{const spec=specs.get(name);if(!spec)fail(`rigFrame has no Bone named "${name}" to recompute a coherent skin matrix`);return new THREE.Matrix4().set(...spec.restMatrix.flat());};
   const inverseActorForSkin=new THREE.Matrix4().fromArray(pose.actorMatrix).invert();
