@@ -65,9 +65,9 @@ export function prepareStoneFromGlb(bytes, { size, cellSize, surfaceTolerance=0 
     if (!(referenceVolume > 0)) throw new Error('Imported source must admit a positive oriented solid');
     const solid=surfaceTolerance>0?own(reference.simplify(surfaceTolerance)):reference;
     const preparedVolume=solid.volume(),relativeVolumeError=Math.abs(preparedVolume-referenceVolume)/referenceVolume;
-    if(!(Number.isFinite(preparedVolume)&&preparedVolume>0&&Number.isFinite(relativeVolumeError))||relativeVolumeError>.01)throw new Error('Mechanical surface approximation changes admitted volume by over one percent');
     const componentVolumes=value=>{const parts=value.decompose();try{return parts.map(p=>p.volume());}finally{for(const p of parts)p.delete();}};
     const mechanicalPreparation={route:surfaceTolerance>0?'manifold-3.5.4-simplify-within-tolerance-v1':'manifold-3.5.4-source-v1',sourceSha256:hash(bytes),surfaceTolerance,referenceVolume,preparedVolume,relativeVolumeError,referenceTriangles:reference.numTri(),preparedTriangles:solid.numTri(),referenceComponentVolumes:componentVolumes(reference),preparedComponentVolumes:componentVolumes(solid)};
+    if(!(Number.isFinite(preparedVolume)&&preparedVolume>0&&Number.isFinite(relativeVolumeError))||relativeVolumeError>.01){const error=new Error('Mechanical surface approximation changes admitted volume by over one percent');error.mechanicalPreparation=mechanicalPreparation;throw error;}
     const grid = size.map(s => Math.ceil(s / cellSize)), spacing = size.map((s, a) => s / grid[a]);
     const cells = [], byGrid = new Map();
     for (let z = 0; z < grid[2]; z++) for (let y = 0; y < grid[1]; y++) for (let x = 0; x < grid[0]; x++) {

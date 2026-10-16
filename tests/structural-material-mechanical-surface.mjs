@@ -26,3 +26,12 @@ test('zero tolerance keeps the prior source geometry and volume',()=>{
  assert.deepEqual(explicit.cells,original.cells);assert.equal(explicit.volume,original.volume);
  assert.equal(explicit.mechanicalPreparation?.surfaceTolerance,0);
 });
+test('rejected approximation preserves the observed volume and component inventory',()=>{
+ assert.throws(()=>prepareStoneFromGlb(bytes,{...options,surfaceTolerance:.5}),error=>{
+  assert.match(error.message,/volume/);const observed=error.mechanicalPreparation;
+  assert(observed,'Rejected geometry must retain measured evidence, not only its rejection message');
+  assert.equal(observed.surfaceTolerance,.5);assert(observed.relativeVolumeError>.01);
+  assert(observed.referenceVolume>0);assert(Number.isFinite(observed.preparedVolume));
+  assert(observed.referenceComponentVolumes.length>0);assert(Array.isArray(observed.preparedComponentVolumes));return true;
+ });
+});

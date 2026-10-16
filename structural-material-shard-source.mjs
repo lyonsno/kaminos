@@ -16,4 +16,4 @@ try{
   report.vertices=Array.from({length:g.properties.length/g.numProp},(_,i)=>g.properties.slice(i*g.numProp,i*g.numProp+3));
   report.triangles=Array.from({length:g.indices.length/3},(_,i)=>g.indices.slice(i*3,i*3+3));
   report.route='imported-whole-solid-manifold-3.5.4';report.status='passed';report.phase='complete';save();
-}catch(error){report.status='failed';report.failure={message:error.message,stack:error.stack};save();throw error;}
+}catch(error){report.status='failed';if(error.mechanicalPreparation)report.mechanicalPreparation=error.mechanicalPreparation;report.failure={message:error.message,stack:error.stack};save();throw error;}
