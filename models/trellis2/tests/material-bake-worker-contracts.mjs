@@ -12,7 +12,9 @@ import {createBrowserMaterialBaker} from '../material-bake.js';
 import {NodeTrellisUVWorker as NodeModuleWorker} from '../node-uv-worker.mjs';
 import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
 
-const sha=a=>createHash('sha256').update(new Uint8Array(a.buffer,a.byteOffset,a.byteLength)).digest('hex');
+// Hash typed-array views and raw ArrayBuffers (the GLB is an ArrayBuffer).
+const bytes=a=>a instanceof ArrayBuffer?new Uint8Array(a):new Uint8Array(a.buffer,a.byteOffset,a.byteLength);
+const sha=a=>createHash('sha256').update(bytes(a)).digest('hex');
 const spec=MESH_FINISHING_CASES['simplify-route'],{vertices,triangles}=spec.build();
 const clean=cleanupAndSimplifyPreservingSurface(vertices,triangles,{targetFaces:spec.targetFaces});
 const surface={vertices:clean.vertices,triangles:clean.faces,metadata:{}};
@@ -50,6 +52,13 @@ const viaProvider=await finishTrellisMesh(surface,{materialFields,textureSize,un
 const inThread=await finishTrellisMesh(surface,{materialFields,textureSize,unwrapMesh});
 assert.equal(calls,1,'finishTrellisMesh calls the bakeMaterial provider');
 assert.equal(sha(viaProvider.textures.baseColor),sha(inThread.textures.baseColor),'provider bake equals the built-in bake');
-assert.equal(sha(viaProvider.glb),sha(inThread.glb),'same GLB either way');
+// The GLB binary chunk (geometry and textures) is identical; its JSON records
+// where the bake ran (and run timings, which differ every run).
+const glb=g=>{const d=new DataView(g),jl=d.getUint32(12,true);
+  return {json:JSON.parse(new TextDecoder().decode(new Uint8Array(g,20,jl))),bin:new Uint8Array(g,20+jl+8)};};
+const a=glb(viaProvider.glb),b=glb(inThread.glb);
+assert.ok(a.bin.length>1000&&b.bin.length>1000,'both exports carry a real binary chunk');
+assert.equal(sha(a.bin),sha(b.bin),'same GLB geometry and texture bytes either way');
+assert.equal(a.json.extras.trellis.materialPostprocess.execution,'module-worker','the GLB records the worker bake');
 await assert.rejects(finishTrellisMesh(surface,{materialFields,textureSize,unwrapMesh,bakeMaterial:async()=>({width:textureSize})}),/bake/);
 assert.rejects(finishTrellisMesh(surface,{materialFields,textureSize,unwrapMesh,bakeMaterial:'bake'}),/bake/);
