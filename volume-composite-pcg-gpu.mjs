@@ -1,11 +1,12 @@
 import {compositeDivergence,COMPOSITE_GRID_ID} from './volume-composite-grid.mjs';
+import {createCompositeSolidsGPU} from './volume-composite-solids-gpu.mjs';
 
 // Dormant fixed-topology, diagonal-preconditioned CG candidate. Pressure is warm
 // across steps; RHS, directions and reductions are rebuilt from current inputs.
 // All iteration decisions stay on GPU. The explicit dispatch budget is still
 // encoded in full; converged solves skip arithmetic, not command submission.
 // readback adjudicates corrected face flux, independently of recursive residual.
-export function createCompositePCGGPU(device,grid,{tolerance=1e-5,uniformCounts=false}={}){
+export function createCompositePCGGPU(device,grid,{tolerance=1e-5,uniformCounts=false,residentSolids=false}={}){
   if(!Number.isFinite(tolerance)||tolerance<=0||!Number.isFinite(Math.fround(tolerance))||Math.fround(tolerance)===0)throw new Error('positive float32 tolerance required');
   const n=grid.cells.length,m=grid.faces.length,groups=Math.ceil(n/64);
   if(!n||!m)throw new Error('PCG requires nonempty cells and faces');
@@ -25,11 +26,13 @@ export function createCompositePCGGPU(device,grid,{tolerance=1e-5,uniformCounts=
   let nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,control,partials;
   try{
     nodeBuffer=alloc('PCG nodes',nodes.byteLength,nodes);const packed=Float32Array.from(links);linkBuffer=alloc('PCG adjacency',packed.byteLength,packed);
-    faceBuffer=alloc('PCG faces',m*16,Float32Array.from(grid.faces.flatMap(f=>[f.a,f.b,f.area/f.distance,0])));
+    faceBuffer=alloc('PCG faces',m*16,Float32Array.from(grid.faces.flatMap(f=>[f.a,f.b,f.area/f.distance,f.area/f.distance])));
     fluxBuffer=alloc('PCG shared flux',m*4);cells=alloc('PCG cell state',n*32);control=alloc('PCG control',32);
     partials=[alloc('PCG partial reduction',groups*16)];let count=groups;
     while(count>1){count=Math.ceil(count/64);partials.push(alloc('PCG reduction level',count*16));}
   }catch(e){for(const b of owned)b.destroy();throw e;}
+  const solids=residentSolids?createCompositeSolidsGPU(device,grid,{nodes:nodeBuffer,links:linkBuffer,faces:faceBuffer,flux:fluxBuffer,cells}):null;
+  if(solids)shaders.push(...solids.shaders);
   const common=/* wgsl */`
 fn finite(x:f32)->bool{return abs(x)<=3.402823466e38;}
 fn combine(a:vec4<f32>,b:vec4<f32>)->vec4<f32>{return vec4<f32>(a.x+b.x,0.0,max(a.z,b.z),max(a.w,b.w));}
@@ -46,6 +49,7 @@ struct Cell{p:f32,r:f32,d:f32,ad:f32,rhs:f32,expansion:f32,pad0:f32,pad1:f32}
 @group(0) @binding(5) var<storage,read_write> partial:array<vec4<f32>>;
 // rho,alpha,beta,active,reserved,iterations,failure,trueResidual
 @group(0) @binding(6) var<storage,read_write> ctrl:array<f32>;
+${residentSolids?`@group(0) @binding(${uniformCounts?8:7}) var<storage,read> active:array<u32>;`:''}
 ${common}
 fn emit(value:vec4<f32>,lane:u32,group:u32){
   scratch[lane]=value;workgroupBarrier();
@@ -55,13 +59,14 @@ fn emit(value:vec4<f32>,lane:u32,group:u32){
 fn component(i:u32,direction:bool)->f32{if(direction){return cells[i].d;}return cells[i].p;}
 fn product(i:u32,direction:bool)->f32{
   let row=nodes[i];var v=component(i,direction)*row.w;
-  for(var j=0u;j<u32(row.y);j++){let link=links[u32(row.x)+j];if(link.x>=0.0){let k=u32(link.x);v-=link.y*component(k,direction);}}
+  for(var j=0u;j<u32(row.y);j++){let link=links[u32(row.x)+j];if(link.x>=0.0){let k=u32(link.x);v-=${residentSolids?'faces[u32(link.z)].z':'link.y'}*component(k,direction);}}
   return v;
 }
 @compute @workgroup_size(64) fn recover(@builtin(global_invocation_id) id:vec3<u32>){if(id.x<N&&ctrl[6]>0.0){cells[id.x].p=0.0;}}
 @compute @workgroup_size(64) fn initialize(@builtin(global_invocation_id) id:vec3<u32>,@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) group:vec3<u32>){
   let i=id.x;var value=vec4<f32>(0.0);
   if(i<N){let row=nodes[i];var sum=0.0;var bad=0.0;
+    ${residentSolids?'if(active[i]==0u){cells[i].expansion=0.0;}':''}
     for(var j=0u;j<u32(row.y);j++){let link=links[u32(row.x)+j];let q=flux[u32(link.z)];sum+=q*link.w;if(!finite(q)){bad=1.0;}}
     let b=cells[i].expansion*row.z-sum;let r=b-product(i,false);let z=r/max(row.w,1e-30);
     cells[i].rhs=b;cells[i].r=r;cells[i].d=z;
@@ -87,10 +92,10 @@ fn product(i:u32,direction:bool)->f32{
 @compute @workgroup_size(64) fn project(@builtin(global_invocation_id) id:vec3<u32>){
   let i=id.x;if(i<M&&ctrl[6]==0.0){let f=faces[i];var pb=0.0;if(f.y>=0.0){pb=cells[u32(f.y)].p;}flux[i]+=f.z*(cells[u32(f.x)].p-pb);}
 }`.replace(/\b(N|M)\b/g,x=>uniformCounts?(x==='N'?'counts.x':'counts.y'):x));
-  const layout=device.createBindGroupLayout({entries:Array.from({length:uniformCounts?8:7},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7?'uniform':binding<3?'read-only-storage':'storage'}}))});
+  const layout=device.createBindGroupLayout({entries:Array.from({length:7+Number(uniformCounts)+Number(residentSolids)},(_,binding)=>({binding,visibility:GPUShaderStage.COMPUTE,buffer:{type:binding===7&&uniformCounts?'uniform':binding<3||binding===7+Number(uniformCounts)?'read-only-storage':'storage'}}))});
   const pl=device.createPipelineLayout({bindGroupLayouts:[layout]});
   const pipelines=Object.fromEntries(['recover','initialize','apply','update','measure','direction','project'].map(entryPoint=>[entryPoint,device.createComputePipeline({layout:pl,compute:{module:main,entryPoint}})]));
-  const bind=device.createBindGroup({layout,entries:[nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,partials[0],control,...(counts?[counts]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const bind=device.createBindGroup({layout,entries:[nodeBuffer,linkBuffer,faceBuffer,fluxBuffer,cells,partials[0],control,...(counts?[counts]:[]),...(solids?[solids.active]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
   const reductions=[];let count=groups;
   for(let level=1;level<partials.length;level++){
     const s=shader('PCG hierarchical reduction',/* wgsl */`
@@ -135,6 +140,7 @@ ${uniformCounts?'@group(0) @binding(2) var<uniform> counts:vec4<u32>;':''}
   const validate=iterations=>{alive();if(!Number.isInteger(iterations)||iterations<0)throw new Error('explicit nonnegative iteration budget required');};
   const encode=(encoder,targetBuffer,iterations,reset)=>{
     if(reset){encoder.clearBuffer(cells);encoder.clearBuffer(control);}
+    solids?.encode(encoder);
     const group=device.createBindGroup({layout:intake.getBindGroupLayout(0),entries:[targetBuffer,cells,...(counts?[counts]:[])].map((buffer,binding)=>({binding,resource:{buffer}}))});
     const pass=encoder.beginComputePass({label:'warm composite PCG'});
     const call=(pipeline,group,count)=>{pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(count);};
@@ -147,6 +153,7 @@ ${uniformCounts?'@group(0) @binding(2) var<uniform> counts:vec4<u32>;':''}
     warm=hasPressure&&!reset;hasPressure=true;budget=iterations;hasInput=false;encoded=generation;
   };
   return {shaders,fluxBuffer,
+    bindSolids(textures){alive();if(!solids)throw Error('resident solids not enabled');solids.bind(textures);},
     setInput(flux,target=new Float32Array(n)){
       alive();if(flux.length!==m||target.length!==n||!flux.every(Number.isFinite)||!target.every(Number.isFinite))throw new Error('finite complete flux/target arrays required');
       const q=Float32Array.from(flux),t=Float32Array.from(target);if(!q.every(Number.isFinite)||!t.every(Number.isFinite))throw new Error('input exceeds float32 range');
@@ -170,6 +177,6 @@ ${uniformCounts?'@group(0) @binding(2) var<uniform> counts:vec4<u32>;':''}
         return {flux,pressure,target,converged,receipt:{identity:COMPOSITE_GRID_ID,route:'gpu-composite-pcg-candidate',inputRoute,generation:captured,iterations:c[5],iterationBudget:budget,warmStartRequested:warm,tolerance,maxDivergenceError,gpuTrueResidual:c[7],breakdown:c[6]!==0,converged,targetFinite,cells:n,faces:m,innerFeedback:true,liveFlame:false}};
       }finally{b.destroy();}
     },
-    destroy(){if(!destroyed){owned.forEach(b=>b.destroy());destroyed=true;}},
+    destroy(){if(!destroyed){solids?.destroy();owned.forEach(b=>b.destroy());destroyed=true;}},
   };
 }

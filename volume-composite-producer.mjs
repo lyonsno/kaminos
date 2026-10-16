@@ -11,13 +11,14 @@ function mask(field,shape,label){
   if(typeof field.revision!=='string'||!field.revision.length)throw new Error(`${label} solid revision required (including disabled state)`);
   return field.cells.slice();
 }
-export function createCompositeProducerLayout({geometry,fineSolids,coarseSolids}){
+export function createCompositeProducerLayout({geometry,fineSolids,coarseSolids,fixedTopology=false}){
   // Validate geometric ownership before interpreting producer arrays.
   const h=geometry.cellWidth/geometry.fine.ratio;
   const fineShape=geometry.fine.max.map((v,a)=>Math.round((v-geometry.fine.min[a])/h));
   const near=mask(fineSolids,fineShape,'fine'),outer=mask(coarseSolids,geometry.shape,'coarse');
   const inFine=p=>p.every((v,a)=>v>=geometry.fine.min[a]&&v<geometry.fine.max[a]);
   const grid=createCompositeGrid({...geometry,solid:p=>{
+    if(fixedTopology)return false;
     const refined=inFine(p),origin=refined?geometry.fine.min:geometry.min??[0,0,0],w=refined?h:geometry.cellWidth;
     const q=p.map((v,a)=>Math.round((v-origin[a])/w-.5));
     return (refined?near:outer)[index(q,refined?fineShape:geometry.shape)]!==0;
@@ -31,7 +32,7 @@ export function createCompositeProducerLayout({geometry,fineSolids,coarseSolids}
     if(q.some((v,a)=>v<0||v>=fineShape[a]))throw new Error('fine target coordinate outside producer');
     targetCoordinates.set([...q,1],4*i);
   });
-  return {grid,fineShape,targetCoordinates,solidRevisions:{fine:fineSolids.revision,coarse:coarseSolids.revision}};
+  return {grid,fineShape,targetCoordinates,fixedTopology,solidRevisions:{fine:fineSolids.revision,coarse:coarseSolids.revision}};
 }
 export function assertCompositeSolidRevisions(layout,revisions){
   if(!revisions)throw new Error('effective solid revisions required');
