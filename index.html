@@ -7199,8 +7199,9 @@ function renderSceneObjectList() {
     const key = button.dataset.outlineToggle;
     if (sceneOutlineCollapsed.has(key)) sceneOutlineCollapsed.delete(key); else sceneOutlineCollapsed.add(key);
     renderSceneObjectList();
+    list.querySelector(`[data-outline-toggle="${CSS.escape(key)}"]`)?.focus();
   }));
-  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
