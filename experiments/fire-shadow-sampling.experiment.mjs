@@ -6,16 +6,16 @@ import {installRenderingNumberControl} from '../rendering-number-controls.mjs';
 export default {
   id:'fire-shadow-sampling',title:'Fire shadow sampling',
   async create({host,inputs,record,updateInputs=()=>{}}) {
-    return createFireShadowSettings({session:await host.scene.open(),document:host.controls.document,inputs,record,updateInputs});
+    return createFireShadowSettings({session:await host.scene.open(),document:host.controls.document,inputs,record,updateInputs,diagnostics:true});
   },
 };
 
 // The ordinary Scene Rendering inspector and the experiment share operations,
 // validation and controls. Only the experiment supplies owner-input persistence.
-export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag}) {
+export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,retry;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[];
@@ -32,7 +32,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
       value(implementationSelector,comparison.implementation);
       value(grainSelector,comparison.grain);
-      if(cellInput){value(cellInput,comparison.worldCellSize);cellInput.disabled=comparison.grain!=='world';}
+      if(grainSelector&&!diagnostics)for(const option of grainSelector.children)option.hidden=option.value==='ordered'&&comparison.grain!=='ordered';
+      if(cellInput){value(cellInput,comparison.worldCellSize);cellRow.hidden=comparison.grain!=='world';}
       value(selector,state.effective??requested);
       value(pointSelector,state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1));
       for(const {key,number} of qualityControls){
@@ -41,6 +42,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       }
       const quality=state.shadowQuality;
       if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.shadowComparison?`${comparison.implementation} / ${comparison.grain} grain`:'comparison unavailable'} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
+      if(status&&!diagnostics&&state.available)status.textContent=`${state.evaluatedPoints??'?'} of ${state.points} sources per pixel · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + ${quality?.filterSamples??'?'} shadow samples${state.effective!=='complementary'||comparison.implementation!=='shared'?` · Saved diagnostic mode: ${state.effective} / ${comparison.implementation}`:''}`;
       if(status&&state.status==='compiling-lighting')status.textContent='Compiling lighting asynchronously; holding the last image. Additional changes are queued.';
       if(status&&state.status==='lighting-compile-failed')status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
       if(retry)retry.hidden=state.status!=='lighting-compile-failed';
@@ -95,7 +97,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         pointSelector=document.createElement('select');pointSelector.setAttribute('aria-label','Flame lighting sources');
         for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}
         pointSelector.addEventListener('change',()=>invoke('setQuadrature',{points:pointSelector.value==='4-paired'?4:Number(pointSelector.value),pointSampling:pointSelector.value==='4-paired'?'paired':'all'}).catch(failed));
-        pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel,label);
+        pointLabel.append(pointSelector);label.append(selector);panel.append(pointLabel);if(diagnostics)panel.append(label);
         const comparisonControl=(text,choices,key)=>{
           const row=document.createElement('label');row.textContent=text;
           const select=document.createElement('select');select.setAttribute('aria-label',text);
@@ -103,17 +105,17 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           select.addEventListener('change',()=>invoke('setShadowComparison',{[key]:select.value}).catch(failed));
           row.append(select);panel.append(row);return select;
         };
-        implementationSelector=comparisonControl('Capture implementation',[['shared','Shared preparation + uniform offsets'],['legacy','Before optimization — per-source preparation + arithmetic']],'implementation');
+        if(diagnostics)implementationSelector=comparisonControl('Capture implementation',[['shared','Shared preparation + uniform offsets'],['legacy','Before optimization — per-source preparation + arithmetic']],'implementation');
         grainSelector=comparisonControl('Shadow grain placement',[['ordered','Ordered screen pattern — baseline'],['screen','Scrambled screen grain — stable'],['screen-animated','Scrambled screen grain — animated'],['world','Scrambled world-space grain']],'grain');
-        const cellRow=document.createElement('label');cellRow.textContent='World grain cell size';
+        cellRow=document.createElement('label');cellRow.textContent='World grain cell size';
         cellInput=document.createElement('input');cellInput.type='number';cellInput.min='0.000001';cellInput.step='any';cellInput.setAttribute('aria-label','World grain cell size');
         cellInput.addEventListener('change',()=>invoke('setShadowComparison',{worldCellSize:Number(cellInput.value)}).catch(failed));
         cellRow.append(cellInput);panel.append(cellRow);installRenderingNumberControl(cellInput,installNumberDrag);
         const grainHelp=document.createElement('details'),grainSummary=document.createElement('summary'),grainText=document.createElement('p');
         grainSummary.textContent='About grain and A/B';
         grainText.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. Animated screen grain changes every rendered frame, including with a frozen flame. Stable screen grain stays on pixels; world grain stays in world-space cells. This is sampling noise, not simulated photographic film or a denoiser. Use complementary sampling to compare filter grain.';
-        grainHelp.append(grainSummary,grainText);panel.append(grainHelp);
-        const heading=document.createElement('h3');heading.textContent='Surface shadow cost';panel.append(heading);
+        grainHelp.append(grainSummary,grainText);if(diagnostics)panel.append(grainHelp);
+        const heading=document.createElement('h3');heading.textContent='Shadow quality';panel.append(heading);
         for(const [key,text,help] of [
           ['resolution','Shadow cube resolution','Pixels per cube face. Lower values reduce capture size and shadow detail.'],
           ['blockerSamples','Blocker-search samples','Depth reads used to estimate blocker distance and penumbra width.'],
@@ -132,7 +134,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         const help=document.createElement('p');help.textContent='Applies on release. GPU pipelines compile asynchronously while the last image is held; JavaScript shader graph preparation still runs cooperatively on the main thread. All source cubes update each rendered frame. The viewport and flame resolution are unchanged.';
         retry=document.createElement('button');retry.type='button';retry.textContent='Retry lighting compilation';
         retry.addEventListener('click',()=>invoke('retryCompile').catch(failed));
-        panel.append(restore,retry,help,status);sync();
+        if(diagnostics)panel.append(restore,help);
+        panel.append(retry,status);sync();
       },
       async dispose(){stop();await session.dispose();},
     };
