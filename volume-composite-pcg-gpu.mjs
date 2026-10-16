@@ -49,7 +49,7 @@ struct Cell{p:f32,r:f32,d:f32,ad:f32,rhs:f32,expansion:f32,pad0:f32,pad1:f32}
 @group(0) @binding(5) var<storage,read_write> partial:array<vec4<f32>>;
 // rho,alpha,beta,active,reserved,iterations,failure,trueResidual
 @group(0) @binding(6) var<storage,read_write> ctrl:array<f32>;
-${residentSolids?`@group(0) @binding(${uniformCounts?8:7}) var<storage,read> active:array<u32>;`:''}
+${residentSolids?`@group(0) @binding(${uniformCounts?8:7}) var<storage,read> activeCells:array<u32>;`:''}
 ${common}
 fn emit(value:vec4<f32>,lane:u32,group:u32){
   scratch[lane]=value;workgroupBarrier();
@@ -66,7 +66,7 @@ fn product(i:u32,direction:bool)->f32{
 @compute @workgroup_size(64) fn initialize(@builtin(global_invocation_id) id:vec3<u32>,@builtin(local_invocation_index) lane:u32,@builtin(workgroup_id) group:vec3<u32>){
   let i=id.x;var value=vec4<f32>(0.0);
   if(i<N){let row=nodes[i];var sum=0.0;var bad=0.0;
-    ${residentSolids?'if(active[i]==0u){cells[i].expansion=0.0;}':''}
+    ${residentSolids?'if(activeCells[i]==0u){cells[i].expansion=0.0;}':''}
     for(var j=0u;j<u32(row.y);j++){let link=links[u32(row.x)+j];let q=flux[u32(link.z)];sum+=q*link.w;if(!finite(q)){bad=1.0;}}
     let b=cells[i].expansion*row.z-sum;let r=b-product(i,false);let z=r/max(row.w,1e-30);
     cells[i].rhs=b;cells[i].r=r;cells[i].d=z;
