@@ -206,3 +206,27 @@ test('a notification outcome is kept with the note and is not a delivery', () =>
   assert.deepEqual(note.receipts.notified['far-agent'], {at: '2026-10-16T12:00:00.000Z', seq: 90, ok: false, detail: 'notify command exited 3'});
   assert.ok(!('far-agent' in note.receipts.delivered));
 });
+
+test('a note can be on a point of an object, as a pick named it', () => {
+  const raw = {kind: 'point', id: 'boom-arm', label: 'Straight boom arm', local: [0.1, 0.25, -0.5], point: [1.2, 3.4, 0.5],
+    normal: [0, 1, 0], face: 42, path: 'Boom/Beam', geometry: {uuid: 'g-1', version: 3}, authority: 'exact', at: [0.41, 0.62]};
+  assert.deepEqual(checkedAnchor(raw), raw);
+  assert.deepEqual(checkedAnchor({kind: 'point', id: 'boom-arm', local: [0, 0, 0], point: [1, 2, 3]}),
+    {kind: 'point', id: 'boom-arm', label: 'boom-arm', local: [0, 0, 0], point: [1, 2, 3]});
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'boom-arm', point: [1, 2, 3]}), /local point/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'boom-arm', local: [0, 0], point: [1, 2, 3]}), /local point/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'boom-arm', local: [0, 0, NaN], point: [1, 2, 3]}), /local point/);
+  assert.throws(() => checkedAnchor({kind: 'point', local: [0, 0, 0], point: [1, 2, 3]}), /object id/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], authority: 'sure'}), /authority/);
+  assert.throws(() => checkedAnchor({kind: 'point', id: 'b', local: [0, 0, 0], point: [1, 2, 3], path: 7}), /path/);
+});
+
+test('an agent reading a point note is told the object, the point on it and how sure the pick was', () => {
+  const events = [{schema: NOTES_SCHEMA, seq: 1, type: 'note', kind: 'note', id: 'kn-dddddddddddd', thread: 'kn-dddddddddddd', parent: null,
+    at: '2026-10-16T12:00:00.000Z', author: 'noah', via: 'page', to: ['water-agent'], recipients: ['water-agent'], text: 'this beam is bent',
+    anchor: {kind: 'point', id: 'boom-arm', label: 'Straight boom arm', local: [0.1, 0.25, -0.5], point: [1.2, 3.4, 0.5], normal: [0, 1, 0], authority: 'exact'},
+    subject: {scene: 'arm.kaminos.json'}}];
+  const text = describeNote(foldNotes(events), 'kn-dddddddddddd', {root: '/tmp/n'});
+  assert.match(text, /point on object "Straight boom arm" \(boom-arm\)/);
+  assert.match(text, /point: world \[1\.2, 3\.4, 0\.5\], in the object's frame \[0\.1, 0\.25, -0\.5\], normal \[0, 1, 0\], picked exact/);
+});

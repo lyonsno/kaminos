@@ -29,7 +29,40 @@ export function checkedAnchor(raw) {
     const label = typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim() : id;
     return {kind: 'object', id, label};
   }
-  throw new Error(`Unknown anchor ${JSON.stringify(raw?.kind)}: a note goes on the scene or on one object`);
+  if (raw?.kind === 'point') {
+    // A point on an object as a pick named it: the point in the object's own
+    // frame (so it follows the object) and in the world when it was picked.
+    const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+    if (!id) throw new Error('A point anchor needs the object id');
+    const vector = (value, size) => Array.isArray(value) && value.length === size && value.every(Number.isFinite);
+    if (!vector(raw.local, 3)) throw new Error('A point anchor needs its local point as [x, y, z]');
+    if (!vector(raw.point, 3)) throw new Error('A point anchor needs its world point as [x, y, z]');
+    const label = typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim() : id;
+    const anchor = {kind: 'point', id, label, local: [...raw.local], point: [...raw.point]};
+    if (raw.normal != null) {
+      if (!vector(raw.normal, 3)) throw new Error('A point anchor normal is [x, y, z]');
+      anchor.normal = [...raw.normal];
+    }
+    if (raw.face != null) {
+      if (!Number.isInteger(raw.face) || raw.face < 0) throw new Error('A point anchor face is a face index');
+      anchor.face = raw.face;
+    }
+    if (raw.path != null) {
+      if (typeof raw.path !== 'string') throw new Error('A point anchor path is the mesh path inside the object');
+      anchor.path = raw.path;
+    }
+    if (raw.geometry != null) anchor.geometry = plainJson(raw.geometry, 'A point anchor geometry');
+    if (raw.authority != null) {
+      if (!['exact', 'approximate'].includes(raw.authority)) throw new Error('A point anchor authority is exact or approximate');
+      anchor.authority = raw.authority;
+    }
+    if (raw.at != null) {
+      if (!vector(raw.at, 2)) throw new Error('A point anchor at is [x, y], fractions of the view');
+      anchor.at = [...raw.at];
+    }
+    return anchor;
+  }
+  throw new Error(`Unknown anchor ${JSON.stringify(raw?.kind)}: a note goes on the scene, one object, or a point on one`);
 }
 
 function checkedPicture(raw) {
@@ -144,11 +177,12 @@ export function noteLink(note, origin = note?.subject?.source?.origin) {
   return `${origin}/index.html#${hash}`;
 }
 
-const anchorText = anchor => anchor?.kind === 'object' ? `object "${anchor.label}" (${anchor.id})` : 'the scene';
+const anchorText = anchor => anchor?.kind === 'object' ? `object "${anchor.label}" (${anchor.id})`
+  : anchor?.kind === 'point' ? `a point on object "${anchor.label}" (${anchor.id})` : 'the scene';
 
 // The text a person copies into a conversation with an agent.
 export function formatRef(note) {
-  const where = note.anchor?.kind === 'object' ? `"${note.anchor.label}"` : 'the scene';
+  const where = note.anchor?.kind === 'object' ? `"${note.anchor.label}"` : note.anchor?.kind === 'point' ? `a point on "${note.anchor.label}"` : 'the scene';
   const scene = note.subject?.scene ? ` in ${note.subject.scene}` : '';
   const link = noteLink(note);
   return `Kaminos note ${note.id} on ${where}${scene}. Read it with: node tools/notes.mjs show ${note.id}${link ? `  Open: ${link}` : ''}`;
@@ -194,6 +228,11 @@ export function describeNote(state, id, {root, as = null, server = null}) {
   const where = `${anchorText(thread.anchor)}${thread.subject?.scene ? ` in scene ${thread.subject.scene}` : ''}`;
   const lines = [`Kaminos note ${target.id} from ${target.author} (${target.via}) at ${target.at}`];
   lines.push(reply ? `a reply in thread ${thread.id} on ${where}` : `on ${where}`);
+  const pin = thread.anchor;
+  if (pin?.kind === 'point') {
+    lines.push(`point: world ${numbers(pin.point)}, in the object's frame ${numbers(pin.local)}${pin.normal ? `, normal ${numbers(pin.normal)}` : ''}`
+      + `${pin.face != null ? `, face ${pin.face}` : ''}${pin.authority ? `, picked ${pin.authority}` : ''}`);
+  }
   const own = viewLines(target, root);
   const recorded = target.context?.view || target.picture || target.context?.selection?.ids?.length;
   if (reply && !recorded) lines.push(...own.filter(line => line.startsWith('served by')), 'no view was recorded with this note');

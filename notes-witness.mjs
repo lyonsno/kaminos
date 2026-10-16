@@ -526,6 +526,43 @@ try {
     await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   }
 
+  report.phase = 'point-anchor'; save();
+  // Alt-click pins a note to the point the renderer drew under the cursor;
+  // the pin sits on that point and moves with its object.
+  if (await page.isHidden('.kn-drawer')) await page.click('.kn-toggle');
+  await page.evaluate(id => window.kaminosSelection.set([id], id), red);
+  const canvas = await page.evaluate(() => {
+    const rect = [...document.querySelectorAll('canvas')].find(node => node.getBoundingClientRect().width > 300)?.getBoundingClientRect();
+    return rect ? {x: rect.left + rect.width * 0.35, y: rect.top + rect.height * 0.5} : null;
+  });
+  await page.keyboard.down('Alt');
+  await page.mouse.click(canvas.x, canvas.y);
+  await page.keyboard.up('Alt');
+  await page.waitForFunction(() => /a point of/.test(document.querySelector('.kn-compose .kn-anchor')?.textContent ?? ''), null, {timeout: 10000}).catch(() => {});
+  const pinnedLine = await page.textContent('.kn-compose .kn-anchor');
+  check('Alt-click pins the note to a point of the object under the cursor', /a point of "Witness red"/.test(pinnedLine), {pinnedLine, status: await page.textContent('.kn-status')});
+  await page.fill('.kn-compose textarea', 'this exact spot');
+  await page.click('.kn-compose .kn-btn.primary');
+  await page.waitForFunction(() => /^Posted kn-/.test(document.querySelector('.kn-status')?.textContent ?? ''), null, {timeout: 30000}).catch(() => {});
+  const spot = (await log()).filter(event => event.type === 'note' && event.text === 'this exact spot').at(-1);
+  const local = spot?.anchor?.local ?? [];
+  check('the note is stored on a point of that object, inside it', spot?.anchor?.kind === 'point' && spot.anchor.id === red
+    && local.length === 3 && local.every(value => Math.abs(value) <= 0.51) && spot.anchor.point?.length === 3, {anchor: spot?.anchor});
+  await sleep(400);
+  const pinAt = async () => page.evaluate(id => {
+    const pin = document.querySelector(`[data-pin="point:${id}"]`);
+    if (!pin) return null;
+    const rect = pin.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  }, spot?.id);
+  const before = await pinAt();
+  check('a pin sits on the picked point', before && Math.hypot(before.x - canvas.x, before.y - canvas.y) < 30, {before, clicked: canvas});
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0.6, 0.5, 0]}), red);
+  await sleep(500);
+  const after = await pinAt();
+  check('the pin moves with its object', before && after && after.x - before.x > 20, {before, after});
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), red);
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});

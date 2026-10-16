@@ -280,3 +280,27 @@ test('when the server notifies people who are not listening, the preview says wh
   session.setParticipants([{name: 'near-agent', listening: true}, {name: 'far-agent', listening: false}]);
   assert.deepEqual(session.preview({text: '@far-agent'}).notified, [], 'without a notify command nobody is notified');
 });
+
+test('a picked point anchors the note while its object stays selected', async () => {
+  const {app, session} = fakePage({selected: {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'}});
+  session.hello({author: 'noah', lastSeq: 0});
+  const point = {kind: 'point', id: 'cube', label: 'Cube', local: [0.1, 0.2, 0.3], point: [1, 2, 3], authority: 'exact', at: [0.5, 0.5]};
+  session.setPoint(point);
+  assert.deepEqual(session.anchorFromSelection(), point);
+  await session.post({text: 'right here', attachPicture: false});
+  assert.deepEqual(app.posted[0].anchor, point);
+  app.selected = {ids: ['lamp'], memberIds: ['lamp'], activeId: 'lamp'};
+  assert.deepEqual(session.anchorFromSelection(), {kind: 'object', id: 'lamp', label: 'Lamp'}, 'another object drops the point');
+  app.selected = {ids: ['cube'], memberIds: ['cube'], activeId: 'cube'};
+  assert.deepEqual(session.anchorFromSelection(), {kind: 'object', id: 'cube', label: 'Cube'}, 'and it does not come back');
+});
+
+test('going to a point note selects the object the point is on', () => {
+  const {app, session} = fakePage();
+  session.hello({author: 'noah', lastSeq: 0});
+  session.receive([note(1, {anchor: {kind: 'point', id: 'cube', label: 'Cube', local: [0, 0, 0], point: [1, 2, 3]}, context: {view: VIEW}})]);
+  const result = session.goTo('kn-000000000001');
+  assert.deepEqual(app.selections, ['cube']);
+  assert.equal(result.object, 'cube');
+  assert.equal(result.present, true);
+});
