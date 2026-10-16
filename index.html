@@ -565,6 +565,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
 <link rel="stylesheet" href="./startup-veil.css">
+<script src="./startup-veil-guard.js"></script>
+<noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
 <link rel="stylesheet" href="./experiment-workspace.css">
 </head>
 <body class="kaminos-starting">
@@ -3472,10 +3474,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
-import { loadRuntimeConfig } from './runtime-config-once.mjs';
+import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
-// Ask the server once, now, so the answer arrives while modules load.
-loadRuntimeConfig().catch(() => {});
+// Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
+loadStartupRuntimeConfig().catch(() => {});
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
@@ -4693,7 +4695,7 @@ async function initializeHybridSplatOverlayModuleUrl() {
     return hybridSplatOverlayModuleUrl();
   }
   try {
-    const config = await loadRuntimeConfig();
+    const config = await loadStartupRuntimeConfig();
     if (config?.hybridSplatOverlayModuleUrl) {
       setHybridSplatOverlayModuleUrl(config.hybridSplatOverlayModuleUrl, { persist: false });
     }
@@ -11278,7 +11280,7 @@ async function initScene() {
   camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
-    samHostConfig = (await loadRuntimeConfig()).sam3 || null;
+    samHostConfig = (await loadStartupRuntimeConfig()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
   // Load declarative requirements before constructing either GPU consumer.
   // Module top levels must be inert; mount remains after volume construction.

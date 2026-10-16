@@ -8,7 +8,7 @@ const setupEnd = source.indexOf('  if (samHostConfig?.mounted) {\n    const { cr
 assert.ok(start >= 0 && setupEnd > start, 'host bootstrap through shared-device acquisition is present');
 const setup = source.slice(start, setupEnd);
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', 'sharedDeviceHostRequirements', 'loadRuntimeConfig', `
+const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', 'sharedDeviceHostRequirements', 'loadStartupRuntimeConfig', `
   const location=window.location;
   let sharedGpu, sharedGpuFailureReason, compositionModule, compositionSetupError, scene, camera, cameraProjectionBase, sceneCameras = null, samHostConfig = null;
   const initializeHybridSplatOverlayModuleUrl = async () => {};
