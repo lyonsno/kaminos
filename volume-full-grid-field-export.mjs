@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomInt } from 'node:crypto';
 import { appendFileSync, closeSync, mkdirSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -54,7 +55,9 @@ const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const reuseBrowser = args.has('--reuse-browser');
 const keepBrowserOpen = args.has('--keep-browser-open');
-const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-full-grid-field-export-profile-'));
+// A Chrome profile is created only when this run launches a browser, under
+// the temp root; --user-data-dir names one to use instead.
+const requestedUserDataDir = args.get('--user-data-dir') ? String(args.get('--user-data-dir')) : null;
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = String(args.get('--window-size') || '960,720');
 const viewportSize = args.has('--viewport-size')
@@ -363,11 +366,12 @@ async function attachOrLaunchBrowser(url) {
       identity: 'attach-or-launch-shared-cdp-browser-v0',
       mode: 'attached-existing',
       port,
-      userDataDir,
+      userDataDir: requestedUserDataDir,
       keepBrowserOpen,
       process: null,
     };
   }
+  const userDataDir = requestedUserDataDir || mkdtempSync(join(tmpdir(), 'kaminos-full-grid-field-export-profile-'));
   const process = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,

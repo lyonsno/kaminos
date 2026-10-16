@@ -55,9 +55,9 @@ unintegrated.
 
 ## Tests
 
-Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, run the full `npm test`; it must report no new failures. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
 
-Landing does not go through `node tools/land.mjs` for now: the `tests` workflow is disabled and main has no required check (2026-10-14), so the tool cannot get a CI run. When landing is authorized, rebase on current `origin/main`, run the full `npm test` (no new failures), and fast-forward main as before. A CI gate returns only after a pilot shows lanes pass it without added overhead. Details: `docs/landing.md`.
+Landing does not go through `node tools/land.mjs` for now: main has no required check, and the `tests` workflow runs on pushes to main as advisory only: test results appear as warnings and never fail the run or block anything; only a failure to set up shows red. When landing is authorized, rebase on current `origin/main`, run the full `npm test` (no new failures), and fast-forward main as before. A CI gate returns only after a pilot shows lanes pass it without added overhead. Details: `docs/landing.md`.
 
 ## Retiring Surfaces
 

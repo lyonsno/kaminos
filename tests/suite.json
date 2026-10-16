@@ -5,10 +5,6 @@
     "tests/annular-burner-contracts.mjs": {
       "kind": "node"
     },
-    "tests/annular-burner-dom-contracts.mjs": {
-      "kind": "browser",
-      "reason": "drives Playwright; needs the Playwright module path argument"
-    },
     "tests/apple-sharp-adapter-contracts.mjs": {
       "kind": "node"
     },
@@ -543,10 +539,6 @@
     },
     "tests/scene-lighting-authoring-contracts.mjs": {
       "kind": "node"
-    },
-    "tests/scene-lighting-dom-contracts.mjs": {
-      "kind": "browser",
-      "reason": "drives Playwright; needs the Playwright module path argument"
     },
     "tests/scene-load-picker-contracts.mjs": {
       "kind": "node"

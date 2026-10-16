@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {sharedDeviceHostRequirements} from '../authoring-image-generation.mjs';
+import {createRuntimeConfigLoader} from '../runtime-config-once.mjs';
 const source = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const start = source.indexOf('async function initScene()');
 const setupEnd = source.indexOf('  if (samHostConfig?.mounted) {\n    const { createWebGpuDeviceRequest', start);
 assert.ok(start >= 0 && setupEnd > start, 'host bootstrap through shared-device acquisition is present');
 const setup = source.slice(start, setupEnd);
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
-const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', 'sharedDeviceHostRequirements', `
+const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'importCompositionModule', 'console', 'fetch', 'samHostDeviceRequirements', 'sharedDeviceHostRequirements', 'loadStartupRuntimeConfig', `
   const location=window.location;
   let sharedGpu, sharedGpuFailureReason, compositionModule, compositionSetupError, scene, camera, cameraProjectionBase, sceneCameras = null, samHostConfig = null;
   const initializeHybridSplatOverlayModuleUrl = async () => {};
@@ -18,7 +19,9 @@ const run = new AsyncFunction('window', 'requestKaminosSharedWebGpuDevice', 'imp
   }
   return initScene();
 `);
-const execute = (window, acquire, load, console, fetch, sam) => run(window, acquire, load, console, fetch, sam, sharedDeviceHostRequirements);
+// Startup reads runtime configuration through the shared single-flight loader;
+// each run gets a fresh loader over its own fetch.
+const execute = (window, acquire, load, console, fetch, sam) => run(window, acquire, load, console, fetch, sam, sharedDeviceHostRequirements, createRuntimeConfigLoader(fetch ?? (async () => { throw new Error('no fetch'); })));
 // Optional hosts (SAM when mounted, klein when the adapter has f16) compose into one
 // callback that always yields an object; checked by calling it with an adapter.
 const noF16 = {features: new Set(), limits: {}};
