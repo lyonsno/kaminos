@@ -3898,6 +3898,11 @@ import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createFo
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
 import {checkedViewportDisplay,viewportShortcut,syncSceneHelperVisibility} from './viewport-display-settings.mjs';
+import {createViewportShading} from './viewport-shading.mjs';
+import {createSurfelProxyLayer} from './proxy-surfels.mjs';
+import {createInterfaceSurfelProducer,createProxySnapshotRegistry} from './proxy-snapshot.mjs';
+import {createFireSplatLayer} from './proxy-fire-splats.mjs';
+import {createFireProxySync} from './fire-proxy-sync.mjs';
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
@@ -3966,6 +3971,100 @@ function attachViewportGizmo(target) {
 function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
+ for(const button of document.querySelectorAll('.viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
+ for(const button of document.querySelectorAll('.viewport-water [data-water]'))button.setAttribute('aria-pressed',String(button.dataset.water===viewportDisplay.water));
+ for(const button of document.querySelectorAll('.viewport-fire [data-fire]'))button.setAttribute('aria-pressed',String(button.dataset.fire===viewportDisplay.fire));
+}
+// Wireframe is a view preference over mesh content, applied only around the
+// viewport render (see renderSceneFrame). Like Blender's default it is
+// see-through: dark translucent edges without depth writes, so edge density
+// reads as tone and back faces stay visible. Splats, image planes and editor
+// helpers keep their own presentation; fire and water renderers are not mesh
+// materials and are unaffected.
+const VIEWPORT_SHADING_SKIPPED_TYPES=new Set(['splat','image','light',CAMERA_TYPE,FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,'simulation-domain']);
+let viewportShading=null,lastViewportShadingRender=null;
+function renderWithViewportShading(render) {
+ viewportShading??=createViewportShading({createWireMaterial:()=>new THREE.MeshBasicNodeMaterial({color:0x15181c,wireframe:true,transparent:true,opacity:.42,depthWrite:false,side:THREE.DoubleSide})});
+ const entries=viewportDisplay.shading==='wireframe'?sceneObjects.filter(entry=>!VIEWPORT_SHADING_SKIPPED_TYPES.has(entry.type)):[];
+ const receipt=viewportShading.renderWith(entries.map(entry=>entry.object),viewportDisplay.shading,render);
+ return {mode:receipt.mode,meshes:receipt.meshes,kept:receipt.kept,perObject:Object.fromEntries(entries.map((entry,index)=>[entry.id,receipt.perRoot[index]]))};
+}
+document.addEventListener('click',event=>{const button=event.target.closest?.('.viewport-shading [data-shading]');if(button)window.kaminosViewportSettings.set({shading:button.dataset.shading});
+ const water=event.target.closest?.('.viewport-water [data-water]');if(water)window.kaminosViewportSettings.set({water:water.dataset.water});
+ const fire=event.target.closest?.('.viewport-fire [data-fire]');if(fire)window.kaminosViewportSettings.set({fire:fire.dataset.fire});});
+// Proxy snapshots: CPU-resident, camera-independent payloads published per
+// source. The viewport proxy layer is one subscriber; maps, sketches and agents
+// can subscribe through window.kaminosProxySnapshots. A producer runs while any
+// subscriber listens.
+const proxySnapshots=createProxySnapshotRegistry();
+window.kaminosProxySnapshots={latest:proxySnapshots.latest,subscribe:proxySnapshots.subscribe,sources:proxySnapshots.sources,state:proxySnapshots.state};
+// Proxy meshes live on their own three.js layer. The viewport camera enables it
+// only in Proxy display; another camera (an agent's sub view, an inset) enables
+// it to draw the proxies from its own viewpoint. require(source) keeps a
+// source's proxy mesh alive while the viewport shows the full render.
+const PROXY_LAYER=3,FIRE_PROXY_LAYER=4;
+const proxyRequirements=new Map();
+window.kaminosProxyPreview={layer:PROXY_LAYER,layers:{water:PROXY_LAYER,fire:FIRE_PROXY_LAYER},
+ require(source){proxyRequirements.set(source,(proxyRequirements.get(source)??0)+1);window._kaminosDirty?.();let released=false;
+  return ()=>{if(released)return;released=true;const n=(proxyRequirements.get(source)??1)-1;if(n>0)proxyRequirements.set(source,n);else proxyRequirements.delete(source);window._kaminosDirty?.();};},
+ required:()=>Object.fromEntries(proxyRequirements)};
+// Water proxy: in Proxy display the local liquid host skips its liquid passes
+// and a surfel layer drawn from the latest water snapshot stands in for the
+// water. Reconciled every frame against the current host, so host restarts and
+// disposal need no extra hooks.
+let waterProxy=null;
+function syncWaterProxy() {
+ const host=localLiquidHost,display=viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
+ camera?.layers[display?'enable':'disable'](PROXY_LAYER);
+ if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
+ if(host&&!waterProxy){
+  const descriptor=()=>localLiquidHost===host?host.interfaceRecordDescriptor():null;
+  waterProxy={host,layer:null,unsubscribe:null,
+   producer:createInterfaceSurfelProducer({descriptor,everyFrames:4,maxInstances:16384,onSnapshot:snapshot=>proxySnapshots.publish('water',snapshot)})};
+ }
+ if(waterProxy&&wanted&&!waterProxy.layer){
+  const layer=createSurfelProxyLayer({radius:(host.interfaceRecordDescriptor()?.visibleParticleRadius??0.046)*1.15});
+  layer.mesh.layers.set(PROXY_LAYER);
+  scene.add(layer.mesh);
+  waterProxy.layer=layer;
+  // A snapshot can land while the scene is idle (paused water): redraw it.
+  waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
+ }
+ if(waterProxy&&!wanted&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
+ if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
+ if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
+}
+// Fire proxy: heat-block splats on their own layer stand in for the flame in
+// Proxy display (fire-proxy-sync.mjs reconciles it each frame).
+let fireProxySync=null,fireProxyStepEvery=1;
+// Opt-in: while the fire proxy stands in, step the fire sim every nth frame.
+window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
+function syncFireProxy() {
+ fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
+  createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
+ fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
+  canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
+}
+window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
+window.kaminosFireProxyDebugState=()=>({display:viewportDisplay.fire,proxyLayer:FIRE_PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(FIRE_PROXY_LAYER):null,
+ ...(fireProxySync?.state()??{attached:false,awaitingSnapshot:false,fieldGeneration:null,presentationSuppressed:false,decodeErrors:0,lastError:null,layer:{visible:false}}),
+ bridgeVisible:volumeBridge?.mesh?.visible??null,canvasVisibility:document.getElementById('kaminos-volume-canvas')?.style.visibility??null,snapshot:proxySnapshots.sources().find(s=>s.source==='fire')??null});
+window.kaminosWaterProxyStepEvery=n=>{if(!localLiquidHost)throw Error('Water host is absent');return localLiquidHost.setProxyStepEvery(n);};
+window.kaminosWaterProxyStyle=patch=>{const style=waterProxy?.layer?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
+window.kaminosWaterProxyDebugState=()=>({display:viewportDisplay.water,hostPresentation:localLiquidHost?.presentation??null,
+ proxyLayer:PROXY_LAYER,viewportCameraSeesProxies:camera?camera.layers.isEnabled(PROXY_LAYER):null,meshLayerMask:waterProxy?.layer?.mesh.layers.mask??null,required:Object.fromEntries(proxyRequirements),
+ hostFrame:localLiquidHost?.state().lastFrame??null,producer:waterProxy?.producer.state()??null,
+ layer:waterProxy?.layer?.state()??{visible:false},snapshots:proxySnapshots.sources(),registry:proxySnapshots.state()});
+// Witness view: authored materials as save/export see them, plus what the last
+// viewport render drew.
+window.kaminosViewportShadingDebugState=()=>{
+ const objects=sceneObjects.map(entry=>{let wire=0,solid=0;const sides=new Set();entry.object?.traverse?.(o=>{if(!o.isMesh||o.userData?.kaminosEditorOnly||!o.material)return;const m=Array.isArray(o.material)?o.material:[o.material];for(const x of m)sides.add(x.side);if(m.every(x=>x.wireframe))wire++;else solid++;});return {id:entry.id,type:entry.type,wireMeshes:wire,solidMeshes:solid,sides:[...sides].sort()};});
+ return {mode:viewportDisplay.shading,aoIntensity:aoIntensity?.value??null,aoToggle:document.getElementById('ao-toggle')?.checked??null,lastRender:lastViewportShadingRender,objects};
+};
+// Wire materials do not reach the solid AO depth override, so AO would shade
+// empty space where surfaces used to be.
+function effectiveAOIntensity() {
+ return viewportDisplay.shading==='wireframe'||!document.getElementById('ao-toggle').checked?0:parseFloat(document.getElementById('ao-intensity').value);
 }
 window.kaminosViewportSettings={
  read:()=>({...viewportDisplay}),
@@ -3975,6 +4074,7 @@ window.kaminosViewportSettings={
   viewportDisplay=next;viewportGizmosVisible=next.gizmos;viewportBoundsVisible=next.overlays&&next.bounds;viewportHelpersVisible=next.overlays&&next.helpers;
   if(transformControls){transformControls.enabled=viewportGizmosVisible;transformControls.getHelper().visible=viewportGizmosVisible&&!!transformControls.object;}
   document.getElementById('navigation-hint').hidden=!(next.overlays&&next.hints);
+  if(aoIntensity)aoIntensity.value=effectiveAOIntensity();
   syncEditorHelperVisibility();syncViewportDisplayControls();scenePlacementTools?.draw();window._kaminosDirty?.();return this.read();
  },
 };
@@ -7044,7 +7144,7 @@ function pickSceneObjectFromViewportPointer(event) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, .playback-controls, .scene-owner-playback');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, .playback-controls, .scene-owner-playback');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -11539,7 +11639,7 @@ async function initScene() {
     return setupScenePass.call(this, builder);
   };
 
-  aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
+  aoIntensity = uniform(effectiveAOIntensity());
   // Preserve the existing 0..1 look; stronger AO darkens smoothly without negative light.
   const aoVisibility = texture(denoiseResolved.value, screenUV).r.clamp(0, 1);
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
@@ -11992,19 +12092,29 @@ async function initScene() {
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
     }
-    if (localLiquidHost) {
-      try { localLiquidHost.render(); }
-      catch (error) {
-        console.error('Local water frame failed', error);
-        localLiquidFailure = String(error?.message || error);
-        localLiquidHost.dispose();
-        localLiquidHost = null;
-        refreshLocalLiquidPerformance();
-        renderPipeline.render();
-        setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
-      }
-    } else renderPipeline.render();
+    syncWaterProxy();
+    syncFireProxy();
+    // Shadow passes above see authored casters; only the viewport render sees
+    // wire materials.
+    const shadingReceipt = renderWithViewportShading(() => {
+      if (localLiquidHost) {
+        try { localLiquidHost.render(); }
+        catch (error) {
+          console.error('Local water frame failed', error);
+          localLiquidFailure = String(error?.message || error);
+          localLiquidHost.dispose();
+          localLiquidHost = null;
+          refreshLocalLiquidPerformance();
+          renderPipeline.render();
+          setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
+        }
+      } else renderPipeline.render();
+    });
+    // Copy the surface records this frame's step wrote; queue order puts the
+    // copy after the step.
+    if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
     sceneFrameCount++;
+    lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;
     fpsFrames++;
     const elapsed = performance.now() - fpsLast;
@@ -12033,7 +12143,8 @@ async function initScene() {
     const fireLightFieldRouteActive = fireLightFieldPass !== null;
     // Kiln composition already overlays the depth-clipped native canvas. Do
     // not upload that canvas back into the scene rendered by its depth provider.
-    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && volumeBridge ? volumeBridge.update() === true : false;
+    const fireProxyEffective = fireProxySync?.effective() ?? false;
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;
@@ -12775,6 +12886,7 @@ function installSharedWorkbench() {
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
     openTool:tab=>setActiveTab(tab),frame:()=>window.kaminosFrameSelected(),
   });
+  syncViewportDisplayControls();
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
   sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
@@ -22533,7 +22645,7 @@ for (const key of Object.keys(sceneGISettings)) {
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   if (aoIntensity) {
-    aoIntensity.value = e.target.checked ? parseFloat(document.getElementById('ao-intensity').value) : 0;
+    aoIntensity.value = effectiveAOIntensity();
   }
   window._kaminosDirty?.();
 });
@@ -22548,7 +22660,7 @@ document.getElementById('ao-radius').addEventListener('input', e => {
 document.getElementById('ao-intensity').addEventListener('input', e => {
   const v = parseFloat(e.target.value);
   document.getElementById('ao-intensity-val').textContent = v.toFixed(1);
-  if (aoIntensity) aoIntensity.value = document.getElementById('ao-toggle').checked ? v : 0;
+  if (aoIntensity) aoIntensity.value = effectiveAOIntensity();
   window._kaminosDirty?.();
 });
 

@@ -12068,6 +12068,21 @@ export function createKaminosVolumePrototype({
   let pressureResidualPartialsBuffer = null;
   let pressureResidualReadbackBuffer = null;
   let pressureResidualWorkgroupCount = 0;
+  // Proxy consumers (heat-block snapshots) read the probe's per-block partials
+  // after the readback the probe already performs; no extra GPU work.
+  let residualPartialsConsumer = null;
+  // The latest readback's partials, kept so a consumer attaching while the sim
+  // is paused gets the held field without advancing it; cleared whenever the
+  // fluid state is recreated (field generation = state.fluidStateResetCount).
+  let lastResidualPartials = null;
+  // A scene proxy stands in for the fire (viewport Fire Proxy): the sim, light
+  // field and probes keep running, and the canvas raymarch is not drawn.
+  let canvasPresentationSuppressed = false;
+  // While a scene proxy stands in: rebuild the scene light field only when a
+  // snapshot is taken, and optionally step the sim every Nth frame.
+  let proxyPacing = null;
+  // The pacing armed for the current frame's light field build, or null.
+  let lightFieldPacing = null;
   let pressureResidualCopyPending = false;
   let pressureResidualCopyStep = 0;
   let pressureResidualCopyFrame = 0;
@@ -14763,6 +14778,7 @@ export function createKaminosVolumePrototype({
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
+    lastResidualPartials = null;
     updateSimCostLedger();
     emitStatus({ phase: reason });
   }
@@ -17409,6 +17425,19 @@ export function createKaminosVolumePrototype({
       }
       const partials = new Float32Array(buffer.getMappedRange()).slice();
       buffer.unmap();
+      // typeof: source-extraction contract harnesses run this body without the
+      // closure that declares the consumer.
+      if (typeof residualPartialsConsumer === 'function') {
+        const info = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
+          workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
+        lastResidualPartials = info;
+        try { residualPartialsConsumer(info); } catch (error) { console.warn('Residual partials consumer failed', error); }
+      } else if (typeof lastResidualPartials !== 'undefined') {
+        lastResidualPartials = { partials, grid, gridY: gridHeightForSize(grid), workgroupsX: Math.ceil(grid / 4),
+          workgroupsY: Math.ceil(gridHeightForSize(grid) / 4), workgroupsZ: Math.ceil(grid / 4),
+          floatsPerWorkgroup: PRESSURE_RESIDUAL_FLOATS_PER_WORKGROUP, step, fieldGeneration: state.fluidStateResetCount };
+      }
       const reduceOperator = offset => {
         let sumBefore = 0;
         let maxBefore = 0;
@@ -17761,6 +17790,11 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeFireIrradianceLightField(encoder, options = {}) {
+    // Paced while a scene proxy stands in: rebuild on the step whose residual
+    // probe copy feeds the next snapshot, or at least every 16 steps if no
+    // probe copy was taken. The lattice from the last build stays bound.
+    const paced = typeof lightFieldPacing !== 'undefined' ? lightFieldPacing : null;
+    if (paced && pressureResidualCopyFrame !== state.frameCount && state.simStepCount - (paced.lightFieldStep ?? -Infinity) < 16) return false;
     const requested = fireLightFieldRequested();
     state.fireLightFieldRequested = requested;
     state.fireLightFieldIdentity = FIRE_IRRADIANCE_LATTICE_IDENTITY;
@@ -17828,6 +17862,7 @@ export function createKaminosVolumePrototype({
     state.fireLightFieldFrameCount = (state.fireLightFieldFrameCount || 0) + 1;
     state.fireLightFieldGeneration = irradianceAtlasGeneration;
     state.fireLightFieldProducedAtMs = performance.now();
+    if (paced) paced.lightFieldStep = state.simStepCount;
     return true;
   }
 
@@ -20935,12 +20970,21 @@ export function createKaminosVolumePrototype({
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
       }
-      if (!lookFreeze && !simulationPaused) {
+      // typeof: source-extraction contract harnesses run this body without the
+      // closure that declares the pacing.
+      const pacing = typeof proxyPacing !== 'undefined' ? proxyPacing : null;
+      const stepThisFrame = !lookFreeze && !simulationPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
+      // Armed for this frame's light field build only (see
+      // encodeFireIrradianceLightField).
+      if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
+      if (stepThisFrame) {
         encodeSim(encoder);
         encodeFireIrradianceLightField(encoder);
         encodeLiquidFireContactTransfer(encoder);
         encodeSelectiveHeadLiveFields(encoder);
       }
+      if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
+      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -21075,6 +21119,11 @@ export function createKaminosVolumePrototype({
           residualApplied,
           compositionEffective: 'authored-raymarch-plus-browser-residual-v0',
         });
+      } else if (typeof canvasPresentationSuppressed !== 'undefined' && canvasPresentationSuppressed) {
+        // typeof: source-extraction contract harnesses run this body without
+        // the closure that declares the flag.
+        recordBrowserResidualCost({ applied: false });
+        recordVolumePresentationApplication({ compositionEffective: 'suppressed-for-scene-proxy-v0' });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
         state.volumeReconstructionStyle = volumePresentationModeEffective === 'intrinsic'
@@ -27152,6 +27201,31 @@ export function createKaminosVolumePrototype({
         identity: 'debug-raymarch-shader-specialization-override-v0',
         effective: debugRaymarchShaderSpecialization,
       };
+    },
+    // Additive read-only seam for proxy previews: receives each residual probe
+    // readback's per-block partials. null detaches.
+    setResidualPartialsConsumer(fn) {
+      residualPartialsConsumer = typeof fn === 'function' ? fn : null;
+      // Replay the held field (current generation only) to a new consumer.
+      const held = lastResidualPartials;
+      if (residualPartialsConsumer && held && held.fieldGeneration === state.fluidStateResetCount) {
+        queueMicrotask(() => { if (residualPartialsConsumer === fn) { try { fn(held); } catch (error) { console.warn('Residual partials consumer failed', error); } } });
+      }
+      return Boolean(residualPartialsConsumer);
+    },
+    getResidualFieldGeneration() { return state.fluidStateResetCount; },
+    isActive() { return state.active === true; },
+    // Skip the ordinary canvas raymarch while a scene proxy stands in for the
+    // fire. Other presentation routes (boundary splats, browser residual) keep
+    // drawing; the frame's presentation receipt says which happened.
+    setProxyPacing(pacing) {
+      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true, frame: 0, lightFieldStep: null } : null;
+      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots } : null;
+      return state.proxyPacing;
+    },
+    setCanvasPresentationSuppressed(suppressed) {
+      canvasPresentationSuppressed = suppressed === true;
+      return canvasPresentationSuppressed;
     },
     setDebugOpticalStepping(config = {}) {
       const next = opticalSteppingConfig(config);
