@@ -39,10 +39,14 @@ try{
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'cold-mobile.png')});await page.setViewportSize({width:1440,height:1000});
   const advance=async target=>{await page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target);await invoke('pause');};
   report.phase='ignite';await save();await invoke('run');await advance(180);const hot=await sample('lighter-on');assert.ok(hot.ignited.length>0,'Real fluid heat must ignite the fuse');
-  await invoke('lighterOff');await invoke('pause');await advance(1080);const after=await sample('lighter-off');assert.equal(after.state.lighter,false);
+  await invoke('lighterOff');await invoke('flameView',{visible:false});await page.evaluate(()=>window.kaminosSelection.clear());
+  await sample('burner-off-front');await invoke('pause');await advance(300);const front=await sample('material-front');
+  assert.ok(front.spent.length>0&&front.spent.length<96,'Intermediate view must retain spent and intact material');
+  assert.ok(front.hot.length>0,'Intermediate view must include a hot reaction region');
+  await invoke('pause');await advance(1080);const after=await sample('lighter-off');assert.equal(after.state.lighter,false);
   assert.ok(after.spent.some(i=>!hot.spent.includes(i)),'Fuel must continue burning after the lighter is off');
   assert.ok(Math.max(...after.ignited)>Math.max(...hot.ignited),'The front must advance beyond initially ignited material');
-  await invoke('flameView',{visible:false});await page.evaluate(()=>window.kaminosSelection.clear());await sample('material-front');
+  await sample('spent-material');
   await invoke('reset');const reset=await sample('reset');assert.equal(reset.state.paused,true);assert.equal(reset.state.field.steps,0);assert.deepEqual(reset.ignited,[]);
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('curved-fuse',{}));const reopened=await sample('reopened');assert.equal(reopened.state.field.steps,0);
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase='complete';
