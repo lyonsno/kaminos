@@ -246,4 +246,55 @@ function makeModifier(overrides={}){
  assert.throws(()=>module.createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:-0.1,maxPitch:0.5,neckShare:0.5}),/maxYaw|nonnegative/i,'a negative yaw limit must be rejected, not clamped silently');
 }
 
+// --- Parent consumption correction (October16): retained regression cases from
+// cc/mushfinger-attention-1016@5973c4772's tests/creature-look-aim-geometry.mjs.
+// A richer chest -> neck -> head -> head-end / chest -> leg fixture, with
+// distinct rotated neck/head local rest axes, so a shared-basis correction or
+// a fix that only patches neck+head (ignoring further descendants or a true
+// leg sibling) cannot pass by accident.
+{
+ const rows=m=>{const e=m.elements;return [[e[0],e[4],e[8],e[12]],[e[1],e[5],e[9],e[13]],[e[2],e[6],e[10],e[14]],[e[3],e[7],e[11],e[15]]];};
+ const names=['chest','neck','head','head-end','leg'],parents=[null,'chest','neck','head','chest'];
+ function fixture(rotated){
+  const matrix=(position,rotation=[0,0,0])=>new THREE.Matrix4().compose(new THREE.Vector3(...position),new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),new THREE.Vector3(1,1,1));
+  const locals=[matrix([0,0,0]),matrix([0,1,0],rotated?[.3,.2,.8]:[0,0,0]),matrix([0,1,0],rotated?[-.1,.4,-.6]:[0,0,0]),matrix([0,.4,0]),matrix([1,-1,0])];
+  const actor=matrix([3,0,-2],[0,.35,0]),world=new Map();
+  const bones=names.map((name,i)=>{const m=(parents[i]?world.get(parents[i]):actor).clone().multiply(locals[i]);world.set(name,m);return {name,parent:parents[i],localMatrix:locals[i].toArray(),worldMatrix:m.toArray(),skinMatrix:new THREE.Matrix4().toArray()};});
+  return {pose:{actorMatrix:actor.toArray(),bones},rigFrame:{bones:names.map((name,i)=>({name,parent:parents[i],restMatrix:rows(world.get(name))}))}};
+ }
+ const placement=new THREE.Matrix4().compose(new THREE.Vector3(10,2,-4),new THREE.Quaternion().setFromEuler(new THREE.Euler(.1,.7,0)),new THREE.Vector3(1,1,1)).scale(new THREE.Vector3(2,2,2));
+ const full=(pose,name)=>placement.clone().multiply(new THREE.Matrix4().fromArray(pose.bones.find(b=>b.name===name).worldMatrix));
+ const axis=(pose,name,v)=>new THREE.Vector3(...v).transformDirection(full(pose,name));
+ const position=(pose,name)=>new THREE.Vector3().setFromMatrixPosition(full(pose,name));
+ const alignment=(pose,target)=>axis(pose,'head',[0,0,1]).dot(target.clone().sub(position(pose,'head')).normalize());
+
+ for(const rotated of [false,true])for(const share of [0,.4,1]){
+  const {pose,rigFrame}=fixture(rotated),before=structuredClone(pose);
+  const target=position(pose,'head').add(axis(pose,'head',[0,0,1]).multiplyScalar(8)).add(axis(pose,'head',[1,0,0]).multiplyScalar(3));
+  const look=module.createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:1,maxPitch:.7,neckShare:share});
+  const out=look.apply(pose,{target:target.toArray(),placementMatrix:placement.toArray(),strength:1});
+  assert.ok(alignment(out.pose,target)>alignment(pose,target)+.025,`actual muzzle direction must improve, not just report a signed angle (rotated=${rotated}, neckShare=${share})`);
+  assert.deepEqual(pose,before,'aiming cannot mutate the baseline');
+  for(const name of ['chest','leg'])assert.deepEqual(out.pose.bones.find(b=>b.name===name),pose.bones.find(b=>b.name===name),'chest and limb stay exactly unchanged');
+  const head=out.pose.bones.find(b=>b.name==='head'),tip=out.pose.bones.find(b=>b.name==='head-end');
+  const expectedTip=new THREE.Matrix4().fromArray(head.worldMatrix).multiply(new THREE.Matrix4().fromArray(tip.localMatrix));
+  assert.ok(tip.worldMatrix.every((v,i)=>Math.abs(v-expectedTip.elements[i])<1e-9),'head descendants must follow the corrected head in cached world matrices');
+ }
+}
+
+// --- reject nonfinite target and out-of-range strength rather than manufacturing finite-looking metadata ---
+{
+ const modifier=makeModifier();
+ const pose=buildPose();
+ const headPoint=worldPointOf(pose,'head');
+ const target=headPoint.clone().add(headRightOf(pose).multiplyScalar(4)).toArray();
+ assert.throws(()=>modifier.apply(pose,{target:[NaN,0,0],placementMatrix:placementMatrix.toArray(),strength:1}),/finite|target/i,'a nonfinite target component must be rejected, not silently coerced');
+ assert.throws(()=>modifier.apply(pose,{target:[0,Infinity,0],placementMatrix:placementMatrix.toArray(),strength:1}),/finite|target/i,'an infinite target component must be rejected');
+ assert.throws(()=>modifier.apply(pose,{target,placementMatrix:placementMatrix.toArray(),strength:NaN}),/finite|strength/i,'a nonfinite strength must be rejected');
+ assert.throws(()=>modifier.apply(pose,{target,placementMatrix:placementMatrix.toArray(),strength:1.5}),/strength|range|\[0,\s*1\]/i,'a strength above 1 must be rejected rather than silently admitted');
+ assert.throws(()=>modifier.apply(pose,{target,placementMatrix:placementMatrix.toArray(),strength:-0.1}),/strength|range|\[0,\s*1\]/i,'a negative strength must be rejected rather than silently admitted');
+ const badPlacement=new Array(16).fill(0);badPlacement[0]=NaN;
+ assert.throws(()=>modifier.apply(pose,{target,placementMatrix:badPlacement,strength:1}),/finite|placement/i,'a nonfinite placementMatrix must be rejected, not silently propagated into NaN geometry');
+}
+
 console.log('Look-pose aim correction stays bounded, coherent, degenerate-safe, and non-accumulating across the synthetic neck/head chain');
