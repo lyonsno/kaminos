@@ -8263,6 +8263,19 @@ fn makeRaymarchResult(
   return result;
 }
 
+// Where a view ray starts. A perspective view's rays all leave the camera. An orthographic
+// view's are parallel, each leaving its own pixel on the near plane: clip depth -1, the same
+// near convention as the rest of this shader (the camera's projection is WebGL-style). An
+// orthographic projection is affine, so its near and far points unproject with the same w.
+fn viewRayOrigin(ndc: vec2<f32>) -> vec3<f32> {
+  let nearPoint = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
+  let farPoint = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
+  if (abs(nearPoint.w - farPoint.w) <= 1.0e-5 * max(abs(nearPoint.w), abs(farPoint.w))) {
+    return nearPoint.xyz / nearPoint.w;
+  }
+  return u.cameraPos_time.xyz;
+}
+
 fn productSceneDepthEndT(in: VSOut, ro: vec3<f32>, rd: vec3<f32>) -> f32 {
   let dimensions = vec2<i32>(textureDimensions(productSceneDepth));
   let pixel = clamp(vec2<i32>(in.pos.xy), vec2<i32>(0), dimensions - vec2<i32>(1));
@@ -8285,7 +8298,7 @@ fn ordinarySceneDepthEndT(in: VSOut) -> f32 {
   let ndc = in.uv * 2.0 - vec2<f32>(1.0);
   let world = u.invViewProj * vec4<f32>(ndc, depth, 1.0);
   let farWorld = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
-  let ro = u.cameraPos_time.xyz;
+  let ro = viewRayOrigin(ndc);
   let rd = normalize(farWorld.xyz / farWorld.w - ro);
   return max(0.0, dot(world.xyz / world.w - ro, rd));
 }
@@ -8319,7 +8332,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let farWorldRaw = u.invViewProj * farClip;
   let nearWorld = nearWorldRaw.xyz / nearWorldRaw.w;
   let farWorld = farWorldRaw.xyz / farWorldRaw.w;
-  let ro = u.cameraPos_time.xyz;
+  let ro = viewRayOrigin(ndc);
   let rd = normalize(farWorld - nearWorld);
   // The box spans x/z [-1, 1] and y [-1, -1 + 2 GRID_Y/GRID] at equal pitch
   // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
@@ -9711,7 +9724,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearWorldRaw = u.invViewProj * vec4<f32>(ndc, -1.0, 1.0);
   let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
-  let ro = u.cameraPos_time.xyz;
+  let ro = viewRayOrigin(ndc);
   let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
   let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);

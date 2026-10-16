@@ -3933,6 +3933,7 @@ import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
+import { createViewProjection } from './view-projection.mjs';
 import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -4186,7 +4187,7 @@ window.kaminosViewportSettings={
 };
 
 let scenePlacementTools = null;
-let polyEdit = null;
+let polyEdit = null, viewProjection = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
 const authoringParameterTargets = new Map();
@@ -12193,7 +12194,11 @@ async function initScene() {
   authoringControlSessions.push(...cameraAuthoring.sessions);
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
-  const cameraViewAction=id=>{if(id==='camera'){sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);};
+  // Orthographic views (Blender's Auto Perspective): an axis view from the pie turns orthographic
+  // and orbiting away returns to perspective; Numpad 5 toggles it explicitly.
+  viewProjection=createViewProjection({camera,target:()=>controls.target});
+  window.kaminosViewProjection={state:()=>viewProjection.state(),read:()=>({...viewProjection.state(),position:camera.position.toArray(),target:controls.target.toArray(),near:camera.near,far:camera.far,projection:[...camera.projectionMatrix.elements]}),setOrthographic:(on,options)=>viewProjection.setOrthographic(on,options),toggle:()=>viewProjection.toggle()};
+  const cameraViewAction=id=>{if(id==='camera'){viewProjection.setOrthographic(false);sceneCameras.toggle();return;}if(id==='selected'){sceneCameras.leave();window.kaminosFrameSelected();return;}sceneCameras.leave();navigation.axis(id);viewProjection.setOrthographic(true,{auto:true});};
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
   polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,
@@ -12249,6 +12254,7 @@ async function initScene() {
         command('view.hide','View','Hide Selected',()=>window.kaminosSceneVisibility.hideSelected(),{shortcut:'H',disabled:selectedReason}),
         command('view.isolate','View','Hide Unselected',()=>window.kaminosSceneVisibility.hideUnselected(),{shortcut:'Shift H',aliases:['isolate'],disabled:selectedReason}),
         command('view.reveal','View','Show All Hidden',()=>window.kaminosSceneVisibility.showAll(),{shortcut:'Alt H',aliases:['unhide','reveal']}),
+        command('view.orthographic','View','Toggle Orthographic',()=>viewProjection.toggle(),{aliases:['perspective','ortho','projection'],shortcut:'Numpad 5'}),
         command('view.overlays','View','Toggle Overlays',()=>window.kaminosViewportSettings.set({overlays:!viewportDisplay.overlays}),{aliases:['helpers','outlines'],shortcut:'Shift Alt Z'}),
         command('view.gizmos','View','Toggle Transform Gizmos',()=>window.kaminosViewportSettings.set({gizmos:!viewportDisplay.gizmos}),{aliases:['handles'],shortcut:'Ctrl ~'}),
         command('document.save','Scene','Save',()=>window.saveScene(),{aliases:['file','composition']}),
@@ -12256,7 +12262,7 @@ async function initScene() {
       ];return result;
     }});
 
-  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad5'){event.preventDefault();event.stopImmediatePropagation();viewProjection.toggle();return;}if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
   controls.addEventListener('change',()=>cameraViewsPanel.refresh());
@@ -12372,6 +12378,7 @@ async function initScene() {
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     controls.update();
+    viewProjection?.update();
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
