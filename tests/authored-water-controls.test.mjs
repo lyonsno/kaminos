@@ -32,7 +32,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  f.setRuntime({paused:false,step:0,particleCount:4096});
  const c={localLiquidHost:host,localLiquidFailure:null,console:{error(){}},String,authoredWaterControls:{refreshStatus(){f.setRuntime(present?{paused:false,step,particleCount:4096}:null);f.controls.refreshStatus();}},sharedWorkbench:{update(value){footer=value;}},refreshLocalLiquidPerformance(){},renderPipeline:{render(){}},setInfo(){}};
  vm.createContext(c);vm.runInContext(arm,c);
- if(mode==='failure'){assert.equal(footer?.status,'Stopped','Footer must retire failed runtime state');assert.equal(c.localLiquidHost,null);assert.equal(f.input('[data-pause]').disabled,true,'Host loss disables playback actions');assert.doesNotMatch(f.input('[data-state]').textContent,/Playing/);}
+ if(mode==='failure'){assert.equal(footer?.status,'Stopped','Footer must retire failed runtime state');assert.equal(c.localLiquidHost,null);assert.equal(f.input('[data-pause]').textContent,'Play','Host loss offers a fresh start from retained sources');assert.doesNotMatch(f.input('[data-state]').textContent,/Playing/);}
  else {assert.match(f.input('[data-state]').textContent,/tick 12/,'Both supported source modes publish the effective clock');assert.match(footer?.clock??'',/tick 12/,'Footer agrees for both supported water modes');}
  assert.equal(Number(f.input('[data-width]').value),.75,'Runtime updates preserve drafts');
 }
@@ -58,14 +58,14 @@ for(const mode of ['continuous','finite_drop','failure']){
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
- Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){}});
+ Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){}});
  vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
  f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
  const check=(paused,step)=>{
   f.controls.refreshStatus();assert.equal(facade.paused,paused,'Authored facade must forward effective playback state');
   assert.equal(c.window.kaminosWaterSources.read().runtime.paused,paused);
   assert.match(f.input('[data-state]').textContent,new RegExp(`${paused?'Paused':'Playing'} · tick ${step}`));
-  assert.equal(f.input('[data-pause]').textContent,paused?'Resume water':'Pause water');
+  assert.equal(f.input('[data-pause]').textContent,paused?'Play':'Pause');
   const drawContext={...c,console,sharedWorkbench:{update(value){drawContext.footer=value;}},renderPipeline:{render(){}},setInfo(){}};
   vm.createContext(drawContext);vm.runInContext(arm,drawContext);
   assert.equal(drawContext.footer.status,paused?'Paused':'Playing','Footer and panel agree on playback');
@@ -85,7 +85,7 @@ console.log('Real finite facade, public source state, controls and footer agree 
 }
 
 for(const applied of ['finite_drop','continuous'])for(const action of ['pause','release']){
- const f=fixture(),pending=applied==='finite_drop'?'continuous':'finite_drop';
+ const f=fixture(),pending=applied==='finite_drop'?'continuous':'finite_drop';if(action==='pause')f.setRuntime({paused:false,step:12,particleCount:4096});
  const original=f.api.read;f.api.read=()=>{const s=original();return {...s,selected:{...s.selected,settings:{...s.selected.settings,mode:applied}}};};f.controls.refresh();
  f.input('[data-mode]').value=pending;f.input('[data-mode]').onchange();f.draftWidth(.75);
  const check=()=>{assert.equal(f.input('[data-mode]').value,pending);assert.equal(f.input('[data-drop]').hidden,pending!=='finite_drop','Visible fields must follow the retained pending mode');assert.equal(f.input('[data-flow]').hidden,pending!=='continuous');assert.equal(Number(f.input('[data-width]').value),.75);};

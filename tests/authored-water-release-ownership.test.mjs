@@ -7,7 +7,7 @@ const begin=source.indexOf('async function releaseAuthoredWater('),end=source.in
 const actual=source.slice(begin,end).replace("await import('./authored-water-host.mjs')",'await loadHostModule()');
 function fixture(){
  let host={name:'prior',dispose(){this.disposed=true;}};const pending=[];
- const context={Error,structuredClone,localLiquidGeneration:1,authoredWaterReleaseRequest:0,sceneObjects:[{id:'A',type:'water'}],LOCAL_LIQUID_EMITTER_TYPE:'water',renderer:{},scene:{},camera:{},renderPipeline:{},sharedGpu:{device:{}},localLiquidSetup:{},getLocalLiquidDisplayPolicy:()=>({}),selectionFeedback:{output:x=>x},localLiquidHost:host,localLiquidPaused:false,authoredWaterControls:null,window:{_kaminosDirty(){}},assertSceneConstructionAvailable(){},localLiquidEmitterRecords:()=>[],setAuthoredWaterPreviewVisible(){},updateAuthoringPropertySelection(){},authoredWaterState:()=>({}),loadHostModule:async()=>({createAuthoredWaterHost:options=>new Promise(resolve=>pending.push({resolve,options}))})};
+ const context={Error,structuredClone,localLiquidGeneration:1,authoredWaterReleaseRequest:0,sceneObjects:[{id:'A',type:'water'}],LOCAL_LIQUID_EMITTER_TYPE:'water',renderer:{},scene:{},camera:{},renderPipeline:{},sharedGpu:{device:{}},localLiquidSetup:{},getLocalLiquidDisplayPolicy:()=>({}),selectionFeedback:{output:x=>x},localLiquidHost:host,localLiquidPaused:false,authoredWaterControls:null,sharedWorkbench:null,refreshLocalLiquidPerformance(){},window:{_kaminosDirty(){}},assertSceneConstructionAvailable(){},localLiquidEmitterRecords:()=>[],setAuthoredWaterPreviewVisible(){},updateAuthoringPropertySelection(){},authoredWaterState:()=>({}),loadHostModule:async()=>({createAuthoredWaterHost:options=>new Promise(resolve=>pending.push({resolve,options}))})};
  vm.createContext(context);vm.runInContext(actual,context);
  const candidate=name=>({name,disposed:false,dispose(){this.disposed=true;},setPaused(){}});
  return {context,pending,candidate,call:()=>context.releaseAuthoredWater('A')};
@@ -28,4 +28,11 @@ console.log('Release publication preserves newest request, newer scene and usabl
 
 {
  const f=fixture(),a=f.call();await flush();const accepted=f.candidate('accepted');f.pending[0].resolve(accepted);await a;const b=f.call();await flush();assert.equal(f.pending[0].options.isCurrent(),true,'Pending replacement must leave admitted prior lifetime usable');const bad=f.candidate('bad');bad.setPaused=()=>{throw Error('start refused');};f.pending[1].resolve(bad);await assert.rejects(b,/start refused/);assert.equal(f.context.localLiquidHost,accepted);assert.equal(f.pending[0].options.isCurrent(),true);
+}
+
+{
+ const f=fixture();assert.equal(typeof f.context.resetAuthoredWater,'function','Reset must expose the initial-preview transition');
+ const pending=f.call();await flush();const prior=f.context.localLiquidHost;
+ f.context.resetAuthoredWater();assert.equal(prior.disposed,true);assert.equal(f.context.localLiquidHost,null);assert.equal(f.context.localLiquidPaused,true);
+ const stale=f.candidate('late');f.pending[0].resolve(stale);await assert.rejects(pending,/changed|superseded/i);assert.equal(stale.disposed,true,'An older Replay cannot publish after Reset');assert.equal(f.context.localLiquidHost,null);
 }
