@@ -14,7 +14,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,retry;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[];
@@ -41,6 +41,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       if(status)status.textContent=state.available?`Configured: ${state.effective} · ${state.shadowComparison?`${comparison.implementation} / ${comparison.grain} grain`:'comparison unavailable'} · ${state.points} sources, ${state.evaluatedPoints??'?'} evaluated per pixel · ${state.capturedPoints??'?'} current-frame cubes · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + up to ${quality?.filterSamples??'?'} filter taps/source · softness ${state.softness}`:'Awaiting hybrid lighting; load an authored hybrid fire scene.';
       if(status&&state.status==='compiling-lighting')status.textContent='Compiling lighting asynchronously; holding the last image. Additional changes are queued.';
       if(status&&state.status==='lighting-compile-failed')status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
+      if(retry)retry.hidden=state.status!=='lighting-compile-failed';
     };
     const apply=(points,mode)=>{
       validateSourceQuadrature(points,mode);
@@ -129,7 +130,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
         restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(error=>{sync();status.textContent=error.message;}));
         const help=document.createElement('p');help.textContent='Applies on release. GPU pipelines compile asynchronously while the last image is held; JavaScript shader graph preparation still runs cooperatively on the main thread. All source cubes update each rendered frame. The viewport and flame resolution are unchanged.';
-        const retry=document.createElement('button');retry.type='button';retry.textContent='Retry lighting compilation';
+        retry=document.createElement('button');retry.type='button';retry.textContent='Retry lighting compilation';
         retry.addEventListener('click',()=>invoke('retryCompile').catch(error=>{sync();status.textContent=error.message;}));
         panel.append(restore,retry,help,status);sync();
       },
