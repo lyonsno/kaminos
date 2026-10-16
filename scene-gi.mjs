@@ -112,6 +112,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       for(const pair of filters.values())for(const {filter} of Object.values(pair))for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
       estimator = next;
     },
+    requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
+    needsHistoryFrame:()=>settings.mode==='combined'&&settings.temporal&&history.needsFrame(),
     resetHistory(reason) { history.reset(reason); },
     async readback(renderer,kind='incoming') {
       if (!['incoming','receiving','estimate'].includes(kind)) throw new Error('Invalid GI readback kind');
@@ -125,7 +127,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       return {kind,source:kind==='receiving'?'receiving':kind==='incoming'&&settings.temporal?'temporal-result':'current-estimate',estimatorFrames:frames,historyFrames:history.frames,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite}};
     },
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
-      history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:34,weight:history.weight.value},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
+      history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:34,weight:history.weight.value,pendingFrames:history.pendingFrames,settlingInitialInfluence:.01},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterFrames:{...filterFrames},

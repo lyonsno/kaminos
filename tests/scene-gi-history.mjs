@@ -11,6 +11,7 @@ const sample={value:new Texture()};
 const history=new History(sample,sample,sample,sample,camera);
 assert.equal(history.valid.value,false);
 assert.equal(history.frames,0);
+history.requestFrames();assert.equal(history.pendingFrames,45);history.weight.value=0;history.requestFrames();assert.equal(history.pendingFrames,1);history.weight.value=.9;
 const output=history.getGINode(),original=output.value;
 const saved=output.sample();
 const renderer={getRenderTarget:()=>null,setRenderTarget(){},getMRT:()=>null,setMRT(){},autoClear:true};
@@ -25,3 +26,21 @@ history.reset('lighting-change');assert.equal(history.valid.value,false);
 history.renderFrame(renderer,8,4);assert.deepEqual(history.size,[8,4]);
 history.dispose();
 console.log('GI history settings, reset and alternating texture identity pass');
+
+// Exercise the actual ordinary RAF predicate, independently of inspection draws.
+const {readFileSync}=await import('node:fs');const {runInNewContext}=await import('node:vm');
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const begin=html.indexOf('  function animate() {'),end=html.indexOf('\n  compositionHost =',begin);
+for(const enabled of [true,false]) {
+  let remaining=45,draws=0;
+  const scope={requestAnimationFrame(){},controls:{update(){}},workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
+    fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
+    isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
+    foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
+    sceneGI:{needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},
+    renderSceneFrame(){draws++;remaining--;},
+  };
+  for(const name of ['updateHybridSplatOverlayFrame','updateMotionAgencyFrame','updateMotionDecisionFrame','updateMotionPhraseControlFrame','updateMotionTrackFrame','updateGeneratedPoseOutputMapFrame','updateGeneratedPoseTemporalFrame','updateForgeHostStationFrame'])scope[name]=()=>false;
+  runInNewContext(html.slice(begin,end)+';for(let tick=0;tick<90;tick++)animate();',scope);
+  assert.equal(draws,enabled?45:4,'ordinary RAF must settle enabled history and preserve disabled idle behavior');
+}
