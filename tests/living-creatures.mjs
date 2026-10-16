@@ -1,0 +1,35 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+let module={};try{module=await import('../experiments/creature-motion/living-scene.experiment.mjs');}catch(e){if(e.code!=='ERR_MODULE_NOT_FOUND')throw e;}
+assert.equal(typeof module.createLivingScene,'function','Independent actors need a shared-scene composition, not the last-created creature singleton');
+class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(){}remove(){}}
+const document={createElement:()=>new Element(),getElementById:()=>null},scene=new THREE.Scene(),callbacks=new Set();
+const host={controls:{document},scene:{refreshPresentation(){},async open(){const owned=new Set(),stops=new Set();return {async attach(root){owned.add(root);scene.add(root);return {id:root.uuid,root};},onFrame(fn){callbacks.add(fn);const stop=()=>callbacks.delete(fn);stops.add(stop);return stop;},redraw(){},readView:()=>({}),setView(){},async dispose(){for(const stop of stops)stop();for(const root of owned)root.removeFromParent();}};}}};
+const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
+const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[0,.2,0,0,.2,1,0,.2,2],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
+let loads=0;const deps={loadSources:async()=>{loads++;return data;}};
+const template={case:'fixture',case_sha256:'c'.repeat(64),motion:'fixture-motion',motion_sha256:'a'.repeat(64),frame:'fixture-frame',frame_sha256:'b'.repeat(64),blend_frames:0};
+const inputs={template,actors:[{id:'heavy',label:'Heavy',creature:{...template,transform:{position:[-5,0,0],quaternion:[0,0,0,1],scale:[1,1,1]}}},{id:'lean',label:'Lean',creature:{...template,transform:{position:[5,0,0],quaternion:[0,0,0,1],scale:[1,1,1]}}}]};
+const room=await module.createLivingScene({host,inputs},deps);
+assert.equal(loads,1,'Identical authenticated sources should be shared, not refetched per actor');
+assert.equal(scene.children.length,2);assert.equal(new Set(room.read().actors.map(a=>a.state.host.id)).size,2);
+const leanBefore=room.pose('lean',{bones:['pelvis']});
+await room.operations.actor({id:'heavy',operation:'seek',input:{frame:1}});
+assert.deepEqual(room.pose('lean',{bones:['pelvis']}),leanBefore,'Posing one actor changed its neighbour');
+assert.notDeepEqual(room.pose('heavy',{bones:['pelvis']}).rootMatrix,leanBefore.rootMatrix);
+await room.operations.actor({id:'heavy',operation:'play'});await room.operations.actor({id:'lean',operation:'play'});assert.equal(callbacks.size,2);
+await room.operations.actor({id:'heavy',operation:'pause'});assert.equal(callbacks.size,1,'Pausing one actor stopped its neighbour clock');
+for(const fn of callbacks)fn({deltaSeconds:1/30});assert.equal(room.read().actors.find(a=>a.id==='lean').state.playback.frame,1);
+await room.operations.remove({id:'heavy'});assert.equal(scene.children.length,1);assert.equal(callbacks.size,1);
+await assert.rejects(()=>room.operations.actor({id:'heavy',operation:'seek',input:{frame:1}}),/Unknown actor/);
+assert.throws(()=>room.pose('lean',{bones:['invented']}),/Unknown.*Bone/);
+await room.operations.actor({id:'lean',operation:'pause'});
+const beforeReplace=room.read().actors[0];await assert.rejects(()=>room.operations.replace({id:'lean',creature:{...template,actor_root:'invented'}}),/root mode/);
+assert.deepEqual(room.read().actors[0],beforeReplace,'Rejected reopen destroyed the original actor');
+const recipe=room.read().recipe;await room.dispose();assert.equal(scene.children.length,0);assert.equal(callbacks.size,0);
+const reopened=await module.createLivingScene({host,inputs:recipe},deps);assert.equal(reopened.read().actors[0].id,'lean');assert.equal(reopened.read().actors[0].state.playback.frame,1);
+await reopened.operations.add({id:'new',label:'New',creature:template});assert.equal(scene.children.length,2);
+await assert.rejects(()=>reopened.operations.add({id:'new',label:'Duplicate',creature:template}),/Duplicate actor/);
+await reopened.dispose();assert.equal(scene.children.length,0);
+console.log('Stable independent actor identity, source sharing, local clocks/poses/removal, truthful pose reads and retained cohort reconstruction');
