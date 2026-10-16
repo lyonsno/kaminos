@@ -1,5 +1,5 @@
 import {Node,RenderTarget,NodeMaterial,QuadMesh,Matrix4,Vector2,HalfFloatType,UnsignedByteType,RGBAFormat,RedFormat,NearestFilter,RendererUtils,TSL} from './lib/three.webgpu.js';
-const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context,reference}=TSL;
+const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context,reference,mix}=TSL;
 
 // Reproject estimated diffuse lighting and visibility, leaving current-frame
 // geometry and direct lighting untouched. Two alternating MRTs avoid history
@@ -99,8 +99,8 @@ export default class SceneGIHistory extends Node {
             const oldVisibility=this.oldAO.sample(priorUV).r.clamp(lowerAO,upperAO);
             const change=abs(luminance(oldColor).sub(luminance(irradiance))).div(max(.01,luminance(irradiance)));
             const blend=this.weight.div(float(1).add(change.mul(4)));
-            irradiance.assign(irradiance.mix(oldColor,blend));
-            visibility.assign(visibility.mix(oldVisibility,this.weight));
+            irradiance.assign(mix(irradiance,oldColor,blend));
+            visibility.assign(mix(visibility,oldVisibility,this.weight));
           });
         });
       });
