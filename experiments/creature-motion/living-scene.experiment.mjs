@@ -7,7 +7,7 @@ import {loadFullBodySources,loadFullBodySkin} from './full-body-source.mjs';
 export async function createLivingScene({host,inputs={},record=()=>{}},dependencies={}) {
  if(!Array.isArray(inputs.actors))throw Error('Living scene requires explicit actors');
  const actors=new Map(),pending=new Set(),sourceCache=new Map(),skinCache=new Map();
- let disposed=false,mountRoot=null,serial=0,tail=Promise.resolve(),selectedId=null,onSelection=()=>{};
+ let disposed=false,mountRoot=null,serial=0,tail=Promise.resolve();
  const cache=(store,load)=>input=>{
   const key=JSON.stringify(['case','case_sha256','motion','motion_sha256','frame','frame_sha256','prefix','prefix_sha256'].map(name=>input[name]??null));
   if(!store.has(key)){const promise=Promise.resolve().then(()=>load(input));store.set(key,promise);promise.catch(()=>{if(store.get(key)===promise)store.delete(key);});}
@@ -26,7 +26,18 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   const {view,ground,gizmos,...creature}=spec.creature;
   if(creature.actor_root!==undefined&&creature.actor_root!=='live'){pending.delete(spec.id);throw Error('Unknown living creature root mode; actors require live roots');}
   const scopedHost={...host,controls:{...host.controls}};
-  if(host.controls.mountObject)scopedHost.controls.mountObject=options=>host.controls.mountObject({...options,onSelected:()=>{selectedId=spec.id;onSelection();options.onSelected?.();}});
+  if(host.controls.mountObject)scopedHost.controls.mountObject=options=>{
+   const document=host.controls.document,bar=document.createElement('div'),title=document.createElement('strong'),duplicate=document.createElement('button'),remove=document.createElement('button'),error=document.createElement('output');
+   title.textContent=spec.label;duplicate.textContent='Duplicate creature';remove.textContent='Remove creature';error.setAttribute('role','alert');
+   const call=async action=>{try{await action();error.textContent='';}catch(e){error.textContent=e.message;}};
+   duplicate.onclick=()=>call(()=>operations.duplicate({id:spec.id}));remove.onclick=()=>call(()=>operations.remove({id:spec.id}));
+   bar.style.cssText='display:grid;gap:6px';bar.append(title,duplicate,remove,error);options.properties.prepend(bar);
+   const setup=document.createElement('details'),summary=document.createElement('summary'),save=document.createElement('button'),open=document.createElement('input');summary.textContent='Save / open creatures';save.textContent='Save creatures';open.type='file';open.accept='.json,application/json';open.setAttribute('aria-label','Open creatures setup');
+   save.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='creatures.setup.json';link.click();URL.revokeObjectURL(url);};
+   open.onchange=()=>call(async()=>{const file=open.files?.[0];if(!file)return;const entry=globalThis.window?.kaminosWorkbenchExperiments;if(!entry?.open)throw Error('Shared creature entry is unavailable');await entry.open('mushfinger/living-scene',JSON.parse(await file.text()));});
+   setup.append(summary,save,open);options.properties.append(setup);
+   return host.controls.mountObject(options);
+  };
   try{row.entry=await createWalkingCreature({host:scopedHost,inputs:{...creature,label:spec.label,actor_root:'live'},record:event=>record({...event,actor:spec.id})},deps);active();return row;}
   catch(error){await row.entry?.dispose();throw error;}finally{pending.delete(spec.id);}
  }
@@ -62,18 +73,7 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   for(const spec of inputs.actors)await add(spec);
   if(inputs.view){const session=await host.scene.open();try{session.setView(inputs.view);}finally{await session.dispose();}}
   if(globalThis.window)window.kaminosCreatureActors=registry;
-  return {...registry,operations,dispose,mount({root}){
-   mountRoot=root;for(const row of actors.values())seat(row);
-   const document=host.controls.document,section=document.createElement('section'),title=document.createElement('h3'),select=document.createElement('select'),duplicate=document.createElement('button'),removeButton=document.createElement('button'),save=document.createElement('button'),open=document.createElement('input'),output=document.createElement('output');
-   title.textContent='Creatures';select.setAttribute('aria-label','Scene creature');duplicate.textContent='Duplicate creature';removeButton.textContent='Remove creature';save.textContent='Save creatures';open.type='file';open.accept='.json,application/json';open.setAttribute('aria-label','Open creatures setup');
-   const update=()=>{select.replaceChildren();for(const row of actors.values()){if(row.entry.read().playback.status==='removed')continue;const option=document.createElement('option');option.value=row.id;option.textContent=row.label;select.append(option);}if(actors.has(selectedId))select.value=selectedId;};
-   onSelection=()=>{if(selectedId)select.value=selectedId;};
-   const call=async action=>{try{await action();output.textContent='';update();}catch(error){output.textContent=error.message;}};
-   select.onchange=()=>call(()=>operations.select({id:select.value}));duplicate.onclick=()=>call(()=>operations.duplicate({id:select.value}));removeButton.onclick=()=>call(()=>operations.remove({id:select.value}));
-   save.onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(read().recipe,null,2)+'\n'],{type:'application/json'})),link=document.createElement('a');link.href=url;link.download='creatures.setup.json';link.click();URL.revokeObjectURL(url);};
-   open.onchange=()=>call(async()=>{const file=open.files?.[0];if(!file)return;const entry=globalThis.window?.kaminosWorkbenchExperiments;if(!entry?.open)throw Error('Shared creature entry is unavailable');await entry.open('mushfinger/living-scene',JSON.parse(await file.text()));});
-   section.append(title,select,duplicate,removeButton,save,open,output);root.append(section);update();return {dispose(){onSelection=()=>{};section.remove();}};
-  }};
+  return {...registry,operations,dispose,mount({root}){mountRoot=root;for(const row of actors.values())seat(row);}};
  }catch(error){await dispose();throw error;}
 }
 
