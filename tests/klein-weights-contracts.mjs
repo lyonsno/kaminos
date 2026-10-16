@@ -22,4 +22,15 @@ assert.deepEqual(new KleinPipeline(device, { weightsBase: 'http://127.0.0.1:9000
 assert.deepEqual(new KleinPipeline(device, { textEncoderUrl: '/a', transformerUrl: '/b', vaeUrl: '/c' }).urls,
   { textEncoderUrl: '/a', transformerUrl: '/b', vaeUrl: '/c' });
 
+// A load that cannot reach its weights names the URL it tried, even when the browser reports only
+// a network failure (a missing file without CORS headers surfaces as "Failed to fetch").
+{
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+  try {
+    const pipeline = new KleinPipeline(device, { weightsBase: 'https://example.com/no-weights-here' });
+    await assert.rejects(() => pipeline.load(), /https:\/\/example\.com\/no-weights-here\/te\/manifest\.json: Failed to fetch/);
+  } finally { globalThis.fetch = realFetch; }
+}
+
 console.log('klein weights contracts passed');

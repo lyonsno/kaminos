@@ -14,7 +14,12 @@ import { kleinWeightUrls } from './klein-weights.js';
 import { createWebGpuLatentPreview } from '../../webgpu-inference-kit/src/core.js';
 import { LATENT_PREVIEW_FIT, LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from './klein-latent-preview.js';
 
-async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
+// fetch that names the URL when the request fails outright: browsers report a blocked or missing
+// cross-origin file only as "Failed to fetch".
+async function fetchNamed(url, init) {
+  try { return await fetch(url, init); } catch (error) { throw new Error(`${url}: ${error?.message ?? error}`, { cause: error }); }
+}
+async function getJson(url) { const r = await fetchNamed(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 
 // Weight files are immutable per manifest digest, so they are cached in the browser Cache API
 // under URL + sha256: a second visit loads from disk with no network. Downloads stream so the
@@ -82,7 +87,7 @@ async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, o
   let body;
   if (response?.ok) body = await inflatedBody(response, count);
   else {
-    response = await fetch(url);
+    response = await fetchNamed(url);
     if (!response.ok) throw new Error(`${url}: ${response.status}`);
     body = await inflatedBody(response, count);
   }
@@ -345,7 +350,7 @@ export class KleinPipeline {
   async fetchEmbeddingRows(ids) {
     const { textEncoderUrl: te } = this.urls; const { file, row_bytes: rb } = this.teManifest.embedding;
     return new Map(await Promise.all(ids.map(async id => {
-      const r = await fetch(`${te}/${file}`, { headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
+      const r = await fetchNamed(`${te}/${file}`, { headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
       if (r.status !== 206) throw new Error(`embedding range request returned ${r.status}`);
       const b = await r.arrayBuffer(); if (b.byteLength !== rb) throw new Error('short embedding row');
       return [id, b];
