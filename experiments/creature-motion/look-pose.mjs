@@ -17,10 +17,10 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
  const forwardLocal=new THREE.Vector3(...forward),upLocal=new THREE.Vector3(...up);
  if(!(forwardLocal.length()>1e-8)||!(upLocal.length()>1e-8))fail('forward and up must be nonzero head-local directions');
  forwardLocal.normalize();
- const rightLocal=new THREE.Vector3().crossVectors(forwardLocal,upLocal);
+ const rightLocal=new THREE.Vector3().crossVectors(upLocal,forwardLocal);
  if(!(rightLocal.length()>1e-6))fail('forward and up must not be parallel');
  rightLocal.normalize();
- const upOrtho=new THREE.Vector3().crossVectors(rightLocal,forwardLocal).normalize();
+ const upOrtho=new THREE.Vector3().crossVectors(forwardLocal,rightLocal).normalize();
 
  function decompose(array){
   const p=new THREE.Vector3(),q=new THREE.Quaternion(),s=new THREE.Vector3();
@@ -47,19 +47,21 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   const placementArray=placementMatrix??new THREE.Matrix4().identity().toArray();
   if(!Array.isArray(placementArray)||placementArray.length!==16||!placementArray.every(Number.isFinite))fail('placementMatrix must be a finite 16-element array');
   const placement=new THREE.Matrix4().fromArray(placementArray);
-  const headWorldFull=placement.clone().multiply(new THREE.Matrix4().fromArray(headBone.worldMatrix));
-  const headPosWorld=new THREE.Vector3().setFromMatrixPosition(headWorldFull);
-  const headQuatFull=new THREE.Quaternion().setFromRotationMatrix(headWorldFull);
-
-  const targetVec=new THREE.Vector3(...target);
-  const offset=targetVec.clone().sub(headPosWorld);
+  if(placement.determinant()===0)fail('placementMatrix must be invertible');
+  // Pull the target through placement instead of extracting a quaternion from
+  // a scaled scene matrix. The latter is not a rotation (even at uniform x2).
+  const headWorld=new THREE.Matrix4().fromArray(headBone.worldMatrix);
+  const headPosition=new THREE.Vector3().setFromMatrixPosition(headWorld);
+  const headOrientation=decompose(headBone.worldMatrix).q;
+  const targetInPose=new THREE.Vector3(...target).applyMatrix4(placement.clone().invert());
+  const offset=targetInPose.sub(headPosition);
   const distance=offset.length();
   if(!(distance>1e-4))return {...unmodified,reason:'target too near the head: original pose preserved'};
   const dirWorld=offset.multiplyScalar(1/distance);
 
   // Express the desired aim direction in the head's own local forward/up/right
   // basis so the correction is relative to the animated baseline, not world axes.
-  const dirLocal=dirWorld.clone().applyQuaternion(headQuatFull.clone().invert());
+  const dirLocal=dirWorld.clone().applyQuaternion(headOrientation.clone().invert());
   const x=dirLocal.dot(rightLocal),y=dirLocal.dot(upOrtho),z=dirLocal.dot(forwardLocal);
   const horizontal=Math.hypot(x,z);
   const yaw=Math.atan2(x,z);
@@ -76,7 +78,10 @@ export function createLookPoseModifier({THREE,rigFrame,neck,head,forward,up,maxY
   const pitchQuat=new THREE.Quaternion().setFromAxisAngle(rightLocal,-clampedPitch);
   const fullCorrection=yawQuat.clone().multiply(pitchQuat).normalize();
   const identityQuat=new THREE.Quaternion();
-  const neckCorrection=identityQuat.clone().slerp(fullCorrection,neckShare);
+  // The correction was expressed in head-local axes. Neck has different
+  // animated/rest axes: conjugate the neck share into its own local frame.
+  const headInNeck=decompose(neckBone.worldMatrix).q.invert().multiply(headOrientation);
+  const neckCorrection=headInNeck.clone().multiply(identityQuat.clone().slerp(fullCorrection,neckShare)).multiply(headInNeck.clone().invert()).normalize();
   const headCorrection=identityQuat.clone().slerp(fullCorrection,1-neckShare);
 
   const neckOriginal=decompose(neckBone.localMatrix);
