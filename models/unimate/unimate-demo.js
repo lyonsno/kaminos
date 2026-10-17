@@ -598,7 +598,7 @@ export async function createUniMateDemo({ canvas, weightsBase = '/weights/', bun
   // The model and its generation skeleton (unimate-generator.js), on this page's device and session,
   // generating as a kit route beside the scene's foreground frames.
   async function loadModel({ onStatus = () => {}, onBytes = () => {} } = {}) {
-    const gen = await createUniMateGenerator({ device, session, beginRun: id => foreground.beginRun(id), weightsBase, t5Base, bundleBase, onStatus, onBytes });
+    const gen = await createUniMateGenerator({ device, session, beginRun: (id, options) => foreground.beginRun(id, options), weightsBase, t5Base, bundleBase, onStatus, onBytes });
     const sync = () => {
       const { parents, jointNames, rest, name, fps } = gen.skeleton;
       generationSkeleton = { parents, jointNames, rest };

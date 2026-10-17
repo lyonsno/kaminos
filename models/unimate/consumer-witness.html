@@ -33,14 +33,14 @@ try {
     h.completion.then(r => { const now = performance.now(); if (r.status === 'completed') { state.frames++; if (last !== null && state.phase === 'running') state.gaps.push(now - last); last = now; } requestAnimationFrame(frame); });
   };
   requestAnimationFrame(frame);
-  const consumer = createUniMateConsumer({ device, queue: device.queue, session, beginRun: id => foreground.beginRun(id), routeId: foreground.routeId }, {
+  const consumer = createUniMateConsumer({ device, queue: device.queue, session, beginRun: (id, options) => foreground.beginRun(id, options) }, {
     ...(params.get('weights') ? { weightsBase: params.get('weights'), t5Base: params.get('t5') } : {}),
     ...(params.get('budget') ? { memoryBudgetBytes: Number(params.get('budget')) } : {}),
   });
   window.__runConsumer = async (asset, prompt, seed = 1) => {
     state.phase = 'running'; state.gaps = []; state.progress = []; state.result = null; state.error = null;
     try {
-      const input = asset.url ? { glb: await (await fetch(asset.url)).arrayBuffer(), name: asset.name, restRotation: asset.restRotation ?? null } : asset;
+      const input = asset.url ? { bytes: await (await fetch(asset.url)).arrayBuffer(), name: asset.name, source: asset.url, restRotation: asset.restRotation ?? null } : asset;
       const out = await consumer.run({ asset: input, prompt, seed, onProgress: p => state.progress.push({ stage: p.stage, detail: p.detail, progress: p.progress, at: performance.now() }) });
       window.__consumerGlb = out.glb;
       const s = [...state.gaps].sort((a, b) => a - b);

@@ -1,22 +1,24 @@
 // UniMate as a model consumer for a host app such as the Kaminos authoring app.
 //
-// The host owns the GPU: { device, queue, session, beginRun, routeId } (one shared device, one kit
-// inference session, and its foreground service's beginRun(runId) and routeId, so the host keeps
-// drawing frames while the model runs as GPU duties on that route). The consumer has the Generate-drawer service shape:
+// The host owns the GPU: { device, queue, session, beginRun } (one shared device, one kit inference
+// session or a function returning it, and its foreground service's beginRun(runId, { routeId }), so
+// the host keeps drawing frames while the model runs as GPU duties under UniMate's own route; the
+// Kaminos app's GPU host has this shape). The consumer has the Generate-drawer service shape:
 //
 //   const unimate = createUniMateConsumer(host, { weightsBase, t5Base, skeletonsBase, labelerZip });
-//   const { glb, motion, report } = await unimate.run({ asset: { glb: bytes, name: 'fox' }, prompt: 'An object walks forward.', seed: 1 });
-//   unimate.read();   // { phase, stage, detail, progress, error, last }
+//   const { glb, motion, report } = await unimate.run({ asset: { bytes, name: 'fox' }, prompt: 'An object walks forward.', seed: 1 });
+//   unimate.read();   // { phase, stage, detail, progress, error, last, memory }
 //   unimate.stop();   // between GPU duties, through the kit inference control
 //
-// asset is a rigged .glb ({ glb, name, restRotation?, labels? }; prepared as UniMate's rig_preprocess
+// asset is a rigged .glb ({ bytes, name, source?, restRotation?, labels? }; prepared as UniMate's rig_preprocess
 // would, labels from UniMate's own rule labeller unless given) or a published skeleton ({ skeleton:
 // 'dog' }). The result's glb is the animated asset: the skeleton at UniMate's canonical rest, the
 // motion's rotation and root tracks at 30 fps, and for a rig its skinned mesh, materials and
 // textures bound to that skeleton (unimate-export-glb.js). Stages report what they are doing, with
 // no invented percentages: download (bytes), label, encode, solve (evaluations and solver time t),
-// decode, bake. Before any allocation, run() refuses if the model's GPU memory estimate exceeds
-// the host's memoryBudgetBytes.
+// decode, bake. Before any allocation, run() refuses if the model's GPU memory estimate exceeds the
+// device's buffer limits or the host's memoryBudgetBytes, and read().memory reports the estimate.
+// Playback is the host's: the glb's animation clip plays wherever the host plays glTF animation.
 import { createUniMateGenerator } from './unimate-generator.js';
 import { readRig, turnRest, buildSkeletonBundle } from './unimate-rig-import.js';
 import { createLabeler } from './unimate-rig-labels.js';
@@ -30,22 +32,23 @@ export function unimateMemoryEstimate({ joints = 71 } = {}) {
   const weights = 297_891_584 + 438_514_176;
   const tokens = 2 * 61 * joints, D = 512;
   const workspace = 4 * (tokens * D * 12 + tokens * 2 * 1365 * 2 + 2 * 8 * joints * joints * 10 + 6 * Math.max(2 * joints * joints * 128, 2 * 61 * 1024 * joints));
-  return { weights, workspace, total: weights + workspace };
+  return { weights, workspace, total: weights + workspace, largestBuffer: 32128 * 768 * 4 };
 }
 
 export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16/`, t5Base = `${HUB}/t5-fp16/`, skeletonsBase = `${HUB}/skeletons/`,
   labelerZip = `${HUB}/labeler/unimate-labeler.zip`, defaultSkeleton = 'dog', memoryBudgetBytes = null } = {}) {
-  const { device, session, beginRun } = host;
-  const routeId = host.routeId ?? undefined;   // the host foreground service's route (see unimate-generator.js)
-  if (!device || !session || typeof beginRun !== 'function') throw new Error('UniMate needs a host { device, session, beginRun }');
-  const state = { phase: 'idle', stage: null, detail: null, progress: null, error: null, last: null };
+  const { device } = host;
+  const session = typeof host.session === 'function' ? host.session() : host.session;
+  const beginRun = (runId, options) => host.beginRun(runId, options);
+  if (!device || !session || typeof host.beginRun !== 'function') throw new Error('UniMate needs a host { device, session, beginRun }');
+  const state = { phase: 'idle', stage: null, detail: null, progress: null, error: null, last: null, memory: unimateMemoryEstimate() };
   const set = (phase, stage = null, detail = null, progress = null) => Object.assign(state, { phase, stage, detail, progress });
   let generator = null, labeler = null, running = null;
 
   async function ensureModel() {
     if (generator) return generator;
     set('loading', 'download', 'model and text encoder');
-    generator = await createUniMateGenerator({ device, session, beginRun, routeId, weightsBase, t5Base, bundleBase: `${skeletonsBase}${defaultSkeleton}/`,
+    generator = await createUniMateGenerator({ device, session, beginRun, weightsBase, t5Base, bundleBase: `${skeletonsBase}${defaultSkeleton}/`,
       onStatus: s => { if (s.phase === 'load') set('loading', 'download', s.detail, state.progress); },
       onBytes: (loaded, total) => set('loading', 'download', 'model and text encoder', { bytes: loaded, totalBytes: total }) });
     return generator;
@@ -59,15 +62,17 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
     state.error = null;
     try {
       // Refuse before allocating anything the host cannot afford.
-      const estimate = unimateMemoryEstimate();
-      if (memoryBudgetBytes !== null && estimate.total > memoryBudgetBytes) {
-        throw Object.assign(new Error(`UniMate needs about ${Math.ceil(estimate.total / 1e6)} MB of GPU memory; the budget is ${Math.floor(memoryBudgetBytes / 1e6)} MB`), { name: 'MemoryRefusal' });
-      }
+      const estimate = state.memory = unimateMemoryEstimate();
+      const refuse = why => { throw Object.assign(new Error(`UniMate needs about ${Math.ceil(estimate.total / 1e6)} MB of GPU memory; ${why}`), { name: 'MemoryRefusal' }); };
+      if (memoryBudgetBytes !== null && estimate.total > memoryBudgetBytes) refuse(`the budget is ${Math.floor(memoryBudgetBytes / 1e6)} MB`);
+      // The largest single tensor (the T5 shared embedding) must fit one buffer binding.
+      if (device.limits && device.limits.maxBufferSize < estimate.largestBuffer) refuse(`this device's largest buffer is ${Math.floor(device.limits.maxBufferSize / 1e6)} MB`);
       const gen = await ensureModel();
       let rig = null, labels = null, data = null;
-      if (asset?.glb) {
+      const bytes = asset?.bytes ?? asset?.glb ?? null;
+      if (bytes) {
         report('running', 'label', asset.name ?? 'rig');
-        rig = turnRest(readRig(asset.glb instanceof ArrayBuffer ? asset.glb : asset.glb.buffer.slice(asset.glb.byteOffset, asset.glb.byteOffset + asset.glb.byteLength)),
+        rig = turnRest(readRig(bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
           asset.restRotation ?? null);
         labels = asset.labels ?? (await (labeler ??= createLabeler({ zipUrl: labelerZip, onStatus: s => report('running', 'label', s) }))).label(rig);
         report('running', 'encode', 'joint labels');

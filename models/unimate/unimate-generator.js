@@ -75,8 +75,8 @@ async function download(url, onBytes) {
 
 
 // skeleton: a published bundle directory (bundleBase) or in-memory data ({ b, a }, skeletonData).
-// routeId: the kit route the generation registers. Foreground opportunities are tied to the foreground
-// service's route, so a host whose service has its own route (an app frame owner) passes that one.
+// routeId: the model's kit route. A run starts with beginRun(runId, { routeId }), so the host's
+// foreground service (its own or an app-wide one) carries UniMate's identity for the run.
 export async function createUniMateGenerator({ device, session, beginRun, routeId = UNIMATE_ROUTE_ID, weightsBase, t5Base, bundleBase = null, skeletonData = null,
   onStatus = () => {}, onBytes = () => {} }) {
   const g = { bundle: null, arrays: null, skeleton: null, parameterCount: null, forwardFlops: null };
@@ -174,7 +174,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
     let frameRun = null, route = null, result;
     try {
       if (cooperative) {
-        frameRun = await beginRun(runId);
+        frameRun = await beginRun(runId, { routeId });
         route = await session.registerRoute({ routeId, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
