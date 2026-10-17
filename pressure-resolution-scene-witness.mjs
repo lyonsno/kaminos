@@ -32,9 +32,12 @@ try {
   // This saved basin is a held look. Explicitly resume it for the live dispatch assay.
   await control('volume-look-freeze',0);
   assert.equal(await page.locator('[data-authoring-alias="volume-pressure-resolution"]').count(),1,'normal scene pressure choice is mounted');
-  await page.keyboard.press('Home');
+  await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosFrameSelected();});
   for(const mode of ['off','equal','half','off']) {
-    report.phase=`scene-${mode}`;await save();await control('volume-pressure-resolution',mode);
+    report.phase=`scene-${mode}`;await save();
+    const selector=page.locator('[data-authoring-alias="volume-pressure-resolution"]');
+    assert.ok(await selector.isVisible(),'pressure selector must be visible in the scene inspector');
+    await selector.selectOption(mode);
     const step=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
     await page.waitForFunction(({step,mode})=>{
       const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);
