@@ -22,7 +22,7 @@ export default {
     geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
     geometry.setIndex(health.faces.flat());
     const mesh = new Mesh(geometry,new MeshNormalMaterial({side:DoubleSide}));
-    mesh.name = 'MobRecon native diagnostic'; mesh.position.y=1.5; mesh.scale.setScalar(10); mesh.visible=false;
+    mesh.name = 'MobRecon native diagnostic'; mesh.position.y=1.5; mesh.scale.setScalar(5); mesh.visible=false;
     const asset = await scene.attach(mesh,{owned:true,metadata:{label:mesh.name,type:'live-diagnostic',source:health.identity}});
     document.defaultView.kaminosSelection?.clear();
     const video = document.createElement('video'); video.muted=true; video.autoplay=true; video.playsInline=true;
@@ -39,7 +39,7 @@ export default {
     const sync = () => {
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ' | last computed mesh retained' : ''}` :
-        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | capture age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | diagnostic, no interaction`;
+        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | diagnostic, no interaction`;
       if (overlay && video.videoWidth) {
         const [x0,y0,x1,y1]=cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
         Object.assign(overlay.style,{left:`${x0/video.videoWidth*100}%`,top:`${y0/video.videoHeight*100}%`,
@@ -57,18 +57,19 @@ export default {
     };
     const schedule = ticket => {
       if (!running || ticket!==generation || disposed) return;
-      frameCallback=video.requestVideoFrameCallback(() => {
-        flight=infer(ticket).catch(async cause => {
+      frameCallback=video.requestVideoFrameCallback((now,metadata) => {
+        flight=infer(ticket,metadata).catch(async cause => {
           error=String(cause); running=false; stream?.getTracks().forEach(track=>track.stop());stream=null; sync();
           if(sessionId) await emit({kind:'failure',error,epochMs:Date.now()}).catch(()=>{});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
     };
-    const infer = async ticket => {
+    const infer = async (ticket,metadata) => {
       canvas.width=video.videoWidth;canvas.height=video.videoHeight;
       const capture={captureId:crypto.randomUUID(),captureEpochMs:Date.now()};
       context.drawImage(video,0,0);
       const request={...capture,sessionId,handedness,pixelBasis:'unmirrored_camera',
+        clock:'browser_sample_not_sensor_exposure',videoFrameMetadata:metadata,
         cropBox:cameraCrop(canvas.width,canvas.height,cropX,cropY,cropSize),
         image:canvas.toDataURL('image/jpeg',.95).split(',')[1]};
       const result=await api('/frame',request);
@@ -85,9 +86,9 @@ export default {
       geometry.computeVertexNormals();geometry.computeBoundingSphere();mesh.visible=true;
       last=result;received++;scene.redraw();sync();
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
-        displayTransform:{center,scale:10,invertY:true}});
+        displayTransform:{center,scale:5,invertY:true}});
     };
-    const frame = () => scene.setView({position:[0,1.5,document.defaultView.innerWidth<600?5:3.2],target:[0,1.5,0]});
+    const frame = () => scene.setView({position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     frame();
     const unsubscribe=scene.onFrame(sync);
     const start = async () => {
