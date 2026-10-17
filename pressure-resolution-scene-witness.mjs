@@ -6,12 +6,14 @@ const [origin,out,basin,executable,playwright]=process.argv.slice(2);
 assert.ok(origin&&out&&basin&&executable&&playwright);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',origin,basin,executable,source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),errors:[],arms:[]};
-const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));await save();let browser;
+const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));await save();let browser,page;
 try {
   assert.ok(!executable.includes('/Google Chrome.app/'));
   const {chromium}=await import(playwright);
   browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
-  const page=await browser.newPage({viewport:{width:1100,height:800}});
+  page=await browser.newPage({viewport:{width:1100,height:800}});
+  report.networkErrors=[];
+  page.on('response',r=>{if(r.status()>=400)report.networkErrors.push({url:r.url(),status:r.status()});});
   page.on('pageerror',e=>report.errors.push(String(e)));
   page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
   report.runtime=await (await page.request.get(`${origin}/api/runtime-config`)).json();
@@ -19,7 +21,7 @@ try {
   report.phase='scene-load';await save();
   await page.goto(`${origin}/index.html?workspace=authoring`);
   await page.waitForFunction(()=>window.kaminosSceneAuthoring?.addFlameEmitter);
-  await page.evaluate(async id=>window.kaminosSceneAuthoring.addFlameEmitter(id),basin);
+  report.addResult=await page.evaluate(async id=>window.kaminosSceneAuthoring.addFlameEmitter(id),basin);
   const control=async(id,value)=>page.evaluate(({id,value})=>{
     const c=document.getElementById(id);if(!c)throw Error(`Missing ${id}`);
     c.value=value;c.dispatchEvent(new Event('input',{bubbles:true}));c.dispatchEvent(new Event('change',{bubbles:true}));
@@ -48,6 +50,8 @@ try {
   report.saved=await page.evaluate(()=>window.saveScene({result:true}));
   assert.equal(report.saved.ok,true);
   report.status='passed';report.phase='complete';
-}catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;}
+}catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;
+  if(page)try{report.failureState=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),scene:window.kaminosSceneAuthoring?.read?.(),pressureControl:document.getElementById('volume-pressure-resolution')?.value}));await page.screenshot({path:`${out}/failure.png`});}catch(capture){report.captureError=String(capture);}
+}
 finally{await save();await browser?.close();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));
