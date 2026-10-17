@@ -27710,7 +27710,7 @@ sceneInitialization.then(async () => {
   initEnvButtons();
   loadDemoButtons();
   factorySceneDocument=buildSceneData();
-  factorySceneDocument.environment.name='studio';factorySceneDocument.environment.recipes={};
+  Object.assign(factorySceneDocument.environment,{name:'studio',...environmentDefaults('studio'),recipes:{}});
   factorySceneDocument.backdropBrightness=Number(document.getElementById('backdrop-brightness').value);
   const applyNavigationPreference=value=>{
     const input=document.getElementById('navigation-input-mode');
