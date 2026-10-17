@@ -157,6 +157,15 @@ export function isReloadableSceneObjectRecord(record) {
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
 }
 
+// A scene's own identity, kept through save and load. Anything written about
+// the scene (a note on a point of an object) names it to recognise it again.
+const SCENE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const readSceneId = value => typeof value === 'string' && SCENE_ID.test(value) ? value : null;
+
+export function mintSceneId(crypto = globalThis.crypto) {
+  return 'scene-' + Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
   if (!sceneDocumentIsLoadable(data) && !(allowEmpty && Number.isInteger(data?.version) && data.version > 0)) throw new Error('Invalid scene format');
@@ -191,6 +200,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    sceneId: readSceneId(data.sceneId),
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
@@ -211,6 +221,7 @@ export function planSceneRestore(data, { allowEmpty = false } = {}) {
 }
 
 export function buildSceneDocument({
+  sceneId = null,
   timestamp = new Date().toISOString(),
   objects = [],
   groups = [],
@@ -236,6 +247,7 @@ export function buildSceneDocument({
   backdrop = false,
   backdropBrightness = undefined,
 } = {}) {
+  if (sceneId != null && !readSceneId(sceneId)) throw new Error('Scene id must be 1-128 letters, digits, ".", "_", ":" or "-"');
   const sceneObjects = objects.map(normalizeSceneObjectRecord);
   const liquidSetup = normalizeLocalLiquidSetup(localLiquid);
   if (sceneObjects.some(record => record.type === LOCAL_LIQUID_EMITTER_TYPE) && !liquidSetup) {
@@ -258,6 +270,7 @@ export function buildSceneDocument({
   const document = {
     schema: SCENE_SCHEMA,
     version: fireSettings ? SCENE_VERSION : 8,
+    ...(sceneId == null ? {} : {sceneId}),
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),

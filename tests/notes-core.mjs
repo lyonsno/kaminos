@@ -245,16 +245,18 @@ test("a point note says what became of the geometry it was on", () => {
   assert.equal(pointStatusText(null), '');
 });
 
-test('a point note is checked only in its own scene', () => {
-  const note = {subject: {scene: 'arm.kaminos.json'}};
-  assert.equal(pointInScene(note, 'arm.kaminos.json'), true);
-  assert.equal(pointInScene(note, 'kiln.kaminos.json'), false);
-  assert.equal(pointInScene(note, ''), false);
-  // Two unsaved scenes are the same only with evidence: the same page and scene load.
-  const unsaved = {subject: {scene: null}, context: {sceneInstance: 'page-1:3'}};
-  assert.equal(pointInScene(unsaved, null, 'page-1:3'), true, 'the same unsaved scene, still open');
-  assert.equal(pointInScene(unsaved, null, 'page-1:4'), false, 'another scene loaded since');
-  assert.equal(pointInScene(unsaved, null, 'page-2:3'), false, 'another page');
-  assert.equal(pointInScene({subject: {scene: null}}, null, 'page-1:3'), false, 'no evidence, no match');
-  assert.equal(pointInScene({subject: {scene: 'arm.kaminos.json'}, context: {sceneInstance: 'x'}}, 'arm.kaminos.json', 'y'), true, 'a named scene matches by name');
+test('a point note is checked only in the scene it was written in, by scene id', () => {
+  const note = {subject: {scene: 'arm.kaminos.json', sceneId: 'scene-aaaaaaaaaaaaaaaa'}};
+  assert.equal(pointInScene(note, 'scene-aaaaaaaaaaaaaaaa'), true, 'the same scene, open again');
+  assert.equal(pointInScene(note, 'scene-bbbbbbbbbbbbbbbb'), false, 'another scene, even under the same file name');
+  assert.equal(pointInScene(note, null), false, 'no scene settled on the page (still loading): no match');
+  assert.equal(pointInScene({subject: {scene: 'arm.kaminos.json'}}, 'scene-aaaaaaaaaaaaaaaa'), false, 'a file name alone is not evidence');
+  assert.equal(pointInScene({subject: {scene: null, sceneId: null}}, null), false, 'no id on either side is no match');
+});
+
+test('a post keeps the scene id it was written in', () => {
+  const posted = checkedPost({kind: 'note', text: 'here', anchor: {kind: 'scene'}, subject: {scene: null, sceneId: 'scene-aaaaaaaaaaaaaaaa'}});
+  assert.deepEqual(posted.subject, {scene: null, sceneId: 'scene-aaaaaaaaaaaaaaaa'});
+  assert.deepEqual(checkedPost({kind: 'note', text: 'here', anchor: {kind: 'scene'}, subject: {scene: 'a.kaminos.json'}}).subject, {scene: 'a.kaminos.json'});
+  assert.throws(() => checkedPost({kind: 'note', text: 'here', anchor: {kind: 'scene'}, subject: {sceneId: 7}}), /sceneId/);
 });

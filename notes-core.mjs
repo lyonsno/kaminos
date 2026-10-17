@@ -99,8 +99,9 @@ export function checkedPost(raw) {
   if (kind === 'note' && !text && !picture) throw new Error('A note needs words or a picture');
   const subject = plainJson(raw.subject, 'subject') ?? {};
   if (subject.scene != null && typeof subject.scene !== 'string') throw new Error('subject.scene must be a scene file name');
+  if (subject.sceneId != null && typeof subject.sceneId !== 'string') throw new Error('subject.sceneId must be the scene id');
   if (raw.urgent != null && typeof raw.urgent !== 'boolean') throw new Error('urgent is true or false');
-  return {kind, text, to: parseAddressees(raw.to ?? []), parent, anchor, subject: {scene: subject.scene ?? null},
+  return {kind, text, to: parseAddressees(raw.to ?? []), parent, anchor, subject: {scene: subject.scene ?? null, ...(subject.sceneId ? {sceneId: subject.sceneId} : {})},
     context: plainJson(raw.context, 'context'), picture, urgent: raw.urgent === true};
 }
 
@@ -298,13 +299,10 @@ export function addresseesIn(text, known) {
 }
 // What became of the geometry a point note is on, from a scene recheck
 // ({now, status}); nothing to say while it is the same or cannot be told.
-// A point note's geometry can only be checked in the scene it was written in:
-// a named scene by its name; an unsaved scene only with evidence that it is
-// the same one, the page and scene load the note was written in.
-export function pointInScene(note, scene, instance = null) {
-  const written = note?.subject?.scene ?? null;
-  if (written || scene) return written === (scene || null);
-  return !!instance && note?.context?.sceneInstance === instance;
+// A point note's geometry can only be checked in the scene it was written in,
+// known by the scene's own id; a file name or an id-less note is no evidence.
+export function pointInScene(note, sceneId) {
+  return !!sceneId && note?.subject?.sceneId === sceneId;
 }
 
 export function pointStatusText(result) {

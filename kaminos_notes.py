@@ -324,8 +324,9 @@ class NotesLog:
         else:
             anchor = checked_anchor(body.get("anchor"))
         subject = body.get("subject") or {}
-        if not isinstance(subject, dict) or (subject.get("scene") is not None and not isinstance(subject.get("scene"), str)):
-            raise NotesError(400, "request", "subject is {scene: <scene file name or null>}")
+        if not isinstance(subject, dict) or (subject.get("scene") is not None and not isinstance(subject.get("scene"), str)) \
+                or (subject.get("sceneId") is not None and not isinstance(subject.get("sceneId"), str)):
+            raise NotesError(400, "request", "subject is {scene: <scene file name or null>, sceneId: <scene id, optional>}")
         context = body.get("context")
         if context is not None and not isinstance(context, dict):
             raise NotesError(400, "request", "context is an object")
@@ -349,10 +350,11 @@ class NotesLog:
             recipients = [name for name in dict.fromkeys(to + inherited) if name != author]
             thread = parent["thread"] if parent else note_id
             scene = subject.get("scene") or ((self._notes[thread].get("subject") or {}).get("scene") if parent else None)
+            scene_id = subject.get("sceneId") or ((self._notes[thread].get("subject") or {}).get("sceneId") if parent else None)
             event = self._stamp(seq, "note", author, origin)
             event.update({"id": note_id, "kind": kind, "text": text, "to": to, "recipients": recipients,
                           "parent": parent_id, "thread": thread, "anchor": anchor,
-                          "subject": {"scene": scene, "source": origin.get("source")}, "context": context,
+                          "subject": {"scene": scene, **({"sceneId": scene_id} if scene_id else {}), "source": origin.get("source")}, "context": context,
                           "picture": None, "urgent": urgent})
             if picture is not None:
                 data, meta = picture
