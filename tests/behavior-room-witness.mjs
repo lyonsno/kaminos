@@ -8,6 +8,11 @@ const state={running:false,zones:[{id:'yard',label:'Yard',transform:t,mounted:tr
 api.validateBehaviorRoom(state,setup);
 for(const mutate of [s=>s.zones=[],s=>s.zones[0].mounted=false,s=>s.actors[0].places[0].enabled=false,s=>s.actors[0].active=false,s=>s.running=true,s=>s.actors[0].state.skin.bones=28,s=>s.actors[0].state.deformation.effective='cpu-reference',s=>s.actors[0].state.source.motionSha256='stale']){const wrong=structuredClone(state);mutate(wrong);assert.throws(()=>api.validateBehaviorRoom(wrong,setup));}
 api.validateBehaviorRoom({...state,newField:123},setup);
+const stanceSetup=structuredClone(setup);stanceSetup.actors[0].creature.wander_travel='stance';
+assert.throws(()=>api.validateBehaviorRoom(state,stanceSetup),/stance|travel/i,'Requested stance travel must not pass with missing or fallback transport evidence');
+const stanceState=structuredClone(state);stanceState.actors[0].state.action.motion={travel:{kind:'derived-low-foot-backward-speed',unitsPerSecond:1,supports:[{name:'hindlimb-left-toe'},{name:'hindlimb-right-toe'},{name:'forelimb-left-toe'},{name:'forelimb-right-toe'}]}};
+api.validateBehaviorRoom(stanceState,stanceSetup);
+for(const mutate of [t=>t.kind='source-root-distance',t=>t.unitsPerSecond=0,t=>t.supports.pop()]){const wrong=structuredClone(stanceState);mutate(wrong.actors[0].state.action.motion.travel);assert.throws(()=>api.validateBehaviorRoom(wrong,stanceSetup));}
 assert.equal(typeof api.validateRendererConsole,'function','Renderer-rejected visible output can silently pass the witness');
 assert.throws(()=>api.validateRendererConsole([{type:'error',text:'THREE.Renderer: Objects of type THREE.LineLoop are not supported.'}]),/Renderer/);
 api.validateRendererConsole([{type:'warning',text:'Optional adapter information unavailable'}]);
