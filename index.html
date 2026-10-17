@@ -12319,14 +12319,16 @@ async function initScene() {
     try{return frame.renderHost();}finally{ordinarySceneTransportFrame=null;}
   };
   function syncAuthoredWaterFlameTransport() {
+    syncWaterProxy();
     const prototype=volumePrototype;
     const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
       &&ordinaryDepthEnabled
+      &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
       &&!!localLiquidHost&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
       &&prototype?.isActive?.()===true;
     if(transportPrototype&&(!wanted||transportPrototype!==prototype)) {
       transportPrototype.setSceneTransportConsumer(null);
-      if(!fireProxySync?.effective())transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
+      if(!fireProxySync?.state().presentationSuppressed)transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
       transportPrototype=null;
     }
     // Release the proxy's temporary canvas hiding before transport snapshots
@@ -12341,7 +12343,7 @@ async function initScene() {
     if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
   }
   window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
-    registered:!!transportPrototype,effective:!!localLiquidHost?.state().lastFrame?.volumeTransport,
+    registered:!!transportPrototype,effective:!!transportPrototype&&!!localLiquidHost?.state().lastFrame?.volumeTransport,
     lastFrame:localLiquidHost?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
     refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   let foregroundServiceActive = false;
