@@ -115,12 +115,13 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
  for(const key of ['axis','offset','width','interior'])$(key).oninput=()=>operations.setSection({[key]:key==='interior'?$(key).value:Number($(key).value)});
  for(const key of ['isolate','deviation'])$(key).onchange=()=>{state[key]=$(key).checked;render();};
  panel.addEventListener('toggle',()=>{if(panel.open&&!target)invoke('open').catch(()=>{});else if(!panel.open&&target)operations.close();});
- let down;
+ let down,suppressClick=false;
  const hit=event=>{if(!inspectionMesh)return null;const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);return ray.intersectObject(inspectionMesh)[0];};
- const pointerDown=event=>{if(event.button===0&&panel.open&&hit(event)){down=[event.clientX,event.clientY];event.stopImmediatePropagation();}};
- const pointerUp=event=>{if(!down)return;const moved=Math.hypot(event.clientX-down[0],event.clientY-down[1]);down=null;if(moved<4){const intersection=hit(event);if(intersection){operations.selectElement(inspectionMesh.userData.faceTets[intersection.faceIndex]);event.stopImmediatePropagation();}}};
- const pointerCancel=()=>{down=null;};
- canvas.addEventListener('pointerdown',pointerDown,true);canvas.addEventListener('pointerup',pointerUp,true);canvas.addEventListener('pointercancel',pointerCancel,true);
+ const pointerDown=event=>{suppressClick=false;if(event.button===0&&panel.open&&hit(event)){down=[event.clientX,event.clientY];event.stopImmediatePropagation();}};
+ const pointerUp=event=>{if(!down)return;const moved=Math.hypot(event.clientX-down[0],event.clientY-down[1]);down=null;suppressClick=true;if(moved<4){const intersection=hit(event);if(intersection){operations.selectElement(inspectionMesh.userData.faceTets[intersection.faceIndex]);event.stopImmediatePropagation();}}};
+ const pointerCancel=()=>{down=null;suppressClick=false;};
+ const click=event=>{if(suppressClick){suppressClick=false;event.stopImmediatePropagation();}};
+ canvas.addEventListener('pointerdown',pointerDown,true);canvas.addEventListener('pointerup',pointerUp,true);canvas.addEventListener('pointercancel',pointerCancel,true);canvas.addEventListener('click',click,true);
  function refresh(){const entry=selected();let supported=false;entry?.object?.traverse(o=>{if(o.isMesh)supported=true;});panel.hidden=!supported;if(target&&entry?.id!==target.id)operations.close();if(target&&group){target.object.updateWorldMatrix(true,false);if(!group.matrix.equals(target.object.matrixWorld)){group.matrix.copy(target.object.matrixWorld);if(boundaryMesh?.parent?.isClippingGroup){const normal=new THREE.Vector3();normal.setComponent(state.axis,-1);boundaryMesh.parent.clippingPlanes[0].set(normal,planeValues().offset).applyMatrix4(group.matrix);}redraw();}}if(supported&&new URLSearchParams(location.search).get('mechanicalProxy')==='1'&&!panel.dataset.autoOpened){panel.dataset.autoOpened='true';invoke('open').catch(()=>{});}}
- return{...operations,refresh,dispose(){disposed=true;operations.close();canvas.removeEventListener('pointerdown',pointerDown,true);canvas.removeEventListener('pointerup',pointerUp,true);canvas.removeEventListener('pointercancel',pointerCancel,true);sourceGeometry?.dispose();panel.remove();}};
+ return{...operations,refresh,dispose(){disposed=true;operations.close();canvas.removeEventListener('pointerdown',pointerDown,true);canvas.removeEventListener('pointerup',pointerUp,true);canvas.removeEventListener('pointercancel',pointerCancel,true);canvas.removeEventListener('click',click,true);sourceGeometry?.dispose();panel.remove();}};
 }
