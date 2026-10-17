@@ -41,6 +41,16 @@ test('owned attachment cannot acquire an unrelated existing registration or pare
  await assert.rejects(session.attach(root,{owned:true}),/already|parent/);
  assert.equal(h.scene.children.includes(root),true);
 });
+test('owned presentation is rendered without acquiring an editable scene registration',async()=>{
+ const h=harness(),session=h.host.open(),root=new THREE.Group();
+ const geometry=new THREE.BoxGeometry(),material=new THREE.MeshStandardMaterial();root.add(new THREE.Mesh(geometry,material));
+ let released=0;geometry.addEventListener('dispose',()=>released++);
+ const receipt=await session.attach(root,{owned:true,presentation:true});
+ assert.equal(h.scene.children.includes(root),true);
+ assert.equal(h.rows.size,0,'GPU presentation cannot become a selectable transform target');
+ assert.equal(receipt.presentation,true);
+ await session.dispose();assert.equal(root.parent,null);assert.equal(released,1);
+});
 test('shared camera rejects an invalid view before mutation and round trips the applied view',()=>{
  const h=harness(),session=h.host.open(),before=session.readView();
  assert.throws(()=>session.setView({...before,position:[0,NaN,1]}),/view|finite/);

@@ -84,9 +84,10 @@ export function createWorkbenchSceneHost({scene,camera,controls,loadAsset,regist
    if(existing||root.parent)throw Error('Owned attachment cannot acquire an existing registration or parent');
    if(options.metadata?.id!==undefined)throw Error('Owned attachment receives a new scene registration');
    scene.add(root);
+   if(options.presentation===true){redraw();return {id:'@presentation:'+root.uuid,root,owned:true,presentation:true,clips:[],source:options.metadata?.source??null};}
    try{const row=registerObject(root,{type:'experiment',...(options.metadata||{})});redraw();return {id:row.id,root,owned:true,clips:options.clips||[],source:row.source};}
    catch(error){scene.remove(root);throw error;}
   },
-  remove:removeObject,readView,setView,redraw,onFrame,
+  remove:handle=>{if(!handle.presentation)return removeObject(handle);handle.root.removeFromParent();disposeOwnedSceneTree(handle.root,[scene],[scene.environment,scene.background]);redraw();},readView,setView,redraw,onFrame,
  })});
 }
