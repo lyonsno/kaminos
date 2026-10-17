@@ -6,6 +6,7 @@ import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const frame=source.slice(source.indexOf('  function renderOrdinaryFrame('),source.indexOf('  function pumpLookLabFrozenFrame('));
 const invalidate=source.match(/  function invalidateRaymarchReadouts\([^]*?\n  \}/)?.[0]||'function invalidateRaymarchReadouts() {}';
+const prepare=source.match(/  function prepareRayStepCounters\([^]*?\n  \}/)?.[0];
 test('releasing disabled counters refreshes fluid bindings before they can be submitted',()=>{
   let rebound=0;
   const context=vm.createContext({state:{width:8,height:8},controlsSnapshot:{rayStepTelemetry:false},debugOpticalStepping:{mode:'numerical'},
@@ -18,10 +19,11 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
   const noop=()=>{},state={active:true,frameCount:1,simStepCount:9,width:8,height:8,lookFreezeFrame:null,
     rayStepTelemetry:{requested:true,active:true},opticalStepping:{requested:'numerical',effective:'numerical'}};
   let receipt={...state.rayStepTelemetry},visible=true;
-  const rayStepTelemetry={ensure(w,h,requested,options){receipt={requested,active:options.supported,reason:options.reason};visible=options.supported;return false;},read:()=>receipt};
+  const rayStepTelemetry={ensure(w,h,requested,options){const active=options.supported&&options.activate!==false;receipt={requested,active,reason:options.reason};visible=active;return false;},read:()=>receipt};
   const encoder={finish:()=>({})},context=vm.createContext({
     state,rayStepTelemetry,debugOpticalStepping:{mode:'numerical',tolerance:.001},controlsSnapshot:{lookFreeze:1,density:1,fire:1,rayStepTelemetry:true},
-    productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:noop,
+    productFrameOwner:'prototype',selectiveHeadLiveCapturePaused:false,raf:0,controls:{update:noop},updateUniforms:()=>context.prepareRayStepCounters(),
+    emissiveRaymarchAdmission:()=>({eligible:true}),debugRaymarchShaderSpecialization:'auto',rebuildFluidBindGroups:noop,
     performance:{now:()=>1},device:{createCommandEncoder:()=>encoder,queue:{submit:noop}},normalizeLookFreeze:()=>true,lookFreezeCanPin:()=>true,
     simulationPaused:true,liveCompleteFlameOpticalCoefficientsEnabled:false,prepareSharedSceneConsumers:e=>e,
     selectiveHeadLiveRoleGroups:()=>null,encodeBoundarySidecar:noop,encodeBoundarySplats:noop,
@@ -35,7 +37,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
     canvas:{classList:{remove:noop}},emitStatus:noop,
   });
-  vm.runInContext(invalidate+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);
+  vm.runInContext(invalidate+'\n'+prepare+'\n'+frame+'\nrenderOrdinaryFrame(1);',context);
   assert.equal(state.error,undefined,'the chosen branch must successfully submit');assert.equal(state.frameCount,2);
   assert.equal(state.rayStepTelemetry.active,false);assert.equal(visible,false);
   assert.equal(state.opticalStepping.effective,null);assert.equal(state.opticalStepping.requested,'numerical');
