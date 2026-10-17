@@ -38,6 +38,20 @@ try {
     headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:8498'},body:JSON.stringify({error:'witness_inference_failure'})}));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('witness_inference_failure'));
   report.failure=await read();assert.equal(report.failure.running,false);assert.equal(report.failure.visible,true);
+  report.failedSubmission=await page.evaluate(async()=>{
+    const opened=indexedDB.open('hand-live-diagnostic',1);
+    const db=await new Promise((resolve,reject)=>{opened.onsuccess=()=>resolve(opened.result);opened.onerror=()=>reject(opened.error);});
+    try {
+      if(!db.objectStoreNames.contains('captures')) return null;
+      const request=db.transaction('captures').objectStore('captures').getAll();
+      return await new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result.find(x=>x.outcome?.state==='failed'));request.onerror=()=>reject(request.error);});
+    } finally {db.close();}
+  });
+  assert(report.failedSubmission?.request?.image,'failed transport lost submitted image');
+  assert.equal(report.failedSubmission.request.captureId,report.failedSubmission.captureId);
+  const beforeAge=report.failure.captureAgeMs;
+  await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+5000;});
+  await page.waitForFunction(age=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/sample age (\d+) ms/)?.[1])>age+4000,beforeAge);
   await page.screenshot({path:out+'/failure.png'});
   await page.unroute('http://127.0.0.1:8791/frame');
   await page.getByRole('button',{name:'Start camera',exact:true}).click();
@@ -49,6 +63,30 @@ try {
   await page.setViewportSize({width:430,height:932});
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('frame'));
   await page.screenshot({path:out+'/mobile.png'});
+  await page.route('http://127.0.0.1:8791/frame',route=>route.abort('connectionfailed'));
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
+  await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('Failed to fetch'));
+  report.transportFailure=await page.evaluate(async()=>{
+    const opened=indexedDB.open('hand-live-diagnostic',1);
+    const db=await new Promise((resolve,reject)=>{opened.onsuccess=()=>resolve(opened.result);opened.onerror=()=>reject(opened.error);});
+    try {
+      const request=db.transaction('captures').objectStore('captures').getAll();
+      return await new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result.find(x=>x.outcome?.error?.includes('Failed to fetch')));request.onerror=()=>reject(request.error);});
+    } finally {db.close();}
+  });
+  assert(report.transportFailure?.request?.image,'connection failure lost source pixels');
+  await page.route('http://127.0.0.1:8791/event',route=>route.abort('connectionfailed'));
+  report.closeFailure=await page.evaluate(async()=>{
+    try {await window.kaminosWorkbenchExperiments.close();return null;}catch(error){return String(error);}
+  });
+  assert(report.closeFailure,'backend loss must remain visible');
+  report.registryAfterClose=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
+  assert.equal(report.registryAfterClose.filter(row=>row.label==='MobRecon native diagnostic').length,0,'backend loss leaked registered mesh');
+  await page.unroute('http://127.0.0.1:8791/frame');await page.unroute('http://127.0.0.1:8791/event');
+  report.reopened=await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('hand-live'));
+  assert.equal(report.reopened.running,false);assert.equal(report.reopened.visible,false);
+  report.registryAfterReopen=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
+  assert.equal(report.registryAfterReopen.filter(row=>row.label==='MobRecon native diagnostic').length,1,'reopen duplicated mesh');
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());
   assert.deepEqual(report.errors,[]);report.status='passed';report.phase=null;
 } catch(error){report.error=String(error);process.exitCode=1;}
