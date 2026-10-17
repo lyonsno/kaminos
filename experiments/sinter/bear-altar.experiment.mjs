@@ -33,7 +33,7 @@ export default {id:'bear-altar',title:'Midsummer burn altar',async create({host,
   await controller.set({objectId:asset.id});syncControls();
   const unsubscribe=session.onFrame(syncControls);
   session.setView({position:[2.5,1.5,3.1],target:[0,-.2,0]});host.scene.select(asset.id);
-  const operations={setBurnable,frame:()=>{session.setView({position:[2.5,1.5,3.1],target:[0,-.2,0]});return read();}};
+  const operations={setBurnable,frame:()=>{if(controller.get())return controller.get().operations.frame();session.setView({position:[2.5,1.5,3.1],target:[0,-.2,0]});return read();}};
   for(const name of ['run','burnerOff','pause','reset','move','snapshot','view','flameView','selectFire','basins','reconnectFire','fuelFeed'])operations[name]=value=>{const active=controller.get();if(!active)throw Error('Select a mesh and enable Burnable');return active.operations[name](value);};
   return {read,operations,mount({root}){body=document.createElement('div');root.append(body);show(controller.get());return {dispose(){mount?.dispose?.();body.remove();body=null;}};},async dispose(){if(disposed)return;disposed=true;unsubscribe();for(const entry of controls.values())entry.seating.dispose();controls.clear();await controller.dispose();await session.dispose();}};
  }catch(error){await controller?.dispose();for(const entry of controls.values())entry.seating.dispose();await session.dispose();throw error;}

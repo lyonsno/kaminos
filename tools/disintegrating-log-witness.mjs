@@ -50,6 +50,7 @@ try{
  }
  const cold=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(cold.paused,true);assert.equal(cold.burner,false);
  if(experiment==='bear-altar'){
+  await page.screenshot({path:path.join(out,'altar.png')});
   const toggle=page.getByRole('checkbox',{name:'Burnable wood',exact:true});
   await toggle.uncheck();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
   await toggle.check();await page.waitForFunction(async()=>!!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
