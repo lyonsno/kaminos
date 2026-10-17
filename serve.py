@@ -3839,7 +3839,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
         elif parsed.path == "/api/ingest-mesh":
-            self.handle_ingest_mesh(parse_qs(parsed.query))
+            self.handle_ingest_mesh()
         elif parsed.path == "/api/scene-library-import":
             self.handle_scene_library_import()
         elif parsed.path == "/api/save-scene":
@@ -4596,19 +4596,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except OSError as error:
             self.send_json({'error': str(error), 'phase': 'origin-persistence'}, 500)
 
-    def handle_ingest_mesh(self, params=None):
-        """Persist a generated GLB by content hash for the existing scene loader.
-
-        An optional ?name= adds a readable alias named/<slug>-<sha8>.glb, hard-linked
-        to the same bytes, because viewer links label a mesh by its filename.
-        """
+    def handle_ingest_mesh(self):
+        """Persist a generated GLB by content hash for the existing scene loader."""
         try:
-            requested_name = (params or {}).get("name", [None])[0]
-            slug = None
-            if requested_name is not None:
-                slug = re.sub(r"[^a-z0-9]+", "-", requested_name.lower()).strip("-")[:120].strip("-")
-                if not slug:
-                    raise ValueError("Mesh name has no usable characters")
             length = int(self.headers.get("Content-Length", 0))
             if length < 20:
                 raise ValueError("GLB header and first chunk required")
@@ -4644,27 +4634,14 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                         raise ValueError("Stored GLB content identity conflict")
             finally:
                 temporary.unlink()
-            named = None
-            if slug:
-                alias = f"named/{slug}-{digest[:8]}.glb"
-                (root / "named").mkdir(exist_ok=True)
-                try:
-                    os.link(target, root / alias)
-                except FileExistsError:
-                    if not os.path.samefile(root / alias, target):
-                        raise ValueError("Mesh name alias already names other content")
-                named = {"path": alias, "source": "/api/read?" + urlencode({"root": "generated-meshes", "path": alias})}
         except ValueError as error:
             self.send_json({"error": str(error)}, 400)
             return
         except OSError as error:
             self.send_json({"error": str(error), "phase": "mesh-persistence"}, 500)
             return
-        receipt = {"schema": "kaminos.generated-mesh.v0", "sha256": digest,
-                   "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"}
-        if named:
-            receipt["named"] = named
-        self.send_json(receipt)
+        self.send_json({"schema": "kaminos.generated-mesh.v0", "sha256": digest,
+                        "bytes": length, "source": f"/api/read?root=generated-meshes&path={digest}.glb"})
 
     def handle_ingest_splat(self, params):
         """Write a dropped PLY/SPZ into the experimental splat inbox."""
