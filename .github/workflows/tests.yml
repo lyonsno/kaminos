@@ -78,7 +78,7 @@ jobs:
           if [ -f tools/ci-advisory-warnings.mjs ]; then
             node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE" "$SETUP" || {
               code=$?
-              echo "::warning::the advisory warning tool failed (exit $code), so problems in this run are unknown; see the suite step and the test-results artifact"
+              echo "::warning::the advisory warning tool failed (exit $code; setup: $SETUP), so problems in this run are unknown; see the suite step and the test-results artifact"
               printf '### Tests (advisory)\n\nThe warning tool failed (exit %s); results unknown.\n' "$code" >> "$GITHUB_STEP_SUMMARY"
             }
           else

@@ -93,3 +93,36 @@ test('an owned install is recorded with no link target', async t => {
   const report = await readReport(f);
   assert.equal(report.effective.nodeModules.linkTarget, null);
 });
+
+// A worktree whose own node_modules other worktrees link to owns a shared
+// install: npm ci there empties and rewrites it for all of them.
+async function ownerWithDependent(t, f, { installed }) {
+  const git = (...args) => spawnSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', ...args], { cwd: f.root, encoding: 'utf8' });
+  git('init', '-q'); git('add', '-A'); git('commit', '-q', '-m', 'fixture');
+  const sibling = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-dependent-'));
+  await fs.rm(sibling, { recursive: true, force: true });
+  t.after(() => fs.rm(sibling, { recursive: true, force: true }));
+  const added = git('worktree', 'add', '-q', '--detach', sibling);
+  assert.equal(added.status, 0, added.stderr);
+  await withInstall(t, f, { linked: false, installed });
+  await fs.symlink(path.join(f.root, 'node_modules'), path.join(sibling, 'node_modules'));
+  return realpathSync.native(sibling);
+}
+
+test('an install other worktrees link to is named as shared, and the remedy is not a bare npm ci', async t => {
+  const f = await fixture(t, { files, manifest });
+  const sibling = await ownerWithDependent(t, f, { installed: false });
+  await run(f);
+  const report = await readReport(f);
+  assert.deepEqual(report.effective.nodeModules.linkedFrom, [sibling]);
+  assert.doesNotMatch(report.error, /Run npm ci\./);
+  assert.match(report.error, /1 other worktree/);
+  assert.ok(report.error.includes(sibling), report.error);
+});
+
+test('the summary of an owner of a shared install says other worktrees use it', async t => {
+  const f = await fixture(t, { files, manifest });
+  await ownerWithDependent(t, f, { installed: true });
+  const cli = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f), encoding: 'utf8' });
+  assert.match(cli.stdout, /node_modules: used by 1 other worktree through a link; npm ci or npm install here changes it for them too/);
+});

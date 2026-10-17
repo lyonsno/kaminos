@@ -159,16 +159,43 @@ function nodeModulesLink(root) {
   const dir = path.join(root, 'node_modules');
   let stat;
   try { stat = lstatSync(dir); } catch { return { path: dir, linkTarget: null, dangling: false }; }
-  if (!stat.isSymbolicLink()) return { path: dir, linkTarget: null, dangling: false };
+  if (!stat.isSymbolicLink()) return { path: dir, linkTarget: null, dangling: false, linkedFrom: linkedFrom(root, dir) };
   try { return { path: dir, linkTarget: realpathSync.native(dir), dangling: false }; }
   catch { return { path: dir, linkTarget: path.resolve(root, readlinkSync(dir)), dangling: true }; }
+}
+
+// Other worktrees of this repository whose node_modules links to this one's.
+// A worktree they link to owns a shared install. Unknown (git missing, not a
+// repository) reads as none.
+function linkedFrom(root, dir) {
+  let listing;
+  try { listing = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }); }
+  catch { return []; }
+  let own;
+  try { own = realpathSync.native(dir); } catch { return []; }
+  const self = (() => { try { return realpathSync.native(root); } catch { return root; } })();
+  const found = [];
+  for (const line of listing.split('\n')) {
+    if (!line.startsWith('worktree ')) continue;
+    let tree;
+    try { tree = realpathSync.native(line.slice('worktree '.length)); } catch { continue; }
+    if (tree === self) continue;
+    const other = path.join(tree, 'node_modules');
+    try { if (lstatSync(other).isSymbolicLink() && realpathSync.native(other) === own) found.push(tree); } catch {}
+  }
+  return found.sort();
 }
 
 // npm ci or npm install, run here or where the link points, rewrites the shared
 // directory for every worktree linked to it; the only safe remedy is an install
 // of this worktree's own. unlink removes the link and never what it points at.
 function npmRemedy(link) {
-  if (!link.linkTarget) return 'Run npm ci.';
+  if (!link.linkTarget) {
+    const others = link.linkedFrom || [];
+    if (!others.length) return 'Run npm ci.';
+    const named = others.slice(0, 3).join(', ') + (others.length > 3 ? `, and ${others.length - 3} more` : '');
+    return `node_modules here is used by ${others.length} other worktree${others.length === 1 ? '' : 's'} through a link (${named}); npm ci or npm install here empties and rewrites it for all of them, with this branch's lockfile. Run it only when those worktrees can take that, or tell their owners first.`;
+  }
   if (link.dangling) return `node_modules here is a link to ${link.linkTarget}, which no longer exists. Install your own: unlink node_modules, then npm ci here.`;
   return `node_modules here is a link to a shared install at ${link.linkTarget} that other worktrees also use; npm ci or npm install, here or there, empties or changes it for all of them. Install your own instead: unlink node_modules (this removes only the link), then npm ci here.`;
 }
@@ -836,7 +863,9 @@ function summarize({ report, reportPath }) {
   // The browser line follows the counts line and any warnings.
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
   const shared = report.effective?.nodeModules?.linkTarget;
-  if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}` : `shared install at ${shared}`}; do not run npm ci or npm install here`);
+  if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}; unlink it first, then npm ci here` : `shared install at ${shared}; do not run npm ci or npm install here`}`);
+  const dependents = report.effective?.nodeModules?.linkedFrom?.length || 0;
+  if (dependents) lines.push(`node_modules: used by ${dependents} other worktree${dependents === 1 ? '' : 's'} through a link; npm ci or npm install here changes it for them too`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
