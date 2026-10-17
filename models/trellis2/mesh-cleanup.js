@@ -96,12 +96,33 @@ function unionMin(parent,a,b){a=find(parent,a);b=find(parent,b);if(a!==b){if(a<b
 const KEY_BASE=67108864;
 const edgeKey=(a,b)=>a<b?a*KEY_BASE+b:b*KEY_BASE+a;
 function admitIndexRange(vertices){if(vertices.length/3>=KEY_BASE)throw RangeError('mesh exceeds 2**26 vertices');}
+// V8 caps a Map at 2**24 entries and a multi-million-face surface has more
+// edges than that, so edge-keyed maps spill into further Maps of bounded size.
+// Membership, values and insertion-order iteration are unchanged.
+let mapShard=1<<23,shardsUsed=0,largestShard=0;
+export function setEdgeMapShardForTests(size){mapShard=size;shardsUsed=0;largestShard=0;}
+export function edgeMapShardsUsedForTests(){return shardsUsed;}
+export function edgeMapLargestShardForTests(){return largestShard;}
+function shardedMap(){
+  // Fill one Map to the shard size, then open the next: every Map stays under
+  // the limit whatever the key pattern. A key lives in exactly one shard.
+  const shards=[new Map()];
+  const home=k=>{for(const m of shards)if(m.has(k))return m;return null;};
+  return {
+    get(k){for(const m of shards){const v=m.get(k);if(v!==undefined)return v;}return undefined;},
+    set(k,v){let m=home(k);
+      if(!m){m=shards[shards.length-1];if(m.size>=mapShard){m=new Map();shards.push(m);shardsUsed=Math.max(shardsUsed,shards.length);}}
+      m.set(k,v);if(m.size>largestShard)largestShard=m.size;},
+    *values(){for(const m of shards)yield* m.values();},
+    *entries(){for(const m of shards)yield* m.entries();},
+    get size(){let t=0;for(const m of shards)t+=m.size;return t;}};
+}
 
 // Components over every shared edge, labelled in order of their lowest face
 // (scipy connected_components numbering).
 function faceComponents(faces){
   const n=faces.length/3,parent=new Int32Array(n);for(let i=0;i<n;i++)parent[i]=i;
-  const first=new Map();
+  const first=shardedMap();
   for(let f=0;f<n;f++)for(let i=0;i<3;i++){
     const k=edgeKey(faces[f*3+i],faces[f*3+(i+1)%3]),g=first.get(k);
     if(g===undefined)first.set(k,f);else unionMin(parent,g,f);
@@ -138,7 +159,7 @@ export function removeSmallComponents(vertices,faces,minArea=1e-5){
 // Split corners across edges that are not shared by exactly two faces.
 export function repairNonManifoldEdges(vertices,faces){
   if(!faces.length)return {vertices,faces};
-  const n=faces.length/3,groups=new Map();
+  const n=faces.length/3,groups=shardedMap();
   for(let f=0;f<n;f++)for(const [la,lb] of [[0,1],[1,2],[2,0]]){
     const va=faces[f*3+la],vb=faces[f*3+lb],k=edgeKey(va,vb),first=va<=vb?la:lb,second=va<=vb?lb:la;
     let g=groups.get(k);if(!g)groups.set(k,g=[]);g.push(f*3+first,f*3+second);
@@ -160,12 +181,13 @@ export function repairNonManifoldEdges(vertices,faces){
 
 export function fillSmallHoles(vertices,faces,maxHolePerimeter=3e-2){
   if(!faces.length||maxHolePerimeter<=0)return {vertices,faces};
-  const counts=new Map();
+  // Shards fill in order, so iteration is insertion order, as with one Map.
+  const counts=shardedMap();
   for(let f=0;f<faces.length/3;f++)for(let i=0;i<3;i++){
     const k=edgeKey(faces[f*3+i],faces[f*3+(i+1)%3]);counts.set(k,(counts.get(k)??0)+1);
   }
   const edges=[];
-  for(const [k,c] of counts)if(c===1)edges.push(k);
+  for(const [k,c] of counts.entries())if(c===1)edges.push(k);
   if(!edges.length)return {vertices,faces};
   const lo=k=>k%KEY_BASE,hi=k=>Math.floor(k/KEY_BASE);
   const boundary=new PySetOrder();
@@ -399,7 +421,7 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
     if(signal?.aborted)throw abortError(signal);
     const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe,simplifier:engine??undefined});
     if(signal?.aborted)throw abortError(signal);
-    return {...result,simplifier:reason?{route,reason}:{route}};
+    return {...result,simplifier:{route,...(reason?{reason}:{}),...(engine?.fallback?{fallback:engine.fallback.reason}:{})}};
   };
   return async mesh=>{
     const started=performance.now(),inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;

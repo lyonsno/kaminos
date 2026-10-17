@@ -4,7 +4,7 @@
 // fuses them; probeRelaxedFma checks that before the module is used, and
 // otherwise the finisher keeps the JS port (which emulates the fusion exactly).
 import factory from './vendor/fast-simplification/fast-simplification-0.2.0.mjs';
-import {fma} from './mesh-simplify.js';
+import {fma,simplifyMesh} from './mesh-simplify.js';
 
 export const WASM_SIMPLIFY_ROUTE='fast-simplification 0.2.0 Wasm (relaxed-SIMD fused multiply-add)';
 export const JS_SIMPLIFY_ROUTE='fast-simplification 0.2.0 JS port (emulated fused multiply-add)';
@@ -28,8 +28,26 @@ export function probeRelaxedFma(){
 
 // One simplify_mesh run: (points F32/F64 xyz, triangles I32/U32, target count,
 // aggressiveness, preserveBorder, onIteration) -> {points: F64, triangles: I32}.
+// A Wasm abort (e.g. a surface past 4 GB of Wasm memory) leaves the module
+// unusable: that call and every later one run the JS port (identical bytes), the
+// shared module is dropped so the next load starts fresh, and engine.fallback
+// records why.
 export function wasmSimplifierEngine(M){
-  return (points,triangles,count,aggressiveness,preserveBorder,onIteration)=>{
+  const js=(points,triangles,count,aggressiveness,preserveBorder,onIteration)=>
+    simplifyMesh(points,triangles,{targetCount:count,aggressiveness,preserveBorder,onIteration});
+  const engine=(points,triangles,count,aggressiveness,preserveBorder,onIteration)=>{
+    if(engine.fallback)return js(points,triangles,count,aggressiveness,preserveBorder,onIteration);
+    try{return wasm(points,triangles,count,aggressiveness,preserveBorder,onIteration);}
+    catch(error){
+      if(!(error instanceof WebAssembly.RuntimeError))throw error;
+      engine.fallback={reason:'Wasm simplifier aborted ('+error.message+'); JS port used'};
+      if(loaded===M)loading=null;
+      return js(points,triangles,count,aggressiveness,preserveBorder,onIteration);
+    }
+  };
+  engine.fallback=null;
+  return engine;
+  function wasm(points,triangles,count,aggressiveness,preserveBorder,onIteration){
     const nv=points.length/3,nt=triangles.length/3;
     // fs_simplify takes ownership of both input buffers and frees them once loaded.
     // Wasm addresses are unsigned: index the heaps with >>> so buffers above 2 GiB work.
@@ -41,11 +59,11 @@ export function wasmSimplifierEngine(M){
       const op=M._malloc(np*24),ot=M._malloc(nOut*12);
       try{M._fs_read(op,ot);return {points:M.HEAPF64.slice(op>>>3,(op>>>3)+np*3),triangles:M.HEAP32.slice(ot>>>2,(ot>>>2)+nOut*3)};}
       finally{M._free(op);M._free(ot);}
-    }finally{M.onIteration=undefined;M._fs_release();}
-  };
+    }finally{M.onIteration=undefined;try{M._fs_release();}catch{}}
+  }
 }
 
-let loading=null;
+let loading=null,loaded=null;
 // -> {engine, route, reason?}; engine is null when the JS port must be used.
 export function loadSimplifier({prefer='auto'}={}){
   if(prefer==='js')return Promise.resolve({engine:null,route:JS_SIMPLIFY_ROUTE,reason:'JS port requested'});
@@ -53,6 +71,7 @@ export function loadSimplifier({prefer='auto'}={}){
   return loading??=(async()=>{
     const probe=probeRelaxedFma();
     if(!probe.fused)return {engine:null,route:JS_SIMPLIFY_ROUTE,reason:probe.reason};
-    return {engine:wasmSimplifierEngine(await factory()),route:WASM_SIMPLIFY_ROUTE};
+    loaded=await factory();
+    return {engine:wasmSimplifierEngine(loaded),route:WASM_SIMPLIFY_ROUTE};
   })();
 }
