@@ -56,6 +56,13 @@ try{
   await toggle.check();await page.waitForFunction(async()=>!!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
   assert.equal(await page.getByRole('button',{name:'Run',exact:true}).isVisible(),true,'Selected burnable must expose its actual Run control');
   const rebound=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(rebound.objectId,cold.objectId);assert.equal(rebound.altarBearId,cold.objectId);
+  const undo=await guarded(page.evaluate(async()=>{
+   const id=(await window.kaminosWorkbenchExperiments.read()).objectId;
+   window.removeSceneObject(id);const removed=!window.kaminosSceneObjectDebugState().some(row=>row.id===id);
+   await new Promise(requestAnimationFrame);await window.kaminosSceneEdits.undo();window.selectSceneObject(id);
+   await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+   return {id,removed,restored:window.kaminosSceneObjectDebugState().some(row=>row.id===id),checkboxes:document.querySelectorAll('[aria-label="Burnable wood"]').length};
+  }));assert.equal(undo.removed,true);assert.equal(undo.restored,true);assert.equal(undo.checkboxes,1);assert.equal(await page.getByRole('button',{name:'Run',exact:true}).isVisible(),true,'Undo must restore active combustion controls');report.lifecycle={undo};
   report.selection=await page.evaluate(()=>({objects:window.kaminosSceneObjectDebugState(),active:window.kaminosSelection.read()}));
   assert.equal(report.selection.objects.some(row=>row.label==='Char residue'),false,'Residue cannot be an authored transform target');
   report.inputs.push({inspectorBurnableToggle:'off/on',objectId:cold.objectId});
@@ -82,6 +89,18 @@ try{
  await invoke('view',{mode:'char'});await sample('consumed-char');await invoke('view',{mode:'beauty'});
  await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
  await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
+ if(experiment==='bear-altar'){
+  report.phase='lifecycle-switch';await save();await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('checkbox',{name:'Burnable wood',exact:true}).uncheck();
+  await guarded(page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled));
+  report.lifecycle.switch=await guarded(page.evaluate(async()=>{
+   const toggle=document.querySelector('[aria-label="Burnable wood"]');toggle.click();const pending=toggle.disabled;
+   await window.kaminosWorkbenchExperiments.open('material-study',{roughness:.4});
+   await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+   return {pending,id:window.kaminosWorkbenchExperiments.state().id,consumer:window.__kaminosVolumePrototype.thermalConsumerState(),active:window.__kaminosVolumePrototype.debugState().active};
+  }));assert.equal(report.lifecycle.switch.pending,true);assert.equal(report.lifecycle.switch.id,'material-study');assert.equal(report.lifecycle.switch.consumer,null);assert.equal(report.lifecycle.switch.active,false);
+  await page.screenshot({path:path.join(out,'after-switch.png')});
+ }
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());checkDisintegrationEvidence(report);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}

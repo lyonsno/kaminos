@@ -21,13 +21,14 @@ export default {id:'bear-altar',title:'Midsummer burn altar',async create({host,
    const objects=host.scene.objects(),present=new Set(objects.map(row=>row.id));
    for(const [id,entry]of controls)if(!present.has(id)){entry.seating.dispose();controls.delete(id);}
    for(const entry of objects){
-    if(controls.has(entry.id)||inspected.has(entry.object))continue;inspected.add(entry.object);
-    try{resolveBurnableTarget(objects,entry.id);}catch{continue;}
+    if(controls.has(entry.id)||inspected.has(entry.object))continue;
+    try{resolveBurnableTarget(objects,entry.id);}catch{inspected.add(entry.object);continue;}
     const properties=document.createElement('section'),playback=document.createElement('div'),label=document.createElement('label'),checkbox=document.createElement('input'),status=document.createElement('p');
     checkbox.type='checkbox';checkbox.checked=controller.read().objectId===entry.id;checkbox.setAttribute('aria-label','Burnable wood');label.append(checkbox,document.createTextNode('Burnable · wood'));properties.append(label,status);
     checkbox.onchange=()=>{checkbox.disabled=true;setBurnable({objectId:entry.id,enabled:checkbox.checked}).catch(error=>{status.textContent=error.message;checkbox.checked=controller.read().objectId===entry.id;}).finally(()=>{checkbox.disabled=false;});};
     const seating=host.controls.mountObject({asset:{id:entry.id,root:entry.object},properties,playback,onSelected:()=>{checkbox.checked=controller.read().objectId===entry.id;}});
     controls.set(entry.id,{id:entry.id,checkbox,seating,properties});
+    if(body&&controller.read().objectId===entry.id)show(controller.get());
    }
   }
   await controller.set({objectId:asset.id});syncControls();
