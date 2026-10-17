@@ -20832,7 +20832,7 @@ export function createKaminosVolumePrototype({
     if (!rayStepTelemetry) return;
     const supported=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full'&&productFrameOwner==='prototype';
     if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
-      {supported,reason:'requires-ordinary-emissive-beauty'})) rebuildFluidBindGroups();
+      {supported,reason:'requires-ordinary-emissive-beauty',activate:false})) rebuildFluidBindGroups();
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {

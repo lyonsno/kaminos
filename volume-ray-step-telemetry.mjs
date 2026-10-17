@@ -161,7 +161,7 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
     if(canvas){canvas.width=224;canvas.height=96;context=canvas.getContext('webgpu');
       context?.configure({device,format:navigator.gpu.getPreferredCanvasFormat(),alphaMode:'opaque'});}
   }
-  function ensure(width,height,requested,{supported=true,reason='unsupported-renderer',allowResize=true}={}){
+  function ensure(width,height,requested,{supported=true,reason='unsupported-renderer',allowResize=true,activate=true}={}){
     active=false;let refusal=!requested?'off':!supported?reason:!context?'display-unavailable':
       !canvas.getClientRects().length?'inspector-hidden':null;
     const count=width*height;
@@ -171,10 +171,10 @@ export function createRayStepTelemetry(device,{document=globalThis.document}={})
     if(!refusal){
       initialize();
       if(count!==pixels){counterBuffer.destroy();counterBuffer=device.createBuffer({label:'per-pixel ray material evaluations',size:count*4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=count;changed=true;computeGroup=null;}
-      active=true;
+      active=activate;
     }else if(!requested&&pixels!==1&&allowResize){counterBuffer.destroy();counterBuffer=device.createBuffer({label:'disabled ray sample counters',size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});pixels=1;changed=true;computeGroup=null;}
     if(canvas)canvas.style.visibility=active?'visible':'hidden';
-    status={requested,active,reason:refusal,readback:false,scope:'material-evaluations-per-intersecting-ray',width,height};
+    status={requested,active,reason:refusal||(!activate?'awaiting-instrumented-draw':null),readback:false,scope:'material-evaluations-per-intersecting-ray',width,height};
     return changed;
   }
   function encode(encoder){
