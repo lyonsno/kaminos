@@ -66,6 +66,11 @@ export function mountLightingDebugView({document,renderer,camera,getLighting,get
     savedRecords=session.records.length;status(`Exported ${savedRecords} complete inspection/failure records; all raw source fields and selected GPU inputs included.`);
   };
   const unload=e=>{if(session.records.length>savedRecords){e.preventDefault();e.returnValue='Unsaved lighting inspection snapshots';}};globalThis.addEventListener('beforeunload',unload);
-  const api={captureAt,measure,session,renderRecord,dispose(){document.removeEventListener('pointerdown',pointer,true);globalThis.removeEventListener('beforeunload',unload);}};
+  const api={captureAt,measure,session,renderRecord,dispose(){
+    armed=false;document.removeEventListener('pointerdown',pointer,true);globalThis.removeEventListener('beforeunload',unload);
+    pick.onclick=null;document.getElementById('rendering-light-debug-time').onclick=null;document.getElementById('rendering-light-debug-save').onclick=null;
+    if(window.__kaminosLightingDebug===api)window.__kaminosLightingDebug=null;
+    panel.hidden=true;
+  }};
   window.__kaminosLightingDebug=api;panel.hidden=false;return api;
 }

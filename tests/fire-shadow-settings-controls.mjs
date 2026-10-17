@@ -10,8 +10,8 @@ class Element {
 }
 let state={shadowSampling:'complementary',pointCount:4,pointSampling:'paired',shadowResolution:48,blockerSamples:3,filterSamples:3,shadowImplementation:'shared',shadowGrain:'world',shadowWorldCellSize:.02};
 const document={createElement:tag=>new Element(tag),getElementById:()=>null,defaultView:{__kaminosSceneRadiance:{debugState:()=>state,setShadowSampling:value=>{state={...state,shadowSampling:value};}}}};
-const root=new Element('div'),installed=[];
-const settings=createFireShadowSettings({document,applyInitial:false,diagnostics:true,session:{redraw(){},dispose(){}},installNumberDrag:options=>{installed.push(options);}});
+const root=new Element('div'),installed=[];let scrubDisposals=0;
+const settings=createFireShadowSettings({document,applyInitial:false,diagnostics:true,session:{redraw(){},dispose(){}},installNumberDrag:options=>{installed.push(options);return {dispose(){scrubDisposals++;}};}});
 settings.mount({root,document,invoke:async(name,value)=>settings.operations[name](value)});
 const walk=node=>[node,...node.children.filter(v=>typeof v==='object').flatMap(walk)];
 const controls=walk(root),select=controls.find(v=>v.attrs['aria-label']==='Fire shadow sampling');
@@ -22,6 +22,7 @@ assert.equal(select.assignments,before,'unchanged configuration must not touch t
 await select.listeners.change();assert.equal(settings.read().effective,'fixed');
 assert.equal(controls.filter(v=>v.type==='range').length,0,'quality uses a single drag/type field, not duplicate sliders');
 assert.equal(installed.length,4,'world-cell size and all three cost controls use the shared widget');
+await settings.dispose();assert.equal(scrubDisposals,4,'lighting settings must retire all owned number scrubs');
 assert(controls.some(v=>v.value==='screen-animated'),'animated screen grain is exposed');
 const cell=controls.find(v=>v.attrs['aria-label']==='World grain cell size');
 await cell.listeners.focus();cell.value='0';await cell.listeners.change();

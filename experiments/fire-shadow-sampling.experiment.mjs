@@ -18,7 +18,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
-    const qualityControls=[];
+    const qualityControls=[],numberScrubs=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
@@ -110,7 +110,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         cellRow=document.createElement('label');cellRow.textContent='World grain cell size';
         cellInput=document.createElement('input');cellInput.type='number';cellInput.min='0.000001';cellInput.step='any';cellInput.setAttribute('aria-label','World grain cell size');
         cellInput.addEventListener('change',()=>invoke('setShadowComparison',{worldCellSize:Number(cellInput.value)}).catch(failed));
-        cellRow.append(cellInput);panel.append(cellRow);installRenderingNumberControl(cellInput,installNumberDrag);
+        cellRow.append(cellInput);panel.append(cellRow);numberScrubs.push(installRenderingNumberControl(cellInput,installNumberDrag));
         const grainHelp=document.createElement('details'),grainSummary=document.createElement('summary'),grainText=document.createElement('p');
         grainSummary.textContent='About grain and A/B';
         grainText.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. Animated screen grain changes every rendered frame, including with a frozen flame. Stable screen grain stays on pixels; world grain stays in world-space cells. This is sampling noise, not simulated photographic film or a denoiser. Use complementary sampling to compare filter grain.';
@@ -127,7 +127,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           const change=value=>invoke('setShadowQuality',{[key]:Number(value)}).catch(failed);
           // Rebuild only on release/commit, not every intermediate drag pixel.
           number.addEventListener('change',()=>change(number.value));
-          qualityControls.push({key,number});row.append(number);panel.append(row);installRenderingNumberControl(number,installNumberDrag);
+          qualityControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
         const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
         restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(failed));
@@ -137,6 +137,6 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         if(diagnostics)panel.append(restore,help);
         panel.append(retry,status);sync();
       },
-      async dispose(){stop();await session.dispose();},
+      async dispose(){stop();for(const scrub of numberScrubs.splice(0))scrub?.dispose?.();await session.dispose();},
     };
 }

@@ -91,7 +91,7 @@ function installNumberPresentation(input) {
 
 /** One field: relative dragging while idle, ordinary text editing after a click. */
 export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
-  let gesture=null, suppressClick=false;
+  let gesture=null, suppressClick=false, disposed=false;
   const doc=input.ownerDocument || document;
   const targets=[...new Set([grip,input].filter(Boolean))];
   input.readOnly=true;
@@ -135,7 +135,8 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     input.classList?.add('scrubbing');input.value=String(value);
     input.dispatchEvent(new Event('input',{bubbles:true}));
   }
-  doc.addEventListener('mouseup',event=>{if(gesture?.continuous?.locked && event.button===0)finish();});
+  const mouseup=event=>{if(gesture?.continuous?.locked && event.button===0)finish();};
+  doc.addEventListener('mouseup',mouseup);
   for(const target of targets) {
     target.style.cursor='ew-resize';target.style.touchAction='none';
     target.addEventListener('click',event=>{
@@ -143,7 +144,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
       if(target!==input){event.preventDefault();input.readOnly=false;input.focus?.();input.select?.();}
     });
     target.addEventListener('pointerdown',event=>{
-      if(event.button!==0 || gesture || input.disabled)return;
+      if(disposed || event.button!==0 || gesture || input.disabled)return;
       if(target===input && doc.activeElement===input && !input.readOnly)return;
       event.preventDefault();onStart();suppressClick=false;
       input.dispatchEvent(new Event('focusin'));
@@ -167,10 +168,15 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     target.addEventListener('pointercancel',()=>{if(gesture?.target===target)finish(true);});
     target.addEventListener('lostpointercapture',()=>{if(gesture?.target===target && !gesture.continuous?.locked)finish(true);});
   }
-  window.addEventListener('blur',()=>finish(true));
-  document.addEventListener('keydown',event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){event.preventDefault();input.dispatchEvent(new Event('pointercancel'));input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
+  const blur=()=>finish(true);
+  const keydown=event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){event.preventDefault();input.dispatchEvent(new Event('pointercancel'));input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}};
+  const win=doc.defaultView||window;
+  win.addEventListener('blur',blur);doc.addEventListener('keydown',keydown,true);
   // The transaction owner can finish via Escape/Enter/selection before our
   // document listener runs. Release pointer ownership without emitting a second
   // transaction-ending event back into that owner.
-  return {stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}}};
+  return {
+    stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}},
+    dispose(){if(disposed)return;disposed=true;finish(true);doc.removeEventListener('mouseup',mouseup);doc.removeEventListener('keydown',keydown,true);win.removeEventListener('blur',blur);},
+  };
 }
