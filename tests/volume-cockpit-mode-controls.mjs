@@ -68,6 +68,7 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
 // Exercise the actual readout's receipt-to-DOM integration without starting a
 // GPU. These are UI fixtures, not evidence that a native renderer was executed.
 const nodes = new Map([...knownIds].map(id => [id, { id, value: `preserved:${id}`, dataset: {}, disabled: false }]));
+for(const id of ['volume-raymarch-status','volume-ray-step-status'])nodes.set(id,{id,textContent:''});
 const rows = ['volume-reaction-boundary-gamma', 'volume-physical-thermal'].map(id => ({
   dataset: {}, style: {}, querySelectorAll: () => [Object.assign(nodes.get(id), { closest: () => null })],
 }));

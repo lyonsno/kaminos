@@ -16,7 +16,7 @@ function assertOccupancyRidgeContract(source) {
   const opticalStepArm = balancedWgslBlock(allRaymarch,
     'if (opticalStepping) {\n        opticalStepObserve', { label: 'optical transfer arm' });
   assert.match(opticalStepArm,
-    /opticalStepObserve\(&opticalStep, vec4<f32>\(emission, sigma\)\);[\s\S]*color = opticalStep.transfer.xyz;[\s\S]*trans = opticalStep.transfer.w;[\s\S]*continue;/,
+    /opticalStepObserveWithTolerance\(&opticalStep, vec4<f32>\(emission, sigma\), u\.reserved_render_controls\.y\);[\s\S]*color = opticalStep.transfer.xyz;[\s\S]*trans = opticalStep.transfer.w;[\s\S]*continue;/,
     'optical stepping composes the supported material before continuing');
   const opticalTraceArm = balancedWgslBlock(allRaymarch,
     'if (opticalTrace) {\n        let row =', { label: 'optical trace arm' });
@@ -94,7 +94,7 @@ for (const write of [
 }
 
 assert.throws(() => assertOccupancyRidgeContract(core.replace(
-  'opticalStepObserve(&opticalStep, vec4<f32>(emission, sigma));', '/* dropped optical sample */')),
+  'opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);', '/* dropped optical sample */')),
   /optical transfer|optical stepping|missing/, 'numerical continuation cannot silently discard the sample');
 assert.throws(() => assertOccupancyRidgeContract(core.replace(
   'atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);\n        continue;', 'continue;')),
