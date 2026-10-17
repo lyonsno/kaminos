@@ -135,6 +135,8 @@ try {
   const page = await context.newPage();
   page.on('pageerror', error => { report.pageErrors.push(String(error)); });
   page.on('console', message => { if (message.type() === 'error') report.pageErrors.push(`console: ${message.text()}`); });
+  // A failed resource names only its status in the console; keep which request it was.
+  context.on('response', response => { if (response.status() >= 500) report.pageErrors.push(`http ${response.status()}: ${response.request().method()} ${response.url()}`); });
   await page.goto(`${origin}/index.html`, {waitUntil: 'load'});
   await page.waitForFunction(() => window.kaminosNotes && window.kaminosSceneAuthoring && window.kaminosSetCameraDebugPose, null, {timeout: 90000});
   report.effective.pageId = await page.evaluate(() => window.kaminosNotes.pageId);
