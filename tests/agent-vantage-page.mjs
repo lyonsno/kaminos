@@ -591,6 +591,7 @@ test('click selection waits while a picture holds the viewport', () => {
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
+    sceneHitsFromViewportPointer: () => [], pickVisibleFlameFromViewportPointer: () => null,
     clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
   const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
   fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));

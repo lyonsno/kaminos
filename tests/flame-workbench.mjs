@@ -157,6 +157,8 @@ test('the real host retains geometry, collision and confirmed-source notificatio
 test('explicit domain framing uses its actual bounds without admitting editor helpers as content',()=>{
   const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const functionSource=source.slice(source.indexOf('function frameAuthoredSelection() {'),source.indexOf('function groupEditState('));
+  const imported=source.match(/import \{ ([^}]+) \} from '\.\/scene-frame-selected\.mjs';/)[1].split(', ').map(name=>name.trim());
+  const bindings=Object.fromEntries(imported.map(name=>[name,framing[name]]));
   const box=new THREE.Box3(new THREE.Vector3(1,-1,-2),new THREE.Vector3(3,3,0));
   const guide=new THREE.Box3Helper(box);guide.userData.kaminosEditorHelper=true;
   const camera=new THREE.PerspectiveCamera(40,1.3,.01,100);camera.position.set(0,.6,3);
@@ -166,7 +168,7 @@ test('explicit domain framing uses its actual bounds without admitting editor he
   assert.deepEqual(camera.position.toArray(),before);
   guide.visible=false;
   assert.equal(runInNewContext(functionSource+'\nframeAuthoredSelection()',{
-    activeSceneFieldId:'flame-field',flameDomainGuide:guide,camera,controls,...framing,
+    activeSceneFieldId:'flame-field',flameDomainGuide:guide,camera,controls,...bindings,
   }),true,'explicit domain framing must not be filtered as helper content');
   assert.notDeepEqual(camera.position.toArray(),before);
   assert.deepEqual(controls.target.toArray(),box.getCenter(new THREE.Vector3()).toArray());
