@@ -2705,6 +2705,69 @@ def save_mesh_generation_origin(result):
     return {'schema': 'kaminos.mesh-generation-origin.v1', 'result': result}
 
 
+_SHA256_HEX = re.compile(r'[a-f0-9]{64}')
+_LOD_LEVEL_FIELDS = ('sha256', 'faces', 'route', 'textureSize')
+
+
+def _lod_set_path(source):
+    if not isinstance(source, str) or not _SHA256_HEX.fullmatch(source):
+        raise ValueError('Source mesh sha256 required')
+    return Path(BROWSE_ROOTS['generated-meshes']).resolve() / ('.' + source + '.glb.lods.json')
+
+
+def read_mesh_lod_set(source):
+    """Coarse levels registered for a stored mesh; an empty set when none exist."""
+    path = _lod_set_path(source)
+    if not path.exists():
+        return {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': []}
+    data = json.loads(path.read_text())
+    if data.get('schema') != 'kaminos.lod-set.v0' or data.get('source') != source or not isinstance(data.get('levels'), list):
+        raise ValueError('Invalid mesh level-set record')
+    return data
+
+
+def save_mesh_lod_level(payload):
+    """Register one coarse level of a stored source mesh. Levels are immutable by sha."""
+    source, level = payload.get('source'), payload.get('level')
+    path = _lod_set_path(source)
+    if not isinstance(level, dict) or not isinstance(level.get('sha256'), str) or not _SHA256_HEX.fullmatch(level['sha256']):
+        raise ValueError('Level sha256 required')
+    if not isinstance(level.get('faces'), int) or level['faces'] < 1 or not isinstance(level.get('route'), str) or not level['route']:
+        raise ValueError('Level faces and route required')
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    for sha in (source, level['sha256']):
+        if not (root / (sha + '.glb')).is_file():
+            raise ValueError('Mesh not stored: ' + sha)
+    with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        data = read_mesh_lod_set(source)
+        previous = next((l for l in data['levels'] if l['sha256'] == level['sha256']), None)
+        if previous is not None and previous != level:
+            raise ValueError('Registered level is immutable')
+        if previous is None:
+            data['levels'].append(level)
+            data['levels'].sort(key=lambda l: -l['faces'])
+            with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.mesh-lods-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(data, handle)
+            try:
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level}
+
+
+def mesh_lod_choice(source, faces=None):
+    """All levels plus the largest one within a face budget (else the smallest, flagged)."""
+    data = read_mesh_lod_set(source)
+    levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
+    choice, within = None, None
+    if faces is not None and levels:
+        fitting = [l for l in levels if l['faces'] <= faces]
+        choice, within = (fitting[0], True) if fitting else (levels[-1], False)
+    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within}
+
+
 def pipeline_manifest_payload():
     document = json.loads(PIPELINE_MANIFEST_PATH.read_text())
     for pipeline in document.get("pipelines", []):
@@ -3776,6 +3839,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/mesh-lods":
+            query = parse_qs(parsed.query)
+            try:
+                faces = query.get("faces", [None])[0]
+                self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None))
+            except ValueError as error:
+                self.send_json({"error": str(error), "phase": "mesh-lods"}, 400)
         elif parsed.path == "/api/authoring-assets":
             try:
                 self.send_json(authoring_asset_catalog(parse_qs(parsed.query).get("collection", ["generated-meshes"])[0]))
@@ -3838,6 +3908,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
+        elif parsed.path == "/api/mesh-lods":
+            self.handle_mesh_lods_register()
         elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
         elif parsed.path == "/api/scene-library-import":
@@ -4578,6 +4650,18 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 409)
         except (OSError, subprocess.SubprocessError) as error:
             self.send_json({"error": str(error)}, 503)
+
+    def handle_mesh_lods_register(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length)) if length > 0 else None
+            if not isinstance(payload, dict):
+                raise ValueError('Level registration must be an object')
+            self.send_json(save_mesh_lod_level(payload))
+        except (ValueError, KeyError, TypeError) as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 400)
+        except OSError as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 500)
 
     def handle_mesh_generation_origin(self):
         try:
