@@ -6,6 +6,21 @@ import * as THREE from '../lib/three.core.js';
 import vm from 'node:vm';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
+test('late Add Flame passes the mounted opaque surface cache to the hybrid consumer',async()=>{
+  const cache={},elements=new Map();let options;
+  const document={getElementById(id){if(!elements.has(id))elements.set(id,{value:'1',parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
+  const context={URLSearchParams,window:{__kaminosSurfaceLighting:cache},document,renderer:{},scene:{},volumePrototype:{},sharedGpu:{device:{}},
+    isFireLightFieldRoute:()=>true,renderingMode:'',readFireShadowSceneSettings:()=>({}),
+    importedModule:{mountDistributedSceneRadiance(value){options=value;return {}; }},
+    bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
+    createFireShadowSettings:()=>({operations:{},sync(){},mount(){}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
+  const start=source.indexOf('async function mountSceneRadianceRoute('),end=source.indexOf('async function initKaminosVolumeRoute()',start);
+  const mount=source.slice(start,end).replace(/await import\([^;]+\);/,'importedModule;');
+  vm.createContext(context);vm.runInContext(mount,context);
+  await context.mountSceneRadianceRoute(new URLSearchParams('volume_light_field_distributed=1&volume_light_field_hybrid=1'));
+  assert.equal(options.surfaceLighting,cache,'ordinary emitter must retain current main opaque irradiance reuse');
+});
+
 test('ordinary Add Flame selects live four-source lighting without altering its saved basin',async()=>{
   const settings={source:{presetId:'saved-basin'},domControls:Object.fromEntries(Object.entries({
     'volume-emitter-source-law':'immersed-source','volume-pressure-solver':'converged-open-top',

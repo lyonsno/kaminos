@@ -79,8 +79,8 @@ async function mountedMaterial() {
     fire(type,init={}){const e=new Event(type,{cancelable:true,bubbles:true});for(const [k,v] of Object.entries(init))Object.defineProperty(e,k,{value:v});this.dispatchEvent(e);return e;}
     dispatchEvent(e){super.dispatchEvent(e);if(e.bubbles)this.parentNode?.dispatchEvent(e);return !e.defaultPrevented;}
   }
-  const doc=new EventTarget();doc.createElement=tag=>new Element(tag);doc.defaultView={};
-  globalThis.document=doc;globalThis.window=new EventTarget();
+  const doc=new EventTarget();doc.createElement=tag=>new Element(tag);doc.defaultView=new EventTarget();
+  globalThis.document=doc;globalThis.window=doc.defaultView;
   const records=[];const session={attach:async()=>({id:'material'}),readView:()=>({}),redraw(){},dispose(){}};
   const owner=await definition.create({host:{scene:{open:async()=>session},controls:{installNumberDrag:installRelativeNumberDrag}},inputs:{},record:r=>records.push(r)});
   const panel=new Element('div');owner.mount({root:panel,document:doc,invoke:async(op,value)=>owner.operations[op](value)});
