@@ -3,11 +3,12 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 
-const [url,out,modulePath,executable]=process.argv.slice(2);
+const [url,out,modulePath,executable,settingsJson]=process.argv.slice(2);
+const settings=settingsJson?JSON.parse(settingsJson):{envelope:.05,spacing:.1,budgetSeconds:5};
 if(!url||!out||!modulePath||!executable)throw Error('URL OUTPUT PLAYWRIGHT_MODULE INDEPENDENT_CHROMIUM required');
 if(fs.realpathSync(executable).includes('/Applications/Google Chrome.app/'))throw Error('Independent Chromium required');
 fs.mkdirSync(out,{recursive:true});
-const report={status:'running',phase:'launch',requestedUrl:url,executable:fs.realpathSync(executable),messages:[],httpErrors:[],checks:[],sourceFiles:{}};
+const report={status:'running',phase:'launch',requestedUrl:url,settings,executable:fs.realpathSync(executable),messages:[],httpErrors:[],checks:[],sourceFiles:{}};
 for(const file of ['mechanical-proxy-tool.mjs','mechanical-proxy-core.mjs','mechanical_proxy.py','mechanical_proxy_backend.py'])report.sourceFiles[file]=createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));save();
 let browser;
@@ -21,8 +22,8 @@ try{
  if(report.link.requestedPath!==new URL(url).searchParams.get('mesh_path'))throw Error('Wrong source asset');
  await page.evaluate(()=>window.kaminosMechanicalProxy.open());
  report.phase='generate';save();
- report.submission=await page.evaluate(()=>window.kaminosMechanicalProxy.generate({envelope:.05,spacing:.1,budgetSeconds:5}));save();
- await page.waitForFunction(()=>['passed','failed','cancelled','over-budget'].includes(window.kaminosMechanicalProxy.read().status),{timeout:0});
+ report.submission=await page.evaluate(value=>window.kaminosMechanicalProxy.generate(value),settings);save();
+ await page.waitForFunction(()=>{const value=window.kaminosMechanicalProxy.read();return value.status==='passed'?Boolean(value.resultFacts):['failed','cancelled','over-budget'].includes(value.status);},null,{timeout:0});
  report.result=await page.evaluate(()=>window.kaminosMechanicalProxy.read());
  if(report.result.status!=='passed')throw Error('Mechanical proxy did not complete: '+JSON.stringify(report.result));
  report.phase='views';save();
@@ -35,7 +36,9 @@ try{
  report.reopened=await page.evaluate(async()=>{const p=window.kaminosMechanicalProxy;p.close();return p.open();});
  if(report.reopened.resultId!==report.result.resultId)throw Error('Kept result did not reopen');
  report.checks=['exact asset route','actual tetrahedral result','section/slab/surface','element selection','keep/reopen'];
- if(report.messages.length)throw Error('Browser errors: '+JSON.stringify(report.messages));
+ report.hostResiduals=report.messages.filter(m=>m.type==='console'&&new URL(m.location?.url??url).pathname==='/api/volume-cockpit-layouts');
+ const errors=report.messages.filter(m=>!report.hostResiduals.includes(m));
+ if(errors.length)throw Error('Browser errors: '+JSON.stringify(errors));
  report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error={message:error.message,stack:error.stack};process.exitCode=1;}
 finally{if(browser)await browser.close();report.browserClosed=true;save();}

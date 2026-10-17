@@ -12141,7 +12141,6 @@ async function initScene() {
   mechanicalProxyTool=installMechanicalProxy({document,scene,camera,canvas:renderer.domElement,
     selected:()=>selectedSceneObjectEntry(),redraw:()=>window._kaminosDirty?.()});
   window.kaminosMechanicalProxy=mechanicalProxyTool;
-  renderer.localClippingEnabled=true;
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));

@@ -96,17 +96,20 @@ class MechanicalProxyService:
             result.update(report)
             if result['status'] == 'running' and result.get('startedAt'):
                 result['elapsedSeconds'] = max(0, time.time()-result['startedAt'])
-        if result['status'] in ('submitting', 'pending') and run.get('jobId'):
+        if result['status'] in ('submitting', 'pending', 'running') and run.get('jobId'):
             for bucket in ('pending','running','done','failed','cancelled'):
                 status_path = self.queue/bucket/run['jobId']/'status.json'
                 if status_path.exists():
                     queue = json.loads(status_path.read_text()); result['queue'] = queue
                     if bucket in ('pending','running'):
-                        result['status'] = bucket
+                        if result['status'] != 'running':
+                            result['status'] = bucket
                     elif result['status'] not in ('passed','failed','cancelled','over-budget'):
-                        result.update(status='failed',phase='queue-terminal',error=queue.get('error_message') or 'Queue finished without a complete proxy report')
+                        result.update(status='cancelled' if bucket=='cancelled' else 'failed',lastBackendPhase=result.get('phase'),phase='queue-terminal',error=queue.get('error_message') or 'Queue finished without a complete proxy report')
                     break
         result['kept'] = (directory/'kept.json').exists()
+        selection = self.store/('selected-'+run.get('sourceDigest','')+'.json')
+        result['selected'] = selection.is_file() and json.loads(selection.read_text()).get('id') == identity
         if result['status'] == 'passed':
             target = directory/'mesh.json'
             if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != result.get('resultSha256'):
@@ -144,4 +147,5 @@ class MechanicalProxyService:
         if result['status'] != 'passed':
             raise ValueError('Only complete mechanical proxies can be kept')
         write_json(self.directory(identity)/'kept.json', {'id':identity,'sourceDigest':result['sourceDigest'],'resultSha256':result['resultSha256'],'settings':result['settings'],'route':ROUTE})
+        write_json(self.store/('selected-'+result['sourceDigest']+'.json'), {'id':identity,'sourceDigest':result['sourceDigest']})
         return self.read(identity)

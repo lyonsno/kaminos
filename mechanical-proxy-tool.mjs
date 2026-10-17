@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.core.js';
+import {ClippingGroup} from './lib/three.webgpu.js';
 import {MeshBVH} from './node_modules/three-mesh-bvh/build/index.module.js';
 import {admitProxy,proxyBoundary,proxySection,proxySlab,proxySettings,tetFaces} from './mechanical-proxy-core.mjs';
 
@@ -40,7 +41,8 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
  <details><summary>Result data</summary><a data-mp="download" target="_blank" rel="noopener">Open full result</a><pre data-mp="facts"></pre></details></div>`;
  document.getElementById('authoring-object-tools').append(panel);
  const $=name=>panel.querySelector(`[data-mp="${name}"]`),state={status:'idle',mode:'proxy',interior:'section',axis:2,offset:.5,width:.05,selectedTet:null,isolate:false,deviation:false};
- let target,snapshot,identity,result,rows=[],group,boundaryMesh,inspectionMesh,ghost,bvh,sourceGeometry,job,token=0,timer,visibleBefore,disposed=false;
+ let target,snapshot,identity,result,resultRecord,rows=[],group,boundaryMesh,inspectionMesh,ghost,bvh,sourceGeometry,job,token=0,timer,visibleBefore,disposed=false;
+ const current=generation=>!disposed&&generation===token&&target&&selected()?.id===target.id;
  const request=async(body,query='')=>{const response=await fetch('/api/mechanical-proxy'+query,body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{});const data=await response.json();if(!response.ok)throw Error(data.error??`Mechanical proxy HTTP ${response.status}`);return data;};
  const status=text=>{$('status').textContent=text;};
  function clearGroup(){if(group){scene.remove(group);group.traverse(o=>{o.geometry?.dispose();if(o.material)for(const m of Array.isArray(o.material)?o.material:[o.material])m.dispose();});}group=null;boundaryMesh=inspectionMesh=ghost=null;}
@@ -65,7 +67,7 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
   boundaryMesh=new THREE.Mesh(g,material);group.add(boundaryMesh);
   const {offset,width}=planeValues();
   if(state.interior!=='surface'){
-   const normal=new THREE.Vector3();normal.setComponent(state.axis,-1);material.clippingPlanes=[new THREE.Plane(normal,offset).applyMatrix4(group.matrix)];
+   const normal=new THREE.Vector3();normal.setComponent(state.axis,-1);const clip=new ClippingGroup();clip.clippingPlanes=[new THREE.Plane(normal,offset).applyMatrix4(group.matrix)];group.add(clip);clip.add(boundaryMesh);
    const selected=state.selectedTet;let ids=state.interior==='section'?null:state.interior==='wire'?result.tetrahedra.map((_,i)=>i):proxySlab(result,state.axis,offset,width);
    const neighbor=new Set(selected===null?[]:result.tetrahedra.flatMap((t,i)=>t.some(n=>result.tetrahedra[selected].includes(n))?[i]:[]));
    let polygons=state.interior==='section'?proxySection(result,state.axis,offset).map(p=>({tet:p.tet,points:p.points})):ids.flatMap(tet=>tetFaces.map(f=>({tet,points:f.map(i=>result.positions[result.tetrahedra[tet][i]])})));
@@ -78,30 +80,30 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
   }
   $('element').textContent=state.selectedTet===null?'':`Element ${state.selectedTet} / ${result.tetrahedra.length}`;redraw();
  }
- const read=()=>({...state,targetId:target?.id??null,sourceDigest:identity?.sourceDigest??null,jobId:job?.jobId??null,resultId:job?.status==='passed'?job.id:null,settings:result?.settings??null,results:rows.map(r=>({...r})),resultFacts:result?{points:result.positions.length,tetrahedra:result.tetrahedra.length,volume:result.volume,effective:result.effective}:null});
- async function refreshRows(){if(!identity)return;rows=(await request(null,`?source=${identity.sourceDigest}`)).results;$('results').replaceChildren(...rows.map(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=`${r.kept?'Kept · ':''}${r.settings.envelope} / ${r.settings.spacing} · ${r.status}`;return o;}));if(job)$('results').value=job.id;}
+ const read=()=>({...state,targetId:target?.id??null,sourceDigest:identity?.sourceDigest??null,jobId:job?.jobId??null,resultId:resultRecord?.id??null,settings:result?.settings??null,results:rows.map(r=>({...r})),resultFacts:result?{points:result.positions.length,tetrahedra:result.tetrahedra.length,volume:result.volume,effective:result.effective}:null});
+ async function refreshRows(generation=token){if(!identity)return;const source=identity.sourceDigest,next=await request(null,`?source=${source}`);if(!current(generation)||source!==identity?.sourceDigest)return;rows=next.results;$('results').replaceChildren(...rows.map(r=>{const o=document.createElement('option');o.value=r.id;o.textContent=`${r.kept?'Kept · ':''}${r.settings.envelope} / ${r.settings.spacing} · ${r.status}`;return o;}));if(resultRecord)$('results').value=resultRecord.id;}
  function setBusy(busy){$('generate').disabled=busy;$('cancel').disabled=!busy;}
- async function loadResult(id){const next=await request(null,`?id=${id}&result=1`);if(next.sourceDigest!==identity?.sourceDigest)throw Error('Result belongs to another source');if(next.status!=='passed')throw Error(`Result is ${next.status}`);admitProxy(next.mesh);result=next.mesh;job=next;state.status='passed';state.selectedTet=null;$('keep').disabled=false;$('download').href=`/api/read?root=mechanical-proxies&path=${id}%2Fmesh.json`;$('facts').textContent=JSON.stringify({...next,mesh:undefined},null,2);status(next.cached?'Cached result':'Complete');render();return read();}
+ async function loadResult(id,generation=token){const source=identity?.sourceDigest,next=await request(null,`?id=${id}&result=1`);if(!current(generation)||source!==identity?.sourceDigest)return read();if(next.sourceDigest!==source)throw Error('Result belongs to another source');if(next.status!=='passed')throw Error(`Result is ${next.status}`);admitProxy(next.mesh);result=next.mesh;resultRecord=next;state.status='passed';state.selectedTet=null;$('keep').disabled=false;$('download').href=`/api/read?root=mechanical-proxies&path=${id}%2Fmesh.json`;$('facts').textContent=JSON.stringify({...next,mesh:undefined},null,2);status(next.cached?'Cached result':'Complete');render();return read();}
  async function observe(id,generation){
-  const row=await request(null,`?id=${id}`);if(generation!==token||disposed)return;
-  job=row;state.status=row.status;status(row.status==='running'?`${row.phase==='initializing'?'Initializing':'Meshing'} · ${(row.elapsedSeconds??0).toFixed(1)} s total`:row.status);
+  const row=await request(null,`?id=${id}`);if(!current(generation))return;
+  job=row;state.status=row.status==='passed'?'loading-result':row.status;status(row.status==='running'?`${row.phase==='initializing'?'Initializing':'Meshing'} · ${(row.elapsedSeconds??0).toFixed(1)} s total`:row.status);
   if(['pending','running','submitting'].includes(row.status)){timer=setTimeout(()=>observe(id,generation).catch(fail),500);return;}
-  setBusy(false);await refreshRows();if(row.status==='passed')await loadResult(id);else{status(`${row.status}${row.error?': '+row.error:''}`);$('facts').textContent=JSON.stringify(row,null,2);}
+  setBusy(false);await refreshRows(generation);if(!current(generation))return;if(row.status==='passed')await loadResult(id,generation);else{status(`${row.status}${row.error?': '+row.error:''}`);$('facts').textContent=JSON.stringify(row,null,2);}
  }
  const fail=error=>{setBusy(false);state.status='failed';status(error.message);};
  const operations={
   async open(){
-   const entry=selected();if(!entry?.object)throw Error('Select a mesh');snapshot=meshSnapshot(entry);restore();target=entry;visibleBefore=entry.object.visible;result=null;sourceGeometry?.dispose();bvh=null;sourceGeometry=null;token++;clearTimeout(timer);panel.open=true;
-   identity=await request({action:'inspect',input:{...snapshot,settings:proxySettings({envelope:Number($('envelope').value),spacing:Number($('spacing').value),budgetSeconds:Number($('budgetSeconds').value)})}});state.status='idle';status(target.label??'Mesh');await refreshRows();const kept=rows.findLast(r=>r.kept&&r.status==='passed');if(kept)await loadResult(kept.id);updateAbsolute();return read();
+   const entry=selected();if(!entry?.object)throw Error('Select a mesh');const captured=meshSnapshot(entry);restore();target=entry;snapshot=captured;visibleBefore=entry.object.visible;result=resultRecord=job=identity=null;rows=[];sourceGeometry?.dispose();bvh=null;sourceGeometry=null;const generation=++token;clearTimeout(timer);for(let parent=panel.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;panel.open=true;setBusy(false);$('keep').disabled=true;
+   const next=await request({action:'inspect',input:{...captured,settings:proxySettings({envelope:Number($('envelope').value),spacing:Number($('spacing').value),budgetSeconds:Number($('budgetSeconds').value)})}});if(!current(generation))return read();identity=next;state.status='idle';status(target.label??'Mesh');await refreshRows(generation);if(!current(generation))return read();const kept=rows.find(r=>r.selected&&r.status==='passed');if(kept)await loadResult(kept.id,generation);if(current(generation))updateAbsolute();return read();
   },
-  async generate(settings){if(!target||selected()?.id!==target.id)await operations.open();const effective=proxySettings(settings??Object.fromEntries(['envelope','spacing','budgetSeconds'].map(k=>[k,Number($(k).value)])));const current=meshSnapshot(target);if(JSON.stringify(current.positions)!==JSON.stringify(snapshot.positions)||JSON.stringify(current.triangles)!==JSON.stringify(snapshot.triangles))throw Error('Source geometry changed; reopen Mechanical proxy');setBusy(true);const generation=++token;job=await request({action:'generate',input:{...snapshot,settings:effective}});state.status=job.status;await refreshRows();await observe(job.id,generation);return read();},
+  async generate(settings){if(!target||selected()?.id!==target.id)await operations.open();if(!target||!identity)throw Error('Inspection closed before generation');const effective=proxySettings(settings??Object.fromEntries(['envelope','spacing','budgetSeconds'].map(k=>[k,Number($(k).value)])));const geometry=meshSnapshot(target);if(JSON.stringify(geometry.positions)!==JSON.stringify(snapshot.positions)||JSON.stringify(geometry.triangles)!==JSON.stringify(snapshot.triangles))throw Error('Source geometry changed; reopen Mechanical proxy');setBusy(true);const generation=++token,next=await request({action:'generate',input:{...snapshot,settings:effective}});if(!current(generation))return read();job=next;state.status=job.status==='passed'?'loading-result':job.status;await refreshRows(generation);if(current(generation))await observe(job.id,generation);return read();},
   async cancel(){if(job)await request({action:'cancel',id:job.id});return read();},
-  async selectResult(id){return loadResult(id);},
+  async selectResult(id){const generation=++token;clearTimeout(timer);setBusy(false);return loadResult(id,generation);},
   setView(mode){if(!['original','proxy','overlay'].includes(mode))throw Error('Unknown proxy view');state.mode=mode;for(const b of panel.querySelectorAll('[data-mode]'))b.setAttribute('aria-pressed',String(b.dataset.mode===mode));render();return read();},
   setSection(value){if(value.axis!==undefined){if(![0,1,2].includes(value.axis))throw Error('Invalid section axis');state.axis=value.axis;$('axis').value=String(value.axis);}for(const k of ['offset','width'])if(value[k]!==undefined){if(!Number.isFinite(value[k])||value[k]<0||value[k]>1)throw Error('Section fraction must be in [0,1]');state[k]=value[k];$(k).value=String(value[k]);}if(value.interior!==undefined){if(!['section','slab','surface','wire'].includes(value.interior))throw Error('Unknown interior view');state.interior=value.interior;$('interior').value=value.interior;}render();return read();},
   selectElement(index){if(!result||!Number.isInteger(index)||index<0||index>=result.tetrahedra.length)throw Error('Valid tetrahedron required');state.selectedTet=index;render();return read();},
-  async keep(){if(!job||!result)throw Error('Generate a complete proxy first');await request({action:'keep',id:job.id});await refreshRows();status('Kept');return read();},
-  close(){token++;clearTimeout(timer);restore();target=null;result=null;state.status='idle';panel.open=false;setBusy(false);return read();},
+  async keep(){if(!resultRecord||!result)throw Error('Generate a complete proxy first');const generation=token;await request({action:'keep',id:resultRecord.id});if(!current(generation))return read();await refreshRows(generation);if(current(generation))status('Kept');return read();},
+  close(){token++;clearTimeout(timer);restore();target=null;result=resultRecord=identity=job=null;rows=[];state.status='idle';panel.open=false;setBusy(false);$('keep').disabled=true;return read();},
   read,
  };
  function updateAbsolute(){if(identity)$('absolute').textContent=`${(identity.diagonal*Number($('envelope').value)).toPrecision(4)} local units`;$('envelope-log').value=String(Math.log10(Number($('envelope').value)));}
@@ -115,8 +117,10 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
  panel.addEventListener('toggle',()=>{if(panel.open&&!target)invoke('open').catch(()=>{});else if(!panel.open&&target)operations.close();});
  let down;
  const hit=event=>{if(!inspectionMesh)return null;const rect=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,-(event.clientY-rect.top)/rect.height*2+1),camera);return ray.intersectObject(inspectionMesh)[0];};
- canvas.addEventListener('pointerdown',event=>{if(event.button===0&&panel.open&&hit(event)){down=[event.clientX,event.clientY];event.stopImmediatePropagation();}},true);
- canvas.addEventListener('pointerup',event=>{if(!down)return;const moved=Math.hypot(event.clientX-down[0],event.clientY-down[1]);down=null;if(moved<4){const intersection=hit(event);if(intersection){operations.selectElement(inspectionMesh.userData.faceTets[intersection.faceIndex]);event.stopImmediatePropagation();}}},true);
+ const pointerDown=event=>{if(event.button===0&&panel.open&&hit(event)){down=[event.clientX,event.clientY];event.stopImmediatePropagation();}};
+ const pointerUp=event=>{if(!down)return;const moved=Math.hypot(event.clientX-down[0],event.clientY-down[1]);down=null;if(moved<4){const intersection=hit(event);if(intersection){operations.selectElement(inspectionMesh.userData.faceTets[intersection.faceIndex]);event.stopImmediatePropagation();}}};
+ const pointerCancel=()=>{down=null;};
+ canvas.addEventListener('pointerdown',pointerDown,true);canvas.addEventListener('pointerup',pointerUp,true);canvas.addEventListener('pointercancel',pointerCancel,true);
  function refresh(){const entry=selected();let supported=false;entry?.object?.traverse(o=>{if(o.isMesh)supported=true;});panel.hidden=!supported;if(target&&entry?.id!==target.id)operations.close();if(supported&&new URLSearchParams(location.search).get('mechanicalProxy')==='1'&&!panel.dataset.autoOpened){panel.dataset.autoOpened='true';invoke('open').catch(()=>{});}}
- return{...operations,refresh,dispose(){disposed=true;operations.close();sourceGeometry?.dispose();panel.remove();}};
+ return{...operations,refresh,dispose(){disposed=true;operations.close();canvas.removeEventListener('pointerdown',pointerDown,true);canvas.removeEventListener('pointerup',pointerUp,true);canvas.removeEventListener('pointercancel',pointerCancel,true);sourceGeometry?.dispose();panel.remove();}};
 }

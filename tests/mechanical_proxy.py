@@ -42,5 +42,35 @@ class ProxyContracts(unittest.TestCase):
             m.write_json(d/'report.json',{'status':'passed','route':'fallback','resultSha256':digest})
             with self.assertRaisesRegex(ValueError,'route'):service.read(identity)
 
+    def test_terminal_queue_overrides_abandoned_running_report(self):
+        with tempfile.TemporaryDirectory() as root:
+            service=m.MechanicalProxyService(Path(__file__).resolve().parents[1],Path(root)/'results',queue_dir=Path(root)/'queue')
+            identity='a'*32;d=service.directory(identity);d.mkdir(parents=True)
+            m.write_json(d/'run.json',{'id':identity,'status':'pending','jobId':'job','route':m.ROUTE})
+            m.write_json(d/'report.json',{'status':'running','phase':'meshing','route':m.ROUTE,'startedAt':1})
+            queue=service.queue/'failed'/'job';queue.mkdir(parents=True)
+            m.write_json(queue/'status.json',{'status':'failed','error_message':'owned supervisor terminated'})
+            row=service.read(identity)
+            self.assertEqual(row['status'],'failed')
+            self.assertEqual(row['lastBackendPhase'],'meshing')
+            self.assertIn('supervisor terminated',row['error'])
+
+    def test_keep_order_is_not_uuid_order(self):
+        with tempfile.TemporaryDirectory() as root:
+            service=m.MechanicalProxyService(Path(__file__).resolve().parents[1],root)
+            source='b'*64;settings=self.request()['settings']
+            for identity in ['f'*32,'a'*32]:
+                d=service.directory(identity);d.mkdir()
+                mesh={'status':'passed','route':m.ROUTE,'sourceDigest':source,'settings':settings}
+                m.write_json(d/'mesh.json',mesh)
+                import hashlib
+                digest=hashlib.sha256((d/'mesh.json').read_bytes()).hexdigest()
+                m.write_json(d/'run.json',{'id':identity,'status':'passed','route':m.ROUTE,'sourceDigest':source,'settings':settings})
+                m.write_json(d/'report.json',{'status':'passed','route':m.ROUTE,'resultSha256':digest})
+                service.keep(identity)
+            selected=[r for r in service.list(source) if r.get('selected')]
+            self.assertEqual([r['id'] for r in selected],['a'*32])
+            self.assertTrue(all(r['kept'] for r in service.list(source)))
+
 
 unittest.main()
