@@ -86,7 +86,7 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   assert.match(index, /id="volume-appearance-model-state"/);
   const control = schema.controls.find(c => c.key === 'volume-appearance-model');
   assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3'], additiveSinceControlCount: 256 });
-  assert.equal(schema.controlCount, 256);
+  assert.equal(schema.controlCount, 259); // the appearance model at 256, then the three wavelet turbulence controls
   assert.match(source, /const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig\.effective\.admitted \? 'compact-3' : 'authored';\n\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(appearanceEffective\);/, 'packed in the last borrowed reactant lane (d.w); compact-3 is effective only under the admitted reactant law (under the authored law the dropped carriers feed the reaction)');
   assert.match(source, /reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' \? 'compact-3-requires-the-reactant-law' : null/, 'the receipt names the refusal');
   assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat lane follows the effective model');
