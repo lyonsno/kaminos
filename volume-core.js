@@ -21309,6 +21309,14 @@ export function createKaminosVolumePrototype({
     });
   }
 
+  function invalidateRaymarchReadouts(reason) {
+    if (rayStepTelemetry) {
+      rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason});
+      state.rayStepTelemetry=rayStepTelemetry.read();
+    }
+    state.opticalStepping={...debugOpticalStepping,requested:debugOpticalStepping.mode,effective:null,reason,fullRay:false};
+  }
+
   function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
@@ -21320,6 +21328,7 @@ export function createKaminosVolumePrototype({
     }
     raf = 0;
     try {
+      invalidateRaymarchReadouts('presentation-without-instrumented-raymarch');
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
@@ -27450,6 +27459,7 @@ export function createKaminosVolumePrototype({
     if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
       throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
     }
+    invalidateRaymarchReadouts('caller-owned-presentation');
     updateUniforms(now);
     encodeSim(commandEncoder);
     encodeSelectiveHeadLiveFields(commandEncoder);
@@ -28225,6 +28235,7 @@ export function createKaminosVolumePrototype({
         }
       } else {
         state.active = false;
+        invalidateRaymarchReadouts('inactive-renderer');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
