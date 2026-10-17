@@ -27077,6 +27077,7 @@ sceneInitialization.then(async () => {
   const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
   window.__kaminosFireBoot = fireBoot;
   const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
+  ownerVolumeReady=volumeLoaded;
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));
