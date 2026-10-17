@@ -3041,6 +3041,7 @@ function refreshRenderingControls() {
   window._kaminosDirty?.();
 }
 let ordinarySceneDepthProvider = null;
+let authoredWaterFlameTransportActive = false;
 let compositionHost = null;
 
 // Fire light-field route params may ride the URL HASH as well as the query:
@@ -11722,6 +11723,36 @@ async function initScene() {
     || isAuthoredKilnCollisionRoute();
 
   let sceneRenderedForVolume = false;
+  let ordinarySceneTransportFrame = null;
+  let transportPrototype = null;
+  let transportCanvasVisibility = '';
+  const consumeSceneTransportFrame=frame=>{
+    ordinarySceneTransportFrame=frame;
+    try{return frame.renderHost();}finally{ordinarySceneTransportFrame=null;}
+  };
+  function syncAuthoredWaterFlameTransport() {
+    const prototype=volumePrototype;
+    const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
+      &&ordinaryDepthEnabled
+      &&!!localLiquidHost&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
+      &&prototype?.isActive?.()===true;
+    if(transportPrototype&&(!wanted||transportPrototype!==prototype)) {
+      transportPrototype.setSceneTransportConsumer(null);
+      if(!fireProxySync?.effective())transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
+      transportPrototype=null;
+    }
+    if(wanted&&!transportPrototype) {
+      prototype.setSceneTransportConsumer(consumeSceneTransportFrame);
+      transportCanvasVisibility=prototype.canvasElement().style.visibility;
+      transportPrototype=prototype;
+    }
+    authoredWaterFlameTransportActive=!!transportPrototype;
+    if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
+  }
+  window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
+    registered:!!transportPrototype,effective:!!localLiquidHost?.state().lastFrame?.volumeTransport,
+    lastFrame:localLiquidHost?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
+    refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
   let sceneFrameCount = 0;
@@ -11749,6 +11780,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     if(exclusiveInspectionRender&&!manualInspectionRender)return false;
+    if(authoredWaterFlameTransportActive&&!ordinarySceneTransportFrame)return false;
     renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
@@ -11784,7 +11816,7 @@ async function initScene() {
     // wire materials.
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
-        try { localLiquidHost.render(); authoredWaterControls?.refreshStatus();
+        try { localLiquidHost.render({volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=localLiquidHost.state(),clock=state.clock??{paused:localLiquidHost.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
@@ -11823,6 +11855,7 @@ async function initScene() {
     syncViewportQuality(syncViewportRendererSize);
     controls.update();
     viewProjection?.update();
+    syncAuthoredWaterFlameTransport();
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
@@ -11959,7 +11992,7 @@ async function initScene() {
       // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
       const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
           if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
-        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')&&!authoredWaterFlameTransportActive?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>window.selectSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
@@ -25050,7 +25083,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
     const capture = captureComposedCanvases({
       crop,
       host: renderer.domElement,
-      volume: activeSceneComposition && isSceneItemVisible('flame-field') ? volumePrototype.canvasElement() : null,
+      volume: activeSceneComposition && isSceneItemVisible('flame-field') && !authoredWaterFlameTransportActive ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });

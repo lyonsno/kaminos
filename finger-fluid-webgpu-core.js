@@ -15309,6 +15309,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function render({
+    beforeComposite = null,
     width = null,
     height = null,
     pixelRatio = globalThis.devicePixelRatio || 1,
@@ -15742,6 +15743,13 @@ export async function createWebGPUFingerFluidSolver({
       accumulationPass.end();
       screenSpaceSurfaceAccumulationPassCount += 1;
       screenSpaceOpticalSlabGeometryPassCount += 1;
+
+      if(beforeComposite!==null) {
+        if(typeof beforeComposite!=='function'||!validatedHostFrame||!refractionEnabled)throw new Error('Water before-composite hook requires host-frame refraction');
+        const result=beforeComposite({encoder,frameId:validatedHostFrame.frameId,
+          frontDepthView:screenSpaceOpticalSlabFrontDepthTexture.createView()});
+        if(result&&typeof result.then==='function')throw new Error('Water before-composite hook must encode synchronously');
+      }
 
       const compositePass = encoder.beginRenderPass({
         label: refractionEnabled

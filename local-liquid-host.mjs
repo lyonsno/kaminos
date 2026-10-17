@@ -111,9 +111,10 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     environmentKey=key; environmentGeneration++;
   }
 
-  function render({advance=true}={}) {
+  function render({advance=true,volumeTransport=null}={}) {
     if (disposed) throw Error('Local liquid host disposed');
     if (failure) throw Error(failure);
+    if(volumeTransport&&(volumeTransport.device!==device||volumeTransport.camera!==camera))throw Error('Water volume transport must share the live device and camera');
     const previousTarget=renderer.getRenderTarget(), previousOverride=scene.overrideMaterial, previousBackground=scene.background;
     const previousRenderObject=renderer.getRenderObjectFunction();
     const clearColor=renderer.getClearColor(new THREE.Color()), clearAlpha=renderer.getClearAlpha();
@@ -166,13 +167,24 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
         environment:attachment('host-environment',environmentTarget,{format:'rgba16float',mapping:'equirectangular_world_radiance'}),
         target:attachment('host-liquid-output',outputTarget,{format:'rgba16float',colorSpace:'linear_hdr'})};
-      solver.render({hostFrame,externalCamera:cameraSnapshot});
+      let frontDepthView=null,backgroundTransport=null,foregroundTransport=null;
+      solver.render({hostFrame,externalCamera:cameraSnapshot,beforeComposite:volumeTransport?input=>{
+        frontDepthView=input.frontDepthView;
+        backgroundTransport=volumeTransport.encode({encoder:commandEncoder,targetView:nativeTexture(colorTarget).createView(),
+          frontDepthView,sceneDepthView:hostFrame.sceneDepth.view,foreground:false});
+        // No-water/discarded pixels must also begin with this frame's behind
+        // segment. The liquid pass then refracts that same HDR scene image.
+        commandEncoder.copyTextureToTexture({texture:nativeTexture(colorTarget)},{texture:nativeTexture(outputTarget)},[width,height]);
+      }:null});
+      if(volumeTransport)foregroundTransport=volumeTransport.encode({encoder:commandEncoder,targetView:hostFrame.target.view,
+        frontDepthView,sceneDepthView:hostFrame.sceneDepth.view,foreground:true});
       device.queue.submit([commandEncoder.finish()]);
       renderer.setRenderTarget(previousTarget); presentation.render();
       frameCount=generation;
       lastFrame={frameId,cameraIdentity:cameraSnapshot.identity,cameraGeneration:generation,width,height,presentation:'full',
         environmentSource:environmentSource.uuid,environmentGeneration,
         route:ROUTE,submittedByHost:true,presentedByHost:true,displayTransform:'host-render-pipeline',
+        volumeTransport:volumeTransport?{background:backgroundTransport,foreground:foregroundTransport}:null,
         simulationTimePolicy:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
     } catch(error) { failure=error.message || String(error); throw error; }
     finally {
