@@ -55,6 +55,7 @@ try {
   await invoke('frame');
   await page.screenshot({path:out+'/mobile.png'});
   report.mobile = await read();
+  assert.equal(report.mobile.view.position[2],9.8,'narrow_view_not_framed');
   report.phase='missing_image'; save();
   await page.route('**/frames/0189.png', route => route.fulfill({status:404,body:'missing diagnostic frame'}));
   await assert.rejects(invoke('seek',189));

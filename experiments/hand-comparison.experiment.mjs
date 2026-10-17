@@ -75,7 +75,7 @@ export default {
       return effective;
     };
     const frameView = () => {
-      const width = document.querySelector('#kaminos-host-renderer-canvas')?.getBoundingClientRect().width;
+      const width = document.defaultView.innerWidth;
       return session.setView({position: [0, 1.5, width < 600 ? 9.8 : 5.5], target: [0, 1.5, 0]});
     };
     try {
