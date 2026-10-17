@@ -2189,6 +2189,27 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="volume-control-section" data-volume-control-section="render-budget">
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-raymarch-mode">Ray marcher</label>
+      <select id="volume-raymarch-mode" class="select-input" data-volume-settings-role="renderer">
+        <option value="current">Old adaptive</option>
+        <option value="numerical" selected>New adaptive</option>
+        <option value="fixed" title="Uniform reference: four integration panels per authored base interval">Standard (fixed)</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-optical-tolerance">Tolerance</label>
+      <input id="volume-optical-tolerance" type="number" step="any" min="0" value="0.001" data-authoring-drag-step="0.0001" data-volume-settings-role="renderer">
+    </div>
+    <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-ray-step-telemetry">Ray statistics</label>
+      <input id="volume-ray-step-telemetry" type="checkbox" data-volume-settings-role="renderer">
+    </div>
+    <div id="volume-ray-step-stats" hidden>
+      <output id="volume-ray-step-status" class="flame-scope" role="status"></output>
+      <canvas id="volume-ray-step-display" width="224" height="96" aria-label="GPU ray material samples: p50, p95, p99 and total per frame" style="display:block;width:224px;height:96px"></canvas>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
       <input type="range" id="volume-steps" min="6" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
@@ -3564,6 +3585,7 @@ import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-colli
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
+import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -19131,6 +19153,9 @@ function readVolumeControls() {
     flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
     flowKernelCoherence: parseFloat(document.getElementById('volume-flow-kernel-coherence').value),
     toneMapping: document.getElementById('volume-tone-mapping').value,
+    raymarchMode: document.getElementById('volume-raymarch-mode').value,
+    opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
+    rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
@@ -19419,6 +19444,9 @@ function supersedeVolumeRebuildHolds() {
 
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
+  document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
@@ -19873,6 +19901,14 @@ function refreshVolumeReadout() {
     request => volumePrototype.previewGridShape(request),
     Number(document.getElementById('volume-grid-height-ratio').value));
   const s = volumePrototype.debugState();
+  const stepping=s.opticalStepping;
+  const requested=document.getElementById('volume-raymarch-mode').value;
+  const modeNames={current:'Old adaptive',numerical:'New adaptive',fixed:'Standard (fixed)','fixed-dense':'Fixed reference 2x'};
+  document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
+    `${modeNames[stepping.effective]}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
+  const telemetry=s.rayStepTelemetry;
+  document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
+    telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
   syncKilnCollisionControl(s.sceneCollision);
   flameInspector?.sync();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
@@ -20789,6 +20825,9 @@ async function initKaminosVolumeRoute() {
     setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
   }
   for (const [id, param] of [
+    ['volume-raymarch-mode', 'volume_raymarch_mode'],
+    ['volume-optical-tolerance', 'volume_optical_tolerance'],
+    ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
@@ -20836,6 +20875,7 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
+  volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
   wireJoinedProvisionalControls(volumePrototype);
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
@@ -21184,6 +21224,9 @@ async function initKaminosVolumeRoute() {
   for (const id of [
     'volume-emitter-source-law',
     'volume-tone-mapping',
+    'volume-raymarch-mode',
+    'volume-optical-tolerance',
+    'volume-ray-step-telemetry',
     'volume-ray-start-noise',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
@@ -22661,6 +22704,11 @@ function flameSettingsStateProblems(state) {
         flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale),false);
     } catch(error) {problems.push({id:'volume-immersed-radius',message:error.message});}
   }
+  if(state.rendererControls?.['volume-optical-tolerance']) {
+    try{opticalSteppingConfig({mode:state.rendererControls['volume-raymarch-mode'].value,
+      tolerance:Number(state.rendererControls['volume-optical-tolerance'].rawValue??state.rendererControls['volume-optical-tolerance'].value)});}
+    catch(error){problems.push({id:'volume-optical-tolerance',message:error.message});}
+  }
   return problems;
 }
 function checkFlameSettingsState(state) {
@@ -22859,9 +22907,10 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
-      if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+      if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
         const next=flameSettingsState();
-        next.domControls[control.id]={...next.domControls[control.id],value:state.value,rawValue:String(state.value)};
+        const axis=Object.hasOwn(next.rendererControls,control.id)?'rendererControls':'domControls';
+        next[axis][control.id]={...next[axis][control.id],value:state.value,rawValue:String(state.value)};
         checkFlameSettingsState(next);
       }
       return {value:state.value};
@@ -22871,7 +22920,7 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
-    if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+    if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
       // DOM listener exceptions cannot reject dispatchEvent in the caller.
       // Refuse an invalid aperture before the live runtime handlers see it.
       const validatePreview=event=>{
