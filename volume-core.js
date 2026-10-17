@@ -17979,14 +17979,13 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
-    refreshSceneCollision();
-    ensureAppearanceLayout(encoder);
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
     if (joinedExterior?.paused) return false;
     // Install current collider occupancy before admitting either predictor.
     // A changed pressure topology cannot be discovered after fine advances.
     refreshSceneCollision();
+    ensureAppearanceLayout(encoder);
     const editingHeld = Boolean(state.joinedEditing?.held);
     if (!editingHeld && state.joinedBoundary?.requested && !state.joinedBoundary.admitted && joinedExterior?.retryAvailable?.(joinedProducerSnapshot())) {
       refreshJoinedBoundary();
