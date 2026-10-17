@@ -65,3 +65,34 @@ test('authored inspector receives later admission changes without losing its act
   assert.equal(field.options[1].textContent,'160');
   syncField(true);assert.equal(field.value,'32');
 });
+
+function observedOption(value) {
+  let textContent='',title='';const mutations=[];
+  const dataset=new Proxy({}, {set(target,key,value){mutations.push(['attribute',key,value]);target[key]=value;return true;},deleteProperty(target,key){mutations.push(['delete',key]);delete target[key];return true;}});
+  return {value:String(value),style:{},dataset,disabled:false,mutations,
+    get textContent(){return textContent;},set textContent(value){mutations.push(['children',value]);textContent=value;},
+    get title(){return title;},set title(value){mutations.push(['attribute','title',value]);title=value;}};
+}
+test('idle grid admission refresh leaves native option text and attributes untouched',()=>{
+  const select={options:[32,160].map(observedOption)};
+  const checked=preview({limits:{maxStorageBufferBindingSize:268435456,maxBufferSize:268435456,maxTextureDimension3D:2048}});
+  syncVolumeGridOptions(select,checked,2);
+  for(const option of select.options)option.mutations.length=0;
+  syncVolumeGridOptions(select,checked,2);
+  assert.deepEqual(select.options.flatMap(option=>option.mutations),[], 'an unchanged native menu must not have its option contents or attributes rewritten');
+});
+test('idle inspector refresh leaves the focused grid menu intact while preserving the proposed choice',()=>{
+  const text=readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8');
+  const start=text.indexOf('      function syncField(force=false) {');
+  const end=text.indexOf("      if(id==='emitter-assay-family')field.title",start);
+  const source={value:'32',options:[32,160].map(observedOption)};
+  const field={value:'160',options:[32,160].map(observedOption)};
+  const id='volume-resolution',document={activeElement:field};
+  const readControlBounds=()=>null,flameControlDisplayValue=(_id,value)=>value;
+  const syncField=eval('('+text.slice(start,end).trim()+')');
+  syncVolumeGridOptions(source,preview(null),2);syncField();
+  for(const option of field.options)option.mutations.length=0;
+  syncField();
+  assert.deepEqual(field.options.flatMap(option=>option.mutations),[], 'periodic inspector updates must not rewrite an unchanged open native menu');
+  assert.equal(field.value,'160');assert.equal(source.value,'32');
+});

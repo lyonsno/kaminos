@@ -170,10 +170,11 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         if(id==='volume-resolution')for(const option of field.options) {
           const origin=[...source.options].find(candidate=>candidate.value===option.value);
           if(!origin)continue;
-          option.textContent=origin.textContent;option.title=origin.title;
+          if(option.textContent!==origin.textContent)option.textContent=origin.textContent;
+          if(option.title!==origin.title)option.title=origin.title;
           option.style.color=origin.style.color;option.disabled=false;
-          if(origin.dataset.gridAdmission)option.dataset.gridAdmission=origin.dataset.gridAdmission;
-          else delete option.dataset.gridAdmission;
+          if(origin.dataset.gridAdmission){if(option.dataset.gridAdmission!==origin.dataset.gridAdmission)option.dataset.gridAdmission=origin.dataset.gridAdmission;}
+          else if(option.dataset.gridAdmission)delete option.dataset.gridAdmission;
         }
         const bounds=readControlBounds(id);
         if(bounds)syncFlameRangeBounds(source,bounds);

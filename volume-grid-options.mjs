@@ -6,11 +6,15 @@ export function syncVolumeGridOptions(select, previewGridShape, gridHeightRatio)
     const preview = previewGridShape({resolution:Number(option.value), gridHeightRatio});
     const refused = preview.limitsChecked === true && preview.admitted === false;
     option.disabled = false;
-    option.dataset.gridAdmission = refused ? 'refused' : preview.limitsChecked ? 'within-limits' : 'unchecked';
+    const admission = refused ? 'refused' : preview.limitsChecked ? 'within-limits' : 'unchecked';
+    if (option.dataset.gridAdmission !== admission) option.dataset.gridAdmission = admission;
     option.style.color = refused ? '#777' : '';
-    option.textContent = `${option.value}${refused ? ' · exceeds GPU limits' : ''}`;
-    option.title = refused ? preview.admissionReason : preview.limitsChecked
+    const text = `${option.value}${refused ? ' · exceeds GPU limits' : ''}`;
+    const title = refused ? preview.admissionReason : preview.limitsChecked
       ? `${preview.dimensions.join('×')} · within allocation limits; shader compilation not tested`
       : 'GPU limits not checked yet';
+    // Replacing identical option text disturbs an open native select menu.
+    if (option.textContent !== text) option.textContent = text;
+    if (option.title !== title) option.title = title;
   }
 }
