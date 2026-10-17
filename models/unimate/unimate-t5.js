@@ -11,7 +11,9 @@ import * as K from './unimate-kernels.js';
 import { tensorFloat32Bytes } from './unimate-weights.js';
 import { createT5Tokenizer } from './unimate-t5-tokenizer.js';
 
-const SU = GPUBufferUsage;
+// The WebGPU spec's buffer usage flags, so the module also loads where WebGPU is absent (bundling,
+// servers, workers); the browser's own constants are used when present.
+const SU = globalThis.GPUBufferUsage ?? { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512 };
 const STORAGE = SU.STORAGE | SU.COPY_SRC | SU.COPY_DST;
 
 export class T5Encoder {

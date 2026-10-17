@@ -9,7 +9,9 @@
 export const PYODIDE_VERSION = '0.27.7';
 export const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 
-export async function createLabeler({ zipUrl, pyodideUrl = PYODIDE_URL, loadPyodide = null, packageBaseUrl = undefined, onStatus = () => {} }) {
+export const LABELER_URL = 'https://huggingface.co/BasinShapers/unimate-webgpu/resolve/main/labeler/unimate-labeler.zip';
+
+export async function createLabeler({ zipUrl = LABELER_URL, pyodideUrl = PYODIDE_URL, loadPyodide = null, packageBaseUrl = undefined, onStatus = () => {} }) {
   onStatus('loading Python');
   const load = loadPyodide ?? (await import(/* webpackIgnore: true */ `${pyodideUrl}pyodide.mjs`)).loadPyodide;
   const py = await load({ indexURL: pyodideUrl, ...(packageBaseUrl ? { packageBaseUrl } : {}) });

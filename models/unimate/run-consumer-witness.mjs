@@ -1,6 +1,7 @@
 // Drive the UniMate consumer (unimate-consumer.js) from a minimal host page, as the Kaminos app would.
 // Usage: node run-consumer-witness.mjs --chrome <exe> --out <dir> [--weights <dir> --t5 <dir>] [--rig <file.glb>]
 //        [--rest x180] [--skeleton dog] [--prompt "An object walks forward."] [--seed 1] [--budget <bytes>]
+//        [--page-root <dir> --page <file>]  (serve another host page, e.g. built from the installed package)
 // The host page owns the device, kit session and foreground service and keeps drawing frames. The
 // witness runs the consumer on a rig (or a published skeleton), saves the .glb it returns and
 // report.json: stages seen, frame gaps during the run, the consumer's read(), the effective browser,
@@ -30,13 +31,15 @@ async function finish(code) {
 try {
   if (!chrome || !opt('--out')) throw new Error('need --chrome and --out');
   await fsp.mkdir(outDir, { recursive: true });
-  const roots = { '/': path.resolve(here, '../..') };
+  // --page-root <dir> --page <file>: serve another host page (e.g. one built from the installed npm package).
+  const pageRoot = opt('--page-root') ? path.resolve(opt('--page-root')) : null;
+  const roots = pageRoot ? { '/app/': pageRoot } : { '/': path.resolve(here, '../..') };
   if (opt('--weights')) Object.assign(roots, { '/weights/': path.resolve(opt('--weights')), '/t5/': path.resolve(opt('--t5')) });
   if (rig) roots['/rig/'] = path.dirname(rig);
   const started = await startServer(roots);
   server = started.server;
   const q = new URLSearchParams({ ...(opt('--weights') ? { weights: '/weights/', t5: '/t5/' } : {}), ...(opt('--budget') ? { budget: opt('--budget') } : {}) });
-  report.pageUrl = `${started.origin}/models/unimate/consumer-witness.html?${q}`;
+  report.pageUrl = pageRoot ? `${started.origin}/app/${opt('--page', 'consumer-witness.html')}?${q}` : `${started.origin}/models/unimate/consumer-witness.html?${q}`;
   browser = await launchChrome(chrome, ['--window-size=800,600'], report);
   report.phase = 'host';
   await browser.navigate(report.pageUrl, "window.__consumerWitness && window.__consumerWitness.phase !== 'start'");
