@@ -13002,16 +13002,20 @@ function installSceneActuators(){
   const members=id=>id?.startsWith('@group:')?sceneGroups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id];
   const readPose=id=>{if(id?.startsWith('@group:'))return structuredClone(sceneGroups.find(g=>g.id===id.slice(7))?.transform||null);const e=sceneObjects.find(e=>e.id===id);return e?sceneObjectTransformState(e.object):null;};
   const supported=id=>{const ids=members(id);return ids.length&&ids.every(key=>{const e=sceneObjects.find(e=>e.id===key);return e&&['glb',PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(e.type)&&(id.startsWith('@group:')||!e.groupId);});};
-  const writePoses=poses=>{
+  const validatePoses=poses=>{
     const before={},seen=new Set();for(const [id,pose]of Object.entries(poses)){
       if(!supported(id))throw Error('Actuator parts need ungrouped rigid meshes (or a carried flame source)');
       for(const member of members(id)){if(seen.has(member))throw Error('Actuator groups overlap');seen.add(member);}
       checkedGroupPose(pose);const e=sceneObjects.find(e=>e.id===id);if(e?.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(pose);before[id]=readPose(id);
     }
+    return before;
+  };
+  const writePoses=poses=>{
+    const before=validatePoses(poses);
     try{for(const [id,pose]of Object.entries(poses))applyAuthoredScenePose(id,pose);}
     catch(error){for(const [id,pose]of Object.entries(before))applyAuthoredScenePose(id,pose);throw error;}
   };
-  const controller=createActuatorController({edits:scenePlacementTools.edits,readPose,writePoses,
+  const controller=createActuatorController({edits:scenePlacementTools.edits,readPose,writePoses,validatePoses,
     changed:()=>{actuatorControls?.refresh();window._kaminosDirty?.();},
     admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||vantageCaptureHeld||polyEdit?.active()||greenroomPreviewIsActive())throw Error('Finish the current document, edit or capture action');}});
   sceneActuators=controller;

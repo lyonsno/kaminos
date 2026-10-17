@@ -32,3 +32,31 @@ test('installation, hand crank, detach and saved restoration use ordinary histor
  const saved=c.read();c.detach('p');assert.equal(c.read().length,0);await edits.undo();assert.equal(c.read().length,1);c.restore(saved);assert.ok(writes>0);
  delete poses.rod;c.play.bind(c);assert.throws(()=>c.play('p'),/missing/);assert.equal(c.state().actuators[0].available,false);
 });
+function setup(){const r=fixture(),poses=structuredClone(r.reference),edits=createSceneEdits({read:id=>poses[id],write:(id,p)=>poses[id]=p});const c=createActuatorController({edits,readPose:id=>poses[id],writePoses:p=>Object.assign(poses,p)});c.install(r);return {r,poses,edits,c};}
+test('an ordinary synchronous edit stops the motor before it can overwrite the accepted pose',async()=>{
+ const {c,edits,poses}=setup();c.play('p');c.tick(.2);const length=c.state().actuators[0].length;
+ edits.apply('boom',{position:[9,9,9]});assert.equal(c.state().running,null);c.tick(.1);assert.deepEqual(poses.boom.position,[9,9,9]);near(c.read()[0].length,length);
+ await edits.undo();assert.notDeepEqual(poses.boom.position,[9,9,9]);assert.equal(edits.state().active,null);
+});
+test('unavailable independent mechanism does not block accepting the healthy mechanism Stop',()=>{
+ const {r,c,poses}=setup(),other=structuredClone(r);other.id='p2';for(const k of ['fixedId','followerId','barrelId','rodId'])other[k]+='2';other.reference=Object.fromEntries(Object.entries(other.reference).map(([id,p])=>[id+'2',p]));Object.assign(poses,other.reference);c.install(other);delete poses.rod;
+ c.play('p2');c.tick(.25);const length=c.state().actuators[1].length;c.pause();near(c.read()[1].length,length);assert.equal(c.state().running,null);assert.equal(c.state().actuators[0].available,false);c.configure('p2',{length:1.3});near(c.read()[1].length,1.3);
+});
+test('invalid live base refuses before opening a gesture, leaving cancellation and Undo usable',async()=>{
+ const {c,edits,poses}=setup();edits.apply('base',{scale:[1,2,1]});assert.throws(()=>c.configure('p',{length:1.2}),/uniform/);assert.equal(edits.state().active,null);assert.equal(edits.cancel(),false);await edits.undo();assert.deepEqual(poses.base.scale,[1,1,1]);c.configure('p',{length:1.2});
+});
+test('clearing an active crank cannot resurrect the recipe through gesture cancellation',()=>{
+ const {c,edits}=setup();c.scrub('p',1.2);c.clear();edits.clear();assert.deepEqual(c.read(),[]);assert.equal(edits.state().active,null);assert.equal(edits.state().undoCount,0);
+});
+test('provider refusal is preflighted before a crank or configuration owns history',()=>{
+ const r=fixture(),poses=structuredClone(r.reference),edits=createSceneEdits({read:id=>poses[id],write:(id,p)=>poses[id]=p});let refused=false;
+ const validatePoses=()=>{if(refused)throw Error('Unsupported provider');};
+ const c=createActuatorController({edits,readPose:id=>poses[id],validatePoses,writePoses:p=>{validatePoses();Object.assign(poses,p);}});c.install(r);refused=true;
+ assert.throws(()=>c.scrub('p',1.2),/Unsupported provider/);assert.equal(edits.state().active,null);
+ assert.throws(()=>c.configure('p',{length:1.2}),/Unsupported provider/);assert.equal(edits.state().active,null);near(c.read()[0].length,r.length);
+});
+test('Undo during playback stops without erasing the ordinary edit Redo',async()=>{
+ const {c,edits,poses}=setup();edits.apply('base',{position:[3,0,0]});c.play('p');c.tick(.2);const length=c.state().actuators[0].length;
+ await edits.undo();assert.equal(c.state().running,null);near(c.read()[0].length,length);assert.equal(edits.state().redoCount,1);c.tick(.1);assert.deepEqual(poses.base.position,[0,0,0]);
+ await edits.redo();assert.deepEqual(poses.base.position,[3,0,0]);assert.equal(edits.state().redoCount,0);
+});
