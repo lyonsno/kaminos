@@ -1176,6 +1176,51 @@ async function runPreviewBoundScenario(ws) {
   await evaluate(ws, base);
 }
 
+// The fire-cadence Workbench experiment as the operator uses it: Add flame
+// through its button, the step slider and mode menu through their controls,
+// effective pacing read from the fire itself, and close restoring
+// every-frame stepping. Load ?fire=on&experiment=fire-cadence&workspace=workbench.
+async function runFireCadenceExperimentScenario(ws) {
+  phase = 'scenario-fire-cadence-experiment';
+  const failures = [], check = (ok, message) => { if (!ok) failures.push(message); };
+  const evidence = lastEvidence.fireCadenceExperiment = { failures, steps: [] };
+  let opened = null;
+  for (let i = 0; i < 240 && !opened; i++) { opened = await evaluate(ws, `(() => { const e = window.kaminosWorkbenchExperiments; return e?.state().id === 'fire-cadence' ? e.read() : null; })()`).catch(() => null); if (!opened) await delay(250); }
+  assert.ok(opened, 'the fire-cadence experiment did not open');
+  evidence.opened = opened;
+  const pacing = () => evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()?.proxyPacing ?? null');
+  if (!opened.fire) {
+    await evaluate(ws, `(async () => { const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Add flame' && !x.hidden); if (!b) throw Error('no visible Add flame button'); b.click(); return true; })()`);
+    for (let i = 0; i < 480; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 60) break; await delay(250); }
+  }
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
+  await settleViewportFrames(ws, 800);
+  evidence.steps.push({ step: 'after flame', pacing: await pacing(), read: await evaluate(ws, 'window.kaminosWorkbenchExperiments.read()') });
+  const slider = await evaluate(ws, `(() => { const s = document.querySelector('input[aria-label="Sim steps every N frames"]'); s.value = '3'; s.dispatchEvent(new Event('input', { bubbles: true })); return s.value; })()`);
+  await settleViewportFrames(ws, 600);
+  const afterSlider = await pacing();
+  evidence.steps.push({ step: 'slider 3', slider, pacing: afterSlider });
+  check(afterSlider?.simStepEvery === 3 && afterSlider?.presentationAdvect === true, `the step slider did not reach the fire: ${JSON.stringify(afterSlider)}`);
+  await evaluate(ws, `(() => { const m = document.querySelector('select[aria-label="Between sim steps"]'); m.value = 'held'; m.dispatchEvent(new Event('change', { bubbles: true })); return m.value; })()`);
+  await settleViewportFrames(ws, 600);
+  const afterMode = await pacing();
+  evidence.steps.push({ step: 'mode held', pacing: afterMode });
+  check(afterMode?.simStepEvery === 3 && afterMode?.presentationAdvect === false, `the mode menu did not reach the fire: ${JSON.stringify(afterMode)}`);
+  const invoked = await evaluate(ws, `window.kaminosWorkbenchExperiments.invoke('setMode', 'carry')`);
+  await settleViewportFrames(ws, 600);
+  evidence.steps.push({ step: 'agent setMode carry', invoked, pacing: await pacing() });
+  check((await pacing())?.presentationAdvect === true, 'the agent setMode did not reach the fire');
+  const shot = await capturePngScreenshot(ws, siblingPngPath('-fire-cadence-experiment'));
+  evidence.shot = shot.path;
+  evidence.status = await evaluate(ws, `document.querySelector('[role="status"]')?.textContent ?? null`);
+  await evaluate(ws, 'window.kaminosWorkbenchExperiments.close()');
+  await settleViewportFrames(ws, 600);
+  const afterClose = await pacing();
+  evidence.steps.push({ step: 'closed', pacing: afterClose });
+  check(afterClose === null, `closing did not restore every-frame stepping: ${JSON.stringify(afterClose)}`);
+  assert.deepEqual(failures, [], `fire cadence experiment checks failed:\n- ${failures.join('\n- ')}`);
+}
+
 // Decoupled fire cadence: the sim steps every N frames; held stepping repeats
 // the last state, advect carries it forward between steps. The fire loop is
 // paused and stepped one presented frame at a time from a frame that lands a
@@ -7133,6 +7178,8 @@ try {
     await runFireProxyBridgeRouteScenario(ws);
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
+  } else if (scenario === 'fire-cadence-experiment') {
+    await runFireCadenceExperimentScenario(ws);
   } else if (scenario === 'fire-decoupled-cadence') {
     await runFireDecoupledCadenceScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {
