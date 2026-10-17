@@ -24,6 +24,7 @@ export function moveRestJoint(plan, {name, position, mirror=false, descendants=f
  if(!by.has(name)||!vector(position)||typeof mirror!=='boolean'||typeof descendants!=='boolean')throw Error('Choose a joint and three finite coordinates');
  const heads=restHeads(p),delta=position.map((v,k)=>v-heads[name][k]);
  const partner=name.includes('-left-')?name.replace('-left-','-right-'):name.includes('-right-')?name.replace('-right-','-left-'):null;
+ if(mirror&&!partner)delta[0]=0;
  const moves=new Map([[name,delta]]);
  if(mirror&&partner){if(!by.has(partner))throw Error('Mirrored joint is absent: '+partner);moves.set(partner,delta.map((v,k)=>k===0?-v:v));}
  const shift=(root,d)=>{for(const j of p.joints){let affected=j.name===root;for(let parent=j.parent;descendants&&parent;parent=by.get(parent).parent)if(parent===root)affected=true;

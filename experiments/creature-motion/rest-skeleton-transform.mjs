@@ -27,19 +27,33 @@ export function applyRestTransform(plan,state){
  if(!['median','active','individual'].includes(state.pivot??'median'))throw Error('Unknown component pivot');
  const linear=delta.clone();linear.elements[12]=linear.elements[13]=linear.elements[14]=0;
  const translation=new Vector3(...state.position).sub(new Vector3(...state.anchor.position));
+ // Symmetry belongs to the source skeleton, even when its scene object is
+ // rotated, offset or scaled. A central handle cannot translate its branch
+ // sideways and thereby widen the paired limbs it owns.
+ const localTranslation=translation.clone().applyMatrix4(inverse).sub(new Vector3().applyMatrix4(inverse));
+ const lateral=new Vector3(localTranslation.x,0,0).applyMatrix4(frame).sub(new Vector3().applyMatrix4(frame));
+ const translationOnly=linear.elements.every((v,i)=>Math.abs(v-identity.elements[i])<1e-12);
  const preferred=[state.active,...chosen].find(name=>partner(name)),side=preferred?.includes('-left-')?'left':'right';
  for(const name of affected){
   const pair=partner(name);if(state.mirror&&pair&&affected.has(pair)&&!name.includes('-'+side+'-'))continue;
+  let owner=name;while(!chosen.includes(owner))owner=by.get(owner).parent;
+  const centralOwner=state.mirror&&!partner(owner);
   const point=new Vector3(...original[name]).applyMatrix4(frame);
   if(state.pivot==='individual'){
    // Each chosen joint owns its branch; a chosen descendant starts its own pivot.
    let origin=name;while(!chosen.includes(origin))origin=by.get(origin).parent;
    const pivot=new Vector3(...original[origin]).applyMatrix4(frame);point.sub(pivot).applyMatrix4(linear).add(pivot).add(translation);
   }else point.applyMatrix4(delta);
+  if(centralOwner)point.sub(lateral);
   // A pivot origin is mathematically unchanged by rotation/scale. Keep its
   // source bytes instead of manufacturing an anatomy edit from frame roundoff.
   const fixedOrigin=(state.pivot==='active'&&name===state.active)||(state.pivot==='individual'&&chosen.includes(name));
-  const next=fixedOrigin&&translation.lengthSq()===0?[...original[name]]:point.applyMatrix4(inverse).toArray();heads[name]=next;
+  const unchanged=centralOwner&&translationOnly&&translation.clone().sub(lateral).lengthSq()<1e-24;
+  const next=unchanged||fixedOrigin&&translation.lengthSq()===0?[...original[name]]:point.applyMatrix4(inverse).toArray();
+  // Preserve the current axial coordinate, including inherited source offsets;
+  // toggling symmetry is not permission to snap the authored rig to x=0.
+  if(state.mirror&&!pair)next[0]=original[name][0];
+  heads[name]=next;
   if(state.mirror&&pair){if(!original[pair])throw Error('Mirrored component missing: '+pair);heads[pair]=original[pair].map((v,k)=>v+(k===0?-1:1)*(next[k]-original[name][k]));}
  }
  return withRestHeads(plan,heads);
