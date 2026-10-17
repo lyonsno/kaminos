@@ -11741,6 +11741,9 @@ async function initScene() {
       if(!fireProxySync?.effective())transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
       transportPrototype=null;
     }
+    // Release the proxy's temporary canvas hiding before transport snapshots
+    // ordinary presentation. Later proxy reconciliation is then idempotent.
+    syncFireProxy();
     if(wanted&&!transportPrototype) {
       prototype.setSceneTransportConsumer(consumeSceneTransportFrame);
       transportCanvasVisibility=prototype.canvasElement().style.visibility;
