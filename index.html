@@ -11759,10 +11759,12 @@ async function initScene() {
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     sceneExposureControls?.sync();
+    let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const physical=window.__kaminosVolumePrototype?.emissiveCameraState();
       const state=sceneEmissiveCamera.update(requested,physical);
+      matchedCameraEffective=state.effective;
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:!!localLiquidHost});
       localLiquidHost?.setSceneCamera(requested,physical);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
@@ -11793,6 +11795,7 @@ async function initScene() {
           authoredWaterControls?.refreshStatus();
           sharedWorkbench?.update({source:'Authored water',status:'Stopped',clock:localLiquidFailure});
           refreshLocalLiquidPerformance();
+          applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
           setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
         }
