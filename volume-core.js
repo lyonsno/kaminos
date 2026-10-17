@@ -1,5 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
+import { pressureResolutionPlan, createPressureTransfer } from './volume-pressure-resolution.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
@@ -3661,6 +3662,7 @@ override TRANSPARENT_CANVAS: f32 = 0.0;
 override LEAN_STOCK_RAYMARCH: bool = false;
 override LEAN_EMISSIVE_RAYMARCH: bool = false;
 override OPTICAL_TRACE_CAPTURE: bool = false;
+override SEPARATED_PRESSURE: bool = false;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -5453,6 +5455,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   let base = idx * SLOTS_PER_CELL;
   let c = vec3<i32>(gid);
   if (sceneSolidAt(c)) {
+    if (SEPARATED_PRESSURE) { fluidDst[base] = vec4<f32>(0.0); return; }
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
     for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) { fluidDst[base + slot] = vec4<f32>(0.0); }
@@ -5466,8 +5469,10 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureNeighborRead(c + vec3<i32>(0, 0, 1)) - pressureHere
   );
   let velocityDensity = fluidSrc[base];
-  frontDst[idx] = frontSrc[idx];
-  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
+  if (!SEPARATED_PRESSURE) {
+    frontDst[idx] = frontSrc[idx];
+    if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
+  }
   let projectionGain = clamp(u.pressure_solver_controls.w, 0.0, 1.0);
   var correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   if (!sceneFaceOpen(c, 0u)) { correctedVelocity.x = 0.0; }
@@ -5487,6 +5492,9 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   }
   // The legacy per-component velocity bound is retained; the residual probe
   // measures divergence after it, so anything it reintroduces is visible.
+  // Separated pressure returns the unbounded coarse correction. The bound is
+  // applied once, in material-cell units, after prolongation.
+  if (SEPARATED_PRESSURE) { fluidDst[base] = vec4<f32>(correctedVelocity, 0.0); return; }
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), velocityDensity.w);
   fluidDst[base + 1u] = fluidSrc[base + 1u];
   fluidDst[base + 2u] = fluidSrc[base + 2u];
@@ -12093,6 +12101,8 @@ export function createKaminosVolumePrototype({
   let browserResidualModelUrl = '';
   let browserResidualLoadPromise = null;
   let computePipeline = null;
+  let separatedPressure = null;
+  let separatedPressureProjectPipeline = null;
   let faceForcesPipeline = null;
   let transportPredictPipeline = null;
   let appearanceRelayoutPipeline = null;
@@ -13017,6 +13027,9 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    separatedPressure?.destroy();
+    separatedPressure = null;
+    separatedPressureProjectPipeline = null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
     sceneSolidTextureView = null;
@@ -13166,6 +13179,8 @@ export function createKaminosVolumePrototype({
     // crash. The main raymarch groups are built per fluid index.
     reactantRead = reactantTextures[0],
     reactantWrite = reactantTextures[1],
+    solidView = sceneSolidTextureView,
+    expansionTexture = burnRateTexture,
   }) {
     return device.createBindGroup({
       label,
@@ -13184,13 +13199,13 @@ export function createKaminosVolumePrototype({
         { binding: 13, resource: { buffer: quenchRead } },
         { binding: 14, resource: { buffer: quenchWrite } },
         { binding: 15, resource: { buffer: emissiveLightField.incident } },
-        { binding: 16, resource: sceneSolidTextureView },
+        { binding: 16, resource: solidView },
           { binding: 28, resource: joinedLowerFaceView() },
           { binding: 29, resource: joinedGhostView(0) },
           { binding: 30, resource: joinedGhostView(1) },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
-        { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
+        { binding: 19, resource: expansionTexture.createView({ dimension: '3d' }) },
         { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
         { binding: 23, resource: reactantRead.createView({ dimension: '3d' }) },
         { binding: 24, resource: reactantWrite.createView({ dimension: '3d' }) },
@@ -17224,7 +17239,12 @@ export function createKaminosVolumePrototype({
       ? 2 / PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS
       : 0;
     const transportPredictorPasses = resolveTransportConfig(controlsSnapshot).effective.predictorPass ? 1 : 0;
-    const fullGridPassesPerFrame = simPassesPerFrame + transportPredictorPasses + pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses + pressureResidualProbePasses;
+    const separated = pressureEnabled && state.pressureResolution?.dispatched === true;
+    const pressureCellRatio = separated ? 1 / state.pressureResolution.divisor ** 3 : 1;
+    // Cell visits, not a timing prediction: restriction reads every material
+    // cell and prolongation writes every material cell, in addition to solve.
+    const pressureTransferPasses = separated ? 2 : 0;
+    const fullGridPassesPerFrame = simPassesPerFrame + transportPredictorPasses + (pressureDivergencePasses + pressureJacobiFullGridEquivalentPasses + pressureProjectionPasses) * pressureCellRatio + pressureResidualProbePasses + pressureTransferPasses;
     const fullGridPassBreakdown = {
       fluidSim: simPassesPerFrame,
       pressureDivergence: pressureDivergencePasses,
@@ -17237,6 +17257,8 @@ export function createKaminosVolumePrototype({
       pressureProjection: pressureProjectionPasses,
       pressureResidualProbe: pressureResidualProbePasses,
       transportPredictor: transportPredictorPasses,
+      pressureCellRatio,
+      pressureTransfer: pressureTransferPasses,
       total: fullGridPassesPerFrame,
     };
     const fullGridWorkgroupsPerPass = Math.ceil(gridSize / 4) ** 2 * Math.ceil(gridHeight / 4);
@@ -17314,6 +17336,7 @@ export function createKaminosVolumePrototype({
       volumeScene: scene,
       grid: gridSize,
       gridDimensions: [gridSize, gridHeight, gridSize],
+      pressureResolution: state.pressureResolution ?? null,
       workgroupSize: '4x4x4',
       fullGridWorkgroupsPerPass,
       simPassesPerFrame,
@@ -17391,7 +17414,7 @@ export function createKaminosVolumePrototype({
       boundarySidecarBufferBytes: boundarySidecarBytes,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
       analyticEmitterUniformBufferBytes: analyticEmitterInjectionUniformData.byteLength,
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength,
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + boundarySidecarBytes + externalEmitterBufferBytes() + analyticEmitterInjectionUniformData.byteLength + (separatedPressure?.residentBytes ?? 0) + (separatedPressure ? uniforms.byteLength : 0),
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -17725,8 +17748,77 @@ export function createKaminosVolumePrototype({
     }
   }
 
+  function encodeSeparatedPressure(encoder, solver, options) {
+    const plan = pressureResolutionPlan({ dims: [gridSize, gridHeight, gridSize], mode: controlsSnapshot.pressureResolution || 'off',
+      solver: solver.effective.solver, inflow: state.inflowBoundary?.effective?.admitted === true,
+      joined: state.joinedBoundary?.admitted === true });
+    state.pressureResolution = { ...plan, scope: 'pressure-only', transportDims: [...plan.materialDims],
+      dispatched: false, obstaclePolicy: 'any-solid-cell', step: state.simStepCount };
+    if (plan.effective === 'off') {
+      separatedPressure?.destroy(); separatedPressure = null;
+      return null;
+    }
+    const key = [...plan.materialDims, plan.divisor].join(':');
+    if (!separatedPressure || separatedPressure.key !== key) {
+      separatedPressure?.destroy();
+      const transfer = createPressureTransfer(device, plan);
+      const uniform = device.createBuffer({ label: 'separated pressure uniforms', size: uniforms.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const destroyTransfer = transfer.destroy;
+      separatedPressure = Object.assign(transfer, { key, uniform, group: null, solidEnabled: null,
+        write: device.createBindGroup({ layout: pressureWriteBindGroupLayout, entries: [{binding:1,resource:{buffer:transfer.pressure}}] }),
+        read: device.createBindGroup({ layout: pressureReadBindGroupLayout, entries: [{binding:0,resource:{buffer:transfer.pressure}}] }),
+        destroy() { destroyTransfer(); uniform.destroy(); } });
+    }
+    if (!separatedPressureProjectPipeline) separatedPressureProjectPipeline = device.createComputePipeline({
+      label: 'separated existing pressure projection', layout: pressureProjectPipelineLayout,
+      compute: {module: shader, entryPoint: 'csProjectPressureConverged', constants: {SEPARATED_PRESSURE:true}} });
+    const owner = separatedPressure;
+    const coarseUniforms = uniforms.slice();
+    coarseUniforms[GRID_SHAPE_UNIFORM_OFFSET] = plan.pressureDims[0];
+    coarseUniforms[GRID_SHAPE_UNIFORM_OFFSET + 1] = plan.pressureDims[1];
+    device.queue.writeBuffer(owner.uniform, 0, coarseUniforms);
+    const solidEnabled = sceneSolidTexture.width === gridSize;
+    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture];
+    if (!owner.group || !groupResources.every((value,i)=>value===owner.groupResources?.[i])) {
+      owner.groupResources = groupResources;
+      owner.solidEnabled = solidEnabled;
+      owner.group = createFluidRenderBindGroup({label:'separated pressure fluid',uniformsBuffer:owner.uniform,
+        fluidRead:owner.before,fluidWrite:owner.after,frontRead:frontBuffers[0],frontWrite:frontBuffers[1],
+        captureRows:nonRidgeOpticalCaptureRowBuffer,solidView:solidEnabled?owner.solid.createView():sceneSolidTextureView,
+        expansionTexture:owner.burn});
+    }
+    const transport = resolveTransportConfig(controlsSnapshot).effective;
+    const time = resolveTimeStepConfig(controlsSnapshot).effective;
+    owner.prepare({ fluid:fluidBuffers[currentFluid], solidTexture:sceneSolidTexture, burnTexture:burnRateTexture,
+      openTop:solver.effective.openTop, nonLegacy:transport.scheme!=='legacy',
+      maxSpeed:TRANSPORT_MAX_BACKTRACE_CELLS / time.backtraceScale });
+    const probe = beginPressureResidualProbe(encoder);
+    owner.encode(encoder,'restrict');
+    const run = (pipeline, pressureGroup, label) => {
+      const pass = encoder.beginComputePass({label}); pass.setPipeline(pipeline);
+      pass.setBindGroup(0,owner.group);pass.setBindGroup(2,pressureGroup);
+      pass.dispatchWorkgroups(...plan.pressureDims.map(n=>Math.ceil(n/4)));pass.end();
+    };
+    run(pressureDivergenceWarmPipeline,owner.write,'separated warm divergence');
+    for(let sweep=0;sweep<solver.effective.iterations;sweep++) {
+      run(pressureRedBlackEvenPipeline,owner.write,'separated red sweep');
+      run(pressureRedBlackOddPipeline,owner.write,'separated black sweep');
+    }
+    run(separatedPressureProjectPipeline,owner.read,'separated pressure correction');
+    owner.encode(encoder,'prolong',options.timestampWrites);
+    if (probe) finishPressureResidualProbe(encoder);
+    state.pressureProjectionEnabled = true;
+    state.pressureProjectionIterations = solver.effective.iterations;
+    state.pressureResolution = {...state.pressureResolution,dispatched:true,residentBytes:owner.residentBytes+uniforms.byteLength};
+    updateSimCostLedger();
+    return Boolean(options.timestampWrites);
+  }
+
   function encodePressureProjection(encoder, options = {}) {
     advancePressureResidualFreshness();
+    state.pressureResolution = { requested: controlsSnapshot.pressureResolution || 'off', effective: 'off',
+      materialDims: [gridSize,gridHeight,gridSize], pressureDims: [gridSize,gridHeight,gridSize],
+      scope: 'pressure-only', dispatched: false, reason: 'pressure-not-dispatched' };
     const solverConfig = resolvePressureSolverConfig(controlsSnapshot);
     const pressureIterationCount = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     const pressureStrategy = normalizePressureStrategy(controlsSnapshot.pressureStrategy, controlsSnapshot.volumeScene);
@@ -17750,6 +17842,8 @@ export function createKaminosVolumePrototype({
       updateSimCostLedger();
       return false;
     }
+    const separatedResult = encodeSeparatedPressure(encoder, solverConfig, options);
+    if (separatedResult !== null) return separatedResult;
     const workgroups = Math.ceil(gridSize / 4);
     const workgroupsY = Math.ceil(gridHeight / 4);
     const dispatchPressureTierPass = (pipeline, bindGroup, tierWorkgroupsY, label, readBindGroup = fluidFrontReadBindGroups[currentFluid]) => {

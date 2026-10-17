@@ -221,7 +221,9 @@ test('cockpit plumbing carries the solver selection through DOM, route, controls
   assert.match(index, /pressureSolver: document\.getElementById\('volume-pressure-solver'\)\.value/, 'controls read the solver');
   assert.match(index, /pressureSolverIterations: parseFloat\(document\.getElementById\('volume-pressure-solver-iterations'\)\.value\)/, 'controls read the sweep count');
   assert.match(index, /volume-pressure-solver-val'\)\.textContent/, 'solver label renders the effective solver');
-  assert.match(index, /'volume-pressure-solver',\s*\n\s*'volume-pressure-solver-iterations',/, 'both controls register live listeners');
+  for (const id of ['volume-pressure-solver', 'volume-pressure-solver-iterations']) {
+    assert.ok(index.includes(`    '${id}',\n`), `${id} registers a live listener independently of adjacent controls`);
+  }
   assert.match(index, /\['volume-pressure-solver', 'volume_pressure_solver'\]/, 'route params apply the solver');
 });
 
