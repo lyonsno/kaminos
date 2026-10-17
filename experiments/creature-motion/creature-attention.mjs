@@ -61,7 +61,6 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  reticle.visible=false;
 
  function poseOf(bones,group){
-  group.updateMatrixWorld(true);
   return {actorMatrix:group.matrixWorld.toArray(),bones:[...bones.values()].map(bone=>({name:bone.name,parent:bone.parent?.isBone?bone.parent.name:null,localMatrix:bone.matrix.toArray(),worldMatrix:bone.matrixWorld.toArray()}))};
  }
  const worldPosition=bone=>new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
@@ -70,7 +69,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(!enabled){reticle.visible=false;return;}
   const dt=lastTime===null?0:Math.max(0,time-lastTime);lastTime=time;
   try{
-   group.updateMatrixWorld(true);
+   // Playback updates world matrices before calling the modifier.
    const head=bones.get('head'),chest=bones.get('spine-chest');
    const headAt=worldPosition(head),body=headAt.clone().sub(worldPosition(chest));body.y=0;
    if(body.lengthSq()<1e-12)throw Error('Creature body heading is degenerate');body.normalize();
@@ -109,7 +108,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const out=look.apply(poseOf(bones,group),{target:aim.toArray(),strength:Math.min(1,weight)});
     if(out.applied){
      for(const name of ['neck','head']){const row=out.pose.bones.find(b=>b.name===name);new THREE.Matrix4().fromArray(row.localMatrix).decompose(bones.get(name).position,bones.get(name).quaternion,bones.get(name).scale);}
-     group.updateMatrixWorld(true);
+     bones.get('neck').updateMatrixWorld(true);
     }
    }
    reticle.visible=Boolean(focus)&&weight>.2;
@@ -145,8 +144,11 @@ export function sceneObjectInterests({THREE,root,specs}) {
   if(spec.anchor!==undefined&&!['top','center'].includes(spec.anchor))throw Error('Unknown interest anchor');
   return {object:spec.object,interest:spec.interest,anchor:spec.anchor??'top',reason:spec.reason??'authored interest'};
  });
- const boxes=new Map();
- function find(id){let found=null;root().traverse(node=>{if(!found&&node.userData?.kaminosSceneObject?.id===id)found=node;});return found;}
+ const boxes=new Map(),found=new Map();
+ const attached=(object,scene)=>{let node=object;while(node.parent)node=node.parent;return node===scene;};
+ // Look each prop up once; search the scene again only after it leaves it.
+ function find(id){const scene=root(),cached=found.get(id);if(cached&&cached.userData?.kaminosSceneObject?.id===id&&attached(cached,scene))return cached;
+  let hit=null;scene.traverse(node=>{if(!hit&&node.userData?.kaminosSceneObject?.id===id)hit=node;});if(hit)found.set(id,hit);else found.delete(id);return hit;}
  function localBox(object){
   if(!boxes.has(object)){
    object.updateMatrixWorld(true);const inverse=object.matrixWorld.clone().invert(),box=new THREE.Box3();
@@ -158,7 +160,6 @@ export function sceneObjectInterests({THREE,root,specs}) {
  return ()=>checked.flatMap(spec=>{
   const object=find(spec.object);if(!object)return [];
   const box=localBox(object),center=box.getCenter(new THREE.Vector3());if(spec.anchor==='top')center.y=box.max.y;
-  object.updateMatrixWorld(true);
   return [{id:spec.object,label:object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason}];
  });
 }

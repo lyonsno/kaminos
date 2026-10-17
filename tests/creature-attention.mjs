@@ -84,11 +84,14 @@ function run(attention,c,seconds,start=0,step=1/30){c.base??=new Map([...c.bones
 
 {
  // Interests resolve from live scene objects and follow the prop when moved.
- const scene=new THREE.Scene(),prop=new THREE.Mesh(new THREE.BoxGeometry(1,2,1));prop.userData.kaminosSceneObject={id:'mesh-1',label:'Brazier'};prop.position.set(3,1,0);scene.add(prop);
+ const scene=new THREE.Scene(),prop=new THREE.Mesh(new THREE.BoxGeometry(1,2,1));prop.userData.kaminosSceneObject={id:'mesh-1',label:'Brazier'};prop.position.set(3,1,0);scene.add(prop);scene.updateMatrixWorld(true);
  const read=sceneObjectInterests({THREE,root:()=>scene,specs:[{object:'mesh-1',interest:.8},{object:'missing',interest:1}]});
  let rows=read();assert.equal(rows.length,1,'missing scene objects contribute nothing');
  assert.deepEqual(rows[0].point.map(v=>+v.toFixed(9)),[3,2,0],'top anchor of the prop');
- prop.position.x=5;rows=read();assert.equal(rows[0].point[0],5,'moving the prop moves the interest');
+ // The renderer refreshes world matrices each frame; interests read them.
+ prop.position.x=5;scene.updateMatrixWorld(true);rows=read();assert.equal(rows[0].point[0],5,'moving the prop moves the interest');
+ prop.removeFromParent();assert.equal(read().length,0,'removing the prop removes the interest');
+ scene.add(prop);assert.equal(read().length,1,'a prop restored to the scene is found again');
  assert.throws(()=>sceneObjectInterests({THREE,root:()=>scene,specs:[{object:'mesh-1',interest:-1}]}),/finite and nonnegative/);
 }
 {
