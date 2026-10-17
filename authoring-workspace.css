@@ -406,3 +406,12 @@ body[data-workspace=workbench] #authoring-viewport-tools .selection-setting { fo
 body[data-workspace=workbench] #authoring-viewport-tools .selection-setting select { font-size:10px; }
 #authoring-actions { display:flex; align-items:center; gap:1px; }
 #authoring-navigation-slot .navigation-input { margin:0; padding:0 2px; border:0; background:transparent; gap:4px; }
+
+.scene-visibility-eye {flex:none;display:grid;place-items:center;width:25px;height:24px;padding:3px!important;border:0!important;background:transparent!important;color:#d8dce2;cursor:pointer;border-radius:3px}
+.scene-visibility-eye svg {width:18px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4}
+.scene-visibility-eye[aria-pressed=false] {color:#747a84}
+.scene-visibility-eye:hover,.scene-visibility-eye:focus-visible {color:white;background:#414650!important;outline:1px solid #7798c2}
+
+/* Keep multi-selection distinct while retaining main's Outliner typography and icons. */
+#authoring-tree .scene-object-row.selected, #authoring-tree .scene-group-row.selected { background:#2d2a26; color:#ead2b2; }
+#authoring-tree .scene-group-row.active { background:#3a3226; border-color:#7d6440; }

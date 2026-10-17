@@ -29,6 +29,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
   return new Promise(resolve => {
     let ordered = sortScenesNewestFirst(scenes);
     let pending = !!more;
+    let listingError = '';
     const backdrop = document.createElement('div');
     backdrop.className = 'file-name-prompt scene-load-picker';
     backdrop.setAttribute('role', 'dialog');
@@ -71,7 +72,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       shown[active]?.classList.add('active');
       shown[active]?.scrollIntoView({ block: 'nearest' });
       note.textContent = pending ? 'Loading scenes from other Kaminos servers…'
-        : rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.';
+        : listingError || (rows.length ? (shown.length ? '' : 'No saved scene matches.') : 'No saved scenes yet. Cmd+S saves one.');
     };
     const finish = value => { open = false; backdrop.remove(); resolve(value); };
     const applyFilter = () => { ordered.forEach((scene, index) => { rows[index].hidden = !sceneMatchesFilter(scene, input.value); }); };
@@ -83,7 +84,7 @@ export function pickSavedScene({ scenes, more = null, host = document.body } = {
       ordered = [...ordered, ...added];
       rows = [...rows, ...addedRows];
       list.append(...addedRows);
-    }).catch(() => {}).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
+    }).catch(error => { listingError = `Other saved scenes could not be listed: ${error.message || error}`; }).finally(() => { if (!open) return; pending = false; applyFilter(); highlight(); });
     backdrop.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); finish(null); }
