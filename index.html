@@ -26584,7 +26584,7 @@ function setSceneSelection(ids,activeId=ids.at(-1)??null){
   const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
   currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():activeSceneFieldId==='flame-field'?flameDomainEditObject():activeSceneGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
   renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
-  if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
+  if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);if(activeSceneFieldId==='flame-field')transformControls.setMode('translate');}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
 function readSceneSelection(){
@@ -26645,6 +26645,7 @@ function setupSelectionHistory(){
   sceneSelectionHistory={set(ids,activeId=ids.at(-1)??null){
     const next=checkedSelection(ids,activeId);if(JSON.stringify(next)===JSON.stringify(read()))return read();
     if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
+    if(splatCorrectionMode&&(next.ids.length!==1||splatCorrectionMode.objectId!==next.activeId))exitSplatCorrectionMode({revert:false,silent:true});
     scenePlacementTools.selectionChanged();
     try{return edits.apply(id,next,next.ids.length?'Change selection':'Clear selection');}
     catch(error){if(edits.state().active?.id===id)edits.cancel();throw error;}

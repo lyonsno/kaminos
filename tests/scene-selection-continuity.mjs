@@ -54,3 +54,16 @@ test('Select All keeps bulk object editing usable when visible simulation volume
  const c=context();Object.assign(c,{createSelectionTransformTarget:()=>({}),selectionRootState(){},applyAuthoredScenePose(){},checkSelectionRoot(){},readSelectionMembership(){},checkSelectionMembership(){},writeSelectionMembership(){},duplicateSelectedSceneObjects(){},removeSelectedSceneObjects(){},groupSelectedObjects(){},ungroupSelectedObjects(){},isSceneItemVisible:()=>true});
  vm.runInContext(grab('setupSelectionHistory')+grab('setupSelectionTransforms'),c);c.setupSelectionTransforms();c.window.kaminosSelection.all();assert.deepEqual(Array.from(c.readSceneSelection().ids),['mesh','source'],'A selects editable objects; fields join through explicit Shift selection');
 });
+test('leaving splat correction by selecting or clearing occurs before shared history admission',()=>{
+ for(const ids of [['source'],[]]){
+  const c=context();c.sceneSelection={ids:['mesh'],activeId:'mesh'};c.splatCorrectionMode={objectId:'mesh'};c.exits=[];c.exitSplatCorrectionMode=options=>{c.exits.push(options);c.splatCorrectionMode=null;};
+  c.scenePlacementTools.edits=createSceneEdits({read(){},write(){},admit(){if(c.splatCorrectionMode)throw Error('Finish preview or correction before editing placement');}});
+  vm.runInContext(grab('setupSelectionHistory'),c);c.setupSelectionHistory();c.sceneSelectionHistory.set(ids,ids.at(-1)??null);
+  assert.equal(c.exits.length,1);assert.equal(c.exits[0].revert,false);assert.equal(c.splatCorrectionMode,null);assert.equal(c.scenePlacementTools.edits.state().undoCount,1);
+  c.scenePlacementTools.edits.undo();assert.equal(c.readSceneSelection().activeId,'mesh');assert.equal(c.splatCorrectionMode,null);c.scenePlacementTools.edits.redo();assert.deepEqual(Array.from(c.readSceneSelection().ids),ids);
+ }
+});
+test('sole Fire selection replaces an inherited rotation gizmo with supported translation',()=>{
+ const c=context();let mode='rotate';Object.assign(c,{transformControls:{detach(){},setSpace(){},setMode(value){mode=value;}},attachViewportGizmo(){}});
+ c.setSceneSelection(['flame-field']);assert.equal(mode,'translate');
+});
