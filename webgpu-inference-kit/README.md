@@ -198,3 +198,7 @@ Each physical timestamp pair is used once per query set. Exhausted sets retire a
 - Read the [advanced integration reference](./docs/integration-reference.md) for the complete current API manual and scheduling contracts.
 - Inspect the public exports in [`src/index.js`](./src/index.js).
 - Start with one session, one registered route, one complete invocation, and direct model execution. Add cooperative boundaries where measurements show the application needs them.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

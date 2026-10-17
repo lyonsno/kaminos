@@ -46,6 +46,11 @@ try {
   fs.mkdirSync(app);
   fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ name: 'klein-consumer', private: true, type: 'module' }));
   run('npm', ['install', '--offline', '--no-audit', '--no-fund', kitTarball, packed.tarball], app);
+  // The kit Klein depends on is MIT too (operator decision, 2026-10-17), so the installed dependency
+  // carries a license an application can build on.
+  const kitInstalled = path.join(app, 'node_modules/@kaminos/webgpu-inference-kit');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(kitInstalled, 'package.json'), 'utf8')).license, 'MIT');
+  assert.match(fs.readFileSync(path.join(kitInstalled, 'LICENSE'), 'utf8'), /^MIT License\n/);
   const probe = `import * as klein from '@kaminos/flux2-klein';
 const names = ['KleinPipeline', 'kleinWeightUrls', 'kleinWeightStatus', 'KLEIN_HOSTED_WEIGHTS', 'KLEIN_LEVELS', 'WEIGHT_CACHE'];
 const pipeline = new klein.KleinPipeline({ queue: {}, limits: {} });
