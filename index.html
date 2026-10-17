@@ -2105,8 +2105,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="sim-cadence">
       <span class="slider-label">Between steps</span>
-      <select id="volume-sim-between" data-volume-settings-role="renderer" class="select-input" title="What the viewport shows between fire simulation steps.">
-        <option value="blend" selected>Blend (one step behind)</option>
+      <select id="volume-sim-between" data-volume-settings-role="renderer" class="select-input" title="What the viewport shows between fire simulation steps. Blend mixes the previous and current steps and runs one step behind the sim; Carry forward moves the latest step along its flow; Hold repeats it.">
+        <option value="blend" selected>Blend</option>
         <option value="carry">Carry forward</option>
         <option value="held">Hold</option>
       </select>

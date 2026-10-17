@@ -1229,6 +1229,25 @@ async function runFireCadencePanelScenario(ws) {
     const following = document.getElementById('volume-sim-every').closest('.slider-row').nextElementSibling;
     return { afterSpeed: !!next?.querySelector('#volume-sim-every'), afterEvery: !!following?.querySelector('#volume-sim-between') }; })()`);
   check(evidence.order?.afterSpeed === true && evidence.order?.afterEvery === true, `the cadence rows do not sit directly under Speed: ${JSON.stringify(evidence.order)}`);
+  // The Flame inspector: select the fire, open Motion, and drive Sim every from there.
+  await evaluate(ws, `(async () => { const e = window.kaminosWorkbenchExperiments; await e.open('flame'); await e.invoke('select', 'domain'); return e.state().id; })()`, { timeoutMs: 60000 });
+  await settleViewportFrames(ws, 600);
+  evidence.inspector = await evaluate(ws, `(() => { const item = document.querySelector('.flame-control-inspector');
+    const tab = [...document.querySelectorAll('.flame-inspector-tabs [role="tab"], .flame-inspector-tabs button')].find(b => /motion/i.test(b.textContent)); tab?.click();
+    const every = document.getElementById('selected-volume-sim-every'), between = document.getElementById('selected-volume-sim-between');
+    const row = every?.closest('.flame-property-row'); row?.scrollIntoView({ block: 'center' }); const r = row?.getBoundingClientRect();
+    return { selected: !!item, tab: !!tab, everyVisible: !!r && r.width > 0 && r.height > 0, afterSpeed: row?.previousElementSibling?.dataset.flameControl ?? null,
+      nextIsBetween: row?.nextElementSibling?.dataset.flameControl ?? null, speedLabel: document.getElementById('selected-volume-speed')?.closest('.flame-property-row')?.querySelector('.slider-label')?.textContent ?? null,
+      everyValue: every?.value ?? null, betweenValue: between?.value ?? null }; })()`);
+  await settleViewportFrames(ws, 500);
+  evidence.inspectorShot = (await capturePngScreenshot(ws, siblingPngPath('-fire-cadence-inspector'))).path;
+  check(evidence.inspector?.everyVisible && evidence.inspector.afterSpeed === 'volume-speed' && evidence.inspector.nextIsBetween === 'volume-sim-between'
+    && evidence.inspector.speedLabel === 'Speed (× world)', `the inspector does not show the cadence directly under Speed: ${JSON.stringify(evidence.inspector)}`);
+  await evaluate(ws, `(() => { const f = document.getElementById('selected-volume-sim-every'); f.value = '2'; f.dispatchEvent(new Event('input', { bubbles: true })); return f.value; })()`);
+  await settleViewportFrames(ws, 600);
+  const viaInspector = await read();
+  evidence.steps.push({ step: 'inspector Sim every 2', ...viaInspector });
+  check(viaInspector.pacing?.simStepEvery === 2 && Math.abs(viaInspector.simSpeed - 2.4) < 1e-6, `the inspector field did not reach the fire: ${JSON.stringify(viaInspector)}`);
   await setControl('volume-sim-every', 1);
   await settleViewportFrames(ws, 600);
   const one = await read();
