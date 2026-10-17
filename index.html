@@ -12164,7 +12164,7 @@ async function initScene() {
   sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
-  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>setActiveSceneObject(id),onError:error=>setInfo(error.message)});
+  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>window.selectSceneObject(id),onError:error=>setInfo(error.message)});
   authoringControlSessions.push(...cameraAuthoring.sessions);
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
@@ -12481,7 +12481,7 @@ async function initScene() {
           if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
         return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
-        selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
+        selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>window.selectSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
         sceneFile:()=>currentSceneFile,capture:captureForNotes,redraw:()=>window._kaminosDirty?.(),
         linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
@@ -22599,7 +22599,7 @@ function selectAuthoredRimLight() {
   try {
     scenePlacementTools?.finish(false);
     if(!readRimLightSettings().enabled)scenePlacementTools.edits.apply('@rim-settings',{enabled:true},'Enable rim light');
-    syncRimAuthoringHandle();setActiveTab('assets');setActiveSceneObject(RIM_LIGHT_ID);
+    syncRimAuthoringHandle();setActiveTab('assets');window.selectSceneObject(RIM_LIGHT_ID);
     document.getElementById('selected-light-properties').scrollIntoView({block:'nearest'});
     document.activeElement?.blur?.();
   } catch(error){setInfo(error.message);}
@@ -22641,7 +22641,7 @@ function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
   installFlameDomainControls(shared);
   installKilnCollisionControl(shared);
-  document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
+  document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)window.selectSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
@@ -26197,7 +26197,7 @@ document.getElementById('composition-ground-roughness').oninput = event => {
   window._kaminosDirty?.();
 };
 document.getElementById('composition-basins').onclick = () => {
-  if(window.kaminosWorkspace?.state().mode==='authoring'){setActiveSceneObject(FLAME_EMITTER_ID);const panel=document.getElementById('flame-basin-browser');panel.open=true;panel.scrollIntoView({block:'nearest'});}
+  if(window.kaminosWorkspace?.state().mode==='authoring'){window.selectSceneObject(FLAME_EMITTER_ID);const panel=document.getElementById('flame-basin-browser');panel.open=true;panel.scrollIntoView({block:'nearest'});}
   else setActiveTab('volume');
 };
 
@@ -26656,7 +26656,7 @@ function setupSelectionTransforms(){
     read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
   scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
   window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
-    set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>sceneSelectionHistory.set([...['flame-field','water-field'].filter(id=>(id==='flame-field'?activeSceneComposition:localLiquidSetup)&&isSceneItemVisible(id)),...sceneGroups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...sceneObjects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
+    set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>sceneSelectionHistory.set([...sceneGroups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...sceneObjects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
     transform:patch=>{if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
 

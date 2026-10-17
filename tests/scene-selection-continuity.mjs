@@ -37,3 +37,20 @@ test('a user selection enters shared chronological history and restores via Undo
 test('a mesh overlapping a domain edge wins an ordinary viewport click',()=>{
  let picked=null;const c={polyEdit:null,vantageCaptureHeld:false,viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,viewportSuppressedClick:null,viewportPointerDown:null,greenroomPreviewIsActive:()=>false,transformGizmoDragging:false,transformControls:null,pickSceneObjectFromViewportPointer:()=>({id:'mesh',type:'glb'}),pickFlameDomainFromViewportPointer:()=>true,pickWaterDomainFromViewportPointer:()=>false,FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',setActiveSceneObject:id=>picked=id,clearActiveSceneObjectSelection(){},setInfo(){},window:{selectSceneObject:id=>picked=id,selectSceneField:id=>picked=id,_kaminosDirty(){}}};vm.createContext(c);vm.runInContext(grab('handleViewportSelectionClick'),c);c.handleViewportSelectionClick({button:0,type:'click',clientX:20,clientY:30});assert.equal(picked,'mesh');
 });
+test('selection and authored edits undo in one chronology without changing poses on selection replay',()=>{
+ const c=context();vm.runInContext(grab('setupSelectionHistory'),c);c.setupSelectionHistory();const edits=c.scenePlacementTools.edits;
+ let pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};edits.register('@test-pose',{read:()=>pose,write:value=>{pose=value;}});
+ c.window.selectSceneObject('source');edits.apply('@test-pose',{position:[2,0,0]},'Move source');c.window.selectSceneObject('mesh');
+ edits.undo();assert.equal(c.readSceneSelection().activeId,'source');assert.deepEqual(pose.position,[2,0,0]);
+ edits.undo();assert.deepEqual(pose.position,[0,0,0]);assert.equal(c.readSceneSelection().activeId,'source');
+ edits.undo();assert.equal(c.readSceneSelection().activeId,'mesh');assert.equal(edits.state().undoCount,0);
+ edits.redo();edits.redo();edits.redo();assert.equal(c.readSceneSelection().activeId,'mesh');assert.deepEqual(pose.position,[2,0,0]);
+});
+test('an absent requested target leaves no pending selection transaction or history entry',()=>{
+ const c=context();vm.runInContext(grab('setupSelectionHistory'),c);c.setupSelectionHistory();
+ assert.throws(()=>c.window.selectSceneObject('absent'),/absent/);assert.equal(c.scenePlacementTools.edits.state().active,null);assert.equal(c.scenePlacementTools.edits.state().undoCount,0);assert.equal(c.readSceneSelection().activeId,'mesh');
+});
+test('Select All keeps bulk object editing usable when visible simulation volumes are present',()=>{
+ const c=context();Object.assign(c,{createSelectionTransformTarget:()=>({}),selectionRootState(){},applyAuthoredScenePose(){},checkSelectionRoot(){},readSelectionMembership(){},checkSelectionMembership(){},writeSelectionMembership(){},duplicateSelectedSceneObjects(){},removeSelectedSceneObjects(){},groupSelectedObjects(){},ungroupSelectedObjects(){},isSceneItemVisible:()=>true});
+ vm.runInContext(grab('setupSelectionHistory')+grab('setupSelectionTransforms'),c);c.setupSelectionTransforms();c.window.kaminosSelection.all();assert.deepEqual(Array.from(c.readSceneSelection().ids),['mesh','source'],'A selects editable objects; fields join through explicit Shift selection');
+});
