@@ -55,11 +55,13 @@ class MechanicalProxyService:
             raise ValueError('Valid proxy result id required')
         return self.store / identity
 
-    def start(self, request):
+    def start(self, request, fresh=False):
+        if type(fresh) is not bool:
+            raise ValueError('Fresh-run choice must be boolean')
         data = validate_input(request)
         with self.lock:
             for row in self.list(data['sourceDigest']):
-                if row['status'] == 'passed' and all(row['settings'][k] == data['settings'][k] for k in ('envelope', 'spacing')):
+                if not fresh and row['status'] == 'passed' and all(row['settings'][k] == data['settings'][k] for k in ('envelope', 'spacing')):
                     return {**row, 'cached': True}
             if not self.python or not Path(self.python).is_file() or not self.greenroom:
                 raise RuntimeError('Configure KAMINOS_MECHANICAL_PROXY_PYTHON with wildmeshing 0.4.1 and install gpu-greenroom')
@@ -69,7 +71,7 @@ class MechanicalProxyService:
             identity = uuid.uuid4().hex
             directory = self.directory(identity); directory.mkdir(parents=True)
             write_json(directory/'input.json', data)
-            run = {'id': identity, 'status': 'submitting', 'route': ROUTE, 'sourceDigest': data['sourceDigest'], 'source': data['source'], 'settings': data['settings'], 'diagonal': data['diagonal'], 'repoRoot': str(self.repo), 'queueDir': str(self.queue)}
+            run = {'id': identity, 'status': 'submitting', 'route': ROUTE, 'sourceDigest': data['sourceDigest'], 'source': data['source'], 'settings': data['settings'], 'diagonal': data['diagonal'], 'repoRoot': str(self.repo), 'queueDir': str(self.queue), 'submittedAt': time.time(), 'fresh': fresh}
             write_json(directory/'run.json', run)
             try:
                 command = [self.greenroom, '--queue-dir', str(self.queue), 'submit-command', '--agent-id', 'kaminos-mechanical-proxy', '--repo-root', str(self.repo), '--cwd', str(self.repo), '--route-identity', ROUTE, '--output-dir', str(directory), '--output-class', 'final', '--', self.python, str(self.repo/'mechanical_proxy_backend.py'), '--run', str(directory)]

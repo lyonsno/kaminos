@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
 
 spec=importlib.util.spec_from_file_location('mechanical_proxy',Path(__file__).resolve().parents[1]/'mechanical_proxy.py')
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
@@ -71,6 +73,25 @@ class ProxyContracts(unittest.TestCase):
             selected=[r for r in service.list(source) if r.get('selected')]
             self.assertEqual([r['id'] for r in selected],['a'*32])
             self.assertTrue(all(r['kept'] for r in service.list(source)))
+
+    def test_explicit_fresh_run_bypasses_cache_and_preserves_result(self):
+        with tempfile.TemporaryDirectory() as root:
+            service=m.MechanicalProxyService(Path(__file__).resolve().parents[1],root,python=__file__,greenroom='test-greenroom')
+            data=m.validate_input(self.request());identity='a'*32;d=service.directory(identity);d.mkdir()
+            m.write_json(d/'run.json',{'id':identity,'status':'passed','sourceDigest':data['sourceDigest'],'settings':data['settings'],'route':m.ROUTE})
+            m.write_json(d/'mesh.json',{'status':'passed','route':m.ROUTE,'sourceDigest':data['sourceDigest'],'settings':data['settings']})
+            import hashlib
+            digest=hashlib.sha256((d/'mesh.json').read_bytes()).hexdigest()
+            m.write_json(d/'report.json',{'status':'passed','route':m.ROUTE,'resultSha256':digest})
+            with patch.object(m.subprocess,'run') as run:
+                self.assertTrue(service.start(self.request())['cached'])
+                run.assert_not_called()
+                run.side_effect=[SimpleNamespace(returncode=0),SimpleNamespace(returncode=0,stdout=json.dumps({'job_id':'fresh-job','effective_queue_dir':str(service.queue)}))]
+                fresh=service.start(self.request(),fresh=True)
+            self.assertNotEqual(fresh['id'],identity)
+            self.assertEqual(fresh['jobId'],'fresh-job')
+            self.assertEqual(service.read(identity)['status'],'passed')
+            self.assertEqual(hashlib.sha256((d/'mesh.json').read_bytes()).hexdigest(),digest)
 
 
 unittest.main()

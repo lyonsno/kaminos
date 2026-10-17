@@ -3900,8 +3900,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     raise ValueError('Send mechanical proxy requests as application/json')
                 body = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or '0')))
                 action = body.get('action')
-                if action == 'generate':
-                    data = service.start(body['input'])
+                if action in ('generate', 'rerun'):
+                    data = service.start(body['input'], fresh=action == 'rerun')
                 elif action == 'inspect':
                     from mechanical_proxy import validate_input
                     admitted = validate_input(body['input'])
@@ -3911,7 +3911,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                 elif action == 'keep':
                     data = service.keep(body['id'])
                 else:
-                    raise ValueError('Expected generate, cancel or keep')
+                    raise ValueError('Expected generate, rerun, cancel or keep')
             self.send_json(data)
         except (ValueError, KeyError, FileNotFoundError) as error:
             self.send_json({'status': 'failed', 'phase': 'request', 'error': str(error)}, 400)

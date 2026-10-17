@@ -46,6 +46,8 @@ handler=(url,body)=>body?.action==='generate'?rejectedGenerate.promise:{results:
 tool.close();selected=b;handler=(url,body)=>body?.action==='inspect'?{sourceDigest:'b'.repeat(64),diagonal:2}:{results:[]};await tool.open();
 handler=(url,body)=>body?.action==='generate'||url.includes('?id=')?{id:'d'.repeat(32),jobId:'queue-B',status:'pending'}:{results:[]};panelHost.children[0].querySelector('[data-mp="generate"]').onclick();await flush();
 assert.equal(tool.read().status,'pending');rejectedGenerate.reject(Error('old A failed'));await flush();
+assert.match(panelHost.children[0].querySelector('[data-mp="status"]').textContent,/Queued.*not started/i,'queue waiting must not resemble active meshing');
+assert.match(panelHost.children[0].querySelector('[data-mp="execution"]').textContent,/Greenroom.*native CPU/i,'external execution must be visible');
 assert.equal(tool.read().status,'pending','stale Generate rejection must not poison the next inspection');
 assert.equal(panelHost.children[0].querySelector('[data-mp="generate"]').disabled,true);
 assert.equal(panelHost.children[0].querySelector('[data-mp="cancel"]').disabled,false);
@@ -61,5 +63,9 @@ try{
  assert.equal(tool.read().status,'pending','stale poll rejection must not poison the next inspection');
  assert.equal(panelHost.children[0].querySelector('[data-mp="generate"]').disabled,true);
 }finally{tool.close();globalThis.setTimeout=savedTimeout;globalThis.clearTimeout=savedClear;}
+selected=a;let action;
+handler=(url,body)=>body?.action==='inspect'?{sourceDigest:'a'.repeat(64),diagonal:2}:body?.action==='rerun'?(action=body.action,{id:'e'.repeat(32),status:'failed',error:'observed fixture failure'}):url.includes('?id=')?{id:'e'.repeat(32),status:'failed'}:{results:[]};
+await tool.open();await tool.rerun({envelope:.01,spacing:.1,budgetSeconds:5});
+assert.equal(action,'rerun','agent and human fresh-run command must bypass cache explicitly');
 tool.dispose();assert.equal(scene.children.length,0);assert.equal(listeners.size,0,'disposed inspection must release its input listeners');
 console.log('mechanical proxy async ownership and clipping contracts pass');
