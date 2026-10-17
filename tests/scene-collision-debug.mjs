@@ -15,7 +15,7 @@ test('debug reads installed mask, clears unavailable data, and isolates caller m
  const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
  const method=source.match(/    readSceneCollisionMask\([\s\S]*?\n    },/);
  assert.ok(method,'runtime must expose the installed collision mask');
- const ctx={sceneSolidGpu:null,sceneSolidRevisionKey:'r1',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[1,2,3],scale:2},state:{sceneCollision:{effective:'mesh-voxel-solid'}},structuredClone};
+ const ctx={sceneSolidRevisionKey:'r1',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[1,2,3],scale:2},state:{sceneCollision:{effective:'mesh-voxel-solid'}},structuredClone};
  const runtime=vm.runInNewContext(`({${method[0].replace(/,$/,'')}})`,ctx);
  const result=runtime.readSceneCollisionMask();assert.deepEqual(Array.from(result.cells),[1,0]);result.cells[0]=0;assert.equal(ctx.sceneSolidCellsCpu[0],1);
  assert.equal(runtime.readSceneCollisionMask(result.revision),null);
@@ -24,7 +24,7 @@ test('debug reads installed mask, clears unavailable data, and isolates caller m
 test('incremental voxel read includes domain frame even when installed local mask is unchanged',()=>{
  const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
  const method=source.match(/    readSceneCollisionMask\([\s\S]*?\n    },/)[0];
- const ctx={sceneSolidGpu:null,sceneSolidRevisionKey:'wall',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[0,0,0],scale:1},state:{sceneCollision:{effective:'emitter-back-wall'}},structuredClone};
+ const ctx={sceneSolidRevisionKey:'wall',sceneSolidCellsCpu:new Uint8Array([1,0]),gridSize:1,gridHeight:2,productTransform:{translate:[0,0,0],scale:1},state:{sceneCollision:{effective:'emitter-back-wall'}},structuredClone};
  const api=vm.runInNewContext(`({${method.replace(/,$/,'')}})`,ctx),first=api.readSceneCollisionMask();
  ctx.productTransform.translate[0]=4;
  const moved=api.readSceneCollisionMask(first.revision);assert.ok(moved,'world movement must refresh the overlay');assert.equal(moved.transform.translate[0],4);

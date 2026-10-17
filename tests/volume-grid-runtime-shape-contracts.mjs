@@ -117,8 +117,6 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     EMISSIVE_TRANSPORT_WGSL: (await import('../volume-emissive-transport.mjs')).EMISSIVE_TRANSPORT_WGSL,
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
     SOOT_BURNOUT_WGSL: (await import('../volume-physics-appearance.mjs')).SOOT_BURNOUT_WGSL,
-    JOINED_OPTICS_WGSL: (await import('../volume-joined-optics.mjs')).JOINED_OPTICS_WGSL,
-    SCENE_JOINED_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_JOINED_SOURCE_WGSL,
   };
   assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());
   const seen = [];
@@ -211,9 +209,7 @@ test('capture: @emissiveCoefficients is refused in an arm that also sets control
 // frame without changing the simulation are non-configuring.
 test('capture: every control except the read-only debug controls counts as configuration', async () => {
   const { armSetsConfiguration, NON_CONFIGURING_CAPTURE_CONTROLS } = await import('../volume-arm-capture-checks.mjs');
-  // The joined exterior's probes and panel readout are read-only (Sexy Fireman).
-  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@fluidBandStats', '@joinedExteriorProbe', '@joinedExteriorStats', '@joinedPanelText', '@savePreset', '@simGpuProfile']);
-  assert.equal(armSetsConfiguration([['@click', 'volume-joined-admit']]), true, 'a button press can change configuration');
+  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@fluidBandStats', '@savePreset', '@simGpuProfile']);
   assert.equal(armSetsConfiguration([['@confinementEpsilon', '0.1']]), true, 'an epsilon override is configuration');
   assert.equal(armSetsConfiguration([['volume-grid-height-ratio', '3']]), true);
   assert.equal(armSetsConfiguration([['@cameraFrame', '0:1:3:0:0:0'], ['@emissiveCoefficients', '1']]), false);

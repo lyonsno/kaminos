@@ -42,11 +42,6 @@ const resources = {
   // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceView: () => ({ label: 'joined lower planes view' }),
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),
-  // The joined exterior's optical texture (binding 20) and render uniform (21);
-  // with no exterior the group binds the 1x1x1 disabled fallback.
-  joinedExterior: null,
-  joinedRenderFallback: { createView: () => ({ label: 'disabled exterior optical' }) },
-  joinedRenderUniform: buffer('joined render'),
 };
 const makeGroup = new Function(...Object.keys(resources), `${helper}; return createFluidRenderBindGroup;`)(...Object.values(resources));
 for (let q = 0; q < 2; q++) {
@@ -68,8 +63,6 @@ for (let q = 0; q < 2; q++) {
     'all fluid render resources have distinct bindings');
   assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
   for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
-  assert.equal(group.entries.find(e => e.binding === 20)?.resource.label, 'disabled exterior optical', 'no exterior binds the disabled fallback');
-  assert.equal(group.entries.find(e => e.binding === 21)?.resource.buffer, resources.joinedRenderUniform);
 }
 assert.match(core, /function fluidBindGroup\([\s\S]*?return bindGroups\[fluidIndex \* 2 \+ quenchIndex\]/,
   'simulation consumes both independent ping-pong indices');

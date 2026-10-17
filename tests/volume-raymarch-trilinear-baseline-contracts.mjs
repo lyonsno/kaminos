@@ -75,12 +75,11 @@ const supportAdmission = traversal.slice(
   traversal.indexOf('var reconstructed: FlowReconstructionSample;'),
 );
 const baselineAdmission = supportAdmission.replace('!opticalStepping && !fullGridCapture && !opticalTrace', '!fullGridCapture');
-// The joined exterior (Sexy Fireman) only adds a conjunct that is true whenever it is off.
-assert.match(supportAdmission, /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001 && \(!exteriorActive \|\| joinedOuterSample\(p\)\.x<=0\.0001\)\)/,
+assert.match(supportAdmission, /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\)/,
   'only explicit comparison/capture modes bypass production support admission');
 assert.match(
   baselineAdmission,
-  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001 && \(!exteriorActive \|\| joinedOuterSample\(p\)\.x<=0\.0001\)\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
+  /^var directSupport: f32;\s*if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*neighborhood = sampleRaymarchNeighborhood\(p\);\s*directSupport = raymarchNeighborhoodSupport\(neighborhood\);\s*\} else \{\s*directSupport = directCellOpticalSupport\(p\);\s*\}\s*if \(!fullGridCapture && directSupport <= 0\.0001\) \{\s*let cellExit = directCellExitDistance\(p, rd\);\s*let emptyCellAdvance = mix\(\s*dtBase,\s*max\(dtBase, cellExit \+ 0\.0001\),\s*occupancySkipStrength\s*\);\s*t = t \+ min\(emptyCellAdvance, max\(0\.0001, endT - t\)\);\s*continue;\s*\}\s*$/,
   'one live direct-support skip must own admission before sampling',
 );
 const sampleBranch = traversal.slice(
@@ -140,7 +139,7 @@ const falseClosureMutations = [
   [
     'dead support skip with live global-occupancy alias',
     source => source
-      .replace('    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && (!exteriorActive || joinedOuterSample(p).x<=0.0001)) {', '    if (false) {\n    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && (!exteriorActive || joinedOuterSample(p).x<=0.0001)) {')
+      .replace('    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {', '    if (false) {\n    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {')
       .replace('    var reconstructed: FlowReconstructionSample;', '    }\n    let effectiveSupport = select(directSupport, 1.0, flowKernelReconstructionActive);\n    if (!fullGridCapture && effectiveSupport <= 0.0001) { continue; }\n    var reconstructed: FlowReconstructionSample;'),
     /one live direct-support skip must own admission before sampling/,
   ],

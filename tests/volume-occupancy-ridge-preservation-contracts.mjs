@@ -32,16 +32,11 @@ function assertOccupancyRidgeContract(source) {
     assert.equal((arm.match(/\bcontinue\s*;/g) || []).length, 1,
       'each optical arm has one continuation after consumption');
   }
-  // The joined exterior (Sexy Fireman) marches samples outside the fine box in its
-  // own branch, entered only while the exterior renders; the fine-box contract
-  // below is about everything else.
-  const exteriorArm = allRaymarch.match(/    if\(exteriorActive && !joinedInsideFine\(p\)\)\{[\s\S]*?continue;\n    \}\n/)?.[0] ?? '';
-  assert.ok(exteriorArm.includes('joinedPassiveMaterial(p,'), 'the exterior branch is gated by the exterior being active and the sample being outside the fine box');
-  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '').replace(exteriorArm, '');
+  const raymarch = allRaymarch.replace(opticalStepArm, '').replace(opticalTraceArm, '');
   const reconstructionStart = raymarch.indexOf('var reconstructed: FlowReconstructionSample;');
   assert.ok(reconstructionStart >= 0, 'supported-sample reconstruction boundary is discoverable');
   const emptyCellBranch = raymarch.match(
-    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001 && \(!exteriorActive \|\| joinedOuterSample\(p\)\.x<=0\.0001\)\) \{([^{}]*)\}/,
+    /if \(!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0\.0001\) \{([^{}]*)\}/,
   );
   assert.ok(emptyCellBranch, 'conservative empty-cell branch has a stable non-nested boundary');
   const branchStart = emptyCellBranch.index;

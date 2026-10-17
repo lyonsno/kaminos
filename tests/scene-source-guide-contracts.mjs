@@ -26,10 +26,6 @@ const count=65536,omega=4*Math.atan(2/(4*Math.sqrt(21)));
 let sum=0;for(let i=0;i<count;i++)sum+=1/sourceGuideRaySample([0,1,5],i,g,count).pdf;
 near(sum/count,omega,.003);
 const full={lo:[-1,-1,-1],hi:[1,3,1]};
-const exteriorDomain={lo:[-3,-2,-3],hi:[3,10,3]};
-const outerGuide=await import('../scene-source-guide.mjs');
-near(outerGuide.sourceGuidePdf([0,1,5],[0,0,-1],g,12,exteriorDomain),
-  .25*(8**3-2**3)/(3*6*12*6)+.75*(5.4**3-4.6**3)/(3*.8*2.5*.8));
 near(sourceGuidePdf([0,1,5],[0,0,-1],full,12),(6**3-4**3)/48);
 const shifted=deriveSourceGuide({position:[2,-.52,0],radius:.19,height:2.2,depth:.24},{translate:[2,.24,0],scale:1});
 assert.deepEqual(shifted,guide,'world/domain translation must not shift the local guide');

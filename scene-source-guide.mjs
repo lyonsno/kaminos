@@ -1,9 +1,9 @@
 import {SOURCE_LO,SOURCE_HI,SOURCE_VOLUME,progressiveSourcePoint,SOURCE_AWARE_BODY_WGSL} from './scene-source-aware.mjs';
 
-export function normalizeSourceGuide(guide,domain={lo:SOURCE_LO,hi:SOURCE_HI}){
+export function normalizeSourceGuide(guide){
   if(!guide||!['lo','hi'].every(k=>Array.isArray(guide[k])&&guide[k].length===3&&guide[k].every(Number.isFinite)))throw new Error('finite source-guide bounds required');
   const lo=guide.lo.map(Math.fround),hi=guide.hi.map(Math.fround);
-  if(lo.some((x,a)=>x<domain.lo[a]||hi[a]>domain.hi[a]||hi[a]<=x))throw new Error('source guide must have positive extent inside the full volume');
+  if(lo.some((x,a)=>x<SOURCE_LO[a]||hi[a]>SOURCE_HI[a]||hi[a]<=x))throw new Error('source guide must have positive extent inside the full volume');
   return {lo,hi,effective:guide.effective||'emitter-envelope',reason:guide.reason||null};
 }
 export function deriveSourceGuide({position,radius,height,depth},transform={translate:[0,0,0],scale:1}){
@@ -20,13 +20,13 @@ export function sourceGuideFraction(count){
   if(!Number.isSafeInteger(count)||count<2||count%2)throw new Error('even source-guide direction count required');
   return (count-Math.ceil(count/4))/count;
 }
-export function sourceGuidePoint(index,guide,rotation=0,domain={lo:SOURCE_LO,hi:SOURCE_HI}){
-  normalizeSourceGuide(guide,domain);
+export function sourceGuidePoint(index,guide,rotation=0){
+  normalizeSourceGuide(guide);
   if(!Number.isSafeInteger(index)||index<0)throw new Error('nonnegative source-guide index required');
   const component=index%4,ordinal=component?Math.floor(index/4)*3+component-1:Math.floor(index/4);
-  const point=progressiveSourcePoint(ordinal,rotation,domain);
+  const point=progressiveSourcePoint(ordinal,rotation);
   if(!component)return point;
-  return point.map((x,a)=>guide.lo[a]+(guide.hi[a]-guide.lo[a])*(x-domain.lo[a])/(domain.hi[a]-domain.lo[a]));
+  return point.map((x,a)=>guide.lo[a]+(guide.hi[a]-guide.lo[a])*(x-SOURCE_LO[a])/(SOURCE_HI[a]-SOURCE_LO[a]));
 }
 function boxPdf(p,d,lo,hi){
   let near=0,far=Infinity;
@@ -38,13 +38,13 @@ function boxPdf(p,d,lo,hi){
   const volume=hi.reduce((v,x,a)=>v*(x-lo[a]),1);
   return (far-near)*(far*far+far*near+near*near)/(3*volume);
 }
-export function sourceGuidePdf(p,d,guide,count,domain={lo:SOURCE_LO,hi:SOURCE_HI}){
-  normalizeSourceGuide(guide,domain);
+export function sourceGuidePdf(p,d,guide,count){
+  normalizeSourceGuide(guide);
   if(![p,d].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||Math.abs(Math.hypot(...d)-1)>1e-6)throw new Error('finite receiver and unit direction required');
   const fraction=sourceGuideFraction(count);
   // Probability integrates every point that can select this direction, before
   // solid clipping. A selected-point density is not the whole-chord density.
-  return (1-fraction)*boxPdf(p,d,domain.lo,domain.hi)+fraction*boxPdf(p,d,guide.lo,guide.hi);
+  return (1-fraction)*boxPdf(p,d,SOURCE_LO,SOURCE_HI)+fraction*boxPdf(p,d,guide.lo,guide.hi);
 }
 export function sourceGuideRaySample(p,index,guide,count,rotation=0){
   const point=sourceGuidePoint(index,guide,rotation),v=point.map((x,a)=>x-p[a]),length=Math.hypot(...v),direction=length?v.map(x=>x/length):[0,1,0];
