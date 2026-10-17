@@ -40,6 +40,19 @@ const tune = (c, recipe) => {
 };
 const snapshot = c => Object.fromEntries(Object.entries(values).map(([key,id]) => [key, Number(c.document.getElementById(id).value)]));
 
+test('environment intensity permits zero through the real control and recipe path', async () => {
+  const control=source.match(/<input\b[^>]*id="env-intensity-slider"[^>]*>/)?.[0];
+  assert.ok(control,'environment intensity control exists');
+  assert.equal(Number(control.match(/\bmin="([^"]+)"/)?.[1]),0,'environment intensity must not retain a positive floor');
+  const c=environmentContext();
+  await c.loadEnvironment('studio');
+  const recipe={...c.readEnvironmentRecipe(),intensity:0};
+  c.applyEnvironmentRecipe(recipe);
+  assert.equal(c.scene.environmentIntensity,0);
+  assert.equal(Number(c.document.getElementById('env-intensity-slider').value),0);
+  assert.equal(c.readEnvironmentRecipe().intensity,0);
+});
+
 test('environment recipes retain independent exposure while the matched editor displays flame EV', async () => {
   const c=environmentContext();let syncs=0;
   c.sceneExposureControls={read:()=>({independent:c.renderer.toneMappingExposure}),sync(){syncs++;c.document.getElementById('exposure-slider').value='4.96';}};
