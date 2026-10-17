@@ -1,4 +1,5 @@
 // kaminos-test: node
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import {checkMovingLogEvidence} from '../tools/moving-log-contracts.mjs';
 const frame=(name,shift,step)=>({name,resets:1,allocation:'live-1',burn:.2,state:{burner:false,motion:{runtimeReadbacks:0},followingDomain:{translation:[shift/16,0,0],shifts:shift},fields:[{steps:step}]}});

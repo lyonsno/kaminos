@@ -28051,6 +28051,7 @@ export function createKaminosVolumePrototype({
       if(typeof getPosition!=='function')throw Error('Following domain needs an object position reader');
       const anchor=getPosition();followingDomainShift({anchor,origin:productTransform.translate,target:anchor,current:productTransform.translate,scale:productTransform.scale,grid:gridSize});
       const gpu=await createMovingVolumeGpu(device);
+      if(followingDomain){gpu.dispose();throw Error('A domain-following owner is already bound');}
       const owner={gpu,getPosition,onTranslation,anchor:[...anchor],origin:[...productTransform.translate],pending:null,shifts:0};
       followingDomain=owner;state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...productTransform.translate],shifts:0,rotation:'world-aligned',runtimeReadbacks:0};
       return ()=>{if(followingDomain===owner){followingDomain=null;state.followingDomain={...state.followingDomain,status:'released'};gpu.dispose();}};
