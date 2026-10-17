@@ -18,7 +18,7 @@ export function assertEffectiveSceneCollision(receipt, expectedSourceId) {
 
 // Mirror the emitter shader's signed-distance chemistry gate at cell centers.
 // The dispatch box alone is deliberately wider than the actual fuel source.
-export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid, height = 2 * grid) {
+export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, grid, height = 2 * grid, onSupport = null) {
   if (!dispatch?.active || !descriptor || !(solidCells instanceof Uint8Array)
     || solidCells.length !== grid * height * grid) {
     return {boundsFluidCells: 0, sourceSupportCells: 0, fluidSupportCells: 0, solidSupportCells: 0};
@@ -86,6 +86,7 @@ export function countEmitterChemicalSupport(descriptor, dispatch, solidCells, gr
         // shader: 1 - smoothstep(-0.5 * cellWidth, 0.5 * cellWidth, sourceDistance)
         if (!(sourceDistance < 1 / grid) || !(descriptor.strength > 0)) continue;
         sourceSupportCells++;
+        onSupport?.(solidFieldIndex(grid,x,y,z,height));
         if (solid) solidSupportCells++;
         else fluidSupportCells++;
       }
@@ -305,7 +306,8 @@ export function voxelizeTriangleSolid(triangles, grid, height = 2 * grid) {
 // Fill each authored object independently, then union occupancy. This preserves
 // object interiors without treating a space between separate meshes as solid.
 // Mesh edits invalidate only their own field; domain/grid edits invalidate all.
-export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid}={}) {
+export function createSceneSolidGeometryCache({voxelize=voxelizeTriangleSolid,gpuProducer=null}={}) {
+  if(gpuProducer)return gpuProducer;
   const members=new Map();let combined=null;
   return {update(objects,transform,{grid,gridHeight=2*grid}) {
     const ids=new Set(),fields=[];let builds=0;

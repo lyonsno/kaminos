@@ -3559,7 +3559,7 @@ import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow
 import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import {collisionVoxelInstances} from './scene-collision-debug.mjs';
+import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
@@ -3737,7 +3737,10 @@ function syncCollisionVoxelView() {
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
   if(snapshot) {
     collisionVoxelRevision=snapshot.revision;
-    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(snapshot.backend==='gpu'){
+      collisionVoxelMesh=createGpuCollisionVoxelMesh(THREE,renderer,snapshot);scene.add(collisionVoxelMesh);
+    }
     if(snapshot.cells) {
       const {centres,size}=collisionVoxelInstances(snapshot);
       collisionVoxelMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size*.94,size*.94,size*.94),new THREE.MeshBasicMaterial({color:0x46d7dd,transparent:true,opacity:.35,depthWrite:false,depthTest:false}),centres.length);
@@ -13175,10 +13178,16 @@ async function installOwnerWorkbenchEntry() {
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     renderer:()=>renderer,objects:()=>sceneObjects,select:id=>window.selectSceneObject(id),
+    ground:()=>({center:[groundPlane.position.x,groundPlane.position.y,groundPlane.position.z],height:groundPlane.position.y,radius:5,visible:groundPlane.visible}),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
     setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
     enterWorkbench:()=>{authoringWorkspace.setMode('workbench');setActiveTab('assets',{reveal:false});},
-  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype},
+  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype,
+    followObject:object=>volumePrototype.bindFollowingDomain({getPosition:()=>object.getWorldPosition(new THREE.Vector3()).toArray(),onTranslation:translation=>{
+      flameDomainTranslation=[...translation];flameDomainFollowSource=false;flameDomainDraft=null;
+      writeAuthoredFlameEmitterPose(flameEmitterPose);refreshFlameDomainPreview();return volumePrimitivesInFlameDomain();
+    }}),
+  },
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
