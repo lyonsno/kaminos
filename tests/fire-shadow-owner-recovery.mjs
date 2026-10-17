@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {installOwnerExperimentEntry,readOwnerExperimentAddress,writeOwnerExperimentAddress} from '../owner-experiment-entry.mjs';
 import {compositionRestoreUrl} from '../scene-authoring.mjs';
 class Element {
-  constructor(){this.children=[];this.nodes=new Map();this.value='';}
+  constructor(){this.children=[];this.nodes=new Map();this.value='';this.style={};this.ownerDocument=document;}
   append(...nodes){this.children.push(...nodes);}
   replaceChildren(...nodes){this.children=nodes;}
   setAttribute(){} addEventListener(){}
@@ -11,8 +11,9 @@ class Element {
 }
 globalThis.Option=class extends Element {constructor(text,value){super();this.textContent=text;this.value=value;}};
 let frame,points=1,pointSampling='all',sampling='fixed',quality={resolution:256,blockerSamples:9,filterSamples:16},href='http://localhost/index.html#scene=kiln.json';
-const document={getElementById:()=>null,createElement:()=>new Element(),defaultView:{__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}}};
+const document={addEventListener(){},getElementById:()=>null,createElement:()=>new Element(),defaultView:{Event,__kaminosSceneRadiance:{setShadowQuality:value=>{quality={...quality,...value};},setShadowSampling:value=>sampling=value,setPointCount:value=>points=value,setQuadrature:(value,mode)=>{points=value;pointSampling=mode;},debugState:()=>({pointCount:points,pointSampling,shadowSampling:sampling,shadowSoftness:1,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples})}}};
 const host={controls:{document},scene:{open:async()=>({onFrame:fn=>{frame=fn;return()=>{};},redraw(){},dispose(){}})}};
+globalThis.document=document;globalThis.window={addEventListener(){}};
 const entry=await installOwnerExperimentEntry({document,root:new Element(),host,discover:async()=>[new URL('../experiments/fire-shadow-sampling.experiment.mjs',import.meta.url).href],onChange:value=>{href=writeOwnerExperimentAddress(href,value);}});
 await entry.open('fire-shadow-sampling',{sampling:'complementary',points:1,retained:'other input'});frame();
 await entry.invoke('setPoints',2);assert.equal(points,2);
@@ -61,4 +62,5 @@ assert.deepEqual((await entry.read()).shadowComparison,comparisonInputs.shadowCo
 const comparisonHref=href;
 await assert.rejects(entry.invoke('setShadowComparison',{grain:'unknown'}),/grain/);
 assert.equal(href,comparisonHref,'invalid grain must not poison shareable inputs');
-await entry.close();console.log('PASS actual owner operation/address/recovery preserves edited source count and sampling');
+await entry.close();delete globalThis.document;delete globalThis.window;
+console.log('PASS actual owner operation/address/recovery preserves edited source count and sampling');
