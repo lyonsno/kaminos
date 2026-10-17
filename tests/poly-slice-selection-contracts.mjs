@@ -134,3 +134,19 @@ assert.equal(separateSelection(column,someFaces).part.faces,1,'Separate works on
   assert.equal(cut.part.frame.rotation.length,4);
   assert.throws(()=>sliceSelection(plate,new Uint8Array(QQ.length/3).fill(1),{kind:'cylinder',point:[0,0,0],axis:[0,0,0],radius:1}),/axis/);
 }
+
+// Cut preview: the section outline a cut would make, without cutting. Outlines that close are the
+// ones that will fill; open ones will not.
+{
+  const {sectionPreview}=await import('../poly-mesh-edit.mjs');
+  const arrays={positions,normals:null,uvs:null,indices:I};
+  const level=sectionPreview(arrays,all,plane);
+  assert.equal(level.closed.length,1,'one closed outline around the column');assert.equal(level.open.length,0);
+  assert.ok(level.closed[0].length>=4&&level.closed[0].every(q=>Math.abs(q[1]-.5)<1e-9),'it lies on the cut plane, in the mesh frame');
+  const oneSide=Uint8Array.from({length:faces},(_,f)=>f<2?1:0);
+  assert.equal(sectionPreview(arrays,oneSide,plane).closed.length,1,'the preview follows the cut around, as Slice does');
+  // An open sheet: the strip of the U-loop's left side alone leaves an open outline.
+  const sheet={positions:Float32Array.from([0,0,0, 0,2,0, 0,0,1, 0,2,1]),normals:null,uvs:null,indices:Uint32Array.from([0,1,3, 0,3,2])};
+  const openPreview=sectionPreview(sheet,Uint8Array.from([1,1]),{point:[0,1,0],normal:[0,1,0]});
+  assert.equal(openPreview.closed.length,0);assert.equal(openPreview.open.length,1,'an open outline is reported as open');
+}

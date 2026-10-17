@@ -87,6 +87,20 @@ const picked=edit.geometry();assert.deepEqual([...picked.indices],[...mesh.geome
   assert.throws(()=>edit.planeFromLine(10,10,12,11),/longer line/);
 }
 
+// Cut preview: outlines drawn over the mesh before anything is cut, and a screen point placed at
+// the selection's depth, where the handles of a pending cut live.
+{
+  edit.setMode('face');edit.selectAll('select');
+  const preview=edit.previewCut({point:[0,0,0],normal:[0,1,0]});
+  assert.deepEqual([preview.closed,preview.open],[1,0],'one closed outline around the cube at its middle');
+  const drawn=()=>mesh.children[0].children.filter(child=>child.userData.polyPreview).length;
+  assert.ok(drawn()>0,'the outline is drawn');
+  edit.clearPreview();assert.equal(drawn(),0,'and cleared');
+  const centre=edit.screenOf([0,0,0]),placed=edit.pointAtScreen(centre.x,centre.y);
+  assert.ok(Math.hypot(...placed)<1e-6,`a screen point lands at the selection's depth, got ${placed}`);
+  edit.selectAll('deselect');
+}
+
 // Exit removes everything Edit Mode added and leaves the object's material alone.
 state=edit.exit();
 assert.equal(state.editing,false);

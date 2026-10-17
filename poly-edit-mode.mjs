@@ -6,10 +6,12 @@
 import {BufferGeometry,DoubleSide,Float32BufferAttribute,Uint32BufferAttribute,Group,LineBasicMaterial,LineSegments,Matrix4,Mesh,MeshBasicMaterial,Points,PointsMaterial,Ray,Vector3} from './lib/three.core.js';
 import {MeshBVH} from './node_modules/three-mesh-bvh/build/index.module.js';
 import {buildPolyMesh,NO_EDGE} from './poly-mesh-core.mjs';
+import {sectionPreview} from './poly-mesh-edit.mjs';
 import {createComponentSelection,setSelectMode,clickComponent,selectAll,boxSelect,selectLinkedComponents,selectionCounts} from './poly-selection.mjs';
 
 // Wire reads on dark baked textures as well as light ones; selection is Blender's orange.
-const SELECTED=0xff9a1f,WIRE=0xb8c2d6;
+// A pending cut's outline: cyan where it closes, red where it stays open, against orange selection.
+const SELECTED=0xff9a1f,WIRE=0xb8c2d6,CLOSED_OUTLINE=0x3cf0ff,OPEN_OUTLINE=0xff3b30;
 function compact(attribute,width){
   if(!attribute)return null;
   // Plain float attributes copy as they lie; interleaved or normalized ones go through the accessors.
@@ -185,6 +187,33 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const a=localRay(x0,y0),b=localRay(x1,y1),p1=a.origin.clone().add(a.direction),p2=b.origin.clone().add(b.direction);
       const normal=p1.sub(a.origin).cross(p2.sub(a.origin)).normalize();
       return {point:a.origin.toArray(),normal:normal.toArray()};
+    },
+    // A pending cut's outline, drawn through the mesh: cyan where it closes and will be capped,
+    // red where it stays open. Nothing is cut.
+    previewCut(shape){
+      const {arrays,kernel,selection,overlay}=need();this.clearPreview();
+      const preview=sectionPreview(arrays,Uint8Array.from(selection.faces),shape,{mesh:kernel});
+      const draw=(loops,color,closed)=>{
+        const lines=[];for(const loop of loops)for(let i=0;i<loop.length-(closed?0:1);i++){const a=loop[i],b=loop[(i+1)%loop.length];lines.push(a[0],a[1],a[2],b[0],b[1],b[2]);}
+        if(!lines.length)return;const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(lines,3));
+        const outline=new LineSegments(g,new LineBasicMaterial({color,depthTest:false,transparent:true}));outline.renderOrder=5;outline.userData.polyPreview=true;overlay.add(outline);
+      };
+      draw(preview.closed,CLOSED_OUTLINE,true);draw(preview.open,OPEN_OUTLINE,false);onChange(state());
+      return {closed:preview.closed.length,open:preview.open.length,followed:preview.followed};
+    },
+    clearPreview(){
+      if(!edit)return;
+      for(const child of [...edit.overlay.children])if(child.userData.polyPreview){edit.overlay.remove(child);child.geometry.dispose();child.material.dispose();}
+    },
+    // The point under a screen position at the selection's depth (or the mesh's), in the mesh's
+    // frame: where a pending cut's handles are anchored, so they stay on the geometry as the view moves.
+    pointAtScreen(x,y){
+      const {kernel}=need(),ray=localRay(x,y),q=kernel.vertexPositions;
+      let depth=null;try{depth=new Vector3(...this.selectionMedian());}catch{}
+      if(!depth){const lo=new Vector3(Infinity,Infinity,Infinity),hi=new Vector3(-Infinity,-Infinity,-Infinity),v=new Vector3();for(let i=0;i<kernel.vertexCount;i++){v.set(q[3*i],q[3*i+1],q[3*i+2]);lo.min(v);hi.max(v);}depth=lo.add(hi).multiplyScalar(.5);}
+      const inverse=new Matrix4().copy(edit.mesh.matrixWorld).invert(),forward=new Vector3(0,0,-1).transformDirection(camera.matrixWorld).transformDirection(inverse);
+      const along=ray.direction.dot(forward),t=Math.abs(along)>1e-12?depth.clone().sub(ray.origin).dot(forward)/along:0;
+      return ray.origin.clone().addScaledVector(ray.direction,t).toArray();
     },
     // Circle cut: dragged from the joint's centre to its rim. A cylinder along the view ray through
     // the centre, at the depth of the selection (or the mesh), with the rim ray's distance as radius.

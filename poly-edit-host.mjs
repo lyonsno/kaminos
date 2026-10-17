@@ -32,18 +32,57 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   }
   // The edited object can leave the scene (undo of its insertion, scene load); leave Edit Mode with it.
   const live=()=>{if(edit.active()&&!objectFor(objectId))exit();return edit.active();};
-  // The cut line for Slice (K): drawn like Blender's bisect line, shown as a dashed rule.
-  const line=document.createElement?.('div');
-  if(line){line.hidden=true;Object.assign(line.style,{position:'absolute',height:'0',borderTop:'2px dashed #ff9a1f',transformOrigin:'0 0',pointerEvents:'none',zIndex:20});viewport.appendChild?.(line);}
-  function armCut(){cancelBox();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
-  function cancelCut(){cutLine=null;if(line)line.hidden=true;if(ring)ring.hidden=true;}
-  const ring=document.createElement?.('div');
-  if(ring){ring.hidden=true;Object.assign(ring.style,{position:'absolute',border:'2px dashed #ff9a1f',borderRadius:'50%',pointerEvents:'none',zIndex:20});viewport.appendChild?.(ring);}
-  function drawCut(x,y){
-    if(!cutLine?.start)return;const v=viewport.getBoundingClientRect(),dx=x-cutLine.start.x,dy=y-cutLine.start.y,r=Math.hypot(dx,dy);
-    if(cutLine.circle){if(ring){Object.assign(ring.style,{left:cutLine.start.x-r-v.left+'px',top:cutLine.start.y-r-v.top+'px',width:2*r+'px',height:2*r+'px'});ring.hidden=false;}return;}
-    if(line){Object.assign(line.style,{left:cutLine.start.x-v.left+'px',top:cutLine.start.y-v.top+'px',width:r+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});line.hidden=false;}
+  // The cut for Slice (K). A drag draws a line (with Shift, a circle from a joint's centre to its
+  // rim). It does not cut yet: it waits as a pending cut, anchored on the geometry at the
+  // selection's depth, with a handle at each end and the outline it would cut drawn on the mesh.
+  // Dragging a handle reshapes it; Enter or Space cuts; Escape drops it.
+  const overlayDiv=style=>{const div=document.createElement?.('div');if(div){div.hidden=true;Object.assign(div.style,{position:'absolute',pointerEvents:'none',zIndex:20,...style});viewport.appendChild?.(div);}return div;};
+  const line=overlayDiv({height:'0',borderTop:'2px dashed #ff9a1f',transformOrigin:'0 0'}),ring=overlayDiv({border:'2px dashed #ff9a1f',borderRadius:'50%'});
+  const handles=[0,1].map(()=>overlayDiv({width:'12px',height:'12px',marginLeft:'-7px',marginTop:'-7px',borderRadius:'50%',border:'2px solid #ff9a1f',background:'#fff'}));
+  const HANDLE_REACH=12;
+  function armCut(){cancelBox();cutLine={start:null,pending:null,dragging:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
+  function hideCut(){for(const div of [line,ring,...handles])if(div)div.hidden=true;}
+  function cancelCut(){cutLine=null;hideCut();if(edit.active())edit.clearPreview();}
+  // Drawn in the view it was made in, a cut's own outline lies edge-on along this line or ring,
+  // so the line or ring carries the verdict: cyan when every outline closes, red when some stay
+  // open. Orbit to see the outlines themselves on the mesh.
+  const CUT_COLOURS={drawing:'#ff9a1f',closes:'#3cf0ff',open:'#ff3b30'};
+  function paintCut(state){const colour=CUT_COLOURS[state];if(line)line.style.borderTopColor=colour;if(ring)ring.style.borderColor=colour;for(const h of handles)if(h)h.style.borderColor=colour;}
+  function drawShape(a,b,circle){
+    const v=viewport.getBoundingClientRect(),dx=b.x-a.x,dy=b.y-a.y,r=Math.hypot(dx,dy);
+    if(line)line.hidden=circle;if(ring)ring.hidden=!circle;
+    if(circle&&ring)Object.assign(ring.style,{left:a.x-r-v.left+'px',top:a.y-r-v.top+'px',width:2*r+'px',height:2*r+'px'});
+    if(!circle&&line)Object.assign(line.style,{left:a.x-v.left+'px',top:a.y-v.top+'px',width:r+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});
   }
+  const pendingScreens=()=>cutLine.pending.anchors.map(anchor=>edit.screenOf(anchor));
+  // Keep the drawn line and handles on their anchors as the view moves.
+  function followView(){
+    if(!cutLine?.pending)return;const v=viewport.getBoundingClientRect(),[a,b]=pendingScreens();
+    drawShape(a,b,cutLine.pending.circle);
+    [a,b].forEach((q,i)=>{if(handles[i]){Object.assign(handles[i].style,{left:q.x-v.left+'px',top:q.y-v.top+'px'});handles[i].hidden=false;}});
+    globalThis.requestAnimationFrame?.(followView);
+  }
+  function reshapeCut(){
+    const p=cutLine.pending,[a,b]=pendingScreens();
+    p.shape=p.circle?edit.circleFromDrag(a.x,a.y,b.x,b.y):edit.planeFromLine(a.x,a.y,b.x,b.y);
+    p.preview=edit.previewCut(p.shape);paintCut(p.preview.open?'open':'closes');
+    setInfo(`Cut preview · ${p.preview.closed} outline${p.preview.closed===1?'':'s'} will close and fill (cyan)${p.preview.open?` · ${p.preview.open} stay open (red)`:''} · drag the handles to adjust · Enter or Space cuts · Escape cancels`);
+  }
+  function settleCut(from,to,circle){
+    cutLine.start=null;
+    const anchors=[edit.pointAtScreen(from.x,from.y),edit.pointAtScreen(to.x,to.y)];
+    cutLine.pending={circle,anchors,shape:null,preview:null};
+    if(attempt(()=>{reshapeCut();return true;})===null){cancelCut();return;}
+    followView();
+  }
+  function adjustCut(index,x,y){
+    const p=cutLine?.pending;if(!p)throw Error('No pending cut to adjust');
+    const before=p.anchors[index];p.anchors[index]=edit.pointAtScreen(x,y);
+    try{reshapeCut();}catch(error){p.anchors[index]=before;reshapeCut();throw error;}
+    followView();return pendingCut();
+  }
+  function confirmCut(){const shape=cutLine?.pending?.shape;if(!shape)return null;cancelCut();hud();return runOnce(()=>slice(shape));}
+  function pendingCut(){const p=cutLine?.pending;return p?{circle:p.circle,shape:p.shape,preview:p.preview,verdict:p.preview?.open?'open':'closes',handles:pendingScreens().map(({x,y})=>({x,y}))}:null;}
   function armBox(){cancelCut();box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
   function cancelBox(){box=null;pointer=null;if(rect)rect.hidden=true;}
   function cancelAll(){cancelBox();cancelCut();}
@@ -60,6 +99,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     }
     if(!live())return;
     if((box||cutLine)&&event.key==='Escape'){steal(event);cancelAll();hud();return;}
+    if(cutLine?.pending&&['Enter','NumpadEnter','Space'].includes(event.code)){steal(event);confirmCut();return;}
     if(event.ctrlKey||event.metaKey){if(event.code==='KeyL'){steal(event);attempt(()=>edit.linked());}return;}
     if(MODE_KEYS[event.code]&&!event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setMode(MODE_KEYS[event.code]));return;}
     if(event.code==='KeyA'&&!event.shiftKey){steal(event);attempt(()=>edit.selectAll(event.altKey?'deselect':'select'));return;}
@@ -78,7 +118,8 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   document.addEventListener('pointermove',event=>{
     if(!edit.active())return;
     if(insideCanvas(event))hover={x:event.clientX,y:event.clientY};
-    if(cutLine?.start){drawCut(event.clientX,event.clientY);return;}
+    if(cutLine?.dragging!=null){attempt(()=>adjustCut(cutLine.dragging,event.clientX,event.clientY));return;}
+    if(cutLine?.start){drawShape(cutLine.start,{x:event.clientX,y:event.clientY},cutLine.circle);return;}
     // A left drag past the click tolerance becomes a box, as Blender's Select Box tool.
     if(pointer&&!pointer.dragging&&event.pointerId===pointer.id&&Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>CLICK_DRIFT)pointer.dragging=true;
     const start=box?.start??(pointer?.dragging?pointer:null);
@@ -91,17 +132,22 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   document.addEventListener('pointerdown',event=>{
     if(!live()||!insideCanvas(event)||overlayHit(event))return;
     // With Shift held, the drag is a circle from the joint's centre to its rim (a hinge cut).
-    if(cutLine){steal(event);if(event.button!==0){cancelCut();hud();return;}cutLine.start={x:event.clientX,y:event.clientY};cutLine.circle=event.shiftKey;return;}
+    if(cutLine){
+      // Other buttons navigate (orbit, pan) and leave a pending cut alone; a right click while
+      // still drawing drops the drawing. Escape drops a pending cut.
+      if(event.button!==0){if(cutLine.start&&event.button===2){steal(event);cancelCut();hud();}return;}
+      steal(event);
+      // On a handle, adjust the pending cut; anywhere else, draw a new one in its place.
+      if(cutLine.pending){const near=pendingScreens().findIndex(q=>Math.hypot(q.x-event.clientX,q.y-event.clientY)<=HANDLE_REACH);if(near>=0){cutLine.dragging=near;return;}cutLine.pending=null;edit.clearPreview();hideCut();}
+      cutLine.start={x:event.clientX,y:event.clientY};cutLine.circle=event.shiftKey;paintCut('drawing');return;
+    }
     if(box){steal(event);if(event.button===2){cancelBox();hud();return;}box.start={x:event.clientX,y:event.clientY};box.mode=event.button===1?'subtract':'extend';return;}
     if(event.button===0)pointer={x:event.clientX,y:event.clientY,id:event.pointerId};
   },true);
   document.addEventListener('pointerup',event=>{
     if(!live())return;
-    if(cutLine?.start){
-      steal(event);const from=cutLine.start,circle=cutLine.circle;cancelCut();
-      const plane=attempt(()=>circle?edit.circleFromDrag(from.x,from.y,event.clientX,event.clientY):edit.planeFromLine(from.x,from.y,event.clientX,event.clientY));
-      if(plane)runOnce(()=>slice(plane));else hud();return;
-    }
+    if(cutLine?.dragging!=null){steal(event);cutLine.dragging=null;return;}
+    if(cutLine?.start){steal(event);settleCut(cutLine.start,{x:event.clientX,y:event.clientY},cutLine.circle);return;}
     if(box?.start){steal(event);const r={x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},mode=box.mode;cancelBox();attempt(()=>edit.box(r,{mode}));return;}
     if(!pointer||event.button!==0||event.pointerId!==pointer.id)return;
     const down=pointer;pointer=null;
@@ -127,7 +173,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   const api=Object.freeze({
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
-    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),circleFromDrag:(x0,y0,x1,y1)=>edit.circleFromDrag(x0,y0,x1,y1),
+    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),pendingCut:()=>pendingCut(),adjustCut:(index,x,y)=>adjustCut(index,x,y),confirmCut:()=>confirmCut(),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),circleFromDrag:(x0,y0,x1,y1)=>edit.circleFromDrag(x0,y0,x1,y1),
     selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),

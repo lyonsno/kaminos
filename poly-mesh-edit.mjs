@@ -97,9 +97,9 @@ function triangulateConvex(polygon,P,emit){
 // Extend a cut selection along the cut: a face that crosses the plane and shares a vertex with
 // a face already being cut joins it, until the cut closes. A box selects faces by their centre,
 // so long triangles crossing the line can fall outside it and would hold the sides together.
-export function followCut(arrays,mask,plane,{epsilon}={}) {
+export function followCut(arrays,mask,plane,{epsilon,mesh:prepared=null}={}) {
   checkedFaceMask(arrays,mask);
-  const cutter=checkedCutter(plane),mesh=buildPolyMesh(arrays),d=vertexDistances(mesh,cutter,epsilon??defaultEpsilon(arrays.positions));
+  const cutter=checkedCutter(plane),mesh=prepared??buildPolyMesh(arrays),d=vertexDistances(mesh,cutter,epsilon??defaultEpsilon(arrays.positions));
   const {cornerVertex:CV,vertexFaceOffsets:VO,vertexFaces:VF}=mesh,out=Uint8Array.from(mask),stack=[];
   const crosses=f=>{let above=false,below=false;for(let c=3*f;c<3*f+3;c++){const x=d[CV[c]];above||=x>0;below||=x<0;}return above&&below;};
   for(let f=0;f<mesh.faceCount;f++)if(out[f]&&crosses(f))stack.push(f);
@@ -169,6 +169,15 @@ export function extractFaces(arrays,mask) {
     return {positions:gather(arrays.positions,3),normals:gather(arrays.normals,3),uvs:gather(arrays.uvs,2),indices,faceMaterial};
   };
   return {part:take(faces[0]),rest:take(faces[1]),partFaces:faces[0],restFaces:faces[1]};
+}
+
+// What a cut would leave, without cutting: the section outlines in the mesh's frame, split into
+// those that close (and will be capped) and those that stay open. Cheap enough to follow a drag;
+// pass the prepared mesh of the same arrays to skip rebuilding it.
+export function sectionPreview(arrays,mask,shape,{mesh=null}={}) {
+  const {mask:cutMask,followed}=followCut(arrays,mask,shape,{mesh}),section=sectionSegments(arrays,cutMask,shape);
+  const {loops,open}=sectionLoops(section.segments),world=points=>points.map(([x,y])=>section.toWorld({x,y}));
+  return {closed:loops.map(world),open:[...open.map(world),...(section.open??[]).map(chain=>chain.map(q=>[...q]))],followed};
 }
 
 // Close the openings that lie in a plane. Loops come from the open boundary as
@@ -385,7 +394,7 @@ export function sectionLoops(segments) {
     if(closed&&loop.length>=3)loops.push(loop);else open.push([...loop,last]);
   }
   const stitched=stitchChains(open,key,{distance:(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]),bridge:.05*Math.hypot(hi[0]-lo[0],hi[1]-lo[1])});
-  return {loops:[...loops,...stitched.loops],openChains:stitched.open.length,bridged:stitched.bridged};
+  return {loops:[...loops,...stitched.loops],openChains:stitched.open.length,bridged:stitched.bridged,open:stitched.open};
 }
 
 export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding'}={}) {

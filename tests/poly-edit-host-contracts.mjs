@@ -66,19 +66,43 @@ key('KeyP');assert.equal(separations,2,'once it finishes, P works again');finish
 separateFails=true;key('KeyP');await new Promise(r=>setTimeout(r));assert.match(infos.at(-1),/Select faces to separate/,'a refusal is shown, not thrown away');separateFails=false;
 key('Tab');
 
-// K arms Slice: the next left drag is the cut line, and Escape cancels it.
+// K arms Slice. A drag draws the cut but does not make it: the line waits with handles and a
+// preview until Enter or Space cuts it, and Escape drops it.
 event=key('KeyK');assert.ok(!event.defaultPrevented,'outside Edit Mode K is not ours');
 key('Tab');key('KeyA');
 key('KeyK');drag(0,200,400,200);await new Promise(r=>setTimeout(r));
-assert.equal(slices.length,1,'K then a drag slices once');
-assert.ok(Math.abs(Math.abs(slices[0].normal[1])-1)<1e-6,'along the drawn line: horizontal');
+assert.equal(slices.length,0,'drawing the line does not cut yet');
+let pending=api.pendingCut();
+assert.ok(pending&&!pending.circle,'a line waits to be confirmed');
+assert.ok(Math.abs(Math.abs(pending.shape.normal[1])-1)<1e-6,'along the drawn line: horizontal');
+assert.deepEqual(pending.handles.map(h=>[Math.round(h.x),Math.round(h.y)]),[[0,200],[400,200]],'with a handle at each end');
+assert.ok(pending.preview.closed>=1,'and a preview of the outline it would cut');
+assert.equal(pending.verdict,'closes','every outline closes, so the line shows cyan');
+key('Enter');await new Promise(r=>setTimeout(r));
+assert.equal(slices.length,1,'Enter cuts it');
+assert.ok(Math.abs(Math.abs(slices[0].normal[1])-1)<1e-6);
 assert.equal(api.read().counts.vertices,8,'the drag was the cut line, not a box selection');
-// K then a Shift-drag from a centre out to a rim cuts a circle: a cylinder along the view.
+assert.equal(api.pendingCut(),null);
+// Orbiting with the right or middle button leaves a pending cut in place and is not taken from navigation.
+key('KeyK');drag(0,200,400,200);
+for(const button of [1,2]){const press=pointer('pointerdown',300,300,{button});assert.ok(!press.defaultPrevented,`button ${button} still navigates`);pointer('pointerup',300,300,{button});}
+assert.ok(api.pendingCut(),'the pending cut survives navigation');key('Escape');
+// Dragging a handle reshapes the pending cut before it is made.
+key('KeyK');drag(0,200,400,200);drag(400,200,400,120);
+pending=api.pendingCut();assert.ok(Math.abs(pending.shape.normal[1])<.99,'moving an end tilts the line');
+key('Space');await new Promise(r=>setTimeout(r));
+assert.equal(slices.length,2,'Space cuts too');assert.ok(Math.abs(slices[1].normal[1])<.99,'the cut is the adjusted one');
+// A Shift-drag from a centre out to a rim is a circle: a cylinder along the view, confirmed the same way.
 key('KeyK');drag(200,200,260,200,{shiftKey:true});await new Promise(r=>setTimeout(r));
-assert.equal(slices.length,2,'the circle slices once');assert.equal(slices[1].kind,'cylinder');
-assert.ok(slices[1].radius>0&&Math.abs(Math.abs(slices[1].axis[2])-1)<1e-9,'a cylinder along the view');
+assert.equal(slices.length,2);assert.equal(api.pendingCut().circle,true);
+key('Enter');await new Promise(r=>setTimeout(r));
+assert.equal(slices.length,3,'the circle cuts once confirmed');assert.equal(slices[2].kind,'cylinder');
+assert.ok(slices[2].radius>0&&Math.abs(Math.abs(slices[2].axis[2])-1)<1e-9,'a cylinder along the view');
+// Escape drops a pending cut, and disarms K before a drag.
+key('KeyK');drag(0,200,400,200);key('Escape');key('Enter');await new Promise(r=>setTimeout(r));
+assert.equal(slices.length,3,'Escape drops the pending cut');assert.equal(api.pendingCut(),null);
 key('KeyK');key('Escape');drag(0,200,400,200);await new Promise(r=>setTimeout(r));
-assert.equal(slices.length,2,'Escape disarms it; the next drag is a box again');
+assert.equal(slices.length,3,'Escape disarms it; the next drag is a box again');
 key('Tab');
 
 // Shift+S puts the origin on the selection, through the app.
