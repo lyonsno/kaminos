@@ -83,6 +83,17 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // A far prop (weak pull) is still inspected properly, and stays familiar for
+ // minutes: no "noticed again" a few seconds after the look ends.
+ const c=creature(),point=[1.4,.5,-3.9];
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'far',point,interest:1}]});
+ const w=watch(attention,c,150,0);
+ assert.deepEqual(looks(w.rows).map(l=>l.cause),['first sight'],`one look, then familiar for minutes (${JSON.stringify(looks(w.rows))})`);
+ const end=w.rows.findIndex(r=>!r.focus&&r.t>.5);assert.ok(w.rows[end].t>2,`the far prop is looked at properly (${w.rows[end].t.toFixed(2)} s)`);
+ assert.ok(attention.read().familiarity.far>.3,'and is not yet forgotten minutes later');
+}
+
+{
  // Familiarity fades over minutes: a long absence makes the prop worth a look again.
  const c=creature(),point=[1,.5,-2.6];
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,forgetSeconds:20},interests:()=>[{id:'brazier',point,interest:1}]});
@@ -117,6 +128,8 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const scene=new THREE.Scene(),prop=new THREE.Mesh(new THREE.BoxGeometry(1,2,1));prop.userData.kaminosSceneObject={id:'mesh-1',label:'Brazier'};prop.position.set(3,1,0);scene.add(prop);scene.updateMatrixWorld(true);
  const read=sceneObjectInterests({THREE,root:()=>scene,specs:[{object:'mesh-1',interest:.8},{object:'missing',interest:1}]});
  let rows=read();assert.equal(rows.length,1,'missing scene objects contribute nothing');
+ assert.equal(rows[0].label,'Brazier','scene label by default');
+ assert.equal(sceneObjectInterests({THREE,root:()=>scene,specs:[{object:'mesh-1',interest:1,label:'brazier A'}]})()[0].label,'brazier A','an authored name tells look-alike props apart');
  assert.deepEqual(rows[0].point.map(v=>+v.toFixed(9)),[3,2,0],'top anchor of the prop');
  // The renderer refreshes world matrices each frame; interests read them.
  prop.position.x=5;scene.updateMatrixWorld(true);rows=read();assert.equal(rows[0].point[0],5,'moving the prop moves the interest');

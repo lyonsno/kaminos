@@ -46,7 +46,7 @@ function generator(seed){let a=seed>>>0||1;return ()=>{a=(a+0x6D2B79F5)>>>0;let 
 // ends a look; familiarity fades over minutes. Every look records its cause.
 export function createCreatureAttention({THREE,rigFrame,profile,interests,options={}}) {
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
- const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:2.5,forgetSeconds:180,familiarAt:.6,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
+ const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
   idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
@@ -106,20 +106,23 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if(s.visible){
      // Causes fire on transitions and changes, not on mere presence.
      if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
-     else if(!m.seen&&m.familiarity<o.familiarAt){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.everSeen?'noticed again':'first sight';}
+     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?'noticed again':'first sight';}
      m.everSeen=true;
     }else if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
-    if(attended){m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.familiarAt)m.inspected=true;}else m.familiarity*=forget;
+    // Inspected once familiar enough; forgotten only after it fades well below.
+    if(attended){m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
+    else{m.familiarity*=forget;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;}}
     // A thing seen but not yet inspected keeps its pull while in view; an
     // inspected (familiar) thing pulls only through a fresh cause.
     // It waits its turn: only a fresh event interrupts an ongoing inspection.
     const inspecting=focus&&!focus.id.startsWith('look-around-');
-    const pending=m.everSeen&&m.familiarity<o.familiarAt&&(!inspecting||attended)?significance*(1-m.familiarity):0;
-    if(pending>m.impulse&&!attended)m.cause=m.inspected?'noticed again':'first sight';
-    const drive=attended?Math.max(m.impulse,significance*(1-m.familiarity)):Math.max(m.impulse,pending);
-    const near=Math.max(0,1-s.distance/o.noticeRadius),score=s.visible?Math.max(0,drive*s.view*(.5+.5*near)-o.threshold):0;
+    const pending=m.everSeen&&!m.inspected&&(!inspecting||attended)?significance*(1-m.familiarity):0;
+    if(pending>m.impulse&&!attended)m.cause=m.forgotten?'noticed again':'first sight';
+    // A look lasts until the thing is inspected, however weak its pull at a distance.
+    const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
+    const near=Math.max(0,1-s.distance/o.noticeRadius),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
@@ -192,7 +195,8 @@ export function sceneObjectInterests({THREE,root,specs}) {
   if(typeof spec?.object!=='string'||!spec.object.trim())throw Error('Interest requires a scene object id');
   if(!Number.isFinite(spec.interest)||spec.interest<0)throw Error('Interest strength must be finite and nonnegative');
   if(spec.anchor!==undefined&&!['top','center'].includes(spec.anchor))throw Error('Unknown interest anchor');
-  return {object:spec.object,interest:spec.interest,anchor:spec.anchor??'top',reason:spec.reason??'authored interest'};
+  if(spec.label!==undefined&&(typeof spec.label!=='string'||!spec.label.trim()))throw Error('Interest label must be a nonempty string');
+  return {object:spec.object,interest:spec.interest,anchor:spec.anchor??'top',reason:spec.reason??'authored interest',label:spec.label};
  });
  const boxes=new Map(),found=new Map();
  const attached=(object,scene)=>{let node=object;while(node.parent)node=node.parent;return node===scene;};
@@ -210,6 +214,6 @@ export function sceneObjectInterests({THREE,root,specs}) {
  return ()=>checked.flatMap(spec=>{
   const object=find(spec.object);if(!object)return [];
   const box=localBox(object),center=box.getCenter(new THREE.Vector3());if(spec.anchor==='top')center.y=box.max.y;
-  return [{id:spec.object,label:object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason}];
+  return [{id:spec.object,label:spec.label??object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason}];
  });
 }
