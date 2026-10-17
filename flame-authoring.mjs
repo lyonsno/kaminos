@@ -76,7 +76,8 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'],
-    ['volume-ray-start-noise','Blue-noise ray starts'], ['volume-render-scale','Screen resolution (%)'],
+    ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'],
+    ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
   ] },
   { name:'Appearance', view:'look', open:true, fields:[
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],

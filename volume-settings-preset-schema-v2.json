@@ -1813,6 +1813,20 @@
       "additiveDefault": "agx"
     },
     {
+      "key": "volume-ray-noise-animated",
+      "param": "volume_ray_noise_animated",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": false
+    },
+    {
+      "key": "volume-flame-priority",
+      "param": "volume_flame_priority",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0
+    },
+    {
       "key": "volume-flow-kernel-strength",
       "param": "volume_flow_kernel_strength",
       "tagName": "INPUT",
