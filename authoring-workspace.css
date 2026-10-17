@@ -163,6 +163,9 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 .scene-menu-heading { padding:10px 10px 4px; font-size:10px; color:#92969c; border-top:1px solid #383a40; }
 .scene-field-row small { font-size:9px; font-weight:400; color:#92969c; }
 #selected-object-relations, #selected-mesh-properties, #selected-group-properties { padding:12px 0; }
+body[data-component-editing="true"] #selected-object-relations,
+body[data-component-editing="true"] #authoring-object-tools,
+body[data-component-editing="true"] button[onclick="snapToGround()"] { display:none; }
 #selected-object-relations h3, #selected-mesh-properties h3, #selected-group-properties h3 { font-size:12px; margin:12px 0; }
 #selected-object-relations label { display:flex; flex-direction:column; gap:7px; font-size:11px; }
 #object-parent { background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; }

@@ -7,7 +7,7 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
-export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null}) {
+export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null,ownerComponents=null}) {
   let separating=false,cutLine=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
@@ -56,7 +56,12 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   document.addEventListener('keydown',event=>{
     if(event.defaultPrevented||isText(event.target)||blocked())return;
     if(event.key==='Tab'&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.shiftKey){
-      if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():enter());return;
+      if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():ownerComponents?.toggle(selectedId())||enter());return;
+    }
+    if(ownerComponents?.active()){
+      if(event.code==='KeyA'&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey){steal(event);attempt(()=>ownerComponents.selectAll(event.altKey?'deselect':'select'));return;}
+      if(['Delete','Backspace'].includes(event.key)||['KeyB','KeyP','KeyL','Digit1','Digit2','Digit3'].includes(event.code)||(event.shiftKey&&event.code==='KeyD')){steal(event);setInfo('Joint topology is fixed in this editor; click or Shift-click joints to select them');}
+      return;
     }
     if(!live())return;
     if((box||cutLine)&&event.key==='Escape'){steal(event);cancelAll();hud();return;}
@@ -114,7 +119,14 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     if(insideCanvas(event)&&!overlayHit(event))attempt(()=>edit.click(event.clientX,event.clientY,{extend:event.shiftKey}));
   },true);
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
-  for(const type of ['click','dblclick'])document.addEventListener(type,event=>{if(edit.active()&&insideCanvas(event)&&!overlayHit(event))steal(event);},true);
+  for(const type of ['click','dblclick'])document.addEventListener(type,event=>{
+    if(!insideCanvas(event)||overlayHit(event))return;
+    if(edit.active())steal(event);
+    else if(ownerComponents?.active()){
+      if(type==='click'&&!gizmo?.dragging&&!gizmo?.axis)attempt(()=>ownerComponents.pick(event,{camera,canvas}));
+      steal(event);
+    }
+  },true);
 
   // Separate and Slice change the scene through the app; one runs at a time.
   function runOnce(work){

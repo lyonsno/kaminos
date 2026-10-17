@@ -37,3 +37,9 @@ test('save/reopen preserves reference placement and visibility with the saved ca
  const plan=authoredRestPlan(fixture(),{baselineSha256:'a'.repeat(64),displayMatrix:display,referenceDisplay});
  const reopened=await loadRestEditorInput({plan:JSON.parse(JSON.stringify(plan))});assert.deepEqual(reopened.plan.rest_authoring.referenceDisplay,referenceDisplay);
 });
+test('whole-object and freely placed reference transforms round-trip separately from rest heads',async()=>{
+ const scene={skeleton:{position:[2,3,4],rotation:[0,.5,0],scale:[2,2,2]},reference:{position:[-.2,0,1],rotation:[.1,0,0],scale:[.8,.8,.8]}};
+ const plan=authoredRestPlan(fixture(),{baselineSha256:'a'.repeat(64),displayMatrix:display,scene});
+ const reopened=await loadRestEditorInput({plan});assert.deepEqual(reopened.plan.rest_authoring.scene,scene);assert.deepEqual(reopened.plan.joints,fixture().joints);
+ assert.throws(()=>authoredRestPlan(fixture(),{baselineSha256:'a'.repeat(64),displayMatrix:display,scene:{...scene,skeleton:{...scene.skeleton,scale:[0,1,1]}}}),/scene transform/);
+});

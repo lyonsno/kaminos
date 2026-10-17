@@ -1,101 +1,122 @@
 import * as THREE from '../../lib/three.core.js';
-import {validateRestPlan,restHeads,withRestHeads,moveRestJoint,authoredRestPlan} from './rest-skeleton-edit.mjs';
+import {validateRestPlan,restHeads,authoredRestPlan} from './rest-skeleton-edit.mjs';
+import {captureRestTransform,applyRestTransform} from './rest-skeleton-transform.mjs';
+import {checkedPose} from '../../scene-edit-session.mjs';
 
 const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const identity=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
+const poseOf=root=>({position:root.position.toArray(),rotation:[root.rotation.x,root.rotation.y,root.rotation.z],scale:root.scale.toArray()});
+const putPose=(root,pose)=>{pose=checkedPose(pose);root.position.fromArray(pose.position);root.rotation.set(...pose.rotation);root.scale.fromArray(pose.scale);root.updateMatrixWorld(true);};
+
 export async function loadRestEditorInput(inputs,{fetchImpl=globalThis.fetch}={}){
  if(inputs.recipe){if(!/^[a-f0-9]{64}$/i.test(inputs.recipe_sha256??'')||inputs.plan||inputs.plan_url)throw Error('A recipe needs its digest and no competing plan');const r=await fetchImpl(inputs.recipe,{cache:'no-store'});if(!r.ok)throw Error('Recipe HTTP '+r.status);const bytes=await r.arrayBuffer();if(await digest(bytes)!==inputs.recipe_sha256)throw Error('Recipe digest mismatch');inputs=JSON.parse(new TextDecoder().decode(bytes));if(inputs.recipe)throw Error('Nested recipes are not supported');}
  let plan,sha=inputs.baseline_sha256;
  if(inputs.plan){if(inputs.plan_url)throw Error('Choose a plan file or inline plan');plan=validateRestPlan(inputs.plan);sha=plan.rest_authoring?.baselineSha256??sha;}
  else {if(!inputs.plan_url||!/^[a-f0-9]{64}$/i.test(inputs.plan_sha256??''))throw Error('Explicit plan URL and digest required');const r=await fetchImpl(inputs.plan_url,{cache:'no-store'});if(!r.ok)throw Error('Plan HTTP '+r.status);const bytes=await r.arrayBuffer();if(await digest(bytes)!==inputs.plan_sha256)throw Error('Plan digest mismatch');plan=validateRestPlan(JSON.parse(new TextDecoder().decode(bytes)));sha=plan.rest_authoring?.baselineSha256??inputs.plan_sha256;}
  const displayMatrix=plan.rest_authoring?.displayMatrix??inputs.display_matrix,reference=plan.rest_authoring?.reference??inputs.reference??null;
- const result=authoredRestPlan(plan,{baselineSha256:sha,displayMatrix,reference,view:plan.rest_authoring?.view??inputs.view??null,referenceDisplay:plan.rest_authoring?.referenceDisplay??null});
+ const result=authoredRestPlan(plan,{baselineSha256:sha,displayMatrix,reference,view:plan.rest_authoring?.view??inputs.view??null,referenceDisplay:plan.rest_authoring?.referenceDisplay??null,scene:plan.rest_authoring?.scene??null});
  const m=new THREE.Matrix4().fromArray(result.rest_authoring.displayMatrix);
  if(Math.abs(m.determinant())<1e-12||m.elements[3]!==0||m.elements[7]!==0||m.elements[11]!==0||m.elements[15]!==1)throw Error('Invertible affine display frame required');
  if(reference){const J=reference.jointNames?.length;if(!J||reference.parents?.length!==J||reference.positions?.length!==J*3||!reference.positions.every(Number.isFinite)||reference.parents.some((p,j)=>!Number.isInteger(p)||p< -1||p>=j))throw Error('Invalid reference skeleton');}
  return {plan:result,baselineSha256:sha,displayMatrix:m,reference};
 }
 
-function links(plan,positions,color){
- const g=new THREE.BufferGeometry(),J=plan.length,names=new Map(plan.map((j,i)=>[j.name,i]));
- const edges=plan.map((j,i)=>[typeof j.parent==='number'?j.parent:names.get(j.parent)??-1,i]).filter(([p])=>p>=0);
- const a=new THREE.BufferAttribute(new Float32Array(edges.length*6),3);g.setAttribute('position',a);
- const mesh=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color,depthTest:false,transparent:true,opacity:.75}));mesh.renderOrder=5;mesh.raycast=()=>{};
- const update=values=>{let k=0;for(const [p,j]of edges)for(const index of[p,j])for(const v of values[index])a.array[k++]=v;a.needsUpdate=true;g.computeBoundingSphere();};update(positions);
+function links(joints,positions,color){
+ const names=new Map(joints.map((j,i)=>[j.name,i]));
+ const edges=joints.map((j,i)=>[typeof j.parent==='number'?j.parent:names.get(j.parent)??-1,i]).filter(([p])=>p>=0);
+ const geometry=new THREE.BufferGeometry(),a=new THREE.BufferAttribute(new Float32Array(edges.length*6),3);geometry.setAttribute('position',a);
+ const mesh=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color,depthTest:false,transparent:true,opacity:.85}));mesh.renderOrder=5;mesh.raycast=()=>{};
+ const update=values=>{let k=0;for(const [p,j]of edges)for(const index of[p,j])for(const v of values[index])a.array[k++]=v;a.needsUpdate=true;geometry.computeBoundingSphere();};update(positions);
  return {mesh,update};
 }
 
 export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{fetchImpl=globalThis.fetch}={}){
- const loaded=await loadRestEditorInput(inputs,{fetchImpl}),baseline=structuredClone(loaded.plan),matrix=loaded.displayMatrix,inverse=matrix.clone().invert(),reference=loaded.reference;
- const document=host.controls.document,session=await host.scene.open(),edits=document.defaultView?.kaminosSceneEdits;
- if(!edits) {await session.dispose();throw Error('Shared scene edit ledger unavailable');}
- let plan=structuredClone(baseline),selected=plan.joints.find(j=>j.name.includes('shoulder'))?.name??plan.joints[0].name,mirror=false,descendants=false,disposed=false,error=null,changed=false,refresh=()=>{},stop=()=>{},unlisten=()=>{},referenceSide='x';
- const handles=[],seats=[],scrubbers=[],by=new Map(),target='@rest-skeleton:'+crypto.randomUUID();let referenceRoot,baselineRoot,referenceMode=baseline.rest_authoring.referenceDisplay?.mode??'side',showBaseline=baseline.rest_authoring.referenceDisplay?.baseline??false;
- referenceSide=baseline.rest_authoring.referenceDisplay?.axis??'x';
- const openedSha256=await digest(new TextEncoder().encode(JSON.stringify(restHeads(baseline))));
- const toWorld=p=>new THREE.Vector3(...p).applyMatrix4(matrix).toArray(),toLocal=p=>new THREE.Vector3(...p).applyMatrix4(inverse).toArray();
- const positions=()=>plan.joints.map(j=>toWorld(j.head));
- const gather=()=>Object.fromEntries(handles.map(h=>[h.name,toLocal(h.asset.root.position.toArray())]));
- function active(){if(disposed)throw Error('Rest skeleton editor disposed');if(handles.some(h=>!h.asset.root.parent))throw Error('Joint handle removed; Undo removal or reopen the skeleton');}
- function sync(){active();const heads=gather();if(plan.joints.some(j=>j.head.some((v,k)=>Math.abs(v-heads[j.name][k])>1e-9))){plan=withRestHeads(plan,heads);changed=true;error=null;graph.update(positions());refresh();}return plan;}
- function install(next){active();next=validateRestPlan(next);if(!same(next.joints.map(j=>[j.name,j.parent]),baseline.joints.map(j=>[j.name,j.parent])))throw Error('This editing session preserves the loaded topology');
-  plan=next;for(const h of handles){h.asset.root.position.fromArray(toWorld(plan.joints.find(j=>j.name===h.name).head));host.scene.refreshPresentation(h.asset);}graph.update(positions());error=null;changed=true;session.redraw();refresh();}
- function snapshot(){sync();return {heads:restHeads(plan)};}
- const checked=value=>({heads:restHeads(withRestHeads(baseline,value.heads))});
- const exported=()=>{sync();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,view:session.readView(),referenceDisplay:{mode:referenceMode,axis:referenceSide,baseline:showBaseline}});};
- const graph=links(plan.joints,positions(),0x4ce4ed),graphRoot=new THREE.Group();graphRoot.name='Rest skeleton connections';graphRoot.add(graph.mesh);
- const read=()=>{try{sync();}catch(e){error=e.message;}return {status:error?'invalid':'editing-rest-pose',error,selected,mirror,descendants,changed,baselineSha256:loaded.baselineSha256,referenceMode,showBaseline,view:session.readView(),joints:handles.map(h=>({name:h.name,parent:plan.joints.find(j=>j.name===h.name).parent,id:h.asset.id,position:h.asset.root.position.toArray(),head:toLocal(h.asset.root.position.toArray())})),semantics:'Rest-joint edits require new conditioning/generation; no existing clip or skin is modified'};};
- const apply=(next,label)=>{active();sync();return edits.apply(target,{heads:restHeads(next)},label);};
+ const loaded=await loadRestEditorInput(inputs,{fetchImpl}),baseline=loaded.plan,matrix=loaded.displayMatrix,reference=loaded.reference;
+ const document=host.controls.document,win=document.defaultView,session=await host.scene.open(),edits=win?.kaminosSceneEdits;
+ if(!edits||!host.controls.components){await session.dispose();throw Error('Shared component editing host unavailable');}
+ let plan=structuredClone(baseline),selected=[plan.joints.find(j=>j.name.includes('shoulder'))?.name??plan.joints[0].name],active=selected[0],mirror=false,descendants=false,editMode=false,disposed=false;
+ let refresh=()=>{},componentSeat,controlSeat,unsubscribe=()=>{},draft=null,error=null;
+ const target='@rest-components:'+crypto.randomUUID(),root=new THREE.Group(),proxy=new THREE.Group(),markers=new Map();root.name='Creature · rest skeleton';proxy.name='Rest joint transform';proxy.userData.kaminosEditorHelper=true;
+ const positions=()=>plan.joints.map(j=>new THREE.Vector3(...j.head).applyMatrix4(matrix).toArray());
+ const graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
+ for(const [i,j]of plan.joints.entries()){
+  const marker=new THREE.Mesh(new THREE.SphereGeometry(.018,12,8),new THREE.MeshBasicMaterial({color:0x4ce4ed,depthTest:false}));marker.name=j.name;marker.renderOrder=10;marker.position.fromArray(positions()[i]);root.add(marker);markers.set(j.name,marker);
+ }
+ let referenceRoot=null,referenceAsset=null,asset=null;
+ function assertLive(){if(disposed||!root.parent)throw Error('Skeleton removed; Undo removal or reopen it');}
+ const sourceFrame=()=>{root.updateWorldMatrix(true,false);return root.matrixWorld.clone().multiply(matrix).toArray();};
+ const capture=()=>captureRestTransform(plan,{selected:selected.length?[...selected]:[plan.joints[0].name],active:active??plan.joints[0].name,mirror,descendants,localToWorld:sourceFrame()});
+ const snapshot=()=>structuredClone(draft??capture());
+ function repaint(){
+  const p=positions();for(const [i,j]of plan.joints.entries()){
+   const marker=markers.get(j.name);marker.position.fromArray(p[i]);marker.material.color.setHex(editMode&&selected.includes(j.name)?0xffad45:j.name.includes('-toe')?0xffa057:0x4ce4ed);
+  }graph.update(p);root.updateMatrixWorld(true);session.redraw();refresh();
+ }
+ function placeProxy(){if(!editMode||!selected.length)return;draft=null;putPose(proxy,capture());}
+ const exported=()=>{assertLive();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,view:session.readView(),referenceDisplay:null,scene:{skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null}});};
+ const read=()=>({status:error?'invalid':editMode?'editing-rest-joints':'object-mode',error,selected:[...selected],active,mirror,descendants,objectId:asset?.id,referenceId:referenceAsset?.id,targetId:target,baselineSha256:loaded.baselineSha256,objectPose:poseOf(root),referencePose:referenceRoot?poseOf(referenceRoot):null,
+  joints:plan.joints.map(j=>({name:j.name,parent:j.parent,head:[...j.head],position:markers.get(j.name).getWorldPosition(new THREE.Vector3()).toArray()})),semantics:'Rest-joint candidate; placement does not change anatomy; fresh motion generation is separate'});
  const operations={
   read,
-  select({name,pair=false}={}){active();const h=by.get(name);if(!h)throw Error('Unknown joint');selected=name;const other=name.replace('-left-','-right-')===name?name.replace('-right-','-left-'):name.replace('-left-','-right-');const ids=[h.asset.id];if(pair&&other!==name&&by.has(other))ids.push(by.get(other).asset.id);document.defaultView.kaminosSelection.set(ids,h.asset.id);refresh();return read();},
-  move({name=selected,position,mirror:paired=mirror,descendants:branch=descendants}={}){sync();if(!Array.isArray(position)||position.length!==3||!position.every(Number.isFinite))throw Error('Position must have three finite display coordinates');apply(moveRestJoint(plan,{name,position:toLocal(position),mirror:paired,descendants:branch}),'Edit skeleton joint');record({kind:'skeleton.rest.move',phase:'applied',requested:{name,position,mirror:paired,descendants:branch},effective:exported()});return read();},
-  options(input={}){active();for(const key of Object.keys(input))if(!['mirror','descendants'].includes(key)||typeof input[key]!=='boolean')throw Error('Unknown editor option');mirror=input.mirror??mirror;descendants=input.descendants??descendants;refresh();return read();},
-  reset(){apply(baseline,'Reset rest skeleton');record({kind:'skeleton.rest.reset',phase:'applied'});return read();},
-  undo:async()=>{await edits.undo();sync();return read();},redo:async()=>{await edits.redo();sync();return read();},
+  select({name,extend=false,pair=false}={}){
+   assertLive();if(!markers.has(name))throw Error('Unknown joint');if(!editMode)throw Error('Press Tab to edit skeleton joints');
+   componentSeat.changed(()=>{if(extend){if(selected.includes(name)&&selected.length>1)selected=selected.filter(n=>n!==name);else if(!selected.includes(name))selected.push(name);}else selected=[name];active=selected.includes(name)?name:selected.at(-1);
+    const other=name.includes('-left-')?name.replace('-left-','-right-'):name.replace('-right-','-left-');if(pair&&other!==name&&markers.has(other)&&!selected.includes(other))selected.push(other);placeProxy();repaint();});return read();
+  },
+  options(input={}){for(const key of Object.keys(input))if(!['mirror','descendants'].includes(key)||typeof input[key]!=='boolean')throw Error('Unknown editor option');componentSeat.changed(()=>{mirror=input.mirror??mirror;descendants=input.descendants??descendants;placeProxy();refresh();});return read();},
+  move({name=active,position,mirror:paired=mirror,descendants:branch=descendants}={}){
+   operations.select({name});const start=captureRestTransform(plan,{selected:[name],active:name,mirror:paired,descendants:branch,localToWorld:sourceFrame()});edits.apply(target,{...start,position},'Edit rest joints');return read();
+  },
+  undo:async()=>{await edits.undo();return read();},redo:async()=>{await edits.redo();return read();},
   export(){const value=exported();record({kind:'skeleton.rest.export',phase:'applied',effective:value});return value;},
-  setup(){return {plan:exported()};},
-  reference({mode=referenceMode,baseline:visible=showBaseline}={}){active();if(!['off','overlay','side'].includes(mode)||typeof visible!=='boolean')throw Error('Invalid reference display');referenceMode=mode;showBaseline=visible;if(referenceRoot){referenceRoot.visible=mode!=='off';referenceRoot.position.set(0,0,0);if(mode==='side')referenceRoot.position[referenceSide]=1.6;}baselineRoot.visible=visible;session.redraw();refresh();return read();},
-  frame({direction='side'}={}){active();const dirs={side:[3,0,0],front:[0,0,3],dorsal:[0,3,.001],perspective:[2,1.7,2]};if(!dirs[direction])throw Error('Unknown view');referenceSide=direction==='side'?'z':'x';operations.reference({});const box=new THREE.Box3();for(const h of handles)box.expandByPoint(h.asset.root.position);const c=box.getCenter(new THREE.Vector3());session.setView({position:c.clone().add(new THREE.Vector3(...dirs[direction])).toArray(),target:c.toArray(),up:[0,1,0]});host.scene.frame([...handles.map(h=>h.asset.root),...(referenceRoot?.visible?[referenceRoot]:[])]);return session.readView();},
+  setup:()=>({plan:exported()}),
+  frame({direction='side'}={}){
+   const dirs={side:[3,0,0],front:[0,0,3],dorsal:[0,3,.001],perspective:[2,1.7,2]};if(!dirs[direction])throw Error('Unknown view');
+   root.updateMatrixWorld(true);referenceRoot?.updateMatrixWorld(true);const box=new THREE.Box3().setFromObject(root);if(referenceRoot?.visible)box.union(new THREE.Box3().setFromObject(referenceRoot));const center=box.getCenter(new THREE.Vector3()),radius=box.getSize(new THREE.Vector3()).length()/2;
+   session.setView({position:center.clone().add(new THREE.Vector3(...dirs[direction]).normalize().multiplyScalar(Math.max(radius*2.8,.5))).toArray(),target:center.toArray(),up:direction==='dorsal'?[0,0,-1]:[0,1,0]});return session.readView();
+  },
  };
  try{
-  await session.attach(graphRoot,{owned:true,metadata:{label:graphRoot.name,source:'derived:rest-skeleton-connections'}});
-  const baseGraph=links(baseline.joints,positions(),0xe5b95c);baselineRoot=new THREE.Group();baselineRoot.name='Opened skeleton · session reset state';baselineRoot.add(baseGraph.mesh);baselineRoot.visible=showBaseline;await session.attach(baselineRoot,{owned:true,metadata:{label:baselineRoot.name,source:'derived:opened-heads-sha256:'+openedSha256}});
-  if(reference){referenceRoot=new THREE.Group();referenceRoot.name=reference.label??'Reference skeleton';referenceRoot.position.x=1.6;const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));const line=links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff);referenceRoot.add(line.mesh);for(const v of p){const dot=new THREE.Mesh(new THREE.SphereGeometry(.008,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff}));dot.position.fromArray(v);dot.raycast=()=>{};referenceRoot.add(dot);}await session.attach(referenceRoot,{owned:true,metadata:{label:referenceRoot.name,source:typeof reference.source==='string'?reference.source:reference.source?.path??'caller-reference'}});}
-  for(const j of plan.joints){const root=new THREE.Mesh(new THREE.SphereGeometry(.019,12,8),new THREE.MeshBasicMaterial({color:j.name.includes('-toe')?0xffa057:0x4ce4ed,depthTest:false}));root.name=j.name;root.renderOrder=10;root.position.fromArray(toWorld(j.head));const asset=await session.attach(root,{owned:true,metadata:{label:j.name,source:'rest-joint:'+j.name}}),h={name:j.name,asset};handles.push(h);by.set(j.name,h);}
-  edits.register(target,{read:snapshot,check:checked,write:value=>install(withRestHeads(baseline,value.heads))});
-  unlisten=edits.subscribe(()=>{if(disposed)return;try{sync();}catch(e){error=e.message;}refresh();});
-  stop=session.onFrame(()=>{try{sync();}catch(e){if(error!==e.message){error=e.message;refresh();}}});
-  operations.reference({});if(inputs.view??baseline.rest_authoring?.view)session.setView(inputs.view??baseline.rest_authoring.view);else operations.frame({direction:'side'});
- }catch(e){stop();unlisten();edits.discard(entry=>entry.id===target);edits.unregister(target);await session.dispose();throw e;}
- return {read,operations,async dispose(){if(disposed)return;stop();unlisten();for(const scrub of scrubbers)scrub.stop();for(const seat of seats)seat.dispose();edits.discard(entry=>entry.id===target||Object.keys(entry.before?.roots??{}).some(id=>handles.some(h=>h.asset.id===id))||handles.some(h=>h.asset.id===entry.id));edits.unregister(target);disposed=true;await session.dispose();},mount({root:panel,document,invoke}){
-  const initialSelected=selected,tools=document.createElement('section');tools.style.cssText='font-size:12px;line-height:1.4;padding:8px 0';panel.append(tools);
-  const title=document.createElement('h3'),note=document.createElement('p'),status=document.createElement('output');title.textContent='Rest skeleton · author proportions';note.textContent='Cyan: editable · orange: toes · purple: source Cat reference. Select joints and G / gizmo to move; Shift-select and S X narrows/widens a pair. Save skeleton JSON for fresh motion generation; Scene Save does not replace it.';tools.append(title,note,status);
-  const call=(name,input)=>invoke(name,input).catch(e=>{status.textContent=e.message;});
-  const controls=document.createElement('div'),select=document.createElement('select');select.setAttribute('aria-label','Joint');for(const h of handles){const o=document.createElement('option');o.value=h.name;o.textContent=h.name;select.append(o);}select.onchange=()=>call('select',{name:select.value});controls.append(select);
-  const button=(label,name,input,where=controls)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>call(name,typeof input==='function'?input():input);where.append(b);return b;};
-  button('Select L/R pair','select',()=>({name:selected,pair:true}));button('Undo','undo');button('Redo','redo');button('Reset to opened state','reset');
-  const referenceSelect=document.createElement('select');referenceSelect.setAttribute('aria-label','Reference display');for(const [value,text]of[['side','Reference beside'],['overlay','Reference overlay'],['off','Reference off']]){const o=document.createElement('option');o.value=value;o.textContent=text;referenceSelect.append(o);}referenceSelect.onchange=()=>call('reference',{mode:referenceSelect.value});referenceSelect.disabled=!reference;controls.append(referenceSelect);
-  const show=document.createElement('label'),ghost=document.createElement('input');ghost.type='checkbox';ghost.onchange=()=>call('reference',{baseline:ghost.checked});show.append(ghost,' Show opened state');controls.append(show);controls.style.cssText='display:flex;flex-wrap:wrap;gap:5px';tools.append(controls);
-  const views=document.createElement('div');views.style.cssText='display:flex;flex-wrap:wrap;gap:5px;margin-top:8px';for(const [name,direction]of[['Side','side'],['Front','front'],['Dorsal','dorsal'],['Perspective','perspective']])button(name,'frame',{direction},views);tools.append(views);
-  const fields=[];
-  const makeProperties=()=>{const p=document.createElement('section'),h=document.createElement('h3'),hint=document.createElement('p');h.textContent='Joint position · display frame';hint.textContent='Mirror / branch options apply to these fields. Viewport G moves only the selected scene joints.';p.append(h,hint);
-   for(const [key,text]of[['mirror','Mirror L/R field edits'],['descendants','Move descendant branch with field edits']]){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.dataset.restOption=key;input.onchange=()=>call('options',{[key]:input.checked});label.append(input,text);p.append(label);}
-   for(let k=0;k<3;k++){const label=document.createElement('label'),grip=document.createElement('span'),field=document.createElement('input');grip.textContent=['X','Y','Z'][k]+' ';field.type='number';field.step='any';field.className='transform-input';field.setAttribute('aria-label','Joint '+['X','Y','Z'][k]);
-    // One numeric gesture is one shared history transaction. Mirror and branch
-    // coordinates are part of the same complete head snapshot.
-    let began=false,base=null,scrubber;
-    const begin=()=>{if(!began){base=structuredClone(sync());edits.begin(target,'Edit joint position');began=true;}};
-    const update=()=>{if(!field.value.trim()||!Number.isFinite(Number(field.value)))return;try{begin();const world=toWorld(base.joints.find(j=>j.name===selected).head);world[k]=Number(field.value);const next=moveRestJoint(base,{name:selected,position:toLocal(world),mirror,descendants});edits.preview({heads:restHeads(next)});}catch(e){status.textContent=e.message;}};
-    const finish=cancel=>{if(!began)return;began=false;try{cancel?edits.cancel():edits.commit();}finally{base=null;scrubber?.stop();if(cancel)field.value=String(by.get(selected).asset.root.position.toArray()[k]);refresh();}};
-    field.oninput=update;field.onchange=()=>finish(false);field.onblur=()=>finish(false);field.onkeydown=e=>{if(e.key==='Escape'){finish(true);field.blur();}if(e.key==='Enter'){finish(false);field.blur();}};
-    field.addEventListener('pointercancel',()=>finish(true));scrubber=host.controls.installNumberDrag({input:field,grip,step:.005});scrubbers.push(scrubber);label.append(grip,field);p.append(label);fields.push({field,k});
-   }return p;};
-  for(const h of handles){const properties=makeProperties(),playback=document.createElement('div');properties.style.cssText='font-size:12px;line-height:1.4';for(const label of properties.querySelectorAll('label'))label.style.display='block';seats.push(host.controls.mountObject({asset:h.asset,properties,playback,onSelected:()=>{selected=h.name;properties.prepend(tools);refresh();}}));}
-  const save=document.createElement('button');save.textContent='Save skeleton JSON';save.type='button';save.onclick=async()=>{try{const plan=await invoke('export'),text=JSON.stringify(plan,null,2)+'\n';if(typeof document.defaultView.showSaveFilePicker==='function'){const file=await document.defaultView.showSaveFilePicker({suggestedName:'authored-skeleton.json',types:[{description:'Skeleton plan JSON',accept:{'application/json':['.json']}}]});const writer=await file.createWritable();await writer.write(text);await writer.close();status.textContent='Saved '+file.name+' — pass this plan to conditioning.';}else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='authored-skeleton.json';a.click();URL.revokeObjectURL(url);status.textContent='Downloaded authored-skeleton.json';}}catch(e){if(e.name!=='AbortError')status.textContent=e.message;}};
-  const open=document.createElement('button'),file=document.createElement('input');open.type='button';open.textContent='Open skeleton JSON';file.type='file';file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const plan=JSON.parse(await file.files[0].text());validateRestPlan(plan);if(!plan.rest_authoring)throw Error('Open a saved rest-skeleton authoring file');await document.defaultView.kaminosWorkbenchExperiments.open('marionette/rest-skeleton',{plan});}catch(e){status.textContent=e.message;}finally{file.value='';}};tools.append(save,open,file);
-  for(const element of tools.querySelectorAll('button,select'))element.style.cssText='background:#292c31;color:#e5e7eb;border:1px solid #454a52;border-radius:4px;padding:4px;font-size:12px;max-width:100%';
-  refresh=()=>{select.value=selected;referenceSelect.value=referenceMode;ghost.checked=showBaseline;const h=by.get(selected);if(h){const p=h.asset.root.position.toArray();for(const {field,k}of fields)if(document.activeElement!==field)field.value=String(p[k]);}for(const e of document.querySelectorAll('[data-rest-option]'))e.checked=e.dataset.restOption==='mirror'?mirror:descendants;if(error)status.textContent=error;};refresh();operations.select({name:initialSelected});
+  putPose(root,baseline.rest_authoring.scene?.skeleton??identity());
+  asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'authored-rest-skeleton:'+loaded.baselineSha256}});root.parent.add(proxy);
+  if(reference){
+   referenceRoot=new THREE.Group();referenceRoot.name=reference.label??'Reference skeleton';const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));
+   referenceRoot.add(links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff).mesh);
+   for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
+   const legacy=baseline.rest_authoring.referenceDisplay,initial=identity();initial.position[legacy?.axis??'z']=legacy?.mode==='overlay'?0:1.6;
+   putPose(referenceRoot,baseline.rest_authoring.scene?.reference??initial);referenceRoot.visible=legacy?.mode!=='off';
+   referenceAsset=await session.attach(referenceRoot,{owned:true,metadata:{label:referenceRoot.name,source:typeof reference.source==='string'?reference.source:reference.source?.path??'caller-reference'}});
+  }
+  edits.register(target,{read:snapshot,check:value=>{applyRestTransform(baseline,value);return structuredClone(value);},write:value=>{assertLive();const next=applyRestTransform(baseline,value);plan=next;draft=structuredClone(value);putPose(proxy,value);error=null;repaint();}});
+  componentSeat=host.controls.components.register(asset.id,{
+   enter(){assertLive();editMode=true;placeProxy();repaint();},exit(){editMode=false;draft=null;repaint();},
+   target:()=>selected.length?({id:target,type:'rest-joints',label:active+(selected.length>1?` + ${selected.length-1}`:''),object:proxy,read:snapshot,localOrientation:poseOf(root).rotation}):null,
+   selectAll(action){componentSeat.changed(()=>{selected=action==='deselect'?[]:plan.joints.map(j=>j.name);active=selected.includes(active)?active:selected[0]??null;draft=null;placeProxy();repaint();});},
+   pick(event,{camera,canvas}){const r=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-r.left)/r.width*2-1,1-(event.clientY-r.top)/r.height*2),camera);const hit=ray.intersectObjects([...markers.values()],false)[0];if(hit)operations.select({name:hit.object.name,extend:event.shiftKey});},
+  });
+  unsubscribe=edits.subscribe(state=>{if(disposed)return;if(!state.active&&!state.replaying){draft=null;placeProxy();}refresh();});
+  if(baseline.rest_authoring.view)session.setView(baseline.rest_authoring.view);else operations.frame();
+  win.kaminosSelection.set([asset.id],asset.id);
+ }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target);edits.unregister(target);proxy.removeFromParent();await session.dispose();throw e;}
+ return {read,operations,async dispose(){
+  if(disposed)return;componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===asset.id||entry.id===referenceAsset?.id||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);proxy.removeFromParent();disposed=true;await session.dispose();
+ },mount({root:panel,document,invoke}){
+  const properties=document.createElement('section'),playback=document.createElement('div'),title=document.createElement('h3'),hint=document.createElement('p'),selection=document.createElement('p'),options=document.createElement('div');
+  title.textContent='Rest skeleton';properties.append(title,hint,selection,options);properties.style.cssText='font-size:12px;line-height:1.45';
+  for(const [key,label]of[['mirror','Mirror L/R'],['descendants','Move branch']]){
+   const row=document.createElement('label'),input=document.createElement('input');row.style.display='block';input.type='checkbox';input.dataset.restOption=key;input.onchange=()=>invoke('options',{[key]:input.checked}).catch(e=>{hint.textContent=e.message;});row.append(input,label);options.append(row);
+  }
+  const files=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Skeleton file';files.append(summary);
+  const status=document.createElement('output');status.style.display='block';files.append(status);
+  const save=document.createElement('button');save.type='button';save.textContent='Save skeleton…';save.onclick=async()=>{try{
+   const value=await invoke('export'),text=JSON.stringify(value,null,2)+'\n';if(typeof win.showSaveFilePicker==='function'){
+    const handle=await win.showSaveFilePicker({suggestedName:'authored-skeleton.json',types:[{description:'Skeleton plan JSON',accept:{'application/json':['.json']}}]});const writer=await handle.createWritable();await writer.write(text);await writer.close();status.textContent='Saved '+handle.name;
+   }else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='authored-skeleton.json';a.click();URL.revokeObjectURL(url);status.textContent='Downloaded skeleton';}
+  }catch(e){if(e.name!=='AbortError')status.textContent=e.message;}};
+  const open=document.createElement('button'),file=document.createElement('input');open.type='button';open.textContent='Open skeleton…';file.type='file';file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const plan=JSON.parse(await file.files[0].text());if(!plan.rest_authoring)throw Error('Choose a saved authoring skeleton');await win.kaminosWorkbenchExperiments.open('marionette/rest-skeleton',{plan});}catch(e){status.textContent=e.message;}finally{file.value='';}};
+  files.append(save,open,file);properties.append(files);panel.textContent='Select the skeleton. Tab edits joints. The purple reference is a separate scene object.';
+  refresh=()=>{hint.textContent=error??(editMode?'Edit Mode · click joints · Shift-click adds · G / R / S · Tab returns to Object Mode':'Object Mode · G / R / S places the whole skeleton · Tab edits its joints');selection.hidden=options.hidden=!editMode;selection.textContent=selected.length===1?active:`${selected.length} joints · ${active}`;for(const input of options.querySelectorAll('input'))input.checked=input.dataset.restOption==='mirror'?mirror:descendants;};
+  controlSeat=host.controls.mountObject({asset,properties,playback});refresh();
  }};
 }
 export default {id:'marionette/rest-skeleton',title:'Creature · rest skeleton authoring',create:createRestSkeletonEditor};
