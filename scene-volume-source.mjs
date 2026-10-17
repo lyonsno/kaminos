@@ -50,7 +50,7 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
   return tau;
 }
 
-export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
+export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, getJoinedOptics=null, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
   }
@@ -77,6 +77,42 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
   let worldTransform=validateSceneSourceTransform();
   let optical = null;
+  let exterior=null, joinedFinePipeline=null, joinedOuterPipeline=null, joinedBindings=null;
+  const encodeJoined=(encoder,index,joined)=>{
+    if(!joined.dimensions?.every(n=>Number.isInteger(n)&&n>0)||joined.dimensions.length!==3||
+      !['localMin','localMax'].every(k=>joined[k]?.length===3&&joined[k].every(Number.isFinite))||
+      joined.localMin.some((v,a)=>joined.localMax[a]<=v))throw new Error('invalid joined lighting domain');
+    joinedFinePipeline ||= device.createComputePipeline({label:'joined fine scene coefficients',layout:'auto',compute:{module,entryPoint:'seedSceneJoinedFineSource'}});
+    joinedOuterPipeline ||= device.createComputePipeline({label:'joined exterior scene coefficients',layout:'auto',compute:{module,entryPoint:'seedSceneJoinedExteriorSource'}});
+    const key=JSON.stringify([joined.dimensions,joined.localMin,joined.localMax]);
+    if(exterior?.key!==key){
+      exterior?.texture.destroy();exterior?.scatteringTexture.destroy();
+      const make=(label,format)=>device.createTexture({label,format,dimension:'3d',size:joined.dimensions,
+        usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
+      exterior={key,texture:make('joined exterior emission extinction','rgba32float'),scatteringTexture:make('joined exterior scattering','r32float'),
+        dimensions:joined.dimensions.slice(),localMin:joined.localMin.slice(),localMax:joined.localMax.slice()};
+    }
+    const handles=[joined.texture,joined.uniformBuffer,getReactantTextures(),exterior.texture];
+    if(!joinedBindings||handles.some((h,i)=>h!==joinedBindings.handles[i])){
+    const shared=[{binding:0,resource:{buffer:uniformBuffer}},{binding:20,resource:joined.texture.createView()},
+      {binding:21,resource:{buffer:joined.uniformBuffer}}];
+    const fineInputs=fluidBuffers.map((buffer,i)=>device.createBindGroup({layout:joinedFinePipeline.getBindGroupLayout(0),entries:[...shared,
+      {binding:1,resource:{buffer}},{binding:7,resource:{buffer:frontBuffers[i]}},{binding:23,resource:getReactantTextures()[i].createView({dimension:'3d'})}]}));
+    const outerInput=device.createBindGroup({layout:joinedOuterPipeline.getBindGroupLayout(0),entries:shared});
+    const outputs=[joinedFinePipeline,joinedOuterPipeline].map((active,i)=>device.createBindGroup({layout:active.getBindGroupLayout(3),entries:[
+      {binding:4,resource:(i?exterior.texture:texture).createView()},{binding:5,resource:(i?exterior.scatteringTexture:scatteringTexture).createView()}]}));
+    joinedBindings={handles,fineInputs,outerInput,outputs};
+    }
+    for(const [active,dimensions,dst,scatter,fine] of [[joinedFinePipeline,[grid,gridY,grid],texture,scatteringTexture,true],
+      [joinedOuterPipeline,joined.dimensions,exterior.texture,exterior.scatteringTexture,false]]){
+      const input=fine?joinedBindings.fineInputs[index]:joinedBindings.outerInput;
+      const output=joinedBindings.outputs[fine?0:1];
+      const pass=encoder.beginComputePass({label:fine?'joined fine material export':'joined exterior material export'});
+      pass.setPipeline(active);pass.setBindGroup(0,input);pass.setBindGroup(3,output);
+      pass.dispatchWorkgroups(...dimensions.map(n=>Math.ceil(n/4)));pass.end();
+    }
+  };
+  let exteriorActive=false;
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
     encode(encoder, index, currentFrame,transform) {
@@ -86,9 +122,14 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       worldTransform=validateSceneSourceTransform(transform);
       status = 'unbuilt'; reason = 'encoding';
       invalidateOptical();
+      const joined=getJoinedOptics?.();
+      exteriorActive=Boolean(joined?.enabled);
+      if(exteriorActive)encodeJoined(encoder,index,joined);
+      else {
       const pass = encoder.beginComputePass({label: 'raw live volume source'});
       pass.setPipeline(pipeline); pass.setBindGroup(0, inputs[index]); pass.setBindGroup(3, output);
       pass.dispatchWorkgroups(Math.ceil(grid/4), Math.ceil(gridY/4), Math.ceil(grid/4)); pass.end();
+      }
       status = 'encoded'; reason = null; sourceIndex = index; frame = currentFrame; generation++;
     },
     invalidate(why) {if (status !== 'destroyed') {status = 'unbuilt'; reason = why; invalidateOptical();}},
@@ -154,8 +195,11 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',
       coefficientLengthSpace: 'volume-local', sampleCountPerCell: 8, completionAuthority: false,
       worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
-      scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
-    destroy() {texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+      scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null,
+      exterior:status==='encoded'&&exteriorActive?{texture:exterior.texture,scatteringTexture:exterior.scatteringTexture,
+        dimensions:exterior.dimensions.slice(),localMin:exterior.localMin.slice(),localMax:exterior.localMax.slice(),generation,frame,
+        ownership:'outside-fine-only',material:'same-passive-material-as-camera'}:null};},
+    destroy() {texture.destroy();scatteringTexture.destroy(); exterior?.texture.destroy();exterior?.scatteringTexture.destroy();optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
@@ -220,5 +264,42 @@ fn integrateMedium(@builtin(global_invocation_id) c: vec3<u32>) {
     }
   }
   textureStore(opticalDepth,vec3<i32>(c),vec4<f32>(tau,0.0,0.0,0.0));
+}
+`;
+
+// These entry points share the camera's actual material law. The two textures
+// overlap in storage, but the transport consumer gives the fine box sole
+// ownership inside its bounds; exterior coefficients are used only outside.
+export const SCENE_JOINED_SOURCE_WGSL=/* wgsl */`
+@compute @workgroup_size(4,4,4)
+fn seedSceneJoinedFineSource(@builtin(global_invocation_id) c:vec3<u32>){
+  seatGridShape();
+  if(any(c>=vec3<u32>(SCENE_SOURCE_GRID,SCENE_SOURCE_GRID_Y,SCENE_SOURCE_GRID))){return;}
+  var coefficients=vec4<f32>(0);var scattering=0.0;
+  for(var k=0u;k<8u;k++){
+    let offset=(vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+.5)*.5;
+    let p=(vec3<f32>(c)+offset)*(2.0/f32(SCENE_SOURCE_GRID))-1.0;
+    let medium=joinedBlendMaterial(p,sceneEmissiveMaterialAt(p),1.0,1.0);
+    coefficients+=vec4<f32>(medium.emission,medium.absorption+medium.scattering)*.125;
+    scattering+=medium.scattering*.125;
+  }
+  textureStore(sceneSourceOut,vec3<i32>(c),coefficients);
+  textureStore(sceneScatteringOut,vec3<i32>(c),vec4<f32>(scattering,0,0,0));
+}
+@compute @workgroup_size(4,4,4)
+fn seedSceneJoinedExteriorSource(@builtin(global_invocation_id) c:vec3<u32>){
+  seatGridShape();
+  let dims=textureDimensions(sceneSourceOut);
+  if(any(c>=dims)){return;}
+  var coefficients=vec4<f32>(0);var scattering=0.0;
+  for(var k=0u;k<8u;k++){
+    let offset=(vec3<f32>(f32(k&1u),f32((k>>1u)&1u),f32((k>>2u)&1u))+.5)*.5;
+    let p=joinedRender.loPitch.xyz+(vec3<f32>(c)+offset)*joinedRender.loPitch.w;
+    let medium=joinedPassiveMaterial(p,1.0,1.0);
+    coefficients+=vec4<f32>(medium.emission,medium.absorption+medium.scattering)*.125;
+    scattering+=medium.scattering*.125;
+  }
+  textureStore(sceneSourceOut,vec3<i32>(c),coefficients);
+  textureStore(sceneScatteringOut,vec3<i32>(c),vec4<f32>(scattering,0,0,0));
 }
 `;

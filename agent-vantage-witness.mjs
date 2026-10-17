@@ -224,6 +224,13 @@ try {
   check('its point is the one the picture drew, from its depth, on the red box\'s front face, and the mesh agrees with it',
     pickRed.result.hit?.pointBasis === 'depth' && pickRed.result.hit.surfaceBasis === 'recast-agrees' && onRedFace(pickRed.result.hit.point),
     {point: pickRed.result.hit?.point, pointBasis: pickRed.result.hit?.pointBasis, surfaceBasis: pickRed.result.hit?.surfaceBasis});
+  // What a note anchor keeps from the pick, and a recheck of it against the scene as it is now.
+  const redAnchor = path.join(out, 'red-anchor.json');
+  writeFileSync(redAnchor, JSON.stringify(pickRed));
+  const recheckRed = await vantageOk('recheck', '--anchor', redAnchor);
+  check('a pick gives an anchor its geometry identity, entry matrix and entry-frame normal, and a recheck finds the same geometry',
+    !!pickRed.result.hit.geometry?.identity?.sample && pickRed.result.hit.entryMatrix?.length === 16 && pickRed.result.hit.localNormal?.length === 3
+    && recheckRed.result.now === 'present' && recheckRed.result.status === 'same', {hit: pickRed.result.hit, recheck: recheckRed.result});
   const pickBlue = await vantageOk('pick', '0.5', '0.5', '--from', 'operator');
   check('a live pick at the centre of the operator view names the blue box the renderer draws there, with a point on it from its depth',
     pickBlue.result.referent === 'rendered' && pickBlue.result.hit?.id === scene.blue && pickBlue.result.hit.pointBasis === 'depth'
@@ -273,6 +280,36 @@ try {
   const pickGlance = await vantageOk('pick', ...middle(glance), '--picture', glance.recordPath);
   check('a pick on the glance names the red box, at the point the glance drew', pickGlance.result.hit?.id === scene.red && pickGlance.result.hit.pointBasis === 'depth'
     && Math.abs(pickGlance.result.hit.point[2] - 0.5) < 2e-3, {hit: pickGlance.result.hit});
+
+  report.phase = 'live'; save();
+  // The live view in the sub's panel: frames arrive, they show the sub's view, and the operator's frame rate holds.
+  const frameRate = () => page.evaluate(async () => {
+    const start = window.kaminosSceneObjectDebugState ? performance.now() : 0, frames = await new Promise(done => {
+      let count = 0; const until = performance.now() + 3000;
+      const step = () => { count++; if (performance.now() < until) requestAnimationFrame(step); else done(count); };
+      requestAnimationFrame(step);
+    });
+    return frames / ((performance.now() - start) / 1000);
+  });
+  const fpsOff = await frameRate();
+  const liveOn = await vantageOk('live', 'on', '--fps', '4');
+  const fpsOn = await frameRate();
+  const liveFrame = await page.evaluate(() => {
+    const canvas = document.querySelector('#agent-vantage-hud .vantage-live');
+    if (!canvas || canvas.hidden) return {shown: false};
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let red = 0;
+    for (let i = 0; i < data.length; i += 4) if (data[i] > 70 && data[i] > 1.6 * data[i + 1] && data[i] > 1.6 * data[i + 2]) red++;
+    return {shown: true, frame: Number(canvas.dataset.frame), red: red / (data.length / 4), width: canvas.width, height: canvas.height};
+  });
+  const panelShot = path.join(out, 'live-panel.png');
+  await page.locator('#agent-vantage-hud').screenshot({path: panelShot});
+  report.artifacts.push(panelShot);
+  const liveOff = await vantageOk('live', 'off');
+  report.effective.live = {fpsOff, fpsOn, frame: liveFrame, state: liveOff.result.live};
+  check('the live view puts frames from the sub\'s camera in its panel', liveOn.result.live.on && liveFrame.shown && liveFrame.frame >= 8 && liveFrame.red > 0.02, liveFrame);
+  check('and the operator\'s frame rate holds while it runs', fpsOn >= 0.8 * fpsOff, {fpsOff, fpsOn});
+  check('live off stops it and reports what it cost', liveOff.result.live.on === false && liveOff.result.live.frames >= 8 && Number.isFinite(liveOff.result.live.drawMs), liveOff.result.live);
 
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
@@ -482,6 +519,8 @@ try {
     && samePoint(pickGone.result.hit.point, pickRed.result.hit.point), {hit: pickGone.result.hit});
   check('and a live pick through the same sub view no longer names it', liveGone.result.referent === 'rendered' && liveGone.result.hit?.id !== scene.red,
     {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
+  const recheckGone = await vantageOk('recheck', '--anchor', redAnchor);
+  check('and a recheck of its anchor says it is no longer in the scene', recheckGone.result.now === 'missing' && recheckGone.result.status === null, recheckGone.result);
 
   report.phase = 'remove'; save();
   await vantageOk('remove');

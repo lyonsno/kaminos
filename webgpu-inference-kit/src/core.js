@@ -331,3 +331,4 @@ export {
   WEBGPU_ROUTE_REQUEST_SCHEMA,
   WEBGPU_ROUTE_RESULT_SCHEMA,
 } from './route-boundary.js';
+export { WebGpuCommandDutyScheduler } from './command-duty-scheduler.js';

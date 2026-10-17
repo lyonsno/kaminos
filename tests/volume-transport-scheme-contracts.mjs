@@ -187,7 +187,8 @@ test('runtime receipt, predictor dispatch, and cost ledger name the transport sc
   assert.match(encodeSim, /predictorPass[^]*?transportPredictPipeline[^]*?pass\.setPipeline\(computePipeline\)/, 'predictor pass is encoded before the main sim pass when the scheme requests it');
   assert.match(source, /uniforms\[353\] = transportConfig\.effective\.commonCharacteristic \? 1 : 0;/, 'common characteristic is packed at slot 353');
   assert.match(source, /uniforms\[360\] = transportSchemeUniformValue\(transportConfig\.effective\.scheme\);/, 'scheme is packed at slot 360');
-  assert.match(source, /transportPredictBindGroupLayout = device\.createBindGroupLayout\(\{[^]*?entries: \[\s*\{ binding: 1, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'storage' \} \},?\s*\]/, 'predictor bind group layout declares exactly one storage buffer');
+  const predictorLayout=source.slice(source.indexOf('transportPredictBindGroupLayout = device.createBindGroupLayout('),source.indexOf('browserResidualBindGroupLayout = device.createBindGroupLayout('));
+  assert.equal((predictorLayout.match(/buffer: \{ type: 'storage' \}/g)||[]).length,1,'transport layout retains exactly one storage buffer; sampled sources do not spend that limit');
   assert.match(source, /transportPipelineLayout = device\.createPipelineLayout\(\{[^]*?bindGroupLayouts: \[bindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, transportPredictBindGroupLayout\]/, 'transport pipelines use a private layout with the predictor at index 3');
   assert.match(source, /\{ binding: 1, resource: \{ buffer: fluidPredictBuffer \} \}/, 'predictor bind group binds the predictor buffer');
   assert.match(encodeSim, /predictor\.setBindGroup\(3, transportPredictBindGroup\)/, 'predictor pass sets bind group 3');

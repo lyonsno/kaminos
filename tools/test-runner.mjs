@@ -7,19 +7,29 @@
 //   // kaminos-test: browser — reason
 //   # kaminos-test: manual — reason
 // or by an entry in tests/suite.json. Kinds `node` and `python` execute;
-// `browser`, `helper` and `manual` are counted with their reason and never run.
+// `browser` executes only when KAMINOS_BROWSER names an executable file and the
+// test opts in to that route (`// kaminos-test: browser route — reason`, or
+// "route": true in its manifest entry); it receives the browser's real path
+// as KAMINOS_CHROME. `helper` and `manual` are counted with their reason and
+// never run.
 //
 // A failure is known only when the file is quarantined and fails with exactly
 // its recorded signature. Everything else fails the run: new failures, changed
 // signatures, timeouts, tests that cannot start, unclassified files, invalid or
 // orphaned entries, quarantined tests that now pass, selectors that match
-// nothing, missing declared dependencies, and test roots elsewhere in the
-// repository that are neither covered nor excluded with a reason. A report is
-// written for every invocation, including interrupted ones.
+// nothing, missing or mismatched npm dependencies, and test roots elsewhere in
+// the repository that are neither covered nor excluded with a reason. A report
+// is written for every invocation, including interrupted ones.
+//
+// Warnings never fail a run: what the Python dependency check finds, and any
+// line a test writes beginning `kaminos-test-warning: `, are listed in the
+// report and printed once in the summary. The command line, not runSuite,
+// appends a start line and a finish line per run to a run ledger (see
+// docs/testing.md), so a run that never finishes still shows.
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -36,6 +46,13 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const LATE_LAUNCH_SETTLE_MS = 2000;
 const EXIT_MARKER = /\n?kaminos-test-exit pid=(\d+) tid=(\d+) framework=(yes|no) tests=(started|not-started) code=(-?\d+)\n?/g;
 const ENTRY_SEPARATOR = ' | ';
+// A line a test writes to stdout or stderr that begins with this prefix is a
+// warning: collected with the test's file, printed in the summary, and kept
+// out of the failure signature and the run's outcome. A carriage return
+// starts a line too, as a terminal shows it after progress output.
+export const TEST_WARNING_PREFIX = 'kaminos-test-warning: ';
+const TEST_WARNING_LINE = /(^|[\r\n])kaminos-test-warning: ([^\r\n]*)/g;
+export const RUN_LEDGER_SCHEMA = 'kaminos.test-run-ledger.v2';
 // node:test files run with the spec reporter on stdout for the log and this
 // module's reporter writing structured events beside it. Signatures for such
 // files come from the events, never from the human-readable output.
@@ -43,8 +60,12 @@ export const EVENTS_REPORTER_PATH = fileURLToPath(new URL('./test-events-reporte
 export const EXIT_MARKER_PATH = fileURLToPath(new URL('./test-exit-marker.mjs', import.meta.url));
 export const DEFAULT_NODE_FLAGS = Object.freeze([`--import=${pathToFileURL(EXIT_MARKER_PATH).href}`, '--test-reporter=spec', '--test-reporter-destination=stdout', `--test-reporter=${pathToFileURL(EVENTS_REPORTER_PATH).href}`]);
 const DEFAULT_TIMEOUT_MS = 600000;
-const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)\s*(?:[—–-]+\s*(.+?))?\s*$/;
+const DECLARATION = /^\s*(?:\/\/|#)\s*kaminos-test:\s*([a-z]+)(?:\s+(route))?\s*(?:[—–-]+\s*(.+?))?\s*$/;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'artifacts', 'lib', 'scratch', 'scenes', 'fixtures']);
+
+// The installed Google Chrome is an operator's browser; a headless run must
+// never take it over.
+const INSTALLED_CHROME = /\/Applications\/Google Chrome\.app\//;
 
 const sha256 = text => crypto.createHash('sha256').update(text).digest('hex');
 const posix = p => p.split(path.sep).join('/');
@@ -91,21 +112,44 @@ async function readDeclaration(root, file) {
     const { buffer, bytesRead } = await handle.read(Buffer.alloc(512), 0, 512, 0);
     const firstLine = buffer.subarray(0, bytesRead).toString('utf8').split('\n')[0];
     const match = firstLine.match(DECLARATION);
-    return match ? { kind: match[1], reason: match[2] || null, source: 'declaration' } : null;
+    return match ? { kind: match[1], route: Boolean(match[2]), reason: match[3] || null, source: 'declaration' } : null;
   } finally { await handle.close(); }
 }
 
 function gitIdentity(root) {
+  const git = args => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   try {
-    const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-    const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() !== '';
-    return { head, dirty };
-  } catch { return { head: null, dirty: null }; }
+    const head = git(['rev-parse', 'HEAD']);
+    const dirty = git(['status', '--porcelain']) !== '';
+    let branch = null;
+    try { branch = git(['symbolic-ref', '--quiet', '--short', 'HEAD']) || null; } catch { branch = null; }
+    return { head, branch, dirty };
+  } catch { return { head: null, branch: null, dirty: null }; }
 }
 
 function executableVersion(executable, args) {
   try { return execFileSync(executable, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
   catch { return null; }
+}
+
+// Switches every launch of the route's browser carries: with them Chrome keeps
+// its secrets in a mock keychain and a basic store, so macOS raises no
+// Keychain dialog for a browser whose HOME has no default keychain.
+export const BROWSER_SAFETY_SWITCHES = Object.freeze(['--use-mock-keychain', '--password-store=basic']);
+
+// A browser's --version, bounded: a browser that never answers is recorded
+// without a version instead of holding the run. It is asked with the safety
+// switches and a private profile directory, removed afterwards, so even this
+// launch touches neither the Keychain nor any profile of the operator's.
+function browserVersion(executable, timeoutMs) {
+  const profile = mkdtempSync(path.join(os.tmpdir(), 'kaminos-browser-version-'));
+  try {
+    return { version: execFileSync(executable, [...BROWSER_SAFETY_SWITCHES, `--user-data-dir=${profile}`, '--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: timeoutMs, killSignal: 'SIGKILL' }).trim().split('\n')[0] || null, error: null };
+  } catch (error) {
+    return { version: null, error: error.code === 'ETIMEDOUT' ? `--version timed out after ${timeoutMs} ms` : String(error.message || error).split('\n')[0] };
+  } finally {
+    rmSync(profile, { recursive: true, force: true });
+  }
 }
 
 async function checkDependencies(root) {
@@ -137,6 +181,143 @@ async function checkDependencies(root) {
   }
   return { declared, missing: missing.sort(), mismatched, installed, checked, integrityVerified: Boolean(hidden),
     lockfileSha256: existsSync(lockPath) ? sha256(await fs.readFile(lockPath)) : null };
+}
+
+// Why a path is not an interpreter the runner can run, or null when it is an
+// executable regular file once links are followed.
+function unusableReason(file) {
+  const explain = (error, missing) => (error?.code === 'ENOENT' ? missing
+    : error?.code === 'ELOOP' ? 'is a symlink loop'
+    : `cannot be used (${error?.code || error})`);
+  try { lstatSync(file); } catch (error) { return explain(error, 'does not exist'); }
+  try {
+    if (!statSync(file).isFile()) return 'does not resolve to a file';
+    accessSync(file, fsConstants.X_OK);
+    return null;
+  } catch (error) {
+    return error?.code === 'EACCES' ? 'is not executable' : explain(error, 'is a link to nothing');
+  }
+}
+
+// An interpreter named by command, as a path: one with a slash is taken
+// relative to the working directory, a bare name is looked up on PATH the way
+// a spawn would. Null when a bare name is not found.
+function locateExecutable(name, envPath) {
+  if (name.includes('/')) return path.resolve(name);
+  for (const dir of String(envPath || '').split(path.delimiter).filter(Boolean)) {
+    const candidate = path.resolve(dir, name);
+    if (unusableReason(candidate) === null) return candidate;
+  }
+  return null;
+}
+
+// Which python the runner uses, in order: an explicit executables.python
+// from a programmatic caller, KAMINOS_PYTHON, <root>/.venv/bin/python3 (the
+// declared packages live in a repo-local venv) when it resolves to an
+// executable file, then the python3 on PATH. A .venv/bin/python3 that is
+// there but unusable is recorded and warned about, and PATH is used instead.
+// Child tests get the same interpreter for a bare python3 at execution:
+// .venv/bin goes first on their PATH, or for KAMINOS_PYTHON a run-private
+// directory holding a python3 wrapper that execs it.
+function resolvePython(root, explicit, env) {
+  if (explicit) return { requested: explicit, resolved: explicit, source: 'executables', located: locateExecutable(explicit, env.PATH), unusable: null, skippedVenv: null };
+  if (env.KAMINOS_PYTHON) {
+    const located = locateExecutable(env.KAMINOS_PYTHON, env.PATH);
+    return { requested: 'KAMINOS_PYTHON', resolved: env.KAMINOS_PYTHON, source: 'KAMINOS_PYTHON', located, unusable: located ? unusableReason(located) : 'is not on PATH', skippedVenv: null };
+  }
+  const venvBin = path.join(root, '.venv', 'bin');
+  const venvPython = path.join(venvBin, 'python3');
+  const venvProblem = unusableReason(venvPython);
+  if (venvProblem === null) return { requested: 'python3', resolved: venvPython, source: 'venv', located: venvPython, unusable: null, skippedVenv: null, venvBin };
+  return { requested: 'python3', resolved: 'python3', source: 'PATH', located: locateExecutable('python3', env.PATH), unusable: null,
+    skippedVenv: venvProblem === 'does not exist' ? null : { interpreter: venvPython, reason: venvProblem } };
+}
+
+// The commands that fix what the Python check finds, written out for this
+// root. The venv command works whether or not a venv (complete, partial or
+// broken) is already there; under KAMINOS_PYTHON the packages belong in that
+// interpreter instead.
+const shellWord = word => (/^[\w@%+=:,./-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`);
+function venvRemedy(root) {
+  const venv = path.join(root, '.venv');
+  return `uv venv --allow-existing ${shellWord(venv)} && uv pip install --python ${shellWord(path.join(venv, 'bin', 'python3'))} -r ${shellWord(path.join(root, 'requirements.txt'))}`;
+}
+function installRemedy(root, python) {
+  if (python.source === 'KAMINOS_PYTHON' || python.source === 'executables') {
+    return `install them into that interpreter: uv pip install --python ${shellWord(python.located || python.resolved)} -r ${shellWord(path.join(root, 'requirements.txt'))}`;
+  }
+  return `install them into the repo-local venv, which the runner prefers: ${venvRemedy(root)}`;
+}
+function startRemedy(root, python) {
+  if (python.source === 'KAMINOS_PYTHON') return `point KAMINOS_PYTHON at an interpreter that runs, or unset it to use the repo-local venv: ${venvRemedy(root)}`;
+  if (python.source === 'executables') return `pass an interpreter that runs, or use the repo-local venv: ${venvRemedy(root)}`;
+  return `${python.source === 'venv' ? 'recreate' : 'create'} the repo-local venv, which the runner prefers: ${venvRemedy(root)}`;
+}
+
+// Python distributions the suite needs, from requirements.txt at the root:
+// one bare distribution name per line, comments and blank lines allowed,
+// nothing else. Whenever the file declares anything they are checked before
+// anything runs, whatever tests are selected, in the runner's python with
+// one importlib.metadata call by distribution name (pillow, not PIL): Node
+// tests spawn python3 too, so a narrowed run is warned as well. Installed
+// means the package metadata is recorded, not that the package imports.
+const DISTRIBUTION_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
+const PYTHON_DEPENDENCY_PROBE = [
+  'import importlib.metadata as m, json, sys',
+  'out = {"python": sys.version.split()[0], "executable": sys.executable, "installed": {}, "missing": []}',
+  'for name in sys.argv[1:]:',
+  '    try: out["installed"][name] = m.version(name)',
+  '    except m.PackageNotFoundError: out["missing"].append(name)',
+  'print(json.dumps(out))',
+].join('\n');
+const PYTHON_PROBE_TIMEOUT_MS = 60000;
+
+// Checks requirements.txt in the chosen interpreter and returns what it found
+// with the warnings to report. It never throws: whatever goes wrong is a
+// warning, and the run goes on.
+async function checkPythonDependencies(root, python) {
+  const warnings = [];
+  const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable: python.resolved, source: python.source, resolvedExecutable: null, python: null, declared: [], invalidLines: [], installed: {}, missing: [], stderrTail: null };
+  if (python.skippedVenv) warnings.push(`the repo-local venv interpreter ${python.skippedVenv.interpreter} ${python.skippedVenv.reason}, so the python3 on PATH is used instead; recreate the venv: ${venvRemedy(root)}`);
+  if (python.source === 'KAMINOS_PYTHON' && python.unusable) warnings.push(`KAMINOS_PYTHON names ${python.resolved}, which ${python.unusable}, so child tests that spawn python3 get the one on PATH; ${startRemedy(root, python)}`);
+  try {
+    const requirementsPath = path.join(root, 'requirements.txt');
+    if (!existsSync(requirementsPath)) { result.skipped = 'no requirements.txt'; return { result, warnings }; }
+    const text = await fs.readFile(requirementsPath, 'utf8');
+    Object.assign(result, { requirementsPath, requirementsSha256: sha256(text) });
+    text.split(/\r?\n/).forEach((raw, index) => {
+      const line = raw.replace(/#.*$/, '').trim();
+      if (!line) return;
+      if (DISTRIBUTION_NAME.test(line)) result.declared.push(line);
+      else result.invalidLines.push({ line: index + 1, text: raw.trim() });
+    });
+    if (result.invalidLines.length) {
+      warnings.push(`requirements.txt holds lines that are not bare distribution names, which were not checked: ${result.invalidLines.map(l => `line ${l.line}: ${l.text}`).join('; ')}; write one bare distribution name per line`);
+    }
+    if (!result.declared.length) { result.skipped = 'requirements.txt declares nothing'; return { result, warnings }; }
+    let probe;
+    try {
+      probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS }));
+    } catch (error) {
+      // The raised exception is the last error-shaped stderr line: after a
+      // traceback it is the last line, but an interpreter that dies while
+      // starting ends with "<no Python frame>" after its error.
+      const stderrLines = String(error?.stderr || '').split('\n').map(line => line.trimEnd()).filter(line => line.trim());
+      result.stderrTail = stderrLines.length ? stderrLines.slice(-20).join('\n') : null;
+      const errorLine = stderrLines.findLast(line => /Error|Exception|Fatal Python error/.test(line)) || stderrLines.at(-1);
+      const detail = [error?.code, errorLine?.trim() || firstLine(error?.message || error)].filter(Boolean).join(': ');
+      warnings.push(`could not check requirements.txt with ${result.executable} (${detail}); ${startRemedy(root, python)}`);
+      return { result, warnings };
+    }
+    Object.assign(result, { checked: true, resolvedExecutable: probe.executable, python: probe.python, installed: probe.installed, missing: probe.missing });
+    if (result.missing.length) {
+      const asked = `${result.executable}${result.resolvedExecutable && result.resolvedExecutable !== result.executable ? ` (${result.resolvedExecutable})` : ''}`;
+      warnings.push(`python distributions listed in requirements.txt are not installed in ${asked}: ${result.missing.join(', ')}; ${installRemedy(root, python)}`);
+    }
+  } catch (error) {
+    warnings.push(`could not check requirements.txt: ${firstLine(error?.message || error)}`);
+  }
+  return { result, warnings };
 }
 
 // The failure signature: the first error-shaped line for Node, the last for
@@ -236,10 +417,18 @@ function firstLine(text) {
   return String(text).split('\n').map(l => l.trim()).find(Boolean) || '';
 }
 
-function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
+// The warning lines in one stream's output, and output without them.
+function testWarnings(text) {
+  return [...String(text).matchAll(TEST_WARNING_LINE)].map(match => match[2].trim()).filter(Boolean);
+}
+function stripTestWarnings(text) {
+  return String(text).replace(TEST_WARNING_LINE, '$1');
+}
+
+function runOne({ root, file, kind, runtime = kind, executable, timeoutMs, logsDir, env: baseEnv, track, nodeFlags }) {
   const env = { ...baseEnv, KAMINOS_TEST_RUNNER_TEST: file, KAMINOS_TEST_RUNNER_ROOT: root };
   const eventsPath = path.join(logsDir, `${file.replace(/[\/]/g, '__')}.events.jsonl`);
-  const flags = kind === 'node' ? [...nodeFlags] : [];
+  const flags = runtime === 'node' ? [...nodeFlags] : [];
   const withReporter = flags.some(f => f.startsWith('--test-reporter=') && f.includes('test-events-reporter'));
   if (withReporter) flags.push(`--test-reporter-destination=${eventsPath}`);
   const started = Date.now();
@@ -250,11 +439,15 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
       return resolve({ file, kind, executable, durationMs: 0, log: null, events: null, signature: null, outcome: 'spawn-error', exitCode: null, signal: null, spawnError: String(error?.message || error) });
     }
     const chunks = [];
+    const streams = { stdout: [], stderr: [] };
     let spawnError = null;
     let timedOut = false;
     const finish = async fields => {
       await fs.writeFile(logPath, Buffer.concat(chunks));
       const output = Buffer.concat(chunks).toString('utf8');
+      // Warnings are read from each stream on its own, so a line on one is
+      // never split by output on the other.
+      const warnings = [...new Set(['stdout', 'stderr'].flatMap(name => testWarnings(Buffer.concat(streams[name]).toString('utf8'))))];
       let events = null;
       try { events = await fs.readFile(eventsPath, 'utf8'); } catch { events = null; }
       let signature = null;
@@ -273,7 +466,7 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
           if (events === null) unsigned = 'tests started but no events were written; the process ended before they were flushed';
           if (unsigned) { outcome = 'unsigned-failure'; signature = null; }
         } else {
-          signature = failureSignature(output.replace(EXIT_MARKER, '\n'), { root, kind, exitCode: fields.exitCode });
+          signature = failureSignature(stripTestWarnings(output.replace(EXIT_MARKER, '\n')), { root, kind: runtime, exitCode: fields.exitCode });
         }
       } else if (outcome === 'pass' && testsStarted) {
         // Exiting zero before the summary is not a pass; nothing says the
@@ -286,7 +479,7 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
         else if (signatureEntries(check.signature)?.some(e => !e.startsWith('uncaught :: '))) { outcome = 'fail'; signature = check.signature; }
       }
       resolve({ file, kind, executable, durationMs: Date.now() - started, log: logPath, events: events !== null ? eventsPath : null, signature, ...fields, outcome,
-        ...(unsigned ? { unsigned } : {}) });
+        ...(unsigned ? { unsigned } : {}), warnings });
     };
     let child;
     try {
@@ -300,8 +493,8 @@ function runOne({ root, file, kind, executable, timeoutMs, logsDir, env: baseEnv
       timedOut = true;
       try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
     }, timeoutMs);
-    child.stdout.on('data', d => chunks.push(d));
-    child.stderr.on('data', d => chunks.push(d));
+    child.stdout.on('data', d => { chunks.push(d); streams.stdout.push(d); });
+    child.stderr.on('data', d => { chunks.push(d); streams.stderr.push(d); });
     child.on('error', error => { spawnError = error; chunks.push(Buffer.from(String(error?.stack || error))); });
     child.on('close', (exitCode, signal) => {
       clearTimeout(timer);
@@ -342,34 +535,44 @@ export async function runSuite({
   executables = {},
   nodeFlags = DEFAULT_NODE_FLAGS,
   abortSignal = null,
+  // The browser executable for browser-kind tests; null or empty leaves them
+  // not run. Defaults to KAMINOS_BROWSER.
+  browser = process.env.KAMINOS_BROWSER,
+  browserVersionTimeoutMs = 10000,
 } = {}) {
+  browser = browser || null;
   root = path.resolve(root);
   manifestPath ||= path.join(root, 'tests', 'suite.json');
   quarantinePath ||= path.join(root, 'tests', 'quarantine.json');
   if (!reportPath) throw new Error('reportPath is required');
   logsDir = logsDir || path.join(path.dirname(reportPath), 'logs');
-  const resolvedExecutables = { node: process.execPath, python: 'python3', ...executables };
-  const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
   // NODE_TEST_CONTEXT would switch child node:test files to the binary
   // protocol used between a parent `node --test` and its children.
-  const { NODE_TEST_CONTEXT: _parentTestContext, ...inheritedEnv } = process.env;
+  // KAMINOS_BROWSER is the runner's input; tests receive the browser only as
+  // KAMINOS_CHROME, and only browser-kind tests.
+  const { NODE_TEST_CONTEXT: _parentTestContext, KAMINOS_BROWSER: _browserInput, ...inheritedEnv } = process.env;
+  const pythonExecutable = resolvePython(root, executables.python, inheritedEnv);
+  const resolvedExecutables = { node: process.execPath, ...executables, python: pythonExecutable.resolved };
+  const browserLog = path.join(logsDir, 'browser-launch-attempts.tsv');
   // A per-run stub with the log path baked in, so a child that scrubs its
   // environment still records the attempt when it reaches the stub.
   const browserStub = path.join(logsDir, 'browser-launch-stub.sh');
-  const childEnv = { ...inheritedEnv, ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
     effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
+      pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, located: pythonExecutable.located,
+        unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
-      manifestSha256: null, quarantineSha256: null, dependencies: null },
+      browser: browser ? { executable: browser, realpath: null, source: 'KAMINOS_BROWSER', passedAs: 'KAMINOS_CHROME', version: null } : null,
+      manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
     unclassified: [], invalid: [], invalidQuarantine: [], unmatchedSelectors: [],
     uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [],
-    orphans: { manifest: [], quarantine: [] }, notRun: [], results: [],
+    orphans: { manifest: [], quarantine: [] }, notRun: [], results: [], warnings: [],
   };
   const running = new Set();
   const track = child => { running.add(child); return () => running.delete(child); };
@@ -387,6 +590,21 @@ export async function runSuite({
     report.failurePhase = 'arguments';
     if (!Number.isInteger(parallel) || parallel < 1) throw Object.assign(new Error(`parallel must be a positive integer, got ${parallel}`), { phase: 'arguments' });
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMEOUT_MS) throw Object.assign(new Error(`timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}, got ${timeoutMs}`), { phase: 'arguments' });
+    if (browser) {
+      report.failurePhase = 'browser';
+      const fail = message => Object.assign(new Error(`KAMINOS_BROWSER=${browser}: ${message}`), { phase: 'browser' });
+      let stat;
+      try { stat = await fs.stat(browser); } catch (error) { throw fail(`cannot be read (${error.code || error.message})`); }
+      if (!stat.isFile()) throw fail('is not a file');
+      try { await fs.access(browser, fsConstants.X_OK); } catch { throw fail('is not executable'); }
+      // The native real path carries the volume's own spelling, so a link or a
+      // differently cased path to the installed app is still recognized.
+      report.effective.browser.realpath = realpathSync.native(browser);
+      if (INSTALLED_CHROME.test(browser) || INSTALLED_CHROME.test(report.effective.browser.realpath)) throw fail('names the installed Google Chrome; use a Chrome for Testing executable');
+      const probe = browserVersion(report.effective.browser.realpath, browserVersionTimeoutMs);
+      report.effective.browser.version = probe.version;
+      report.effective.browser.versionError = probe.error;
+    }
     report.failurePhase = 'load-manifest';
     const manifest = await readJson(manifestPath, SUITE_MANIFEST_SCHEMA, 'load-manifest');
     report.effective.manifestSha256 = manifest.sha256;
@@ -400,6 +618,13 @@ export async function runSuite({
     if (missing.length || mismatched.length) {
       throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). Run npm ci.`), { phase: 'dependencies' });
     }
+
+    // The Python check reports and goes on: what it finds is a warning with
+    // the command that fixes it, and the tests run either way.
+    report.failurePhase = 'python-dependencies';
+    const { result: pythonDependencies, warnings: pythonWarnings } = await checkPythonDependencies(root, pythonExecutable);
+    report.effective.pythonDependencies = pythonDependencies;
+    for (const message of pythonWarnings) report.warnings.push({ source: 'python-dependencies', test: null, message });
 
     report.failurePhase = 'discover';
     if (kinds.includes('python')) report.effective.python = executableVersion(resolvedExecutables.python, ['--version']);
@@ -430,7 +655,9 @@ export async function runSuite({
       const conflict = declared && listed && listed.kind !== declared.kind;
       const badKind = !KNOWN_KINDS.has(entry.kind);
       const missingReason = !EXECUTED_KINDS.has(entry.kind) && !entry.reason;
-      if (conflict || badKind || missingReason) { report.invalid.push(file); continue; }
+      // Only a browser-kind test can opt in to the KAMINOS_BROWSER route.
+      const strayRoute = Boolean(entry.route) && entry.kind !== 'browser';
+      if (conflict || badKind || missingReason || strayRoute) { report.invalid.push(file); continue; }
       classification.set(file, entry);
     }
     report.orphans.manifest = Object.keys(tests).filter(f => !fileSet.has(f)).sort();
@@ -447,7 +674,12 @@ export async function runSuite({
     for (const [file, entry] of classification) {
       if (onlySet && !onlySet.has(file)) continue;
       if (EXECUTED_KINDS.has(entry.kind) && kinds.includes(entry.kind)) planned.push({ file, kind: entry.kind, executable: resolvedExecutables[entry.kind] });
-      else report.notRun.push({ file, kind: entry.kind, reason: entry.reason || `kind ${entry.kind} not selected`, source: entry.source });
+      else if (entry.kind === 'browser' && browser && entry.route === true) {
+        const runtime = file.endsWith('.py') ? 'python' : 'node';
+        planned.push({ file, kind: 'browser', runtime, executable: resolvedExecutables[runtime] });
+      } else if (entry.kind === 'browser' && browser) {
+        report.notRun.push({ file, kind: entry.kind, reason: `not opted in to the KAMINOS_BROWSER route: ${entry.reason}`, source: entry.source });
+      } else report.notRun.push({ file, kind: entry.kind, reason: entry.reason || `kind ${entry.kind} not selected`, source: entry.source });
     }
     report.counts.notRun = report.notRun.length;
     if (!planned.length && !report.unmatchedSelectors.length) report.unmatchedSelectors.push('empty-plan');
@@ -458,8 +690,34 @@ export async function runSuite({
     const quotedLog = `'${browserLog.replace(/'/g, `'\\''`)}'`;
     await fs.writeFile(browserStub, `#!/bin/sh\n# Stands in for a browser while tools/test-runner.mjs runs tests. Any test\n# that reaches a browser launch lands here: record it and fail.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" "$$" "$*" >> ${quotedLog}\necho "browser launch blocked by tools/test-runner.mjs" >&2\nexit 97\n`);
     await fs.chmod(browserStub, 0o755);
+    // Child tests that spawn a bare python3 get the chosen interpreter: the
+    // venv's bin goes first on their PATH, or for KAMINOS_PYTHON a run-private
+    // directory holding a python3 that execs it by its own path. A wrapper,
+    // not a link, so a venv interpreter keeps its venv. The prefix is
+    // recorded only once it is in place.
+    let pathPrefix = pythonExecutable.source === 'venv' ? pythonExecutable.venvBin : null;
+    if (pythonExecutable.source === 'KAMINOS_PYTHON' && !pythonExecutable.unusable) {
+      const dir = path.join(logsDir, 'python-bin');
+      const wrapper = path.join(dir, 'python3');
+      try {
+        await fs.mkdir(dir, { recursive: true });
+        await fs.rm(wrapper, { recursive: true, force: true });
+        await fs.writeFile(wrapper, `#!/bin/sh\nexec '${pythonExecutable.located.replace(/'/g, `'\\''`)}' "$@"\n`);
+        await fs.chmod(wrapper, 0o755);
+        pathPrefix = dir;
+      } catch (error) {
+        report.warnings.push({ source: 'python-dependencies', test: null, message: `could not put KAMINOS_PYTHON first on the PATH of child tests (${firstLine(error?.message || error)}), so those that spawn python3 get the one on PATH` });
+      }
+    }
+    Object.assign(report.effective.pythonExecutable, { pathPrefixed: Boolean(pathPrefix), pathPrefix });
+    const childPath = pathPrefix ? [pathPrefix, inheritedEnv.PATH].filter(Boolean).join(path.delimiter) : inheritedEnv.PATH;
+    const childEnv = { ...inheritedEnv, ...(childPath === undefined ? {} : { PATH: childPath }), ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
+    // Browser-kind tests get the browser's real path, so a link cannot stand
+    // in for the executable the report records.
+    const browserEnv = browser ? { ...childEnv, KAMINOS_CHROME: report.effective.browser.realpath } : null;
     report.results = await pool(planned, parallel,
-      item => runOne({ root, ...item, timeoutMs, logsDir, env: childEnv, track, nodeFlags }), () => interrupted);
+      item => runOne({ root, ...item, timeoutMs, logsDir, env: item.kind === 'browser' ? browserEnv : childEnv, track, nodeFlags }), () => interrupted);
+    for (const result of report.results) for (const message of result.warnings || []) report.warnings.push({ source: 'test', test: result.file, message });
     if (interrupted) throw Object.assign(new Error('run interrupted'), { phase: 'interrupted' });
 
     report.counts.executed = report.results.length;
@@ -527,11 +785,35 @@ export function parseArgs(argv) {
   return args;
 }
 
+// The interpreter a run used, as the summary line and the run ledger name it.
+function pythonShown(report) {
+  const python = report.effective?.pythonExecutable || {};
+  return { executable: python.located || python.resolved || null, source: python.source || null };
+}
+
+// Warnings once each, in the order they arose; one that several tests wrote
+// is listed once with all of them.
+function warningLines(warnings = []) {
+  const grouped = new Map();
+  for (const warning of warnings) {
+    const key = `${warning.source}\u0000${warning.message}`;
+    if (!grouped.has(key)) grouped.set(key, { source: warning.source, message: warning.message, tests: [] });
+    const group = grouped.get(key);
+    if (warning.test && !group.tests.includes(warning.test)) group.tests.push(warning.test);
+  }
+  return [...grouped.values()].map(g => `${g.tests.length ? g.tests.join(', ') : g.source}: ${g.message}`);
+}
+
 function summarize({ report, reportPath }) {
+  const python = pythonShown(report);
   const lines = [
-    `${report.ok ? 'OK' : 'FAILED'}  executed ${report.counts.executed}, passed ${report.counts.passed}, known failures ${report.counts.knownFailures}, new failures ${report.counts.newFailures}, not run ${report.counts.notRun}`,
+    `${report.ok ? 'OK' : 'FAILED'}  executed ${report.counts.executed}, passed ${report.counts.passed}, known failures ${report.counts.knownFailures}, new failures ${report.counts.newFailures}, not run ${report.counts.notRun}; python ${python.executable} (${python.source})`,
   ];
-  if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${report.error}`);
+  const warned = warningLines(report.warnings);
+  if (warned.length) lines.push(`warnings:\n  ${warned.join('\n  ')}`);
+  // The browser line follows the counts line and any warnings.
+  lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
+  if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
   list('unsigned failures', report.results.filter(r => r.outcome === 'unsigned-failure').map(r => `${r.file}: ${r.unsigned}`), 'the file failed but its events cannot be trusted, so it can never be known');
@@ -541,7 +823,7 @@ function summarize({ report, reportPath }) {
   list('invalid classifications', report.invalid, 'unknown kind, a non-executed kind without a reason, or a declaration that disagrees with tests/suite.json');
   list('invalid quarantine entries', report.invalidQuarantine, 'each needs class, owner, reason and signature');
   list('selectors that matched nothing', report.unmatchedSelectors);
-  list('browser launches reached by tests', report.browserLaunchAttempts.map(a => `${a.file}: ${a.args}`), 'classify these tests as browser');
+  list('browser launches reached by tests', report.browserLaunchAttempts.map(a => `${a.file}: ${a.args}`), 'classify these tests as browser; a browser-kind test must take its browser from KAMINOS_CHROME');
   list('test roots that are neither run nor excluded', report.uncoveredTestRoots, 'add them to excludedRoots in tests/suite.json with a reason');
   list('manifest entries for missing files', report.orphans.manifest);
   list('quarantine entries for missing files', report.orphans.quarantine);
@@ -558,19 +840,93 @@ async function writeArgumentFailure(argv, error) {
   await fs.writeFile(reportPath, `${JSON.stringify({ schema: REPORT_SCHEMA, ok: false, failurePhase: 'arguments', error: error.message, argv }, null, 2)}\n`);
 }
 
+// The run ledger: JSON lines appended to KAMINOS_RUN_LEDGER, or
+// ~/.local/state/kaminos/test-runs.jsonl by default; KAMINOS_RUN_LEDGER=off
+// turns it off. runSuite never writes it. Each command-line run appends a
+// `start` line before it parses its arguments and a `finish` line, with the
+// same runId, when it ends: a start with no finish is a run that was killed
+// or crashed. An argument failure is a finish in the `arguments` phase.
+export function runLedgerPath(env = process.env) {
+  if (env.KAMINOS_RUN_LEDGER === 'off') return null;
+  if (env.KAMINOS_RUN_LEDGER) return path.resolve(env.KAMINOS_RUN_LEDGER);
+  return path.join(os.homedir(), '.local', 'state', 'kaminos', 'test-runs.jsonl');
+}
+
+export function runLedgerStart(argv, { runId, cwd = process.cwd(), pid = process.pid } = {}) {
+  const index = argv.indexOf('--root');
+  const root = path.resolve(cwd, index >= 0 && argv[index + 1] ? argv[index + 1] : '.');
+  let branch = null;
+  try { branch = execFileSync('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null; } catch {}
+  return { schema: RUN_LEDGER_SCHEMA, event: 'start', runId, timestamp: new Date().toISOString(), root, branch, pid, argv };
+}
+
+export function runLedgerEntry({ report, reportPath }, { durationMs, runId = null }) {
+  const effective = report.effective || {};
+  return {
+    schema: RUN_LEDGER_SCHEMA,
+    event: 'finish',
+    runId,
+    timestamp: report.finishedAt || new Date().toISOString(),
+    root: effective.root ?? null,
+    branch: effective.git?.branch ?? null,
+    head: effective.git?.head ?? null,
+    dirty: effective.git?.dirty ?? null,
+    selection: effective.only ? effective.only.map(normalizeSelector) : 'full',
+    kinds: effective.kinds ?? null,
+    ok: report.ok,
+    failurePhase: report.failurePhase,
+    counts: report.counts,
+    warnings: (report.warnings || []).map(w => ({ source: w.source, test: w.test, firstLine: firstLine(w.message) })),
+    python: pythonShown(report),
+    durationMs,
+    report: reportPath,
+  };
+}
+
+// Appends one line to the ledger and returns null, or, when the ledger cannot
+// be written, the warning message: never a failure.
+async function appendLedgerLine(entry, what, env = process.env) {
+  const ledger = runLedgerPath(env);
+  if (!ledger) return null;
+  try {
+    await fs.mkdir(path.dirname(ledger), { recursive: true });
+    await fs.appendFile(ledger, `${JSON.stringify(entry)}\n`);
+    return null;
+  } catch (error) {
+    return `could not append ${what} to ${ledger}: ${firstLine(error?.message || error)}`;
+  }
+}
+
+// Appends this run's finish line. A ledger that could not be written is one
+// warning on the report: the finish line's, or else the start line's.
+async function appendRunLedger(result, { durationMs, runId, startWarning = null, env = process.env }) {
+  const failed = await appendLedgerLine(runLedgerEntry(result, { durationMs, runId }), 'this run', env);
+  const messages = [failed || startWarning].filter(Boolean);
+  if (!messages.length) return;
+  result.report.warnings ||= [];
+  for (const message of messages) result.report.warnings.push({ source: 'run-ledger', test: null, message });
+  try { await fs.writeFile(result.reportPath, `${JSON.stringify(result.report, null, 2)}\n`); } catch {}
+}
+
 const invokedAsMain = (() => { try { return Boolean(process.argv[1]) && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (invokedAsMain) {
   const argv = process.argv.slice(2);
+  const runId = crypto.randomUUID();
+  const startWarning = await appendLedgerLine(runLedgerStart(argv, { runId }), "this run's start");
   let args;
   try { args = parseArgs(argv); } catch (error) {
     console.error(error.message);
+    if (startWarning) console.error(`warning: ${startWarning}`);
     await writeArgumentFailure(argv, error);
+    await appendLedgerLine({ schema: RUN_LEDGER_SCHEMA, event: 'finish', runId, timestamp: new Date().toISOString(), ok: false, failurePhase: 'arguments', error: error.message, argv }, 'this run');
     process.exit(2);
   }
   args.reportPath ||= path.resolve(os.tmpdir(), `kaminos-test-run-${Date.now()}`, 'report.json');
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
+  const started = Date.now();
   const result = await runSuite({ ...args, abortSignal: controller.signal });
+  await appendRunLedger(result, { durationMs: Date.now() - started, runId, startWarning });
   console.log(summarize(result));
   process.exit(result.report.failurePhase === 'interrupted' ? 130 : result.ok ? 0 : 1);
 }

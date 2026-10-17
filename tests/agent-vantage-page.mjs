@@ -622,7 +622,8 @@ test('tool framing buttons wait while a picture holds the viewport', () => {
   for (const name of ['frameForgeHostCamera', 'frameMotionAgencyCamera', 'frameVolumeCamera']) {
     const writes = [];
     const vector = label => ({set: (...value) => writes.push([label, value]), copy: () => writes.push([label]), fromArray: () => writes.push([label])});
-    const scope = {vantageCaptureHeld: true, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
+    // No joined exterior (Sexy Fireman): frameVolumeCamera takes its standalone framing.
+    const scope = {vantageCaptureHeld: true, volumePrototype: {joinedWorldBounds: () => null}, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
       controls: {target: vector('target'), update() {}}};
     fromIndexLive(name, scope)();
     assert.deepEqual(writes, [], `${name} leaves the borrowed camera alone`);
@@ -650,19 +651,21 @@ test('a default picture of a very large scene still returns its picture and map'
 });
 
 // installAgentVantage over a fake page: the panel map refresh runs on a timer.
-function installedPage({subs = [], drawnAt = null, water = false} = {}) {
-  const intervals = [], painted = [];
+function installedPage({subs = [], drawnAt = null, water = false, glance = null} = {}) {
+  const intervals = [], painted = [], classes = [];
   const element = tag => {
     const node = new FakeElement(tag), parts = {};
     node.querySelector = selector => (parts[selector] ??= element(selector === 'canvas' ? 'canvas' : 'span'));
-    node.classList = {add() {}, remove() {}};
+    node.classList = {add: name => classes.push(name), remove() {}};
+    node.toDataURL = () => 'data:image/png;base64,';
     node.getContext = () => new Proxy({}, {get: (_, key) => (key === 'measureText' ? () => ({width: 0}) : () => {
       if (key === 'drawImage') painted.push(node);
     }), set: () => true});
     return node;
   };
   const document = {visibilityState: 'visible', head: {append() {}}, getElementById: () => null, createElement: element};
-  const window = {setInterval: (fn, ms) => intervals.push({fn, ms}), clearInterval() {}, crypto: {randomUUID: () => 'test'}};
+  const window = {setInterval: (fn, ms) => intervals.push({fn, ms, cleared: false}) - 1, clearInterval: id => { if (intervals[id]) intervals[id].cleared = true; },
+    crypto: {randomUUID: () => 'test'}, ImageData: class { constructor(data, width, height) { Object.assign(this, {data, width, height}); } }};
   let bounds = 0, projection = opticsOf({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
   const entries = Array.from({length: 3}, (_, i) => {
     const object = new THREE.Group(), update = object.updateWorldMatrix.bind(object);
@@ -680,9 +683,9 @@ function installedPage({subs = [], drawnAt = null, water = false} = {}) {
     entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
     writeView() {}, viewport, hostCanvas, busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
-    idPass, water: () => water});
+    idPass, glance, water: () => water});
   const refresh = intervals.find(item => item.ms === 400).fn;
-  return {vantage, refresh, painted, entries, idPass, map: viewport.children[0].querySelector('canvas'),
+  return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'), title: viewport.children[0].querySelector('.vantage-title'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
     set records(value) { records = copy(value); }, set projection(value) { projection = value; }};
 }
@@ -1432,4 +1435,162 @@ test('a glance names what it drew from the scene as it stood when drawn, not aft
   assert.deepEqual(shot.objects.inView.map(object => object.id), ['centre'], 'named from the scene as it was drawn');
   assert.equal(shot.view.fov, drawnFov, 'the view reported is the one drawn');
   assert.equal(shot.aspect, 1600 / 900);
+});
+
+// --- live view in the sub's panel ------------------------------------------------
+
+test('a live sub view draws small glances into the panel while on, never over a frame still in flight', async () => {
+  const draws = [], readbacks = [];
+  const glance = {draw(options) {
+    draws.push(options);
+    return {ready: new Promise(done => readbacks.push(() => done({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})))};
+  }};
+  const page = installedPage({subs: [BEBOP], glance});
+  const on = await page.vantage.run('live', {on: true, fps: 4});
+  assert.deepEqual([on.live.on, on.live.fps, on.live.pilot], [true, 4, 'bebop']);
+  const timer = page.intervals.find(item => item.ms === 250 && !item.cleared);
+  assert.ok(timer, 'four frames a second');
+  timer.fn(); timer.fn();
+  assert.equal(draws.length, 1, 'a frame still being read back is not drawn over');
+  assert.deepEqual(draws[0].hide, ['vantage-bebop'], 'the sub is not in its own view');
+  assert.equal(draws[0].width, 320);
+  readbacks[0](); await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.dataset.frame, '1', 'the frame reaches the panel');
+  assert.equal(page.live.hidden, false);
+  timer.fn();
+  assert.equal(draws.length, 2);
+  const off = await page.vantage.run('live', {on: false});
+  assert.equal(off.live.on, false);
+  assert.equal(timer.cleared, true, 'off stops the timer');
+  assert.ok(off.live.frames >= 1 && Number.isFinite(off.live.drawMs), 'and reports what the view cost');
+});
+
+test('a live view needs a sub, and a page that can draw a second view', async () => {
+  await assert.rejects(() => installedPage({glance: {draw() {}}}).vantage.run('live', {on: true}), error => error.phase === 'no-sub');
+  await assert.rejects(() => installedPage({subs: [BEBOP]}).vantage.run('live', {on: true}), error => error.phase === 'live');
+});
+
+test('a new picture appears in the panel without a flash', async () => {
+  const page = installedPage({subs: [BEBOP], glance: {draw: options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})})}});
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.ok(!page.classes.includes('flash'));
+});
+
+test('while the live view runs it takes the last picture\'s place, so the panel does not grow', async () => {
+  const frame = options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})});
+  const page = installedPage({subs: [BEBOP], glance: {draw: frame}});
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.equal(page.picture.hidden, false);
+  await page.vantage.run('live', {on: true, fps: 4});
+  page.intervals.find(item => item.ms === 250 && !item.cleared).fn();
+  await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.hidden, false);
+  assert.equal(page.picture.hidden, true, 'the live view stands in for the last picture');
+  assert.equal(page.title.textContent, 'Bebop · live', 'and the panel says so');
+  await page.vantage.run('live', {on: false});
+  assert.equal(page.live.hidden, true);
+  assert.equal(page.picture.hidden, false, 'and the last picture returns when it stops');
+});
+
+test('the panel header names what the panel shows, through map repaints, new pictures and stopping', async () => {
+  const frame = options => ({ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})});
+  const page = installedPage({subs: [BEBOP], glance: {draw: frame}});
+  const flush = () => new Promise(done => setTimeout(done, 0));
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  const still = page.title.textContent;
+  assert.match(still, /^Bebop · glance/);
+  await page.vantage.run('live', {on: true, fps: 4});
+  const tick = () => page.intervals.find(item => item.ms === 250 && !item.cleared).fn();
+  tick(); await flush();
+  assert.equal(page.title.textContent, 'Bebop · live');
+  page.projection = opticsOf({position: [1, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000});
+  page.refresh();
+  assert.equal(page.title.textContent, 'Bebop · live', 'a map repaint keeps the live title');
+  await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.equal(page.title.textContent, 'Bebop · live', 'a picture arriving while live keeps it too');
+  const newer = page.title.textContent;
+  await page.vantage.run('live', {on: false});
+  assert.equal(page.picture.hidden, false);
+  assert.match(page.title.textContent, /^Bebop · glance/, 'stopping restores the picture and its own title');
+  assert.notEqual(page.title.textContent, newer);
+});
+
+test('restarting the live view never draws over a readback still in flight', async () => {
+  const draws = [], readbacks = [];
+  const glance = {draw(options) {
+    draws.push(options);
+    return {ready: new Promise(done => readbacks.push(() => done({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})))};
+  }};
+  const page = installedPage({subs: [BEBOP], glance});
+  const active = () => page.intervals.filter(item => !item.cleared && item.ms !== 400 && item.ms !== 1000).at(-1);
+  for (const fps of [4, 6, 8]) { await page.vantage.run('live', {on: true, fps}); active().fn(); }
+  await page.vantage.run('live', {on: false});
+  await page.vantage.run('live', {on: true, fps: 4});
+  active().fn();
+  assert.equal(draws.length, 1, 'one draw outstanding across restarts');
+  readbacks[0](); await new Promise(done => setTimeout(done, 0));
+  assert.equal(page.live.dataset.frame, undefined, 'a frame from an earlier stream is not shown');
+  active().fn();
+  assert.equal(draws.length, 2, 'once it settles the current stream draws');
+});
+
+// --- anchors: what a note needs to keep a pick and check it later ----------------------------
+
+test('a pick gives what an anchor keeps: the geometry identity, the entry matrix it was drawn with, and the normal in the entry\'s frame', async () => {
+  const page = installedPage(), box = page.entries[1];
+  // Turned a quarter about Y, box 1's local -X face now faces the camera.
+  box.object.rotation.y = Math.PI / 2;
+  const picked = await page.vantage.run('pick', {from: 'operator', at: pictureFraction(OPERATOR, 1600 / 900, [2, 0.1, 0.5])});
+  assert.equal(picked.hit?.id, 'box-1');
+  assert.equal(picked.hit.geometry.status, 'same');
+  assert.deepEqual(picked.hit.geometry.identity, vantage.geometryIdentity(box.object.children[0], 'page-test'), 'the identity the pick map recorded');
+  assert.deepEqual(picked.hit.entryMatrix, box.object.matrixWorld.toArray(), 'the entry matrix it was drawn with, in which local is given');
+  closeTo(picked.hit.normal, [0, 0, 1], 'the world normal faces the camera');
+  closeTo(picked.hit.localNormal, [-1, 0, 0], 'and is the entry\'s -X face in its own frame', 1e-6);
+  closeTo(picked.hit.local, [-0.5, 0.1, 0], 'local is in the same frame', 5e-3);
+});
+
+test('recheck says whether an anchored mesh is still the one picked, without drawing anything', async () => {
+  const page = installedPage();
+  const picked = await page.vantage.run('pick', {from: 'operator', at: pictureFraction(OPERATOR, 1600 / 900, [2, 0.1, 0.5])});
+  const anchor = {id: picked.hit.id, path: picked.hit.surface.path, identity: picked.hit.geometry.identity}, draws = page.idPass.calls.length;
+  assert.deepEqual(await page.vantage.run('recheck', anchor), {now: 'present', status: 'same'});
+  const mesh = page.entries[1].object.children[0];
+  mesh.geometry.attributes.position.setX(0, 5); mesh.geometry.attributes.position.needsUpdate = true;
+  assert.deepEqual(await page.vantage.run('recheck', anchor), {now: 'present', status: 'edited'});
+  mesh.geometry = new THREE.BoxGeometry(2, 2, 2);
+  assert.deepEqual(await page.vantage.run('recheck', anchor), {now: 'present', status: 'replaced'});
+  const other = {...vantage.geometryIdentity(page.entries[2].object.children[0], 'page-another-load'), uuid: 'from-another-load'};
+  assert.deepEqual(await page.vantage.run('recheck', {id: 'box-2', path: [0], identity: other}), {now: 'present', status: 'likely-same'},
+    'from another page load, counts and sampled content decide');
+  assert.deepEqual(await page.vantage.run('recheck', {...anchor, id: 'gone'}), {now: 'missing', status: null});
+  assert.deepEqual(await page.vantage.run('recheck', {...anchor, path: [4]}), {now: 'mesh-missing', status: null});
+  assert.deepEqual(await page.vantage.run('recheck', {...anchor, path: []}), {now: 'present', status: null, reason: 'not-a-mesh'});
+  assert.equal(page.idPass.calls.length, draws, 'nothing was drawn');
+});
+
+test('a pictured pick keeps the identity its map recorded when the entry or mesh is gone, so a later recheck can still compare', async () => {
+  const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])}, entry = page.entries[1];
+  const meshless = await page.vantage.run('pick', {optics, at, pictured: {...pictured, path: [3]}});
+  assert.equal(meshless.hit.now, 'mesh-missing');
+  assert.deepEqual(meshless.hit.geometry, {status: null, identity: pictured.geometry});
+  page.entries.splice(1, 1);
+  const gone = await page.vantage.run('pick', {optics, at, pictured});
+  assert.equal(gone.hit.now, 'missing');
+  assert.deepEqual(gone.hit.geometry, {status: null, identity: pictured.geometry}, 'kept, with no status while there is nothing to compare');
+  page.entries.splice(1, 0, entry);   // as undo puts the entry back
+  assert.deepEqual(await page.vantage.run('recheck', {id: gone.hit.id, path: pictured.path, identity: gone.hit.geometry.identity}), {now: 'present', status: 'same'});
+});
+
+test('recheck answers unverified when the kept identity cannot support a comparison', async () => {
+  const page = installedPage(), mesh = page.entries[1].object.children[0];
+  const full = vantage.geometryIdentity(mesh, page.vantage.pageId), {sample, ...unsampled} = full;
+  for (const identity of [{}, {status: 'same'}, {...full, vertices: 'many'}, {...full, sample: 42}, unsampled]) {
+    assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity}), {now: 'present', status: 'unverified'}, JSON.stringify(identity).slice(0, 80));
+  }
+  const partial = {session: full.session, uuid: full.uuid};
+  mesh.geometry.attributes.position.setX(0, 5); mesh.geometry.attributes.position.needsUpdate = true;
+  assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity: partial}), {now: 'present', status: 'unverified'},
+    'an identity missing what an edit would change cannot say same');
 });

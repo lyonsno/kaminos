@@ -80,6 +80,19 @@ assert.equal(failed.noiseInputs.lowResolutionShape.values.length,96);
 await assert.rejects(failed.run(invocation),/failed/);failed.dispose();failStage=undefined;
 const bad=create({...options,initialNoise:{highResolutionShape:new Float32Array(96)}});
 await assert.rejects(bad.run(invocation),/complete.*highResolutionShape/);assert.equal(bad.outputs,undefined);bad.dispose();
+for(const mode of ['shape','texture']){
+  const broken=create({...options,pipelineType:'512',meshResolution:64,onPhase(e){options.onPhase(e);
+    if(e.phase===(mode==='shape'?'learned-geometry-decoding':'shape-guided-material-decoding'))failStage='decoder-child-counts';}});
+  await assert.rejects(broken.run(invocation),/injected generation failure/);
+  const context=broken.decoderFailureContext;
+  assert.ok(context,'generation must expose its actual failed final decoder before disposal');
+  assert.equal(context.mode,mode);assert.equal(context.level,0);
+  assert.ok(context.inputs.sample.buffer&&!context.inputs.sample.destroyed);
+  assert.ok(context.inputs.coordinates.buffer&&!context.inputs.coordinates.destroyed);
+  assert.deepEqual(context.subdivisionLogits.shape,[3,8]);
+  assert.equal(broken.outputs,undefined);broken.dispose();
+  assert.equal(broken.decoderFailureContext,undefined);failStage=undefined;
+}
 assert.ok(allocated.filter(t=>t!==conditioning&&t.name!=='trellis.occupancy.occupied-view').every(t=>t.destroyed));
 const retainedNoise=[],retention=create({...options,async onNoiseInput(input){
   retainedNoise.push(input.stage);assert.ok(input.values instanceof Float32Array);

@@ -25,11 +25,16 @@ assert.equal(multiplier, 2, 'tall domain is 1x2x1');
 const raymarch = source.slice(source.indexOf('fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)'));
 for (const [expression, meaning] of [
   ['let domainHalfY = f32(GRID_Y) / f32(GRID);', 'the raymarch box half-height follows the grid shape (grid height control)'],
-  ['let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));', 'raymarch box spans world y [-1, -1 + 2 GRID_Y/GRID] (y [-1, 3] at the auto height)'],
+  ['let nearHit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));', 'raymarch box spans world y [-1, -1 + 2 GRID_Y/GRID] (y [-1, 3] at the auto height)'],
+  // Joined exterior (Sexy Fireman): the ray box widens to the exterior only while it renders;
+  // without it the camera samples exactly the fine box and its step, as before.
+  ['var hit = nearHit;\n  let exteriorActive = joinedRenderOn() && !fullGridCapture && !opticalTrace;\n  if(exteriorActive){', 'without the exterior the ray box is the fine box'],
   ['if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {', 'scene depth in front of the box is a miss'],
   ['let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);', 'full-grid capture spans the tall box (4.0 at the auto height)'],
-  ['let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;',
+  ['let standaloneDt = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;',
     'depth clipping keeps ordinary sample positions stable'],
+  ['let dtBase = select(standaloneDt,', 'without the exterior the step is the standalone step'],
+  [',exteriorActive);\n  let jitter = dtBase', 'the exterior step applies only while the exterior renders'],
 ]) {
   assert.ok(raymarch.includes(expression), `raymarch resolution lost: ${meaning}`);
 }

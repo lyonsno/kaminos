@@ -646,6 +646,10 @@ export function validateVolumeSettingsPresetTarget(receipt, params) {
     'volume_raymarch_smoke',
     'volume_appearance_decomposition',
     'volume_appearance_selection',
+    // Owner experiment setup is frontend state, not recipe. New addresses keep
+    // it in the hash; addresses written before that keep it in the query.
+    'experiment',
+    'experiment_inputs',
   ]);
   const unexpected = [...params].map(([key]) => key).filter(key => !allowed.has(key));
   if (unexpected.length > 0) throw new Error(`target settings route contains unexpected parameters: ${unexpected.join(',')}`);

@@ -27,11 +27,14 @@ Commands
   glance [--annotate] [--max-size PX] [--no-map] [--name NAME]   the sub's view from its own camera: your view is never
                              borrowed; the scene's meshes, lights and background, without the fire volume, local water or AO
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
+  live on|off [--fps N]      a small live view from the sub's own camera in the operator's sub panel (default 4 fps)
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
   pick X Y [--from sub|operator]      what the renderer draws at a point of the view now; X and Y are fractions from the top left
   pick X Y --picture RECORD.json [--frame N] [--now]   what a kept picture drew at its pixel X Y, from the
                              picture's own pick map; --now casts that picture's camera into the scene as it is now
+  recheck --anchor FILE      whether the mesh a note anchor or a saved pick record names is still the geometry
+                             that was picked: same, edited, replaced, or after a reload likely-same; renders no scene
 
 Pictures carry the map unless --no-map is given, and always a pick map: the renderer's record of which
 object it drew at each pixel, with the depth it drew there kept as a file beside the picture (a burst keeps
@@ -51,7 +54,7 @@ Options
 const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map', 'now', 'depth']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
   'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
-  'from', 'picture', 'frame']);
+  'from', 'picture', 'frame', 'fps', 'anchor']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -100,8 +103,12 @@ function commandArgs(command, rest, options, pilot) {
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
     case 'map': return defined({size: number(options.size)});
+    case 'live':
+      if (rest.length !== 1 || !['on', 'off'].includes(rest[0])) throw new Exit(2, 'live needs on or off');
+      return defined({pilot, on: rest[0] === 'on', fps: number(options.fps)});
     case 'sketch': return {};
     case 'pick': return pickArgs(rest, options, pilot);
+    case 'recheck': return recheckArgs(options);
     default: return {};
   }
 }
@@ -148,6 +155,21 @@ function pickArgs(rest, options, pilot) {
   const instanceMatrix = instances?.[found.instance];
   return {pilot, from: 'sub', at, optics, pictured: {...pictured, instance: found.instance, pixel: found.pixel, ...(instanceMatrix ? {instanceMatrix} : {}),
     ...(depth ? {depth} : {})}, scene: {clouds: map.clouds ?? [], fields: map.fields ?? [], water: map.water === true}};
+}
+
+// An anchor is a note anchor ({id, path, geometry: identity}) or a pick: a
+// saved record, or its hit ({id, surface: {path}, geometry: {status, identity}}).
+// A pick's geometry is a wrapper with a status; one saved before identities
+// were kept has no identity, and is never taken for one.
+function recheckArgs(options) {
+  if (!options.anchor) throw new Exit(2, 'recheck needs --anchor FILE: a note anchor or a saved pick record');
+  let data;
+  try { data = JSON.parse(readFileSync(options.anchor, 'utf8')); }
+  catch (error) { throw new Exit(2, `Cannot read the anchor ${options.anchor}: ${error.message}`); }
+  const hit = data?.result?.hit ?? data?.hit ?? data, geometry = hit?.geometry;
+  const wrapper = geometry && typeof geometry === 'object' && ('identity' in geometry || 'status' in geometry);
+  const identity = wrapper ? geometry.identity ?? null : geometry ?? null;
+  return {id: hit?.id, path: hit?.path ?? hit?.surface?.path, identity};
 }
 
 async function request(server, method, route, body) {
@@ -221,6 +243,16 @@ function summarize(command, record) {
     for (const image of result.images) lines.push(`  ${image.name.padEnd(9)} ${image.path}`);
     lines.push(`  record    ${record.recordPath}`);
     lines.push(`  ${(result.sketch?.objects ?? []).length} objects, ${(result.sketch?.fields ?? []).length} fields, ${(result.sketch?.subs ?? []).length} subs`);
+  } else if (command === 'live') {
+    const live = result.live ?? {};
+    lines.push(live.on ? `live view on: ${live.pilot}, ${live.fps} fps, in the sub panel` : 'live view off');
+    if (Number.isFinite(live.frames)) lines.push(`  ${live.frames} frames drawn, ${live.skipped ?? 0} ticks skipped${Number.isFinite(live.drawMs) ? `, last draw ${live.drawMs.toFixed(1)} ms` : ''}`);
+  } else if (command === 'recheck') {
+    const {id, path: meshPath = []} = record.request?.args ?? {};
+    const status = {same: 'the same geometry as when it was picked', edited: 'edited since it was picked', replaced: 'replaced since it was picked',
+      'likely-same': 'likely the same (checked from another page load by counts and sampled content)', unverified: 'not verifiable: no identity was kept'};
+    const now = {missing: 'no longer in the scene', 'mesh-missing': 'has no mesh at that path any more'}[result.now];
+    lines.push(`${id} [${meshPath.join('/') || 'entry'}]: ${now ?? (result.status ? status[result.status] ?? result.status : result.reason === 'not-a-mesh' ? 'not a mesh' : 'present')}`);
   } else if (command === 'sketch') {
     const list = value => Array.isArray(value) ? value : [];
     lines.push(`${list(result.objects).length} objects, ${list(result.fields).length} fields`);

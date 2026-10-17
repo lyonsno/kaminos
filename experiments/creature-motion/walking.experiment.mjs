@@ -9,12 +9,14 @@ import {createWorkbenchSceneHost} from '../../workbench-scene-host.mjs';
 import {createSkinCaseSelection,validateSkinCaseChoices} from './skin-case-selection.mjs';
 import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
+import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests} from './creature-attention.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
 }
 function checkRecipeInputs(inputs){
  checkAuthoredTransform(inputs.transform);
+ if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
@@ -52,7 +54,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,pathGuide,player,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
@@ -61,6 +63,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},
   recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:{position:placement.position.toArray(),quaternion:placement.quaternion.toArray(),scale:placement.scale.toArray()},mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView()},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
+  attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,
   pathGuide:pathGuide?{mode,kind:mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
  function refreshGuide(){
@@ -88,7 +91,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>attention?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -98,14 +101,28 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>walking.frame(index,{mode,cycle})};
-  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,now:()=>clock,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,now:()=>clock,
+   poseModifier:attention?state=>attention.modify({...state,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data});
   placement.add(runtime.group);
+  if(inputs.attention){
+   // Interests resolve from the live scene this creature stands in; the
+   // muzzle is measured from the current cast's own skin.
+   const sceneRoot=()=>{let node=placement;while(node.parent)node=node.parent;return node;};
+   attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:sceneObjectInterests({THREE,root:sceneRoot,specs:inputs.attention.interests})});
+   attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
+   if(inputs.attention.enabled===false)attention.setEnabled(false);
+  }
   asset=await session.attach(placement,{owned:true,metadata:{fileName:'Creature',source:inputs.case,label:'Creature'}});
   player=makePlayer();
-  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:loadSkin,onApplied:state=>{
+  // Keep each loaded skin with its own request so a superseded load that
+  // finishes late cannot supply the muzzle profile for the applied cast.
+  const loadedSkins=new Map();
+  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:async input=>{const loaded=await loadSkin(input);loadedSkins.set(input.case_sha256,loaded);return loaded;},onApplied:state=>{
+   const applied=loadedSkins.get(state.current.case_sha256);loadedSkins.clear();
+   if(attention&&applied){attention.setProfile(deriveHeadProfile({skin:applied,frame:data.frame}));attentionSkin=applied.source.caseSha256;}
    chosenInputs={...chosenInputs,case:state.current.case,case_sha256:state.current.case_sha256};source.caseSha256=state.current.case_sha256;
    host.scene.refreshPresentation?.(asset);session.redraw();refresh();
   }});
@@ -167,6 +184,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      throw error;
     }
    }),
+   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
+    // While not playing no frame will come to clear or apply the turn: show
+    // the displayed source frame again without moving time.
+    if(player.read().status!=='playing'){player.represent();host.scene.refreshPresentation?.(asset);}
+    return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
   if(inputs.mode!==undefined)operations.mode({mode:inputs.mode});

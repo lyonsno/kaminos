@@ -513,6 +513,21 @@ const COMMANDS = {
   burst: args => ({pilot: pilotArg(args), count: count(args.count, 'count', 6), interval: positive(args.interval, 'interval', 250),
     settle: count(args.settle, 'settle', 2), maxSize: count(args.maxSize, 'maxSize', 1280, 64), cell: count(args.cell, 'cell', 480, 64),
     annotate: flag(args.annotate), frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)}),
+  live: args => {
+    if (typeof args.on !== 'boolean') throw new Error('Live needs on: true or false');
+    const fps = args.fps ?? 4;
+    if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Live fps is between 0.5 and 15');
+    return {pilot: pilotArg(args), on: args.on, fps};
+  },
+  // Whether the mesh an anchor keeps is still the one picked: the entry id,
+  // the mesh path under it, and the geometry identity the pick recorded.
+  recheck: args => {
+    if (typeof args.id !== 'string' || !args.id) throw new Error('Recheck needs the id of the anchored entry');
+    if (!Array.isArray(args.path) || !args.path.every(index => Number.isInteger(index) && index >= 0)) throw new Error('Recheck path is the mesh path under the entry, a list of child indices');
+    const identity = args.identity ?? null;
+    if (identity !== null && (typeof identity !== 'object' || Array.isArray(identity))) throw new Error('Recheck identity is the geometry identity object a pick recorded, or null');
+    return {id: args.id, path: [...args.path], identity};
+  },
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),
   pick: args => {

@@ -327,6 +327,13 @@ export function createVantagePilot(host) {
         image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },
 
+    // A small live view from the sub's own camera in the operator's panel, while on.
+    live({pilot, on, fps}) {
+      if (on) requireSub(pilot);
+      if (!host.live) fail('live', 'This page cannot draw a second view of its scene');
+      return {schema: VANTAGE_SCHEMA, kind: 'live', live: on ? host.live.start({pilot, fps}) : host.live.stop()};
+    },
+
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
       const record = requireSub(pilot);
       admitCapture();
@@ -400,9 +407,14 @@ export function createVantagePilot(host) {
         // Past 65,536 instances the map's instance number wraps, so it names no instance.
         const depthPoint = depth ? pointAtViewDepth(camera, centre, depth) : null;
         const found = host.surfaceOf({row, instanceMatrix, ray, optics: camera, depthPoint}), instanced = !!(instanceMatrix || row.instanceArray) && !row.instancesBeyondMap;
+        // What an anchor keeps: the geometry identity the map recorded (for recheck), and the
+        // entry matrix it was drawn with, in whose frame `local` and `localNormal` are given.
         hit = {id: row.id, label: row.label ?? row.id, type: row.type ?? null, authority: 'exact', now: found.now,
           distance: found.distance ?? null, point: found.point ?? null, local: found.local ?? null, normal: found.normal ?? null,
-          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}), geometry: found.geometry ?? null,
+          localNormal: normalInFrame(found.normal ?? null, row.root ?? null), entryMatrix: row.root ?? null,
+          pointBasis: found.basis ?? null, ...(found.surfaceBasis ? {surfaceBasis: found.surfaceBasis} : {}),
+          // The map's identity is kept even when there is no mesh now to compare it with.
+          geometry: found.geometry || row.geometry ? {status: found.geometry?.status ?? null, identity: row.geometry ?? null} : null,
           surface: {path: row.path, mesh: row.mesh ?? null, face: found.face ?? null, instance: instanced ? instance : null},
           ...(row.coverage ? {coverage: row.coverage} : {})};
       } else {
@@ -425,6 +437,12 @@ export function createVantagePilot(host) {
       if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
       return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ...(pixel ? {pixel} : {}), pixelCentre: centre, ray,
         referent: pictured ? 'pictured' : 'rendered', hit, ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
+    },
+
+    // Whether an anchored mesh is still the one picked. It reads the scene and draws nothing.
+    recheck({id, path, identity}) {
+      if (!host.recheck) fail('recheck', 'This page cannot look up scene meshes');
+      return host.recheck({id, path, identity});
     },
   };
 
@@ -658,9 +676,7 @@ const HUD_STYLE = `
 #agent-vantage-hud button{background:none;border:0;color:#9aa3ad;cursor:pointer;font:inherit;padding:0 2px}
 #agent-vantage-hud img,#agent-vantage-hud canvas{display:block;width:100%;height:auto}
 #agent-vantage-hud [hidden]{display:none}
-#agent-vantage-hud .vantage-map{border-bottom:1px solid rgba(95,211,200,.25)}
-#agent-vantage-hud.flash{animation:agent-vantage-flash .6s ease-out}
-@keyframes agent-vantage-flash{from{box-shadow:0 0 0 3px rgba(56,242,224,.9)}to{box-shadow:0 6px 18px rgba(0,0,0,.35)}}`;
+#agent-vantage-hud .vantage-map,#agent-vantage-hud .vantage-live{border-bottom:1px solid rgba(95,211,200,.25)}`;
 
 // Shows the operator a live map of where everyone is looking, and each
 // picture the sub takes, so both see the same image.
@@ -675,11 +691,16 @@ export function installVantageHud({document, viewport}) {
   root.id = 'agent-vantage-hud';
   root.dataset.vantageIgnore = '';
   root.hidden = true;
-  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><img alt="Latest picture from the agent sub" hidden>';
+  root.innerHTML = '<div class="vantage-head"><span class="vantage-dot"></span><span class="vantage-title">Sub</span><button type="button" aria-label="Hide the sub panel">×</button></div><canvas class="vantage-map" width="440" height="330" hidden aria-label="Map of the scene with your view and the sub\'s"></canvas><canvas class="vantage-live" width="320" height="180" hidden aria-label="What the sub sees, live"></canvas><img alt="Latest picture from the agent sub" hidden>';
   for (const type of ['pointerdown', 'pointerup', 'mousedown', 'click', 'dblclick', 'wheel']) root.addEventListener(type, event => event.stopPropagation());
-  const mapCanvas = root.querySelector('canvas'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
-  let dismissed = false;
-  const show = () => { root.hidden = dismissed || (mapCanvas.hidden && picture.hidden); };
+  const mapCanvas = root.querySelector('canvas'), liveCanvas = root.querySelector('.vantage-live'), picture = root.querySelector('img'), title = root.querySelector('.vantage-title');
+  // While the live view runs it stands in for the last picture, which returns when it stops.
+  // The header always names what the panel shows: the live view, else the last picture, else the map.
+  let dismissed = false, liveFrames = 0, hasPicture = false, liveOn = false, pictureTitle = '', liveTitle = '';
+  const show = () => {
+    title.textContent = liveOn ? liveTitle : hasPicture ? pictureTitle : mapCanvas.hidden ? 'Sub' : 'Sub · map';
+    root.hidden = dismissed || (mapCanvas.hidden && picture.hidden && liveCanvas.hidden);
+  };
   root.querySelector('button').addEventListener('click', () => { dismissed = true; show(); });
   viewport.append(root);
   return {
@@ -690,19 +711,27 @@ export function installVantageHud({document, viewport}) {
         const context = mapCanvas.getContext('2d');
         context.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
         context.drawImage(canvas, 0, 0, mapCanvas.width, mapCanvas.height);
-        if (picture.hidden) title.textContent = 'Sub · map';
       }
       show();
     },
+    // A new picture simply appears: no flash, nothing that pulls attention.
     shutter({kind, label, image}) {
       picture.src = image.dataUrl;
-      picture.hidden = false;
-      title.textContent = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
-      dismissed = false;
+      hasPicture = true;
+      picture.hidden = liveOn;
+      pictureTitle = `${label} · ${kind} · ${new Date().toLocaleTimeString()}`;
       show();
-      root.classList.remove('flash');
-      void root.offsetWidth;
-      root.classList.add('flash');
+    },
+    live(frame, ImageData, label = 'Sub') {
+      if (!frame) { liveOn = false; liveCanvas.hidden = true; picture.hidden = !hasPicture; show(); return; }
+      if (liveCanvas.width !== frame.width || liveCanvas.height !== frame.height) { liveCanvas.width = frame.width; liveCanvas.height = frame.height; }
+      liveCanvas.getContext('2d').putImageData(new ImageData(frame.pixels, frame.width, frame.height), 0, 0);
+      liveCanvas.dataset.frame = String(++liveFrames);
+      liveTitle = `${label} · live`;
+      liveOn = true;
+      liveCanvas.hidden = false;
+      picture.hidden = true;
+      show();
     },
     dispose() { root.remove(); },
   };
@@ -844,18 +873,33 @@ export function geometryIdentity(mesh, session = null) {
     ...(instances ? {instanceMatrix: attributeId(instances), instanceVersion: instances.version, instanceCount: mesh.count,
       instanceSample: sampled(mesh.count, 16, (i, c) => instances.array[i * 16 + c])} : {})};
 }
+// Whether a kept identity has every field a comparison reads, each of the type
+// geometryIdentity writes. The instance fields come together or not at all.
+const counted = value => value === null || (Number.isInteger(value) && value >= 0);
+const hashed = value => value === null || (typeof value === 'string' && /^[0-9a-f]{8}$/.test(value));
+const INSTANCE_KEYS = ['instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
+function comparableIdentity(recorded) {
+  if (!recorded || typeof recorded !== 'object' || Array.isArray(recorded)) return false;
+  if (!(recorded.uuid === null || typeof recorded.uuid === 'string') || !(recorded.session === null || typeof recorded.session === 'string')) return false;
+  if (!['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices'].every(key => counted(recorded[key]))) return false;
+  if (!hashed(recorded.sample) || !hashed(recorded.indexSample)) return false;
+  const instanced = INSTANCE_KEYS.filter(key => recorded[key] !== undefined).length;
+  if (instanced === 0) return true;
+  return instanced === INSTANCE_KEYS.length && counted(recorded.instanceMatrix) && counted(recorded.instanceVersion) && counted(recorded.instanceCount) && hashed(recorded.instanceSample);
+}
 // Whether the geometry under a mesh is the one a picture recorded. Within one
 // page session a different geometry object is a replacement, and any change to
 // its attributes, stores, edit counts or sampled content is an edit. Across
 // sessions identities differ, so counts and samples decide likely-same or replaced.
+// A kept identity missing a field the comparison reads, or holding the wrong
+// type there, is unverified: absent evidence is never read as a match or a change.
 export function geometryStatus(recorded, current, session) {
   if (!current) return 'replaced';
-  if (!recorded) return 'unverified';
+  if (!comparableIdentity(recorded)) return 'unverified';
   if (session && recorded.session === session) {
     if (recorded.uuid !== current.uuid) return 'replaced';
-    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample',
-      'instanceMatrix', 'instanceVersion', 'instanceCount', 'instanceSample'];
-    return keys.every(key => recorded[key] === undefined || recorded[key] === current[key]) ? 'same' : 'edited';
+    const keys = ['position', 'positionStore', 'version', 'vertices', 'index', 'indexVersion', 'indices', 'sample', 'indexSample', ...INSTANCE_KEYS];
+    return keys.every(key => (recorded[key] ?? null) === (current[key] ?? null)) ? 'same' : 'edited';
   }
   if (recorded.vertices !== current.vertices || recorded.indices !== current.indices || (recorded.instanceCount ?? null) !== (current.instanceCount ?? null)) return 'replaced';
   if (recorded.sample && current.sample) {
@@ -901,6 +945,29 @@ export function sceneOutsideMap(THREE, entries, fields, water) {
     if (bounds) clouds.push({id: entry.id, label: entry.label || entry.id, type: entry.type, bounds});
   }
   return {clouds, fields: fields.filter(field => field.bounds).map(({id, label, type, bounds}) => ({id, label, type, bounds})), water: !!water};
+}
+
+// A world-space normal in the frame of `matrix` (a column-major 4x4): the
+// transpose of its linear part, which is the inverse transpose of the map
+// from world to that frame. Null when there is no normal or frame.
+function normalInFrame(normal, matrix) {
+  if (!normal || !matrix) return null;
+  const n = [0, 1, 2].map(i => matrix[4 * i] * normal[0] + matrix[4 * i + 1] * normal[1] + matrix[4 * i + 2] * normal[2]);
+  const length = Math.hypot(...n);
+  return length > 0 ? n.map(value => value / length) : null;
+}
+
+// Whether the mesh at `path` under the entry `id` is still the geometry an
+// anchor recorded: same, edited or replaced within the page session that
+// recorded it, likely-same or replaced from another, unverified without an
+// identity. Reads the scene only.
+export function recheckAnchor(entries, {id, path, identity}, session = null) {
+  const entry = entries.find(item => item.id === id);
+  if (!entry?.object) return {now: 'missing', status: null};
+  const node = nodeAt(entry.object, path);
+  if (!node) return {now: 'mesh-missing', status: null};
+  if (!node.isMesh) return {now: 'present', status: null, reason: 'not-a-mesh'};
+  return {now: 'present', status: geometryStatus(identity, geometryIdentity(node, session), session)};
 }
 
 // Where a ray meets one mesh placed with the given matrices: the nearest
@@ -1000,6 +1067,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
       return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
     } : null,
     surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
+    recheck: anchor => recheckAnchor(entries(), anchor, pageId),
     // A glance's pixels become a canvas like any other picture.
     renderView: glance ? options => {
       const view = glance.draw(options);
@@ -1013,7 +1081,41 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     coordinateSystem,
     now: () => Date.now(),
     shutter: info => hud.shutter(info),
+    live: glance ? {start: options => startLive(options), stop: () => stopLive()} : null,
   });
+  // The live view: a small glance from the sub's camera on a timer. A tick is
+  // skipped while the tab is hidden, while a picture holds the camera, or while
+  // the previous frame is still being read back, so it never queues work.
+  // One live draw at most is ever in flight, whichever stream issued it.
+  let live = null, liveInFlight = false;
+  const clock = () => window.performance?.now?.() ?? Date.now();
+  const liveState = () => (live ? {on: true, pilot: live.pilot, fps: live.fps, frames: live.frames, skipped: live.skipped, drawMs: live.drawMs} : {on: false});
+  const liveTick = () => {
+    if (!live) return;
+    if (liveInFlight || document.visibilityState !== 'visible' || pilot.isCapturing()) { live.skipped++; return; }
+    const record = cameras.read().cameras.find(item => item.id === vantageCameraId(live.pilot));
+    if (!record) { stopLive(); return; }
+    const ratio = viewport.clientWidth / viewport.clientHeight || 16 / 9, width = 320, height = Math.max(1, Math.round(width / ratio));
+    const optics = opticsOfView(cameraViewFromRecord(record, ratio, 3), ratio, {coordinateSystem});
+    const started = clock(), current = live;
+    let view;
+    try { view = glance.draw({optics, width, height, hide: [record.id]}); }
+    catch { current.skipped++; return; }
+    liveInFlight = true;
+    current.drawMs = clock() - started;
+    view.ready.then(frame => { if (live === current) { hud.live(frame, window.ImageData, record.label); current.frames++; } }, () => { current.skipped++; })
+      .finally(() => { liveInFlight = false; });
+  };
+  function startLive({pilot: name, fps}) {
+    stopLive();
+    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
+    return liveState();
+  }
+  function stopLive() {
+    const state = liveState();
+    if (live) { window.clearInterval(live.timer); live = null; hud.live(null); }
+    return {...state, on: false};
+  }
   glyph();
   const glyphTimer = window.setInterval(glyph, 1000);
   // Keep the operator's map current while a sub is in the scene; repaint
@@ -1041,7 +1143,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
     pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
-    dispose() { window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
+    dispose() { stopLive(); window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }
 

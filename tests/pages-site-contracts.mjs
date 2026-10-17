@@ -37,7 +37,7 @@ test("Pages site keeps the flame boutique at the root and publishes the model di
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-settings)?\.mjs|finger-fluid-webgpu-core\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-(?:settings|history))?\.mjs|finger-fluid-webgpu-core\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "unimate", "index.html")));

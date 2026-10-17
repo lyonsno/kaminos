@@ -30,12 +30,13 @@ export default {
       geometry.dispose(); reference.dispose(); candidate.dispose();
       await session.dispose(); throw error;
     }
-    let slider, value;
+    let slider, fieldDocument;
     const read = () => ({objectId: asset.id, roughness: candidate.roughness,
       referenceRoughness: reference.roughness, view: session.readView()});
-    const sync = () => {
-      if (slider) slider.value = String(candidate.roughness);
-      if (value) value.textContent = candidate.roughness.toFixed(2);
+    const sync = (force = false) => {
+      if (slider && (force || fieldDocument.activeElement !== slider || slider.readOnly)) {
+        slider.value = String(candidate.roughness);
+      }
     };
     return {
       read,
@@ -54,17 +55,28 @@ export default {
         },
       },
       mount({root: panel, document, invoke}) {
-        const label = document.createElement('label'); label.textContent = 'Candidate roughness ';
-        slider = document.createElement('input'); slider.type = 'range';
-        slider.min = '0'; slider.max = '1'; slider.step = '0.01';
+        fieldDocument = document;
+        const label = document.createElement('label');
+        const grip = document.createElement('span'); grip.textContent = 'Candidate roughness ';
+        slider = document.createElement('input'); slider.type = 'number';
+        slider.min = '0'; slider.max = '1'; slider.step = 'any';
+        slider.className='transform-input';
         slider.setAttribute('aria-label', 'Candidate roughness');
-        value = document.createElement('output');
         const frame = document.createElement('button'); frame.type = 'button'; frame.textContent = 'Frame comparison';
         const status = document.createElement('div'); status.setAttribute('role', 'status');
-        const failed = error => {sync(); status.textContent = error.message;};
-        slider.addEventListener('input', () => invoke('setRoughness', Number(slider.value)).catch(failed));
+        const failed = error => {sync(true); status.textContent = error.message;};
+        slider.addEventListener('input', () => {
+          if (!slider.value.trim() || !Number.isFinite(Number(slider.value))) return;
+          invoke('setRoughness', Number(slider.value)).catch(failed);
+        });
+        slider.addEventListener('blur', () => sync(true));
+        slider.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === 'Escape') slider.blur();
+        });
         frame.addEventListener('click', () => invoke('frame').catch(failed));
-        label.append(slider, value); panel.append(label, frame, status); sync();
+        label.append(grip, slider); panel.append(label, frame, status);
+        host.controls.installNumberDrag({input:slider,grip,step:.01});
+        sync();
       },
       dispose: () => session.dispose(),
     };

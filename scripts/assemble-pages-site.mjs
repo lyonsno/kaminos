@@ -42,9 +42,6 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   for (const file of fs.readdirSync(unimate)) {
     if (file === "index.html" || /^unimate-[\w-]+\.js$/.test(file)) fs.copyFileSync(path.join(unimate, file), path.join(motion, file));
   }
-  // UniMate schedules its GPU work with Klein's duty scheduler, imported as ../flux2-klein/.
-  fs.mkdirSync(path.join(out, "inference-kit", "flux2-klein"));
-  fs.copyFileSync(path.join(klein, "klein-duties.js"), path.join(out, "inference-kit", "flux2-klein", "klein-duties.js"));
   for (const file of fs.readdirSync(path.join(unimate, "clips"))) {
     if (/^[\w-]+\.json$/.test(file)) fs.copyFileSync(path.join(unimate, "clips", file), path.join(motion, "clips", file));
   }
@@ -60,7 +57,7 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   }
   for(const dir of ["images","examples","icons"])fs.cpSync(path.join(repoRoot,"demos","material-photo",dir),path.join(photograph,dir),{recursive:true});
   fs.writeFileSync(path.join(photograph,"deployment.js"),`export const GENERATION_AVAILABLE=${!!supermatWeightsUrl};\nexport const SUPERMAT_WEIGHTS_URL=${JSON.stringify(supermatWeightsUrl)};\n`);
-  for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs",
+  for(const file of ["finger-fluid-webgpu-core.js","scene-gi.mjs","scene-gi-settings.mjs","scene-gi-history.mjs",
     "lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js",
     "lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE",
     "lib/addons/tsl/display/SSGINode.js","lib/addons/tsl/display/SSGINode.LICENSE","lib/addons/tsl/display/DenoiseNode.js","lib/addons/math/SimplexNoise.js",

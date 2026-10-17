@@ -53,7 +53,10 @@ export function judgeSf3dSmoke(result, {expectedScene = null, expectedReopen = n
 
 export function connectSf3dForeground(producer, prototype, host, onReceipt = () => {}) {
   const context = prototype?.foregroundGpuContext?.();
-  if (context?.renderer !== 'ordinary-volume' || context.productFrameOwner !== 'prototype') {
+  // Frame owners: the fire scene's volume prototype, or the ordinary scene itself
+  // (app-frame-source.mjs). Both render the host scene inside the model's window.
+  const owner = `${context?.renderer}/${context?.productFrameOwner}`;
+  if (owner !== 'ordinary-volume/prototype' && owner !== 'kaminos-app/app') {
     throw new Error('SF3D foreground service requires the actual ordinary renderer');
   }
   if (!host || host.device !== producer.device || context.device !== producer.device || context.queue !== producer.device.queue) {

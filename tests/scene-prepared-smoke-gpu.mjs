@@ -10,7 +10,7 @@ const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
 await save();let browser;
 try {
   const {chromium}=await import('/private/tmp/beaming-smoke-deps-1001/node_modules/playwright/index.mjs');
-  browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal']});
+  browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
   const page=await browser.newPage();await page.goto(new URL('/api/runtime-config',url).href);
   report.runtime=await page.evaluate(()=>JSON.parse(document.body.innerText));
   const plane=[{a:[0,-2,-2],b:[0,4,-2],c:[0,4,2]},{a:[0,-2,-2],b:[0,4,2],c:[0,-2,2]}];
@@ -35,8 +35,8 @@ try {
     device.lost.then(i=>{if(i.reason!=='destroyed')losses.push({reason:i.reason,message:i.message});});
     device.pushErrorScope('validation');
     const shader=DISTRIBUTED_SMOKE_WGSL.replaceAll('@group(2)','@group(0)')+`
-      @group(0) @binding(2) var<storage,read> query:array<vec4<f32>>;
-      @group(0) @binding(3) var<storage,read_write> result:array<vec4<f32>>;
+      @group(0) @binding(5) var<storage,read> query:array<vec4<f32>>;
+      @group(0) @binding(6) var<storage,read_write> result:array<vec4<f32>>;
       @compute @workgroup_size(1) fn test(@builtin(global_invocation_id) id:vec3<u32>){result[id.x]=vec4<f32>(distributedMeanIncident(query[id.x].xyz),1);}`;
     const module=device.createShaderModule({code:shader});
     const compilation=await module.getCompilationInfo();if(compilation.messages.some(m=>m.type==='error'))throw new Error(JSON.stringify(compilation.messages));
@@ -52,7 +52,12 @@ try {
         const positions=name==='cage'?[[0,1,0]]:name==='empty'?[[-.25,1.25,.1],[-1,-1,-1],[1,3,1],[0,3.01,0]]:name==='oblique'?[[-.35,0,0],[.45,0,0],[.1,0,0]]:[[-.2,1,0],[.2,1,0],[0,1,0]];
         const query=buffer(new Float32Array(positions.flatMap(p=>[...p,0]))),result=buffer(new Float32Array(positions.length*4),GPUBufferUsage.COPY_SRC);
         const read=device.createBuffer({size:positions.length*16,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});owned.push(read);
-        const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:prepared.texture.createView()},...[prepared.metadata.masks,query,result].map((b,i)=>({binding:i+1,resource:{buffer:b}}))]});
+        const bounds=device.createBuffer({size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(bounds);
+        device.queue.writeBuffer(bounds,0,new Float32Array([-1,-1,-1,0,1,3,1,0,-1,-1,-1,0,1,3,1,0]));
+        const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[
+          {binding:0,resource:prepared.texture.createView()},{binding:1,resource:{buffer:prepared.metadata.masks}},
+          {binding:2,resource:prepared.texture.createView()},{binding:3,resource:{buffer:prepared.metadata.masks}},
+          {binding:4,resource:{buffer:bounds}},{binding:5,resource:{buffer:query}},{binding:6,resource:{buffer:result}}]});
         const outputs=[];
         for(const scale of [1,2]){
           const data=new Float32Array(2*4*2*4);
