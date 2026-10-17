@@ -77,6 +77,7 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   pick(ray,cameraPosition,options={}) {
    const prototype=fireProxy?.prototype;
    if(!prototype||(prototype.isActive?.()??true)===false)return null;
+   if(fireProxy.ready&&fireProxy.layer?.group.visible===false)return null;
    return pickFireSplats(registry.latest('fire'),ray,cameraPosition,{...options,
     fieldGeneration:prototype.getResidualFieldGeneration?.()??null,style:fireProxy.layer?.state().style});
   },
