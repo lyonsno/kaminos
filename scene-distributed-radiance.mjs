@@ -230,7 +230,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(vertexIds.some(i=>!Number.isInteger(i)||i<0||i>=row.clone.attributes.position.count))throw new Error('selected triangle indices invalid');
         prototype.setSelectiveHeadLiveCapturePaused(true);paused=true;
         const generation=frame.generation,build=status.geometryBuilds;
-        result.metadata={generation,frame:frame.frame,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,sourceGuide:frame.sourceGuide,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
+        result.metadata={generation,frame:frame.frame,sourceDomain:frame.sourceDomain,directions:frame.directions,angularPattern:frame.angularPattern,samplingLaw:frame.samplingLaw,sourceGuide:frame.sourceGuide,surfaceGainFactor:frame.surfaceScattering.enabled?1:frame.gain,surfaceReconstruction:{passes:frame.surfaceReconstruction.passes},receiverSampling:{...frame.receiverSampling},geometryBuilds:build,geometryTriangles:frame.geometryTriangles};
         result.worldTransform=validateSceneSourceTransform(sourceTransform);result.selection={meshId:mesh.uuid,meshName:mesh.name,materialSide:(Array.isArray(row.material)?row.material[face.materialIndex]:row.material).side,point:point?.toArray?.()||point,cameraPosition:cameraPosition?.toArray?.()||cameraPosition,vertices:[]};
         const allIds=new Set(),worldPoint=new THREE.Vector3(),worldNormal=new THREE.Vector3(),nm=new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
         for(const vertex of vertexIds){
