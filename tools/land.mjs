@@ -554,7 +554,12 @@ if (invokedAsMain) {
   if (args) {
     const controller = new AbortController();
     for (const name of ['SIGINT', 'SIGTERM']) process.once(name, () => { console.error(`landing: ${name} received; writing the receipt and stopping`); controller.abort(); });
-    const result = await land({ ...args, signal: controller.signal });
+    // KAMINOS_LAND_POLL_MS overrides the poll interval (a whole number of
+    // milliseconds); the receipt records the interval used.
+    const pollOverride = process.env.KAMINOS_LAND_POLL_MS;
+    if (pollOverride !== undefined && !/^\d+$/.test(pollOverride)) console.error(`landing: KAMINOS_LAND_POLL_MS=${JSON.stringify(pollOverride)} is not a whole number of milliseconds; polling every ${POLL_MS} ms`);
+    const pollMs = pollOverride !== undefined && /^\d+$/.test(pollOverride) ? Number(pollOverride) : POLL_MS;
+    const result = await land({ ...args, pollMs, signal: controller.signal });
     console.log(`${result.receipt.outcome}  ${result.receipt.message}; receipt: ${result.receiptError ? 'not written' : result.receiptPath}`);
     if (result.receiptError) console.error(`receipt could not be written to ${result.receiptPath}: ${result.receiptError}`);
     const outcome = result.receipt.outcome;

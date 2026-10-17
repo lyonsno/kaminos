@@ -117,7 +117,7 @@ test('the browser is launched with the mock keychain, the basic password store a
   process.env.HOME = home;
   t.after(() => { process.env.HOME = previousHome; });
   const reportPath = path.join(dir, 'report.json');
-  await runSuite({ root, only: ['tests/gui-smoke.mjs'], browser: recording, timeoutMs: 120000, parallel: 1, reportPath, logsDir: path.join(dir, 'logs') });
+  await runSuite({ root, only: ['tests/gui-smoke.mjs'], browser: recording, timeoutMs: 120000, parallel: 1, reportPath, logsDir: path.join(dir, 'logs'), lateLaunchSettleMs: 0 });
   process.env.HOME = previousHome;
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   const result = report.results.find(r => r.file === 'tests/gui-smoke.mjs');
@@ -143,7 +143,7 @@ test('a runner timeout stops the server and the browser with the test, and leave
   process.env.HOME = home;
   t.after(() => { process.env.HOME = previousHome; });
   const reportPath = path.join(dir, 'report.json');
-  await runSuite({ root, only: ['tests/gui-smoke.mjs'], browser: hanging, timeoutMs: 9000, parallel: 1, reportPath, logsDir: path.join(dir, 'logs') });
+  await runSuite({ root, only: ['tests/gui-smoke.mjs'], browser: hanging, timeoutMs: 9000, parallel: 1, reportPath, logsDir: path.join(dir, 'logs'), lateLaunchSettleMs: 0 });
   process.env.HOME = previousHome;
   const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
   const result = report.results.find(r => r.file === 'tests/gui-smoke.mjs');

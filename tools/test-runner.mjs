@@ -587,8 +587,15 @@ export async function runSuite({
   // not run. Defaults to KAMINOS_BROWSER.
   browser = process.env.KAMINOS_BROWSER,
   browserVersionTimeoutMs = 10000,
+  // How long to wait after the last test for browser launches a test handed
+  // to a detached process. The CLI takes it from KAMINOS_LATE_LAUNCH_SETTLE_MS;
+  // the runner's own contracts set 0 except where they test late launches.
+  lateLaunchSettleMs = LATE_LAUNCH_SETTLE_MS,
 } = {}) {
   browser = browser || null;
+  const settleRequested = lateLaunchSettleMs;
+  const settleUsable = /^\d+$/.test(String(settleRequested ?? ''));
+  lateLaunchSettleMs = settleUsable ? Number(settleRequested) : LATE_LAUNCH_SETTLE_MS;
   root = path.resolve(root);
   manifestPath ||= path.join(root, 'tests', 'suite.json');
   quarantinePath ||= path.join(root, 'tests', 'quarantine.json');
@@ -608,7 +615,7 @@ export async function runSuite({
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
-    effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
+    effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, lateLaunchSettleMs, kinds, only,
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
       pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, located: pythonExecutable.located,
         unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
@@ -622,6 +629,7 @@ export async function runSuite({
     uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [],
     orphans: { manifest: [], quarantine: [] }, notRun: [], results: [], warnings: [],
   };
+  if (!settleUsable) report.warnings.push({ source: 'runner', test: null, message: `the late-launch settle ${JSON.stringify(settleRequested)} (KAMINOS_LATE_LAUNCH_SETTLE_MS) is not a whole number of milliseconds, so the default ${LATE_LAUNCH_SETTLE_MS} ms is used; set a whole number, or leave it unset` });
   const running = new Set();
   const track = child => { running.add(child); return () => running.delete(child); };
   const killAll = () => { for (const child of running) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch {} } } };
@@ -773,7 +781,7 @@ export async function runSuite({
     if (report.results.length !== planned.length) throw Object.assign(new Error(`planned ${planned.length} tests but ran ${report.results.length}`), { phase: 'execute' });
     // A test can hand off a browser launch to a detached process that fires
     // after the test exits; give such launches a moment to reach the stub.
-    await new Promise(r => setTimeout(r, LATE_LAUNCH_SETTLE_MS));
+    if (lateLaunchSettleMs > 0) await new Promise(r => setTimeout(r, lateLaunchSettleMs));
     if (existsSync(browserLog)) {
       report.browserLaunchAttempts = (await fs.readFile(browserLog, 'utf8')).trim().split('\n').filter(Boolean)
         .map(line => { const [file, pid, args] = line.split('\t'); return { file, pid: Number(pid), args }; });
@@ -978,7 +986,7 @@ if (invokedAsMain) {
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const started = Date.now();
-  const result = await runSuite({ ...args, abortSignal: controller.signal });
+  const result = await runSuite({ ...args, abortSignal: controller.signal, lateLaunchSettleMs: process.env.KAMINOS_LATE_LAUNCH_SETTLE_MS ?? LATE_LAUNCH_SETTLE_MS });
   await appendRunLedger(result, { durationMs: Date.now() - started, runId, startWarning });
   console.log(summarize(result));
   process.exit(result.report.failurePhase === 'interrupted' ? 130 : result.ok ? 0 : 1);

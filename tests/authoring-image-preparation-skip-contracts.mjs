@@ -52,7 +52,7 @@ test("the runner lists the skip in the report's warnings, under the test that wr
   delete process.env.CI;
   process.env.PYTHONPATH = shim;
   t.after(() => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } });
-  const { report } = await runSuite({ root, reportPath: path.join(out, 'report.json'), kinds: ['python'], only: [FILE], executables: { python: 'python3' }, parallel: 1 });
+  const { report } = await runSuite({ root, reportPath: path.join(out, 'report.json'), kinds: ['python'], only: [FILE], executables: { python: 'python3' }, parallel: 1, lateLaunchSettleMs: 0 });
   const result = report.results.find(r => r.file === FILE);
   assert.equal(result?.outcome, 'pass', JSON.stringify(result));
   const skip = report.warnings.filter(w => w.source === 'test' && w.test === FILE);

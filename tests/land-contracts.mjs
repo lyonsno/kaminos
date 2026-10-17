@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as L from '../tools/land.mjs';
+import { ghStub } from './land-gh-stub.mjs';
 
 const LAND_CLI = fileURLToPath(new URL('../tools/land.mjs', import.meta.url));
 const GH_STUB = fileURLToPath(new URL('./land-gh-stub.mjs', import.meta.url));
@@ -117,7 +118,13 @@ async function fixture(t, { onMain = false } = {}) {
   const lines = [];
   const clock = { now: 1_000_000, slept: [] };
   const baseRunner = L.execFileRunner({ env });
-  const run = (executable, args, options) => { calls.push([path.basename(executable), ...args]); return baseRunner(executable, args, options); };
+  // gh is answered in-process by the stub, which spares a node start per call;
+  // the CLI contracts (cli, cliSpawn) still run the stub as gh through ghPath.
+  const run = (executable, args, options) => {
+    calls.push([path.basename(executable), ...args]);
+    if (executable === ghPath) return Promise.resolve({ ...ghStub(statePath, args, { env }), error: null });
+    return baseRunner(executable, args, options);
+  };
   const receiptPath = path.join(dir, 'receipts', 'receipt.json');
   const makeRun = (over = {}) => ({ databaseId: 4242, status: 'completed', conclusion: 'success', workflowName: 'tests', _file: WORKFLOW_FILE, headSha: sha, event: 'push', headBranch: 'feature', url: `https://github.com/${REPO}/actions/runs/${over.databaseId ?? 4242}`, createdAt: '2026-10-13T12:00:00Z', attempt: 1, ...over });
   const lastArg = c => String(c.at(-1));
@@ -148,8 +155,8 @@ async function fixture(t, { onMain = false } = {}) {
       (error, stdout, stderr) => resolve({ code: error ? error.code : 0, stdout, stderr }))),
     // The CLI as a live child: onStderr sees each line as it arrives, so a
     // contract can act on a state change, such as sending a signal.
-    cliSpawn: (args, onStderr) => {
-      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env });
+    cliSpawn: (args, onStderr, extraEnv = {}) => {
+      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env: { ...env, ...extraEnv } });
       let stdout = '', stderr = '';
       child.stdout.on('data', d => { stdout += d; });
       child.stderr.on('data', d => { stderr += d; for (const line of String(d).split('\n').filter(Boolean)) onStderr?.(line, child); });
@@ -868,9 +875,12 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   // Through the CLI: SIGINT during the wait does the same and exits 130.
   const g = await fixture(t);
   await g.gh.pushTrigger(g.run({ databaseId: 9061, _timeline: ['in_progress'] }));
-  const { done } = g.cliSpawn(['--ci-only', '--receipt', g.receiptPath, '--gh', g.ghPath, '--repo', REPO], (line, child) => { if (/in progress/.test(line)) child.kill('SIGINT'); });
+  // KAMINOS_LAND_POLL_MS shortens the CLI's real poll so the contract does not
+  // sleep a whole 30-second interval before the run shows as in progress.
+  const { done } = g.cliSpawn(['--ci-only', '--receipt', g.receiptPath, '--gh', g.ghPath, '--repo', REPO], (line, child) => { if (/in progress/.test(line)) child.kill('SIGINT'); }, { KAMINOS_LAND_POLL_MS: '50' });
   const result = await done;
   assert.equal(result.code, 130, `${result.stdout}\n${result.stderr}`);
+  assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).effective.pollMs, 50);
   assert.match(result.stdout, /^interrupted\b.*run 9061/);
   assert.match(result.stderr, /pushed land\//);
   assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).ci.run.id, 9061);
