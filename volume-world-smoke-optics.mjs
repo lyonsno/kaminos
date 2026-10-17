@@ -8,12 +8,12 @@ export function worldSmokeOverlayGeometry(s) {
 }
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
-struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, diagnostic:vec4<f32> }
+struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
 fn worldSmokeOn()->bool{return worldRender.hiEnabled.w>0.5;}
 fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
- if(worldRender.diagnostic.x<.5||!worldSmokeOn()){return m;}
+ if(worldRender.overlayControls.x<.5||!worldSmokeOn()){return m;}
  let sigma=m.absorption+m.scattering;
  let color=select(vec3<f32>(1,.24,.015),vec3<f32>(.015,.65,1),coarse);
  // False-color optical support, not physical emission or a radiance percentage.
