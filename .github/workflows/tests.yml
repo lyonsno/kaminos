@@ -115,7 +115,7 @@ jobs:
             echo "::notice title=tests::tests no result: setup failed before checkout, so nothing was checked"
             printf '### Tests (advisory)\n\n**tests no result: setup failed before checkout (%s); nothing was checked**\n' "$SETUP" >> "$GITHUB_STEP_SUMMARY"
           fi
-      - if: always()
+      - if: always() && steps.current.outputs.superseded == ''
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
