@@ -32,3 +32,8 @@ test('recipe refuses wrong digest, bad frame, missing output, and conflicting pl
  await assert.rejects(loadRestEditorInput({recipe:'/input',recipe_sha256:sha,plan:fixture()},{fetchImpl}),/competing plan/);
  await assert.rejects(loadRestEditorInput({...input,display_matrix:new Array(16).fill(0)}),/Invertible/);
 });
+test('save/reopen preserves reference placement and visibility with the saved camera',async()=>{
+ const referenceDisplay={mode:'overlay',axis:'z',baseline:true};
+ const plan=authoredRestPlan(fixture(),{baselineSha256:'a'.repeat(64),displayMatrix:display,referenceDisplay});
+ const reopened=await loadRestEditorInput({plan:JSON.parse(JSON.stringify(plan))});assert.deepEqual(reopened.plan.rest_authoring.referenceDisplay,referenceDisplay);
+});
