@@ -2295,6 +2295,9 @@ SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expandu
 SCENE_LIBRARY_DEFAULT_GLOBS = (
     "~/.local/state/kaminos/*/scenes",
     "~/.local/state/kaminos/*/consumer/scenes",
+    "~/.local/state/kaminos/*/state/scenes",
+    "~/.local/state/kaminos/*/human-authoring-look-*/state/scenes",
+    "~/.local/state/kaminos/*/native-consumer/scenes",
     "~/.local/share/kaminos/*/scenes",
     str(ROOT.parent / "*" / "scenes"),
 )
@@ -4847,7 +4850,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     entry["error"] = str(error)
                 scenes.append(entry)
             if scenes:
-                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name == "consumer" else path.parent.name, "path": str(path), "scenes": scenes})
+                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name in ("consumer", "state", "native-consumer") else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})
 
     def handle_scene_library_read(self, params):

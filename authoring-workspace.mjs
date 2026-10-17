@@ -32,7 +32,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
   hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
-  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Outliner</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)</p></div>`;
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Outliner</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Shift-click to extend · Double-click to rename · Delete removes selected objects</p></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>

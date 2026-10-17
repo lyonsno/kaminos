@@ -4053,7 +4053,7 @@ let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
   if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemVisible(id))){transformControls.detach();return;}
-  if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
+  if(selectionTransforms&&sceneSelection.ids.length&&!sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
@@ -6627,7 +6627,7 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   glbFileName = authored.glbFileName;
   setVolumePrimitivesState(authored.volumePrimitives);
   if(authored.sceneSelection?.ids.length)setSceneSelection(authored.sceneSelection.ids,authored.sceneSelection.activeId);
-  else if (authored.activeSceneFieldId) window.selectSceneField(authored.activeSceneFieldId);
+  else if (authored.activeSceneFieldId) setSceneSelection([authored.activeSceneFieldId],authored.activeSceneFieldId);
   else if (activeSceneGroupId) setActiveSceneGroup(activeSceneGroupId);
   else setActiveSceneObject(activeSceneObjectId);
   if (!sceneObjects.length) {
@@ -6958,7 +6958,7 @@ function updateTransformInspector() {
   sceneOwnerControls?.update();
   inspector.dataset.selectedObjectId = activeSceneFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
-  inspector.dataset.selectionCount=String(activeSceneFieldId?1:sceneSelection.ids.length);
+  inspector.dataset.selectionCount=String(sceneSelection.ids.length);
   inspector.dataset.selectedFieldId=activeSceneFieldId||'';
   inspector.hidden=!!activeSceneFieldId;
   empty.hidden = !!entry;
@@ -6969,7 +6969,7 @@ function updateTransformInspector() {
   if (!entry && activeSceneGroupId) {
     empty.textContent = `Group selected: ${sceneGroupDisplayLabel(selectedSceneGroupEntry())}`;
   } else if (!entry) {
-    empty.textContent = 'No object selected';
+    empty.textContent = sceneSelection.ids.length>1?`${sceneSelection.ids.length} selected · Transform volumes individually`:'No object selected';
   }
   if (!entry) return;
 
@@ -6994,7 +6994,7 @@ function updateTransformInspector() {
       input.value = String(value);
     }
   }
-  if(selectionProxy&&sceneSelection.ids.length&&!transformControls?.dragging)selectionTransformProxy();
+  if(selectionProxy&&sceneSelection.ids.length&&!sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')&&!transformControls?.dragging)selectionTransformProxy();
   scenePlacementTools?.draw();
 }
 
@@ -7144,7 +7144,7 @@ function renderSceneObjectRow(record, options = {}) {
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
-    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" title="${escapeHtml(typeLabel+' · '+reloadability+' · '+source)}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
         ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
@@ -7192,7 +7192,7 @@ function renderSceneObjectList() {
   for (const row of outline) {
     if (row.kind === 'field') {
       const {id,label} = fields.find(field => field.id === row.id);
-      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><span class="scene-object-actions">${sceneVisibilityButton(id,label)}<small>Simulation</small></span></div>`);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':sceneSelection.ids.includes(id)?'selected':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><span class="scene-object-actions">${sceneVisibilityButton(id,label)}<small>Simulation</small></span></div>`);
     } else if (row.kind === 'group') {
       const group = sceneGroups.find(entry => entry.id === row.id);
       if (group) rows.push(renderSceneGroupRow(group, row));
@@ -7210,7 +7210,7 @@ function renderSceneObjectList() {
     renderSceneObjectList();
     list.querySelector(`[data-outline-toggle="${CSS.escape(key)}"]`)?.focus();
   }));
-  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=e=>window.selectSceneField(row.dataset.sceneFieldId,{extend:!!e.shiftKey});row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId,{extend:!!e.shiftKey});}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -7238,7 +7238,7 @@ function clearActiveSceneObjectSelection() {
 }
 
 function setActiveSceneObject(id,options={}) {
-  if(id==='flame-field'||id==='water-field')return window.selectSceneField(id);
+  if(id==='flame-field'||id==='water-field'){const next=changeSelection(sceneSelection,id,options);return setSceneSelection(next.ids,next.activeId);}
   if(!sceneObjects.some(o=>o.id===id)){clearActiveSceneObjectSelection();return;}
   if(splatCorrectionMode&&splatCorrectionMode.objectId!==id)exitSplatCorrectionMode({revert:false,silent:true});
   const next=changeSelection(sceneSelection,id,options);return setSceneSelection(next.ids,next.activeId);
@@ -7343,25 +7343,22 @@ function handleViewportSelectionClick(event) {
   if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
   const record = pickSceneObjectFromViewportPointer(event);
-  // Source symbols are drawn through the scene, including domain edges.
-  if(record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)){
-    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
+  // A visible object at this pixel wins over a helper outline. Free outline pixels still select the volume.
+  if(record){
+    window.selectSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
   }
   if (pickFlameDomainFromViewportPointer(event)) {
-    window.selectSceneField('flame-field');
+    window.selectSceneField('flame-field',{extend:!!event.shiftKey});
     setInfo('Selected: Fire & smoke domain');
     window._kaminosDirty?.();
     return;
   }
   if (pickWaterDomainFromViewportPointer(event)) {
-    window.selectSceneField('water-field');window._kaminosDirty?.();return;
+    window.selectSceneField('water-field',{extend:!!event.shiftKey});window._kaminosDirty?.();return;
   }
-  if (record) {
-    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
-    setInfo(`Selected: ${record.label || record.fileName || record.id}`);
-  } else if(!event.shiftKey) {
-    clearActiveSceneObjectSelection();
+  if(!event.shiftKey) {
+    window.kaminosSelection.clear();
     setInfo('Selection cleared');
   }
   window._kaminosDirty?.();
@@ -7669,16 +7666,14 @@ function registerSceneObject(object, metadata = {}) {
   return record;
 }
 
-window.selectSceneField=function(id) {
-  if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
-  if(window.kaminosPolyEdit?.active())window.kaminosPolyEdit.exit();
-  if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
-  transformControls?.detach();if(id==='flame-field'){currentMesh=flameDomainEditObject();if(transformControls){attachViewportGizmo(currentMesh);transformControls.setMode('translate');}}document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
-  refreshFlameDomainPreview();authoringWorkspace?.setContext('object');setInfo(id==='flame-field'?'Selected: Fire & smoke domain':'Selected: Water simulation');
+window.selectSceneField=function(id,options={}) {
+  const next=changeSelection(sceneSelection,id,options);
+  return sceneSelectionHistory?sceneSelectionHistory.set(next.ids,next.activeId):setSceneSelection(next.ids,next.activeId);
 };
 
 window.selectSceneObject = function(id,options={}) {
-  setActiveSceneObject(id,options);
+  const next=changeSelection(sceneSelection,id,options);
+  if(sceneSelectionHistory)sceneSelectionHistory.set(next.ids,next.activeId);else setActiveSceneObject(id,options);
   if (currentMesh && !activeSceneFieldId) {
     const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
@@ -7687,7 +7682,8 @@ window.selectSceneObject = function(id,options={}) {
 };
 
 window.selectSceneGroup = function(id,options={}) {
-  setActiveSceneGroup(id,options);
+  const next=changeSelection(sceneSelection,'@group:'+id,options);
+  if(sceneSelectionHistory)sceneSelectionHistory.set(next.ids,next.activeId);else setActiveSceneGroup(id,options);
   const group = selectedSceneGroupEntry();
   if (group) {
     setInfo(`Selected group: ${sceneGroupDisplayLabel(group)}`);
@@ -12065,11 +12061,11 @@ async function initScene() {
     controls,
     gizmo: transformControls,
     selected: () => selectedPlacementEntry()?.id || null,
-    prepare:()=>{if(sceneSelection.ids.length)selectionTransforms?.prepare();},
+    prepare:()=>{if(sceneSelection.ids.length&&!sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))selectionTransforms?.prepare();},
     overlaysVisible:()=>viewportDisplay.overlays&&!selectionCaptureSuspended,
     viewReference:id=>{const state=sceneCameras?.state();return state?.mode==='camera'&&id===state.activeId?{point:controls.target.toArray(),screen:[state.frame.x+state.frame.width/2,state.frame.y+state.frame.height/2]}:null;},
     transformSettings:()=>transformPreferences,
-    localOrientation:()=>sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
+    localOrientation:()=>activeSceneFieldId?[0,0,0]:sceneSelection.activeId?selectionRootState(sceneSelection.activeId).rotation:[0,0,0],
     read: id => {
       if(id==='@flame-domain')return structuredClone(flameDomainDraft||acceptedFlameDomainPose());
       if(id==='@selection-transform')return selectionTransforms.pose();
@@ -26306,7 +26302,7 @@ function writeSceneGroups(groups) {
     for(const [id,proxy] of groupProxies)if(!sceneGroups.some(g=>g.id===id)){proxy.removeFromParent();groupProxies.delete(id);}
     const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
     const ids=previous.ids.every(id=>valid.has(id))?previous.ids:expanded.filter(id=>valid.has(id));
-    if(field)window.selectSceneField(field);else setSceneSelection(ids,ids.includes(previous.activeId)?previous.activeId:ids.at(-1)??null);
+    if(field)setSceneSelection([field],field);else setSceneSelection(ids,ids.includes(previous.activeId)?previous.activeId:ids.at(-1)??null);
   }finally{burnerGraphWriting=wasWriting;}
 }
 function editSceneGroups(change,label) {
@@ -26546,11 +26542,12 @@ function groupProxy(group) {
   return proxy;
 }
 let sceneSelection={ids:[],activeId:null};
+let sceneSelectionHistory=null;
 let selectionTransforms=null,selectionProxy=null;
 let transformPreferences={orientation:'world',pivot:'median',explicit:true};
 let viewportHelpersVisible=true;
 const selectionBoxes=new Map();
-function sceneSelectionMembers(ids=sceneSelection.ids){return [...new Set(ids.flatMap(id=>id.startsWith('@group:')?sceneGroups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id]))];}
+function sceneSelectionMembers(ids=sceneSelection.ids){return [...new Set(ids.flatMap(id=>id==='flame-field'||id==='water-field'?[]:id.startsWith('@group:')?sceneGroups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id]))];}
 function selectionRootState(id){
   if(id.startsWith('@group:')){const group=sceneGroups.find(g=>g.id===id.slice(7));if(!group)throw Error('Selected group is absent');return groupEditState(group);}
   const entry=sceneObjects.find(o=>o.id===id);if(!entry)throw Error(`Selected object ${id} is absent`);
@@ -26575,25 +26572,23 @@ function selectionTransformProxy(){
   selectionProxy.userData.kaminosSceneObject={label:`${sceneSelection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
 function setSceneSelection(ids,activeId=ids.at(-1)??null){
-  if(ids.some(id=>id==='flame-field'||id==='water-field')){
-    if(ids.length!==1||activeId!==ids[0])throw Error('Select a simulation field on its own');
-    window.selectSceneField(ids[0]);return readSceneSelection();
-  }
-  const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
+  const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id),...(activeSceneComposition?['flame-field']:[]),...(localLiquidSetup?['water-field']:[])]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=checkedSelection(ids,activeId);
   if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
   if(JSON.stringify(next)!==JSON.stringify(sceneSelection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
-  sceneSelection=next;activeSceneFieldId=null;
+  sceneSelection=next;
+  activeSceneFieldId=['flame-field','water-field'].includes(next.activeId)?next.activeId:null;
   activeSceneGroupId=next.activeId?.startsWith('@group:')?next.activeId.slice(7):null;
-  activeSceneObjectId=activeSceneGroupId?null:next.activeId;
-  currentMesh=next.ids.length>1?selectionTransformProxy():activeSceneGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
+  activeSceneObjectId=activeSceneFieldId||activeSceneGroupId?null:next.activeId;
+  const mixedFields=next.ids.length>1&&next.ids.some(id=>id==='flame-field'||id==='water-field');
+  currentMesh=mixedFields?null:next.ids.length>1?selectionTransformProxy():activeSceneFieldId==='flame-field'?flameDomainEditObject():activeSceneGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
   renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
   if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
 function readSceneSelection(){
-  return structuredClone({...sceneSelection,...(activeSceneFieldId?{ids:[activeSceneFieldId],activeId:activeSceneFieldId}:{}),fieldId:activeSceneFieldId,memberIds:sceneSelectionMembers(),preferences:transformPreferences});
+  return structuredClone({...sceneSelection,fieldId:activeSceneFieldId,memberIds:sceneSelectionMembers(),preferences:transformPreferences});
 }
 function updateSelectionFeedback(){
   if(flameDomainGuide)styleSimulationDomainGuide(flameDomainGuide,'flame-field');
@@ -26614,7 +26609,7 @@ function updateSelectionFeedback(){
   }
 }
 function styleSimulationDomainGuide(guide,id){
-  const selected=activeSceneFieldId===id;
+  const selected=sceneSelection.ids.includes(id);
   guide.material.color.set(selected?0xffc66d:0x5bd8f5);
   styleHelperLines(guide,{width:viewportDisplay.domainWidth+(selected?1:0),opacity:viewportDisplay.domainOpacity});
 }
@@ -26640,13 +26635,29 @@ function syncEditorHelperVisibility(){
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}
+function setupSelectionHistory(){
+  const edits=scenePlacementTools.edits,id='@scene-selection';
+  const read=()=>checkedSelection(sceneSelection.ids,sceneSelection.activeId);
+  edits.register(id,{read,check:value=>checkedSelection(value.ids,value.activeId),write:value=>{
+    const previous=burnerGraphWriting;burnerGraphWriting=true;
+    try{setSceneSelection(value.ids,value.activeId);}finally{burnerGraphWriting=previous;}
+  }});
+  sceneSelectionHistory={set(ids,activeId=ids.at(-1)??null){
+    const next=checkedSelection(ids,activeId);if(JSON.stringify(next)===JSON.stringify(read()))return read();
+    if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
+    scenePlacementTools.selectionChanged();
+    try{return edits.apply(id,next,next.ids.length?'Change selection':'Clear selection');}
+    catch(error){if(edits.state().active?.id===id)edits.cancel();throw error;}
+  }};
+}
 function setupSelectionTransforms(){
+  setupSelectionHistory();
   selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>sceneSelection,groups:()=>sceneGroups,preferences:()=>transformPreferences,
     read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
   scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
   window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
-    set:(ids,activeId)=>setSceneSelection(ids,activeId),all:()=>setSceneSelection([...sceneGroups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...sceneObjects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>clearActiveSceneObjectSelection(),
-    transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
+    set:(ids,activeId)=>sceneSelectionHistory.set(ids,activeId),all:()=>sceneSelectionHistory.set([...['flame-field','water-field'].filter(id=>(id==='flame-field'?activeSceneComposition:localLiquidSetup)&&isSceneItemVisible(id)),...sceneGroups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...sceneObjects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>sceneSelectionHistory.set([],null),
+    transform:patch=>{if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
 
 function readSelectionMembership(){return {objects:sceneObjects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(sceneSelection),field:activeSceneFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
@@ -26680,11 +26691,12 @@ async function writeSelectionMembershipUnchecked(value){
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
   setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
   sceneCameras?.membershipChanged(value.activeCameraId??null);
-  if(value.field)window.selectSceneField(value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
+  if(value.field&&!value.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
 }
 async function writeSelectionMembership(raw){const value=checkSelectionMembership(raw),before=readSelectionMembership();try{await writeSelectionMembershipUnchecked(value);}catch(error){await writeSelectionMembershipUnchecked(before);throw error;}}
 function removeSelectedSceneObjects(){
+  if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
   const before=checkSelectionMembership(readSelectionMembership());
   for(const id of ids)compoundRetentionTargets.set(id,'@selection-membership');
@@ -26738,6 +26750,7 @@ async function separatePolySelection(){
   return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partSource:partStored.source,restSource:restStored.source};
 }
 function duplicateSelectedSceneObjects({interactive=false}={}){
+  if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   assertSceneConstructionAvailable();const roots=selectedRootIds(),members=sceneSelectionMembers(roots);
   if(members.some(id=>!canDuplicateObject(sceneObjects.find(o=>o.id===id))))throw Error('This selection contains a source whose independent duplication is unsupported');
   const before=checkSelectionMembership(readSelectionMembership()),copies=new Map(),newRoots=[];
@@ -26758,9 +26771,11 @@ function duplicateSelectedSceneObjects({interactive=false}={}){
   else complete({commit:true});return newRoots;
 }
 function groupSelectedObjects(label='Group'){
+  if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   const ids=sceneSelectionMembers();if(!ids.length)throw Error('Choose objects to group');setSceneSelection(ids,ids.at(-1));return groupSceneObjects(ids,label);
 }
 function ungroupSelectedObjects(){
+  if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   const ids=sceneSelectionMembers();setSceneSelection(ids,ids.at(-1));
   editSceneGroups(groups=>{for(const group of groups)group.objectIds=group.objectIds.filter(id=>!ids.includes(id));groups.splice(0,groups.length,...groups.filter(g=>g.objectIds.length));},'Unparent selected');
   setSceneSelection(ids,ids.at(-1));
@@ -26769,7 +26784,9 @@ function syncSelectionInspector(){
   let summary=document.getElementById('selection-properties-summary');if(!summary){summary=document.createElement('p');summary.id='selection-properties-summary';summary.className='selection-summary';document.getElementById('transform-inspector').prepend(summary);}
   const slot=document.getElementById('authoring-type-slot');if(slot&&summary.parentElement!==slot)slot.prepend(summary);
   summary.hidden=sceneSelection.ids.length<2;if(summary.hidden)return;
-  const active=selectedSceneObjectEntry()||selectedSceneGroupEntry(),poses=selectedRootIds().map(selectionRootState);
+  const active=selectedSceneObjectEntry()||selectedSceneGroupEntry();
+  if(sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')){summary.textContent=`${sceneSelection.ids.length} selected · Active: ${active?.label||sceneSelection.activeId}. Visibility applies to the selection; properties edit the active item. Transform simulation volumes individually.`;return;}
+  const poses=selectedRootIds().map(selectionRootState);
   const mixed=['position','rotation','scale'].filter(key=>mixedSelectionValue(poses.map(p=>p[key])).mixed);
   summary.textContent=`${sceneSelection.ids.length} selected · Active: ${active?.label||sceneSelection.activeId}. Transform fields edit the selection frame; data below edits the active item. ${mixed.length?`Mixed ${mixed.join(', ')}.`:''}`;
 }
@@ -26795,13 +26812,14 @@ function installSelectionInput(){
   document.addEventListener('pointerup',event=>{
     if(!box?.start)return;event.preventDefault();event.stopImmediatePropagation();
     const ids=objectsInScreenBox(sceneObjects.filter(entry=>isSceneItemVisible(entry.id)),camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
-    const next=box.subtract?sceneSelection.ids.filter(id=>!ids.includes(id)):[...new Set([...sceneSelection.ids,...ids])];stopBox();setSceneSelection(next,next.at(-1));suppressBoxClick=true;
+    const next=box.subtract?sceneSelection.ids.filter(id=>!ids.includes(id)):[...new Set([...sceneSelection.ids,...ids])];stopBox();sceneSelectionHistory.set(next,next.at(-1));suppressBoxClick=true;
   },true);
   document.addEventListener('click',event=>{if(suppressBoxClick){event.preventDefault();event.stopImmediatePropagation();suppressBoxClick=false;}},true);
   window.addEventListener('blur',stopBox);
 }
 
 function selectedPlacementEntry() {
+  if(sceneSelection.ids.length>1&&sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field'))return null;
   if(activeSceneFieldId==='flame-field')return {id:'@flame-domain',type:'simulation-domain',label:'Fire & smoke domain',object:flameDomainEditObject()};
   if(sceneSelection.ids.length>1)return {id:'@selection-transform',type:'selection',label:`${sceneSelection.ids.length} selected · ${selectedSceneObjectEntry()?.label||selectedSceneGroupEntry()?.label||''}`,object:selectionTransformProxy()};
   const group=selectedSceneGroupEntry();
@@ -26810,6 +26828,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
+  if(sceneSelection.ids.length>1&&sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')){const box=new THREE.Box3();for(const id of sceneSelection.ids){if(id==='flame-field'&&flameDomainGuide)box.union(flameDomainGuide.box);else if(id==='water-field'&&localLiquidDomainGuide)box.union(localLiquidDomainGuide.box);}for(const entry of sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)))box.expandByObject(entry.object);return !box.isEmpty()&&frameBox(box,camera,controls);}
   if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
   if(activeSceneFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
@@ -27480,8 +27499,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (legacyBurner?.enabled !== false && legacyBurner && !objectRecords.some(record=>record.type===PROCEDURAL_MESH_TYPE)) migrateLegacyBurner(legacyBurner);
   if (!authoredFlamePresent) applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
-  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>sceneObjects.some(o=>o.id===id)||sceneGroups.some(g=>'@group:'+g.id===id));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
-  if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))window.selectSceneField(data.activeFieldId);
+  if(Array.isArray(data.selectionIds)){const valid=data.selectionIds.filter(id=>sceneObjects.some(o=>o.id===id)||sceneGroups.some(g=>'@group:'+g.id===id)||(id==='flame-field'&&!!activeSceneComposition)||(id==='water-field'&&!!localLiquidSetup));setSceneSelection(valid,valid.includes(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId)?(data.activeGroupId?'@group:'+data.activeGroupId:data.activeObjectId):valid.at(-1)??null);}
+  if(data.activeFieldId && (data.activeFieldId==='flame-field'?activeSceneComposition:localLiquidSetup))setSceneSelection([...new Set([...sceneSelection.ids,data.activeFieldId])],data.activeFieldId);
 
   // The pinned basin is already mounted. Reapplying identical primitives would
   // rebuild its GPU field and invalidate textures held by the lighting pass.
@@ -27621,7 +27640,7 @@ window.openSavedScene = async function() {
     const data = await grFetchApi('read', { root: 'scenes', path: name }).catch(() => null);
     return { name, label: data?.label || data?.capture?.label || '', timestamp: data?.timestamp || '' };
   }));
-  const more = fetch('/api/scene-library').then(response => response.json()).then(library =>
+  const more = fetch('/api/scene-library').then(async response => {const library=await response.json();if(!response.ok||!Array.isArray(library.stores))throw Error(library.error||`HTTP ${response.status}`);return library;}).then(library =>
     (library.stores || []).flatMap(store => store.scenes.filter(scene => !scene.error).map(scene => ({ ...scene, store: { id: store.id, label: store.label } }))));
   const choice = await pickSavedScene({ scenes, more });
   if (choice === 'browse') { document.getElementById('scene-file-input').click(); return; }

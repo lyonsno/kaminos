@@ -334,3 +334,17 @@ body.experiment-workspace.outline-in-experiment #authoring-hierarchy, body.exper
 .scene-visibility-eye svg {width:18px;height:15px;fill:none;stroke:currentColor;stroke-width:1.4}
 .scene-visibility-eye[aria-pressed=false] {color:#747a84}
 .scene-visibility-eye:hover,.scene-visibility-eye:focus-visible {color:white;background:#414650!important;outline:1px solid #7798c2}
+
+/* One compact line per scene item: hierarchy, type, name and the visibility column. */
+#authoring-tree .scene-object-list { gap:0; }
+#authoring-tree .scene-object-row, #authoring-tree .scene-group-row { min-height:27px; padding:1px 4px; border-radius:0; border:0; gap:4px; }
+#authoring-tree .scene-object-row:nth-child(even), #authoring-tree .scene-group-row:nth-child(even) { background:#202124; }
+#authoring-tree .scene-object-row:hover, #authoring-tree .scene-group-row:hover { background:#303238; }
+#authoring-tree .scene-object-row.selected, #authoring-tree .scene-group-row.selected { background:#45382c; color:#ead2b2; }
+#authoring-tree .scene-object-row.active, #authoring-tree .scene-group-row.active { background:#55432e; color:#fff0d7; box-shadow:inset 2px 0 #e9b66b; }
+#authoring-tree .scene-name-input { font-weight:400; padding:2px 0; }
+#authoring-tree .scene-object-actions { gap:2px; }
+#authoring-tree .scene-object-remove { display:none; }
+#authoring-tree .scene-field-row small { display:none; }
+#authoring-tree .scene-object-row > span:first-child, #authoring-tree .scene-group-row > span:first-child { flex:1; overflow:hidden; }
+#authoring-tree .scene-object-row .scene-visibility-eye { height:25px; }
