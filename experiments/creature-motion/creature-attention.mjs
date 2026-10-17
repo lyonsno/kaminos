@@ -106,20 +106,20 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if(s.visible){
      // Causes fire on transitions and changes, not on mere presence.
      if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
-     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?'noticed again':'first sight';}
+     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?'noticed again':m.started?'back to it':'first sight';}
      m.everSeen=true;
     }else if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
     // Inspected once familiar enough; forgotten only after it fades well below.
-    if(attended){m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
-    else{m.familiarity*=forget;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;}}
+    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
+    else{m.familiarity*=forget;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
     // A thing seen but not yet inspected keeps its pull while in view; an
     // inspected (familiar) thing pulls only through a fresh cause.
     // It waits its turn: only a fresh event interrupts an ongoing inspection.
     const inspecting=focus&&!focus.id.startsWith('look-around-');
     const pending=m.everSeen&&!m.inspected&&(!inspecting||attended)?significance*(1-m.familiarity):0;
-    if(pending>m.impulse&&!attended)m.cause=m.forgotten?'noticed again':'first sight';
+    if(pending>m.impulse&&!attended)m.cause=m.forgotten?'noticed again':m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
     const near=Math.max(0,1-s.distance/o.noticeRadius),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
