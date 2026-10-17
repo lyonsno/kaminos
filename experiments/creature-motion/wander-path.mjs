@@ -36,16 +36,28 @@ function curveTable(points,area) {
  if(!(distance>0)||!Number.isFinite(distance))throw Error('Wander curve is collapsed or not representable');
  return {table,length:distance};
 }
-export function createWanderPath({area,position,direction,seed=1,snapshot}={}) {
- let rng,points,offset=0,total=0,entry=false,segments=0,lookup,fallback;
+function validateAreas(rows){
+ if(!Array.isArray(rows)||!rows.length)throw Error('Wander requires an active zone');
+ const ids=new Set();return rows.map(row=>{if(typeof row.id!=='string'||!row.id.trim()||ids.has(row.id)||!Number.isFinite(row.preference)||row.preference<0)throw Error('Invalid zone identity or preference');ids.add(row.id);return {id:row.id,preference:row.preference,area:validateArea(row.area)};});
+}
+export function chooseWanderZone(areas,draw){
+ if(!Number.isFinite(draw)||draw<0||draw>=1)throw Error('Zone draw must be in [0,1)');
+ const max=areas.reduce((m,row)=>Math.max(m,row.preference),0);if(!(max>0))throw Error('Wander requires a positive zone preference');
+ let remainder=draw*areas.reduce((sum,row)=>sum+row.preference/max,0);
+ for(const row of areas){remainder-=row.preference/max;if(remainder<0)return row;}
+ return areas.findLast(row=>row.preference>0);
+}
+export function createWanderPath({area,areas,position,direction,seed=1,snapshot}={}) {
+ let rng,points,offset=0,total=0,entry=false,segments=0,lookup,fallback,zoneId=null;
  if(snapshot!==undefined) {
   if(snapshot?.schema!=='kaminos.creature-wander-path.v1'||!Number.isInteger(snapshot.rng)||snapshot.rng<0||snapshot.rng>0xffffffff||!Array.isArray(snapshot.points)||snapshot.points.length!==3||!snapshot.points.every(finitePair)||!Number.isFinite(snapshot.offset)||snapshot.offset<0||!Number.isFinite(snapshot.distance)||snapshot.distance<0||typeof snapshot.entry!=='boolean'||!Number.isSafeInteger(snapshot.segments)||snapshot.segments<0)throw Error('Invalid wander snapshot or random state');
   area=validateArea(snapshot.area);rng=snapshot.rng;points=copy(snapshot.points);offset=snapshot.offset;total=snapshot.distance;entry=snapshot.entry;segments=snapshot.segments;fallback=normalized(snapshot.direction);
+  if(snapshot.areas!==undefined){areas=validateAreas(snapshot.areas);zoneId=snapshot.zoneId;if(!areas.some(row=>row.id===zoneId))throw Error('Snapshot has an unknown zone');}
   lookup=curveTable(points,area);if(offset>lookup.length)throw Error('Wander snapshot distance exceeds current curve');
  } else {
   area=validateArea(area);if(!finitePair(position))throw Error('Wander position must be finite');
   fallback=normalized(direction);if(!Number.isInteger(seed)||seed<0||seed>0xffffffff)throw Error('Wander random seed must be an unsigned integer');rng=seed;
-  initialize(position,fallback);
+  if(areas!==undefined){areas=validateAreas(areas);chooseArea();}initialize(position,fallback);
  }
  function random() {
   rng=(rng+0x6d2b79f5)>>>0;let t=rng;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;
@@ -54,6 +66,10 @@ export function createWanderPath({area,position,direction,seed=1,snapshot}={}) {
   const radius=Math.sqrt(random()),angle=random()*2*Math.PI;
   const x=radius*Math.cos(angle)*area.radii[0],z=radius*Math.sin(angle)*area.radii[1],c=Math.cos(area.yaw),s=Math.sin(area.yaw);
   return [area.center[0]+c*x-s*z,area.center[1]+s*x+c*z];
+ }
+ function chooseArea(){
+  const chosen=chooseWanderZone(areas,random());
+  area=copy(chosen.area);zoneId=chosen.id;
  }
  function initialize(start,heading) {
   let handle=Math.min(...area.radii)*.5;entry=!inside(start,area);
@@ -77,13 +93,14 @@ export function createWanderPath({area,position,direction,seed=1,snapshot}={}) {
  }
  function nextCurve() {
   const end=sample();segments++;
+  if(areas){chooseArea();initialize(end.position,end.direction);return;}
   if(entry){initialize(points[2],end.direction);return;}
   // Adjacent midpoint quadratics share both their endpoint and tangent.
   const control=points[2].map((v,i)=>2*v-points[1][i]);
   points=[pair(points[2]),control,mix(control,choosePoint())];offset=0;fallback=end.direction;lookup=curveTable(points,area);
  }
  function read() {
-  const state=sample();return {...state,area:copy(area),target:pair(points[2]),distance:total,segments,status:inside(state.position,area)?'wandering':'returning-to-area'};
+  const state=sample();return {...state,...(areas?{zoneId}:{}),area:copy(area),target:pair(points[2]),distance:total,segments,status:inside(state.position,area)?'wandering':'returning-to-area'};
  }
  function advance(distance) {
   if(!Number.isFinite(distance)||distance<0)throw Error('Wander distance must be finite and nonnegative');
@@ -98,6 +115,7 @@ export function createWanderPath({area,position,direction,seed=1,snapshot}={}) {
  function setArea(value) {
   const next=validateArea(value),current=sample();area=next;initialize(current.position,current.direction);return read();
  }
- function save() {return {schema:'kaminos.creature-wander-path.v1',area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
- return Object.freeze({read,advance,setArea,snapshot:save});
+ function setAreas(value){const next=validateAreas(value);if(!next.some(row=>row.preference>0))throw Error('Wander requires a positive zone preference');if(JSON.stringify(next)===JSON.stringify(areas))return read();const current=sample();areas=next;chooseArea();initialize(current.position,current.direction);return read();}
+ function save() {return {schema:'kaminos.creature-wander-path.v1',...(areas?{areas:copy(areas),zoneId}:{}),area:copy(area),points:copy(points),offset,distance:total,rng,entry,segments,direction:sample().direction};}
+ return Object.freeze({read,advance,setArea,setAreas,snapshot:save});
 }

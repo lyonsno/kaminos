@@ -46,7 +46,7 @@ async function checkRecipeView(view,current){
  try{if(current&&Object.keys(current).length)checker.setView(current);checker.setView(view);}finally{await checker.dispose();}
 }
 
-export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
+export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
  const choices=checkRecipeInputs(inputs);
  const data=await loadSources(inputs),document=host.controls.document;
@@ -68,6 +68,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
+ let heldWander=inputs.held_wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1;
  const relatedAssets=[];
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
@@ -78,7 +79,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined},
+  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot()},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
@@ -93,6 +94,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   liveRoot?.guide();
  }
  async function ensureArea(transform){
+  if(zoneProvider){const row=zoneProvider.roots()[0];if(!row)throw Error('No active Wander zone');areaRoot=row.root;areaAsset=row.asset;return;}
   if(areaRoot?.parent)return;
   areaRoot=new THREE.Group();areaRoot.name='Wander area';areaRoot.userData.kaminosEditorOnly=true;
   const disk=new THREE.Mesh(new THREE.CircleGeometry(1,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x4bc9d8,side:THREE.DoubleSide,transparent:true,opacity:.09,depthWrite:false}));
@@ -103,6 +105,13 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function syncArea(){
   if(!wander)return true;
+  if(zoneProvider){try{
+   const frame=authoredPlacement(),rows=zoneProvider.roots();if(!rows.length)throw Error('No active Wander zones');
+   const areas=rows.map(row=>({id:row.id,preference:row.preference,area:wanderAreaInPlacement({THREE,areaRoot:row.root,placement:frame})})),key=JSON.stringify(areas);
+   const prior=areaKey?JSON.parse(areaKey):null,same=Array.isArray(prior)&&prior.length===areas.length&&areas.every((row,i)=>row.id===prior[i].id&&row.preference===prior[i].preference&&[...row.area.center,...row.area.radii,row.area.yaw].every((v,j)=>Math.abs(v-[...prior[i].area.center,...prior[i].area.radii,prior[i].area.yaw][j])<=1e-9*Math.max(1,Math.abs(v))));
+   if(!same){wander.setAreas(areas);areaKey=key;refreshGuide();}
+   const selected=rows.find(row=>row.id===wander.read().path.zoneId)??rows[0];areaRoot=selected.root;areaAsset=selected.asset;actionError=null;return true;
+  }catch(error){actionError=error.message;unsubscribe();player.pause();refresh();return false;}}
   if(!areaRoot?.parent){actionError='Wander area was removed; current pose is held';unsubscribe();player.pause();refresh();return false;}
   try{const area=wanderAreaInPlacement({THREE,areaRoot,placement:authoredPlacement()}),key=JSON.stringify(area),prior=areaKey?JSON.parse(areaKey):null;
    const same=prior&&[...area.center,...area.radii,area.yaw].every((v,i)=>Math.abs(v-[...prior.center,...prior.radii,prior.yaw][i])<=1e-9*Math.max(1,Math.abs(v)));
@@ -184,7 +193,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
-  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(wander.read().path.area);if(!syncArea())throw Error(actionError);mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
+  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(zoneProvider?wander.snapshot().path.areas??null:wander.read().path.area);if(!syncArea())throw Error(actionError);mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
   refreshGuide();
   if(inputs.gizmos!==undefined){
    if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
@@ -204,15 +213,16 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    action:operation('action',async input=>{
     if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
     unsubscribe();player.pause();
-    if(input.kind==='preview'){wander=null;actionError=null;mode='source';cycle=0;source.presentation.mode=mode;source.presentation.action='preview';player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}
+    if(input.kind==='preview'){if(wander)heldWander=wander;wander=null;actionError=null;mode='source';cycle=0;source.presentation.mode=mode;source.presentation.action='preview';player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}
     await ensureArea();active();
+    if(heldWander){wander=heldWander;heldWander=null;}
     const frame=authoredPlacement(),area=wanderAreaInPlacement({THREE,areaRoot,placement:frame});
     if(!wander){
      placement.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),point=frame.worldToLocal(root.getWorldPosition(new THREE.Vector3()));
      const first=adapter.frame(0).bones.find(b=>b.parent===null).worldMatrix,last=adapter.frame(adapter.frames-1).bones.find(b=>b.parent===null).worldMatrix;
      wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
     }
-    areaKey=JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';refreshGuide();player.seek(wander.read().frame);player.play();startClock();host.scene.refreshPresentation?.(asset);return read();
+    areaKey=zoneProvider?'':JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';if(zoneProvider&&!syncArea())return read();refreshGuide();player.seek(wander.read().frame);player.play();startClock();host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
    advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();clock+=input.seconds*1000;const state=presentWander(input.seconds,false);host.scene.refreshPresentation?.(asset);return state;}),
@@ -232,16 +242,17 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
     if(next.prompt!==undefined&&next.prompt!==loaded.motion.prompt||next.seed!==undefined&&next.seed!==loaded.motion.seed)throw Error('Motion choice prompt or seed differs from retained source');
     const nextAdapter=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:data.frame}),nextWalking=createWalkingPoseAdapter({THREE,adapter:nextAdapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
-    const prior={adapter,walking,wander,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
+    const prior={adapter,walking,wander,heldWander,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
     const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
      if(wander)wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,pathSnapshot:prior.wander.snapshot().path});
+     if(heldWander)heldWander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,pathSnapshot:prior.heldWander.snapshot().path});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
     }
     catch(error){
-     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;heldWander=prior.heldWander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
@@ -260,7 +271,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
    seating?.dispose();presentation?.dispose();
-   presentation=mountCreatureProperties({document,read,invoke,
+   presentation=mountProperties({document,read,invoke,
     save(recipe){const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
@@ -271,7 +282,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     }});
    refresh=presentation.update;
    if(host.controls.mountObject)seating=host.controls.mountObject({asset,relatedAssets,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
-   else root.append(presentation.properties,presentation.playback);
+   else {root.append(presentation.properties);if(presentation.playback)root.append(presentation.playback);}
    refresh();return {dispose(){seating?.dispose();presentation?.dispose();refresh=()=>{};}};
   }};
  }catch(error){await dispose();throw error;}

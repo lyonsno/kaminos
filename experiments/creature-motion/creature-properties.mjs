@@ -1,6 +1,6 @@
 import {mountPlaybackControls} from '../../playback-controls.mjs';
 
-export function mountCreatureProperties({document,read,invoke,save,open}) {
+export function mountCreatureProperties({document,read,invoke,save,open,behaviorContext=null}) {
  const el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;};
  const properties=el('section');properties.className='creature-properties';
  const style=el('style',`.creature-properties{display:grid;gap:12px;border-top:1px solid #41494e;padding-top:12px;margin-top:8px;color:#d9e2e5;font:12px system-ui}.creature-properties[hidden]{display:none}.creature-properties h3{margin:0}.creature-properties label{display:grid;gap:5px}.creature-properties select{width:100%;min-width:0;background:#292e32;color:inherit;padding:7px;border:1px solid #505d64;border-radius:4px}.creature-properties details{font-size:11px}.creature-properties details>div{display:grid;gap:10px;margin-top:10px}.creature-properties button{padding:6px;background:#303b41;color:inherit;border:1px solid #56666d;border-radius:4px}.creature-properties [role=alert]{color:#ffb7ac;overflow-wrap:anywhere}.creature-properties .creature-identity{font:10px ui-monospace,monospace;overflow-wrap:anywhere;color:#95a7ad}.scene-owner-playback{position:absolute;bottom:0;left:0;right:0;z-index:35}.creature-properties input[type=file]{max-width:100%}`);
@@ -37,6 +37,27 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
    if(name==='step')return invoke('seek',{frame:Math.min(p.frames-1,Math.max(0,(p.frame??0)+input.direction))});
    return invoke(name,input);
   }});
+ let behaviorUI=null;
+ if(behaviorContext){
+  const hiddenStyle=el('style','.creature-properties [hidden]{display:none}');properties.append(hiddenStyle);
+  action.parentElement?.remove();editArea.remove();actionNote.remove();setup.remove();
+  // DOM/test adapters need not expose parentElement; actual DOM does.
+  if(action.parentNode)action.parentNode.remove();
+  const controls=el('div'),activeLabel=el('label','Behavior active'),active=el('input'),status=el('p'),places=el('div'),heading=el('h3','Places'),add=el('select'),create=el('button','New zone'),previewLabel=el('label','Preview motion clip'),preview=el('input'),localPreview=el('div');
+  active.type=preview.type='checkbox';active.setAttribute('aria-label','Creature behavior active');preview.setAttribute('aria-label','Preview motion clip');status.setAttribute('role','status');status.style.margin='0';
+  activeLabel.style.cssText=previewLabel.style.cssText='display:flex;align-items:center;justify-content:space-between';activeLabel.append(active);previewLabel.append(preview);add.setAttribute('aria-label','Add existing Wander zone');create.type='button';
+  properties.querySelector('h3').textContent='Body & motion';controls.append(el('h3','Behavior'),activeLabel,status,heading,places,add,create,previewLabel);properties.prepend(controls);
+  localPreview.className='creature-local-preview';localPreview.append(playback.node);properties.append(localPreview);
+  const extra=el('style',`.creature-place{display:grid;grid-template-columns:20px minmax(0,1fr) 64px 24px;gap:5px;align-items:center;margin:6px 0}.creature-place button{overflow:hidden;text-overflow:ellipsis}.creature-place input[type=number]{min-width:0;width:100%;box-sizing:border-box;background:#292e32;color:inherit;border:1px solid #505d64;padding:5px}.creature-local-preview[hidden]{display:none}.creature-local-preview .playback-controls{position:relative;grid-template-columns:1fr;grid-template-rows:auto;gap:7px;padding:8px 0}.creature-local-preview .playback-timeline{grid-row:2}.creature-local-preview .playback-options{grid-row:3;justify-self:start}.creature-local-preview .playback-controls output{width:13ch;flex-basis:13ch}`);properties.append(extra);
+  const handle=fn=>perform('behavior',fn);active.onchange=()=>handle(()=>behaviorContext.setActive(active.checked));preview.onchange=()=>handle(()=>behaviorContext.setPreview(preview.checked));
+  add.onchange=()=>handle(()=>{if(!add.value)return;const state=behaviorContext.read();return behaviorContext.setPlaces([...state.places,{zoneId:add.value,enabled:true,preference:1}]);});create.onclick=()=>handle(()=>behaviorContext.addZone());
+  behaviorUI={active,status,localPreview,preview,update(){const state=behaviorContext.read();active.checked=state.behavior.active;active.disabled=state.behavior.preview;preview.checked=state.behavior.preview;status.textContent=state.behavior.status;localPreview.hidden=!state.behavior.preview;mode.parentElement.hidden=!state.behavior.preview;travel.hidden=true;
+   const key=JSON.stringify([state.places,state.zones.map(z=>({id:z.id,label:z.label,mounted:z.mounted}))]);if(key===behaviorUI.key)return;behaviorUI.key=key;places.replaceChildren();add.replaceChildren();const option=el('option','Add existing zone…');option.value='';add.append(option);
+   const change=(zoneId,patch)=>{const current=behaviorContext.read();return behaviorContext.setPlaces(current.places.map(p=>p.zoneId===zoneId?{...p,...patch}:p));};
+   for(const ref of state.places){const zone=state.zones.find(z=>z.id===ref.zoneId),label=zone?.label??'Missing zone',row=el('div'),enabled=el('input'),name=el('button',label),weight=el('input'),remove=el('button','×');row.className='creature-place';enabled.type='checkbox';enabled.checked=ref.enabled;enabled.setAttribute('aria-label','Use zone '+label);enabled.onchange=()=>handle(()=>change(ref.zoneId,{enabled:enabled.checked}));name.type='button';name.title='Select this zone in the scene';name.onclick=()=>handle(()=>behaviorContext.selectZone(ref.zoneId));weight.type='number';weight.min='0';weight.step='any';weight.value=String(ref.preference);weight.setAttribute('aria-label','Preference for '+label);weight.title='Relative preference when choosing the next destination; not a time percentage';weight.onchange=()=>handle(()=>change(ref.zoneId,{preference:Number(weight.value)}));remove.type='button';remove.setAttribute('aria-label','Remove zone '+label);remove.onclick=()=>handle(()=>behaviorContext.setPlaces(behaviorContext.read().places.filter(p=>p.zoneId!==ref.zoneId)));row.append(enabled,name,weight,remove);places.append(row);}
+   for(const zone of state.zones)if(zone.mounted&&!state.places.some(p=>p.zoneId===zone.id)){const option=el('option',zone.label);option.value=zone.id;add.append(option);}add.value='';
+  }};
+ }
  function update(){
   if(disposed)return;const r=read(),s=r.currentSkin;
   // The selector owns Cast/Attachment errors, including requests made through
@@ -52,8 +73,8 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
   motion.value=r.motion?.id??'';mode.value=r.mode;
   travel.hidden=r.mode!=='path';travel.textContent=r.pathGuide?`Radius ${r.pathGuide.radius} · ${r.pathGuide.sourceDistance.toFixed(3)} scene units per cycle · source-paced travel`:'';
   identity.textContent=`${r.source.prompt??'Retained motion'}\nMotion ${r.source.motionSha256}\nSkin ${r.source.caseSha256}`;
-  playback.update();
+  playback.update();behaviorUI?.update();
  }
  update();
- return {properties,playback:playback.node,update,dispose(){disposed=true;playback.dispose();properties.remove();}};
+ return {properties,playback:behaviorContext?null:playback.node,update,dispose(){disposed=true;playback.dispose();properties.remove();}};
 }
