@@ -31,6 +31,8 @@ const loading=tool.selectResult('a'.repeat(32));tool.close();selected=a;
 handler=(url,body)=>body?.action==='inspect'?{sourceDigest:'a'.repeat(64),diagonal:2}:{results:[]};await tool.open();lateResult.resolve(result('a'.repeat(32),'b'.repeat(64)));await loading;
 assert.equal(tool.read().resultId,null,'closed result load must not publish into another inspection');
 handler=url=>url.includes('result=1')?result('c'.repeat(32),'a'.repeat(64)):{results:[]};await tool.selectResult('c'.repeat(32));
+assert.equal(panelHost.children[0].querySelector('[data-mp="results"]').value,'c'.repeat(32));
+assert.equal(panelHost.children[0].querySelector('[data-mp="envelope"]').value,'0.01');
 let boundary;scene.traverse(o=>{if(o.isMesh&&o.material.isMeshStandardMaterial)boundary=o;});
 assert.equal(boundary.parent.isClippingGroup,true,'effective WebGPU boundary requires ClippingGroup ancestry');
 assert.equal(boundary.parent.clippingPlanes.length,1);
