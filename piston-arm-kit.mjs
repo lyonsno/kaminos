@@ -61,6 +61,7 @@ export function pistonArmScene(template, options={}) {
  scene.groups=groups;scene.actuators=[actuator];scene.version=11;scene.model=null;scene.transform=pose();scene.materials=null;scene.capture=null;
  scene.activeObjectId=null;scene.activeGroupId=`${prefix}-barrel`;scene.activeFieldId=null;scene.selectionIds=[roleIds.barrelId];
  scene.label='Analytical flame arm';
+ scene.environment={...scene.environment,ground:{...scene.environment?.ground,height:floor}};
  scene.provenance={...scene.provenance,analyticalCarrier:{schema:'kaminos.piston-arm-carrier.v1',parameters:{height,reach,thickness,cupRadius,prefix},parts,roleIds}};
  return scene;
 }

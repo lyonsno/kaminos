@@ -11,6 +11,7 @@ test('primitive carrier replaces cast geometry, retains fire recipe, and names a
  const input=source(),before=structuredClone(input),s=pistonArmScene(input);assert.deepEqual(input,before);
  assert.equal(s.objects.some(o=>o.type==='glb'),false);assert.equal(s.model,null);assert.deepEqual(s.composition,input.composition);
  const meshes=s.objects.filter(o=>o.type==='procedural-mesh');assert.ok(meshes.length>10);for(const o of meshes)checkedProceduralMesh(o);
+ const foot=meshes.find(o=>o.id.endsWith('-foot'));assert.equal(foot.transform.position[1]-foot.geometry.parameters.height/2,s.environment.ground.height);
  const [r]=checkedActuators(s.actuators);assert.equal(s.actuators.length,1);const ids=[r.fixedId,r.followerId,r.barrelId,r.rodId];assert.equal(new Set(ids).size,4);
  for(const id of ids){const g=s.groups.find(g=>'@group:'+g.id===id);assert.ok(g);assert.ok(g.objectIds.length);for(const id of g.objectIds)assert.ok(s.objects.some(o=>o.id===id));}
  assert.ok(s.groups.find(g=>'@group:'+g.id===r.followerId).objectIds.includes('fire'));
