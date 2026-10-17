@@ -46,7 +46,7 @@ export async function createLiveLogExperiment({host,inputs={},record}) {
       const original=mesh.material;const originals=Array.isArray(original)?original:[original];
       const converted=originals.map(material=>{const binding=createBurnMaterial({renderer,original:material,bounds,settings:{heat:0,char:0,reaction:0},stateNode:field.stateNode,stateIdentity:LIVE_LOG_HEAT_IDENTITY,presenceNode:inputs.disintegrate?field.stateNode.w:null});bindings.push(binding);return binding.material;});
       restores.push({mesh,original});mesh.material=Array.isArray(original)?converted:converted[0];
-      if(inputs.disintegrate){const item=await createLogDebrisGpu({renderer,field,ground:scene.ground()});debris.push(item);await scene.attach(item.root,{owned:true,metadata:{label:'Char residue',collision:{enabled:false}}});}
+      if(inputs.disintegrate){const item=await createLogDebrisGpu({renderer,field,ground:scene.ground()});debris.push(item);await scene.attach(item.root,{owned:true,metadata:{label:'Char residue'}});}
     }
     indicator=createLogBurnIndicator({object,fields,document:host.controls?.document??globalThis.document});
     gasSource=await createLogGasSourceGpu(context);

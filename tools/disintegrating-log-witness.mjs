@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {checkDisintegrationEvidence} from './disintegration-contracts.mjs';
 const [origin,out]=process.argv.slice(2);if(!origin||!out)throw Error('Usage: disintegrating-log-witness.mjs <origin> <out>');
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],httpFailures:[],inputs:[],frames:[],claim:'Finite coarse consumable log and char residue; no calibrated burn, rigid fracture or room-smoke claim'};
@@ -54,6 +55,6 @@ try{
  await invoke('pause');await advance(2400);const consumed=await sample('consumed');assert.ok(consumed.detached>0,'Burning must release finite residue');assert.ok(consumed.attached<initial.attached);assert.ok(consumed.solidCells<initial.solidCells,'Consumed geometry must lose obstruction');
  await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
  await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
- await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());assert.deepEqual(report.errors,[]);assert.deepEqual(report.httpFailures,[]);report.status='passed';report.phase='complete';
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());checkDisintegrationEvidence(report);report.status='passed';report.phase='complete';
 }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
 finally{await browser?.close();await save();}
