@@ -114,7 +114,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // Sudden changes (a flame lit or flaring) are noticed over a wider field
     // than steady presence; once alerted, the creature looks until it has seen it.
     const wide=active&&source.eventFieldOfView?sight(source.point,range,source.eventFieldOfView):plain;
-    if((lit||changed)&&wide.visible&&!plain.visible)m.alerted=true;
+    if((lit||changed)&&wide.visible){m.alerted=true;m.eventAt=time;}
     const s=m.alerted&&wide.visible?wide:plain;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;
@@ -139,7 +139,10 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if(pending>m.impulse&&!attended)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
-    const near=Math.max(0,1-s.distance/range),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
+    // Only a sudden event can draw the eye beyond comfortable neck reach;
+    // presence alone there would be an invisible look.
+    const withinReach=s.angle<=o.reach||m.alerted;
+    const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
@@ -163,6 +166,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     why={cause:focus.reason,id:focus.id,label:c?.label??focus.id,since:time,familiarity:c?.familiarity??null,competitors:candidates.filter(x=>x.id!==focus.id&&x.score>0).map(x=>({id:x.id,label:x.label,cause:x.cause,score:x.score}))};
     remember('look',time,{id:why.id,label:why.label,cause:why.cause,from:previous?.id??null});
    }
+   // A fresh event on the thing already being looked at says why the look goes on.
+   if(focus&&focus.id===previous?.id&&why&&memory.get(focus.id)?.eventAt===time){const m=memory.get(focus.id);why={...why,cause:m.cause,since:time};remember('look',time,{id:why.id,label:why.label,cause:why.cause,from:focus.id});}
    if(previous&&!focus){restUntil=time+o.restSeconds;remember('release',time,{id:previous.id,label:why?.label,cause:why?.cause,held:time-(why?.since??time)});why=null;quietSince=time;nextScan=null;}
    if(scan&&focus?.id!==scan.id&&previous?.id===scan.id)scan=null;
    let want=0;

@@ -194,6 +194,26 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // No invisible looks: something off to the side beyond neck reach does not
+ // win attention by mere presence (the head could not turn to it anyway).
+ const c=creature(),side=[1,.5,-1.95];
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'side',point:side,interest:2}]});
+ const w=watch(attention,c,4,0);
+ assert.ok(w.rows.every(r=>!r.focus||r.weight>.05||r.t<.5),'any chosen focus is actually looked at');
+ assert.equal(looks(w.rows).length,0,'a prop beyond reach is not chosen by presence alone');
+}
+
+{
+ // A flare while the creature is already looking at the flame re-labels the look.
+ const c=creature(),flame={id:'flame',label:'flame',point:[.9,.6,-2.5],interest:1.5,noticeRadius:12,eventFieldOfView:2*Math.PI,active:true,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
+ let w=watch(attention,c,1,0);assert.equal(attention.read().why?.cause,'first sight');
+ flame.version++;w=watch(attention,c,.5,w.t);
+ assert.equal(attention.read().why?.cause,'flared up','the current look now says why it continues');
+ assert.ok(attention.read().history.some(e=>e.kind==='look'&&e.cause==='flared up'),'and the event is recorded');
+}
+
+{
  // A flame is seen from much farther than an ordinary prop: per-source range.
  const c=creature(),far=[1.5,.9,-6];
  const prop=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'prop',point:far,interest:1}]});
