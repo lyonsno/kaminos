@@ -7,27 +7,42 @@ export function normalizeAuthoredWaterDrop(value={}) {
  if(!Number.isFinite(width)||width<=0)throw Error('Drop width must be positive and finite');
  if(!Number.isFinite(samplesPerUnit)||samplesPerUnit<=0)throw Error('Drop samples per unit must be positive and finite');
  const n=width*samplesPerUnit;
- if(!Number.isSafeInteger(Math.round(n))||Math.abs(n-Math.round(n))>1e-9||n<1)throw Error('Drop width × samples per unit must be a whole number of samples');
+ if(!Number.isFinite(n)||!Number.isSafeInteger(Math.max(1,Math.round(n))))throw Error('Drop sample count is not representable');
  const container=value.container===null?null:clone(value.container??DEFAULT_BOUNDS);
  const bounds=container??clone(value.worldBounds??DEFAULT_BOUNDS);
  for(const key of ['min','max'])if(!Array.isArray(bounds[key])||bounds[key].length!==3||!bounds[key].every(Number.isFinite))throw Error('Drop world bounds require finite min and max vectors');
  if(bounds.min.some((v,k)=>v>=bounds.max[k]))throw Error('Drop world bounds must have positive extents');
  return {width,samplesPerUnit,container,...(container===null?{worldBounds:bounds}:{})};
 }
-export function describeAuthoredWaterDrop(drop,pose) {
- const settings=normalizeAuthoredWaterDrop(drop),scale=pose.scale[0],width=settings.width*scale,n=Math.round(settings.width*settings.samplesPerUnit),count=n**3;
- if(!Number.isFinite(scale)||scale<=0||pose.scale.some(v=>v!==scale))throw Error('Drop requires positive uniform source scale');
- if(!Number.isSafeInteger(count)||count*16>0xffffffff)throw Error('Drop population exceeds typed-array capacity');
- const spacing=width/n,volume=spacing**3,baseVolume=(64*Math.PI/315)*.185**3/24.3;
- return {settings,samplesAcross:n,particleCount:count,width,spacing,particleVolume:volume,worldVolume:width**3,particleVolumeScale:volume/baseVolume,supportRadius:.185*Math.cbrt(volume/baseVolume),collisionRadius:.5*spacing,bounds:clone(settings.container??settings.worldBounds),containerEnabled:settings.container!==null};
+export function normalizeAuthoredWaterSampling(value){
+ if(!value||!Number.isFinite(value.spacing)||value.spacing<=0)throw Error('Water particle spacing must be positive and finite');
+ const checked=normalizeAuthoredWaterDrop({container:value.container===null?null:value.container,worldBounds:value.worldBounds});
+ return {spacing:value.spacing,container:checked.container,...(checked.container===null?{worldBounds:checked.worldBounds}:{})};
 }
-export function createAuthoredWaterDrop(drop,pose) {
- const d=describeAuthoredWaterDrop(drop,pose);
+export function resolveAuthoredWaterSampling(records,setup={}){
+ if(setup.waterSampling)return normalizeAuthoredWaterSampling(setup.waterSampling);
+ const first=records.find(r=>r.localLiquidEmitter?.mode==='finite_drop');
+ if(!first)return normalizeAuthoredWaterSampling({spacing:1/48,container:DEFAULT_BOUNDS});
+ const d=describeAuthoredWaterDrop(first.localLiquidEmitter.drop,first.transform);
+ return normalizeAuthoredWaterSampling({spacing:d.spacing,container:d.containerEnabled?d.bounds:null,...(!d.containerEnabled?{worldBounds:d.bounds}:{})});
+}
+export function describeAuthoredWaterDrop(drop,pose,sampling=null) {
+ const settings=normalizeAuthoredWaterDrop(drop),scale=pose.scale[0],width=settings.width*scale;
+ if(!Number.isFinite(scale)||scale<=0||pose.scale.some(v=>v!==scale))throw Error('Drop requires positive uniform source scale');
+ const shared=sampling?normalizeAuthoredWaterSampling(sampling):null;
+ const n=Math.max(1,Math.round(shared?width/shared.spacing:settings.width*settings.samplesPerUnit)),count=n**3;
+ if(!Number.isSafeInteger(count)||count*16>0xffffffff)throw Error('Drop population exceeds typed-array capacity');
+ const spacing=shared?.spacing??width/n,representedWidth=n*spacing,volume=spacing**3,baseVolume=(64*Math.PI/315)*.185**3/24.3;
+ const requestedVolume=width**3,worldVolume=count*volume;
+ return {settings,samplesAcross:n,particleCount:count,width,representedWidth,requestedVolume,relativeVolumeError:worldVolume/requestedVolume-1,spacing,particleVolume:volume,worldVolume,particleVolumeScale:volume/baseVolume,supportRadius:.185*Math.cbrt(volume/baseVolume),collisionRadius:.5*spacing,bounds:clone(shared?(shared.container??shared.worldBounds):(settings.container??settings.worldBounds)),containerEnabled:shared?shared.container!==null:settings.container!==null};
+}
+export function createAuthoredWaterDrop(drop,pose,sampling=null) {
+ const d=describeAuthoredWaterDrop(drop,pose,sampling);
  // Owner's lattice and packing; transform both initial and predicted positions.
  const fixture=createFingerFluidBoxReference({resolution:d.samplesAcross,blockWidth:1}),population=fixture.population,data=population.particleData;
  const rotation=new Euler(...pose.rotation),position=new Vector3(),origin=new Vector3(...pose.position);
  for(let i=0;i<d.particleCount;i++){
-  const o=i*16;position.set(data[o],data[o+1]-.9,data[o+2]).multiplyScalar(d.width).applyEuler(rotation).add(origin);
+  const o=i*16;position.set(data[o],data[o+1]-.9,data[o+2]).multiplyScalar(d.representedWidth).applyEuler(rotation).add(origin);
   for(let k=0;k<3;k++)if(position.getComponent(k)<d.bounds.min[k]+d.collisionRadius||position.getComponent(k)>d.bounds.max[k]-d.collisionRadius)throw Error('Initial water must fit the explicit world bounds');
   data.set(position.toArray(),o);data.set(position.toArray(),o+4);
  }
@@ -47,13 +62,13 @@ function checkedPlacement(record,description){
   for(let k=0;k<3;k++)if(p.getComponent(k)<bounds.min[k]+collisionRadius-1e-12||p.getComponent(k)>bounds.max[k]-collisionRadius+1e-12)throw Error(`${sourceName(record)}: initial particles must fit the shared world bounds. Move the drop or enlarge the bounds.`);
  }
 }
-export function inspectAuthoredWaterCompatibility(records){
+export function inspectAuthoredWaterCompatibility(records,sampling=null){
  const sources=finiteSources(records);
  if(!sources.length)return {compatible:true,sourceCount:0,message:''};
  try{
-  const first=describeAuthoredWaterDrop(sources[0].localLiquidEmitter.drop,sources[0].transform),conflicts=[];
+  const first=describeAuthoredWaterDrop(sources[0].localLiquidEmitter.drop,sources[0].transform,sampling),conflicts=[];
   for(const r of sources){
-   const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform),reasons=[];
+   const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling),reasons=[];
    if(!closeSpacing(d.spacing,first.spacing))reasons.push(`particle spacing ${d.spacing.toPrecision(5)} differs from ${sourceName(sources[0])} (${first.spacing.toPrecision(5)})`);
    if(JSON.stringify(d.bounds)!==JSON.stringify(first.bounds)||d.containerEnabled!==first.containerEnabled)reasons.push('container bounds or walls differ');
    if(reasons.length)conflicts.push(`${sourceName(r)}: ${reasons.join('; ')}`);

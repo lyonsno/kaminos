@@ -4,9 +4,10 @@ import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[];
  const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
- for(const name of ['width','samples','rate','radius','strength','passes'])numbers.push(input('[data-'+name+']'));
+ for(const name of ['width','samples','rate','radius','strength','passes','spacing'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
+ input('[data-simulation]').querySelectorAll=section.querySelectorAll.bind(section);
  const document={createElement(tag){if(tag==='section')return section;return {type:'',dataset:{},children:[],classList:{add(){}},listeners:{},setAttribute(){},addEventListener(k,fn){this.listeners[k]=fn;},append(child){this.children.push(child);}};}};
  const source=(id,width)=>({id,label:id,settings:{mode:'finite_drop',rate:1200,baseRadius:.08,strength:1.15,drop:{width,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}});
  let selected=source('A',.5),runtime=null,hold=null;const edits=[];
@@ -50,15 +51,15 @@ for(const mode of ['continuous','finite_drop','failure']){
   createPresentation:()=>({state:()=>({}),render(){},dispose(){}})});
  const source=readFileSync(new URL('../authored-water-host.mjs',import.meta.url),'utf8');
  const facadeBody=source.slice(source.indexOf(' return {...finite,'),source.lastIndexOf('\n}'));
- const facade=new Function('finite','initial','records',facadeBody)(finite,{sourceIds:['A']},[]);
+ const facade=new Function('finite','initial','records','pendingSetup','options',facadeBody)(finite,{sourceIds:['A']},[],{}, {setup:{}});
  const f=fixture(),row={id:'A',localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}};
  const c={authoredWaterSimulationState:()=>({present:true}),localLiquidEmitterRecords:()=>[{id:'A',localLiquidEmitter:{mode:'finite_drop'}}],editAuthoredWaterSimulation(){},structuredClone,Boolean,window:{_kaminosDirty(){}},localLiquidHost:facade,localLiquidFailure:null,localLiquidPaused:true,
-  selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
+  authoredWaterDraftPreview:null,localLiquidSetup:null,sceneObjectTransformState:()=>({position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}),describeAuthoredWaterDrop:()=>({}),resolveAuthoredWaterSampling:()=>({}),selectedWaterSource:()=>row,sceneObjectDisplayLabel:()=> 'A',refreshLocalLiquidPerformance(){},authoredWaterControls:f.controls};
  vm.createContext(c);
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
- Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){}});
+ Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){},previewAuthoredWaterSetup(){}});
  vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
  f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
  const check=(paused,step)=>{

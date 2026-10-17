@@ -4,12 +4,13 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
-import {LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
+import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
+import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const actual=name=>{const a=html.indexOf('async function '+name+'('),b=html.indexOf('\n}',a);return html.slice(a,b+2);};
 const first=createLocalLiquidEmitterSceneRecord({id:'first',label:'Water drop',transform:{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]},settings:{schema:LOCAL_LIQUID_EMITTER_SCHEMA,mode:'finite_drop',drop:{width:.6,samplesPerUnit:40}}});
 const created=[];
-const c={THREE,structuredClone,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,sceneObjects:[first],assertSceneConstructionAvailable(){},localLiquidSetup:{},makeSceneObjectId:()=> 'second',
+const c={THREE,structuredClone,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA,sceneObjects:[first],assertSceneConstructionAvailable(){},localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,makeSceneObjectId:()=> 'second',
  controls:{target:new THREE.Vector3()},localLiquidEmitterRecords:()=>[first],selectedWaterSource:()=>first,sceneObjectDisplayLabel:r=>r.label,
  createLocalLiquidEmitterSceneRecord,createLocalLiquidEmitterObject:(T,r)=>({object:{},record:r}),scene:{add(){}},registerSceneObject:(o,r)=>created.push(r),recordSceneObjectInsertion:async()=>{},syncLocalLiquidHostEmitters(){},setActiveSceneObject(){},setActiveTab(){},authoredWaterControls:null,sharedWorkbench:null,window:{_kaminosDirty(){}}};
 vm.createContext(c);vm.runInContext(actual('addAuthoredWaterDrop'),c);await c.addAuthoredWaterDrop();
@@ -41,7 +42,7 @@ const {normalizeLocalLiquidEmitter}=await import('../local-liquid-setup.mjs');
 const owned=createLocalLiquidEmitterObject(THREE,first),row={...owned.record,object:owned.object};
 const history=createSceneEdits({read:()=>null,write(){throw Error('Unexpected pose writer');}});
 const q={structuredClone,THREE,sceneObjects:[row],activeSceneObjectId:row.id,LOCAL_LIQUID_EMITTER_TYPE,normalizeLocalLiquidEmitter,createLocalLiquidEmitterObject,
- assertSceneConstructionAvailable(){},sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),
+ localLiquidSetup:null,assertSceneConstructionAvailable(){},sceneObjectTransformState:o=>({position:o.position.toArray(),rotation:[o.rotation.x,o.rotation.y,o.rotation.z],scale:o.scale.toArray()}),
  serializeSceneObject:r=>({...r,object:undefined}),scenePlacementTools:{edits:history},localLiquidHost:{state:()=>({sourceIds:[row.id]})},syncLocalLiquidHostEmitters(){},authoredWaterControls:{refresh(){}},window:{_kaminosDirty(){}}};
 vm.createContext(q);
 const writerStart=html.indexOf('const waterSettingTargets='),writerEnd=html.indexOf('\nlet authoredWaterSimulationTarget',writerStart);

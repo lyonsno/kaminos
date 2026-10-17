@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup} from '../local-liquid-setup.mjs';
+import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function actual(name){const a=source.indexOf('async function '+name+'(');assert.ok(a>=0);const b=source.indexOf('\n}',a);return source.slice(a,b+2);}
 test('ordinary Add uses the same finite default as the authored water operation',async()=>{
@@ -16,8 +18,8 @@ test('ordinary Add uses the same finite default as the authored water operation'
 });
 test('restored finite setup remains an editable preview until explicit release',async()=>{
  let allocations=0,preview=false;
- const c={localLiquidSetup:{},localLiquidHost:null,localLiquidPaused:false,localLiquidFailure:null,
-  localLiquidEmitterRecords:()=>[{localLiquidEmitter:{mode:'finite_drop'}}],setAuthoredWaterPreviewVisible:v=>preview=v,
+ const c={localLiquidSetup:defaultLocalLiquidSetup(),normalizeLocalLiquidSetup,resolveAuthoredWaterSampling,refreshAuthoredWaterSamplingPreviews(){},localLiquidHost:null,localLiquidPaused:false,localLiquidFailure:null,
+  localLiquidEmitterRecords:()=>[{transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]},localLiquidEmitter:{mode:'finite_drop',drop:{width:.5,samplesPerUnit:32}}}],setAuthoredWaterPreviewVisible:v=>preview=v,
   localLiquidHostMount:{mount:async()=>{allocations++;return true;}},refreshLocalLiquidPerformance(){},authoredWaterControls:null,structuredClone,setInfo(){},window:{_kaminosDirty(){}}};
  vm.createContext(c);vm.runInContext(actual('mountLocalLiquidHost'),c);await c.mountLocalLiquidHost();
  assert.equal(allocations,0,'Restoring initial finite water must not freeze a GPU population ahead of placement');assert.equal(preview,true);assert.equal(c.localLiquidPaused,true);

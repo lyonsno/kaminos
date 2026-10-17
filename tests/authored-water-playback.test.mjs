@@ -4,9 +4,10 @@ import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[];
  const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
- for(const name of ['width','samples','rate','radius','strength','passes'])numbers.push(input('[data-'+name+']'));
+ for(const name of ['width','samples','rate','radius','strength','passes','spacing'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
+ input('[data-simulation]').querySelectorAll=section.querySelectorAll.bind(section);
  const document={createElement(tag){if(tag==='section')return section;return {type:'',dataset:{},children:[],classList:{add(){}},listeners:{},setAttribute(){},addEventListener(k,fn){this.listeners[k]=fn;},append(child){this.children.push(child);}};}};
  const source=(id,width)=>({id,label:id,settings:{mode:'finite_drop',rate:1200,baseRadius:.08,strength:1.15,drop:{width,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}}});
  let selected=source('A',.5),runtime=null,hold=null;const edits=[];

@@ -7,7 +7,7 @@ assert.equal(result.mode,'finite_drop','Saved water source must retain finite-dr
 assert.deepEqual(result.drop,settings.drop,'Saved initial amount, sampling and container must survive emitter normalization');
 assert.throws(()=>normalizeLocalLiquidEmitter({...settings,mode:'unknown'}),/mode/i);
 assert.throws(()=>normalizeLocalLiquidEmitter({...settings,drop:{...settings.drop,width:-1}}),/width/i);
-assert.throws(()=>normalizeLocalLiquidEmitter({...settings,drop:{...settings.drop,samplesPerUnit:1.5}}),/samples/i);
+assert.equal(normalizeLocalLiquidEmitter({...settings,drop:{...settings.drop,width:.513}}).drop.width,.513,'Arbitrary requested sizes survive automatic quantization');
 assert.equal(normalizeLocalLiquidEmitter({...settings,mode:'continuous'}).mode,'continuous');
 console.log('Authored water source mode and finite setup persist');
 const {createAuthoredWaterDrop,describeAuthoredWaterDrop}=await import('../authored-water-drop.mjs');
@@ -16,7 +16,7 @@ const a=createAuthoredWaterDrop(settings.drop,pose);
 assert.equal(a.particleCount,4096);assert.equal(a.worldVolume,1);assert.equal(a.spacing,1/16);
 let center=[0,0,0];for(let i=0;i<a.particleCount;i++){const p=Array.from(a.population.particleData.slice(i*16,i*16+3));for(let k=0;k<3;k++)center[k]+=p[k]/a.particleCount;assert.deepEqual(Array.from(a.population.particleData.slice(i*16+4,i*16+7)),p);}
 for(let k=0;k<3;k++)assert.ok(Math.abs(center[k]-pose.position[k])<1e-7,'released population is centered at actual source pose');
-const coarse=describeAuthoredWaterDrop({...settings.drop,samplesPerUnit:48},pose);assert.equal(coarse.worldVolume,a.worldVolume);assert.equal(coarse.particleCount,13824);
+const coarse=describeAuthoredWaterDrop({...settings.drop,samplesPerUnit:48},pose);assert.ok(Math.abs(coarse.worldVolume-a.worldVolume)<1e-12);assert.equal(coarse.particleCount,13824);
 assert.throws(()=>createAuthoredWaterDrop(settings.drop,{...pose,position:[50,0,0]}),/world bounds/);
 const unclipped=createAuthoredWaterDrop({...settings.drop,container:null,worldBounds:settings.drop.container},pose);assert.equal(unclipped.box.collisions,false);
 const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
