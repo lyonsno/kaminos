@@ -19,6 +19,8 @@ import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, 
 import { createJoinedExterior } from './volume-joined-exterior.mjs';
 import { JOINED_OPTICS_WGSL } from './volume-joined-optics.mjs';
 import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
+import {followingDomainShift} from './moving-volume.mjs';
+import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, SCENE_JOINED_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
@@ -12377,6 +12379,36 @@ export function createKaminosVolumePrototype({
   let currentFront = 0;
   let currentQuench = 0;
   let simulationPaused = false;
+  let followingDomain = null;
+
+  function prepareFollowingDomain(lookFreeze) {
+    const owner=followingDomain;
+    if(!owner||simulationPaused||lookFreeze)return;
+    if(state.joinedBoundary?.requested||liquidFireContactDescriptor||proxyPacing)throw Error('Following domain requires standalone fire without liquid contact or proxy pacing');
+    const plan=followingDomainShift({anchor:owner.anchor,origin:owner.origin,target:owner.getPosition(),current:productTransform.translate,scale:productTransform.scale,grid:gridSize});
+    if(!plan.cells.some(Boolean))return;
+    const previous=[...productTransform.translate];
+    productTransform.translate=[...plan.translation];
+    try {
+      const primitives=owner.onTranslation?.([...plan.translation]);
+      if(primitives)volumePrimitives=primitives.map(normalizePrimitiveRecord);
+    }catch(error){productTransform.translate=previous;throw error;}
+    owner.pending=plan.cells.map((v,i)=>v+(owner.pending?.[i]??0));
+    owner.shifts++;owner.cells=plan.cells;
+    state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...plan.translation],cellSize:plan.cellSize,shifts:owner.shifts,lastShift:[...plan.cells],rotation:'world-aligned',transport:'exact-overlap-open-ambient',runtimeReadbacks:0};
+    publishVolumePrimitiveState();getPrimitiveSource();
+  }
+
+  function encodeFollowingDomain(encoder) {
+    const owner=followingDomain;if(!owner?.pending)return;
+    owner.gpu.encode(encoder,{dimensions:[gridSize,gridHeight,gridSize],shift:owner.pending,
+      fluid:[fluidBuffers[currentFluid],fluidBuffers[1-currentFluid]],front:[frontBuffers[currentFront],frontBuffers[1-currentFront]],
+      quench:[quenchBuffers[currentQuench],quenchBuffers[1-currentQuench]],reactant:[reactantTextures[currentFluid],reactantTextures[1-currentFluid]],
+      reactantFull:reactantSidecarFull,ambientOxidizer:REACTANT_MODEL.ambientOxidizer});
+    currentFluid=1-currentFluid;currentFront=1-currentFront;currentQuench=1-currentQuench;
+    for(const buffer of pressureBuffers)encoder.clearBuffer(buffer);
+    owner.pending=null;
+  }
   let frameTexture = null;
   let frameTextureSize = '';
   let browserResidualFeatureTexture = null;
@@ -16314,6 +16346,7 @@ export function createKaminosVolumePrototype({
     if (!sceneSourceFrameConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    prepareFollowingDomain(lookFreeze);
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
     } else {
@@ -17509,6 +17542,7 @@ export function createKaminosVolumePrototype({
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
     if (joinedExterior?.paused) return false;
+    encodeFollowingDomain(encoder);
     // Install current collider occupancy before admitting either predictor.
     // A changed pressure topology cannot be discovered after fine advances.
     refreshSceneCollision();
@@ -17619,6 +17653,7 @@ export function createKaminosVolumePrototype({
     return {device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],
       simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
       dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,
+      backtraceScale:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,
       transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
   }
   function encodeGpuThermalConsumer(encoder) {
@@ -27531,6 +27566,7 @@ export function createKaminosVolumePrototype({
       return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
+      if(followingDomain)throw Error('Release object-following domain before editing the simulation box');
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
         throw new Error('Domain translation requires three finite coordinates');
@@ -28008,6 +28044,17 @@ export function createKaminosVolumePrototype({
     async borrowThermalGpuContext(){
       await ensureGpu();return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
     },
+    async bindFollowingDomain({getPosition,onTranslation}={}) {
+      if(!device||productFrameOwner!=='prototype')throw Error('Following domain requires initialized ordinary fire');
+      if(followingDomain)throw Error('A domain-following owner is already bound');
+      if(state.joinedBoundary?.requested||liquidFireContactDescriptor||proxyPacing)throw Error('Following domain requires standalone fire without liquid contact or proxy pacing');
+      if(typeof getPosition!=='function')throw Error('Following domain needs an object position reader');
+      const anchor=getPosition();followingDomainShift({anchor,origin:productTransform.translate,target:anchor,current:productTransform.translate,scale:productTransform.scale,grid:gridSize});
+      const gpu=await createMovingVolumeGpu(device);
+      const owner={gpu,getPosition,onTranslation,anchor:[...anchor],origin:[...productTransform.translate],pending:null,shifts:0};
+      followingDomain=owner;state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...productTransform.translate],shifts:0,rotation:'world-aligned',runtimeReadbacks:0};
+      return ()=>{if(followingDomain===owner){followingDomain=null;state.followingDomain={...state.followingDomain,status:'released'};gpu.dispose();}};
+    },
     bindGpuThermalConsumer(consumer){
       if(consumer&&(!device||consumer.device!==device||typeof consumer.encode!=='function'||typeof consumer.read!=='function'))throw Error('Thermal consumer requires active same-device encode/read');
       if(gpuThermalConsumer&&consumer&&gpuThermalConsumer!==consumer)throw Error('A thermal consumer is already bound');
@@ -28326,6 +28373,7 @@ export function createKaminosVolumePrototype({
       return {
         ...state,
         ordinaryDomainTranslation: [...productTransform.translate],
+        followingDomain: state.followingDomain??null,
         ordinaryDomainScale: productTransform.scale,
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
         cameraSignature: cameraSignature(),

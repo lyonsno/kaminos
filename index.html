@@ -13024,7 +13024,14 @@ async function installOwnerWorkbenchEntry() {
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
     setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
     enterWorkbench:()=>{authoringWorkspace.setMode('workbench');setActiveTab('assets',{reveal:false});},
-  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype},
+  },volume:{get ready(){return ownerVolumeReady;},get:()=>volumePrototype,
+    followObject:object=>volumePrototype.bindFollowingDomain({getPosition:()=>object.getWorldPosition(new THREE.Vector3()).toArray(),
+      onTranslation:translation=>{
+        flameDomainTranslation=[...translation];flameDomainFollowSource=false;flameDomainDraft=null;
+        writeAuthoredFlameEmitterPose(flameEmitterPose);refreshFlameDomainPreview();
+        return volumePrimitivesInFlameDomain();
+      }}),
+  },
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
