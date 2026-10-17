@@ -40,7 +40,7 @@ function fakePage({selected = {ids: [], memberIds: [], activeId: null}, capture,
     avatarOf,
     ...(ownView ? {ownView: () => ownView(app)} : {}),
     selectionToken: () => app.selected,
-    sceneInstance: () => app.sceneInstance ?? null,
+    sceneId: () => app.sceneId ?? null,
   });
   return {app, session};
 }
@@ -318,10 +318,14 @@ test('leaving the object and coming back drops a picked point, even unseen', asy
   assert.deepEqual(app.posted[0].anchor, {kind: 'object', id: 'cube', label: 'Cube'});
 });
 
-test('a note records which load of an unsaved scene it was written in', async () => {
+test('a note records the id of the scene it was written in, and none while a scene is loading', async () => {
   const {app, session} = fakePage();
-  app.sceneInstance = 'page-aaaa:7';
+  app.sceneId = 'scene-aaaaaaaaaaaaaaaa';
   session.hello({author: 'noah', lastSeq: 0});
   await session.post({text: 'here', attachPicture: false});
-  assert.equal(app.posted[0].context.sceneInstance, 'page-aaaa:7');
+  assert.equal(app.posted[0].subject.sceneId, 'scene-aaaaaaaaaaaaaaaa');
+  assert.equal(app.posted[0].context.sceneInstance, undefined, 'the page-and-load guess is gone');
+  app.sceneId = null;
+  await session.post({text: 'mid-load', attachPicture: false});
+  assert.equal(app.posted[1].subject.sceneId ?? null, null, 'a note written mid-load names no scene');
 });

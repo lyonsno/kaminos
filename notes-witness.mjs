@@ -736,8 +736,9 @@ try {
   // with its own saved camera, has been restored (review F2).
   const stamp = Date.now().toString(36);
   await page.evaluate(() => window.kaminosSetCameraDebugPose({position: [3, 2.2, 4], target: [0, 0.5, 0]}));
-  const savedScene = await page.evaluate(name => window.saveSceneAs({result: true, name}).then(result => ({ok: result?.ok, filename: result?.filename, error: result?.error})), `notes-witness-${stamp}`);
-  check('the scene saves', savedScene.ok === true && !!savedScene.filename, savedScene);
+  const savedScene = await page.evaluate(name => window.saveSceneAs({result: true, name}).then(result => ({ok: result?.ok, filename: result?.filename, error: result?.error,
+    sceneId: result?.document?.sceneId ?? null, document: result?.document ?? null})), `notes-witness-${stamp}`);
+  check('the scene saves', savedScene.ok === true && !!savedScene.filename, {...savedScene, document: undefined});
   savedScenes.push(savedScene.filename);
   const savedView = {position: [-2.4, 1.1, 2.6], target: [0, 0.5, 0]};
   await page.evaluate(view => window.kaminosSetCameraDebugPose(view), savedView);
@@ -749,6 +750,38 @@ try {
   check('a saved-scene link opens after restoration, on the note view, with its object selected',
     near(savedOpen.camera.position, savedView.position) && savedOpen.selection.includes(red) && /restored the view/.test(savedOpen.status),
     {camera: savedOpen.camera.position, selection: savedOpen.selection, status: savedOpen.status});
+
+  report.phase = 'scene-identity'; save();
+  // A point note names its scene by the scene's own id, which the scene keeps
+  // when saved: reopening the scene shows the point again, and a copy of the
+  // same objects under another id is another scene, where it does not.
+  const spotNote = (await log()).find(event => event.id === spotId);
+  check('the saved scene keeps the id its point note was written in', !!savedScene.sceneId && spotNote?.subject?.sceneId === savedScene.sceneId,
+    {saved: savedScene.sceneId, note: spotNote?.subject ?? null});
+  const copyName = `notes-witness-copy-${stamp}`;
+  const copy = await page.evaluate(async ([document, name]) => {
+    const response = await fetch('/api/save-scene', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({...document, sceneId: 'scene-ffffffffffffffff', _saveAsName: name})});
+    return {status: response.status, ...(await response.json().catch(() => ({})))};
+  }, [savedScene.document, copyName]);
+  if (copy.saved) savedScenes.push(copy.saved);
+  const openScene = async (file, expectPin) => {
+    const scenePage = await context.newPage();
+    scenePage.on('pageerror', error => { report.pageErrors.push(`scene page: ${error}`); });
+    await scenePage.goto(`${origin}/index.html#scene=${encodeURIComponent(file)}`, {waitUntil: 'load'});
+    const loaded = await scenePage.waitForFunction(id => window.kaminosNotes && (window.kaminosSceneObjectDebugState?.() ?? []).some(object => object.id === id),
+      red, {timeout: 90000}).then(() => true, () => false);
+    const pinned = await scenePage.waitForFunction(id => !!document.querySelector(`[data-pin="point:${id}"]`), spotId, {timeout: expectPin ? 20000 : 6000}).then(() => true, () => false);
+    const state = await scenePage.evaluate(id => ({status: document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status ?? null,
+      info: document.getElementById('info')?.textContent ?? null}), spotId);
+    await scenePage.close();
+    return {file, loaded, pinned, ...state};
+  };
+  const reopened = await openScene(savedScene.filename, true);
+  check('the saved scene, reopened in another page, shows its point note again', reopened.loaded && reopened.pinned, reopened);
+  const copyOpened = await openScene(copy.saved ?? '', false);
+  report.effective.sceneIdentity = {saved: savedScene.sceneId, reopened, copy: {saved: copy.saved ?? null, status: copy.status}, copyOpened};
+  check('the same objects under another scene id do not show it', copy.status === 200 && copyOpened.loaded && !copyOpened.pinned, {copy: {status: copy.status, saved: copy.saved, error: copy.error}, copyOpened});
 
   report.phase = 'saved-flame-link'; save();
   // A saved flame scene first visits its preset page; the link survives that
