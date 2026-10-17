@@ -12326,13 +12326,16 @@ async function initScene() {
     fireLightFieldPass?.renderShadows();
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
-      const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective);
+      const physical=window.__kaminosVolumePrototype?.emissiveCameraState();
+      const state=sceneEmissiveCamera.update(requested,physical);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:!!localLiquidHost});
+      localLiquidHost?.setSceneCamera(requested,physical);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
-    }
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:!!localLiquidHost});
+      localLiquidHost?.setSceneCamera(false);
+    } else localLiquidHost?.setSceneCamera(false);
     syncWaterProxy();
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
