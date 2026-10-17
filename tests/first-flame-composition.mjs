@@ -66,8 +66,11 @@ test('lighting route mounts are idempotent and serialized with undo and failed i
   while(!finish)await new Promise(resolve=>setImmediate(resolve));
   finish();await Promise.all([mounting,repeat]);
   assert.equal(events.filter(x=>x==='mount').length,1);
+  context.debugView={dispose(){events.push('dispose-debug');}};
+  vm.runInContext('sceneRadianceDebugView=debugView',context);
   const off=context.syncSceneRadianceRoute(new URLSearchParams());await off;
   assert.equal(events.filter(x=>x==='dispose').length,1);assert.equal(window.__kaminosSceneRadiance,null);
+  assert.equal(events.filter(x=>x==='dispose-debug').length,1,'debug subscriptions follow the same serialized lifetime');
   await assert.rejects(context.syncSceneRadianceRoute(new URLSearchParams('volume_light_field_shared_source=1&fail=1')),/observed import failure/);
   assert.equal(window.__kaminosSceneRadianceSetup.status,'failed');
   await context.syncSceneRadianceRoute(new URLSearchParams());

@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import {installRenderingNumberControl,installRenderingNumberControls} from '../rendering-number-controls.mjs';
 import {installRelativeNumberDrag} from '../scene-control-history.mjs';
 class Control extends EventTarget {
- constructor(){super();this.style={};this.type='range';this.value='3';this.min='1';this.max='';this.step='1';}
+ constructor(){super();this.listeners=new Map();this.style={};this.type='range';this.value='3';this.min='1';this.max='';this.step='1';}
+ addEventListener(type,fn,options){super.addEventListener(type,fn,options);if(!this.listeners.has(type))this.listeners.set(type,new Set());this.listeners.get(type).add(fn);}
+ removeEventListener(type,fn,options){super.removeEventListener(type,fn,options);this.listeners.get(type)?.delete(fn);}
+ listenerCount(){return [...this.listeners.values()].reduce((sum,list)=>sum+list.size,0);}
  setPointerCapture(){}hasPointerCapture(){return false;}
  fire(type,props={}){const event=new Event(type,{cancelable:true});for(const [key,value]of Object.entries(props))Object.defineProperty(event,key,{value});this.dispatchEvent(event);}
 }
 const doc=new Control(),win=new Control(),input=new Control();doc.defaultView=win;win.Event=Event;input.ownerDocument=doc;globalThis.document=doc;globalThis.window=win;
 try {
  let commits=0,live=3;input.addEventListener('input',()=>live=Number(input.value));input.addEventListener('change',()=>commits++);
- installRenderingNumberControl(input);installRenderingNumberControl(input);
+ const firstScrub=installRenderingNumberControl(input);installRenderingNumberControl(input);
  assert.equal(input.type,'number');
  input.fire('pointerdown',{button:0,pointerId:1,clientX:0,clientY:0});input.fire('pointermove',{pointerId:1,clientX:5,clientY:0});
  assert.equal(live,8);assert.equal(commits,0,'expensive changes wait for release');
@@ -18,7 +21,7 @@ try {
  input.fire('pointerdown',{button:0,pointerId:2,clientX:0,clientY:0});input.fire('pointermove',{pointerId:2,clientX:6,clientY:0});input.fire('pointerup');
  assert.equal(commits,1,'one widget per input, one commit per drag');assert.equal(live,9);
  const even=new Control();even.ownerDocument=doc;even.value='0';even.min='0';even.max='32';even.step='2';
- installRenderingNumberControl(even);
+ const evenScrub=installRenderingNumberControl(even);
  const values=[];even.addEventListener('input',()=>values.push(Number(even.value)));
  even.fire('pointerdown',{button:0,pointerId:3,clientX:0,clientY:0});even.fire('pointermove',{pointerId:3,clientX:5,clientY:0});even.fire('pointerup');
  assert.ok(values.every(value=>value%2===0),'scrubbing preserves the former range step');
@@ -37,5 +40,13 @@ try {
  historyScrub.stop();const released=gi.value;
  gi.fire('pointermove',{pointerId:4,clientX:10,clientY:0});
  assert.equal(gi.value,released,'history release stops all GI scrubbing');
+ firstScrub.dispose();evenScrub.dispose();historyScrub.dispose();
+ const baseline=doc.listenerCount()+win.listenerCount();
+ for(let cycle=0;cycle<3;cycle++){
+   const scrubs=Array.from({length:4},()=>{const input=new Control();input.ownerDocument=doc;return installRenderingNumberControl(input);});
+   assert.equal(doc.listenerCount()+win.listenerCount(),baseline+12);
+   for(const scrub of scrubs)scrub.dispose?.();
+   assert.equal(doc.listenerCount()+win.listenerCount(),baseline,'retiring the lighting panel must release every global scrub subscription');
+ }
 }finally{delete globalThis.document;delete globalThis.window;}
 console.log('PASS Rendering scrubs preserve live handlers, commit on release and restore cancellation');

@@ -19951,9 +19951,10 @@ window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { s
 // Lighting follows the ordinary field transaction as well as initial URL boot.
 // Serialize mounts/disposal: Undo during a module import cannot leave a second
 // consumer or duplicate inspector listeners behind.
-let sceneRadianceRouteTask=Promise.resolve(),sceneRadianceRouteKey=null,sceneRadianceEditStop=null;
+let sceneRadianceRouteTask=Promise.resolve(),sceneRadianceRouteKey=null,sceneRadianceEditStop=null,sceneRadianceDebugView=null;
 async function releaseSceneRadianceRoute() {
   sceneRadianceEditStop?.();sceneRadianceEditStop=null;
+  sceneRadianceDebugView?.dispose();sceneRadianceDebugView=null;
   await window.kaminosFireLightingSettings?.dispose();
   window.kaminosFireLightingSettings=null;
   const lighting=window.__kaminosSceneRadiance;
@@ -20010,7 +20011,10 @@ async function mountSceneRadianceRoute(params) {
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
       if(distributed)sceneRadianceEditStop=bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(distributed&&!hybrid){
+        const debug=await import('./scene-light-debug-view.mjs');
+        sceneRadianceDebugView=debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()});
+      }
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
       if(hybrid){
