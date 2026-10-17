@@ -86,3 +86,39 @@ test('exact corner dedup merges only bit-identical corners and keeps every attri
     assert.deepEqual([...out.uvs.slice(k*2, k*2+2)], [...uvs.slice(c*2, c*2+2)]);
   }
 });
+
+test('prepareLowTiers returns closed, textured GLBs for each tier through the TRELLIS bake', async () => {
+  const {prepareLowTiers} = await import('../mesh-lod-ladder.mjs');
+  const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  // Raw mesh: a closed sphere of radius 0.4 (subdivided octahedron).
+  let v = [1,0,0, -1,0,0, 0,1,0, 0,-1,0, 0,0,1, 0,0,-1], f = [0,2,4, 2,1,4, 1,3,4, 3,0,4, 2,0,5, 1,2,5, 3,1,5, 0,3,5];
+  for (let s = 0; s < 5; s++) {
+    const mid = new Map(), next = [];
+    const m = (a, b) => { const k = a < b ? `${a},${b}` : `${b},${a}`; if (!mid.has(k)) { const p = [0,1,2].map(i => (v[a*3+i] + v[b*3+i]) / 2), l = Math.hypot(...p); v.push(...p.map(t => t / l)); mid.set(k, v.length / 3 - 1); } return mid.get(k); };
+    for (let t = 0; t < f.length; t += 3) { const [a,b,c] = f.slice(t, t+3), ab = m(a,b), bc = m(b,c), ca = m(c,a); next.push(a,ab,ca, ab,b,bc, ca,bc,c, ab,bc,ca); }
+    f = next;
+  }
+  const vertices = Float32Array.from(v, x => x * 0.4), triangles = Uint32Array.from(f);
+  // Material field: voxels on the sphere shell at resolution 32, colour by height.
+  const R = 32, coords = [], feats = [];
+  for (let i = 0; i < R; i++) for (let j = 0; j < R; j++) for (let k = 0; k < R; k++) {
+    const p = [i, j, k].map(c => (c + 0.5) / R - 0.5);
+    if (Math.abs(Math.hypot(...p) - 0.4) < 1.5 / R) { coords.push(i, j, k); feats.push(p[2] * 2, 0, -p[2] * 2, 0, 0.6, 1); }
+  }
+  const materialFields = {coordinates: Int32Array.from(coords), features: Float32Array.from(feats), resolution: R};
+  const closestPoint = (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l * 0.4, y / l * 0.4, z / l * 0.4]; };
+  const tiers = await prepareLowTiers({mesh: {vertices, triangles}, materialFields, targets: [1000, 200], closestPoint,
+    finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker});
+  assert.deepEqual(tiers.map(t => t.target), [1000, 200]);
+  for (const tier of tiers) {
+    assert.ok(tier.faces <= tier.target && tier.faces >= tier.target * 0.9, `faces ${tier.faces}`);
+    assert.equal(tier.closed, true);
+    assert.equal(tier.route, 'closed-remesh+projection+trellis-simplify');
+    const bytes = new Uint8Array(tier.glb), json = JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + new DataView(tier.glb).getUint32(12, true))));
+    assert.equal(new TextDecoder().decode(bytes.subarray(0, 4)), 'glTF');
+    assert.ok(json.meshes[0].primitives[0].attributes.TEXCOORD_0 !== undefined && json.images.length === 2, 'textured');
+    assert.equal(tier.textureSize, tier.target >= 5000 ? 512 : 256);
+  }
+});

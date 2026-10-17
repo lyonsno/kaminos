@@ -192,3 +192,22 @@ export function dedupCorners({positions, normals, uvs}) {
   const Index = order.length <= 65536 ? Uint16Array : Uint32Array;
   return {positions: pick(positions, 3), normals: pick(normals, 3), uvs: pick(uvs, 2), indices: Index.from(corner)};
 }
+
+// The low tiers Generate prepares before it releases the decoded fields: each target is a
+// closed remesh projected onto the raw TRELLIS surface, then the caller's TRELLIS finisher
+// (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
+// closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
+export async function prepareLowTiers({mesh, materialFields, closestPoint, finish, unwrapMesh, WorkerClass,
+  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}}) {
+  if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
+  const tiers = [];
+  for (const target of targets) {
+    const level = remeshLevel({vertices: mesh.vertices, faces: mesh.triangles}, target, {closestPoint});
+    const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
+    const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
+      {WorkerClass, unwrapMesh, textureSize, materialFields, provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
+    tiers.push({target, glb: finished.glb, faces: level.faces.length / 3, route: level.route, textureSize,
+      closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
+  }
+  return tiers;
+}
