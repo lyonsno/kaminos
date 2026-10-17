@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
-const [origin,out,basin,executable,playwright]=process.argv.slice(2);
+const [origin,out,basin,executable,playwright,profileRequested]=process.argv.slice(2);
 assert.ok(origin&&out&&basin&&executable&&playwright);
 await fs.mkdir(out,{recursive:true});
 const report={status:'running',phase:'launch',origin,basin,executable,source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),errors:[],arms:[]};
@@ -31,6 +31,8 @@ try {
   await control('volume-render-scale',.5);await control('volume-steps',64);
   // This saved basin is a held look. Explicitly resume it for the live dispatch assay.
   await control('volume-look-freeze',0);
+  assert.equal(await page.locator('[data-authoring-alias="volume-pressure-resolution"]').count(),1,'normal scene pressure choice is mounted');
+  await page.keyboard.press('Home');
   for(const mode of ['off','equal','half','off']) {
     report.phase=`scene-${mode}`;await save();await control('volume-pressure-resolution',mode);
     const step=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
@@ -51,6 +53,18 @@ try {
   report.phase='save-scene';await save();
   report.saved=await page.evaluate(()=>window.saveScene({result:true}));
   assert.equal(report.saved.ok,true);
+  if(profileRequested==='profile') {
+    report.profiles=[];
+    // Short repeated AB comparison on one native device; preserve every timestamp.
+    // This is a bounded cost probe, not a frame-rate or aesthetic acceptance run.
+    for(const mode of ['off','half','off','half']) {
+      report.phase=`profile-${mode}`;await save();await control('volume-pressure-resolution',mode);
+      const profile=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSimGpuProfile({steps:32}));
+      report.profiles.push({mode,profile});await save();
+      assert.equal(profile.status,'sampled');assert.equal(profile.mainThroughProjection.count,32);
+      assert.equal(profile.pressureResolution.effective,mode);
+    }
+  }
   report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;
   if(page)try{report.failureState=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),scene:window.kaminosSceneAuthoring?.read?.(),pressureControl:document.getElementById('volume-pressure-resolution')?.value}));await page.screenshot({path:`${out}/failure.png`});}catch(capture){report.captureError=String(capture);}
