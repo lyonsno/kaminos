@@ -166,6 +166,13 @@ export function mintSceneId(crypto = globalThis.crypto) {
   return 'scene-' + Array.from(crypto.getRandomValues(new Uint8Array(8)), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+// A scene saved before ids existed is named by its saved bytes: every page that
+// opens the same unchanged file agrees on it, and the next save writes it down.
+export async function sceneIdForDocument(text, crypto = globalThis.crypto) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text))));
+  return 'scene-' + Array.from(digest.slice(0, 8), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 export function planSceneRestore(data) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
   if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');

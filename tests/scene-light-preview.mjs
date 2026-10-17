@@ -21,7 +21,7 @@ function context() {
     sceneMutationToken: 0, greenroomPreviewGeneration: 0, greenroomPreviewState: null,
     VOLUME_PRIMITIVE_SCHEMA: 'kaminos.volume-primitives.v0',
     activeSceneObjectId: null, activeSceneGroupId: null, activeSceneFieldId: 'flame-field',
-    currentMesh: null, currentSceneFile: 'kiln.kaminos.json', sceneSaveBlockedByFailedRestore: false,
+    currentMesh: null, currentSceneFile: 'kiln.kaminos.json', currentSceneId: 'scene-kiln', sceneSaveBlockedByFailedRestore: false,
     modelSourceUrl: '/kiln.glb', modelSourceType: 'glb', glbFileName: 'kiln.glb', transformControls: null,
     getVolumePrimitiveState: () => ({ primitives: [] }), setVolumePrimitivesState() {},
     renderSceneObjectList() {}, updateTransformInspector() {}, updateGreenroomPreviewControls() {},
@@ -79,9 +79,11 @@ test('temporary View removes complete light bindings and Back restores accepted 
   const state = context(), original = state.window.kaminosSceneLightState();
   await state.greenroomViewMesh('/preview.glb', 'preview.glb', {});
   assertDetached(state);
+  state.currentSceneId = 'scene-preview'; // what a preview that starts a scene leaves behind
   await state.restoreAuthoredSceneFromPreview();
   assertRestored(state, original);
   assert.equal(state.activeSceneFieldId, 'flame-field');
+  assert.equal(state.currentSceneId, 'scene-kiln', 'Back returns to the authored scene, under its own id');
 });
 
 test('View-to-Import restores original bindings once before appending the preview', async () => {
