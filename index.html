@@ -3540,6 +3540,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <script type="module">
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
+import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
+import {installUserPreferences} from './user-preferences-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
@@ -10994,6 +10996,9 @@ window.addEventListener('keydown', e => {
 
 // --- Settings Persistence ---
 const KAMINOS_SETTINGS_KEY = 'kaminos-settings';
+let startupPreferences=null,factorySceneDocument=null,preferencesUI=null,preferencesStartupSettled=false,sceneDefaultsApplied=false;
+const userPreferences=createUserPreferences();
+const startupPreferencesLoaded=userPreferences.load().then(value=>{startupPreferences=value;}).catch(error=>console.warn('User preferences unavailable:',error.message));
 let restoringSettings = false;
 const PERSISTED_SLIDERS = [
   'exposure-slider', 'env-intensity-slider', 'env-rotation-slider', 'env-blur-slider',
@@ -11021,6 +11026,7 @@ function saveSettings() {
 }
 
 function restoreSettings() {
+  if(startupPreferences?.sceneDefaults)return startupPreferences.sceneDefaults.environment?.name;
   let settings;
   try { settings = JSON.parse(localStorage.getItem(KAMINOS_SETTINGS_KEY)); } catch {}
   if (!settings) return;
@@ -27699,12 +27705,36 @@ initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 const sceneInitialization = initScene();
 settleStartupVeil(document, sceneInitialization).catch(() => {});
-sceneInitialization.then(() => {
+sceneInitialization.then(async () => {
+  await startupPreferencesLoaded;
   initEnvButtons();
   loadDemoButtons();
+  factorySceneDocument=buildSceneData();
+  factorySceneDocument.environment.name='studio';factorySceneDocument.environment.recipes={};
+  factorySceneDocument.backdropBrightness=Number(document.getElementById('backdrop-brightness').value);
+  const applyNavigationPreference=value=>{
+    const input=document.getElementById('navigation-input-mode');
+    input.value=value.navigationInput??(/Mac/i.test(navigator.userAgentData?.platform||navigator.platform)?'trackpad':'mouse');
+    input.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);};
+  preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved});
+  window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
+    read:()=>userPreferences.state(),load:()=>userPreferences.load(),
+    save:async value=>{const saved=await userPreferences.save(value);preferencesSaved(saved);return saved;},
+    capture:()=>sceneDefaultsFromDocument(buildSceneData()),
+    startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
+  if(startupPreferences?.navigationInput)applyNavigationPreference(startupPreferences);
   const initialEnvironment = restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
+    if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!sceneObjects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
+      const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
+      await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true});
+      if(sceneSaveBlockedByFailedRestore)throw Error('Default scene settings did not finish loading');
+      sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');
+    }
+
     const params = new URLSearchParams(window.location.search);
     const loadSplat = params.get('load');
     if (loadSplat) {
@@ -27753,6 +27783,7 @@ sceneInitialization.then(() => {
     }
     if (params.get('sam') === '1' && !imageRoute) setActiveTab('masks');
   });
+  environmentLoaded.then(()=>{preferencesStartupSettled=true;},()=>{preferencesStartupSettled=true;});
   // Only a page that asks for fire boots the fluid simulation (fire-boot.mjs). An
   // ordinary scene starts without it; the app is then the frame owner models borrow.
   const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));

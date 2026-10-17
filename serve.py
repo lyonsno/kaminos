@@ -3762,6 +3762,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
             self.send_json(report)
+        elif parsed.path == "/api/preferences":
+            self.handle_preferences()
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/gpu-queue-position":
@@ -3835,7 +3837,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/prepare-image':
+        if parsed.path == '/api/preferences':
+            self.handle_preferences(write=True)
+        elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
         elif parsed.path == "/api/gpu-queue-cancel":
             self.handle_gpu_queue_cancel()
@@ -3877,6 +3881,33 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             notes_http().handle(self, "POST", self.path)
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_preferences(self, write=False):
+        if write and not self._vantage_allowed():
+            return self.send_json({"error": "Preferences writes require this server’s local origin"}, 403)
+        from user_preferences import read_preferences, write_preferences, PreferencesConflict
+        try:
+            if write:
+                if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+                    return self.send_json({"error": "Send preferences as application/json"}, 415)
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0:
+                    raise ValueError("Preferences request is empty")
+                request = json.loads(self.rfile.read(length))
+                if not isinstance(request, dict) or "revision" not in request or "preferences" not in request:
+                    raise ValueError("Preferences request needs preferences and revision")
+                try:
+                    result = write_preferences(request["preferences"], request["revision"])
+                except PreferencesConflict as error:
+                    return self.send_json({"error": str(error)}, 409)
+            else:
+                result = read_preferences()
+            self.send_json(result)
+        except (ValueError, TypeError) as error:
+            # Existing malformed files are not request errors and must remain intact.
+            self.send_json({"error": str(error)}, 400 if write else 500)
+        except OSError as error:
+            self.send_json({"error": str(error)}, 500)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
