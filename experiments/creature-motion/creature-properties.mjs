@@ -16,6 +16,13 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
  const motion=select('Motion',initial.motions.map(c=>[c.id,c.label]));motion.hidden=!initial.motions.length;
  const mode=select('Playback',[['source','One pass'],['cycle','Repeat · straight travel'],['path','Follow curved path']]);
  const travel=el('p');travel.style.cssText='margin:0;color:#a5b7bd;font-size:11px';properties.append(travel);
+ // Attention: what the creature is looking at and why, plus recent looks.
+ const attentionBox=el('div');attentionBox.className='creature-attention';attentionBox.hidden=!initial.attention;
+ const attentionLabel=el('label'),attentionToggle=el('input');attentionToggle.type='checkbox';attentionToggle.setAttribute('aria-label','Creature attention');
+ attentionLabel.style.cssText='display:flex;gap:6px;align-items:center';attentionLabel.append(attentionToggle,el('span','Attention'));
+ const attentionNow=el('p'),attentionRecent=el('ol');attentionNow.style.cssText='margin:0';attentionRecent.style.cssText='margin:0;padding-left:18px;color:#a5b7bd;font-size:11px';
+ attentionBox.append(attentionLabel,attentionNow,attentionRecent);properties.append(attentionBox);
+ attentionToggle.onchange=()=>call('attention',{enabled:attentionToggle.checked});
  const advanced=el('details'),advancedBody=el('div');advanced.append(el('summary','Deformation & source'),advancedBody);properties.append(advanced);
  const attachment=select('Attachment',[],advancedBody),identity=el('p');identity.className='creature-identity';advancedBody.append(identity);
  const setup=el('details'),setupBody=el('div');setup.append(el('summary','Save / open creature'),setupBody);properties.append(setup,error);
@@ -51,6 +58,13 @@ export function mountCreatureProperties({document,read,invoke,save,open}) {
   }
   motion.value=r.motion?.id??'';mode.value=r.mode;
   travel.hidden=r.mode!=='path';travel.textContent=r.pathGuide?`Radius ${r.pathGuide.radius} · ${r.pathGuide.sourceDistance.toFixed(3)} scene units per cycle · source-paced travel`:'';
+  const a=r.attention;attentionBox.hidden=!a;
+  if(a){
+   attentionToggle.checked=a.enabled;
+   attentionNow.textContent=!a.enabled?'Off':a.why?`Looking at ${a.why.label} · ${a.why.cause}`:'Not looking at anything in particular';
+   const looks=a.history.filter(e=>e.kind==='look').slice(-5).reverse(),key=looks.map(e=>e.time).join('|');
+   if(attentionRecent.dataset.key!==key){attentionRecent.dataset.key=key;for(const child of [...attentionRecent.children])child.remove();for(const e of looks)attentionRecent.append(el('li',`${e.time.toFixed(1)} s · ${e.cause} · ${e.label??e.id}`));}
+  }
   identity.textContent=`${r.source.prompt??'Retained motion'}\nMotion ${r.source.motionSha256}\nSkin ${r.source.caseSha256}`;
   playback.update();
  }
