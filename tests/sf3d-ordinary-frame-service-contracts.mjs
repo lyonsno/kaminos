@@ -9,7 +9,7 @@ const device = {queue: {submit() {throw new Error('private submit');}}};
 const state = {active: true, frameCount: 0, simStepCount: 0};
 const make = new Function('state','device','requestAnimationFrame','cancelAnimationFrame','renderOrdinaryFrame','canvas','emitStatus','performance', `
 let foregroundRequester = null, foregroundPending = null, foregroundSequence = 0, raf = 0;
-let sceneLightingRebuildPending = false, foregroundDrain = Promise.resolve();
+let sceneLightingRebuildPending = false, stillPresentationHeld = false, foregroundDrain = Promise.resolve();
 let selectiveHeadLiveCapturePaused = false;
 const productFrameOwner = 'prototype';
 const boundarySplatRequested = () => false, browserResidualCanApply = () => false;
