@@ -47,6 +47,7 @@ struct OpticalStepState {
   transfer: vec4<f32>,
   unresolved: u32,
   phased: u32,
+  phase: f32,
 }
 fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   var s: OpticalStepState;
@@ -68,6 +69,7 @@ fn opticalStepInitPhased(start: f32, end: f32, base: f32, phase: f32) -> Optical
     // quadrature share its phase, including the leading and trailing slabs.
     s.width = min(s.end, s.maximum * (0.25 + 0.75 * phase));
     s.phased = 1u;
+    s.phase = phase;
   }
   return s;
 }
@@ -76,6 +78,9 @@ fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximu
   (*s).minimum = minimum;
   (*s).maximum = maximum;
   (*s).width = min((*s).end - (*s).cursor, min(stop, clamp((*s).width, minimum, maximum)));
+  if ((*s).phased == 1u) {
+    (*s).width = min((*s).end - (*s).cursor, min(stop, maximum * (0.25 + 0.75 * (*s).phase)));
+  }
 }
 fn opticalStepIndex(mask: u32) -> u32 {
   for (var i = 0u; i < 5u; i++) { if ((mask & (1u << i)) == 0u) { return i; } }
@@ -89,9 +94,10 @@ fn opticalCompose(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
 }
 fn opticalPanel(q: vec4<f32>, h: f32) -> vec4<f32> {
   let tau = max(0.0, q.w) * h;
-  // The series avoids cancellation in nearly transparent air.
-  var integral = h * (1.0 - tau * 0.5 + tau * tau / 6.0);
-  if (tau > 0.001) { integral = (1.0 - exp(-tau)) / q.w; }
+  // Arbitrary phased widths expose cancellation in 1-exp(-tau). The fourth
+  // order series stays below f32 rounding error throughout this interval.
+  var integral = h * (1.0 - tau * 0.5 + tau * tau * (1.0 / 6.0 - tau * (1.0 / 24.0 - tau / 120.0)));
+  if (tau > 0.05) { integral = (1.0 - exp(-tau)) / q.w; }
   return vec4<f32>(q.xyz * integral, exp(-tau));
 }
 fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f32>, tolerance: f32) {
