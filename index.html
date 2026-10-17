@@ -13005,7 +13005,7 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},scene:{
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
   }};
@@ -26507,6 +26507,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
+  if(sceneComponents?.active()){const objects=sceneComponents.target()?.frameObjects;if(objects?.length)return frameObjects(objects,camera,controls);return;}
   if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();

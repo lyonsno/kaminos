@@ -45,15 +45,15 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
  let referenceRoot=null,referenceAsset=null,asset=null;
  function assertLive(){if(disposed||!root.parent)throw Error('Skeleton removed; Undo removal or reopen it');}
  const sourceFrame=()=>{root.updateWorldMatrix(true,false);return root.matrixWorld.clone().multiply(matrix).toArray();};
- const capture=()=>captureRestTransform(plan,{selected:selected.length?[...selected]:[plan.joints[0].name],active:active??plan.joints[0].name,mirror,descendants,localToWorld:sourceFrame()});
+ const capture=()=>captureRestTransform(plan,{selected:selected.length?[...selected]:[plan.joints[0].name],active:active??plan.joints[0].name,mirror,descendants,pivot:host.controls.transformSettings?.().pivot??'median',rotation:poseOf(root).rotation,localToWorld:sourceFrame()});
  const snapshot=()=>structuredClone(draft??capture());
  function repaint(){
   const p=positions();for(const [i,j]of plan.joints.entries()){
-   const marker=markers.get(j.name);marker.position.fromArray(p[i]);marker.material.color.setHex(editMode&&selected.includes(j.name)?0xffad45:j.name.includes('-toe')?0xffa057:0x4ce4ed);
+   const marker=markers.get(j.name);marker.position.fromArray(p[i]);marker.material.color.setHex(editMode&&selected.includes(j.name)?0xffad45:0x4ce4ed);
   }graph.update(p);root.updateMatrixWorld(true);session.redraw();refresh();
  }
  function placeProxy(){if(!editMode||!selected.length)return;draft=null;putPose(proxy,capture());}
- const exported=()=>{assertLive();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,view:session.readView(),referenceDisplay:null,scene:{skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null}});};
+ const exported=()=>{assertLive();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,view:session.readView(),referenceDisplay:null,scene:{skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null,referenceVisible:referenceRoot?.visible??false}});};
  const read=()=>({status:error?'invalid':editMode?'editing-rest-joints':'object-mode',error,selected:[...selected],active,mirror,descendants,objectId:asset?.id,referenceId:referenceAsset?.id,targetId:target,baselineSha256:loaded.baselineSha256,objectPose:poseOf(root),referencePose:referenceRoot?poseOf(referenceRoot):null,
   joints:plan.joints.map(j=>({name:j.name,parent:j.parent,head:[...j.head],position:markers.get(j.name).getWorldPosition(new THREE.Vector3()).toArray()})),semantics:'Rest-joint candidate; placement does not change anatomy; fresh motion generation is separate'});
  const operations={
@@ -83,14 +83,14 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
    referenceRoot=new THREE.Group();referenceRoot.name=reference.label??'Reference skeleton';const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));
    referenceRoot.add(links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff).mesh);
    for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
-   const legacy=baseline.rest_authoring.referenceDisplay,initial=identity();initial.position[legacy?.axis??'z']=legacy?.mode==='overlay'?0:1.6;
-   putPose(referenceRoot,baseline.rest_authoring.scene?.reference??initial);referenceRoot.visible=legacy?.mode!=='off';
+   const legacy=baseline.rest_authoring.referenceDisplay,initial=identity();initial.position[legacy?.axis==='x'?0:2]=legacy?.mode==='overlay'?0:1.6;
+   putPose(referenceRoot,baseline.rest_authoring.scene?.reference??initial);referenceRoot.visible=baseline.rest_authoring.scene?.referenceVisible??(legacy?.mode!=='off');
    referenceAsset=await session.attach(referenceRoot,{owned:true,metadata:{label:referenceRoot.name,source:typeof reference.source==='string'?reference.source:reference.source?.path??'caller-reference'}});
   }
   edits.register(target,{read:snapshot,check:value=>{applyRestTransform(baseline,value);return structuredClone(value);},write:value=>{assertLive();const next=applyRestTransform(baseline,value);plan=next;draft=structuredClone(value);putPose(proxy,value);error=null;repaint();}});
   componentSeat=host.controls.components.register(asset.id,{
    enter(){assertLive();editMode=true;placeProxy();repaint();},exit(){editMode=false;draft=null;repaint();},
-   target:()=>selected.length?({id:target,type:'rest-joints',label:active+(selected.length>1?` + ${selected.length-1}`:''),object:proxy,read:snapshot,localOrientation:poseOf(root).rotation}):null,
+   target:()=>{if(!selected.length)return null;if(!edits.state().active&&!edits.state().replaying)placeProxy();return {id:target,type:'rest-joints',label:active+(selected.length>1?` + ${selected.length-1}`:''),object:proxy,read:snapshot,localOrientation:poseOf(root).rotation,frameObjects:selected.map(name=>markers.get(name))};},
    selectAll(action){componentSeat.changed(()=>{selected=action==='deselect'?[]:plan.joints.map(j=>j.name);active=selected.includes(active)?active:selected[0]??null;draft=null;placeProxy();repaint();});},
    pick(event,{camera,canvas}){const r=canvas.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-r.left)/r.width*2-1,1-(event.clientY-r.top)/r.height*2),camera);const hit=ray.intersectObjects([...markers.values()],false)[0];if(hit)operations.select({name:hit.object.name,extend:event.shiftKey});},
   });
@@ -104,9 +104,9 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   const properties=document.createElement('section'),playback=document.createElement('div'),title=document.createElement('h3'),hint=document.createElement('p'),selection=document.createElement('p'),options=document.createElement('div');
   title.textContent='Rest skeleton';properties.append(title,hint,selection,options);properties.style.cssText='font-size:12px;line-height:1.45';
   for(const [key,label]of[['mirror','Mirror L/R'],['descendants','Move branch']]){
-   const row=document.createElement('label'),input=document.createElement('input');row.style.display='block';input.type='checkbox';input.dataset.restOption=key;input.onchange=()=>invoke('options',{[key]:input.checked}).catch(e=>{hint.textContent=e.message;});row.append(input,label);options.append(row);
+   const row=document.createElement('label'),input=document.createElement('input');row.style.display='block';input.type='checkbox';input.dataset.restOption=key;input.onchange=()=>{input.blur();invoke('options',{[key]:input.checked}).catch(e=>{hint.textContent=e.message;});};row.append(input,label);options.append(row);
   }
-  const files=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Skeleton file';files.append(summary);
+  const files=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Skeleton file';files.append(summary);const fileHint=document.createElement('p');fileHint.textContent='Save anatomy here. Scene Save retains placement, but cannot reconstruct these rest joints yet.';files.append(fileHint);
   const status=document.createElement('output');status.style.display='block';files.append(status);
   const save=document.createElement('button');save.type='button';save.textContent='Save skeleton…';save.onclick=async()=>{try{
    const value=await invoke('export'),text=JSON.stringify(value,null,2)+'\n';if(typeof win.showSaveFilePicker==='function'){
