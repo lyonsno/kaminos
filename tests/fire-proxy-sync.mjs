@@ -87,6 +87,19 @@ test('a disabled volume draws no proxy, and enabling it again brings the held fi
  assert.equal(h.sync.layer().state().count, 1);
 });
 
+test('hidden Proxy fire is not pickable, while visible Proxy and snapshot-only Full still are',()=>{
+ const h=harness(),ray={origin:[0,0,5],direction:[0,0,-1]},eye=[0,0,5];
+ h.frame(true);h.prototype.readback(.8);h.frame(true);
+ assert.ok(h.sync.pick(ray,eye));
+ h.sync.layer().setStyle({visible:false});
+ assert.equal(h.sync.pick(ray,eye),null,'the suppressed Full canvas cannot make hidden Proxy fire pickable');
+ assert.equal(h.registry.latest('fire').count,1,'visibility does not delete shared consumer data');
+ h.sync.layer().setStyle({visible:true});assert.ok(h.sync.pick(ray,eye));
+ h.sync.layer().setStyle({visible:false});h.frame(false,true);
+ assert.ok(h.sync.pick(ray,eye),'a hidden secondary-camera proxy does not hide the Full flame');
+ h.frame(false);assert.equal(h.sync.layer(),null);assert.ok(h.sync.pick(ray,eye));
+});
+
 test('switching to Full and back keeps the field heat peak; a new field starts its own', () => {
  const h = harness();
  h.frame(true); // attaches the snapshot consumer
