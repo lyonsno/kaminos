@@ -10,10 +10,16 @@ import { KleinVaeDecoder } from './klein-vae.js';
 import { QwenTokenizer } from './qwen-tokenizer.js';
 import { kleinSchedule, transformerTime } from './klein-schedule.js';
 import { KleinDutyScheduler } from './klein-duties.js';
+import { kleinWeightUrls } from './klein-weights.js';
 import { createWebGpuLatentPreview } from '../../webgpu-inference-kit/src/core.js';
 import { LATENT_PREVIEW_FIT, LATENT_PREVIEW_WEIGHTS, LATENT_PREVIEW_BIAS } from './klein-latent-preview.js';
 
-async function getJson(url) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
+// fetch that names the URL when the request fails outright: browsers report a blocked or missing
+// cross-origin file only as "Failed to fetch".
+async function fetchNamed(url, init) {
+  try { return await fetch(url, init); } catch (error) { throw new Error(`${url}: ${error?.message ?? error}`, { cause: error }); }
+}
+async function getJson(url) { const r = await fetchNamed(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); }
 
 // Weight files are immutable per manifest digest, so they are cached in the browser Cache API
 // under URL + sha256: a second visit loads from disk with no network. Downloads stream so the
@@ -81,7 +87,7 @@ async function getWeightBytes(url, { sha256 = null, bytes = null, gzip = null, o
   let body;
   if (response?.ok) body = await inflatedBody(response, count);
   else {
-    response = await fetch(url);
+    response = await fetchNamed(url);
     if (!response.ok) throw new Error(`${url}: ${response.status}`);
     body = await inflatedBody(response, count);
   }
@@ -143,8 +149,13 @@ export class KleinPipeline {
   // never holds the text encoder and the transformer together: a new prompt loads the text encoder
   // from the browser cache in place of the transformer, encodes, and swaps back, so peak memory is
   // about 2.6 GB at 512 instead of 4 GB, at the cost of those reloads. A re-roll swaps nothing.
-  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all' }) {
-    this.device = device; this.urls = { textEncoderUrl, transformerUrl, vaeUrl };
+  // Weights: the hosted copy by default; weightsBase and level choose another base or jank level
+  // (see klein-weights.js), and explicit textEncoderUrl / transformerUrl / vaeUrl roots override both.
+  constructor(device, { textEncoderUrl, transformerUrl, vaeUrl, weightsBase, level, gemmVersion = 2, sharedType = 'f16', vaeActType = 'f16', residency = 'all' } = {}) {
+    const defaults = kleinWeightUrls({ base: weightsBase, level });
+    this.device = device;
+    this.urls = { textEncoderUrl: textEncoderUrl ?? defaults.textEncoderUrl, transformerUrl: transformerUrl ?? defaults.transformerUrl,
+      vaeUrl: vaeUrl ?? defaults.vaeUrl };
     this.kernels = { gemmVersion, sharedType, vaeActType };
     this.residency = residency;
     this.timings = {}; this.residentBytes = {};
@@ -155,6 +166,7 @@ export class KleinPipeline {
 
   // onProgress(part, name, { loadedBytes, totalBytes }) reports per-bundle progress over all weights.
   async load(onProgress = () => {}) {
+    this.assertUsable();
     const { textEncoderUrl: te, transformerUrl: dit, vaeUrl: vae } = this.urls;
     const t0 = performance.now();
     this.teManifest = await getJson(`${te}/manifest.json`);
@@ -204,6 +216,7 @@ export class KleinPipeline {
   // resident together; if loading fails there is no transformer until a later swap succeeds.
   // onProgress(part, name, { loadedBytes, totalBytes }) as for load(); returns the load stats.
   async loadTransformer(url, onProgress = () => {}) {
+    this.assertUsable();
     const manifest = await getJson(`${url}/manifest.json`);
     const totalBytes = Object.values(manifest.bundles).reduce((sum, b) => sum + transferBytes(b), 0);
     const stats = { totalBytes, cachedBytes: 0, downloadedBytes: 0, cacheErrors: [] };
@@ -255,6 +268,23 @@ export class KleinPipeline {
     if (onPreview) read?.then(image => onPreview({ ...image, step, steps }), () => {});
     else await read; // the warm-up generation: dispatch once, then free the slot
   }
+
+  // Release every GPU buffer this pipeline owns: both models' weights and activations, the decoder's
+  // weights and working memory, the live-preview resources and the prompt cache. The device belongs
+  // to the caller and stays usable for its own work or another model. Waits for submitted work, and
+  // is a no-op the second time; generate() and the loaders refuse afterwards.
+  async destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    try { await this.sched.discard(); } catch { /* nothing unsubmitted to drop */ }
+    await this.device.queue.onSubmittedWorkDone?.();
+    for (const model of [this.textEncoder, this.transformer, this.vae]) model?.destroy();
+    this.preview?.destroy(); this.previewInput?.destroy(); this.promptCache?.buffer?.destroy();
+    this.textEncoder = this.transformer = this.vae = this.preview = this.previewInput = this.promptCache = null;
+    this.residentBytes = {};
+  }
+
+  assertUsable() { if (this.destroyed) throw new Error('this KleinPipeline has been destroyed'); }
 
   // Lean residency: make `which` ('textEncoder' or 'transformer') the resident model, freeing the
   // other's weights first. Encoded work is submitted before anything is freed. Weights come from
@@ -320,7 +350,7 @@ export class KleinPipeline {
   async fetchEmbeddingRows(ids) {
     const { textEncoderUrl: te } = this.urls; const { file, row_bytes: rb } = this.teManifest.embedding;
     return new Map(await Promise.all(ids.map(async id => {
-      const r = await fetch(`${te}/${file}`, { headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
+      const r = await fetchNamed(`${te}/${file}`, { headers: { Range: `bytes=${id * rb}-${(id + 1) * rb - 1}` } });
       if (r.status !== 206) throw new Error(`embedding range request returned ${r.status}`);
       const b = await r.arrayBuffer(); if (b.byteLength !== rb) throw new Error('short embedding row');
       return [id, b];
@@ -335,6 +365,7 @@ export class KleinPipeline {
   // onPreview({ width, height, rgba, step, steps }), if given, receives a rough image after each step:
   // the clean-image estimate at latent resolution (an eighth of the output), mapped linearly to RGB.
   async generate({ prompt, seed = 0, width = 512, height = 512, steps = 4, textLength = 512, onStep = null, onPhase = null, onPreview = null, schedule = null }) {
+    this.assertUsable();
     this.sched.setSchedule(schedule);
     try {
       return await this.generateScheduled({ prompt, seed, width, height, steps, textLength, onStep, onPhase, onPreview });

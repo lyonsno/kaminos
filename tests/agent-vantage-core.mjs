@@ -402,3 +402,12 @@ test('a picture pick carries the depth and pixel its pick map holds', () => {
   assert.deepEqual(args.pictured.pixel, [3, 1]);
   assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0, depth: -1}}}), /depth/);
 });
+
+test('recheck takes an entry id, a mesh path and an identity object', () => {
+  const checked = checkedCommand({command: 'recheck', args: {id: 'beam', path: [0, 2], identity: {vertices: 24}}});
+  assert.deepEqual(checked.args, {id: 'beam', path: [0, 2], identity: {vertices: 24}});
+  assert.deepEqual(checkedCommand({command: 'recheck', args: {id: 'beam', path: [], identity: null}}).args.identity, null);
+  assert.throws(() => checkedCommand({command: 'recheck', args: {path: [0], identity: null}}), /id/);
+  assert.throws(() => checkedCommand({command: 'recheck', args: {id: 'beam', path: [-1], identity: null}}), /path/);
+  assert.throws(() => checkedCommand({command: 'recheck', args: {id: 'beam', path: [0], identity: [1]}}), /identity/);
+});

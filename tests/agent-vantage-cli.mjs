@@ -279,3 +279,34 @@ test('live turns the sub\'s live view on and off', async t => {
   const bad = await run(['--server', url, 'live', 'maybe']);
   assert.equal(bad.code, 2);
 });
+
+test('recheck reads an anchor, or a pick record, and says whether its mesh is the one picked', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, {ok: true, id: 'c', command: 'recheck', page: {id: 'page-a'}, elapsedMs: 1,
+    result: {now: 'present', status: 'edited'}}]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const anchorPath = path.join(out, 'anchor.json'), pickPath = path.join(out, 'pick.json'), identity = {uuid: 'g', vertices: 24, sample: '0badf00d'};
+  writeFileSync(anchorPath, JSON.stringify({kind: 'point', id: 'beam', label: 'Beam', path: [0, 1], geometry: identity, local: [0, 0, 0]}));
+  writeFileSync(pickPath, JSON.stringify({result: {kind: 'pick', hit: {id: 'beam', surface: {path: [0, 1]}, geometry: {status: 'same', identity}}}}));
+  const fromAnchor = await run(['--server', url, 'recheck', '--anchor', anchorPath]);
+  assert.equal(fromAnchor.code, 0, fromAnchor.stderr);
+  assert.deepEqual(received[0].body, {command: 'recheck', args: {id: 'beam', path: [0, 1], identity}, timeoutMs: 30000});
+  assert.match(fromAnchor.stdout, /beam.*edited/);
+  const fromPick = await run(['--server', url, 'recheck', '--anchor', pickPath]);
+  assert.equal(fromPick.code, 0, fromPick.stderr);
+  assert.deepEqual(received[1].body.args, {id: 'beam', path: [0, 1], identity});
+  const bad = await run(['--server', url, 'recheck']);
+  assert.equal(bad.code, 2);
+});
+
+test('a pick saved before identities were kept carries none, so its recheck cannot claim a status', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, {ok: true, id: 'c', command: 'recheck', page: {id: 'page-a'}, elapsedMs: 1,
+    result: {now: 'present', status: 'unverified'}}]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const legacy = path.join(out, 'legacy-pick.json');
+  writeFileSync(legacy, JSON.stringify({result: {kind: 'pick', hit: {id: 'beam', surface: {path: [0]}, geometry: {status: 'same'}}}}));
+  const result = await run(['--server', url, 'recheck', '--anchor', legacy]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(received[0].body.args, {id: 'beam', path: [0], identity: null}, 'the status wrapper is not an identity');
+});

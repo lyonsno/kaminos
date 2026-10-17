@@ -1,0 +1,11 @@
+/* Until startup settles, show a neutral starting state instead of the raw
+   sidebar markup (startup-veil.mjs). visibility keeps layout, so the viewport
+   has its real size while the renderer starts. */
+body.kaminos-starting > :not(#kaminos-startup-veil) { visibility: hidden; }
+#kaminos-startup-veil {
+  position: fixed; inset: 0; z-index: 2147483647;
+  display: flex; align-items: center; justify-content: center;
+  background: #111; color: #666; font-size: 12px; font-family: 'SF Mono', monospace;
+  pointer-events: none;
+}
+body:not(.kaminos-starting) #kaminos-startup-veil { display: none; }

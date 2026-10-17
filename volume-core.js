@@ -94,6 +94,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
+const SIM_GPU_PROFILE_IDENTITY = 'kaminos.volume.sim-gpu-profile.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
 const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
@@ -2221,6 +2222,19 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
   if (!immersedAdmitted) return { requested: true, admitted: false, reason: `joined-boundary-needs-admitted-immersed-source:${immersedReason ?? 'unknown'}` };
   return { requested: true, admitted: true, reason: null };
 }
+// Appearance model (compression study, 2026-10-13). `compact-3` stores three
+// appearance carriers and rebuilds the other six at the slot samplers by these
+// pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
+// The flag rides the last borrowed reactant lane (d.w). `authored` is the
+// existing model, bit for bit.
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3']);
+export const COMPACT_CARRIER_RATIOS = Object.freeze({
+  ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
+  emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
+});
+export function appearanceModelUniformValue(model) {
+  return model === 'compact-3' ? 1 : 0;
+}
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
 }
@@ -4259,12 +4273,59 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
   return index3(clampCell(c)) * SLOTS_PER_CELL + slot;
 }
 
-fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+// The front-topology field under compact-3 reads as the stored front times this
+// ratio (fitted 0.33 on the floor inlet, 0.71 on a raised emitter: one approximate
+// value, a known limit of the A/B).
+const COMPACT_FRONT_TOPOLOGY_RATIO: f32 = 0.4;
+
+fn compactAppearanceOn() -> bool {
+  return u.reactant_combustion_d.w > 0.5;
+}
+
+// Appearance model compact-3 (compression study, 2026-10-13): the kernel stores
+// flame (slot 2.x), interface shred (slot 3.y) and combustion front (slot 2.w);
+// the six other appearance channels are rebuilt here from those three by fixed
+// pooled ratios ([flame, shred, front] weights fitted over seven arms), so every
+// downstream formula is unchanged. Under authored the stored value is returned.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  // Stored form under compact-3: slot 2 = (flame, shred, 0, front); slot 3 unused.
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
+// Compact layout: slot 2 stores (flame, interfaceShred, 0, combustionFront) and
+// slot 3 is neither read nor written, so a carrier read is one load and the
+// per-cell traffic is three slots. With stored = true the read is the raw
+// load: the transport predictor uses it to carry the stored form forward.
+fn readSlotWith(c: vec3<i32>, slot: u32, stored: bool) -> vec4<f32> {
+  if (slot >= 2u && !stored && compactAppearanceOn()) {
+    let carriers = fluidSrc[slotIndex(c, 2u)];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
   return fluidSrc[slotIndex(c, slot)];
 }
 
+fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  return readSlotWith(c, slot, false);
+}
+
 fn readFrontField(c: vec3<i32>) -> f32 {
-  return frontSrc[index3(clampCell(c))];
+  return select(frontSrc[index3(clampCell(c))], readSlot(c, 2u).w * COMPACT_FRONT_TOPOLOGY_RATIO, compactAppearanceOn());
+}
+
+// The optical density the renderer and the legacy projection weight by: a pure
+// function of the material and micro slots. It used to be stored in slot 0's
+// fourth lane every step; that lane is now written as zero and reserved.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
 }
 
 fn readQuenchField(c: vec3<i32>) -> f32 {
@@ -4406,17 +4467,21 @@ fn sampleFrontFieldMasked(cellCenter: vec3<f32>) -> f32 {
 }
 
 fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  return sampleFluidSlotWith(cellCenter, slot, false);
+}
+
+fn sampleFluidSlotWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
-  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
-  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
-  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
-  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
-  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
-  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
-  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
-  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
+  let c000 = readSlotWith(i0 + vec3<i32>(0, 0, 0), slot, stored);
+  let c100 = readSlotWith(i0 + vec3<i32>(1, 0, 0), slot, stored);
+  let c010 = readSlotWith(i0 + vec3<i32>(0, 1, 0), slot, stored);
+  let c110 = readSlotWith(i0 + vec3<i32>(1, 1, 0), slot, stored);
+  let c001 = readSlotWith(i0 + vec3<i32>(0, 0, 1), slot, stored);
+  let c101 = readSlotWith(i0 + vec3<i32>(1, 0, 1), slot, stored);
+  let c011 = readSlotWith(i0 + vec3<i32>(0, 1, 1), slot, stored);
+  let c111 = readSlotWith(i0 + vec3<i32>(1, 1, 1), slot, stored);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -4429,9 +4494,13 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 // the floor (momentum only). Only the transport kernels use it, so the raymarch,
 // sidecar and irradiance passes never touch the coverage texture.
 fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  return sampleFluidSlotInflowWith(cellCenter, slot, false);
+}
+
+fn sampleFluidSlotInflowWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
   // Composed with the kiln collision mask: the backtrace sample excludes solid
   // cells first, then the inflow ghost blends in below the floor aperture.
-  let sample = sampleFluidSlotMasked(cellCenter, slot);
+  let sample = sampleFluidSlotMaskedWith(cellCenter, slot, stored);
   let ghost = inflowGhostBlend(cellCenter);
   return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
@@ -4440,19 +4509,19 @@ fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 // cell centre blends to the exterior over half a cell (one exterior sample per
 // call, at the point).
 fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let fine = sampleFluidSlotMaskedFine(cellCenter, slot);
-  if (!joinedGhosts()) { return fine; }
-  let outside = ghostOutsideAmount(cellCenter);
-  if (outside <= 0.0) { return fine; }
-  return mix(fine, ghostSlotAt(cellCenter, slot), clamp(outside * 2.0, 0.0, 1.0));
+  return sampleFluidSlotMaskedWith(cellCenter, slot, false);
 }
 
-fn sampleFluidSlotMaskedFine(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  if (!sceneSolidEnabled()) { return sampleFluidSlot(cellCenter, slot); }
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
-  let i0 = vec3<i32>(floor(pc));
-  let f = fract(pc);
-  if (sceneSolidEnabled()) {
+// Solid-masked trilinear read through the slot seam (carrying the stored
+// flag), then the joined-ghost blend beyond the last fine cell centre.
+fn sampleFluidSlotMaskedWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
+  var fine = vec4<f32>(0.0);
+  if (!sceneSolidEnabled()) {
+    fine = sampleFluidSlotWith(cellCenter, slot, stored);
+  } else {
+    let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+    let i0 = vec3<i32>(floor(pc));
+    let f = fract(pc);
     var weighted = vec4<f32>(0.0);
     var weightSum = 0.0;
     for (var dz = 0; dz < 2; dz = dz + 1) {
@@ -4463,17 +4532,24 @@ fn sampleFluidSlotMaskedFine(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
           let weight = select(1.0 - f.x, f.x, dx == 1)
             * select(1.0 - f.y, f.y, dy == 1)
             * select(1.0 - f.z, f.z, dz == 1);
-          weighted = weighted + readSlot(sampleCell, slot) * weight;
+          weighted = weighted + readSlotWith(sampleCell, slot, stored) * weight;
           weightSum = weightSum + weight;
         }
       }
     }
-    return weighted / max(weightSum, 1e-12);
+    fine = weighted / max(weightSum, 1e-12);
   }
-  return vec4<f32>(0.0);
+  if (!joinedGhosts()) { return fine; }
+  let outside = ghostOutsideAmount(cellCenter);
+  if (outside <= 0.0) { return fine; }
+  return mix(fine, ghostSlotAt(cellCenter, slot), clamp(outside * 2.0, 0.0, 1.0));
 }
 
 fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (slot >= 2u && compactAppearanceOn()) {
+    let carriers = fluidPredict[slotIndex(c, 2u)];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
   return fluidPredict[slotIndex(c, slot)];
 }
 
@@ -4636,7 +4712,7 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
 // the extremum: clamping acts as a running max-filter and, over thousands of
 // steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
-  let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
+  let predicted = readPredictSlot(c, slot);
   // A forward sample that came partly from the inflow ghost (which now carries
   // the inflow velocity only) has no reverse trace to correct against: the
   // reservoir is not in the domain, so the corrector would read the injected
@@ -4654,7 +4730,10 @@ fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3
     return predicted;
   }
   let reversed = samplePredictSlot(forwardCell, slot);
-  let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
+  // The current value goes through the slot seam: under the compact appearance
+  // model the prediction and the reverse trace carry expanded carriers, so the
+  // corrector must compare against the expanded current, not the stored zeros.
+  let current = readSlot(c, slot);
   let corrected = predicted + (current - reversed) * 0.5;
   let extrema = slotExtrema(backCell, slot);
   let outOfRange = (corrected < extrema.lo) | (corrected > extrema.hi);
@@ -4948,7 +5027,7 @@ fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
-  let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
+  let density = max(derivedDensityFromSlots(material, microLayer), smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
   return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
@@ -5396,10 +5475,10 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureRead(c + vec3<i32>(0, 0, 1)).y - pressureRead(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -5407,8 +5486,12 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  fluidDst[base + 2u] = fireLayer;
-  fluidDst[base + 3u] = microLayer;
+  if (compactAppearanceOn()) {
+    fluidDst[base + 2u] = fluidSrc[base + 2u];
+  } else {
+    fluidDst[base + 2u] = fireLayer;
+    fluidDst[base + 3u] = microLayer;
+  }
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -5431,10 +5514,10 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureReadComposite(c + vec3<i32>(0, 0, 1)).y - pressureReadComposite(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -5442,8 +5525,12 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  fluidDst[base + 2u] = fireLayer;
-  fluidDst[base + 3u] = microLayer;
+  if (compactAppearanceOn()) {
+    fluidDst[base + 2u] = fluidSrc[base + 2u];
+  } else {
+    fluidDst[base + 2u] = fireLayer;
+    fluidDst[base + 3u] = microLayer;
+  }
 }
 
 // Converged pressure solver. Same 7-point Laplacian and wide-stencil divergence
@@ -5600,7 +5687,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), velocityDensity.w);
   fluidDst[base + 1u] = fluidSrc[base + 1u];
   fluidDst[base + 2u] = fluidSrc[base + 2u];
-  fluidDst[base + 3u] = fluidSrc[base + 3u];
+  if (!compactAppearanceOn()) { fluidDst[base + 3u] = fluidSrc[base + 3u]; }
 }
 
 fn pressureResidualReduce(
@@ -6718,6 +6805,34 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
   }
 }
 
+// Appearance relayout: run once by the host when the effective appearance
+// model changes, before the first step under the new model. Reads the stored
+// form the previous model left and writes the form the new model reads. The
+// expansion carries the dropped carriers into the authored layout; the compact
+// direction keeps flame, shred and front and leaves slot 3 untouched.
+@compute @workgroup_size(4, 4, 4)
+fn csAppearanceRelayout(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  fluidDst[base] = fluidSrc[base];
+  fluidDst[base + 1u] = fluidSrc[base + 1u];
+  let fire = fluidSrc[base + 2u];
+  if (compactAppearanceOn()) {
+    let micro = fluidSrc[base + 3u];
+    fluidDst[base + 2u] = vec4<f32>(fire.x, micro.y, 0.0, fire.w);
+    frontDst[idx] = 0.0;
+  } else {
+    fluidDst[base + 2u] = expandCompactCarriers(2u, fire, fire.x, fire.y, fire.w);
+    fluidDst[base + 3u] = expandCompactCarriers(3u, fire, fire.x, fire.y, fire.w);
+    frontDst[idx] = clamp(fire.w * COMPACT_FRONT_TOPOLOGY_RATIO, 0.0, 2.0);
+  }
+  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   seatGridShape();
@@ -6743,6 +6858,13 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  if (compactAppearanceOn()) {
+    // Stored form: three slots predicted, slot 3 untouched.
+    fluidPredict[base] = sampleFluidSlotInflowWith(backCell, 0u, true);
+    fluidPredict[base + 1u] = sampleFluidSlotInflowWith(backCell, 1u, true);
+    fluidPredict[base + 2u] = sampleFluidSlotInflowWith(backCell, 2u, true);
+    return;
+  }
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
@@ -7658,7 +7780,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var canonicalEntrainmentVelocity = vec3<f32>(0.0);
   if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {
     let canonicalTransportDelta = prev.xyz - advected.xyz;
-    let canonicalDensityDelta = prev.w - advected.w;
+    let canonicalDensityDelta = derivedDensityFromSlots(readSlot(cellI, 1u), readSlot(cellI, 3u)) - derivedDensityFromSlots(material, microLayer);
     let canonicalTangentTransport = clamp(dot(canonicalTransportDelta, canonicalTangent), -0.05, 0.05);
     let canonicalInwardTransport = clamp(dot(canonicalTransportDelta, canonicalInward) + canonicalDensityDelta * 0.035, -0.035, 0.035);
     let canonicalVerticalTransport = clamp(canonicalTransportDelta.y + canonicalDensityDelta * 0.020, -0.025, 0.025);
@@ -8226,13 +8348,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * canonicalProofCarrierMask;
   fireLick = fireLick * canonicalProofCarrierMask;
   emberFleck = emberFleck * canonicalProofCarrierMask;
-  let quenchNeighborMax = max(
-    max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
-    max(
-      max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
-      max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
-    )
-  );
+  // The quench field spreads to neighbours only while a liquid is bound with
+  // transfer enabled (the host packs the flag); otherwise the six reads are
+  // skipped and a wetted cell only decays.
+  let quenchSpreadActive = u.reactant_combustion_d.z > 0.5;
+  var quenchNeighborMax = 0.0;
+  if (quenchSpreadActive) {
+    quenchNeighborMax = max(
+      max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
+      max(
+        max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
+        max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
+      )
+    );
+  }
   let transportedQuench = max(clamp(f32(quenchSrc[idx]) / 65536.0, 0.0, 1.0) * 0.996, quenchNeighborMax * 0.92);
   let persistentQuench = max(0.0, transportedQuench - 0.0003);
   quenchDst[idx] = u32(clamp(persistentQuench, 0.0, 1.0) * 65536.0 + 0.5);
@@ -8281,18 +8410,25 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (reactantOn) {
     smoke = smoke * sootBurnoutSurvival(heat, clamp(oxidizer / max(u.reactant_combustion_c.z, 1e-6), 0.0, 1.0), timeStep);
   }
-  let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
   vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, max(bonfireScene, select(0.0, 1.0, joinedBoundary())));
-  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
+  // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
+  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
-  fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
-  fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
-  frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
+  let compact = compactAppearanceOn();
+  // compact-3 stores flame, interface shred and combustion front only; the rest
+  // is rebuilt at the slot samplers (expandCompactCarriers).
+  if (compact) {
+    fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(interfaceShred, 0.0, 1.8), 0.0, clamp(combustionFront, 0.0, 1.8));
+  } else {
+    fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
+    fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
+  }
+  frontDst[idx] = select(clamp(combustionFrontTopology, 0.0, 2.0), 0.0, compact);
   if (reactantOn) {
     textureStore(reactantDst, cellI, vec4<f32>(clamp(oxidizer, 0.0, 2.0), reactantFreshBurnRate, 0.0, 0.0));
   }
@@ -10010,16 +10146,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
   microLayer = clamp(microLayer, vec4<f32>(0.0), vec4<f32>(1.8, 1.8, 1.8, 1.4));
-  let legacyInjectedDensity = clamp(max(
-    material.x * 1.08 + microLayer.x * 0.08,
-    material.y * 0.42
-      + material.w * 0.18
-      + microLayer.y * 0.20
-      + microLayer.z * 0.05
-      + material.z * 0.10
-  ), 0.0, 2.2);
-  let injectedDensity = select(previousVelocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
-  let candidateVelocityDensity = vec4<f32>(injectedVelocity, injectedDensity);
+  // Slot 0's fourth lane is reserved (density is derived where it is read).
+  let candidateVelocityDensity = vec4<f32>(injectedVelocity, 0.0);
   let candidateMaterial = material;
   let candidateFireLayer = fireLayer;
   let candidateMicroLayer = microLayer;
@@ -10418,8 +10546,34 @@ fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
 }
 
+// Appearance model flag for this module (the splat camera's gridShape.z lane).
+fn compactAppearanceOn() -> bool {
+  return boundarySplatCamera.gridShape.z > 0.5;
+}
+
+// Same law as the main module's expandCompactCarriers (separate shader module);
+// the appearance-model contract pins the two copies identical.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  // Stored form under compact-3: slot 2 = (flame, shred, 0, front); slot 3 unused.
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
 fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
-  return fluid[boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL + slot];
+  let base = boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL;
+  if (slot >= 2u && compactAppearanceOn()) {
+    let carriers = fluid[base + 2u];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
+  return fluid[base + slot];
 }
 
 fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
@@ -10566,8 +10720,14 @@ fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstruct
   return boundarySplatFlowReconstructionWithFrame(world, boundarySplatFlowFrame(world), centerWeight, neighborWeight);
 }
 
+// Same law as the main module's derivedDensityFromSlots (this is a separate
+// shader module); the channel-cleanup contract pins the two copies identical.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
+}
+
 fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
-  let density = max(reconstructed.velocityDensity.w, reconstructed.material.x);
+  let density = max(derivedDensityFromSlots(reconstructed.material, reconstructed.micro), reconstructed.material.x);
   let fire = reconstructed.fire.x * 1.25
     + reconstructed.fire.z * 0.52
     + reconstructed.fire.w * 0.86
@@ -12149,6 +12309,11 @@ export function createKaminosVolumePrototype({
   let waveletLowPassPipeline = null;
   let waveletLowPass2Pipeline = null;
   let transportPredictPipeline = null;
+  let appearanceRelayoutPipeline = null;
+  // The stored form the current fluid buffer holds ('authored' | 'compact-3');
+  // uploads and resets write the authored form. Converted by the relayout pass
+  // when it differs from the effective appearance model.
+  let fluidLayoutInForce = 'authored';
   let transportPredictBindGroupLayout = null;
   let sceneSolidTexture = null;
   let sceneSolidTextureView = null;
@@ -14663,6 +14828,11 @@ export function createKaminosVolumePrototype({
       layout: transportPipelineLayout,
       compute: { module: shader, entryPoint: 'csTransportPredict', constants: computePipelineConstants },
     });
+    appearanceRelayoutPipeline = device.createComputePipeline({
+      label: `kaminos appearance relayout compute pipeline ${gridShapeLabel(gridSize)}`,
+      layout: transportPipelineLayout,
+      compute: { module: shader, entryPoint: 'csAppearanceRelayout', constants: computePipelineConstants },
+    });
     analyticEmitterInjectionPipeline = device.createComputePipeline({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)}`,
       layout: analyticEmitterInjectionPipelineLayout,
@@ -15090,6 +15260,7 @@ export function createKaminosVolumePrototype({
     currentFluid = 0;
     currentFront = 0;
     currentQuench = 0;
+    fluidLayoutInForce = 'authored';
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -16482,7 +16653,7 @@ export function createKaminosVolumePrototype({
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       splatCamera.set([...productTransform.translate, productTransform.scale], 52);
-      splatCamera.set([gridSize, gridHeight, 0, 0], 56);
+      splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(state.appearanceModel?.effective), 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -16917,6 +17088,16 @@ export function createKaminosVolumePrototype({
       sourceAdmitted: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true,
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
+    // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
+    // spreads only while a liquid is bound with transfer enabled.
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 14] = liquidFireContactDescriptor && liquidFireContactTransferEnabled ? 1 : 0;
+    // compact-3 is fitted on, and only meaningful under, the reactant law: under
+    // the authored law the dropped carriers feed the reaction itself, so
+    // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
+    const appearanceRequested = String(controlsSnapshot.appearanceModel ?? 'authored');
+    const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig.effective.admitted ? 'compact-3' : 'authored';
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
+    state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null, storedSlots: appearanceEffective === 'compact-3' ? 3 : 4, layout: fluidLayoutInForce };
     state.reactantCombustion = reactantCombustionConfig;
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
     // law's oxidizer ghost).
@@ -17591,6 +17772,33 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  // Converts the stored form when the effective appearance model changed since
+  // the buffer was last written: one pass into the other buffer, then the
+  // flip the sim pass would do. The relayout reads the stored form directly,
+  // so it does not depend on which model the uniforms name for the read seam.
+  function ensureAppearanceLayout(encoder) {
+    const wanted = state.appearanceModel?.effective ?? 'authored';
+    if (wanted === fluidLayoutInForce) return false;
+    if (!appearanceRelayoutPipeline || !transportPredictBindGroup) {
+      throw new Error('appearance relayout pipeline unavailable');
+    }
+    const pass = encoder.beginComputePass({ label: `kaminos appearance relayout ${fluidLayoutInForce} -> ${wanted}` });
+    pass.setPipeline(appearanceRelayoutPipeline);
+    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(3, transportPredictBindGroup);
+    const workgroups = Math.ceil(gridSize / 4);
+    pass.dispatchWorkgroups(workgroups, Math.ceil(gridHeight / 4), workgroups);
+    pass.end();
+    currentFluid = 1 - currentFluid;
+    currentFront = 1 - currentFront;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    fluidLayoutInForce = wanted;
+    state.appearanceRelayouts = (state.appearanceRelayouts || 0) + 1;
+    if (state.appearanceModel) state.appearanceModel.layout = fluidLayoutInForce;
+    return true;
+  }
+
   function encodeSim(encoder, options = {}) {
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
@@ -17599,6 +17807,7 @@ export function createKaminosVolumePrototype({
       return false;
     }
     refreshSceneCollision();
+    ensureAppearanceLayout(encoder);
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
     if (transportConfig.effective.predictorPass) {
@@ -18358,6 +18567,81 @@ export function createKaminosVolumePrototype({
       profile.sourceGrid = gridSize;
       return profile;
     } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  // The step's own GPU cost: timestamp queries around the sim pass and the
+  // pressure projection over N real steps from the current state (uniforms packed
+  // per step as in a normal frame; the state advances). Per-step means in
+  // microseconds; the receipt names what was in force.
+  async function sampleSimGpuProfile(options = {}) {
+    const profile = { identity: SIM_GPU_PROFILE_IDENTITY, status: 'unsupported', reason: null };
+    if (!gpuInitialized || !device) { profile.reason = 'gpu-not-initialized'; return profile; }
+    if (!device.features?.has?.('timestamp-query')) { profile.reason = 'timestamp-query-not-supported'; return profile; }
+    const steps = Math.max(1, Math.min(4096, Math.floor(Number(options.steps) || 64)));
+    // An override lets one page profile both appearance models back to back
+    // (ABAB), so GPU clock state is shared between the arms being compared.
+    const overrideModel = APPEARANCE_MODELS.includes(options.appearanceModel) ? options.appearanceModel : null;
+    const savedAppearanceModel = controlsSnapshot.appearanceModel;
+    if (overrideModel) controlsSnapshot.appearanceModel = overrideModel;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const querySet = device.createQuerySet({ type: 'timestamp', count: steps * 4 });
+    const resolveBuffer = device.createBuffer({ label: 'kaminos sim gpu profile resolve', size: steps * 4 * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readbackBuffer = device.createBuffer({ label: 'kaminos sim gpu profile readback', size: steps * 4 * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const startNow = performance.now();
+      const stepMs = 1000 / 60;
+      // One submit per step, like the frame loop; a single 128-step submit
+      // reads very differently from frame-sized work on a clock-ramping GPU.
+      for (let step = 0; step < steps; step += 1) {
+        const encoder = device.createCommandEncoder({ label: 'kaminos sim gpu profile' });
+        updateUniforms(startNow + step * stepMs);
+        encodeSim(encoder, {
+          timestampWrites: { querySet, beginningOfPassWriteIndex: step * 4, endOfPassWriteIndex: step * 4 + 1 },
+          finalTimestampWrites: { querySet, beginningOfPassWriteIndex: step * 4 + 2, endOfPassWriteIndex: step * 4 + 3 },
+        });
+        state.frameCount += 1;
+        if (step === steps - 1) {
+          encoder.resolveQuerySet(querySet, 0, steps * 4, resolveBuffer, 0);
+          encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, steps * 4 * 8);
+        }
+        device.queue.submit([encoder.finish()]);
+      }
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const t = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const simSamples = [], projSamples = [];
+      for (let step = 0; step < steps; step += 1) {
+        const a = t[step * 4], b = t[step * 4 + 1], c = t[step * 4 + 2], d = t[step * 4 + 3];
+        if (a !== 0n && b !== 0n && b >= a) simSamples.push(Number(b - a) / 1000);
+        if (c !== 0n && d !== 0n && d >= c) projSamples.push(Number(d - c) / 1000);
+      }
+      // Order statistics, not only the mean: GPU clock ramps and background
+      // work skew the mean; the median and the minimum are what two arms in
+      // the same page can be compared on.
+      const stats = samples => {
+        if (!samples.length) return null;
+        const sorted = samples.slice().sort((x, y) => x - y);
+        const q = f => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))];
+        return { mean: samples.reduce((acc, v) => acc + v, 0) / samples.length, median: q(0.5), min: sorted[0], p10: q(0.1), p90: q(0.9), count: samples.length };
+      };
+      profile.status = simSamples.length === steps ? 'sampled' : 'partial';
+      profile.steps = steps;
+      profile.validSimSteps = simSamples.length;
+      profile.validProjectionSteps = projSamples.length;
+      profile.simPass = stats(simSamples);
+      profile.projection = stats(projSamples);
+      profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;
+      profile.projectionMicrosecondsPerStep = profile.projection?.mean ?? null;
+      profile.grid = [gridSize, gridHeight, gridSize];
+      profile.inForce = { reactionLaw: state.reactantCombustion?.effective?.law ?? null, appearanceModel: state.appearanceModel?.effective ?? null, transport: state.transport?.effective?.scheme ?? null, pressureSolver: controlsSnapshot.pressureSolver ?? null };
+      return profile;
+    } finally {
+      controlsSnapshot.appearanceModel = savedAppearanceModel;
       resolveBuffer.destroy();
       readbackBuffer.destroy();
       querySet.destroy?.();
@@ -21263,6 +21547,17 @@ export function createKaminosVolumePrototype({
   let foregroundRequester = null;
   let foregroundPending = null;
   let foregroundSequence = 0;
+  let sceneLightingRebuildPending = false;
+  let foregroundDrain = Promise.resolve();
+
+  function setSceneLightingRebuildPending(pending) {
+    sceneLightingRebuildPending = Boolean(pending);
+    if (pending) { cancelAnimationFrame(raf); raf = 0; }
+    else if (state.active && !selectiveHeadLiveCapturePaused && !foregroundPending && !raf) raf = requestAnimationFrame(render);
+    // A previously admitted foreground frame must finish with its old inputs.
+    // New frames stay parked until the replacement lighting has compiled.
+    return foregroundDrain;
+  }
 
   function setForegroundOpportunityRequester(requester) {
     if (requester !== null && typeof requester !== 'function') throw new Error('foreground requester must be a function or null');
@@ -21274,6 +21569,7 @@ export function createKaminosVolumePrototype({
   }
 
   function render(now) {
+    if (sceneLightingRebuildPending) { raf = 0; return; }
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
     if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
@@ -21281,7 +21577,7 @@ export function createKaminosVolumePrototype({
     const requester = foregroundRequester;
     // Reserve before invoking the requester, which may service synchronously.
     foregroundPending = {requestId};
-    Promise.resolve().then(() => {
+    foregroundDrain = Promise.resolve().then(() => {
       const handle = requester({
         requestId,
         metadata: {renderer: 'ordinary-volume', frameCountBefore: state.frameCount, simStepCountBefore: state.simStepCount},
@@ -21311,7 +21607,7 @@ export function createKaminosVolumePrototype({
       emitStatus({phase: 'foreground-frame-error', error: state.error});
     }).finally(() => {
       foregroundPending = null;
-      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!sceneLightingRebuildPending && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     });
   }
 
@@ -22030,6 +22326,7 @@ export function createKaminosVolumePrototype({
     currentFluid = 0;
     currentFront = 0;
     currentQuench = 0;
+    fluidLayoutInForce = 'authored';
     state.frameCount = upload.receiverInitialSimStepCount;
     state.simStepCount = upload.receiverInitialSimStepCount;
     state.frontFieldReadIndex = currentFront;
@@ -28584,6 +28881,7 @@ export function createKaminosVolumePrototype({
       }
     },
     fireIrradianceLightField,
+    setSceneLightingRebuildPending,
     setSceneVolumeSourceEnabled(enabled) {
       sceneVolumeSourceRequested = enabled === true;
       if (!sceneVolumeSourceRequested) {sceneVolumeSource?.destroy(); sceneVolumeSource = null;}
@@ -28652,6 +28950,7 @@ export function createKaminosVolumePrototype({
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
+    sampleSimGpuProfile,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,

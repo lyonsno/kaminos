@@ -75,8 +75,20 @@ Then open `http://localhost:18709/index.html?weights=` (an empty base loads from
 
 ## Using it in an application
 
-- [`KleinPipeline`](klein-pipeline.js) is the model: `load()` fetches and uploads the weights, and `generate({ prompt, seed, width, height })` returns RGBA pixels with per-stage timings. Passing a `schedule` with an inference-kit route runtime and its queued invocation makes the run cooperative.
-- [`createKleinDemo`](klein-demo.js) shows the complete wiring: an inference session on a shared device, a foreground service for the renderer's frames, a route per run, and pause, resume and stop through the inference control.
+Klein installs as its own package, `@kaminos/flux2-klein`, alongside `@kaminos/webgpu-inference-kit`. `node pack-klein.mjs --out <dir>` builds the package tarball; its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs. Your application creates the WebGPU device and lends it to Klein:
+
+```js
+import { KleinPipeline } from '@kaminos/flux2-klein';
+
+const klein = new KleinPipeline(device);        // hosted weights; weightsBase and level choose others
+await klein.load(onProgress);
+const { rgba, width, height } = await klein.generate({ prompt, seed, width: 512, height: 512, steps: 3, onStep, onPreview });
+await klein.destroy();                            // Klein's buffers are freed; the device stays yours
+```
+
+[`examples/external-app`](examples/external-app) is a complete application built that way, and `node run-external-app.mjs --chrome <exe> --weights-dir <dir> --out <dir>` installs it from the packed tarballs into a directory outside this checkout and runs it: a failing load, load progress, generation with step and preview events, an invalid size, a second generation reusing the prompt encoding, `destroy()`, and the device still working afterwards.
+
+To share the GPU with a renderer, pass a `schedule` with an inference-kit route runtime and its queued invocation; [`createKleinDemo`](klein-demo.js) shows that wiring on this page: an inference session on a shared device, a foreground service for the renderer's frames, a route per run, and pause, resume and stop through the inference control.
 
 ## License
 

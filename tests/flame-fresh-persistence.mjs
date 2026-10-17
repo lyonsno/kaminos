@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import {savedSceneLocation} from '../scene-authoring.mjs';
+import {fireShadowSceneRoute} from '../fire-shadow-scene-settings.mjs';
 
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const section=(start,end)=>{const at=html.indexOf(start);assert.ok(at>=0,start);return html.slice(at,html.indexOf(end,at));};
@@ -12,7 +13,7 @@ const fn=name=>section(`function ${name}(`,'\n}')+'\n}';
 function mount({fire=true,existing=false,refused=true}={}) {
  const writes=[],messages=[],fields=new Map(),runtime={active:true,simGridDimensions:[96,192,96],gridHeight:{admitted:!refused,heightCells:384}};
  const preset={domControls:{'volume-resolution':{value:96},'volume-grid-height-ratio':{value:refused?4:2}},rendererControls:{},presentationControls:{},route:{}};
- const c=vm.createContext({window:{},authoringWorkspace:null,readOwnerExperimentAddress,URLSearchParams,structuredClone,authoringBusy:false,vantageCaptureHeld:false,currentSceneFile:null,
+ const c=vm.createContext({window:{},authoringWorkspace:null,readOwnerExperimentAddress,fireShadowSceneRoute,URLSearchParams,structuredClone,authoringBusy:false,vantageCaptureHeld:false,currentSceneFile:null,
   activeSceneComposition:existing?{}:null,volumePrototype:{debugState:()=>runtime},scenePlacementTools:null,
   sceneSaveBlockedByFailedRestore:false,greenroomPreviewIsActive:()=>false,isFireLightFieldRoute:()=>fire,
   sceneObjects:[{id:'kiln',type:'glb'}],volumePrimitives:[],localLiquidSetup:null,sceneCameras:null,

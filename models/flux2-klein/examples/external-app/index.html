@@ -1,0 +1,13 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Klein in an application</title>
+<!-- No bundler: an import map points the package names at the installed files. -->
+<script type="importmap">
+{ "imports": {
+  "@kaminos/flux2-klein": "./node_modules/@kaminos/flux2-klein/index.js",
+  "@kaminos/webgpu-inference-kit/core": "./node_modules/@kaminos/webgpu-inference-kit/src/core.js"
+} }
+</script>
+<p id="status">Starting…</p>
+<canvas id="image" width="256" height="256"></canvas>
+<script type="module" src="./app.js"></script>

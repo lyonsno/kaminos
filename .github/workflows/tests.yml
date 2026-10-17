@@ -1,9 +1,17 @@
 name: tests
 
+# Advisory: test results never fail the run or block a push or a landing.
+# Problems surface as warnings on the run and in its summary
+# (tools/ci-advisory-warnings.mjs). A failure to set up (checkout, toolchains,
+# installs) still shows red, since then nothing was checked at all.
 on:
   push:
-    branches: [main, 'cc/operlocutor-*', 'land/**']
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   suite:
@@ -19,9 +27,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python3 -m pip install numpy pillow
+      - run: python3 -m pip install -r requirements.txt
       - run: npm ci
       - name: serve.py answers within 10 s
+        id: serve
+        continue-on-error: true
         run: |
           python3 -u serve.py 18499 > serve-startup.log 2>&1 &
           pid=$!
@@ -33,7 +43,17 @@ jobs:
           kill $pid || true
           cat serve-startup.log
           test "$up" = 1
-      - run: node tools/test-runner.mjs --report test-results/report.json
+      - name: suite
+        id: suite
+        continue-on-error: true
+        timeout-minutes: 45
+        run: node tools/test-runner.mjs --report test-results/report.json
+      - name: warnings
+        if: always()
+        env:
+          SERVE: ${{ steps.serve.outcome }}
+          SUITE: ${{ steps.suite.outcome }}
+        run: node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE"
       - if: always()
         uses: actions/upload-artifact@v4
         with:

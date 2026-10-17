@@ -8,7 +8,7 @@ assert.deepEqual(rows.map(r=>r.energy),[[2,0,0],[1,1,0]],'split the emitting ene
 assert.deepEqual(rows[0].position,[-.5,-.5,-.5]);
 assert.deepEqual(rows[1].position,[0,0,-.5]);
 assert.equal(rows[0].radiusSquared,.25);assert.equal(rows[1].radiusSquared,.75);
-for(const count of [1,2,3,5]){
+for(const count of [1,2,3,4,5]){
  const rs=reducePointRegionsReference(values,dims,count,2,'energy');
  const sum=rs.reduce((a,r)=>a.map((v,i)=>v+r.energy[i]),[0,0,0]);
  sum.forEach((v,i)=>assert(Math.abs(v-[6,2,0][i])<1e-12));

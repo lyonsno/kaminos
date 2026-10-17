@@ -80,9 +80,10 @@ export function installExperimentWorkspace({document, title, subtitle, instrumen
       // Reuse the actual outliner node. Authoring owns its placement outside
       // Workbench; mode switching moves that same node through its existing slots.
       if(active&&sceneOutline){
-        const destination=objectScene?byId('experiment-scene-slot'):byId('authoring-inspector-tree-slot');
+        const destination=objectScene?byId('experiment-scene-slot'):byId('authoring-tree');
         if(destination&&sceneOutline.parentNode!==destination)destination.append(sceneOutline);
       }
+      document.body.classList.toggle('outline-in-experiment',active&&objectScene&&!!sceneOutline);
       left.querySelectorAll('[data-workbench]').forEach(button=>button.setAttribute('aria-current',String(button.dataset.workbench===id)));
     },
     setControls({instruments,setup,detailNodes=[],runNodes=[],instrumentTitle='',instrumentHelp=''}){

@@ -26,6 +26,10 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field-key { color: #666; }
 #scene-gi-controls .field { align-items:center; gap:12px; }
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
+#scene-gi-controls .authoring-number-wrap { width:148px; max-width:55%; flex-shrink:0; }
+#scene-gi-controls .authoring-number-wrap input { width:100%; max-width:none; }
+.slider-row > .authoring-number-wrap { flex:1; min-width:0; }
+.legacy-range-number { width:100%; min-width:0; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
 body[data-scene-gi-diagnostic="true"] #kaminos-volume-canvas { opacity:0 !important; }
 .field-val { color: #999; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-val.present { color: #66bb6a; }
@@ -160,6 +164,13 @@ canvas { display: block; }
 .rendering-description { margin: 0 0 14px; color: #a6b2b5; font-size: 11px; line-height: 1.45; }
 .rendering-channel-select { display: block; width: 100%; padding: 8px; margin: 8px 0; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font-size: 11px; }
 #rendering-distributed-controls > label { display: block; margin-top: 12px; font-size: 11px; color: #a6b2b5; }
+#rendering-fire-shadow-controls > label { display:block; margin:12px 0; font-size:11px; color:#a6b2b5; }
+#rendering-fire-shadow-controls select { display:block; width:100%; margin-top:5px; background:#15191a; color:#e6ecee; border:1px solid #405158; padding:6px; }
+#rendering-fire-shadow-controls input[type="range"] { width:65%; margin:6px 8px 0 0; }
+#rendering-fire-shadow-controls input[type="number"] { width:65px; background:#15191a; color:#e6ecee; border:1px solid #405158; }
+#rendering-fire-shadow-controls p, #rendering-fire-shadow-controls [role="status"] { font-size:11px; line-height:1.5; color:#a6b2b5; }
+#rendering-fire-shadow-controls button { margin:6px 6px 6px 0; padding:6px 8px; border:1px solid #405158; border-radius:4px; background:#252a2d; color:#e6ecee; cursor:pointer; font-size:11px; }
+#rendering-fire-shadow-controls h3 { margin:14px 0 8px; font-size:12px; }
 #rendering-distributed-controls > select { display: block; width: 100%; padding: 8px; margin: 6px 0 10px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; font-size: 11px; }
 #rendering-angular-swap { display: block; margin: 10px 0; padding: 7px 10px; border: 1px solid #405158; border-radius: 4px; background: #15191a; color: #e6ecee; cursor: pointer; }
 #rendering-angular-swap:disabled { color: #687276; cursor: default; }
@@ -564,9 +575,13 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./startup-veil.css">
+<script src="./startup-veil-guard.js"></script>
+<noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
 <link rel="stylesheet" href="./experiment-workspace.css">
 </head>
-<body>
+<body class="kaminos-starting">
+<div id="kaminos-startup-veil" role="status">Starting Kaminos…</div>
 
 <div id="sidebar">
   <h1>Kaminos</h1>
@@ -1231,6 +1246,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
       <div class="field"><span class="field-key">Reaction law</span><span class="field-val" id="volume-reaction-law-state">authored</span></div>
+      <div class="field"><span class="field-key">Appearance model</span><span class="field-val" id="volume-appearance-model-state">authored</span></div>
       <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Immersed source</span><span class="field-val" id="volume-immersed-source-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
@@ -2816,6 +2832,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
+      <span class="slider-label">Appearance model</span>
+      <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
+        <option value="authored">Authored (nine carriers)</option>
+        <option value="compact-3">Compact (three carriers)</option>
+      </select>
+      <span class="slider-val" id="volume-appearance-model-val">authored</span>
+    </div>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; every slider and every renderer formula is unchanged, so the only question is whether three channels carry the look. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
       <span class="slider-val" id="volume-pressure-solver-iterations-val">60</span>
@@ -3383,12 +3408,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><label for="scene-gi-mode">Surface illumination</label><select id="scene-gi-mode"><option value="gtao">GTAO baseline</option><option value="combined">Combined AO + GI</option></select></div>
       <div id="scene-gi-controls" hidden>
         <div class="field"><label for="scene-gi-view">View</label><select id="scene-gi-view"><option value="scene">Scene</option><option value="ao">AO visibility</option><option value="gi">Received bounce</option><option value="incoming">Incoming GI</option></select></div>
-        <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="10"></div>
-        <div class="field"><label for="scene-gi-radius">Radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="4"></div>
-        <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="0.3"></div>
+        <div class="field"><label for="scene-gi-gain" title="Artistic multiplier on estimated surface bounce; not camera exposure">Bounce gain</label><input id="scene-gi-gain" type="number" min="0" step="0.1" value="5"></div>
+        <div class="field"><label for="scene-gi-radius">Radius</label><input id="scene-gi-radius" type="number" min="0.01" step="0.1" value="20"></div>
+        <div class="field"><label for="scene-gi-thickness">Thickness</label><input id="scene-gi-thickness" type="number" min="0.01" step="0.01" value="7"></div>
+        <div class="field"><label for="scene-gi-resolutionScale" title="Lighting width and height relative to the viewport. Scene geometry and final display stay at full resolution.">Lighting resolution</label><input id="scene-gi-resolutionScale" type="number" min="0.01" step="0.05" value="1"></div>
         <div class="field"><label for="scene-gi-slices">Slices</label><input id="scene-gi-slices" type="number" min="1" step="1" value="3"></div>
-        <div class="field"><label for="scene-gi-steps">Steps</label><input id="scene-gi-steps" type="number" min="1" step="1" value="8"></div>
-        <div class="slider-row"><label class="slider-label" for="scene-gi-denoise">GI/AO filter</label><input id="scene-gi-denoise" type="range" min="0" max="10" step="0.5" value="3"><output id="scene-gi-denoise-value">3</output></div>
+        <div class="field"><label for="scene-gi-steps">Steps</label><input id="scene-gi-steps" type="number" min="1" step="1" value="3"></div>
+        <div class="field"><label for="scene-gi-backfaceLighting" title="Contribution from surfaces whose normals face away from the receiving point. Zero ignores their bounce.">Back-face bounce</label><input id="scene-gi-backfaceLighting" type="number" min="0" step="0.01" value="1"></div>
+        <div class="field"><label for="scene-gi-denoise" title="Spatial filter radius for GI and AO. Zero displays the unfiltered estimates.">GI/AO filter radius</label><input id="scene-gi-denoise" type="number" min="0" step="0.5" value="1"></div>
+        <div class="field"><label for="scene-gi-temporal" title="Reuse indirect lighting from matching surfaces in previous frames. Experimental; direct lighting and geometry stay current.">Temporal GI</label><input id="scene-gi-temporal" type="checkbox" checked></div>
+        <details><summary>Sampling and filter edges</summary>
+          <div class="field"><label for="scene-gi-temporalWeight" title="Maximum previous-frame fraction after surface rejection and current-light clamping. Larger values settle more slowly.">History blend</label><input id="scene-gi-temporalWeight" type="number" min="0" max="0.99" step="0.01" value="0.9"></div>
+          <div class="field"><label for="scene-gi-expFactor" title="Larger values concentrate samples nearer the receiving surface; sample count stays the same.">Sample concentration</label><input id="scene-gi-expFactor" type="number" min="0.01" step="0.05" value="2"></div>
+          <div class="field"><label for="scene-gi-screenSpaceSampling" title="Use a radius measured in screen space rather than world space.">Screen-space radius</label><input id="scene-gi-screenSpaceSampling" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-linearThickness" title="Scale thickness with distance from the camera.">Depth-scaled thickness</label><input id="scene-gi-linearThickness" type="checkbox"></div>
+          <div class="field"><label for="scene-gi-depthPhi" title="Larger values allow filtering across larger depth differences.">Depth tolerance</label><input id="scene-gi-depthPhi" type="number" min="0.001" step="0.01" value="0.1"></div>
+          <div class="field"><label for="scene-gi-normalPhi" title="Larger values more strongly preserve boundaries between different surface directions.">Normal edge strength</label><input id="scene-gi-normalPhi" type="number" min="0.01" step="0.1" value="5"></div>
+          <div class="field"><label for="scene-gi-lumaPhi" title="Larger values allow filtering across larger brightness differences.">Brightness tolerance</label><input id="scene-gi-lumaPhi" type="number" min="0.01" step="0.1" value="5"></div>
+        </details>
       </div>
       <div id="scene-gi-status" role="status"></div>
       </div>
@@ -3410,6 +3447,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row"><label class="slider-label" for="rendering-shared-gain">Source gain (stops)</label><input type="range" id="rendering-shared-gain" min="-4" max="8" step="0.25" value="0"><span class="slider-val" id="rendering-shared-gain-value">+0.00</span></div>
       <div id="rendering-distributed-controls" hidden><label for="rendering-angular-samples">Distributed flame directions</label><select id="rendering-angular-samples"><option>8</option><option>10</option><option>12</option><option>16</option><option selected>24</option><option>48</option><option>96</option></select>
+        <details id="rendering-fire-shadows" hidden><summary>Fire lighting & shadows · advanced</summary><div id="rendering-fire-shadow-controls"></div></details>
         <label for="rendering-receiver-spacing">Surface receiver spacing (experimental)</label><select id="rendering-receiver-spacing"><option value="0" selected>Per vertex · reference</option><option value="0.04">0.04 source units · fine</option><option value="0.08">0.08 source units · medium</option><option value="0.16">0.16 source units · coarse</option></select>
         <p class="rendering-description" id="rendering-receiver-status">Reference mesh receivers; full render and shadow geometry retained.</p>
         <details id="rendering-light-debug" hidden><summary>Receiver / ray debug</summary>
@@ -3488,6 +3526,10 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 </script>
 
 <script type="module">
+import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
+import { settleStartupVeil } from './startup-veil.mjs';
+// Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
+loadStartupRuntimeConfig().catch(() => {});
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
@@ -3497,7 +3539,10 @@ import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emi
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
-import { resolveSceneGISettings } from './scene-gi-settings.mjs';
+import { compileSceneLighting } from './scene-lighting-compile.mjs';
+import { createFireShadowSettings } from './experiments/fire-shadow-sampling.experiment.mjs';
+import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow-scene-settings.mjs';
+import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
@@ -3883,8 +3928,10 @@ import { installPolyEditMode } from './poly-edit-host.mjs';
 import { separateSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
+import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
@@ -3911,7 +3958,7 @@ import {installGenerateLayout} from './authoring-generate-layout.mjs';
 import {installBrowseLayout} from './authoring-browse-layout.mjs';
 import {createAppFrameSource} from './app-frame-source.mjs';
 import {createAppGpuHost} from './app-gpu-host.mjs';
-import {fireAtBoot} from './fire-boot.mjs';
+import {fireAtBoot,createFluidBoot} from './fire-boot.mjs';
 import {createKleinAuthoringImageGeneration,installKleinImageGeneration,createForegroundHandoff,runWithKilnHandoff,sharedDeviceHostRequirements,KLEIN_PUBLISHED_WEIGHTS} from './authoring-image-generation.mjs';
 import {createImagePreparation} from './authoring-image-preparation.mjs';
 import {sharedGpuBufferRequirements as assetGenerationBufferRequirements} from './sf3d-host-device.mjs';
@@ -4129,7 +4176,7 @@ const authoringParameterTargets = new Map();
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
-let sceneGISettings = resolveSceneGISettings();
+let sceneGISettings = resolveSceneGIControlState();
 let updateSceneGI = null;
 let backdropMesh = null;
 let currentMesh = null;
@@ -4829,9 +4876,7 @@ async function initializeHybridSplatOverlayModuleUrl() {
     return hybridSplatOverlayModuleUrl();
   }
   try {
-    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
-    if (!response.ok) throw new Error(`runtime config ${response.status}`);
-    const config = await response.json();
+    const config = await loadStartupRuntimeConfig();
     if (config?.hybridSplatOverlayModuleUrl) {
       setHybridSplatOverlayModuleUrl(config.hybridSplatOverlayModuleUrl, { persist: false });
     }
@@ -7048,9 +7093,16 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
+const SCENE_OUTLINE_GLYPHS = {field:'◈', group:'▣', light:'✦', camera:'◉', [FLAME_EMITTER_TYPE]:'▲', [LOCAL_LIQUID_EMITTER_TYPE]:'▲'};
+function sceneOutlineGlyph(kind) { return `<span class="scene-outline-glyph" aria-hidden="true">${SCENE_OUTLINE_GLYPHS[kind] || '◆'}</span>`; }
+function sceneOutlineToggle(row) {
+  if (!row?.childCount) return '<span class="scene-outline-toggle-space" aria-hidden="true"></span>';
+  return `<button type="button" class="scene-outline-toggle" data-outline-toggle="${escapeHtml(row.key)}" aria-expanded="${row.collapsed ? 'false' : 'true'}" title="${row.collapsed ? 'Expand' : 'Collapse'}">${row.collapsed ? '▸' : '▾'}</button>`;
+}
+function sceneOutlineAttributes(row) { return row ? ` data-outline-depth="${row.depth}" data-outline-key="${escapeHtml(row.key)}"` : ''; }
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
-  const grouped = options.grouped ? ' grouped' : '';
+  const grouped = options.grouped && !options.outline ? ' grouped' : '';
   const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${sceneSelectionMembers().includes(record.id)?' selected':''}${grouped}`;
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
@@ -7058,9 +7110,9 @@ function renderSceneObjectRow(record, options = {}) {
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
-    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
+        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
       </span>
       <span class="scene-object-actions">
@@ -7072,14 +7124,14 @@ function renderSceneObjectRow(record, options = {}) {
   `;
 }
 
-function renderSceneGroupRow(group) {
+function renderSceneGroupRow(group, outline = null) {
   const active = group.id === activeSceneGroupId;
   const rowClass = `scene-group-row ${active?'active':sceneSelection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
   return `
-    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
+        ${outline ? sceneOutlineToggle(outline) + sceneOutlineGlyph('group') : ''}<input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
@@ -7089,6 +7141,7 @@ function renderSceneGroupRow(group) {
   `;
 }
 
+const sceneOutlineCollapsed = new Set();
 function renderSceneObjectList() {
   updateAuthoringPropertySelection();
   refreshLocalLiquidPerformance();
@@ -7097,21 +7150,32 @@ function renderSceneObjectList() {
   if (!list || !empty) return;
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
-  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  // The outliner is a tree: fields own their emitters, groups their members.
+  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
+  const outline = visibleOutlineRows(buildSceneOutline({fields, groups: sceneGroups, objects: sceneObjects,
+    emitterFields: {[FLAME_EMITTER_TYPE]:'flame-field', [LOCAL_LIQUID_EMITTER_TYPE]:'water-field'}}), sceneOutlineCollapsed);
   const rows = [];
-  for(const [id,label,present] of [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]])if(present)rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}" role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${label}</span><small>Simulation</small></div>`);
-  for (const group of sceneGroups) {
-    rows.push(renderSceneGroupRow(group));
-    for (const objectId of group.objectIds) {
-      const record = sceneObjects.find(entry => entry.id === objectId);
-      if (record) rows.push(renderSceneObjectRow(record, { grouped: true }));
+  for (const row of outline) {
+    if (row.kind === 'field') {
+      const {id,label} = fields.find(field => field.id === row.id);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><small>Simulation</small></div>`);
+    } else if (row.kind === 'group') {
+      const group = sceneGroups.find(entry => entry.id === row.id);
+      if (group) rows.push(renderSceneGroupRow(group, row));
+    } else {
+      const record = sceneObjects.find(entry => entry.id === row.id);
+      if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
-  for (const record of sceneObjects) {
-    if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
-  }
   list.innerHTML = rows.join('');
-  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
+  list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    const key = button.dataset.outlineToggle;
+    if (sceneOutlineCollapsed.has(key)) sceneOutlineCollapsed.delete(key); else sceneOutlineCollapsed.add(key);
+    renderSceneObjectList();
+    list.querySelector(`[data-outline-toggle="${CSS.escape(key)}"]`)?.focus();
+  }));
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -11416,8 +11480,7 @@ async function initScene() {
   camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
-    const response = await fetch('/api/runtime-config', { cache: 'no-store' });
-    if (response.ok) samHostConfig = (await response.json()).sam3 || null;
+    samHostConfig = (await loadStartupRuntimeConfig()).sam3 || null;
   } catch (error) { console.warn('SAM runtime configuration unavailable', error); }
   // Load declarative requirements before constructing either GPU consumer.
   // Module top levels must be inert; mount remains after volume construction.
@@ -11688,6 +11751,8 @@ async function initScene() {
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
   const sceneGI = createSceneGI(scene,camera,aoIntensity);
+  window.kaminosCompileSceneLighting = () => compileSceneLighting(renderer,
+    sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass]);
   let activeSceneDepth = prePassDepth;
   selectionFeedback=createSelectionFeedback(camera);
   window.kaminosSelectionFeedbackState=()=>selectionFeedback.state();
@@ -11699,7 +11764,7 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGISettings.mode}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
+    const graphKey = `${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11733,9 +11798,10 @@ async function initScene() {
     renderPipeline.needsUpdate = true;
   }
   updateSceneGI = value => {
-    const next = resolveSceneGISettings(value);
-    const rebuild = next.mode !== sceneGISettings.mode;
+    const next = resolveSceneGIControlState(value);
+    const rebuild = next.mode !== sceneGISettings.mode || (next.denoise>0)!==(sceneGISettings.denoise>0) || next.temporal!==sceneGISettings.temporal;
     sceneGI.setSettings(next);
+    sceneGI.setEstimatorSettings(next.estimator);
     sceneGISettings = next;
     if (rebuild) rebuildSceneGIOutput();
     document.body.dataset.sceneGiDiagnostic = String(next.mode === 'combined' && next.view !== 'scene');
@@ -11743,6 +11809,7 @@ async function initScene() {
     window._kaminosDirty?.();
   };
   sceneGI.setSettings(sceneGISettings);
+  sceneGI.setEstimatorSettings(sceneGISettings.estimator);
   rebuildSceneGIOutput();
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
@@ -11853,7 +11920,7 @@ async function initScene() {
   window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
 
-  const markDirty = () => { needsRender = true; idleFrames = 0; };
+  const markDirty = () => { needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
@@ -12016,6 +12083,9 @@ async function initScene() {
   });
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
   installAuthoringParameterEditing();
+  const upgradedRangeFields=installLegacyRangeFields({root:document,installNumberDrag:installRelativeNumberDrag,
+    beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
+  scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   window.kaminosSceneEdits = scenePlacementTools.edits;
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
@@ -12201,7 +12271,9 @@ async function initScene() {
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;
 
-    if (!foregroundServiceActive && mainRendererNeeded && (needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
+    if(needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive)sceneGI.requestHistoryFrames();
+
+    if (!foregroundServiceActive && mainRendererNeeded && (sceneGI.needsHistoryFrame() || needsRender || localWaterActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || fireLightFieldActive || idleFrames < IDLE_THRESHOLD)) {
       if (!sceneRenderedForVolume) renderSceneFrame();
       sceneRenderedForVolume = false;
 
@@ -12932,7 +13004,8 @@ function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
-    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    // Add and Navigate live in the shared viewport toolbar in both workspaces.
+    inspector:authoringWorkspace,sceneActions:null,navigation:null,
     sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
@@ -19066,6 +19139,7 @@ function readVolumeControls() {
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
+    appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -19229,6 +19303,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
   document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
   document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
+  document.getElementById('volume-appearance-model-val').textContent = c.appearanceModel;
   document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
@@ -19648,6 +19723,10 @@ function refreshVolumeReadout() {
       : `Wavelet turbulence: on · gain ${wavelet.gain.toFixed(2)} · ${wavelet.octaves} octave${wavelet.octaves === 1 ? '' : 's'} below ${wavelet.baseWavelengthCells} cells · strength ${wavelet.strength.toFixed(2)}× Kolmogorov${wavelet.strength > 1.001 ? ' (exaggerated)' : ''} · coordinates reset every ${wavelet.coherencePeriodSteps} steps`;
   }
   syncVolumeViewerPlay(s);
+  const appearance = s.appearanceModel;
+  document.getElementById('volume-appearance-model-state').textContent = !appearance || appearance.effective !== 'compact-3'
+    ? 'authored · nine carriers + front field stored'
+    : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
     ? 'authored'
@@ -19863,7 +19942,11 @@ function reportKaminosVolumeRouteInitFailure(error) {
   setInfo(`Volume route initialization failed: ${message}`);
 }
 
+// The fluid boots once per page (fire-boot.mjs createFluidBoot): at load when the URL asks for
+// fire, or when fire is added to a scene that started without it.
+window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { started: false, reason: null };
 async function initKaminosVolumeRoute() {
+  initKaminosVolumeRoute.boot ??= createFluidBoot(async () => {
   if (compositionSetupError) throw compositionSetupError;
   window.__kaminosVolumeControlStepsMadeContinuous = [];
   const params = new URLSearchParams(window.location.search);
@@ -20013,7 +20096,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -20584,7 +20667,8 @@ async function initKaminosVolumeRoute() {
     if(distributed)renderingMode='shared';
     import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{pointCount:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_points')||4),shadowResolution:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_shadow_resolution')||256),shadowSoftness:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_shadow_softness')??0),shadowSampling:fireLightFieldRouteParams().get('volume_light_field_hybrid_shadow_sampling')||'fixed',smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{...readFireShadowSceneSettings(fireLightFieldRouteParams()),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+          window.kaminosFireLightingSettings?.syncStatus(state);
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
           badge.hidden=!message;
@@ -20605,6 +20689,17 @@ async function initKaminosVolumeRoute() {
       if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
       if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
       window.__kaminosSceneRadianceSetup.status='mounted';
+      if(hybrid){
+        const settings=createFireShadowSettings({document,applyInitial:false,session:{onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),dispose(){}}});
+        const panel=document.getElementById('rendering-fire-shadows');panel.hidden=false;
+        const invoke=async(name,value)=>{const result=await settings.operations[name](value);settings.sync();return result;};
+        let statusKey='';
+        window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
+          const key=JSON.stringify([state.status,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()),state.error]);
+          if(key!==statusKey){statusKey=key;settings.sync();}
+        }};
+        settings.mount({root:document.getElementById('rendering-fire-shadow-controls'),document,invoke});
+      }
       refreshRenderingControls();
     }).catch(error=>{
       window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
@@ -20929,6 +21024,7 @@ async function initKaminosVolumeRoute() {
     'volume-reaction-law',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
+    'volume-appearance-model',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
     'volume-immersed-centre-y',
@@ -22041,6 +22137,8 @@ async function initKaminosVolumeRoute() {
   recordVolumeSettingsPresetApplied();
   recordFlameSettingsProblems();
   setInterval(refreshVolumeReadout, 500);
+  });
+  return initKaminosVolumeRoute.boot.ensure(window.__kaminosFireBoot?.boot ? window.__kaminosFireBoot.reason : 'add flame');
 }
 
 // --- File Input Handling ---
@@ -22472,6 +22570,9 @@ async function addFirstFlameField(presetId,{signal}={}) {
   assertSceneConstructionAvailable();
   if(activeSceneComposition)return addBurnerObject('flame-source');
   if(!presetId)throw Error('Choose a saved immersed-source basin for the first flame');
+  // A scene that started without fire boots the fluid route now (fire-boot.mjs).
+  if(!volumePrototype){authoringBusy=true;try{await initKaminosVolumeRoute();}finally{authoringBusy=false;}signal?.throwIfAborted();}
+  if(!volumePrototype)throw Error('The fluid simulation did not start; the flame cannot be added');
   const before=JSON.stringify(firstFlameFieldState()),ledger=JSON.stringify(scenePlacementTools.edits.state());
   authoringBusy=true;
   let settings;
@@ -22535,6 +22636,15 @@ function installAuthoringParameterEditing() {
     controls:document.querySelectorAll('#rim-enabled, #rim-color, #rim-controls input'),label:'Tune rim light',
     read:readRimLightSettings,write:setRimLight,check:checkedRimRecipe,
   });
+  const giControls=document.querySelectorAll('#scene-gi-mode, #scene-gi-controls input, #scene-gi-view');
+  bind('@scene-gi',{controls:giControls,label:'Tune surface illumination',
+    read:readSceneGIControls,write:setSceneGIControls,check:resolveSceneGIControlState});
+  scenePlacementTools.addHistoryScope(document.getElementById('scene-gi-panel'));
+  for(const input of giControls) if(input.type==='number') {
+    const scrub=installRelativeNumberDrag({input,grip:input.closest('.field')?.querySelector('label'),step:Number(input.step),
+      onStart:()=>authoringControlSessions.forEach(session=>session.commit())});
+    edits.subscribe(state=>{if(!state.active)scrub.stop();});
+  }
   for(const control of collectVolumeCockpitControlElements(document)) {
     if(['volume-input-radius','volume-flow-rate'].includes(control.id))continue; // existing paired Burner adapter
     if(control.tagName!=='SELECT'&&!['range','number','checkbox','color'].includes(control.type))continue;
@@ -22693,27 +22803,41 @@ function updateBackground() {
 // --- AO Controls ---
 if (!isFireLightFieldRoute()) document.getElementById('scene-gi-general-slot').append(document.getElementById('scene-gi-panel'));
 document.getElementById('scene-gi-panel').append(document.getElementById('scene-ao-panel'));
-function setSceneGIControls(value) {
-  const settings = resolveSceneGISettings(value);
+function readSceneGIControls() { return structuredClone(sceneGISettings); }
+function setSceneGIControls(value, {preserveInput=null}={}) {
+  const settings = resolveSceneGIControlState(value);
   if (updateSceneGI) updateSceneGI(settings);
   else sceneGISettings = settings;
-  for (const key of Object.keys(settings)) document.getElementById(`scene-gi-${key}`).value = String(settings[key]);
+  const {estimator,...basic} = settings;
+  for (const [key,value] of Object.entries({...basic,...estimator})) {
+    const control = document.getElementById(`scene-gi-${key}`);
+    if (control === preserveInput) continue;
+    if (control.type === 'checkbox') control.checked = value;
+    else control.value = String(value);
+  }
   document.getElementById('scene-gi-controls').hidden = settings.mode !== 'combined';
   document.getElementById('gtao-shape-controls').hidden = settings.mode === 'combined';
-  document.getElementById('scene-gi-denoise-value').textContent = String(settings.denoise);
 }
-for (const key of Object.keys(sceneGISettings)) {
-  document.getElementById(`scene-gi-${key}`).addEventListener(key === 'denoise' ? 'input' : 'change',event => {
+for (const key of [...Object.keys(sceneGISettings).filter(key=>key!=='estimator'),...Object.keys(sceneGISettings.estimator)]) {
+  const control = document.getElementById(`scene-gi-${key}`);
+  control.addEventListener(control.type === 'number' ? 'input' : 'change',event => {
     try {
-      const value = ['mode','view'].includes(key) ? event.target.value : Number(event.target.value);
-      setSceneGIControls({...sceneGISettings,[key]:value});
+      // An empty typed field is an unfinished edit, not the number zero.
+      if (control.type === 'number' && control.value === '') return;
+      const value = control.type === 'checkbox' ? control.checked : ['mode','view'].includes(key) ? control.value : Number(control.value);
+      const next = Object.hasOwn(sceneGISettings.estimator,key)
+        ? {...sceneGISettings,estimator:{...sceneGISettings.estimator,[key]:value}}
+        : {...sceneGISettings,[key]:value};
+      setSceneGIControls(next,{preserveInput:control});
       document.getElementById('scene-gi-status').textContent = '';
     } catch (error) {
-      event.target.value = String(sceneGISettings[key]);
       document.getElementById('scene-gi-status').textContent = error.message;
     }
   });
+  // Finish incomplete/invalid text on commit using the last accepted state.
+  control.addEventListener('change',()=>setSceneGIControls(sceneGISettings));
 }
+setSceneGIControls(sceneGISettings);
 document.getElementById('ao-toggle').addEventListener('change', e => {
   document.getElementById('ao-controls').style.display = e.target.checked ? '' : 'none';
   if (aoIntensity) {
@@ -25683,6 +25807,7 @@ async function collectSceneComposition() {
   const preset = buildVolumeSettingsPreset();
   const fingerprint = value => JSON.stringify([
     value.domControls, value.rendererControls, value.presentationControls, value.route,
+    fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()),
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
     burnerRecipe, isAuthoredKilnCollisionRoute(),
@@ -25707,6 +25832,7 @@ async function collectSceneComposition() {
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
+  Object.assign(route,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()));
   const moduleUrl = new URLSearchParams(location.hash.slice(1)).get('composition_module_url');
   if (moduleUrl) route.composition_module_url = moduleUrl;
   route.volume_light_field_test_scene = document.getElementById('fire-light-test-scene-toggle').checked ? '1' : '0';
@@ -27109,8 +27235,9 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   if (!Array.isArray(data.objects)) applyMaterialState(data.materials);
 
   // Apply postprocessing
+  // Scenes without a saved GI record use defaults, independent of prior tuning.
+  setSceneGIControls(data.postprocessing?.sceneGI ?? {});
   if (data.postprocessing) {
-    setSceneGIControls(data.postprocessing.sceneGI ?? {});
     const ao = data.postprocessing.ao;
     if (ao) {
       const aoEnabled = ao.enabled ?? true;
@@ -27270,6 +27397,7 @@ grInit();
 initKaminosFingerFluidBenchRoute();
 initKaminosFingerJuiceHostRoute();
 const sceneInitialization = initScene();
+settleStartupVeil(document, sceneInitialization).catch(() => {});
 sceneInitialization.then(() => {
   initEnvButtons();
   loadDemoButtons();
@@ -27407,11 +27535,12 @@ sceneInitialization.then(() => {
 
 function setupAuthoringAssets(){
   let redraw=()=>{};
-  // The frame owner models borrow frames from: the fire scene's volume prototype when
-  // one is loaded, otherwise the ordinary scene itself, so Generate needs no fire scene.
+  // The frame owner models borrow frames from: the fire scene's volume prototype while it
+  // renders, otherwise the ordinary scene itself, so Generate needs no fire scene. A fluid
+  // route that booted but stayed inactive (a cancelled or refused Add > Flame) draws nothing.
   let appFrameSource=null;
   const frameOwner=()=>{
-    if(volumePrototype?.foregroundGpuContext){
+    if(volumePrototype?.foregroundGpuContext?.().active){
       // A fire scene took over: the app owner stops requesting frames.
       if(appFrameSource?.debugState().active&&!appFrameSource.debugState().pending)appFrameSource.setForegroundOpportunityRequester(null);
       return volumePrototype;

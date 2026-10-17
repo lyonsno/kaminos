@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash, randomInt } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -44,8 +45,18 @@ const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const learnedSplatRadius = Number(args.get('--learned-splat-radius') || 1);
 const learnedSplatSharpness = Number(args.get('--learned-splat-sharpness') || 3.4);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
+// How long to wait for Chrome's DevTools endpoint before giving up.
+// Without --devtools-wait-ms the wait is 100 tries 125 ms apart, as before,
+// which a loaded machine stretches; with it, a fixed deadline.
+const devtoolsWaitMs = args.has('--devtools-wait-ms') ? Math.max(0, Number(args.get('--devtools-wait-ms')) || 0) : null;
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-dense-cue-splat-bridge-profile-'));
+// The Chrome profile is created only when a browser is launched, under the
+// temp root, and removed once the browser has exited unless --user-data-dir
+// named it or KAMINOS_KEEP_BROWSER_PROFILE is set to anything but empty, 0
+// or false.
+const KEEP_PROFILE_ENV = 'KAMINOS_KEEP_BROWSER_PROFILE';
+const keepProfile = !['', '0', 'false'].includes(String(process.env[KEEP_PROFILE_ENV] ?? '').trim().toLowerCase());
+const requestedUserDataDir = args.get('--user-data-dir') ? String(args.get('--user-data-dir')) : null;
 
 function utcNow() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -210,14 +221,16 @@ async function cdpFetch(path, options) {
 }
 
 async function waitForCdp() {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  const deadline = devtoolsWaitMs === null ? null : Date.now() + devtoolsWaitMs;
+  for (let attempt = 1; ; attempt += 1) {
     try {
       return await cdpFetch('/json/version');
     } catch {
+      if (deadline === null ? attempt >= 100 : Date.now() >= deadline) break;
       await delay(125);
     }
   }
-  throw new Error('Chrome DevTools endpoint did not open');
+  throw new Error(`Chrome DevTools endpoint did not open on port ${debugPort} ${devtoolsWaitMs === null ? 'after 100 tries 125 ms apart' : `within ${devtoolsWaitMs} ms`}`);
 }
 
 function routeWithBridgeControls(route, grid) {
@@ -231,8 +244,8 @@ function routeWithBridgeControls(route, grid) {
   return url.toString();
 }
 
-function launchBrowser(route) {
-  return spawn(chrome, [
+function launchBrowser(route, userDataDir) {
+  const browser = spawn(chrome, [
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
@@ -241,13 +254,25 @@ function launchBrowser(route) {
     '--window-size=1200,1200',
     route,
   ], { stdio: 'ignore' });
+  // A browser that cannot start is a browser-capture failure with a report,
+  // not an unhandled error event.
+  return new Promise((resolveLaunch, rejectLaunch) => {
+    browser.once('spawn', () => resolveLaunch(browser));
+    browser.once('error', error => rejectLaunch(new Error(`browser launch failed (${chrome}): ${error.message}`)));
+  });
 }
 
 async function closeBrowser(browser) {
   try {
     await fetch(`http://127.0.0.1:${debugPort}/json/close`);
   } catch {}
-  browser?.kill('SIGTERM');
+  if (browser.exitCode !== null || browser.signalCode !== null) return;
+  // Wait for Chrome to exit so its profile can be removed behind it.
+  const exited = new Promise(resolveExit => browser.once('exit', resolveExit));
+  browser.kill('SIGTERM');
+  const forceKill = setTimeout(() => browser.kill('SIGKILL'), 5000);
+  await exited;
+  clearTimeout(forceKill);
 }
 
 function waitForWebSocketOpen(ws) {
@@ -394,11 +419,12 @@ code { color: #ffd184; }
 
 async function runCapture(input, validated) {
   const route = routeWithBridgeControls(input.frozenState.requestedRoute, input.frozenState.grid);
+  const userDataDir = requestedUserDataDir || mkdtempSync(join(tmpdir(), 'kaminos-dense-cue-splat-bridge-profile-'));
   let browser = null;
   let ws = null;
   const captures = [];
   try {
-    browser = launchBrowser(route);
+    browser = await launchBrowser(route, userDataDir);
     await waitForCdp();
     ws = await connectPage(route);
     const initialState = await waitForVolume(ws);
@@ -481,6 +507,15 @@ async function runCapture(input, validated) {
   } finally {
     ws?.close();
     if (browser) await closeBrowser(browser);
+    if (!requestedUserDataDir) {
+      if (keepProfile) console.error(`keeping browser profile ${userDataDir} because ${KEEP_PROFILE_ENV} is set`);
+      else {
+        // A profile that cannot be removed is reported, never a failure of the
+        // capture or a replacement for the error that ended it.
+        try { rmSync(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+        catch (error) { console.error(`could not remove browser profile ${userDataDir}: ${error.message}`); }
+      }
+    }
   }
 }
 

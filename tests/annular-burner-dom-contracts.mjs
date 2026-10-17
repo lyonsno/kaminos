@@ -1,3 +1,4 @@
+// kaminos-test: manual — needs an installed Playwright module path argument
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
