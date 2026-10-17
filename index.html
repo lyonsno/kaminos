@@ -12164,7 +12164,7 @@ async function initScene() {
   sceneCameras=createSceneCameras({edits:scenePlacementTools.edits,supportsProjection:projection=>projection==='perspective',readObjects:()=>sceneObjects.filter(o=>o.type===CAMERA_TYPE).map(serializeSceneObject),writeCameras:writeAuthoredCameras,readViewport:readAuthoredCameraView,writeViewport:writeAuthoredCameraView,size:()=>({width:viewportEl.clientWidth,height:viewportEl.clientHeight}),changed:()=>{cameraAuthoring?.refresh();cameraViewsPanel?.refresh();syncEditorHelperVisibility();markDirty();},admit:()=>{if(authoringBusy||vantageCaptureHeld||sceneSaveBlockedByFailedRestore||greenroomPreviewIsActive()||splatCorrectionMode)throw Error('Finish the current document or preview action');},capture:(item,frame,original)=>window.captureComposition({result:true,cameraObject:item,cameraFrame:frame,cameraOriginal:original})});
   cameraViewsPanel=installCameraViewsPanel({document,views:cameraViews,edits:scenePlacementTools.edits,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(cameraViewsPanel.session);
-  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>window.selectSceneObject(id),onError:error=>setInfo(error.message)});
+  cameraAuthoring=installCameraAuthoring({document,service:sceneCameras,bookmarks:cameraViews,edits:scenePlacementTools.edits,selected:()=>selectedSceneObjectEntry(),select:id=>window.selectSceneObject(id),selectCreated:setActiveSceneObject,onError:error=>setInfo(error.message)});
   authoringControlSessions.push(...cameraAuthoring.sessions);
   scenePlacementTools.addHistoryScope(document.getElementById('selected-camera-properties'));
   window.kaminosSceneCameras=sceneCameras;
@@ -13119,7 +13119,7 @@ async function installOwnerWorkbenchEntry() {
   const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
-    renderer:()=>renderer,objects:()=>sceneObjects,select:setActiveSceneObject,
+    renderer:()=>renderer,objects:()=>sceneObjects,select:id=>window.selectSceneObject(id),
     frame:objects=>{frameObjects(objects,camera,controls);window._kaminosDirty?.();},
     setTransform:(id,pose)=>window.kaminosSetSceneObjectTransform(id,pose),
     enterWorkbench:()=>{authoringWorkspace.setMode('workbench');setActiveTab('assets',{reveal:false});},
@@ -13127,7 +13127,7 @@ async function installOwnerWorkbenchEntry() {
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
-    select:()=>setActiveSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+    select:()=>window.selectSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
