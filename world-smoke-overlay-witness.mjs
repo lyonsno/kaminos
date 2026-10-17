@@ -4,9 +4,10 @@ import fs from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
 const [origin,out,basin,executable,playwright]=process.argv.slice(2);
 await fs.mkdir(out,{recursive:true});
-const report={status:'running',phase:'launch',source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),origin,executable,errors:[],views:[]};
+const report={status:'running',phase:'source-identity',source:null,origin,executable,errors:[],views:[]};
 const save=()=>fs.writeFile(`${out}/report.json`,JSON.stringify(report,null,2));await save();let browser,page;
 try{
+ report.source=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();report.phase='launch';await save();
  assert.ok(executable&&!executable.includes('/Google Chrome.app/'));
  const {chromium}=await import(playwright);
  browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});

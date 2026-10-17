@@ -33,12 +33,12 @@ fn worldSmokeMaterial(p:vec3<f32>,smokeVisible:f32,fireVisible:f32)->EmissiveMat
  var medium=emissiveMaterial(r,fireVisible,smokeVisible);medium.emission*=fireVisible;return medium;
 }
 fn worldSmokeBlend(p:vec3<f32>,fine:EmissiveMaterial,smokeVisible:f32,fireVisible:f32)->EmissiveMaterial{
- if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return fine;}
+ let near=worldSmokeDiagnostic(fine,false);
+ if(!worldSmokeOn()||any(p<worldRender.loPitch.xyz)||any(p>worldRender.hiEnabled.xyz)){return near;}
  let top=2.0*f32(GRID_Y)/f32(GRID)-1.0;
  let d=min(min(1.0-abs(p.x),1.0-abs(p.z)),min(p.y+1.0,top-p.y));
  let weight=1.0-smoothstep(0.0,min(.5,worldRender.loPitch.w),d);
  let coarse=worldSmokeDiagnostic(worldSmokeMaterial(p,smokeVisible,fireVisible),true);
- let near=worldSmokeDiagnostic(fine,false);
  return EmissiveMaterial(mix(near.emission,coarse.emission,weight),mix(near.absorption,coarse.absorption,weight),mix(near.scattering,coarse.scattering,weight));
 }
 `;
