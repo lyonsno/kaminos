@@ -257,6 +257,20 @@ test('transform fields keep a fixed number of decimals instead of three signific
  assert.match(source,/formatAuthoringNumber\(value,\s*input\.dataset\??\.displayDecimals\)/,'the display overlay honours the declared decimals');
 });
 
+test('typing into a numeric field starts from a tidy value, not float noise',async()=>{
+ const {installRelativeNumberDrag}=await import('../scene-control-history.mjs');
+ const doc=new Control();globalThis.document=doc;globalThis.window=new Control();
+ try {
+  for(const [raw,shown] of [['-1.234567891234','-1.234568'],['1.0000000000000002','1'],['0.5','0.5'],['1234.56789','1234.568']]){
+   const input=new Control();input.type='number';input.value=raw;input.ownerDocument=doc;
+   installRelativeNumberDrag({input,step:.01});
+   input.fire('focus');
+   assert.equal(input.readOnly,false);
+   assert.equal(input.value,shown,`editing ${raw}`);
+  }
+ }finally{delete globalThis.document;delete globalThis.window;}
+});
+
 test('late pointer-lock acquisition is released after the gesture already ended',async()=>{
  const {beginContinuousPointer}=await import('../continuous-pointer.mjs');
  const doc=new Control(),target={ownerDocument:doc};doc.defaultView={};let complete,exits=0;

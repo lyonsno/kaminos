@@ -98,7 +98,14 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   input.classList?.add('authoring-number');
   installNumberPresentation(input);
   input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
-  input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
+  // Typing starts from the value at float precision (seven significant
+  // digits), not its binary noise; untouched, the stored value is unchanged.
+  const beginTyping=()=>{
+    input.readOnly=false;
+    const number=Number(input.value);
+    if(input.value!=='' && Number.isFinite(number)){const tidy=String(Number(number.toPrecision(7)));if(tidy!==input.value)input.value=tidy;}
+  };
+  input.addEventListener('focus',()=>{if(!gesture)beginTyping();}); // Tab preserves normal keyboard editing.
   input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});
   function releaseGesture() {
     if(!gesture)return null;
@@ -111,7 +118,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     const ended=releaseGesture();if(!ended)return;
     if(cancel) {input.dispatchEvent(new Event('pointercancel'));suppressClick=true;}
     else if(ended.moved) {input.dispatchEvent(new Event('change',{bubbles:true}));suppressClick=true;input.readOnly=true;input.blur?.();}
-    else {input.readOnly=false;input.focus?.();input.select?.();}
+    else {beginTyping();input.focus?.();input.select?.();}
     onEnd();
   }
   function adjust(dx,fine) {
