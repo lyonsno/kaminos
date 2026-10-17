@@ -6,6 +6,13 @@ import vm from 'node:vm';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 const frame=source.slice(source.indexOf('  function renderOrdinaryFrame('),source.indexOf('  function pumpLookLabFrozenFrame('));
 const invalidate=source.match(/  function invalidateRaymarchReadouts\([^]*?\n  \}/)?.[0]||'function invalidateRaymarchReadouts() {}';
+test('releasing disabled counters refreshes fluid bindings before they can be submitted',()=>{
+  let rebound=0;
+  const context=vm.createContext({state:{width:8,height:8},controlsSnapshot:{rayStepTelemetry:false},debugOpticalStepping:{mode:'numerical'},
+    rayStepTelemetry:{ensure:()=>true,read:()=>({active:false})},rebuildFluidBindGroups:()=>{rebound++;}});
+  vm.runInContext(invalidate+'\ninvalidateRaymarchReadouts("inactive");',context);
+  assert.equal(rebound,1,'a changed counter binding must replace every fluid bind group');
+});
 
 for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty for '+route+' cannot display old live work or marcher identity',()=>{
   const noop=()=>{},state={active:true,frameCount:1,simStepCount:9,width:8,height:8,lookFreezeFrame:null,
