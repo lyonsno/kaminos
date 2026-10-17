@@ -1176,69 +1176,65 @@ async function runPreviewBoundScenario(ws) {
   await evaluate(ws, base);
 }
 
-// The fire-cadence Workbench experiment as the operator uses it: Add flame
-// through its button, the step slider and mode menu through their controls,
-// effective pacing read from the fire itself, and close restoring
-// every-frame stepping. Load ?fire=on&experiment=fire-cadence&workspace=workbench.
-async function runFireCadenceExperimentScenario(ws) {
-  phase = 'scenario-fire-cadence-experiment';
+// The flame panel's cadence controls as the operator uses them: Sim every and
+// Between steps under Speed. Checks the fire's effective pacing, that the sim
+// receives Speed x N while Speed reads as the world rate, that pausing shows
+// the crisp current state, and that Sim every 1 clears the pacing.
+async function runFireCadencePanelScenario(ws) {
+  phase = 'scenario-fire-cadence-panel';
   const failures = [], check = (ok, message) => { if (!ok) failures.push(message); };
-  const evidence = lastEvidence.fireCadenceExperiment = { failures, steps: [] };
-  let opened = null;
-  for (let i = 0; i < 240 && !opened; i++) { opened = await evaluate(ws, `(() => { const e = window.kaminosWorkbenchExperiments; return e?.state().id === 'fire-cadence' ? e.read() : null; })()`).catch(() => null); if (!opened) await delay(250); }
-  assert.ok(opened, 'the fire-cadence experiment did not open');
-  evidence.opened = opened;
-  const pacing = () => evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()?.proxyPacing ?? null');
-  if (!opened.fire) {
-    await evaluate(ws, `(async () => { const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Add flame' && !x.hidden); if (!b) throw Error('no visible Add flame button'); b.click(); return true; })()`);
-    for (let i = 0; i < 480; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 60) break; await delay(250); }
-  }
+  const evidence = lastEvidence.fireCadencePanel = { failures, steps: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  for (let i = 0; i < 480; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 60) break; await delay(250); }
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
+  const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { pacing: d.proxyPacing ?? null, simSpeed: d.controls?.speed ?? null,
+    worldSpeed: Number(document.getElementById('volume-speed').value), speedLabel: document.getElementById('volume-speed-val').textContent,
+    everyLabel: document.getElementById('volume-sim-every-val').textContent, between: document.getElementById('volume-sim-between').value }; })()`);
+  const setControl = (id, value) => evaluate(ws, `(() => { const c = document.getElementById(${JSON.stringify(id)}); c.value = ${JSON.stringify(String(value))}; c.dispatchEvent(new Event('input', { bubbles: true })); c.dispatchEvent(new Event('change', { bubbles: true })); return c.value; })()`);
+  await setControl('volume-speed', 1.2);
+  await setControl('volume-sim-every', 3);
   await settleViewportFrames(ws, 800);
-  evidence.steps.push({ step: 'after flame', pacing: await pacing(), read: await evaluate(ws, 'window.kaminosWorkbenchExperiments.read()') });
-  const slider = await evaluate(ws, `(() => { const s = document.querySelector('input[aria-label="Sim steps every N frames"]'); s.value = '3'; s.dispatchEvent(new Event('input', { bubbles: true })); return s.value; })()`);
+  const three = await read();
+  evidence.steps.push({ step: 'Sim every 3 (default Blend)', ...three });
+  check(three.pacing?.simStepEvery === 3 && three.pacing?.presentationBlend === true && three.pacing?.presentationBlendActive === true, `Sim every 3 did not reach the fire as Blend: ${JSON.stringify(three.pacing)}`);
+  check(Math.abs(three.simSpeed - 3.6) < 1e-6, `the sim should step at Speed x 3 = 3.6, got ${three.simSpeed}`);
+  check(three.speedLabel === '1.20× world' && three.everyLabel === '3 frames', `labels: ${three.speedLabel} / ${three.everyLabel}`);
+  await setControl('volume-sim-between', 'carry');
   await settleViewportFrames(ws, 600);
-  const afterSlider = await pacing();
-  evidence.steps.push({ step: 'slider 3', slider, pacing: afterSlider });
-  check(afterSlider?.simStepEvery === 3 && afterSlider?.presentationBlend === true, `the step slider (default mode blend) did not reach the fire: ${JSON.stringify(afterSlider)}`);
-  await evaluate(ws, `(() => { const m = document.querySelector('select[aria-label="Between sim steps"]'); m.value = 'held'; m.dispatchEvent(new Event('change', { bubbles: true })); return m.value; })()`);
+  const carry = await read();
+  evidence.steps.push({ step: 'Between steps carry', ...carry });
+  check(carry.pacing?.presentationAdvect === true && carry.pacing?.presentationBlend === false, `Carry forward did not reach the fire: ${JSON.stringify(carry.pacing)}`);
+  const agent = await evaluate(ws, `window.kaminosFireCadence({ every: 4, mode: 'blend' })`);
   await settleViewportFrames(ws, 600);
-  const afterMode = await pacing();
-  evidence.steps.push({ step: 'mode held', pacing: afterMode });
-  check(afterMode?.simStepEvery === 3 && afterMode?.presentationAdvect === false, `the mode menu did not reach the fire: ${JSON.stringify(afterMode)}`);
-  const invoked = await evaluate(ws, `window.kaminosWorkbenchExperiments.invoke('setMode', 'carry')`);
+  const four = await read();
+  evidence.steps.push({ step: 'agent every 4 blend', agent, ...four });
+  check(four.pacing?.simStepEvery === 4 && four.pacing?.presentationBlend === true && four.between === 'blend' && Math.abs(four.simSpeed - 4.8) < 1e-6, `the agent call did not set the panel and the fire: ${JSON.stringify(four)}`);
+  await evaluate(ws, 'window.__kaminosVolumePrototype.setSimulationPaused(true)');
   await settleViewportFrames(ws, 600);
-  evidence.steps.push({ step: 'agent setMode carry', invoked, pacing: await pacing() });
-  check((await pacing())?.presentationAdvect === true, 'the agent setMode did not reach the fire');
-  await evaluate(ws, `(() => { const m = document.querySelector('select[aria-label="Between sim steps"]'); m.value = 'blend'; m.dispatchEvent(new Event('change', { bubbles: true })); return m.value; })()`);
-  await settleViewportFrames(ws, 800);
-  const afterBlend = await pacing();
-  evidence.steps.push({ step: 'mode blend', pacing: afterBlend });
-  check(afterBlend?.presentationBlend === true && afterBlend?.presentationBlendActive === true && afterBlend?.presentationAdvect === false, `blend did not engage: ${JSON.stringify(afterBlend)}`);
-  // World speed pegs to the Speed as it is now: set Speed by hand, then the ratio.
-  const speedOf = () => evaluate(ws, `Number(document.getElementById('volume-speed')?.value)`);
-  await evaluate(ws, `(() => { const c = document.getElementById('volume-speed'); c.value = '1.2'; c.dispatchEvent(new Event('input', { bubbles: true })); c.dispatchEvent(new Event('change', { bubbles: true })); return c.value; })()`);
-  await settleViewportFrames(ws, 400);
-  await evaluate(ws, `(() => { const w = document.querySelector('input[aria-label="World speed ratio"]'); w.value = '1'; w.dispatchEvent(new Event('input', { bubbles: true })); return w.value; })()`);
-  await settleViewportFrames(ws, 400);
-  const realTime = await speedOf();
-  await evaluate(ws, `(() => { const w = document.querySelector('input[aria-label="World speed ratio"]'); w.value = '0.5'; w.dispatchEvent(new Event('input', { bubbles: true })); return w.value; })()`);
-  await settleViewportFrames(ws, 400);
-  const half = await speedOf();
-  evidence.steps.push({ step: 'world speed', realTime, half, read: await evaluate(ws, 'window.kaminosWorkbenchExperiments.read()') });
-  check(Math.abs(realTime - 3.6) < 1e-3, `ratio 1 at N=3 from a hand-set Speed of 1.2 should give 3.6, got ${realTime}`);
-  check(Math.abs(half - 2.4) < 1e-3, `ratio 0.5 at N=3 should give 1.2 x 2 = 2.4, got ${half}`);
-  const shot = await capturePngScreenshot(ws, siblingPngPath('-fire-cadence-experiment'));
-  evidence.shot = shot.path;
-  evidence.status = await evaluate(ws, `document.querySelector('[role="status"]')?.textContent ?? null`);
-  await evaluate(ws, 'window.kaminosWorkbenchExperiments.close()');
+  const paused = await read();
+  evidence.steps.push({ step: 'paused', ...paused });
+  check(paused.pacing?.presentationBlendPhase === 1, `paused Blend should show the current state (phase 1), got ${paused.pacing?.presentationBlendPhase}`);
+  await evaluate(ws, 'window.__kaminosVolumePrototype.setSimulationPaused(false)');
+  // Show the rows where the operator meets them: select the fire, scroll Speed into view.
+  evidence.panel = await evaluate(ws, `(() => { const item = [...document.querySelectorAll('*')].find(n => n.childElementCount === 0 && n.textContent.trim() === 'Fire & smoke'); item?.click(); document.querySelector('.tab[data-tab="volume"]')?.click();
+    const row = document.getElementById('volume-sim-every')?.closest('.slider-row'); row?.scrollIntoView({ block: 'center' });
+    const r = row?.getBoundingClientRect(); const speed = document.getElementById('volume-speed')?.closest('.slider-row'); const sr = speed?.getBoundingClientRect();
+    const chain = n => { const out = []; for (let e = n; e && out.length < 8; e = e.parentElement) out.push([e.id || e.className || e.tagName, getComputedStyle(e).display, e.hidden ? 'hidden' : '', e.dataset?.volumeModeHidden ?? '']); return out; };
+    return { selected: !!item, visible: !!r && r.width > 0 && r.height > 0, rect: r ? [r.x, r.y, r.width, r.height] : null, speedRect: sr ? [sr.x, sr.y, sr.width, sr.height] : null, rowChain: chain(row), speedChain: chain(speed) }; })()`);
   await settleViewportFrames(ws, 600);
-  const afterClose = await pacing();
-  const speedAfterClose = await speedOf();
-  evidence.steps.push({ step: 'closed', pacing: afterClose, speed: speedAfterClose });
-  check(afterClose === null, `closing did not restore every-frame stepping: ${JSON.stringify(afterClose)}`);
-  check(Math.abs(speedAfterClose - 1.2) < 1e-3, `closing should restore the hand-set Speed 1.2, got ${speedAfterClose}`);
-  assert.deepEqual(failures, [], `fire cadence experiment checks failed:\n- ${failures.join('\n- ')}`);
+  evidence.shot = (await capturePngScreenshot(ws, siblingPngPath('-fire-cadence-panel'))).path;
+  check(evidence.panel?.visible, `the cadence rows are not visible in the flame panel: ${JSON.stringify(evidence.panel)}`);
+  evidence.order = await evaluate(ws, `(() => { const speed = document.getElementById('volume-speed').closest('.slider-row'); let next = speed.nextElementSibling; if (next?.classList.contains('slider-help')) next = next.nextElementSibling;
+    const following = document.getElementById('volume-sim-every').closest('.slider-row').nextElementSibling;
+    return { afterSpeed: !!next?.querySelector('#volume-sim-every'), afterEvery: !!following?.querySelector('#volume-sim-between') }; })()`);
+  check(evidence.order?.afterSpeed === true && evidence.order?.afterEvery === true, `the cadence rows do not sit directly under Speed: ${JSON.stringify(evidence.order)}`);
+  await setControl('volume-sim-every', 1);
+  await settleViewportFrames(ws, 600);
+  const one = await read();
+  evidence.steps.push({ step: 'Sim every 1', ...one });
+  check(one.pacing === null && Math.abs(one.simSpeed - 1.2) < 1e-6, `Sim every 1 should clear the pacing and step at Speed: ${JSON.stringify(one)}`);
+  assert.deepEqual(failures, [], `fire cadence panel checks failed:\n- ${failures.join('\n- ')}`);
 }
 
 // Decoupled fire cadence: the sim steps every N frames; held stepping repeats
@@ -7203,8 +7199,8 @@ try {
     await runFireProxyBridgeRouteScenario(ws);
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
-  } else if (scenario === 'fire-cadence-experiment') {
-    await runFireCadenceExperimentScenario(ws);
+  } else if (scenario === 'fire-cadence-panel') {
+    await runFireCadencePanelScenario(ws);
   } else if (scenario === 'fire-decoupled-cadence') {
     await runFireDecoupledCadenceScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {

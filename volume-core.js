@@ -16706,9 +16706,10 @@ export function createKaminosVolumePrototype({
     // Decoupled fire cadence: the fraction of a sim step this frame shows
     // (0 unless opted in). typeof: source-extraction harnesses run this body
     // without the closure that declares the pacing.
-    uniforms[45] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null);
+    const presentationPaused = { paused: (typeof simulationPaused !== 'undefined' && simulationPaused) || state.lookFreeze === 1 };
+    uniforms[45] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null, presentationPaused);
     // Blend mode's step fraction, for the presentation blend pass (unread by WGSL).
-    uniforms[41] = presentationBlendPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null);
+    uniforms[41] = presentationBlendPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null, presentationPaused);
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;

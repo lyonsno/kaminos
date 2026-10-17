@@ -19,6 +19,7 @@ const VOLUME_CONTROL_SELECTOR = [
 ].join(', ');
 
 const LAYOUT_API = '/api/volume-cockpit-layouts';
+const FIRE_CADENCE_CONTROL_IDS = Object.freeze(['volume-sim-every', 'volume-sim-between']);
 const PHYSICS_APPEARANCE_CONTROL_IDS = Object.freeze(['volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin']);
 const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
@@ -201,6 +202,14 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
   if (rayGroup) {
     rayGroup.controlIds.splice(rayGroup.controlIds.indexOf('volume-steps') + 1, 0, 'volume-ray-start-noise');
   }
+  // Fire cadence (2026-10-17): Sim every and Between steps sit directly under Speed.
+  const cadenceMissingIds = FIRE_CADENCE_CONTROL_IDS.filter(controlId => receipt.missingControlIds.includes(controlId));
+  const speedGroup = cadenceMissingIds.length
+    ? reconciled.groups.find(group => group.controlIds.includes('volume-speed'))
+    : null;
+  if (speedGroup) {
+    speedGroup.controlIds.splice(speedGroup.controlIds.indexOf('volume-speed') + 1, 0, ...cadenceMissingIds);
+  }
   // Physics appearance (2026-10-14): its controls join the material law they belong to.
   const physicsMissingIds = PHYSICS_APPEARANCE_CONTROL_IDS.filter(controlId => receipt.missingControlIds.includes(controlId));
   const physicsGroup = physicsMissingIds.length
@@ -213,7 +222,8 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
     .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
       && !(cameraGroup && controlId === 'volume-tone-mapping')
       && !(rayGroup && controlId === 'volume-ray-start-noise')
-      && !(physicsGroup && physicsMissingIds.includes(controlId)));
+      && !(physicsGroup && physicsMissingIds.includes(controlId))
+      && !(speedGroup && cadenceMissingIds.includes(controlId)));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {

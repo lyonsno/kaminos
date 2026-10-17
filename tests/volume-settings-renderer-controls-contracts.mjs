@@ -16,6 +16,8 @@ const expectedRendererControls = [
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
   ['volume-flow-kernel-radius', 'volume_flow_kernel_radius'],
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],
+  ['volume-sim-every', 'volume_sim_every'],
+  ['volume-sim-between', 'volume_sim_between'],
 ];
 
 assert.deepEqual(
@@ -106,7 +108,7 @@ assert.equal(target.searchParams.get('volume_flow_kernel_strength'), '1');
 assert.equal(target.searchParams.get('volume_flow_kernel_radius'), '0.03');
 assert.equal(target.searchParams.get('volume_flow_kernel_coherence'), '1');
 assert.equal(target.searchParams.get('volume_tone_mapping'), 'agx');
-assert.equal(receipt.rendererControlCount, 5);
+assert.equal(receipt.rendererControlCount, 7); // + the fire cadence controls
 assert.equal(target.searchParams.get('volume_ray_start_noise'), 'true');
 
 console.log('volume settings renderer controls contracts passed');

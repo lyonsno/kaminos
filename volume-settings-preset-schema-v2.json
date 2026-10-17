@@ -1834,6 +1834,25 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 1
+    },
+    {
+      "key": "volume-sim-every",
+      "param": "volume_sim_every",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-sim-between",
+      "param": "volume_sim_between",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": [
+        "held",
+        "carry",
+        "blend"
+      ],
+      "additiveDefault": "blend"
     }
   ],
   "presentationControls": [
