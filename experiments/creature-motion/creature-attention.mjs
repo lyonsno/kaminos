@@ -69,7 +69,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  if(typeof canvas?.getContext==='function'&&canvas.getContext('2d')){
   canvas.width=512;canvas.height=96;
   const texture=new THREE.CanvasTexture(canvas),material=new THREE.SpriteMaterial({map:texture,depthTest:false,transparent:true});
-  caption=new THREE.Sprite(material);caption.renderOrder=1000;caption.center.set(0,-.4);caption.scale.set(5.3,1,1);caption.position.set(1.3,0,0);caption.userData.canvas=canvas;reticle.add(caption);
+  caption=new THREE.Sprite(material);caption.renderOrder=1000;caption.center.set(.5,0);caption.scale.set(5.3,1,1);caption.position.set(0,1.4,0);caption.userData.canvas=canvas;reticle.add(caption);
  }
  function setCaption(text){
   if(!caption||text===captionText)return;captionText=text;
