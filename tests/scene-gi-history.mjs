@@ -34,7 +34,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const begin=html.indexOf('  function animate() {'),end=html.indexOf('\n  compositionHost =',begin);
 for(const enabled of [true,false]) {
   let remaining=45,draws=0;
-  const scope={document:{getElementById:()=>({textContent:''})},requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
+  const scope={outputCaptureExtent:null,document:{getElementById:()=>({textContent:''})},requestAnimationFrame(){},controls:{update(){}},viewProjection:null,workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
     isSceneItemVisible:()=>true,isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,

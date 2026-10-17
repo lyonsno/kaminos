@@ -49,6 +49,7 @@ export function sceneDefaultsFromDocument(document){
 }
 export function checkedPreferences(raw){
  if(raw?.schema!==PREFERENCES_SCHEMA)throw Error('Unsupported preferences document');
+ if(Object.hasOwn(raw,'startupConfigured')&&typeof raw.startupConfigured!=='boolean')throw Error('Invalid startup preference state');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
  return {...copy(raw),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
 }
