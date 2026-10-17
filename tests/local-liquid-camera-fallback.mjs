@@ -21,7 +21,7 @@ for(const matching of [true,false])for(const mountTransform of [true,false]) {
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,
-    localLiquidHost:host,localLiquidFailure:null,sceneCameraStatusText:'',console:{error(){}},
+    localLiquidHost:host,ordinarySceneTransportFrame:null,localLiquidFailure:null,sceneCameraStatusText:'',console:{error(){}},
     syncWaterProxy(){},syncFireProxy(){},renderWithViewportShading:draw=>draw(),refreshLocalLiquidPerformance(){},setInfo(){},
   });
   assert.equal(draws.length,1);
