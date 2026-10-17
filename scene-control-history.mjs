@@ -177,6 +177,6 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   // transaction-ending event back into that owner.
   return {
     stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}},
-    dispose(){if(disposed)return;disposed=true;finish(true);doc.removeEventListener('mouseup',mouseup);doc.removeEventListener('keydown',keydown,true);win.removeEventListener('blur',blur);},
+    dispose(){if(disposed)return;disposed=true;finish(true);doc.removeEventListener('mouseup',mouseup);doc.removeEventListener('keydown',keydown,{capture:true});win.removeEventListener('blur',blur);},
   };
 }
