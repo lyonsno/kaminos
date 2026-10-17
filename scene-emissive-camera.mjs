@@ -1,5 +1,39 @@
 import {cameraWhiteBalance} from './volume-emissive-transport.mjs';
 
+// The matched scene control is a second editor for the flame camera's EV.
+// The independent scene exposure stays with its renderer for later unmatching.
+export function bindSceneExposureControls({exposure,flame,match,label,output,readIndependent,writeIndependent,redraw}) {
+  const bounds=Object.fromEntries(['min','max','step'].map(key=>[key,exposure[key]]));
+  const event=type=>new flame.ownerDocument.defaultView.Event(type,{bubbles:true});
+  const sync=()=>{
+    for(const key of ['min','max','step'])exposure[key]=match.checked?flame[key]:bounds[key];
+    exposure.value=String(match.checked?Number(flame.value):readIndependent());
+    label.textContent=match.checked?'Exposure EV':'Exposure';
+    output.textContent=Number(exposure.value).toFixed(2);
+  };
+  const check=state=>{
+    if(typeof state.matched!=='boolean'||!Number.isFinite(state.independent)||state.independent<0||
+      !Number.isFinite(state.flameEV)||state.flameEV<Number(flame.min)||state.flameEV>Number(flame.max))throw Error('Invalid camera exposure state');
+    if(!Number.isFinite(state.value))throw Error('Invalid camera exposure value');
+    const next={...state,...(state.matched?{flameEV:state.value}:{independent:state.value})};
+    if(next.flameEV<Number(flame.min)||next.flameEV>Number(flame.max)||next.independent<0)throw Error('Invalid camera exposure value');
+    return next;
+  };
+  exposure.addEventListener('input',()=>{
+    if(exposure.value===''||!Number.isFinite(Number(exposure.value)))return;
+    const value=Number(exposure.value);
+    if(match.checked){flame.value=String(value);flame.dispatchEvent(event('input'));}
+    else writeIndependent(value);
+    sync();redraw();
+  });
+  flame.addEventListener('input',sync);flame.addEventListener('change',sync);
+  match.addEventListener('change',()=>{sync();redraw();});
+  return {sync,check,
+    read:()=>({value:match.checked?Number(flame.value):readIndependent(),matched:match.checked,independent:readIndependent(),flameEV:Number(flame.value)}),
+    write(state){state=check(state);writeIndependent(state.independent);match.checked=state.matched;flame.value=String(state.flameEV);flame.dispatchEvent(event('input'));sync();redraw();},
+  };
+}
+
 // Display-only comparison. Never alter raw emission, extinction or light gain.
 export function resolveSceneEmissiveCamera(requested, physical) {
   const base={requested:!!requested,effective:false,transform:'host-camera'};
