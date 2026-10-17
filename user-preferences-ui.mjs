@@ -1,4 +1,4 @@
-import {checkedPreferences,sceneDefaultsFromDocument} from './user-preferences.mjs';
+import {checkedPreferences,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES} from './user-preferences.mjs';
 const copy=value=>structuredClone(value),get=(object,path)=>path.split('.').reduce((o,k)=>o?.[k],object);
 const set=(object,path,value)=>{const keys=path.split('.');let slot=object;for(const key of keys.slice(0,-1))slot=slot[key]??={};slot[keys.at(-1)]=value;};
 // Each field edits the preference draft only. Scene controls keep owning live edits.
@@ -15,8 +15,8 @@ export function installUserPreferences({document,controller,readScene,readFactor
   const original=source?document.getElementById(source):null;const select=options||original?.tagName==='SELECT';const input=document.createElement(select?'select':'input');
   input.dataset.preferencePath=path;input.id='preference-'+path.replaceAll('.','-');
   if(select){for(const [value,label] of options??[...original.options].map(o=>[o.value,o.textContent])){const option=document.createElement('option');option.value=value;option.textContent=label;input.append(option);}}
-  // Slider ranges guide scrubbing; scene validators own numeric admission.
-  else{input.type=type;input.step=step;for(const [key,value] of Object.entries({min,max}))if(value!==undefined&&value!=='')input[key]=String(value);}
+  // Only fixed-range consumers constrain numeric admission; exposure remains unbounded.
+  else{const range=SCENE_DEFAULT_RANGES[path];input.type=type;input.step=range?.step??step;for(const [key,value] of Object.entries({min:range?.min??min,max:range?.max??max}))if(value!==undefined&&value!=='')input[key]=String(value);}
   input.addEventListener('input',()=>{if(!draft||busy)return;if(input.type==='number'&&(!input.value.trim()||!input.validity.valid))return;set(draft.sceneDefaults,path,input.type==='checkbox'?input.checked:input.type==='number'?Number(input.value):input.value);status('Unsaved preferences');});
   fields.push({input,path});row.append(title,input);parent.append(row);
  }

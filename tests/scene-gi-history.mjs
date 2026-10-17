@@ -36,7 +36,7 @@ for(const enabled of [true,false]) {
   let remaining=45,draws=0;
   const scope={requestAnimationFrame(){},controls:{update(){}},workbenchSceneFrames:{tick(){}},performance:{now:()=>0},
     fingerFluidPyroCompositionRequested:()=>false,isKaminosVolumeSmokeRoute:()=>false,
-    isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
+    isSceneItemVisible:()=>true,isAuthoredKilnCollisionRoute:()=>false,volumeBridge:null,fireLightFieldPass:null,localLiquidHost:null,
     foregroundServiceActive:false,sceneRenderedForVolume:false,needsRender:true,idleFrames:0,IDLE_THRESHOLD:3,
     syncViewportQuality(){},syncViewportRendererSize(){},fireProxySync:null,
     sceneGI:{needsHistoryFrame:()=>enabled&&remaining>0,requestHistoryFrames(){if(enabled)remaining=45;}},

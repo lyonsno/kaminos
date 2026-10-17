@@ -1,7 +1,7 @@
 // kaminos-test: node
 import {test} from 'node:test';import {readFileSync} from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
 import {planSceneRestore} from '../scene-persistence-core.js';
-import {PREFERENCES_SCHEMA,checkedPreferences,sceneDefaultsFromDocument,newSceneDocument,sceneDefaultsApplyToLocation,createUserPreferences} from '../user-preferences.mjs';
+import {PREFERENCES_SCHEMA,SCENE_DEFAULT_RANGES,checkedPreferences,sceneDefaultsFromDocument,newSceneDocument,sceneDefaultsApplyToLocation,createUserPreferences} from '../user-preferences.mjs';
 const blank=()=>({schema:'kaminos.scene.v1',version:10,objects:[{id:'a'}],sceneId:'old',camera:{position:[0,1,4],target:[0,0,0],up:[0,1,0],fov:50,near:.01,far:100},sceneCamera:{schema:'kaminos.scene-camera.v1',activeId:'camera-a',aspect:[16,9]},environment:{name:'studio',exposure:1},editorDisplay:{hiddenIds:['a']},postprocessing:{},composition:{flame:{presetId:'old'}},localLiquid:{particleCount:4096}});
 test('capturing defaults copies settings without scene membership or camera references',()=>{const doc=blank(),value=sceneDefaultsFromDocument(doc);assert.equal(value.environment.exposure,1);assert.equal(value.sceneCamera.activeId,null);assert.deepEqual(value.editorDisplay.hiddenIds,[]);assert.equal('sceneId' in value,false);assert.equal('objects' in value,false);value.environment.exposure=3;assert.equal(doc.environment.exposure,1);});
 test('new scenes use defaults and never inherit source-scene identities or simulations',()=>{const factory=blank(),defaults=sceneDefaultsFromDocument(factory);defaults.environment.exposure=.7;const value=newSceneDocument(factory,defaults);assert.equal(value.environment.exposure,.7);assert.deepEqual(value.objects,[]);assert.equal(value.composition,null);assert.equal(value.localLiquid,null);assert.equal(value.sceneId,undefined);assert.equal(value.sceneCamera.activeId,null);assert.equal(factory.sceneId,'old');});
@@ -17,11 +17,21 @@ test('Preferences number admission uses setting validity rather than copied slid
  const a=text.indexOf(' function field('),b=text.indexOf(' const env=group(',a);
  const create=tag=>({tagName:tag.toUpperCase(),dataset:{},append(){},addEventListener(){}});
  const fields=[],source={tagName:'INPUT',min:'0.2',max:'4',step:'.1'};
- const c={document:{createElement:create,getElementById:()=>source},fields,copy:structuredClone};vm.createContext(c);vm.runInContext(text.slice(a,b),c);
+ const c={document:{createElement:create,getElementById:()=>source},fields,SCENE_DEFAULT_RANGES,copy:structuredClone};vm.createContext(c);vm.runInContext(text.slice(a,b),c);
  c.field(create('div'),'environment.exposure','Exposure',{source:'exposure-slider'});
  for(const exposure of [0,5,12]){
   assert.equal(checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{environment:{name:'studio',exposure}}}).sceneDefaults.environment.exposure,exposure);
   const input=fields[0].input;assert.ok(!input.min||Number(input.min)<=exposure,'canonical exposure must not be below the preference input minimum');assert.ok(!input.max||Number(input.max)>=exposure,'canonical exposure must not exceed the preference input maximum');
  }
  assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{environment:{name:'studio',backgroundBlur:2}}}),/blur/i,'the environment loader rejects blur outside 0..1');
+});
+
+
+test('saved postprocessing defaults must survive their fixed range consumers without clamping or rounding',()=>{
+ const defaults=postprocessing=>({schema:PREFERENCES_SCHEMA,sceneDefaults:{postprocessing}});
+ for(const ao of [{radius:25},{falloff:2},{radius:.1},{intensity:4},{scale:6},{thickness:6},{radius:1.234}])assert.throws(()=>checkedPreferences(defaults({ao})),/AO|ao/);
+ for(const dof of [{focus:11},{aperture:.02},{maxblur:.06}])assert.throws(()=>checkedPreferences(defaults({dof})),/Depth|dof/);
+ assert.throws(()=>checkedPreferences({schema:PREFERENCES_SCHEMA,sceneDefaults:{backdropBrightness:3}}),/Backdrop|backdrop/);
+ const valid={ao:{radius:7.5,intensity:1.25,scale:.75,thickness:1.45,falloff:.37},dof:{focus:2.5,aperture:.002,maxblur:.01}};
+ assert.deepEqual(checkedPreferences(defaults(valid)).sceneDefaults.postprocessing,valid);
 });

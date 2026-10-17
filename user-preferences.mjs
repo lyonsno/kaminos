@@ -4,6 +4,19 @@ import {resolveSceneGIControlState} from './scene-gi-settings.mjs';
 export const PREFERENCES_SCHEMA='kaminos.preferences.v1';
 const copy=value=>structuredClone(value);
 const sections=['environment','postprocessing','camera','sceneCamera','editorDisplay','backdrop','backdropBrightness'];
+// These consumers restore through fixed HTML range controls. Admission must
+// preserve the stored value through their clamping and step sanitization.
+export const SCENE_DEFAULT_RANGES={
+ 'postprocessing.ao.radius':{label:'AO radius',min:.5,max:20,step:.1},
+ 'postprocessing.ao.intensity':{label:'AO intensity',min:0,max:3,step:.05},
+ 'postprocessing.ao.scale':{label:'AO scale',min:.1,max:5,step:.05},
+ 'postprocessing.ao.thickness':{label:'AO thickness',min:.1,max:5,step:.05},
+ 'postprocessing.ao.falloff':{label:'AO falloff',min:0,max:1,step:.01},
+ 'postprocessing.dof.focus':{label:'Depth of field focus',min:.5,max:10,step:.1},
+ 'postprocessing.dof.aperture':{label:'Depth of field aperture',min:.0001,max:.01,step:.0001},
+ 'postprocessing.dof.maxblur':{label:'Depth of field maximum blur',min:0,max:.05,step:.001},
+ backdropBrightness:{label:'Backdrop brightness',min:.1,max:2,step:.05},
+};
 const membership=['objects','groups','composition','localLiquid','selectionIds','activeObjectId','activeFieldId','sceneId','cameraViews','volumePrimitives'];
 function finiteTree(value){if(typeof value==='number'&&!Number.isFinite(value))throw Error('Preferences need finite numbers');if(value&&typeof value==='object')for(const item of Object.values(value))finiteTree(item);}
 export function checkedSceneDefaults(raw){
@@ -11,6 +24,13 @@ export function checkedSceneDefaults(raw){
  if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid scene defaults');
  if(membership.some(key=>Object.hasOwn(raw,key)))throw Error('Preferences cannot contain scene objects or identity');
  const value=copy(raw);finiteTree(value);
+ for(const [path,{label,min,max,step}] of Object.entries(SCENE_DEFAULT_RANGES)){
+  const number=path.split('.').reduce((value,key)=>value?.[key],value);
+  if(number===undefined)continue;
+  const ticks=(number-min)/step;
+  if(typeof number!=='number'||number<min||number>max||Math.abs(ticks-Math.round(ticks))>1e-7)throw Error(`${label} must be between ${min} and ${max}, in steps of ${step}; the scene cannot preserve this value`);
+ }
+
  if(value.camera)Object.assign(value.camera,checkedCameraView(value.camera));
  if(value.editorDisplay){value.editorDisplay=checkedViewportDisplay(value.editorDisplay);if(value.editorDisplay.hiddenIds.length)throw Error('Default display cannot refer to hidden scene objects');}
  if(value.sceneCamera){const aspect=value.sceneCamera.aspect;if(!Array.isArray(aspect)||aspect.length!==2||!aspect.every(n=>Number.isFinite(n)&&n>0)||value.sceneCamera.activeId!=null)throw Error('Default output needs a positive aspect and no active scene camera');}

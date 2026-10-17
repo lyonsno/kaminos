@@ -8,7 +8,7 @@ import * as ownerAddress from '../owner-experiment-entry.mjs';
 import {fireAtBoot} from '../fire-boot.mjs';
 import {createSceneOwnerControls} from '../scene-owner-controls.mjs';
 const html=fs.readFileSync(process.env.KAMINOS_RECOVERY_TEST_INDEX||new URL('../index.html',import.meta.url),'utf8');
-const start=html.indexOf('sceneInitialization.then(() => {'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
+const start=html.indexOf('sceneInitialization.then(async () => {'),end=html.indexOf('</script>',start);assert.ok(start>=0&&end>start);
 const tail=html.slice(start,end);
 const entryStart=html.indexOf('async function installOwnerWorkbenchEntry()'),entryEnd=html.indexOf('\n}',entryStart);assert.ok(entryStart>=0&&entryEnd>entryStart);
 const entry=html.slice(entryStart,entryEnd+2);
@@ -23,7 +23,7 @@ const flush=()=>new Promise(resolve=>setImmediate(resolve));
 async function startup(url,{matching=false}={}){
  let redirects=[],loads=0,admissions=0,owners=0,rejection=null;
  const location={href:url.href,search:url.search,hash:url.hash,origin:url.origin,replace:value=>redirects.push(value)};
- const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}}},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
+ const c={URL,URLSearchParams,Promise,Symbol,File:class{},compositionRestoreUrl,forwardCompositionHash,...ownerAddress,sceneInitialization:Promise.resolve(),document:{body:{classList:{add(){}}},getElementById:()=>({value:'0.6'})},startupPreferences:null,startupPreferencesLoaded:Promise.resolve(),factorySceneDocument:null,preferencesUI:null,buildSceneData:()=>({environment:{}}),environmentDefaults:()=>({}),installUserPreferences:()=>({}),userPreferences:{state:()=>({receipt:{revision:null}})},window:{location},location,console:{error(){}},sceneSaveBlockedByFailedRestore:false,
  initEnvButtons(){},loadDemoButtons(){},restoreSettings(){return 'studio';},loadEnvironment:()=>Promise.resolve(),kaminosMeshAssetRouteFromSearch:()=>null,kaminosSplatAssetRouteFromSearch:()=>null,kaminosImageAssetRouteFromSearch:()=>null,
  fireAtBoot,initKaminosVolumeRoute:()=>Promise.resolve(),reportKaminosVolumeRouteInitFailure(){},initKaminosMotionAgencyRoute(){},initWorldChambersRoute(){},initKaminosFingerFluidBenchRoute(){},initKaminosFingerJuiceHostRoute(){},initKaminosFingerJuiceTabRoute(){},setActiveTab(){},compositionStatus(){},setInfo(){},planSceneRestore:()=>({composition}),fetch:async()=>({ok:true,json:async()=>({})}),
  async loadSceneFile(){loads++;c.sceneSaveBlockedByFailedRestore=false;},resolveWorkbenchViewerReady(){admissions++;},rejectWorkbenchViewerReady(error){rejection=error.message;},async installOwnerWorkbenchEntry(){owners++;},};
