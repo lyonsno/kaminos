@@ -181,6 +181,15 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // A flame is seen from much farther than an ordinary prop: per-source range.
+ const c=creature(),far=[1.5,.9,-6];
+ const prop=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'prop',point:far,interest:1}]});
+ assert.equal(looks(watch(prop,c,3,0).rows).length,0,'an ordinary prop that far away goes unnoticed');
+ const lit=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'flame',point:far,interest:1.5,noticeRadius:12}]});
+ assert.equal(looks(watch(lit,c,3,0).rows).length,1,'a flame at the same distance is noticed');
+}
+
+{
  // The flame source reads the shared flame workbench: burning (and not frozen),
  // edits as changes, position from the flame source object.
  const scene=new THREE.Scene(),emitter=new THREE.Object3D();emitter.userData.kaminosSceneObject={id:'flame-emitter',label:'Flame source'};emitter.position.set(1,2,3);scene.add(emitter);scene.updateMatrixWorld(true);
@@ -188,7 +197,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const workbench={read:()=>{reads++;return structuredClone(state);},subscribe:fn=>{listener=fn;return ()=>{listener=null;};}};
  const flames=flameInterests({THREE,root:()=>scene,workbench,interest:1.5,now:()=>clock});
  let [row]=flames.read();
- assert.equal(row.active,false,'unlit flame is reported as not active');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
+ assert.equal(row.active,false,'unlit flame is reported as not active');assert.ok(row.noticeRadius>=10,'a flame is visible from afar');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
  state.active=true;clock+=100;[row]=flames.read();assert.equal(row.active,false,'not re-read within the poll interval');
  clock+=600;[row]=flames.read();assert.equal(row.active,true);assert.equal(row.restless,true,'a burning flame is restless');
  const before=row.version;listener();[row]=flames.read();assert.equal(row.version,before+1,'a flame edit is a change');

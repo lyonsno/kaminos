@@ -94,9 +94,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const head=bones.get('head'),chest=bones.get('spine-chest');
    const headAt=worldPosition(head),body=headAt.clone().sub(worldPosition(chest));body.y=0;
    if(body.lengthSq()<1e-12)throw Error('Creature body heading is degenerate');body.normalize();
-   const sight=point=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
+   const sight=(point,range=o.noticeRadius)=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
     const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=Math.max(0,1-Math.max(0,angle-o.fieldOfView*.5)/(o.fieldOfView*.35));
-    return {distance,angle,view,visible:view>0&&distance<o.noticeRadius};};
+    return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    candidates=[];const observations=[];
    for(const source of interests()){
@@ -104,7 +104,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
     // forgetting time: a restless source never stays familiar for long.
     const names={lit:'lit',changed:'changed',again:'noticed again',...source.causes};
-    const s=active?sight(source.point):{distance:Infinity,angle:Math.PI,view:0,visible:false};
+    // Bright things such as flame are seen from farther than ordinary props.
+    const range=source.noticeRadius??o.noticeRadius;
+    const s=active?sight(source.point,range):{distance:Infinity,angle:Math.PI,view:0,visible:false};
     const forgetThis=Math.exp(-dt/(source.forgetSeconds??o.forgetSeconds));
     const lit=active&&m.wasActive===false,changed=m.version!==undefined&&source.version!==undefined&&source.version!==m.version;
     m.wasActive=active;m.version=source.version;
@@ -131,7 +133,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if(pending>m.impulse&&!attended)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
-    const near=Math.max(0,1-s.distance/o.noticeRadius),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
+    const near=Math.max(0,1-s.distance/range),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
@@ -240,7 +242,7 @@ export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emit
  function read(){
   const object=find();if(!object)return [];
   const time=now();if(time-polled>=pollMs){polled=time;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};}catch{state={active:false,paused:false};}}
-  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,active:state.active,version,
+  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,active:state.active,version,
    restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}}];
  }
  return Object.freeze({read,dispose(){unsubscribe();}});
