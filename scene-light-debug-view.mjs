@@ -6,14 +6,21 @@ import {measureSceneGpu} from './scene-light-timing.mjs';
 // `held()` is true while another actor has borrowed the viewport camera; a pick then waits.
 export function mountLightingDebugView({document,renderer,camera,getLighting,getPrototype,drawFrame,beginSceneInspection,held=()=>false}){
   const panel=document.getElementById('rendering-light-debug');
-  const session={identity:'kaminos-lighting-inspection-session-v1',records:[]};
-  let armed=false,busy=false,savedRecords=0;
+  // Retired captures stay exportable, but never masquerade as the current
+  // route's selected record. Keep references uncapped, including a pending
+  // capture's record array when it completes after disposal.
+  const retiredSessions=window.__kaminosLightingDebugHistory??=[];
+  const session={identity:'kaminos-lighting-inspection-session-v1',records:[],retiredSessions};
+  let armed=false,busy=false,savedRecords=0,disposed=false;
   const text=document.getElementById('rendering-light-debug-status'),select=document.getElementById('rendering-light-debug-sample'),plot=document.getElementById('rendering-light-debug-plot'),table=document.getElementById('rendering-light-debug-rays');
-  const status=message=>{text.textContent=message;};
+  const status=message=>{if(!disposed)text.textContent=message;};
+  function clearDisplay(){select.onchange=null;select.replaceChildren();plot.replaceChildren();table.replaceChildren();}
+  clearDisplay();status(`No inspection in this lighting session. Pick a receiving surface. ${retiredSessions.length} retired sessions retained in Save JSON.`);
   const signature=()=>{const d=getLighting()?.debugState();return JSON.stringify({camera:camera.matrixWorld.elements.map(Math.fround),projection:camera.projectionMatrix.elements.map(Math.fround),viewport:[renderer.domElement.width,renderer.domElement.height],matchedCamera:document.getElementById('rendering-match-flame-camera').checked,geometryBuilds:d?.geometryBuilds,spacingRequested:d?.receiverSpacingRequested,sampling:d?.receiverSampling,directions:d?.frame?.directions,pattern:d?.frame?.angularPattern,sourceGuide:d?.frame?.sourceGuide,gain:d?.gain,surfaceGain:d?.surfaceGain,sourceSoftness:d?.sourceSoftness,surfaceReconstruction:d?.surfaceReconstruction,surfaceScattering:d?.surfaceScattering});};
   const measure=async(samples=20)=>{if(busy)return {status:'failed',phase:'admission',error:'lighting inspection/timing already active',records:[]};busy=true;const prototype=getPrototype(),paused=prototype.debugState().selectiveHeadLiveCapturePaused;let release=null;try{prototype.setSelectiveHeadLiveCapturePaused(true);release=beginSceneInspection();status(`Measuring ${samples} exclusive held-frame scene GPU draws; lighting gather and volume costs are separate.`);const record=await measureSceneGpu(renderer,{samples,getSignature:signature,drawFrame});record.identity='kaminos-scene-gpu-profile-v1';record.capturedAt=new Date().toISOString();record.volumeScheduling='paused-during-exclusive-scene-draws';session.records.push(record);status(`${record.status}: Three scene GPU capture; ${record.records.length}/${samples} records. ${record.error||record.reason||''} Save JSON for raw frame identities and timings.`);return record;}finally{release?.();prototype.setSelectiveHeadLiveCapturePaused(!!paused);busy=false;}};
   const peak=rgb=>Math.max(...rgb);
   function renderRecord(record){
+    if(disposed)return;
     select.replaceChildren();table.replaceChildren();plot.replaceChildren();
     if(record.status!=='captured'){status(`Failed during ${record.phase}: ${record.error}. Failure retained in this session.`);return;}
     const meta=record.metadata;
@@ -67,6 +74,9 @@ export function mountLightingDebugView({document,renderer,camera,getLighting,get
   };
   const unload=e=>{if(session.records.length>savedRecords){e.preventDefault();e.returnValue='Unsaved lighting inspection snapshots';}};globalThis.addEventListener('beforeunload',unload);
   const api={captureAt,measure,session,renderRecord,dispose(){
+    if(disposed)return;
+    if(session.records.length||busy)retiredSessions.push({identity:session.identity,retired:true,records:session.records});
+    clearDisplay();text.textContent='Lighting inspection session retired.';disposed=true;
     armed=false;document.removeEventListener('pointerdown',pointer,true);globalThis.removeEventListener('beforeunload',unload);
     pick.onclick=null;document.getElementById('rendering-light-debug-time').onclick=null;document.getElementById('rendering-light-debug-save').onclick=null;
     if(window.__kaminosLightingDebug===api)window.__kaminosLightingDebug=null;
