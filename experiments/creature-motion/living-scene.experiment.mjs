@@ -24,6 +24,8 @@ export async function createLivingScene({host,inputs={},record=()=>{}},dependenc
   const row={id:spec.id,label:spec.label,entry:null,mounted:null};
   // Global camera/floor/gizmo settings are room state, never actor disposal state.
   const {view,ground,gizmos,...creature}=spec.creature;
+  // Scene-wide authored interests reach every actor unless one carries its own.
+  if(inputs.attention!==undefined&&creature.attention===undefined)creature.attention=structuredClone(inputs.attention);
   if(creature.actor_root!==undefined&&creature.actor_root!=='live'){pending.delete(spec.id);throw Error('Unknown living creature root mode; actors require live roots');}
   const scopedHost={...host,controls:{...host.controls}};
   if(host.controls.mountObject)scopedHost.controls.mountObject=options=>{

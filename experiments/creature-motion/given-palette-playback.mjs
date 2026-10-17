@@ -1,4 +1,4 @@
-export function attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,mountControls=true,posePresentation=null,
+export function attachGivenPalettePlayback({THREE,runtime,adapter,source,document,mountRoot,mountControls=true,posePresentation=null,poseModifier=null,
  now=()=>performance.now(),dirty=()=>globalThis.window?._kaminosDirty?.(),isMounted=()=>Boolean(runtime?.group?.parent)}) {
  if(!runtime?.group?.isObject3D||!(runtime.bones instanceof Map)||typeof runtime.update!=='function'||!mountRoot||!document)throw Error('Given motion requires the actual live Bone/deformer runtime and controls mount');
  for(const name of ['motionSha256','frameSha256','caseSha256'])if(!/^[a-f0-9]{64}$/i.test(source?.[name]??''))throw Error('Given motion source identity is incomplete');
@@ -28,7 +28,11 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
    const actorMatrix=base.clone().multiply(new THREE.Matrix4().fromArray(pose.actorMatrix)).toArray();
    assign(group,posePresentation?posePresentation.apply({...pose,actorMatrix}):actorMatrix);
    for(const b of pose.bones)assign(runtime.bones.get(b.name),b.localMatrix);
-   group.updateMatrixWorld(true);original.call(runtime);frame=index;expected=matrices();error=null;
+   group.updateMatrixWorld(true);
+   // An actor's own overlay (e.g. attention) adjusts the source pose before
+   // deformation; it reads the unmodified pose from the live Bones.
+   if(poseModifier){poseModifier({bones:runtime.bones,group,time:now()/1000,frame:index});group.updateMatrixWorld(true);}
+   original.call(runtime);frame=index;expected=matrices();error=null;
   }catch(failure){if(posePresentation)posePresentation.rollback(presentationBefore);assign(group,before.actor);for(const b of before.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);try{original.call(runtime);}catch{}error=failure.message;status='failed';throw failure;}
   refresh();dirty();return read();
  }
