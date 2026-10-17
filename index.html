@@ -12359,7 +12359,7 @@ async function initScene() {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!document.getElementById('rendering-match-flame-camera').checked;
-      cameraStatus.textContent='Flame camera matching is inactive while inspecting indirect lighting.';
+      cameraStatus.textContent=sceneCameraStatusText='Flame camera matching is inactive while inspecting indirect lighting.';
     }
     syncWaterProxy();
     syncFireProxy();

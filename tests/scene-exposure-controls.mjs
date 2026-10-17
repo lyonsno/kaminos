@@ -26,3 +26,15 @@ assert.throws(()=>link.write({...saved,flameEV:NaN}),/exposure/);
 assert.equal(flame.value,'-6','invalid restoration is atomic');
 link.write(link.check({...link.read(),value:2.5}));assert.equal(flame.value,'2.5','existing scene parameter value API edits flame EV when matched');
 console.log('PASS exposure coupling, canonical flame events, independent restoration and history state');
+
+// The adjacent inactive explanation follows scene -> GI inspection -> scene.
+const {readFileSync}=await import('node:fs');const {runInNewContext}=await import('node:vm');
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const start=html.indexOf('    if(sceneEmissiveCamera && (sceneGISettings.mode');
+const end=html.indexOf('    syncWaterProxy();',start);assert(start>=0&&end>start);
+const status={hidden:true,textContent:''},settings={mode:'combined',view:'scene'};
+const scope={sceneEmissiveCamera:{update:()=>({effective:false,reason:'inactive-material'})},sceneGISettings:settings,
+ document:{getElementById:id=>id==='rendering-match-flame-camera'?{checked:true}:status},window:{},
+ renderPipeline:{},outlinedSceneOutput:{},outlinedCameraOutput:{},applySceneEmissiveCamera(){}};
+runInNewContext('let sceneCameraStatusText="";function draw(){'+html.slice(start,end)+'}draw();sceneGISettings.view="ao";draw();sceneGISettings.view="scene";draw();',scope);
+assert.match(status.textContent,/inactive-material/);assert.equal(status.hidden,false);
