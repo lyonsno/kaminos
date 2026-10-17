@@ -1,5 +1,5 @@
 import * as THREE from './lib/three.webgpu.js';
-import { texture, vec4, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
+import { texture, vec3, vec4, float, Fn, agxToneMapping, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
   createWebGPUFingerFluidSolver, sampleFingerFluidPlaygroundHeight, fingerFluidAnalyticalSupportGeometry,
   KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE as SUPPORT,
@@ -8,6 +8,7 @@ import {
 } from './finger-fluid-webgpu-core.js';
 import { normalizeLocalLiquidSetup, localLiquidInletPacket } from './local-liquid-setup.mjs';
 import { localLiquidPresentationPlan } from './local-liquid-presentation.mjs';
+import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
 
 const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
@@ -64,7 +65,9 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   depthTarget.texture.name='Local liquid host linear depth';
   const depthMaterial = new THREE.NodeMaterial(); depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);
   depthMaterial.blending=THREE.NoBlending; depthMaterial.toneMapped=false; depthMaterial.side=THREE.DoubleSide;
-  const presentation = new THREE.RenderPipeline(renderer,texture(outputTarget.texture));
+  const linearOutput = texture(outputTarget.texture);
+  const displayCamera = createSceneEmissiveCamera(linearOutput,{TSL:{uniform,vec3,vec4,float,Fn,agxToneMapping},THREE});
+  const presentation = new THREE.RenderPipeline(renderer,linearOutput);
   const originalOutputTransform=pipeline.outputColorTransform;
   pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
@@ -169,6 +172,11 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   }
 
   return {group,render,
+    setSceneCamera(requested,physical) {
+      const state=displayCamera.update(requested,physical);
+      applySceneEmissiveCamera(presentation,linearOutput,displayCamera.outputNode,state.effective);
+      return state;
+    },
     async readSceneColor({x,y,width,height}) {
       if(!frameCount||failure)throw Error(failure||'Water has no current scene-color frame');
       const frameId=lastFrame.frameId;
@@ -217,7 +225,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     get paused(){return paused;},
     state:()=>({requestedRoute:ROUTE,effectiveRoute:frameCount && !failure ? ROUTE : null,registered:true,mounted:true,
       frameCount,paused,presentation:presentationMode,failure,setup:structuredClone(authored),supportGeometryVisible:group.visible,sourceGeneration,
-      linearSceneColorInput:pipeline.outputColorTransform===false,lastFrame,solver:solver.getDebugState()}),
+      linearSceneColorInput:pipeline.outputColorTransform===false,
+      displayCamera:{...displayCamera.debugState(),placement:'after-liquid-composition'},lastFrame,solver:solver.getDebugState()}),
     dispose() {
       disposed=true;device.removeEventListener('uncapturederror',onGpuError); solver.destroy(); scene.remove(group);
       const materials=new Set(); group.traverse(child=>{child.geometry?.dispose();if(child.material)materials.add(child.material);});
