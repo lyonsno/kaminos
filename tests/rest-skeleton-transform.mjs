@@ -18,6 +18,28 @@ test('symmetry stays in skeleton coordinates after the whole object is rotated a
  const out=applyRestTransform(p,{...s,position:s.position.map((v,k)=>v+(k===1?2:0))});
  assert.ok(Math.abs(out.joints[1].head[0]+1)<1e-9);assert.ok(Math.abs(out.joints[2].head[0]-1)<1e-9);
 });
+test('Mirror L/R locks axial translation in the source frame, including its branch',()=>{
+ const p=fixture();for(const j of p.joints){j.head[0]+=.3;j.tail[0]+=.3;j.matrix[0][3]+=.3;}
+ const s=captureRestTransform(p,{...options,selected:['pelvis'],active:'pelvis'});
+ const out=applyRestTransform(p,{...s,position:[s.position[0]+1,s.position[1]+.4,s.position[2]]});
+ for(let i=0;i<p.joints.length;i++){assert.equal(out.joints[i].head[0],p.joints[i].head[0]);assert.ok(Math.abs(out.joints[i].head[1]-p.joints[i].head[1]-.4)<1e-10);}
+ const lateral=applyRestTransform(p,{...s,position:[s.position[0]+1,s.position[1],s.position[2]]});assert.deepEqual(lateral,p);
+ const free=applyRestTransform(p,{...s,mirror:false,position:[s.position[0]+1,s.position[1],s.position[2]]});assert.equal(free.joints[0].head[0],1.3);
+});
+test('axial lock follows a rotated object, not a world axis, and mixed selection can still widen limbs',()=>{
+ const p=fixture(),frame=new Matrix4().makeRotationZ(Math.PI/2).multiply(new Matrix4().makeScale(2,3,4));
+ const s=captureRestTransform(p,{...options,selected:['pelvis'],active:'pelvis',localToWorld:frame.toArray()});
+ const out=applyRestTransform(p,{...s,position:[s.position[0]+3,s.position[1]+2,s.position[2]]});
+ for(let i=0;i<p.joints.length;i++){assert.ok(Math.abs(out.joints[i].head[0]-p.joints[i].head[0])<1e-10);assert.ok(Math.abs(out.joints[i].head[1]-p.joints[i].head[1]+1)<1e-10);}
+ const mixed=captureRestTransform(p,{...options,selected:['pelvis','forelimb-left-shoulder'],active:'forelimb-left-shoulder'}),wide=applyRestTransform(p,{...mixed,position:[mixed.position[0]+.5,mixed.position[1],mixed.position[2]]});
+ assert.equal(wide.joints[0].head[0],0);assert.equal(wide.joints[1].head[0],-1.5);assert.equal(wide.joints[2].head[0],1.5);assert.equal(wide.joints[3].head[0],-1.5);
+});
+test('axial points stay on their prior transverse coordinates through rotation and scaling',()=>{
+ const p=fixture();p.joints.push(joint('neck','pelvis',[0,3,0]));
+ const s=captureRestTransform(p,{...options,selected:['pelvis','neck'],active:'neck',descendants:false});
+ const out=applyRestTransform(p,{...s,rotation:[0,0,.3],scale:[1,1.2,1]});
+ assert.equal(out.joints[0].head[0],0);assert.equal(out.joints.at(-1).head[0],0);assert.notDeepEqual(out,p);
+});
 test('pair scaling affects each joint once, descendants remain branches, and collapse rejects atomically',()=>{
  const p=fixture(),s=captureRestTransform(p,{...options,selected:['forelimb-left-shoulder','forelimb-right-shoulder']});
  const out=applyRestTransform(p,{...s,scale:[.5,1,1]});assert.deepEqual(out.joints.map(j=>j.head),[[0,0,0],[-1,2,0],[1,2,0],[-1,1,0],[1,1,0]]);

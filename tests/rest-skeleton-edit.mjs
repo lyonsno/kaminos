@@ -15,6 +15,11 @@ test('mirrored branch edit moves both descendants with reflected delta, preservi
  const p=fixture(),q=moveRestJoint(p,{name:'forelimb-left-shoulder',position:[-1,3,.5],mirror:true,descendants:true});
  assert.deepEqual(q.joints.map(j=>j.head),[[0,0,0],[-1,3,.5],[1,3,.5],[-1,2,.5],[1,2,.5]]);
 });
+test('numeric central moves obey the same transverse lock and preserve branch width',()=>{
+ const p=fixture(),q=moveRestJoint(p,{name:'pelvis',position:[1,2,3],mirror:true,descendants:true});
+ assert.deepEqual(q.joints.map(j=>j.head),[[0,2,3],[-2,4,3],[2,4,3],[-2,3,3],[2,3,3]]);
+ assert.deepEqual(moveRestJoint(p,{name:'pelvis',position:[1,0,0],mirror:true}),p);
+});
 test('invalid position, unknown joint and collapsed edges reject without mutation',()=>{
  const p=fixture(),before=structuredClone(p);for(const request of[{name:'absent',position:[0,1,0]},{name:'pelvis',position:[0,NaN,0]},{name:'forelimb-left-shoulder',position:[-2,1,0]}])assert.throws(()=>moveRestJoint(p,request));assert.deepEqual(p,before);
 });
