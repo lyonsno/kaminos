@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
 import { buildSuperMatModule } from '../scripts/build-supermat-module.mjs';
 import { preprocessForSuperMat } from '../models/supermat/supermat-preprocess.js';
 
@@ -26,7 +27,7 @@ try {
   assert.equal(packed.version, '0.2.3');
   assert.equal(await fs.readFile(path.join(output, 'keep.txt'), 'utf8'), 'caller-owned output');
   const entries = execFileSync('tar', ['-tzf', packed.tarball], { encoding: 'utf8' }).trim().split('\n').sort();
-  assert.deepEqual(entries, ['GETTING_STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js']
+  assert.deepEqual(entries, ['README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js']
     .map(file => `package/${file}`).sort());
 
   const app = path.join(scratch, 'app');
@@ -38,6 +39,14 @@ try {
   const entry = require.resolve('@kaminos/supermat');
   const worker = require.resolve('@kaminos/supermat/worker');
   const manifest = require('@kaminos/supermat/package.json');
+  const readme = await fs.readFile(path.join(path.dirname(entry), 'README.md'), 'utf8');
+  assert.equal(readme, await fs.readFile(new URL('../models/supermat/GETTING_STARTED.md', import.meta.url), 'utf8'));
+  const snippets = [...readme.matchAll(/^```js\n([\s\S]*?)^```/gm)].map(match => match[1]);
+  assert.ok(snippets.length > 0, 'the installed README must contain an application example');
+  for (const contents of snippets) {
+    await build({ stdin: { contents, resolveDir: app, sourcefile: 'installed-readme.js' },
+      bundle: true, format: 'esm', platform: 'browser', target: 'esnext', write: false });
+  }
   assert.equal(manifest.private, true, 'publication remains a separate operator decision');
   assert.equal(manifest.license, 'MIT');
   assert.deepEqual(await fs.readFile(path.join(path.dirname(entry), 'LICENSE')),
