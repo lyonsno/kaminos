@@ -27,6 +27,7 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
     async reacquire(){if(!host.fire.read().authoredPresent)await addSavedFire();host.fire.setEnabled(false);},
     dispose(){host.fire.setEnabled(false);}};
   const scene={...host.scene,ready:Promise.resolve(),dirty:()=>session.redraw(),
+    attach:(object,options)=>session.attach(object,options),
     async load(url,options){const asset=await session.loadAsset({url,...options,normalize:true,arrival:'append'});host.scene.refreshPresentation(asset);return asset.root;}};
   let inspectionLighting=null;
   const inspection=enabled=>{

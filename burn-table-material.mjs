@@ -66,7 +66,7 @@ const liveSurfaceNode=THREE.TSL.wgslFn(`fn burnLiveSurface(state: vec4<f32>, fac
 const rotateNode=THREE.TSL.wgslFn(ROTATE_WGSL);
 const facetNormalNode=THREE.TSL.wgslFn(NORMAL_WGSL,[rotateNode]);
 
-export function createBurnMaterial({renderer,original,bounds,settings,stateNode=null,stateIdentity=null,coverage='partial'}) {
+export function createBurnMaterial({renderer,original,bounds,settings,stateNode=null,stateIdentity=null,presenceNode=null,coverage='partial'}) {
   if(!['partial','whole'].includes(coverage))throw Error('Invalid burn coverage');
   const {uniform,vec3,positionLocal,normalLocal,materialNormal,materialColor,materialRoughness,materialMetalness,mix,transformNormalToView,smoothstep}=THREE.TSL;
   const config=checkedBurnControls(settings);
@@ -80,6 +80,7 @@ export function createBurnMaterial({renderer,original,bounds,settings,stateNode=
   if(stateNode&&!stateIdentity)throw Error('GPU material state requires source identity');
   const sample=(stateNode?liveSurfaceNode({state:stateNode,facets,clock}):surfaceNode({p:coverage==='whole'?vec3(1,p.y,p.z):p,facets,controls,metalProfile:profile,clock})).toVar('burnSurfaceData');
   const material=cloneSceneRadianceMaterial(renderer.library,original);
+  if(presenceNode){material.opacityNode=presenceNode;material.alphaTest=.5;}
   // Char alters reflection and local shading normals; it never moves geometry.
   const darkening=sample.y.oneMinus().pow(3).mul(.985).add(.015);
   const recess=facets.x.mul(sample.y).mul(.7).oneMinus();

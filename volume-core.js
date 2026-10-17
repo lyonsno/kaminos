@@ -13352,7 +13352,7 @@ export function createKaminosVolumePrototype({
       const started = performance.now();
       if (typeof device.createComputePipeline === 'function' && (!state.joinedBoundary?.admitted || joinedExterior?.residentSolids)) {
         if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
-        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
+        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells,materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
         const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
         if(sceneSolidGpuSupportKey!==supportKey){
           const support=new Uint32Array(gridSize*gridHeight*gridSize);

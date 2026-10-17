@@ -5,18 +5,22 @@ export const LIVE_LOG_BURN_RATE=.025;
 // Provisional volume yield, not a calibrated wood density or gas equation of state.
 export const LIVE_LOG_GAS_EXPANSION_RATIO=400;
 export const LIVE_LOG_CELL_WGSL='struct LogCell { material:vec4<f32>, burn:vec4<f32> }';
-export const LIVE_LOG_EVOLUTION_WGSL=`
+export function logEvolutionWGSL(rate=LIVE_LOG_BURN_RATE){
+ if(!Number.isFinite(rate)||rate<=0)throw Error('Invalid material burn rate');
+ return `
 ${LIVE_LOG_CELL_WGSL}
 fn evolveLog(old:LogCell,exposure:f32,conducted:f32,dt:f32,surface:bool)->LogCell {
   let temperature=max(0.0,conducted+(exposure*1.6-conducted*0.35)*dt);
   let dose=clamp(old.burn.x+max(0.0,temperature-0.8)*dt/1.2-select(dt*0.5,0.0,temperature>=0.8),0.0,1.0);
   let ignited=select(0.0,1.0,(old.burn.w>0.5||dose>=1.0)&&old.burn.y>0.0);
-  let consumed=select(0.0,old.burn.y*(1.0-exp(-${LIVE_LOG_BURN_RATE}*dt))*smoothstep(0.4,1.0,temperature)*ignited,surface);
+  let consumed=select(0.0,old.burn.y*(1.0-exp(-${rate}*dt))*smoothstep(0.4,1.0,temperature)*ignited,surface);
   let fuel=max(0.0,old.burn.y-consumed);
   let scorch=1.0-(1.0-old.material.y)*exp(-max(0.0,temperature-0.45)*0.02*dt);
   let damage=max(scorch,1.0-fuel);
-  return LogCell(vec4<f32>(temperature,damage,consumed/(${LIVE_LOG_BURN_RATE}*dt),exposure),vec4<f32>(dose,fuel,consumed,ignited));
+  return LogCell(vec4<f32>(temperature,damage,consumed/(${rate}*dt),exposure),vec4<f32>(dose,fuel,consumed,ignited));
 }`;
+}
+export const LIVE_LOG_EVOLUTION_WGSL=logEvolutionWGSL();
 export function checkLiveLogFrame(frame,device) {
   if(frame?.device!==device)throw Error('Live log requires the same GPU device as the fluid');
   if(!frame.fluid||!Array.isArray(frame.dimensions)||frame.dimensions.length!==3||!frame.dimensions.every(n=>Number.isInteger(n)&&n>0))throw Error('Live log requires current fluid and dimensions');

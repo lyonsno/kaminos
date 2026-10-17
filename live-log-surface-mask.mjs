@@ -1,7 +1,7 @@
 import * as THREE from './lib/three.webgpu.js';
 
 // Static geometry classification only; no simulation values leave the GPU.
-export function createLogSurfaceMask(geometry,bounds,grid) {
+export function createLogSurfaceMask(geometry,bounds,grid,{filled=false}={}) {
   const position=geometry.getAttribute('position'),indices=geometry.getIndex();
   if(!position||!Number.isInteger(grid)||grid<=0)throw Error('Invalid log surface geometry or grid');
   const size=bounds.getSize(new THREE.Vector3());
@@ -38,6 +38,19 @@ export function createLogSurfaceMask(geometry,bounds,grid) {
         }
   }
   if(!mask.some(Boolean))throw Error('Log surface has no intersecting thermal cells');
+  if(filled){
+    mask.surface=mask.slice();
+    const exterior=new Uint8Array(mask.length),queue=new Uint32Array(mask.length);let head=0,tail=0;
+    const add=i=>{if(!mask[i]&&!exterior[i]){exterior[i]=1;queue[tail++]=i;}};
+    for(let z=0;z<grid;z++)for(let y=0;y<grid;y++)for(let x=0;x<grid;x++)if(x===0||y===0||z===0||x===grid-1||y===grid-1||z===grid-1)add(x+grid*(y+grid*z));
+    while(head<tail){const i=queue[head++],x=i%grid,y=Math.floor(i/grid)%grid,z=Math.floor(i/(grid*grid));
+      if(x>0)add(i-1);if(x+1<grid)add(i+1);if(y>0)add(i-grid);if(y+1<grid)add(i+grid);if(z>0)add(i-grid*grid);if(z+1<grid)add(i+grid*grid);
+    }
+    for(let i=0;i<mask.length;i++)if(!mask[i]&&!exterior[i]){
+      mask[i]=1;const x=i%grid,y=Math.floor(i/grid)%grid,z=Math.floor(i/(grid*grid));
+      samples.set([bounds.min.x+(x+.5)*size.x/grid,bounds.min.y+(y+.5)*size.y/grid,bounds.min.z+(z+.5)*size.z/grid,2,0,0,0,0],i*8);
+    }
+  }
   mask.samples=samples;
   return mask;
 }
