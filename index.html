@@ -3539,6 +3539,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
+import {captureStill,createOutputProfiles} from './render-output.mjs';
+import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
 loadStartupRuntimeConfig().catch(() => {});
@@ -4084,8 +4086,10 @@ function syncViewportDisplayControls() {
 // Viewport Preview: the scene at device pixel ratio 1 and the fire's raymarch
 // on the runtime ladder's preview tier (see preview-quality.mjs). Applied
 // when the preference changes; the simulation is not touched.
+let outputCaptureExtent=null;
 let appliedViewportQuality=null;
 function syncViewportQuality(syncRendererSize) {
+ if(outputCaptureExtent)return;
  const quality=viewportDisplay.quality;
  if(quality===appliedViewportQuality)return;
  appliedViewportQuality=quality;
@@ -11558,7 +11562,7 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
   cameraProjectionBase=camera.updateProjectionMatrix.bind(camera);
-  camera.updateProjectionMatrix=()=>{const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
+  camera.updateProjectionMatrix=()=>{if(outputCaptureExtent){camera.aspect=outputCaptureExtent.width/outputCaptureExtent.height;cameraProjectionBase();return;}const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
     samHostConfig = (await loadStartupRuntimeConfig()).sam3 || null;
@@ -11971,13 +11975,13 @@ async function initScene() {
   let needsRender = true;
   let idleFrames = 0;
   function syncViewportRendererSize() {
-    const w = Math.max(1, vp.clientWidth);
-    const h = Math.max(1, vp.clientHeight);
+    const w = outputCaptureExtent?.width ?? Math.max(1, vp.clientWidth);
+    const h = outputCaptureExtent?.height ?? Math.max(1, vp.clientHeight);
     const currentSize = renderer.getSize(new THREE.Vector2());
     if (currentSize.x !== w || currentSize.y !== h) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(w, h, !outputCaptureExtent);
       needsRender = true;
       idleFrames = 0;
       cameraAuthoring?.refresh();
@@ -12367,8 +12371,9 @@ async function initScene() {
     // wire materials.
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
-        try { localLiquidHost.render(); }
+        try { localLiquidHost.render({advance:!outputCaptureExtent}); }
         catch (error) {
+          if(outputCaptureExtent)throw error;
           console.error('Local water frame failed', error);
           localLiquidFailure = String(error?.message || error);
           localLiquidHost.dispose();
@@ -12397,6 +12402,7 @@ async function initScene() {
 
   function animate() {
     requestAnimationFrame(animate);
+    if(outputCaptureExtent)return;
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     controls.update();
@@ -12498,6 +12504,68 @@ async function initScene() {
     for(const object of hidden)object.visible=false;
     return ()=>{for(const object of hidden)object.visible=true;};
   };
+  const outputProfiles=createOutputProfiles({controller:createUserPreferences()});
+  const renderOutput=captureStill({async begin({settings,pixels,signal}){
+    const busy=vantageBusy();if(busy)throw Error(busy);
+    if(sceneSaveBlockedByFailedRestore)throw Error('Restore the scene before rendering output');
+    if(sceneObjects.some(item=>item.type==='splat'))throw Error('Splat overlay output is not supported by the mesh/flame capture');
+    const limit=renderer.backend.device?.limits?.maxTextureDimension2D;
+    if(!limit)throw Error('Output requires the WebGPU renderer');
+    if(pixels.width>limit||pixels.height>limit)throw Error(`Output exceeds this GPU’s ${limit} pixel texture dimension`);
+    const record=settings.cameraId===null?null:sceneCameras.read().cameras.find(item=>item.id===settings.cameraId);
+    if(settings.cameraId!==null&&!record)throw Error('The output camera is missing from this scene');
+    if(record&&record.camera.projection!=='perspective')throw Error('This output route supports perspective camera objects');
+    const fireVisible=!!activeSceneComposition&&isSceneItemVisible('flame-field');
+    if(fireVisible&&(!isFireLightFieldRoute()||viewportDisplay.fire==='proxy'))throw Error('Choose Full fire display before rendering this flame');
+    const snapshot={view:readAuthoredCameraView(),aspect:camera.aspect,zoom:camera.zoom,projection:viewProjection.state(),pixelRatio:renderer.getPixelRatio(),controlsEnabled:controls.enabled};
+    const releaseViewport=holdViewportForVantage();let releaseDrawing=null,releaseInspection=null,fire=null,released=false;
+    const release=async()=>{
+      if(released)return;released=true;
+      // Restore every borrowed resource even if another restoration throws.
+      const errors=[];const restore=fn=>{try{fn?.();}catch(error){errors.push(error);}};
+      outputCaptureExtent=null;manualInspectionRender=false;
+      restore(()=>{viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;writeAuthoredCameraView(snapshot.view);camera.aspect=snapshot.aspect;camera.updateProjectionMatrix();});
+      restore(()=>{renderer.setPixelRatio(snapshot.pixelRatio);syncViewportRendererSize();});
+      restore(()=>fire?.release());restore(releaseDrawing);restore(releaseInspection);restore(releaseViewport);
+      controls.enabled=snapshot.controlsEnabled;sceneGI.resetHistory('output-restored');markDirty();
+      if(errors.length)throw new AggregateError(errors,'Output restoration failed');
+    };
+    try{
+      if(fireVisible){
+        const rendering=settings.quality==='scene'?{}:readVolumeControls({quality:settings.quality});
+        fire=await volumePrototype.holdPresentationForStill(rendering);
+      }
+      signal?.throwIfAborted();
+      releaseInspection=window.__kaminosBeginSceneInspection();
+      outputCaptureExtent=pixels;controls.enabled=false;
+      releaseDrawing=suspendEditorDrawingForVantage();
+      if(record)viewProjection.setOrthographic(false);
+      camera.zoom=1;writeAuthoredCameraView(record?cameraViewFromRecord(record,pixels.width/pixels.height):snapshot.view);
+      renderer.setPixelRatio(1);syncViewportRendererSize();camera.updateProjectionMatrix();
+      sceneGI.resetHistory('output-camera-and-size');
+      let fireReceipt=null,fireRaster=null,drawnFrames=0;
+      return {release,async draw(){
+        manualInspectionRender=true;
+        try{
+          do{
+            signal?.throwIfAborted();const before=sceneFrameCount;
+            fireLightFieldPass?.update();
+            if(renderSceneFrame()===false||before===sceneFrameCount)throw Error('Scene presentation is changing; retry output after it settles');
+            drawnFrames++;await new Promise(resolve=>requestAnimationFrame(resolve));
+          }while(sceneGI.needsHistoryFrame());
+          if(fire){const frame=await fire.draw();fireReceipt=frame.receipt;const image=frame.image;if(!image||image.width!==fireReceipt.width||image.height!==fireReceipt.height||image.rgba.length!==image.width*image.height*4)throw Error('Held fire image is incomplete');fireRaster=document.createElement('canvas');fireRaster.width=image.width;fireRaster.height=image.height;fireRaster.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(image.rgba),image.width,image.height),0,0);}
+          // Present the held mesh/water once more in the same capture task.
+          if(renderSceneFrame()===false)throw Error('Scene output was skipped');
+        }finally{manualInspectionRender=false;}
+      },capture(){
+        const shot=captureComposedCanvases({host:renderer.domElement,volumeRaster:fireRaster,document,label:settings.filename});
+        return {dataUrl:shot.image,width:shot.width,height:shot.height,layers:shot.layers,camera:readAuthoredCameraView(),cameraId:settings.cameraId,rendering:{backend:'webgpu',sceneFrames:drawnFrames,lighting:sceneGI.debugState(),fire:fireReceipt,water:localLiquidHost?.state()??null}};
+      }};
+    }catch(error){await release();throw error;}
+  }});
+  const outputUI=installRenderOutput({document,profiles:outputProfiles,capture:renderOutput,cameras:()=>sceneCameras.read().cameras});
+  window.kaminosRenderOutput={open:outputUI.open,close:outputUI.close,read:outputUI.read,write:outputUI.write,capture:renderOutput,profiles:outputProfiles,
+    state:()=>({capturing:!!outputCaptureExtent,canvas:[renderer.domElement.width,renderer.domElement.height],camera:readAuthoredCameraView(),projection:viewProjection.state(),pixelRatio:renderer.getPixelRatio()})};
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
   const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
   // The capture holds camera view, navigation and document actions (Save, Load, Capture) with its own
@@ -19012,7 +19080,7 @@ function linkedVolumeEmitterInletVelocity() {
   }).linkedInletVelocity;
 }
 
-function readVolumeControls() {
+function readVolumeControls({quality=viewportDisplay.quality}={}) {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const params = new URLSearchParams(window.location.search);
@@ -19373,7 +19441,7 @@ function readVolumeControls() {
     lifecycleT: routedVolumeLifecycleT,
     quenchVapor: routedVolumeQuenchVapor,
     runtimeQualityRequested: routedVolumeRuntimeQuality,
-    viewportPreview: viewportDisplay.quality === 'preview',
+    viewportPreview: quality === 'preview',
     gpuPressure: routedVolumeGpuPressure,
     runtimeQualityReason: routedVolumeQualityReason,
     pressureIterations: pressureConfig.pressureIterations,
@@ -20925,6 +20993,7 @@ async function initKaminosVolumeRoute() {
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
+    getPresentationSize: () => outputCaptureExtent,
     getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
     // The kiln is an explicit authored-solid experiment. Its exact registered
     // mesh and world transform, not its bounding box or camera depth, feed the
@@ -27784,10 +27853,10 @@ sceneInitialization.then(async () => {
   preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
-    save:async value=>{const saved=await userPreferences.save(value);preferencesSaved(saved);return saved;},
+    save:async value=>{const saved=await userPreferences.save({...value,startupConfigured:true});preferencesSaved(saved);return saved;},
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
-  if(startupPreferences&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
+  if(startupPreferences&&startupPreferences.startupConfigured!==false&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
   const initialEnvironment = restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
