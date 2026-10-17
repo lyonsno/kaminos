@@ -165,12 +165,12 @@ function nodeModulesLink(root) {
 }
 
 // Other worktrees of this repository whose node_modules links to this one's.
-// A worktree they link to owns a shared install. Unknown (git missing, not a
-// repository) reads as none.
+// A worktree they link to owns a shared install. A directory that is not a
+// repository has none; null means git could not answer (missing, timed out).
 function linkedFrom(root, dir) {
   let listing;
   try { listing = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }); }
-  catch { return []; }
+  catch (error) { return typeof error.status === 'number' && !error.signal ? [] : null; }
   let own;
   try { own = realpathSync.native(dir); } catch { return []; }
   const self = (() => { try { return realpathSync.native(root); } catch { return root; } })();
@@ -191,10 +191,11 @@ function linkedFrom(root, dir) {
 // of this worktree's own. unlink removes the link and never what it points at.
 function npmRemedy(link) {
   if (!link.linkTarget) {
+    if (link.linkedFrom === null) return 'The runner could not check whether other worktrees link to node_modules here (git worktree list did not answer). If they do, npm ci or npm install here empties and rewrites it for them; check `git worktree list` before running npm ci.';
     const others = link.linkedFrom || [];
     if (!others.length) return 'Run npm ci.';
     const named = others.slice(0, 3).join(', ') + (others.length > 3 ? `, and ${others.length - 3} more` : '');
-    return `node_modules here is used by ${others.length} other worktree${others.length === 1 ? '' : 's'} through a link (${named}); npm ci or npm install here empties and rewrites it for all of them, with this branch's lockfile. Run it only when those worktrees can take that, or tell their owners first.`;
+    return `node_modules here is used by ${others.length} other worktree${others.length === 1 ? '' : 's'} through a link (${named}); npm ci or npm install here empties and rewrites it for all of them, with this branch's lockfile. Before running it, make sure those worktrees can take that, or tell their owners.`;
   }
   if (link.dangling) return `node_modules here is a link to ${link.linkTarget}, which no longer exists. Install your own: unlink node_modules, then npm ci here.`;
   return `node_modules here is a link to a shared install at ${link.linkTarget} that other worktrees also use; npm ci or npm install, here or there, empties or changes it for all of them. Install your own instead: unlink node_modules (this removes only the link), then npm ci here.`;

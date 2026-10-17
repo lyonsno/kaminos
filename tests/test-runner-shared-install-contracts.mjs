@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { fixture, manifestOf, run, readReport, PASS, CLI, cliEnv } from './test-runner-fixtures.mjs';
+import { fixture, manifestOf, run, readReport, scopedEnv, PASS, CLI, cliEnv } from './test-runner-fixtures.mjs';
 
 async function withInstall(t, f, { linked, installed }) {
   await fs.writeFile(path.join(f.root, 'package.json'), JSON.stringify({ name: 'fixture', dependencies: { 'fake-dep': '1.0.0' } }));
@@ -125,4 +125,17 @@ test('the summary of an owner of a shared install says other worktrees use it', 
   await ownerWithDependent(t, f, { installed: true });
   const cli = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f), encoding: 'utf8' });
   assert.match(cli.stdout, /node_modules: used by 1 other worktree through a link; npm ci or npm install here changes it for them too/);
+});
+
+test('when git cannot say whether other worktrees link here, the remedy says it could not check instead of a bare npm ci', async t => {
+  const f = await fixture(t, { files, manifest });
+  await withInstall(t, f, { linked: false, installed: false });
+  const empty = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-no-git-'));
+  t.after(() => fs.rm(empty, { recursive: true, force: true }));
+  scopedEnv(t, 'PATH', empty);
+  await run(f, { kinds: ['node'] });
+  const report = await readReport(f);
+  assert.equal(report.effective.nodeModules.linkedFrom, null);
+  assert.doesNotMatch(report.error, /Run npm ci\./);
+  assert.match(report.error, /could not check whether other worktrees link/);
 });
