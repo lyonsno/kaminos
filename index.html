@@ -19948,6 +19948,92 @@ function reportKaminosVolumeRouteInitFailure(error) {
 // The fluid boots once per page (fire-boot.mjs createFluidBoot): at load when the URL asks for
 // fire, or when fire is added to a scene that started without it.
 window.kaminosFluidBootState = () => initKaminosVolumeRoute.boot?.state() ?? { started: false, reason: null };
+// Lighting follows the ordinary field transaction as well as initial URL boot.
+// Serialize mounts/disposal: Undo during a module import cannot leave a second
+// consumer or duplicate inspector listeners behind.
+let sceneRadianceRouteTask=Promise.resolve(),sceneRadianceRouteKey=null,sceneRadianceEditStop=null;
+async function releaseSceneRadianceRoute() {
+  sceneRadianceEditStop?.();sceneRadianceEditStop=null;
+  await window.kaminosFireLightingSettings?.dispose();
+  window.kaminosFireLightingSettings=null;
+  const lighting=window.__kaminosSceneRadiance;
+  if(lighting){try{await lighting.whenRebuilt?.();}catch{}lighting.dispose();}
+  window.__kaminosSceneRadiance=null;
+  volumePrototype?.setSceneVolumeSourceEnabled(false);
+  sceneRadianceRouteKey=null;
+  document.getElementById('rendering-fire-shadows').hidden=true;
+  document.getElementById('rendering-fire-shadow-controls').replaceChildren();
+}
+function syncSceneRadianceRoute(params=fireLightFieldRouteParams()) {
+  params=new URLSearchParams(params);
+  const requested=params.get('volume_light_field_shared_source')==='1';
+  const key=requested?JSON.stringify([...params].filter(([name])=>name.startsWith('volume_light_field')).sort()):null;
+  const task=sceneRadianceRouteTask.catch(()=>{}).then(async()=>{
+    if(key===sceneRadianceRouteKey&&(requested||window.__kaminosSceneRadianceSetup?.status==='inactive'))return;
+    await releaseSceneRadianceRoute();
+    if(!requested){window.__kaminosSceneRadianceSetup={status:'inactive'};refreshRenderingControls();return;}
+    try {
+      await mountSceneRadianceRoute(params);
+      sceneRadianceRouteKey=key;
+    } catch(error) {
+      await releaseSceneRadianceRoute();
+      window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
+      throw error;
+    }
+  });
+  sceneRadianceRouteTask=task;return task;
+}
+async function mountSceneRadianceRoute(params) {
+    if (!isFireLightFieldRoute(params)) throw new Error('shared scene source requires ordinary fire light-field route');
+    window.__kaminosSceneRadianceSetup = {status:'mounting'};
+    const distributed=params.get('volume_light_field_distributed')==='1';
+    const hybrid=distributed&&params.get('volume_light_field_hybrid')==='1';
+    if(distributed)renderingMode='shared';
+    const module=await import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs');
+      window.__kaminosSceneRadiance = distributed
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{...readFireShadowSceneSettings(params),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(params.get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+          window.kaminosFireLightingSettings?.syncStatus(state);
+          const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
+          if(badge.textContent!==message)badge.textContent=message;
+          badge.hidden=!message;
+          const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
+          const guideLabel=document.getElementById('rendering-source-guide-status'),guide=window.__kaminosSceneRadiance?.debugState().frame?.sourceGuide;
+          guideLabel.hidden=!guide;
+          if(guide)guideLabel.textContent=`${guide.effective}: [${guide.lo.map(x=>x.toFixed(2))}] to [${guide.hi.map(x=>x.toFixed(2))}]. Three of each four rays target the stable envelope (radius 2× inlet radius); the rest cover the full volume. ${guide.reason||'No source-energy change; visibility reused while the flame flickers.'}`;
+          if(cache){
+            const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
+            const label=document.getElementById('rendering-angular-cache');
+            const receiverLabel=document.getElementById('rendering-receiver-status');
+            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`PROTOTYPE: ${state.pointCount} live GPU point regions for surfaces; zero surface cache receivers. Distributed smoke retained. Spacing / surface reconstruction do not apply. Point surfaces omit smoke extinction; opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
+            if(label.textContent!==text)label.textContent=text;
+          }
+        }})
+        : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      if(distributed)sceneRadianceEditStop=bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
+      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
+      if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
+      window.__kaminosSceneRadianceSetup.status='mounted';
+      if(hybrid){
+        const settings=createFireShadowSettings({document,applyInitial:false,session:{onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),dispose(){}}});
+        const panel=document.getElementById('rendering-fire-shadows');panel.hidden=false;
+        const invoke=async(name,value)=>{const result=await settings.operations[name](value);settings.sync();return result;};
+        let statusKey='';
+        window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
+          const key=JSON.stringify([state.status,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()),state.error]);
+          if(key!==statusKey){statusKey=key;settings.sync();}
+        }};
+        settings.mount({root:document.getElementById('rendering-fire-shadow-controls'),document,invoke});
+        organizeFireRenderingPanel(document);
+        document.querySelector('label[for="rendering-angular-samples"]').textContent='Smoke lighting directions';
+        document.querySelector('label[for="rendering-shared-gain"]').title='Changes surface and smoke illumination, not visible flame emission.';
+        document.querySelector('label[for="rendering-source-softness"]').title='Redistributes source emission. Can change escaped light and flicker; not brightness-neutral.';
+        document.querySelector('label[for="rendering-surface-gain"]').title='Adjusts fire-lit surfaces without changing smoke or flame emission.';
+        document.getElementById('rendering-match-flame-camera').parentElement.querySelector('span').textContent='Match flame camera';
+      }
+      window.kaminosRefreshSceneGIOutput?.();
+      refreshRenderingControls();
+}
+
 async function initKaminosVolumeRoute() {
   initKaminosVolumeRoute.boot ??= createFluidBoot(async () => {
   if (compositionSetupError) throw compositionSetupError;
@@ -20662,59 +20748,7 @@ async function initKaminosVolumeRoute() {
       installOpticalSteppingPreview(volumePrototype, document);
     });
   }
-  if (fireLightFieldRouteParams().get('volume_light_field_shared_source') === '1') {
-    if (!isFireLightFieldRoute()) throw new Error('shared scene source requires ordinary fire light-field route');
-    window.__kaminosSceneRadianceSetup = {status:'mounting'};
-    const distributed=fireLightFieldRouteParams().get('volume_light_field_distributed')==='1';
-    const hybrid=distributed&&fireLightFieldRouteParams().get('volume_light_field_hybrid')==='1';
-    if(distributed)renderingMode='shared';
-    import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
-      window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{...readFireShadowSceneSettings(fireLightFieldRouteParams()),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
-          window.kaminosFireLightingSettings?.syncStatus(state);
-          const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
-          if(badge.textContent!==message)badge.textContent=message;
-          badge.hidden=!message;
-          const cache=window.__kaminosSceneRadiance?.debugState().frame?.angularCache;
-          const guideLabel=document.getElementById('rendering-source-guide-status'),guide=window.__kaminosSceneRadiance?.debugState().frame?.sourceGuide;
-          guideLabel.hidden=!guide;
-          if(guide)guideLabel.textContent=`${guide.effective}: [${guide.lo.map(x=>x.toFixed(2))}] to [${guide.hi.map(x=>x.toFixed(2))}]. Three of each four rays target the stable envelope (radius 2× inlet radius); the rest cover the full volume. ${guide.reason||'No source-energy change; visibility reused while the flame flickers.'}`;
-          if(cache){
-            const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
-            const label=document.getElementById('rendering-angular-cache');
-            const receiverLabel=document.getElementById('rendering-receiver-status');
-            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`PROTOTYPE: ${state.pointCount} live GPU point regions for surfaces; zero surface cache receivers. Distributed smoke retained. Spacing / surface reconstruction do not apply. Point surfaces omit smoke extinction; opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
-            if(label.textContent!==text)label.textContent=text;
-          }
-        }})
-        : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
-      if(distributed)bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
-      if(distributed&&!hybrid)import('./scene-light-debug-view.mjs').then(debug=>debug.mountLightingDebugView({document,renderer,camera,held:()=>vantageCaptureHeld,getLighting:()=>window.__kaminosSceneRadiance,getPrototype:()=>volumePrototype,beginSceneInspection:()=>window.__kaminosBeginSceneInspection(),drawFrame:()=>window.__kaminosRenderSceneForInspection()})).catch(error=>{document.getElementById('rendering-light-debug-status').textContent=`Inspection unavailable: ${error.message}`;console.error(error);});
-      if(hybrid){for(const id of ['rendering-receiver-spacing','rendering-surface-reconstruction']){const control=document.getElementById(id);if(control){control.disabled=true;control.title='Not applicable to hybrid point surfaces';}}document.getElementById('rendering-light-debug-status').textContent='Hybrid prototype: per-receiver inspection does not apply.';}
-      window.__kaminosSceneRadianceSetup.status='mounted';
-      if(hybrid){
-        const settings=createFireShadowSettings({document,applyInitial:false,session:{onFrame:workbenchSceneFrames.onFrame,redraw:()=>window._kaminosDirty?.(),dispose(){}}});
-        const panel=document.getElementById('rendering-fire-shadows');panel.hidden=false;
-        const invoke=async(name,value)=>{const result=await settings.operations[name](value);settings.sync();return result;};
-        let statusKey='';
-        window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
-          const key=JSON.stringify([state.status,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()),state.error]);
-          if(key!==statusKey){statusKey=key;settings.sync();}
-        }};
-        settings.mount({root:document.getElementById('rendering-fire-shadow-controls'),document,invoke});
-        organizeFireRenderingPanel(document);
-        document.querySelector('label[for="rendering-angular-samples"]').textContent='Smoke lighting directions';
-        document.querySelector('label[for="rendering-shared-gain"]').title='Changes surface and smoke illumination, not visible flame emission.';
-        document.querySelector('label[for="rendering-source-softness"]').title='Redistributes source emission. Can change escaped light and flicker; not brightness-neutral.';
-        document.querySelector('label[for="rendering-surface-gain"]').title='Adjusts fire-lit surfaces without changing smoke or flame emission.';
-        document.getElementById('rendering-match-flame-camera').parentElement.querySelector('span').textContent='Match flame camera';
-      }
-      refreshRenderingControls();
-    }).catch(error=>{
-      window.__kaminosSceneRadianceSetup={status:'failed',error:String(error.message)};
-      console.error('shared scene radiance mount failed',error);
-    });
-  }
+  await syncSceneRadianceRoute();
   // Optional composition-module seam: a URL HASH entry
   // #composition_module_url=<module> (hash, not query — settings routes are
   // contract-validated and reject unexpected query parameters) loads an ES
@@ -22566,13 +22600,12 @@ function writeFirstFlameFieldStateUnchecked(value) {
   window.kaminosRefreshSceneGIOutput?.();
   if(!value.composition&&activeSceneFieldId==='flame-field')activeSceneFieldId=null;
   renderSceneObjectList();refreshRenderingControls();flameInspector?.sync(true);window._kaminosDirty?.();
-  if(value.composition) {
-    const mounting=volumePrototype.setActive(true).then(()=>{
-      if(!activeSceneComposition)volumePrototype.setActive(false);
-    });
-    window.__kaminosFirstFlameMount=mounting;
-    return mounting;
-  }
+  const mounting=syncSceneRadianceRoute(value.composition?fireLightFieldRouteParams():new URLSearchParams()).then(async()=>{
+    if(value.composition&&activeSceneComposition)await volumePrototype.setActive(true);
+    if(!activeSceneComposition)volumePrototype.setActive(false);
+  });
+  window.__kaminosFirstFlameMount=mounting;
+  return mounting;
 }
 async function addFirstFlameField(presetId,{signal}={}) {
   signal?.throwIfAborted();
@@ -22592,6 +22625,17 @@ async function addFirstFlameField(presetId,{signal}={}) {
   if(settings.domControls['volume-pressure-solver'].value!=='converged-open-top')throw Error('Scene flame requires a converged open-top basin');
   if(settings.domControls['volume-advection-scheme'].value!=='maccormack'||settings.domControls['volume-time-step'].value!=='uniform')throw Error('Scene flame requires a MacCormack basin with uniform time stepping');
   const route={volume_light_field:'1',volume_light_field_scene_depth:'1',volume_light_field_test_scene:'0',volume_light_field_shadows:'1',volume_collision:'off'};
+  // Emissive basins export the same raw emission that the flame displays.
+  // Preserve older non-emissive recipes on their existing receiving path;
+  // opting into lighting must not silently recolor a saved flame.
+  if(Number(settings.domControls['volume-physical-mode'].value)===2)Object.assign(route,{
+    volume_light_field_shared_source:'1',volume_light_field_distributed:'1',volume_light_field_hybrid:'1',
+    volume_light_field_hybrid_points:'4',volume_light_field_hybrid_point_sampling:'all',
+    volume_light_field_hybrid_shadow_resolution:'12',volume_light_field_hybrid_blocker_samples:'1',
+    volume_light_field_hybrid_filter_samples:'1',volume_light_field_hybrid_shadow_softness:'1',
+    volume_light_field_hybrid_shadow_sampling:'complementary',volume_light_field_hybrid_shadow_implementation:'shared',
+    volume_light_field_hybrid_shadow_grain:'screen-animated',volume_light_field_hybrid_smoke_refinement:'1',
+  });
   const composition={schema:COMPOSITION_SCHEMA,flame:{presetId:settings.source.presetId,label:settings.source.label||presetId,stationary:true},route,lightGainStops:0};
   await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
