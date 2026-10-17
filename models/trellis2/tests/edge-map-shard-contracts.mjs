@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {cleanupAndSimplifyPreservingSurface,cleanupMesh,setEdgeMapShardForTests,edgeMapShardsUsedForTests} from '../mesh-cleanup.js';
+import {cleanupAndSimplifyPreservingSurface,cleanupMesh,setEdgeMapShardForTests,edgeMapShardsUsedForTests,edgeMapLargestShardForTests} from '../mesh-cleanup.js';
 import {MESH_FINISHING_CASES} from './mesh-finishing-fixture.js';
 
 const fixture=JSON.parse(await fs.readFile(new URL('./fixtures/mesh-finishing-source.json',import.meta.url)));
@@ -25,4 +25,5 @@ try{
     assert.equal(sha(c.vertices),sha(plain[name].vertices),name+': sharded raw cleanup positions equal unsharded');
   }
   assert.ok(edgeMapShardsUsedForTests()>10,'the fixtures actually ran across many shards');
+  assert.ok(edgeMapLargestShardForTests()<=97,`no single map exceeds the shard size, whatever the key pattern (largest ${edgeMapLargestShardForTests()})`);
 }finally{setEdgeMapShardForTests(1<<23);}
