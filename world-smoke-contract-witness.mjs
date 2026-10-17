@@ -33,3 +33,20 @@ export async function probeWorldSmokeContracts() {
     return {results,errors,passed:errors.length===0&&results.every(r=>r.velocityPass&&r.emptyCollisionPass)};
   }finally{device.destroy();}
 }
+if(typeof window==='undefined'){
+  const fs=await import('node:fs/promises');const {execFileSync}=await import('node:child_process');
+  const [origin,out,executable,playwright]=process.argv.slice(2);
+  const report={status:'running',phase:'launch',source:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),root:process.cwd(),executable};
+  await fs.mkdir(out,{recursive:true});let browser;
+  try{
+    const {chromium}=await import(playwright);
+    browser=await chromium.launch({executablePath:executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
+    const page=await browser.newPage();report.runtime=await(await page.request.get(origin+'/api/runtime-config')).json();
+    if(report.runtime.source.commit!==report.source||report.runtime.source.repoRoot!==report.root)throw Error('Source mismatch');
+    await page.goto(origin+'/volume-world-smoke.mjs');report.phase='native-contracts';
+    report.probe=await page.evaluate(async()=>{const m=await import('/world-smoke-contract-witness.mjs');return m.probeWorldSmokeContracts();});
+    report.status=report.probe.passed?'passed':'failed';report.phase='complete';if(!report.probe.passed)process.exitCode=1;
+  }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
+  finally{await fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await browser?.close();}
+  console.log(JSON.stringify(report));
+}
