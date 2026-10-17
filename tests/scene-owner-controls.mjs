@@ -10,6 +10,7 @@ const root={},child={parent:root},other={},properties=new Element(),playback=new
 const handle=registry.mount({asset:{id:'animal',root},properties,playback,onSelected:()=>updates++});
 assert.equal(properties.hidden,true);selected={id:'animal',object:root};registry.update();assert.equal(properties.hidden,false);assert.equal(playback.parent,viewport);assert.equal(playback.hidden,false);
 selected={id:'bone',object:child};registry.update();assert.equal(playback.hidden,false,'a selected child stays with the owning creature');
+selected={id:'@components',object:{},ownerId:'animal'};registry.update();assert.equal(properties.hidden,false,'a world-space component proxy keeps its owning inspector');
 selected={id:'other',object:other};registry.update();assert.equal(properties.hidden,true);assert.equal(playback.hidden,true);
 handle.dispose();selected={id:'animal',object:root};registry.update();assert.equal(viewport.children.length,0);assert.equal(inspector.children.length,0);
 console.log('Owner properties/transport follow actual selected roots and descendants and release independently');

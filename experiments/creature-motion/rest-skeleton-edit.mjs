@@ -31,11 +31,15 @@ export function moveRestJoint(plan, {name, position, mirror=false, descendants=f
  for(const [root,d]of moves)shift(root,d);
  return withRestHeads(p,heads);
 }
-export function authoredRestPlan(plan,{baselineSha256,displayMatrix,reference=null,view=null,referenceDisplay=null}={}){
+export function authoredRestPlan(plan,{baselineSha256,displayMatrix,reference=null,view=null,referenceDisplay=null,scene=null}={}){
  const p=validateRestPlan(plan);
  if(!/^[a-f0-9]{64}$/i.test(baselineSha256??'')||!Array.isArray(displayMatrix)||displayMatrix.length!==16||!displayMatrix.every(Number.isFinite))throw Error('Source digest and explicit display frame required');
  p.authority='Authored rest-joint candidate; source sculpt unchanged; not a generated or anatomically certified motion';
  if(referenceDisplay!==null&&(!['off','side','overlay'].includes(referenceDisplay.mode)||!['x','z'].includes(referenceDisplay.axis)||typeof referenceDisplay.baseline!=='boolean'))throw Error('Invalid reference display');
  p.rest_authoring={schema:'kaminos.rest-skeleton-authoring.v1',baselineSha256,displayMatrix:[...displayMatrix],reference:structuredClone(reference),view:structuredClone(view),referenceDisplay:structuredClone(referenceDisplay)};
+ if(scene!==null){
+  for(const key of ['skeleton','reference']){const pose=scene[key];if(pose===null&&key==='reference')continue;if(!pose||!['position','rotation','scale'].every(k=>vector(pose[k]))||pose.scale.some(v=>Math.abs(v)<1e-10))throw Error('Invalid skeleton scene transform');}
+  p.rest_authoring.scene=structuredClone(scene);
+ }
  return p;
 }

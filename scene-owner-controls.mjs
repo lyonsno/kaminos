@@ -4,6 +4,7 @@ export function createSceneOwnerControls({document,viewport,inspector,selected,o
  let context=false;
  const belongs=(entry,selection)=>{
   if(!selection)return false;
+  if(selection.ownerId===entry.asset.id)return true;
   for(let object=selection.object;object;object=object.parent)if(object===entry.asset.root)return true;
   return false;
  };
