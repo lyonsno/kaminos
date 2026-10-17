@@ -12,6 +12,32 @@ npm install @kaminos/supermat
 import { createSuperMatAdapter, createWebGpuInferenceSession } from '@kaminos/supermat';
 ```
 
+SuperMat uses a CPU worker for image preparation. Vite includes it automatically. With esbuild, copy the package's exported worker beside your built application module using the build recipe below.
+
+For esbuild applications, install the build tool:
+
+```sh
+npm install --save-dev esbuild
+```
+
+`build.mjs`, in your application root:
+
+```mjs
+import { build } from 'esbuild';
+import { copyFile } from 'node:fs/promises';
+
+await build({
+  entryPoints: ['src/main.js'], outdir: 'dist',
+  bundle: true, format: 'esm', platform: 'browser',
+});
+await copyFile(
+  new URL(import.meta.resolve('@kaminos/supermat/worker')),
+  new URL('./dist/supermat-cpu-worker.js', import.meta.url),
+);
+```
+
+Run `node build.mjs` from the application root. `src/main.js` contains your application code, using the imports and lifecycle example below. Serve both output files from `dist`.
+
 ## Load, Run, Release
 
 `gpu` is your application's `{ device, adapter, backendIdentity }` context. `images` contains RGBA images shaped as `{ width, height, data }`, where `data` is an RGBA byte array. The example loads one model for all images and returns its results; each result contains `maps.albedo`, `maps.roughness`, `maps.metallic`, `maps.orm`, and floating-point `planes`.

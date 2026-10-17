@@ -47,6 +47,20 @@ try {
     await build({ stdin: { contents, resolveDir: app, sourcefile: 'installed-readme.js' },
       bundle: true, format: 'esm', platform: 'browser', target: 'esnext', write: false });
   }
+  const lifecycle = snippets.find(contents => contents.includes('export async function inferMaterials'));
+  assert.ok(lifecycle, 'the installed README must supply its reusable inference example');
+  const bundledEntry = path.join(app, 'src', 'main.js');
+  await fs.mkdir(path.dirname(bundledEntry), { recursive: true });
+  await fs.writeFile(bundledEntry, `${lifecycle}\nexport { createSuperMatAdapter } from '@kaminos/supermat';\n`);
+  const bundledOutput = path.join(app, 'dist', 'main.js');
+  const buildRecipes = [...readme.matchAll(/^```mjs\n([\s\S]*?)^```/gm)].map(match => match[1]);
+  assert.equal(buildRecipes.length, 1, 'the installed README must supply one complete Node build recipe');
+  const buildScript = path.join(app, 'build.mjs');
+  await fs.writeFile(buildScript, buildRecipes[0]);
+  const buildRequire = createRequire(import.meta.url);
+  await fs.symlink(path.dirname(buildRequire.resolve('esbuild/package.json')),
+    path.join(app, 'node_modules', 'esbuild'), 'dir');
+  execFileSync(process.execPath, [buildScript], { cwd: app, stdio: 'pipe' });
   assert.equal(manifest.private, true, 'publication remains a separate operator decision');
   assert.equal(manifest.license, 'MIT');
   assert.deepEqual(await fs.readFile(path.join(path.dirname(entry), 'LICENSE')),
@@ -74,20 +88,38 @@ try {
     moduleId: 'supermat.cpu-phases.v0', payload: { width: 2, height: 1, size: 64, data: image.data.buffer } } });
   assert.equal(replies[0].status, 'completed');
   assert.deepEqual(new Float32Array(replies[0].output.planes), preprocessForSuperMat(image, 64));
-  let requestedWorker;
-  globalThis.Worker = class {
-    constructor(url) { requestedWorker = url; throw new Error('installed worker URL observed'); }
-  };
   globalThis.fetch = async () => new Response(JSON.stringify({ schema: 'supermat.browser-weight-package.v0',
     status: 'succeeded', constants: { vScale: 1 }, resources: [] }));
-  const adapter = await api.createSuperMatAdapter({
-    route: { runtime: { device: { features: new Set() } }, loadModelResourcesFromSource() { assert.fail('no resources'); } },
-    weightsUrl: 'https://example.invalid/weights/',
-  });
+  async function observeWorker(moduleApi) {
+    let requestedWorker;
+    globalThis.Worker = class {
+      constructor(url) { requestedWorker = url; throw new Error('installed worker URL observed'); }
+    };
+    const adapter = await moduleApi.createSuperMatAdapter({
+      route: { runtime: { device: { features: new Set() } }, loadModelResourcesFromSource() { assert.fail('no resources'); } },
+      weightsUrl: 'https://example.invalid/weights/',
+    });
+    try {
+      await assert.rejects(adapter.run({ image, size: 64 }), /installed worker URL observed/);
+      assert.ok(requestedWorker, 'the adapter must actually request its worker');
+      return requestedWorker;
+    } finally { adapter.release(); }
+  }
+  assert.equal(await fs.realpath(await observeWorker(api)), await fs.realpath(worker));
+  const bundledApi = await import(pathToFileURL(bundledOutput).href);
+  async function assertDeliveredWorker() {
+    const requested = await observeWorker(bundledApi);
+    assert.deepEqual(await fs.readFile(requested), await fs.readFile(worker),
+      'the emitted application must deliver its referenced package worker');
+    return requested;
+  }
+  const bundledWorker = await assertDeliveredWorker();
+  const heldWorker = new URL('./worker-held-for-negative.js', bundledWorker);
+  await fs.rename(bundledWorker, heldWorker);
   try {
-    await assert.rejects(adapter.run({ image, size: 64 }), /installed worker URL observed/);
-    assert.equal(await fs.realpath(requestedWorker), await fs.realpath(worker));
-  } finally { adapter.release(); }
+    await assert.rejects(assertDeliveredWorker(), { code: 'ENOENT' },
+      'a successful app build with a missing worker must fail delivery conformance');
+  } finally { await fs.rename(heldWorker, bundledWorker); }
   console.log('SuperMat installed package, complete worker and unchanged runtime: PASS');
 } finally {
   for (const [key, value] of Object.entries(previous)) {
