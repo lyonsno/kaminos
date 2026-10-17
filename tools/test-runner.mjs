@@ -165,12 +165,14 @@ function nodeModulesLink(root) {
 }
 
 // Other worktrees of this repository whose node_modules links to this one's.
-// A worktree they link to owns a shared install. A directory that is not a
-// repository has none; null means git could not answer (missing, timed out).
+// A worktree they link to owns a shared install. A directory with no .git
+// entry is not a repository and has none; null means git could not answer
+// (missing, timed out, or a .git that git cannot read, such as a worktree
+// whose admin directory was removed).
 function linkedFrom(root, dir) {
   let listing;
   try { listing = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }); }
-  catch (error) { return typeof error.status === 'number' && !error.signal ? [] : null; }
+  catch (error) { return typeof error.status === 'number' && !error.signal && !existsSync(path.join(root, '.git')) ? [] : null; }
   let own;
   try { own = realpathSync.native(dir); } catch { return []; }
   const self = (() => { try { return realpathSync.native(root); } catch { return root; } })();
@@ -873,6 +875,8 @@ function summarize({ report, reportPath }) {
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
   const shared = report.effective?.nodeModules?.linkTarget;
   if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}; unlink it first, then npm ci here` : `shared install at ${shared}; do not run npm ci or npm install here`}`);
+  const settle = report.effective?.lateLaunchSettleMs;
+  if (typeof settle === 'number' && settle < LATE_LAUNCH_SETTLE_MS) lines.push(`late-launch settle: ${settle} ms (KAMINOS_LATE_LAUNCH_SETTLE_MS; default ${LATE_LAUNCH_SETTLE_MS} ms); browser launches a test hands to a detached process after it exits may not be caught`);
   const dependents = report.effective?.nodeModules?.linkedFrom?.length || 0;
   if (dependents) lines.push(`node_modules: used by ${dependents} other worktree${dependents === 1 ? '' : 's'} through a link; npm ci or npm install here changes it for them too`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);

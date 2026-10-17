@@ -914,6 +914,7 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   const result = await done;
   assert.equal(result.code, 130, `${result.stdout}\n${result.stderr}`);
   assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).effective.pollMs, 50);
+  assert.match(result.stderr, /polling every 50 ms \(KAMINOS_LAND_POLL_MS; default 30000 ms\)/);
   assert.match(result.stdout, /^interrupted\b.*run 9061/);
   assert.match(result.stderr, /pushed land\//);
   assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).ci.run.id, 9061);
@@ -953,6 +954,9 @@ test('the CLI exits 0 when the checks pass, 1 on a refusal, 2 on bad arguments, 
   assert.ok(lines[0].includes(f.receiptPath), 'the summary names the receipt');
   assert.equal(f.originMain(), f.base);
   assert.equal(JSON.parse(await fs.readFile(f.receiptPath, 'utf8')).outcome, 'dry-run');
+  // With KAMINOS_LAND_POLL_MS unset the CLI polls at the default and says nothing about it.
+  assert.equal(JSON.parse(await fs.readFile(f.receiptPath, 'utf8')).effective.pollMs, POLL_MS);
+  assert.doesNotMatch(result.stderr, /KAMINOS_LAND_POLL_MS/);
 
   await f.gh.runs([f.run({ databaseId: 9, conclusion: 'failure' })]);
   result = await f.cli(['--no-dispatch', ...common]);

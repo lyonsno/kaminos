@@ -66,8 +66,13 @@ test('the late-launch settle is the runner default unless a caller sets it, and 
 
 test('the command line takes the settle from KAMINOS_LATE_LAUNCH_SETTLE_MS, and an unusable value keeps the default with a warning', async t => {
   const f = await fixture(t, { files: { 'a.mjs': PASS }, manifest: manifestOf({ 'tests/a.mjs': { kind: 'node' } }) });
-  spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f, { KAMINOS_LATE_LAUNCH_SETTLE_MS: '0' }), encoding: 'utf8' });
+  const zero = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f, { KAMINOS_LATE_LAUNCH_SETTLE_MS: '0' }), encoding: 'utf8' });
   assert.equal((await readReport(f)).effective.lateLaunchSettleMs, 0);
+  // A settle below the default is printed, so a shortened run never looks like a default one.
+  assert.match(zero.stdout, /^late-launch settle: 0 ms \(KAMINOS_LATE_LAUNCH_SETTLE_MS; default 2000 ms\); browser launches a test hands to a detached process after it exits may not be caught$/m);
+  const unset = spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f, { KAMINOS_LATE_LAUNCH_SETTLE_MS: undefined }), encoding: 'utf8' });
+  assert.equal((await readReport(f)).effective.lateLaunchSettleMs, 2000);
+  assert.doesNotMatch(unset.stdout, /late-launch settle/);
   spawnSync(process.execPath, [CLI, '--root', f.root, '--report', f.reportPath], { env: cliEnv(f, { KAMINOS_LATE_LAUNCH_SETTLE_MS: 'soon' }), encoding: 'utf8' });
   const report = await readReport(f);
   assert.equal(report.effective.lateLaunchSettleMs, 2000);

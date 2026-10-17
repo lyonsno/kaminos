@@ -139,3 +139,13 @@ test('when git cannot say whether other worktrees link here, the remedy says it 
   assert.doesNotMatch(report.error, /Run npm ci\./);
   assert.match(report.error, /could not check whether other worktrees link/);
 });
+
+test('a worktree whose .git points at a removed admin directory is unknown, not unshared', async t => {
+  const f = await fixture(t, { files, manifest });
+  await withInstall(t, f, { linked: false, installed: false });
+  await fs.writeFile(path.join(f.root, '.git'), `gitdir: ${path.join(f.root, 'gone', 'worktrees', 'x')}\n`);
+  await run(f, { kinds: ['node'] });
+  const report = await readReport(f);
+  assert.equal(report.effective.nodeModules.linkedFrom, null);
+  assert.doesNotMatch(report.error, /Run npm ci\./);
+});
