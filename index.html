@@ -3823,7 +3823,7 @@ import {
 } from './motion-core.js';
 import {
   SCENE_SCHEMA,
-  buildSceneDocument, mintSceneId,
+  buildSceneDocument, mintSceneId, sceneIdForDocument,
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
@@ -27446,6 +27446,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
     setInfo('Invalid scene format');
     return;
   }
+  const documentSceneId = restorePlan.sceneId || await sceneIdForDocument(text);
+  if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   const objectRecords = restorePlan.objects;
   const hasVolumePrimitiveScene = restorePlan.hasVolumePrimitiveScene;
 
@@ -27689,7 +27691,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
 
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   claimLoadedSceneFile(file, sceneFile);
-  currentSceneId = restorePlan.sceneId || mintSceneId();
+  currentSceneId = documentSceneId;
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {
     const gain = document.getElementById('fire-light-gain-stops');
