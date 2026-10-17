@@ -16,7 +16,7 @@ export function createFlameWorkbench({readSettings,applySettings,readRuntime,rea
       const axis=['domControls','rendererControls','presentationControls'].find(key=>Object.hasOwn(next[key],id));
       if(!axis)throw Error('Unknown flame control: '+id);
       if(!['number','string','boolean'].includes(typeof value)||(typeof value==='number'&&!Number.isFinite(value)))throw Error('Invalid flame control: '+id);
-      next[axis][id]={...next[axis][id],value,rawValue:String(value)};
+      next[axis][id]={...next[axis][id],value,rawValue:typeof value==='boolean'?value:String(value)};
     }
     applySettings(next,'Edit Flame Workbench controls');return read();
   }
