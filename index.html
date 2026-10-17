@@ -11850,9 +11850,9 @@ async function initScene() {
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
   window.kaminosLightingWork={
-    read:()=>sceneGI.debugState(),
-    setFilter(value){sceneGI.setFilterImplementation(value);rebuildSceneGIOutput();markDirty();return sceneGI.debugState();},
-    setSurfaceReuse(value){sceneGI.surfaceLighting.setEnabled(value);markDirty();return sceneGI.debugState();},
+    read:()=>window.kaminosSceneGIDebugState(),
+    setFilter(value){sceneGI.setFilterImplementation(value);rebuildSceneGIOutput();markDirty();return this.read();},
+    setSurfaceReuse(value){sceneGI.surfaceLighting.setEnabled(value);markDirty();return this.read();},
   };
   window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
     color:'#'+groundPlane.material.color.getHexString(),linearColor:groundPlane.material.color.toArray(),

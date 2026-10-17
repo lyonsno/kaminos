@@ -8,6 +8,9 @@ export default {
     const sync=()=>{
       const state=read();if(!status)return;
       filter.checked=state.filterImplementation==='shared';reuse.checked=state.surfaceLighting.enabled;
+      if(state.effectiveMode!=='combined'){
+        status.textContent=`Combined GI is inactive (${state.effectiveMode}). These selections apply when combined GI is enabled; AO/GI filter sharing and source-lighting reuse are not executing.`;return;
+      }
       status.textContent=`${state.filtering?(filter.checked?'One shared AO/GI filter pass':'Two separate AO/GI filter passes'):'Spatial filtering bypassed'} · `+
         (state.surfaceLighting.mounted?`${state.surfaceLighting.materials} flame-lit materials; ${reuse.checked?'matching final receivers reuse source lighting':'final receivers evaluate flame lighting directly'}. Source irradiance export is allocated in both comparison modes.`:'No hybrid flame surface-lighting producer is mounted.');
     };
