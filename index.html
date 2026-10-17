@@ -575,6 +575,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 #authoring-viewport-settings small { color:#8f9b9f; margin-left:auto; }
 </style>
 <link rel="stylesheet" href="./authoring-workspace.css">
+<link rel="stylesheet" href="./mechanical-proxy.css">
 <link rel="stylesheet" href="./startup-veil.css">
 <script src="./startup-veil-guard.js"></script>
 <noscript><style>body.kaminos-starting > * { visibility: visible; } #kaminos-startup-veil { display: none; }</style></noscript>
@@ -3944,6 +3945,7 @@ import { pickSavedScene } from './scene-load-picker.mjs';
 import { chooseLevelingPlane, findRestingPlanes, levelingWorldDelta, normalizeArrivalLeveling, snapGroundWorldDelta } from './asset-resting-plane.mjs';
 import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
+import { installMechanicalProxy } from './mechanical-proxy-tool.mjs';
 import { separateSelection } from './poly-separate-selection.mjs';
 import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
@@ -4183,6 +4185,7 @@ window.kaminosViewportSettings={
 
 let scenePlacementTools = null;
 let polyEdit = null;
+let mechanicalProxyTool = null;
 let sceneControlHistory = null;
 const authoringControlSessions = [];
 const authoringParameterTargets = new Map();
@@ -6938,6 +6941,7 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   sceneOwnerControls?.update();
+  mechanicalProxyTool?.refresh();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
   inspector.dataset.selectionCount=String(sceneSelection.ids.length);
@@ -12134,6 +12138,10 @@ async function initScene() {
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
     overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection});
   window.kaminosPolyEdit=polyEdit.api;
+  mechanicalProxyTool=installMechanicalProxy({document,scene,camera,canvas:renderer.domElement,
+    selected:()=>selectedSceneObjectEntry(),redraw:()=>window._kaminosDirty?.()});
+  window.kaminosMechanicalProxy=mechanicalProxyTool;
+  renderer.localClippingEnabled=true;
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));

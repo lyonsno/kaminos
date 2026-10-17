@@ -1,0 +1,15 @@
+.mechanical-proxy-tool { border-top:1px solid #3a4648; padding-top:9px; font-size:12px; }
+.mechanical-proxy-tool summary { cursor:pointer; color:#c8dbdd; }
+.mp-body { display:grid; gap:10px; padding:12px 0; min-width:0; }
+.mp-body label,.mp-fields label { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.mp-fields { display:grid; gap:9px; }
+.mp-body input[type=number],.mp-body select { min-width:0; width:55%; background:#161b1c; border:1px solid #465154; color:#e1e8e8; padding:5px; border-radius:3px; }
+.mp-body input[type=range] { min-width:0; width:60%; accent-color:#78b2b0; }
+.mp-fields>input[type=range] { width:100%; }
+.mp-actions,.mp-modes { display:flex; gap:5px; flex-wrap:wrap; }
+.mp-body button { padding:6px 9px; border:1px solid #485456; background:#242d2e; color:#e5eceb; border-radius:4px; cursor:pointer; }
+.mp-body button[aria-pressed=true] { background:#385b5c; border-color:#81b9b7; }
+.mp-body button:disabled { opacity:.45; cursor:default; }
+.mp-body pre { font-size:10px; overflow:auto; max-height:200px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.mp-body output,[data-mp=status],[data-mp=element] { color:#adc4c6; overflow-wrap:anywhere; font-size:11px; }
+.mp-body a { color:#9bcac7; overflow-wrap:anywhere; }

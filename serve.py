@@ -2438,6 +2438,7 @@ TRELLIS_CHECKPOINT_ROOT = Path(os.environ['KAMINOS_TRELLIS_CHECKPOINT_ROOT']).ex
 MOUNTED_PACKAGES = {'/klein-weights/': lambda: KLEIN_WEIGHTS_ROOT, '/trellis-checkpoints/': lambda: TRELLIS_CHECKPOINT_ROOT}
 
 BROWSE_ROOTS = {
+    "mechanical-proxies": Path(os.environ.get("KAMINOS_MECHANICAL_PROXY_STORE", os.path.expanduser("~/.local/state/kaminos/mechanical-proxies"))),
     "generated-meshes": Path(os.environ.get("KAMINOS_GENERATED_MESH_DIR", str(KAMINOS_ASSETS_DIR / "generated-meshes"))).expanduser(),
     "scratch": ROOT / "scratch",
     "scenes": SCENES_DIR,
@@ -3746,6 +3747,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        if parsed.path == '/api/mechanical-proxy':
+            return self.handle_mechanical_proxy('GET', parse_qs(parsed.query))
         if self.mounted_package(parsed.path):
             return self.send_klein_weight(parsed.path)
         if parsed.path == "/api/workbench-experiments":
@@ -3832,7 +3835,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/prepare-image':
+        if parsed.path == '/api/mechanical-proxy':
+            self.handle_mechanical_proxy('POST', parse_qs(parsed.query))
+        elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
         elif parsed.path == "/api/gpu-queue-cancel":
             self.handle_gpu_queue_cancel()
@@ -3874,6 +3879,44 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             notes_http().handle(self, "POST", self.path)
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_mechanical_proxy(self, method, params):
+        if not self._vantage_allowed():
+            return
+        from mechanical_proxy import MechanicalProxyService
+        if not hasattr(self.server, 'mechanical_proxy_service'):
+            self.server.mechanical_proxy_service = MechanicalProxyService(ROOT, BROWSE_ROOTS['mechanical-proxies'])
+        service = self.server.mechanical_proxy_service
+        try:
+            if method == 'GET':
+                if 'id' in params:
+                    data = service.read(params['id'][0], include_result=params.get('result') == ['1'])
+                elif 'source' in params:
+                    data = {'results': service.list(params['source'][0])}
+                else:
+                    data = {'route': 'kaminos.mechanical-proxy.wildmeshing.v1', 'configured': bool(service.python and service.greenroom), 'repoRoot': str(ROOT), 'queueDir': str(service.queue)}
+            else:
+                if (self.headers.get('Content-Type') or '').split(';')[0] != 'application/json':
+                    raise ValueError('Send mechanical proxy requests as application/json')
+                body = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or '0')))
+                action = body.get('action')
+                if action == 'generate':
+                    data = service.start(body['input'])
+                elif action == 'inspect':
+                    from mechanical_proxy import validate_input
+                    admitted = validate_input(body['input'])
+                    data = {key: admitted[key] for key in ('sourceDigest', 'source', 'diagonal', 'route')}
+                elif action == 'cancel':
+                    data = service.cancel(body['id'])
+                elif action == 'keep':
+                    data = service.keep(body['id'])
+                else:
+                    raise ValueError('Expected generate, cancel or keep')
+            self.send_json(data)
+        except (ValueError, KeyError, FileNotFoundError) as error:
+            self.send_json({'status': 'failed', 'phase': 'request', 'error': str(error)}, 400)
+        except (OSError, RuntimeError) as error:
+            self.send_json({'status': 'failed', 'phase': 'backend', 'error': str(error)}, 503)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())

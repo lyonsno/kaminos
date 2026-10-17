@@ -1,0 +1,21 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {admitProxy, proxyBoundary, proxySection, proxySlab, proxySettings} from '../mechanical-proxy-core.mjs';
+const mesh={status:'passed',route:'kaminos.mechanical-proxy.wildmeshing.v1',positions:[[0,0,0],[1,0,0],[0,1,0],[0,0,1],[0,0,-1]],tetrahedra:[[0,1,2,3],[0,2,1,4]]};
+assert.equal(proxyBoundary(mesh).length,6,'shared tetrahedral face must not appear on the boundary');
+assert.equal(admitProxy(mesh).tetrahedra.length,2);
+assert.throws(()=>admitProxy({...mesh,status:'running'}),/complete/);
+assert.throws(()=>admitProxy({...mesh,route:'other'}),/route/);
+assert.throws(()=>admitProxy({...mesh,tetrahedra:[[0,0,1,2]]}),/degenerate/);
+assert.throws(()=>admitProxy({...mesh,tetrahedra:[[0,1,2,99]]}),/indices/);
+assert.throws(()=>admitProxy({...mesh,positions:mesh.positions.map((p,i)=>i?[...p]:[NaN,0,0])}),/finite/i);
+const section=proxySection(mesh,2,0.25);
+assert.equal(section.length,1);assert.equal(section[0].tet,0);assert.equal(section[0].points.length,3);
+for(const p of section[0].points)assert.equal(p[2],.25);
+assert.equal(proxySection(mesh,2,2).length,0);
+assert.deepEqual(proxySlab(mesh,2,.25,.1),[0]);
+assert.deepEqual(proxySlab(mesh,2,0,.01),[0,1]);
+assert.deepEqual(proxySettings({envelope:.05,spacing:.1,budgetSeconds:5}),{envelope:.05,spacing:.1,budgetSeconds:5});
+for(const key of ['envelope','spacing','budgetSeconds'])assert.throws(()=>proxySettings({envelope:.05,spacing:.1,budgetSeconds:5,[key]:0}),/positive/);
+assert.throws(()=>proxySettings({envelope:NaN,spacing:.1,budgetSeconds:5}),/positive/);
+console.log('mechanical proxy geometry and admission contracts pass');
