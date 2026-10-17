@@ -82,10 +82,12 @@ export function advisoryVerdict({ report: r, serve, suite, setup = {}, supersede
   // Failures are what the runner itself counts against the run; warnings
   // (the runner's own, or a serve.py startup miss) are read but never refuse.
   const failures = advisoryWarnings({ report: { ...r, warnings: [] }, serve: 'success', suite, setup });
-  const warnings = (Array.isArray(r.warnings) ? r.warnings.length : 0) + (serve && serve !== 'success' && serve !== 'skipped' ? 1 : 0);
+  const warnings = advisoryWarnings({ report: r, serve, suite, setup }).length - failures.length;
   if (r.ok === true && suite === 'success' && !failures.length) {
-    const whole = ['executed', 'passed', 'knownFailures', 'newFailures'].every(k => Number.isInteger(c[k]));
-    if (!whole || c.executed === 0 || c.newFailures !== 0) return `tests no result: the report says ok but ${!whole ? 'has no whole counts' : c.executed === 0 ? 'executed nothing' : 'counts new failures'}`;
+    const whole = ['executed', 'passed', 'knownFailures', 'newFailures'].every(k => Number.isInteger(c[k]) && c[k] >= 0);
+    const why = !whole ? 'has no whole counts' : c.executed === 0 ? 'executed nothing'
+      : c.passed + c.knownFailures + c.newFailures !== c.executed ? 'has counts that do not add up' : c.newFailures !== 0 ? 'counts new failures' : null;
+    if (why) return `tests no result: the report says ok but ${why}`;
     if (!warnings) return `tests clean: ${counts}`;
     return `tests passed with warnings: ${warnings} warning${warnings === 1 ? '' : 's'} to read; ${counts}`;
   }

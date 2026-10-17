@@ -9,7 +9,8 @@ name: tests
 # shared machine (trial, 2026-10-17). No run is ever cancelled: a branch run
 # whose commit a newer push has already replaced skips the suite and says so,
 # and every other run goes to the end. Each run posts one verdict notice:
-# "tests clean", "tests not clean" or "tests no result".
+# "tests clean", "tests passed with warnings", "tests not clean" or "tests no
+# result".
 on:
   push:
     branches: [main, 'cc/**']

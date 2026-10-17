@@ -130,3 +130,9 @@ test('a report claiming ok without whole counts, or with nothing executed, is no
   assert.match(advisoryVerdict({ report: { ...clean(), counts: undefined }, ...ran }), /^tests no result: /);
   assert.match(advisoryVerdict({ report: { ...clean(), counts: { executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 } }, ...ran }), /^tests no result: /);
 });
+
+test('a malformed report never reads clean: warnings that are not a list, or counts that do not add up', () => {
+  assert.doesNotMatch(advisoryVerdict({ report: { ...clean(), warnings: 'x' }, ...ran }), /^tests clean/);
+  assert.match(advisoryVerdict({ report: { ...clean(), counts: { executed: 576, passed: 10, knownFailures: 0, newFailures: 0, notRun: 0 } }, ...ran }), /^tests no result: /);
+  assert.match(advisoryVerdict({ report: { ...clean(), counts: { executed: -1, passed: -1, knownFailures: 0, newFailures: 0, notRun: 0 } }, ...ran }), /^tests no result: /);
+});
