@@ -43,6 +43,22 @@ PAGE = {"via": "page", "pageId": "page-aaaaaaaa", "source": SOURCE}
 CLI = {"via": "cli", "source": SOURCE}
 
 
+def heartbeat_contracts(notes):
+    """Production keeps its listener cadence unless the server is told otherwise,
+    and a bad setting is refused rather than replaced."""
+    with tempfile.TemporaryDirectory() as tmp:
+        assert notes.NotesLog(Path(tmp) / "notes", page_author="noah").heartbeat_seconds == notes.LISTENER_HEARTBEAT_SECONDS == 3.0
+        assert notes.NotesLog(Path(tmp) / "notes", page_author="noah", heartbeat_seconds=0.5).heartbeat_seconds == 0.5
+    assert notes.heartbeat_seconds_from_env({}) == 3.0
+    assert notes.heartbeat_seconds_from_env({"KAMINOS_NOTES_HEARTBEAT_SECONDS": "0.5"}) == 0.5
+    for bad in ["0", "-1", "abc", "nan", "inf"]:
+        try:
+            notes.heartbeat_seconds_from_env({"KAMINOS_NOTES_HEARTBEAT_SECONDS": bad})
+        except ValueError:
+            continue
+        raise AssertionError(f"heartbeat {bad!r} was accepted")
+
+
 def log_contracts(notes):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "notes"
@@ -363,7 +379,7 @@ def presence_stream_contracts():
         process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                    env={**os.environ, "KAMINOS_BIND_HOST": "127.0.0.1", "KAMINOS_NOTES_ROOT": str(Path(tmp) / "notes"),
-                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah"})
+                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah", "KAMINOS_NOTES_HEARTBEAT_SECONDS": "0.5"})
         stream = None
         try:
             deadline = time.monotonic() + 30
@@ -375,6 +391,9 @@ def presence_stream_contracts():
                     if time.monotonic() > deadline:
                         raise AssertionError("serve.py did not start")
                     time.sleep(0.1)
+            # The listener heartbeat is shortened for this check, and the server says so.
+            status, listing = call(port, "GET", "/api/notes")
+            assert status == 200 and listing.get("listenerHeartbeatSeconds") == 0.5, listing.get("listenerHeartbeatSeconds")
             stream = Stream(port, "page-cccccccc")
             stream.next("hello")
             stream.next("presence")
@@ -388,7 +407,10 @@ def presence_stream_contracts():
             waiter.start()
             arrived = stream.next("presence", lambda payload: any(row["name"] == "steady-agent" for row in payload["listeners"]))
             assert all("lastSeen" not in row for row in arrived["listeners"]), arrived
-            time.sleep(7.5)  # two listener heartbeats
+            record = Path(tmp) / "notes" / "listeners" / "steady-agent.json"
+            first_seen = json.loads(record.read_text())["lastSeen"]
+            time.sleep(1.6)  # at least two listener heartbeats
+            assert json.loads(record.read_text())["lastSeen"] - first_seen >= 0.9, "the listener kept beating while the page watched"
             with stream.lock:
                 churn = [payload for event, payload in stream.events if event == "presence"]
             assert churn == [], ("presence repeated while nothing changed", len(churn))
@@ -555,6 +577,7 @@ def notify_timing_contracts(notes):
 
 if __name__ == "__main__":
     notes = load_notes()
+    heartbeat_contracts(notes)
     log_contracts(notes)
     follow_up_contracts(notes)
     participant_contracts(notes)

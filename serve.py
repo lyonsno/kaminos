@@ -57,7 +57,8 @@ def notes_http():
             spec = importlib.util.spec_from_file_location("kaminos_notes", ROOT / "kaminos_notes.py")
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
-            log = module.NotesLog(module.default_root(), page_author=module.default_page_author())
+            log = module.NotesLog(module.default_root(), page_author=module.default_page_author(),
+                                  heartbeat_seconds=module.heartbeat_seconds_from_env(os.environ))
             # KAMINOS_NOTES_DIRECTORY names a JSON file of people to offer in the
             # @ list; KAMINOS_NOTES_NOTIFY is a command run, with the note on
             # stdin, for each recipient not listening when a note is posted.

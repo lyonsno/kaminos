@@ -17,6 +17,7 @@ import getpass
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import secrets
@@ -56,6 +57,21 @@ class NotesError(Exception):
 
 def default_root():
     return Path(os.environ.get("KAMINOS_NOTES_ROOT") or "~/.local/state/kaminos/notes").expanduser().resolve()
+
+
+def heartbeat_seconds_from_env(environ):
+    """How often a waiting listener says it is still there: KAMINOS_NOTES_HEARTBEAT_SECONDS
+    (a positive number of seconds, for tests), else the production cadence."""
+    raw = environ.get("KAMINOS_NOTES_HEARTBEAT_SECONDS")
+    if raw is None:
+        return LISTENER_HEARTBEAT_SECONDS
+    try:
+        seconds = float(raw)
+    except ValueError:
+        raise ValueError(f"KAMINOS_NOTES_HEARTBEAT_SECONDS must be a positive number of seconds, not {raw!r}") from None
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError(f"KAMINOS_NOTES_HEARTBEAT_SECONDS must be a positive number of seconds, not {raw!r}")
+    return seconds
 
 
 def default_page_author():
@@ -117,8 +133,9 @@ def decode_picture(raw):
 
 
 class NotesLog:
-    def __init__(self, root, *, page_author, clock=time.time, poll_interval=0.2):
+    def __init__(self, root, *, page_author, clock=time.time, poll_interval=0.2, heartbeat_seconds=LISTENER_HEARTBEAT_SECONDS):
         self.root = Path(root).expanduser().resolve()
+        self.heartbeat_seconds = heartbeat_seconds
         (self.root / "pictures").mkdir(parents=True, exist_ok=True)
         (self.root / "listeners").mkdir(parents=True, exist_ok=True)
         (self.root / "participants").mkdir(parents=True, exist_ok=True)
@@ -383,7 +400,7 @@ class NotesLog:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         return []
-                    if time.monotonic() - heartbeat >= LISTENER_HEARTBEAT_SECONDS:
+                    if time.monotonic() - heartbeat >= self.heartbeat_seconds:
                         self._write_listener(name, True, server)
                         heartbeat = time.monotonic()
                     self._cond.wait(min(remaining, self._poll))
@@ -628,7 +645,7 @@ class NotesHttp:
     def list(self, handler, query):
         after = int(self._first(query, "after", "0") or 0)
         self._json(handler, {"schema": NOTES_SCHEMA, "root": str(self.log.root), "pageAuthor": self.log.page_author,
-                             "lastSeq": self.log.last_seq, "events": self.log.events(after), "issues": self.log.issues})
+                             "listenerHeartbeatSeconds": self.log.heartbeat_seconds, "lastSeq": self.log.last_seq, "events": self.log.events(after), "issues": self.log.issues})
 
     def post(self, handler, query):
         body = self._body(handler)
