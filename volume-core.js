@@ -21311,7 +21311,7 @@ export function createKaminosVolumePrototype({
 
   function invalidateRaymarchReadouts(reason) {
     if (rayStepTelemetry) {
-      rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason});
+      if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason})) rebuildFluidBindGroups();
       state.rayStepTelemetry=rayStepTelemetry.read();
     }
     state.opticalStepping={...debugOpticalStepping,requested:debugOpticalStepping.mode,effective:null,reason,fullRay:false};
