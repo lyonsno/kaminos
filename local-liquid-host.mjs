@@ -147,6 +147,12 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       }
       scene.overrideMaterial=depthMaterial; scene.background=null;
       renderer.setRenderObjectFunction((...args)=>{
+        // Editor wide lines are triangle carriers expanded by their own shader.
+        // A solid override exposes those triangles as false water/fire occluders.
+        if(args[4].depthWrite===false)return;
+        for(let object=args[0];object;object=object.parent) {
+          if(object.userData?.kaminosEditorHelper||object.userData?.kaminosEditorOnly)return;
+        }
         depthMaterial.side=args[4].side; renderer.renderObject(...args);
       });
       renderer.setClearColor(new THREE.Color(camera.far,0,0),1);
