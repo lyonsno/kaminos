@@ -12697,7 +12697,7 @@ function replaceAuthoredWaterSettings(id,value,prepared=null,{deferSync=false}={
    localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:sampling});
    entry.localLiquidEmitter=checked;entry.object.userData.kaminosSceneObject.localLiquidEmitter=structuredClone(checked);
    for(const [row,object]of builds)replaceAuthoredWaterPreviewChildren(row,object);
-   syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();window._kaminosDirty?.();return;
+   syncLocalLiquidHostEmitters();authoredWaterControls?.refresh();updateAuthoringPropertySelection();window._kaminosDirty?.();return;
   }
   const replacement=prepared??createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(entry),transform:pose,localLiquidEmitter:checked},{sampling:localLiquidSetup?.waterSampling}).object;
   replaceAuthoredWaterPreviewChildren(entry,replacement);
