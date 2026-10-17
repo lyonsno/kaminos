@@ -18,7 +18,7 @@ on:
 jobs:
   suite:
     runs-on: macos-latest
-    # Setup steps are bounded (at most 30 minutes together) and the suite at 45,
+    # Setup steps are bounded (at most 32 minutes together) and the suite at 45,
     # so a hang ends its own step as a warning before the job limit is reached.
     timeout-minutes: 90
     steps:

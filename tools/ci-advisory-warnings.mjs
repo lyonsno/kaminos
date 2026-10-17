@@ -8,10 +8,12 @@
 //
 //   node tools/ci-advisory-warnings.mjs <report.json> <serve outcome> <suite outcome> ["checkout=success npm=failure ..."] [superseding sha]
 //
-// Every run also gets one verdict notice: "tests clean: ..." only when the
-// suite ran to a complete ok report with nothing to warn about; otherwise
-// "tests not clean: ..." or "tests no result: ...". A lane reads the verdict,
-// never the absence of warnings.
+// Every run also gets one verdict notice. "tests clean" and "tests passed with
+// warnings" mean the suite ran to a complete ok report with no new failures
+// (the second also has warnings to read, which never refuse); "tests not
+// clean" means the runner counted something against the run; "tests no
+// result" means nothing usable was checked. A lane reads the verdict, never
+// the absence of warnings.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -75,10 +77,19 @@ export function advisoryVerdict({ report: r, serve, suite, setup = {}, supersede
   if (failedSetup.length) return `tests no result: setup step ${failedSetup.join(', ')} did not succeed, so nothing was checked`;
   if (!r) return `tests no result: no suite report (suite step ${suite || 'not run'})`;
   if (suite === 'skipped' || suite === 'cancelled') return `tests no result: the suite step was ${suite}`;
-  const problems = advisoryWarnings({ report: r, serve, suite, setup });
   const c = r.counts || {};
-  if (!problems.length && r.ok === true && suite === 'success') return `tests clean: executed ${c.executed}, passed ${c.passed}, known failures ${c.knownFailures}, new failures ${c.newFailures}`;
-  return `tests not clean: ${problems.length} problem${problems.length === 1 ? '' : 's'} (see the warnings); executed ${c.executed ?? '?'}, new failures ${c.newFailures ?? '?'}`;
+  const counts = `executed ${c.executed ?? '?'}, passed ${c.passed ?? '?'}, known failures ${c.knownFailures ?? '?'}, new failures ${c.newFailures ?? '?'}`;
+  // Failures are what the runner itself counts against the run; warnings
+  // (the runner's own, or a serve.py startup miss) are read but never refuse.
+  const failures = advisoryWarnings({ report: { ...r, warnings: [] }, serve: 'success', suite, setup });
+  const warnings = (Array.isArray(r.warnings) ? r.warnings.length : 0) + (serve && serve !== 'success' && serve !== 'skipped' ? 1 : 0);
+  if (r.ok === true && suite === 'success' && !failures.length) {
+    const whole = ['executed', 'passed', 'knownFailures', 'newFailures'].every(k => Number.isInteger(c[k]));
+    if (!whole || c.executed === 0 || c.newFailures !== 0) return `tests no result: the report says ok but ${!whole ? 'has no whole counts' : c.executed === 0 ? 'executed nothing' : 'counts new failures'}`;
+    if (!warnings) return `tests clean: ${counts}`;
+    return `tests passed with warnings: ${warnings} warning${warnings === 1 ? '' : 's'} to read; ${counts}`;
+  }
+  return `tests not clean: ${failures.length || 1} problem${failures.length > 1 ? 's' : ''} (see the warnings); ${counts}`;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {

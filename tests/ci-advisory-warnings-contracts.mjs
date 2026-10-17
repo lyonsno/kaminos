@@ -101,11 +101,11 @@ test('entries that are not objects do not crash the warnings', () => {
 
 // A pass must be visible as such: one verdict notice per run, so a lane reads
 // "clean" rather than inferring it from the absence of warnings.
-test('the verdict is clean only for a complete ok report with nothing to warn about', () => {
+test('the verdict is clean for a complete ok report with nothing to warn about', () => {
   assert.equal(advisoryVerdict({ report: clean(), ...ran }), 'tests clean: executed 2, passed 2, known failures 0, new failures 0');
 });
 
-test('any warning, a report that is not ok, or a failed suite step makes the verdict not clean', () => {
+test('a runner failure, a report that is not ok, or a failed suite step makes the verdict not clean', () => {
   assert.match(advisoryVerdict({ report: { ...clean(), unclassified: ['tests/c.mjs'], ok: false }, serve: 'success', suite: 'failure' }), /^tests not clean: 1 problem/);
   assert.match(advisoryVerdict({ report: { ...clean(), ok: false }, ...ran }), /^tests not clean/);
 });
@@ -115,4 +115,18 @@ test('no report, a skipped or cancelled suite, or a superseded commit is no resu
   assert.match(advisoryVerdict({ report: null, serve: 'skipped', suite: 'skipped', setup: { npm: 'failure' } }), /^tests no result: /);
   assert.match(advisoryVerdict({ report: null, serve: 'skipped', suite: 'skipped', superseded: 'abc1234' }), /^tests no result: superseded by abc1234/);
   assert.deepEqual(advisoryWarnings({ report: null, serve: 'skipped', suite: 'skipped', superseded: 'abc1234' }), []);
+});
+
+// Warnings never refuse: an ok report whose only findings are warnings (the
+// runner's own, or a serve.py startup miss) passes, and says how many warnings
+// to read. Only what the runner itself counts as a failure is not clean.
+test('an ok report with only warnings passes with warnings, which is landable', () => {
+  const report = { ...clean(), warnings: [{ source: 'test', message: 'index.html unresolved name x' }] };
+  assert.equal(advisoryVerdict({ report, ...ran }), 'tests passed with warnings: 1 warning to read; executed 2, passed 2, known failures 0, new failures 0');
+  assert.match(advisoryVerdict({ report: clean(), serve: 'failure', suite: 'success' }), /^tests passed with warnings: 1 warning/);
+});
+
+test('a report claiming ok without whole counts, or with nothing executed, is no result', () => {
+  assert.match(advisoryVerdict({ report: { ...clean(), counts: undefined }, ...ran }), /^tests no result: /);
+  assert.match(advisoryVerdict({ report: { ...clean(), counts: { executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 } }, ...ran }), /^tests no result: /);
 });

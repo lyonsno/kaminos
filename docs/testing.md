@@ -9,7 +9,7 @@ npm test -- --only tests/a.mjs,tests/b.mjs
 
 `tools/test-runner.mjs` runs every top-level `.mjs` and `.py` file in `tests/` whose kind is `node` or `python`. It writes a report and one complete log per test. Pass `--report <path>` to choose where. Other flags are `--parallel <n>`, `--timeout-ms <ms>`, `--kinds node,python` and `--only <files>`.
 
-Two environment variables shorten waits for the runner's and the landing tool's own contracts, and both are printed whenever they are in effect: `KAMINOS_LATE_LAUNCH_SETTLE_MS` (default 2000) is how long the runner waits after the last test for browser launches a test handed to a detached process; below the default such launches may be missed. `KAMINOS_LAND_POLL_MS` (default 30000) is the landing tool's poll interval; every poll is a gh call on the shared API limit. Leave both unset in ordinary runs.
+Two environment variables shorten waits for the runner's and the landing tool's own contracts, and both are printed whenever they shorten the wait: `KAMINOS_LATE_LAUNCH_SETTLE_MS` (default 2000) is how long the runner waits after the last test for browser launches a test handed to a detached process; below the default such launches may be missed. `KAMINOS_LAND_POLL_MS` (default 30000) is the landing tool's poll interval; every poll is a gh call on the shared API limit. Leave both unset in ordinary runs.
 
 Landing goes as `AGENTS.md` says: during the trial that began on 2026-10-17, the full suite's result for a lane commit comes from the advisory `tests` workflow run on its branch push, not from a local run on the shared machine. `docs/landing.md` describes the workflow, and `tools/land.mjs` for a future pilot.
 

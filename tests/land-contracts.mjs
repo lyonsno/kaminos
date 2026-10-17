@@ -30,7 +30,7 @@ const quote = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
 // that is not the fixture's. The decoy below proves it.
 function fixtureEnv(gitconfig) {
   const env = {};
-  for (const [key, value] of Object.entries(process.env)) if (!key.startsWith('GIT_') && key !== 'NODE_TEST_CONTEXT') env[key] = value;
+  for (const [key, value] of Object.entries(process.env)) if (!key.startsWith('GIT_') && key !== 'NODE_TEST_CONTEXT' && key !== 'KAMINOS_LAND_POLL_MS') env[key] = value;
   return { ...env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
 }
 
