@@ -74,12 +74,18 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
  const instruments=document.createElement('div');
+ let readingZoneState=false;
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
- function read(){const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
+ function read(){
+  // Authored regions can change while all domain clocks are held. Resolve that
+  // edit before publishing a state/recipe, never on a later preview or reopen.
+  // syncArea refreshes presentation, so guard its nested state reads.
+  if(zoneProvider&&wander&&!readingZoneState){readingZoneState=true;try{syncArea();}finally{readingZoneState=false;}}
+  const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot()},
+  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
   referenceFloor:floor?{id:floorAsset.id,visible:floor.visible,size:floor.geometry.parameters.width,height:floor.position.y,contactSolver:false}:null};}
@@ -94,7 +100,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   liveRoot?.guide();
  }
  async function ensureArea(transform){
-  if(zoneProvider){const row=zoneProvider.roots()[0];if(!row)throw Error('No active Wander zone');areaRoot=row.root;areaAsset=row.asset;return;}
+  if(zoneProvider){const row=zoneProvider.roots()[0];if(row){areaRoot=row.root;areaAsset=row.asset;return;}if(areaRoot)return;
+   // Reconstruct a held journey even if every membership is disabled. This
+   // transform is retained data, not a mounted or implicitly enabled zone.
+   if(transform){checkAuthoredTransform(transform);areaRoot=new THREE.Group();areaRoot.position.fromArray(transform.position);areaRoot.quaternion.fromArray(transform.quaternion);areaRoot.scale.fromArray(transform.scale);return;}
+   throw Error('No active Wander zone');}
   if(areaRoot?.parent)return;
   areaRoot=new THREE.Group();areaRoot.name='Wander area';areaRoot.userData.kaminosEditorOnly=true;
   const disk=new THREE.Mesh(new THREE.CircleGeometry(1,64).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x4bc9d8,side:THREE.DoubleSide,transparent:true,opacity:.09,depthWrite:false}));
@@ -106,7 +116,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function syncArea(){
   if(!wander)return true;
   if(zoneProvider){try{
-   const frame=authoredPlacement(),rows=zoneProvider.roots();if(!rows.length)throw Error('No active Wander zones');
+   const frame=authoredPlacement(),rows=zoneProvider.roots();if(!rows.length){actionError=null;unsubscribe();player.pause();return false;}
    const areas=rows.map(row=>({id:row.id,preference:row.preference,area:wanderAreaInPlacement({THREE,areaRoot:row.root,placement:frame})})),key=JSON.stringify(areas);
    const prior=areaKey?JSON.parse(areaKey):null,same=Array.isArray(prior)&&prior.length===areas.length&&areas.every((row,i)=>row.id===prior[i].id&&row.preference===prior[i].preference&&[...row.area.center,...row.area.radii,row.area.yaw].every((v,j)=>Math.abs(v-[...prior[i].area.center,...prior[i].area.radii,prior[i].area.yaw][j])<=1e-9*Math.max(1,Math.abs(v))));
    if(!same){wander.setAreas(areas);areaKey=key;refreshGuide();}
@@ -193,7 +203,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    restoreGround=()=>{if(height.value===value&&!visible.checked){height.value=previous.height;height.dispatchEvent(new Event('change'));visible.checked=previous.visible;visible.dispatchEvent(new Event('change'));}};
   }
   if(inputs.view)session.setView(inputs.view);
-  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(zoneProvider?wander.snapshot().path.areas??null:wander.read().path.area);if(!syncArea())throw Error(actionError);mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
+  if(wander){await ensureArea(inputs.wander.area);areaKey=JSON.stringify(zoneProvider?wander.snapshot().path.areas??null:wander.read().path.area);if(!syncArea()&&actionError)throw Error(actionError);mode='cycle';cycle=wander.read().cycle;source.presentation.mode=mode;source.presentation.action='wander';player.seek(wander.read().frame);}
   refreshGuide();
   if(inputs.gizmos!==undefined){
    if(typeof inputs.gizmos!=='boolean')throw Error('Gizmo visibility must be boolean');
@@ -214,7 +224,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(!['preview','wander'].includes(input?.kind))throw Error('Unknown creature action');
     unsubscribe();player.pause();
     if(input.kind==='preview'){if(wander)heldWander=wander;wander=null;actionError=null;mode='source';cycle=0;source.presentation.mode=mode;source.presentation.action='preview';player.seek(0);refreshGuide();host.scene.refreshPresentation?.(asset);return read();}
-    await ensureArea();active();
+    await ensureArea(inputs.wander?.area??inputs.held_wander_area);active();
     if(heldWander){wander=heldWander;heldWander=null;}
     const frame=authoredPlacement(),area=wanderAreaInPlacement({THREE,areaRoot,placement:frame});
     if(!wander){
@@ -222,7 +232,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      const first=adapter.frame(0).bones.find(b=>b.parent===null).worldMatrix,last=adapter.frame(adapter.frames-1).bones.find(b=>b.parent===null).worldMatrix;
      wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
     }
-    areaKey=zoneProvider?'':JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';if(zoneProvider&&!syncArea())return read();refreshGuide();player.seek(wander.read().frame);player.play();startClock();host.scene.refreshPresentation?.(asset);return read();
+    areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
    advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();clock+=input.seconds*1000;const state=presentWander(input.seconds,false);host.scene.refreshPresentation?.(asset);return state;}),

@@ -20,9 +20,16 @@ await room.operations.setPlaces({id:'two',places:[{zoneId:'yard',enabled:false,p
 assert.match(room.read().actors.find(a=>a.id==='two').behavior.status,/zone|place/i);
 await room.operations.setPlaces({id:'two',places:[{zoneId:'yard',enabled:true,preference:2}]});assert.equal(callbacks.size,1);
 const before=room.read();await assert.rejects(()=>room.operations.setPlaces({id:'two',places:[{zoneId:'invented',enabled:true,preference:1}]}),/zone/i);assert.deepEqual(room.read(),before);
+await room.operations.setRunning({running:false});const priorPosition=room.read().actors[1].state.action.motion.path.position;
+scene.children.find(root=>root.name==='Courtyard').position.x+=2;
+const edited=room.read().actors[1].state.action.motion;
+assert.equal(edited.path.area.center[0],2,'Paused zone edit remains disconnected from behavior');assert.deepEqual(edited.path.position,priorPosition);
+await room.operations.setPreview({id:'two',preview:true});await room.operations.actor({id:'two',operation:'seek',input:{frame:1}});await room.operations.setPreview({id:'two',preview:false});
+assert.deepEqual(room.read().actors[1].state.action.motion,edited,'Clip preview changed held behavior/RNG after an authored region edit');
+const current=room.read();
 const saved=room.read().recipe;await room.dispose();assert.equal(callbacks.size,0);assert.equal(scene.children.length,0);
-const reopened=await createLivingScene({host,inputs:saved},deps);assert.deepEqual(reopened.read().actors.map(a=>({id:a.id,active:a.active,places:a.places})),before.actors.map(a=>({id:a.id,active:a.active,places:a.places})));
-assert.deepEqual(reopened.read().actors[1].state.action.motion,before.actors[1].state.action.motion,'Reopening changed active path/RNG continuation');
+const reopened=await createLivingScene({host,inputs:saved},deps);assert.deepEqual(reopened.read().actors.map(a=>({id:a.id,active:a.active,places:a.places})),current.actors.map(a=>({id:a.id,active:a.active,places:a.places})));
+assert.deepEqual(reopened.read().actors[1].state.action.motion,current.actors[1].state.action.motion,'Reopening changed active path/RNG continuation');
 await reopened.dispose();assert.equal(scene.children.length,0);
 await assert.rejects(()=>createLivingScene({host,inputs:{...setup,actors:[{...setup.actors[0],places:[{zoneId:'missing',enabled:true,preference:1}]}]}},deps),/zone/i);assert.equal(scene.children.length,0,'Invalid references leaked a scene');
 console.log('Scene run gate, persistent local hold, shared zones, missing/all-disabled references and exact continuation');
