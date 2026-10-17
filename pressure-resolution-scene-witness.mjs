@@ -29,6 +29,8 @@ try {
   },{id,value:String(value)});
   // Cheap render settings for dispatch correctness; the authored reaction stays intact.
   await control('volume-render-scale',.5);await control('volume-steps',64);
+  // This saved basin is a held look. Explicitly resume it for the live dispatch assay.
+  await control('volume-look-freeze',0);
   for(const mode of ['off','equal','half','off']) {
     report.phase=`scene-${mode}`;await save();await control('volume-pressure-resolution',mode);
     const step=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
@@ -38,7 +40,7 @@ try {
     },{step,mode});
     const state=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());
     report.arms.push({mode,state});await save();
-    assert.ok(state.backend.startsWith('webgpu:')&&!/swiftshader|software/i.test(state.backend));
+    assert.ok(/^webgpu:/i.test(state.backend)&&!/swiftshader|software/i.test(state.backend));
     assert.equal(state.controls.reactionLaw,'reactant-v0');assert.equal(state.pressureResolution.requested,mode);
     if(mode!=='off')assert.equal(state.pressureResolution.dispatched,true);
     assert.deepEqual(state.pressureResolution.materialDims,[32,64,32]);
