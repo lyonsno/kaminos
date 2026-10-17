@@ -2,6 +2,7 @@
 import {Vector3,Quaternion,Euler} from './lib/three.core.js';
 import {prepareActuator} from './scene-actuator.mjs';
 import {checkedProceduralMesh} from './scene-geometry.mjs';
+import {flamePoseToDomain,immersedControlsForFlamePose} from './scene-flame-emitter.mjs';
 const pose=(position=[0,0,0],rotation=[0,0,0])=>({position,rotation,scale:[1,1,1]});
 export function pistonArmScene(template, options={}) {
  const {height=.665,reach=1.1,thickness=.10,cupRadius=.14,prefix='analytical-arm'}=options;
@@ -42,6 +43,13 @@ export function pistonArmScene(template, options={}) {
  cylinder('rod','sliding-shaft',along(end,-length*.67),end,thickness*.25);
  pin('rod','rod-eye',end,thickness*.48);
  source.transform={...pose([cup[0],cup[1]+thickness*.85,cup[2]]),scale:[...source.transform.scale]};
+ const domain=scene.objects.find(o=>o.type==='simulation-domain');
+ if(!domain)throw Error('A template with a flame domain is required');
+ const scale=domain.transform.scale[0],translation=domain.transform.position.map((v,i)=>v-(i===1?scale:0));
+ const mapped=immersedControlsForFlamePose({},flamePoseToDomain(source.transform,translation,scale),false);
+ for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]){
+  const control=source.emission?.settings?.[`volume-immersed-${suffix}`];if(control){control.value=mapped[key];control.rawValue=String(mapped[key]);}
+ }
  source.groupId=`${prefix}-boom`;parts.boom.push(source.id);
  const groups=Object.entries(parts).map(([role,objectIds])=>({id:`${prefix}-${role}`,type:'group',label:`Analytical ${role}`,objectIds,transform:pose(),source:null}));
  const roleIds=Object.fromEntries(Object.entries({fixedId:'base',followerId:'boom',barrelId:'barrel',rodId:'rod'}).map(([k,r])=>[k,`@group:${prefix}-${r}`]));

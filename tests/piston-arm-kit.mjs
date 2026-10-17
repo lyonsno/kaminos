@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {pistonArmScene} from '../piston-arm-kit.mjs';
 import {checkedProceduralMesh} from '../scene-geometry.mjs';
 import {checkedActuators,solveActuator} from '../scene-actuator.mjs';
+import {flamePoseToDomain,immersedControlsForFlamePose} from '../scene-flame-emitter.mjs';
 const pose={position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]};
 const source=()=>({objects:[{id:'old-cast',type:'glb'},{id:'fire',type:'flame-emitter',transform:pose,emission:{settings:{}}},{id:'domain',type:'simulation-domain',transform:pose}],groups:[],actuators:[],model:{source:'old.glb'},composition:{flame:{presetId:'retained'}},camera:{position:[4,0,0]}});
 test('primitive carrier replaces cast geometry, retains fire recipe, and names all four moving roles',()=>{
@@ -20,4 +21,10 @@ test('dimension changes alter the carrier and mounts coherently; invalid input r
  assert.notDeepEqual(a.actuators[0].hinge,b.actuators[0].hinge);assert.notDeepEqual(a.actuators[0].movingMount,b.actuators[0].movingMount);
  assert.ok(b.objects.filter(o=>o.type==='procedural-mesh').every(o=>o.id.startsWith('long-')));
  assert.throws(()=>pistonArmScene(source(),{reach:0}),/reach/);assert.throws(()=>pistonArmScene({objects:[]}),/flame/);
+});
+test('moving the source updates the pose-derived saved supply controls rather than contradicting them',()=>{
+ const t=source();t.objects.find(o=>o.type==='flame-emitter').emission.settings=Object.fromEntries(['centre-x','centre-y','centre-z','yaw','pitch'].map(key=>['volume-immersed-'+key,{value:-.3}]));
+ const s=pistonArmScene(t),f=s.objects.find(o=>o.type==='flame-emitter'),d=s.objects.find(o=>o.type==='simulation-domain'),scale=d.transform.scale[0],translation=d.transform.position.map((v,i)=>v-(i===1?scale:0));
+ const expected=immersedControlsForFlamePose({},flamePoseToDomain(f.transform,translation,scale),false);
+ for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']])assert.equal(f.emission.settings['volume-immersed-'+suffix].value,expected[key]);
 });
