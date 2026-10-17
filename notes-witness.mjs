@@ -789,6 +789,31 @@ try {
   report.effective.sceneIdentity = {saved: savedScene.sceneId, reopened, copy: {saved: copy.saved ?? null, status: copy.status}, copyOpened};
   check('the same objects under another scene id do not show it', copy.status === 200 && copyOpened.loaded && !copyOpened.pinned, {copy: {status: copy.status, saved: copy.saved, error: copy.error}, copyOpened});
 
+  // A scene saved before ids existed: two pages that open the unchanged file
+  // agree on its id before anyone saves it, so a note from one is checked in the other.
+  const olderName = `notes-witness-older-${stamp}`;
+  const older = await page.evaluate(async ([document, name]) => {
+    const {sceneId, ...withoutId} = document;
+    const response = await fetch('/api/save-scene', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({...withoutId, _saveAsName: name})});
+    return {status: response.status, ...(await response.json().catch(() => ({})))};
+  }, [savedScene.document, olderName]);
+  if (older.saved) savedScenes.push(older.saved);
+  const olderNoteIn = async text => {
+    const olderPage = await context.newPage();
+    olderPage.on('pageerror', error => { report.pageErrors.push(`older-scene page: ${error}`); });
+    await olderPage.goto(`${origin}/index.html#scene=${encodeURIComponent(older.saved ?? '')}`, {waitUntil: 'load'});
+    await olderPage.waitForFunction(id => window.kaminosNotes && (window.kaminosSceneObjectDebugState?.() ?? []).some(object => object.id === id), red, {timeout: 90000});
+    await olderPage.evaluate(id => window.kaminosSelection.set([id], id), red);
+    const id = await postFromComposer(olderPage, text);
+    await olderPage.close();
+    return (await log()).find(event => event.id === id)?.subject ?? null;
+  };
+  const olderA = await olderNoteIn('older scene, first page'), olderB = await olderNoteIn('older scene, second page');
+  report.effective.sceneIdentity.older = {saved: older.saved ?? null, status: older.status, first: olderA?.sceneId ?? null, second: olderB?.sceneId ?? null};
+  check('two pages opening the same older scene agree on its id before it is saved', older.status === 200 && !!olderA?.sceneId
+    && olderA.sceneId === olderB?.sceneId && olderA.sceneId !== savedScene.sceneId, report.effective.sceneIdentity.older);
+
   report.phase = 'saved-flame-link'; save();
   // A saved flame scene first visits its preset page; the link survives that
   // trip and still opens on the note's view (review F2).

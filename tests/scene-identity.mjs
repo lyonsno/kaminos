@@ -1,6 +1,7 @@
+// kaminos-test: node
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { buildSceneDocument, mintSceneId, planSceneRestore } from '../scene-persistence-core.js';
+import { buildSceneDocument, mintSceneId, planSceneRestore, sceneIdForDocument } from '../scene-persistence-core.js';
 
 const composition = {
   schema: 'kaminos.stationary-flame-composition.v1',
@@ -30,6 +31,14 @@ for (const id of minted) {
   assert.equal(planSceneRestore(scene({ sceneId: id })).sceneId, id, 'a minted id survives save and load');
 }
 
+// A scene saved before ids existed is named by its saved bytes, so every page
+// that opens the same unchanged file agrees on its id before anyone saves it.
+const older = JSON.stringify(scene({ timestamp: '2026-10-01T00:00:00.000Z' }));
+const named = await sceneIdForDocument(older);
+assert.match(named ?? '', /^scene-[0-9a-f]{16}$/, 'an older file gets an id of the usual shape');
+assert.equal(await sceneIdForDocument(older), named, 'the same bytes, the same id, in any page');
+assert.notEqual(await sceneIdForDocument(JSON.stringify(scene({ timestamp: '2026-10-02T00:00:00.000Z' }))), named, 'another document, another id');
+
 // The page publishes a scene's id only once its load settles: from the first
 // change to the open scene until then, there is no id, so nothing written
 // mid-load is taken for either scene.
@@ -38,7 +47,8 @@ const load = html.slice(html.indexOf('async function loadSceneFile('), html.inde
 const blank = load.indexOf('currentSceneId = null;');
 assert.ok(blank > load.indexOf('location.assign(compositionRestoreUrl('), 'the id stays while the open scene is untouched');
 assert.ok(blank < load.indexOf('activeSceneComposition = restorePlan.composition;') && blank < load.indexOf('clearScene('), 'the id goes before the scene starts to change');
-assert.match(load, /claimLoadedSceneFile\(file, sceneFile\);\n  currentSceneId = restorePlan\.sceneId \|\| mintSceneId\(\);/, 'the loaded id (or a new one for an older file) is taken where the load settles');
+assert.match(load, /const documentSceneId = restorePlan\.sceneId \|\| await sceneIdForDocument\(text\);/, "an older file's id comes from its bytes");
+assert.match(load, /claimLoadedSceneFile\(file, sceneFile\);\n  currentSceneId = documentSceneId;/, "the document's id is taken where the load settles");
 const clear = html.slice(html.indexOf('function clearScene('), html.indexOf('function clearScene(') + 400);
 assert.match(clear, /sceneLoadRequests\.invalidate\(\); currentSceneId = mintSceneId\(\);/, 'clearing outside a load starts a new scene');
 console.log('scene identity contracts passed');
