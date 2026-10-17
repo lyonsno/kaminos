@@ -54,6 +54,7 @@ try{
   const toggle=page.getByRole('checkbox',{name:'Burnable wood',exact:true});
   await toggle.uncheck();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
   await toggle.check();await page.waitForFunction(async()=>!!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
+  assert.equal(await page.getByRole('button',{name:'Run',exact:true}).isVisible(),true,'Selected burnable must expose its actual Run control');
   const rebound=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(rebound.objectId,cold.objectId);assert.equal(rebound.altarBearId,cold.objectId);
   report.selection=await page.evaluate(()=>({objects:window.kaminosSceneObjectDebugState(),active:window.kaminosSelection.read()}));
   assert.equal(report.selection.objects.some(row=>row.label==='Char residue'),false,'Residue cannot be an authored transform target');
@@ -65,6 +66,7 @@ try{
  report.phase='consumption';await save();await invoke('move',{position:[.7,0,0]});await invoke('pause');await advance(1500);await sample('shedding');
  report.phase='paused-edit';await save();await invoke('view',{mode:'char'});const pausedBefore=await sample('paused-before'),priorParticles=structuredClone(lastSnapshot.particles);
  if(experiment==='bear-altar'){
+  report.inputs.push({viewportDisplay:{emitters:false}});await page.evaluate(()=>window.kaminosViewportSettings.set({emitters:false}));
   await page.evaluate(()=>window.kaminosSelection.clear());
   const rect=await page.locator('#viewport').boundingBox();await page.mouse.click(rect.x+rect.width/2,rect.y+rect.height/2);
   report.pausedPick=await page.evaluate(()=>window.kaminosSelection.read());assert.equal(report.pausedPick.activeId,pausedBefore.state.objectId,'Picking the remaining body must select the source object');

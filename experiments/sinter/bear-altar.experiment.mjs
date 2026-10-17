@@ -11,7 +11,7 @@ export default {id:'bear-altar',title:'Midsummer burn altar',async create({host,
   await session.attach(createBearAltar(),{owned:true,metadata:{label:'Midsummer altar',source:'authored:bear-altar-v1'}});
   const asset=await session.loadAsset({url:source,normalize:false,arrival:'append',metadata:{label:'TRELLIS bear',collision:{domainId:'flame-field',enabled:true}}});
   placeAltarBear(asset.root);host.scene.refreshPresentation(asset);
-  function show(instance){mount?.dispose?.();mount=null;if(body){body.replaceChildren();if(instance)mount=instance.mount({root:body,document,invoke:(name,value)=>Promise.resolve(instance.operations[name](value))});}}
+  function show(instance){mount?.dispose?.();mount=null;body?.replaceChildren();const destination=controls.get(controller?.read().objectId)?.properties??body;if(instance&&destination)mount=instance.mount({root:destination,document,invoke:(name,value)=>Promise.resolve(instance.operations[name](value))});}
   controller=createBurnableSelection({objects:host.scene.objects,changed:show,create:async objectId=>{
    return liveLog.create({host,inputs:{...inputs,targetId:objectId,disintegrate:true,followObject:true},record});
   }});
@@ -27,7 +27,7 @@ export default {id:'bear-altar',title:'Midsummer burn altar',async create({host,
     checkbox.type='checkbox';checkbox.checked=controller.read().objectId===entry.id;checkbox.setAttribute('aria-label','Burnable wood');label.append(checkbox,document.createTextNode('Burnable · wood'));properties.append(label,status);
     checkbox.onchange=()=>{checkbox.disabled=true;setBurnable({objectId:entry.id,enabled:checkbox.checked}).catch(error=>{status.textContent=error.message;checkbox.checked=controller.read().objectId===entry.id;}).finally(()=>{checkbox.disabled=false;});};
     const seating=host.controls.mountObject({asset:{id:entry.id,root:entry.object},properties,playback,onSelected:()=>{checkbox.checked=controller.read().objectId===entry.id;}});
-    controls.set(entry.id,{id:entry.id,checkbox,seating});
+    controls.set(entry.id,{id:entry.id,checkbox,seating,properties});
    }
   }
   await controller.set({objectId:asset.id});syncControls();
