@@ -46,8 +46,10 @@ export function resolveSceneEmissiveCamera(requested, physical) {
   return {...base,effective:true,reason:null,transform:toneMapping === 'agx' ? 'agx-rec2020-default-srgb-v1' : 'fixed-bradford-white-channel-shoulder-srgb-v4',toneMapping,exposureEV,highlightKnee,whiteBalanceKelvin};
 }
 
-export function applySceneEmissiveCamera(pipeline,raw,matched,effective) {
-  const output=effective?matched:raw,transform=!effective;
+export function applySceneEmissiveCamera(pipeline,raw,matched,effective,{linearIntermediate=false}={}) {
+  // Refraction consumes radiance. A matched camera node already contains its
+  // display transform, independently of outputColorTransform on the pipeline.
+  const output=effective&&!linearIntermediate?matched:raw,transform=!effective&&!linearIntermediate;
   if(pipeline.outputNode!==output||pipeline.outputColorTransform!==transform) {
     pipeline.outputNode=output;pipeline.outputColorTransform=transform;pipeline.needsUpdate=true;
   }
