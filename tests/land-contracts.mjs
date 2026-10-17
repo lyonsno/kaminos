@@ -62,9 +62,47 @@ const decoyBefore = await decoySnapshot();
 // A bare origin holding main, a seed clone that advances origin's main the way
 // another lane would, and the clone under test one commit ahead of main, on a
 // feature branch unless onMain asks for the commit to sit on main itself.
+// Building the origin, seed and clone takes a dozen git commands; each layout
+// is built once per file and copied for every contract, then its remotes and
+// the origin's update hook are pointed at the copy.
+const templates = new Map();
+const templatesRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-land-templates-'));
+after(() => fs.rm(templatesRoot, { recursive: true, force: true }));
+async function templateFor(onMain) {
+  if (!templates.has(onMain)) templates.set(onMain, (async () => {
+    const dir = path.join(templatesRoot, onMain ? 'on-main' : 'feature');
+    await fs.mkdir(dir);
+    const gitconfig = path.join(dir, 'gitconfig');
+    await fs.writeFile(gitconfig, GITCONFIG);
+    const env = fixtureEnv(gitconfig);
+    const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const origin = path.join(dir, 'origin.git');
+    const seed = path.join(dir, 'seed');
+    const clone = path.join(dir, 'clone');
+    const commit = async (cwd, name) => {
+      await fs.writeFile(path.join(cwd, name), `${name}\n`);
+      git(cwd, 'add', name);
+      git(cwd, 'commit', '--quiet', '-m', name);
+      return git(cwd, 'rev-parse', 'HEAD');
+    };
+    git(dir, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+    git(dir, 'init', '--quiet', '--initial-branch=main', seed);
+    const base = await commit(seed, 'base.txt');
+    git(seed, 'remote', 'add', 'origin', origin);
+    git(seed, 'push', '--quiet', 'origin', 'main');
+    git(dir, 'clone', '--quiet', origin, clone);
+    if (!onMain) git(clone, 'checkout', '--quiet', '-b', 'feature');
+    const sha = await commit(clone, 'feature.txt');
+    return { dir, base, sha };
+  })());
+  return templates.get(onMain);
+}
+
 async function fixture(t, { onMain = false } = {}) {
+  const template = await templateFor(onMain);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-land-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  for (const part of ['origin.git', 'seed', 'clone']) await fs.cp(path.join(template.dir, part), path.join(dir, part), { recursive: true, verbatimSymlinks: true });
   const gitconfig = path.join(dir, 'gitconfig');
   await fs.writeFile(gitconfig, GITCONFIG);
   const env = fixtureEnv(gitconfig);
@@ -79,20 +117,15 @@ async function fixture(t, { onMain = false } = {}) {
     git(cwd, 'commit', '--quiet', '-m', name);
     return git(cwd, 'rev-parse', 'HEAD');
   };
-  git(dir, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+  git(seed, 'remote', 'set-url', 'origin', origin);
+  git(clone, 'remote', 'set-url', 'origin', origin);
   // The origin logs every update of a land/ ref ("<ref> <old> <new>"), which is
   // what the stub's push trigger reads, and denies them while deny-land exists.
   const updatesLog = path.join(dir, 'land-ref-updates.log');
   const denyFile = path.join(dir, 'deny-land');
   await fs.writeFile(path.join(origin, 'hooks', 'update'), `#!/bin/sh\ncase "$1" in refs/heads/land/*)\n  if [ -e ${quote(denyFile)} ]; then echo "land refs denied" >&2; exit 1; fi\n  echo "$1 $2 $3" >> ${quote(updatesLog)};;\nesac\nexit 0\n`);
   await fs.chmod(path.join(origin, 'hooks', 'update'), 0o755);
-  git(dir, 'init', '--quiet', '--initial-branch=main', seed);
-  const base = await commit(seed, 'base.txt');
-  git(seed, 'remote', 'add', 'origin', origin);
-  git(seed, 'push', '--quiet', 'origin', 'main');
-  git(dir, 'clone', '--quiet', origin, clone);
-  if (!onMain) git(clone, 'checkout', '--quiet', '-b', 'feature');
-  const sha = await commit(clone, 'feature.txt');
+  const { base, sha } = template;
 
   const statePath = path.join(dir, 'gh-state.json');
   const ghPath = path.join(dir, 'gh');
