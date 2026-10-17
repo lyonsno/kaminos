@@ -12,6 +12,7 @@ export default {id:'live-log-heat',title:'Log heat and retained char',async crea
     globalThis.kaminosSceneCollision.set(true);
   }
   await addSavedFire();
+  if(inputs.targetId)globalThis.kaminosSceneAuthoring.setCollision(inputs.targetId,true);
   host.fire.setEnabled(false);
   host.rendering.gi({mode:'combined',steps:4,slices:3});
   const state=runtime.debugState();

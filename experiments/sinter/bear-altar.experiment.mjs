@@ -13,7 +13,6 @@ export default {id:'bear-altar',title:'Midsummer burn altar',async create({host,
   placeAltarBear(asset.root);host.scene.refreshPresentation(asset);
   function show(instance){mount?.dispose?.();mount=null;if(body){body.replaceChildren();if(instance)mount=instance.mount({root:body,document,invoke:(name,value)=>Promise.resolve(instance.operations[name](value))});}}
   controller=createBurnableSelection({objects:host.scene.objects,changed:show,create:async objectId=>{
-   globalThis.kaminosSceneAuthoring.setCollision(objectId,true);
    return liveLog.create({host,inputs:{...inputs,targetId:objectId,disintegrate:true,followObject:true},record});
   }});
   const setBurnable=async value=>{const state=await controller.set(value);record({kind:'burnable.target',target:value.objectId,phase:'applied',requested:value,effective:{objectId:state.objectId,material:'wood',active:state.active}});for(const entry of controls.values())entry.checkbox.checked=controller.read().objectId===entry.id;return read();};
