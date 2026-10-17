@@ -27343,7 +27343,7 @@ function claimLoadedSceneFile(file, sceneFile = null) {
   currentSceneFile=sceneFile;
 }
 
-async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
+async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySettings = false } = {}) {
   if (authoringBusy || vantageCaptureHeld) {
     setInfo('Wait for the current capture or save');
     return;
@@ -27369,7 +27369,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
   }
   let restorePlan;
   try {
-    restorePlan = planSceneRestore(data);
+    restorePlan = planSceneRestore(data, {allowEmpty:emptySettings});
   } catch {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
     setInfo('Invalid scene format');
@@ -27730,7 +27730,7 @@ sceneInitialization.then(async () => {
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!sceneObjects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
       const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
-      await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true});
+      await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
       if(sceneSaveBlockedByFailedRestore)throw Error('Default scene settings did not finish loading');
       sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');
     }

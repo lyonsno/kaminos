@@ -159,9 +159,9 @@ export function isReloadableSceneObjectRecord(record) {
   return source.startsWith('/api/') || source.startsWith('http://') || source.startsWith('https://') || source.startsWith('demos/');
 }
 
-export function planSceneRestore(data) {
+export function planSceneRestore(data, { allowEmpty = false } = {}) {
   if(Number(data?.version)>SCENE_VERSION)throw Error('Scene version requires a newer authoring client');
-  if (!sceneDocumentIsLoadable(data)) throw new Error('Invalid scene format');
+  if (!sceneDocumentIsLoadable(data) && !(allowEmpty && Number.isInteger(data?.version) && data.version > 0)) throw new Error('Invalid scene format');
   const authoredObjects = getSceneObjectRecords(data);
   checkSceneCollisionReferences(authoredObjects,{implicitFireDomain:data.version<9&&!!normalizeComposition(data.composition)});
   const fire = authoredObjects.some(o=>o.type===FIRE_DOMAIN_TYPE)?readFireObjects(authoredObjects,data.fireRendering):null;
