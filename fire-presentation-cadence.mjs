@@ -5,6 +5,18 @@
 // frame a step lands, and it holds while the sim is paused.
 export function presentationPhase(pacing) {
  if (!pacing || pacing.presentationAdvect !== true) return 0;
+ return stepFraction(pacing);
+}
+
+// Blend: the raymarch reads mix(previous real state, current real state, t).
+// On a step frame t is 0 and the previous state is the one just replaced, so
+// what is shown runs one step behind the sim and never jumps.
+export function presentationBlendPhase(pacing) {
+ if (!pacing || pacing.presentationBlend !== true) return 0;
+ return stepFraction(pacing);
+}
+
+function stepFraction(pacing) {
  const every = Math.max(1, Math.floor(Number(pacing.simStepEvery)) || 1), frame = Math.floor(Number(pacing.frame));
  if (every <= 1 || !Number.isFinite(frame) || frame < 0) return 0;
  return (frame % every) / every;

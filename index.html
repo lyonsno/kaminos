@@ -4076,10 +4076,11 @@ let fireProxySync=null,fireProxyStepEvery=1;
 // Opt-in: while the fire proxy stands in, step the fire sim every nth frame.
 window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
 // Opt-in decoupled fire cadence outside Proxy: step the fire sim every nth
-// frame; with advect, the frames between steps show the latest state carried
-// forward along its velocity (prototype; fire-presentation-cadence.mjs).
-let fireCadence={every:1,advect:false};
-window.kaminosFireCadence=(next={})=>{fireCadence={every:Math.max(1,Math.floor(Number(next.every))||1),advect:next.advect===true};window._kaminosDirty?.();return {...fireCadence};};
+// frame; between steps hold the last state, carry it forward along its velocity,
+// or blend the previous and current states (prototype; fire-presentation-cadence.mjs).
+let fireCadence={every:1,mode:'held'};
+window.kaminosFireCadence=(next={})=>{const mode=['held','carry','blend'].includes(next.mode)?next.mode:next.advect===true?'carry':'held';
+ fireCadence={every:Math.max(1,Math.floor(Number(next.every))||1),mode};window._kaminosDirty?.();return {...fireCadence};};
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});

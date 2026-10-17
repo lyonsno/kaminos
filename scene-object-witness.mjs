@@ -1200,7 +1200,7 @@ async function runFireCadenceExperimentScenario(ws) {
   await settleViewportFrames(ws, 600);
   const afterSlider = await pacing();
   evidence.steps.push({ step: 'slider 3', slider, pacing: afterSlider });
-  check(afterSlider?.simStepEvery === 3 && afterSlider?.presentationAdvect === true, `the step slider did not reach the fire: ${JSON.stringify(afterSlider)}`);
+  check(afterSlider?.simStepEvery === 3 && afterSlider?.presentationBlend === true, `the step slider (default mode blend) did not reach the fire: ${JSON.stringify(afterSlider)}`);
   await evaluate(ws, `(() => { const m = document.querySelector('select[aria-label="Between sim steps"]'); m.value = 'held'; m.dispatchEvent(new Event('change', { bubbles: true })); return m.value; })()`);
   await settleViewportFrames(ws, 600);
   const afterMode = await pacing();
@@ -1210,14 +1210,34 @@ async function runFireCadenceExperimentScenario(ws) {
   await settleViewportFrames(ws, 600);
   evidence.steps.push({ step: 'agent setMode carry', invoked, pacing: await pacing() });
   check((await pacing())?.presentationAdvect === true, 'the agent setMode did not reach the fire');
+  await evaluate(ws, `(() => { const m = document.querySelector('select[aria-label="Between sim steps"]'); m.value = 'blend'; m.dispatchEvent(new Event('change', { bubbles: true })); return m.value; })()`);
+  await settleViewportFrames(ws, 800);
+  const afterBlend = await pacing();
+  evidence.steps.push({ step: 'mode blend', pacing: afterBlend });
+  check(afterBlend?.presentationBlend === true && afterBlend?.presentationBlendActive === true && afterBlend?.presentationAdvect === false, `blend did not engage: ${JSON.stringify(afterBlend)}`);
+  // World speed pegs to the Speed as it is now: set Speed by hand, then the ratio.
+  const speedOf = () => evaluate(ws, `Number(document.getElementById('volume-speed')?.value)`);
+  await evaluate(ws, `(() => { const c = document.getElementById('volume-speed'); c.value = '1.2'; c.dispatchEvent(new Event('input', { bubbles: true })); c.dispatchEvent(new Event('change', { bubbles: true })); return c.value; })()`);
+  await settleViewportFrames(ws, 400);
+  await evaluate(ws, `(() => { const w = document.querySelector('input[aria-label="World speed ratio"]'); w.value = '1'; w.dispatchEvent(new Event('input', { bubbles: true })); return w.value; })()`);
+  await settleViewportFrames(ws, 400);
+  const realTime = await speedOf();
+  await evaluate(ws, `(() => { const w = document.querySelector('input[aria-label="World speed ratio"]'); w.value = '0.5'; w.dispatchEvent(new Event('input', { bubbles: true })); return w.value; })()`);
+  await settleViewportFrames(ws, 400);
+  const half = await speedOf();
+  evidence.steps.push({ step: 'world speed', realTime, half, read: await evaluate(ws, 'window.kaminosWorkbenchExperiments.read()') });
+  check(Math.abs(realTime - 3.6) < 1e-3, `ratio 1 at N=3 from a hand-set Speed of 1.2 should give 3.6, got ${realTime}`);
+  check(Math.abs(half - 2.4) < 1e-3, `ratio 0.5 at N=3 should give 1.2 x 2 = 2.4, got ${half}`);
   const shot = await capturePngScreenshot(ws, siblingPngPath('-fire-cadence-experiment'));
   evidence.shot = shot.path;
   evidence.status = await evaluate(ws, `document.querySelector('[role="status"]')?.textContent ?? null`);
   await evaluate(ws, 'window.kaminosWorkbenchExperiments.close()');
   await settleViewportFrames(ws, 600);
   const afterClose = await pacing();
-  evidence.steps.push({ step: 'closed', pacing: afterClose });
+  const speedAfterClose = await speedOf();
+  evidence.steps.push({ step: 'closed', pacing: afterClose, speed: speedAfterClose });
   check(afterClose === null, `closing did not restore every-frame stepping: ${JSON.stringify(afterClose)}`);
+  check(Math.abs(speedAfterClose - 1.2) < 1e-3, `closing should restore the hand-set Speed 1.2, got ${speedAfterClose}`);
   assert.deepEqual(failures, [], `fire cadence experiment checks failed:\n- ${failures.join('\n- ')}`);
 }
 
@@ -1241,9 +1261,9 @@ async function runFireDecoupledCadenceScenario(ws) {
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.display = await displayIdentity(ws);
   const outDir = dirname(out);
-  for (const advect of [false, true]) {
-    const name = advect ? 'advect' : 'held';
-    await evaluate(ws, `window.kaminosFireCadence({ every: ${every}, advect: ${advect} }); true`);
+  for (const name of ['held', 'carry', 'blend']) {
+    const advect = name === 'carry', blend = name === 'blend';
+    await evaluate(ws, `window.kaminosFireCadence({ every: ${every}, mode: '${name}' }); true`);
     await settleViewportFrames(ws, 800);
     const captured = await evaluate(ws, `(async () => {
       const v = window.__kaminosVolumePrototype, canvas = document.getElementById('kaminos-volume-canvas');
@@ -1265,33 +1285,38 @@ async function runFireDecoupledCadenceScenario(ws) {
     });
     const mean = d => { let sum = 0; for (let i = 0; i < d.pixels.length; i++) sum += d.pixels[i]; return sum / d.pixels.length; };
     const steps = decoded.map((_, k) => k === 0 ? null : meanAbsolutePixelDifference(decoded[k - 1].frame, decoded[k].frame));
-    const arm = { name, advect, canvas: captured.canvas,
+    const arm = { name, advect, blend, canvas: captured.canvas,
       frames: captured.frames.map((f, k) => ({ file: decoded[k].file, simStepDelta: f.simStepDelta, frameDelta: f.frameDelta, simStepCount: f.simStepCount,
-        presentationPhase: f.pacing?.presentationPhase ?? null, pacing: f.pacing ? { simStepEvery: f.pacing.simStepEvery, presentationAdvect: f.pacing.presentationAdvect } : null,
+        presentationPhase: (blend ? f.pacing?.presentationBlendPhase : f.pacing?.presentationPhase) ?? null,
+        pacing: f.pacing ? { simStepEvery: f.pacing.simStepEvery, presentationAdvect: f.pacing.presentationAdvect, presentationBlend: f.pacing.presentationBlend, presentationBlendActive: f.pacing.presentationBlendActive } : null,
         meanLevel: mean(decoded[k].frame) })),
       consecutiveDifferences: steps.slice(1),
-      popFromLastShown: meanAbsolutePixelDifference(decoded[advect ? every - 1 : 0].frame, decoded[every].frame),
+      popFromLastShown: meanAbsolutePixelDifference(decoded[name === 'held' ? 0 : every - 1].frame, decoded[every].frame),
       heldPopSameRun: meanAbsolutePixelDifference(decoded[0].frame, decoded[every].frame) };
     evidence.arms.push(arm);
     const expectedDeltas = [1, ...Array(every - 1).fill(0), 1];
     check(arm.frames.every(f => f.frameDelta === 1), `${name}: a capture step did not present exactly one frame: ${JSON.stringify(arm.frames.map(f => f.frameDelta))}`);
     check(JSON.stringify(arm.frames.map(f => f.simStepDelta)) === JSON.stringify(expectedDeltas), `${name}: sim steps per frame ${JSON.stringify(arm.frames.map(f => f.simStepDelta))} instead of ${JSON.stringify(expectedDeltas)}`);
-    check(arm.frames.every(f => f.pacing?.simStepEvery === every && f.pacing?.presentationAdvect === advect), `${name}: effective pacing differs from the request: ${JSON.stringify(arm.frames.map(f => f.pacing))}`);
-    const expectedPhases = advect ? expectedDeltas.map((_, k) => (k % every) / every) : expectedDeltas.map(() => 0);
+    check(arm.frames.every(f => f.pacing?.simStepEvery === every && f.pacing?.presentationAdvect === advect && f.pacing?.presentationBlend === blend && (!blend || f.pacing?.presentationBlendActive === true)),
+      `${name}: effective pacing differs from the request: ${JSON.stringify(arm.frames.map(f => f.pacing))}`);
+    const expectedPhases = name !== 'held' ? expectedDeltas.map((_, k) => (k % every) / every) : expectedDeltas.map(() => 0);
     check(arm.frames.every((f, k) => Math.abs((f.presentationPhase ?? -1) - expectedPhases[k]) < 1e-6), `${name}: phases ${JSON.stringify(arm.frames.map(f => f.presentationPhase))} instead of ${JSON.stringify(expectedPhases)}`);
     check(arm.frames.every(f => f.meanLevel > 1), `${name}: a captured fire frame is blank: ${JSON.stringify(arm.frames.map(f => f.meanLevel))}`);
   }
-  const held = evidence.arms.find(a => !a.advect), advectArm = evidence.arms.find(a => a.advect);
-  if (held && advectArm) {
+  const held = evidence.arms.find(a => a.name === 'held');
+  if (held) {
     const noiseFloor = Math.max(...held.consecutiveDifferences.slice(0, every - 1));
     evidence.noiseFloor = noiseFloor;
-    evidence.advectInBetweenMotion = advectArm.consecutiveDifferences.slice(0, every - 1);
-    evidence.popRatio = advectArm.popFromLastShown / Math.max(advectArm.heldPopSameRun, 1e-9);
-    check(Math.min(...evidence.advectInBetweenMotion) > noiseFloor * 2 + 0.01, `advect: the in-between frames do not move beyond the capture noise floor: ${JSON.stringify({ noiseFloor, motion: evidence.advectInBetweenMotion })}`);
     check(held.consecutiveDifferences[every - 1] > noiseFloor * 2 + 0.01, `held: the real step did not change the frame beyond the noise floor: ${JSON.stringify(held.consecutiveDifferences)}`);
+    evidence.byMode = {};
+    for (const arm of evidence.arms.filter(a => a.name !== 'held')) {
+      const motion = arm.consecutiveDifferences.slice(0, every - 1);
+      evidence.byMode[arm.name] = { inBetweenMotion: motion, popRatio: arm.popFromLastShown / Math.max(arm.heldPopSameRun, 1e-9), meanLevels: arm.frames.map(f => f.meanLevel) };
+      check(Math.min(...motion) > noiseFloor * 2 + 0.01, `${arm.name}: the in-between frames do not move beyond the capture noise floor: ${JSON.stringify({ noiseFloor, motion })}`);
+    }
   }
   const windowMs = Number(args.get('--window-ms') || 3000);
-  for (const [label, cadence] of [['every-1', { every: 1 }], [`held-${every}`, { every, advect: false }], [`advect-${every}`, { every, advect: true }]]) {
+  for (const [label, cadence] of [['every-1', { every: 1 }], [`held-${every}`, { every, mode: 'held' }], [`carry-${every}`, { every, mode: 'carry' }], [`blend-${every}`, { every, mode: 'blend' }]]) {
     await evaluate(ws, `window.kaminosFireCadence(${JSON.stringify(cadence)}); true`);
     evidence.rates.push({ label, ...(await evaluate(ws, `(async () => { let stop = false; const tick = () => { if (stop) return; window._kaminosDirty?.(); requestAnimationFrame(tick); }; tick();
       await new Promise(r => setTimeout(r, 1500)); const read = () => window.kaminosViewportShadingDebugState()?.lastRender?.sceneFrameCount ?? 0;

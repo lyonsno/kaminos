@@ -65,11 +65,12 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   // cadence steps the sim every `every` frames, optionally carrying the shown
   // state forward between steps (fire-presentation-cadence.mjs).
   const every = Math.max(1, Math.floor(Number(stepEvery) || 1));
-  const cadenceEvery = present ? Math.max(1, Math.floor(Number(cadence?.every) || 1)) : 1, advect = cadence?.advect === true;
-  const pacingKey = ready ? `snapshots:${every}` : cadenceEvery > 1 ? `cadence:${cadenceEvery}:${advect}` : null;
+  const cadenceEvery = present ? Math.max(1, Math.floor(Number(cadence?.every) || 1)) : 1;
+  const cadenceMode = cadence?.mode ?? (cadence?.advect === true ? 'carry' : 'held');
+  const pacingKey = ready ? `snapshots:${every}` : cadenceEvery > 1 ? `cadence:${cadenceEvery}:${cadenceMode}` : null;
   if (prototype && fireProxy && fireProxy.pacingKey !== pacingKey) {
    prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every}
-    : cadenceEvery > 1 ? {lightFieldWithSnapshots: false, simStepEvery: cadenceEvery, presentationAdvect: advect} : null);
+    : cadenceEvery > 1 ? {lightFieldWithSnapshots: false, simStepEvery: cadenceEvery, presentationAdvect: cadenceMode === 'carry', presentationBlend: cadenceMode === 'blend'} : null);
    fireProxy.pacingKey = pacingKey;
   }
   // Routes that composite the fire through the canvas-texture bridge hide that

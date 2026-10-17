@@ -5,7 +5,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './vol
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
-import { presentationPhase } from './fire-presentation-cadence.mjs';
+import { presentationPhase, presentationBlendPhase } from './fire-presentation-cadence.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
@@ -3633,6 +3633,21 @@ fn passiveHeatToSmokeRate(heat: f32, yFine: f32) -> f32 {
 }
 `;
 })();
+
+// Decoupled fire cadence, blend mode: the raymarch reads mix(previous real
+// state, current real state, t) from its own buffer, so no sim kernel sees it.
+const PRESENTATION_BLEND_WGSL = /* wgsl */`
+@group(0) @binding(0) var<storage, read> previous: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> current: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> presented: array<vec4<f32>>;
+@group(0) @binding(3) var<uniform> blend: vec4<f32>;
+@compute @workgroup_size(256)
+fn csPresentationBlend(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let i = gid.x;
+  if (i >= arrayLength(&presented)) { return; }
+  presented[i] = mix(previous[i], current[i], blend.x);
+}
+`;
 
 const WGSL = /* wgsl */`
 var<private> GRID: u32;
@@ -12404,6 +12419,9 @@ export function createKaminosVolumePrototype({
   let boundarySplatControlGeneration = 0;
   let boundarySplatTelemetryCopyGeneration = 0;
   let fluidBuffers = [];
+  // Blend-mode presentation (allocated only while blend is requested).
+  let fluidPrevBuffer = null, fluidPresentBuffer = null, presentationBlendUniform = null, presentationBlendPipeline = null;
+  let presentationBlendBindGroups = [], presentationRenderBindGroups = [], presentationBlendActive = false;
   // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
   // and rewritten when the admitted aperture or pattern changes.
   let inflowCoverageTexture = null;
@@ -13115,6 +13133,8 @@ export function createKaminosVolumePrototype({
     selectiveHeadLiveRuntime = null;
     selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
+    fluidPrevBuffer?.destroy(); fluidPresentBuffer?.destroy();
+    fluidPrevBuffer = null; fluidPresentBuffer = null; presentationBlendBindGroups = []; presentationRenderBindGroups = []; presentationBlendActive = false;
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of quenchBuffers) buffer.destroy();
     for (const texture of reactantTextures) texture.destroy();
@@ -13319,9 +13339,17 @@ export function createKaminosVolumePrototype({
   function rebuildFluidBindGroups() {
     if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || !nonRidgeOpticalCaptureHeaderBuffer || !nonRidgeOpticalCaptureRowBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || quenchBuffers.length !== 2 || !boundarySidecarBuffer) return;
     bindGroups = [];
+    presentationRenderBindGroups = [];
     for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
       for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
-        bindGroups[fluidIndex * 2 + quenchIndex] = createFluidRenderBindGroup({
+        bindGroups[fluidIndex * 2 + quenchIndex] = createFluidRenderBindGroup(fluidRenderBindGroupArgs(fluidIndex, quenchIndex));
+      }
+    }
+    liveCompleteFlameCoefficientWriteBindGroupsRebuild();
+  }
+
+  function fluidRenderBindGroupArgs(fluidIndex, quenchIndex) {
+        return {
           label: `kaminos fluid bind group ${gridShapeLabel(gridSize)} fluid ${fluidIndex} quench ${quenchIndex}`,
           fluidRead: fluidBuffers[fluidIndex],
           fluidWrite: fluidBuffers[1 - fluidIndex],
@@ -13339,9 +13367,48 @@ export function createKaminosVolumePrototype({
           quenchRead: quenchBuffers[quenchIndex],
           quenchWrite: quenchBuffers[1 - quenchIndex],
           captureRows: nonRidgeOpticalCaptureRowBuffer,
-        });
-      }
+        };
+  }
+
+  // Blend mode: lazily allocate the previous and blended states, the blend
+  // pipeline, and raymarch bind groups identical to the fluid ones except that
+  // they read the blended state.
+  function ensurePresentationBlend() {
+    if (!device || fluidBuffers.length !== 2 || bindGroups.length !== 4) return false;
+    const size = fluidBuffers[0].size;
+    if (!fluidPrevBuffer || fluidPrevBuffer.size !== size) {
+      fluidPrevBuffer?.destroy(); fluidPresentBuffer?.destroy();
+      fluidPrevBuffer = device.createBuffer({ label: 'kaminos fluid presentation previous state', size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+      fluidPresentBuffer = device.createBuffer({ label: 'kaminos fluid presentation blended state', size, usage: GPUBufferUsage.STORAGE });
+      const seed = device.createCommandEncoder({ label: 'kaminos fluid presentation seed' });
+      seed.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidPrevBuffer, 0, size);
+      device.queue.submit([seed.finish()]);
+      presentationRenderBindGroups = [];
     }
+    if (!presentationBlendPipeline) {
+      presentationBlendPipeline = device.createComputePipeline({ label: 'kaminos fluid presentation blend', layout: 'auto',
+        compute: { module: device.createShaderModule({ label: 'kaminos fluid presentation blend wgsl', code: PRESENTATION_BLEND_WGSL }), entryPoint: 'csPresentationBlend' } });
+      presentationBlendUniform = device.createBuffer({ label: 'kaminos fluid presentation blend phase', size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    }
+    if (presentationRenderBindGroups.length !== 4) {
+      for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+        for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
+          presentationRenderBindGroups[fluidIndex * 2 + quenchIndex] = createFluidRenderBindGroup({ ...fluidRenderBindGroupArgs(fluidIndex, quenchIndex),
+            label: `kaminos fluid presentation bind group fluid ${fluidIndex} quench ${quenchIndex}`, fluidRead: fluidPresentBuffer });
+        }
+      }
+      presentationBlendBindGroups = fluidBuffers.map(buffer => device.createBindGroup({ layout: presentationBlendPipeline.getBindGroupLayout(0), entries: [
+        { binding: 0, resource: { buffer: fluidPrevBuffer } }, { binding: 1, resource: { buffer } },
+        { binding: 2, resource: { buffer: fluidPresentBuffer } }, { binding: 3, resource: { buffer: presentationBlendUniform } }] }));
+    }
+    return true;
+  }
+
+  function presentationBindGroup() {
+    return presentationBlendActive && presentationRenderBindGroups.length === 4 ? presentationRenderBindGroups[currentFluid * 2 + currentQuench] : fluidBindGroup();
+  }
+
+  function liveCompleteFlameCoefficientWriteBindGroupsRebuild() {
     liveCompleteFlameCoefficientWriteBindGroups = boundarySplatLiveCompleteFlameCoefficientBuffer
       && liveCompleteFlameCoefficientUniformBuffer
       ? [
@@ -16469,6 +16536,8 @@ export function createKaminosVolumePrototype({
     // (0 unless opted in). typeof: source-extraction harnesses run this body
     // without the closure that declares the pacing.
     uniforms[45] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null);
+    // Blend mode's step fraction, for the presentation blend pass (unread by WGSL).
+    uniforms[41] = presentationBlendPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null);
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;
@@ -20916,7 +20985,7 @@ export function createKaminosVolumePrototype({
       }],
     });
     pass.setPipeline(drawPipeline);
-    pass.setBindGroup(0, options.bindGroup || fluidBindGroup());
+    pass.setBindGroup(0, options.bindGroup || presentationBindGroup());
     pass.setBindGroup(1, ordinarySceneDepthBindGroup);
     if (scenePointBindGroup) pass.setBindGroup(2, scenePointBindGroup);
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
@@ -21111,7 +21180,7 @@ export function createKaminosVolumePrototype({
       requested: uniforms[368] === 2 ? 'lean-emissive-raymarch-v0' : null,
     });
     pass.setPipeline(effectiveProductPipeline);
-    pass.setBindGroup(0, bindGroup || fluidBindGroup());
+    pass.setBindGroup(0, bindGroup || presentationBindGroup());
     pass.setBindGroup(1, depthBindGroup);
     pass.draw(3);
     pass.end();
@@ -21279,6 +21348,11 @@ export function createKaminosVolumePrototype({
       // Armed for this frame's light field build only (see
       // encodeFireIrradianceLightField).
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
+      // Blend mode keeps the real state the step replaces; typeof as above.
+      if (typeof presentationBlendActive !== 'undefined') {
+        presentationBlendActive = pacing?.presentationBlend === true && pacing.simStepEvery > 1 && ensurePresentationBlend();
+        if (stepThisFrame && presentationBlendActive) encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidPrevBuffer, 0, fluidPrevBuffer.size);
+      }
       if (stepThisFrame) {
         encodeSim(encoder);
         encodeFireIrradianceLightField(encoder);
@@ -21287,7 +21361,8 @@ export function createKaminosVolumePrototype({
       }
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
       if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, presentationAdvect: pacing.presentationAdvect === true,
-        presentationPhase: uniforms[45], steppedThisFrame: stepThisFrame };
+        presentationPhase: uniforms[45], presentationBlend: pacing.presentationBlend === true, presentationBlendPhase: uniforms[41],
+        presentationBlendActive: typeof presentationBlendActive !== 'undefined' && presentationBlendActive, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -21296,6 +21371,14 @@ export function createKaminosVolumePrototype({
             `live-optical-frame-step-mismatch:producer=${state.liveCompleteFlameOpticalCoefficientReceipt?.producedSimStepCount ?? 'none'}:consumer=${state.simStepCount}`,
           );
         }
+      }
+      if (typeof presentationBlendActive !== 'undefined' && presentationBlendActive) {
+        device.queue.writeBuffer(presentationBlendUniform, 0, new Float32Array([uniforms[41], 0, 0, 0]));
+        const blendPass = encoder.beginComputePass({ label: 'kaminos fluid presentation blend' });
+        blendPass.setPipeline(presentationBlendPipeline);
+        blendPass.setBindGroup(0, presentationBlendBindGroups[currentFluid]);
+        blendPass.dispatchWorkgroups(Math.ceil(fluidPresentBuffer.size / 16 / 256));
+        blendPass.end();
       }
       encoder = prepareSharedSceneConsumers(encoder, foregroundService);
       const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
@@ -27523,8 +27606,8 @@ export function createKaminosVolumePrototype({
     // drawing; the frame's presentation receipt says which happened.
     setProxyPacing(pacing) {
       proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true,
-        presentationAdvect: pacing.presentationAdvect === true, frame: 0, lightFieldStep: null } : null;
-      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots, presentationAdvect: proxyPacing.presentationAdvect } : null;
+        presentationAdvect: pacing.presentationAdvect === true, presentationBlend: pacing.presentationBlend === true, frame: 0, lightFieldStep: null } : null;
+      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots, presentationAdvect: proxyPacing.presentationAdvect, presentationBlend: proxyPacing.presentationBlend } : null;
       return state.proxyPacing;
     },
     setCanvasPresentationSuppressed(suppressed) {
