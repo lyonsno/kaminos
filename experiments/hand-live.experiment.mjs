@@ -1,5 +1,6 @@
 import {Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide} from '../lib/three.core.js';
 import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
+import {openCaptureStore} from './hand-live-retention.mjs';
 
 export default {
   id: 'hand-live', title: 'Live MobRecon hand',
@@ -18,6 +19,7 @@ export default {
     if (health.status !== 'loaded' || health.identity?.model !== 'mobrecon_densestack_spiralconv' ||
         health.interactionAuthority !== false || health.faces?.length !== 1538) throw Error('unexpected native route');
     const scene = await host.scene.open();
+    const captures = await openCaptureStore();
     const geometry = new BufferGeometry();
     geometry.setAttribute('position',new BufferAttribute(new Float32Array(778*3),3));
     geometry.setIndex(health.faces.flat());
@@ -29,7 +31,7 @@ export default {
     video.style.cssText='width:100%;display:block';
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
-    let status, button, overlay, error=null, last=null, received=0;
+    let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
     let handedness=inputs.handedness ?? 'right', cropX=.5, cropY=.5, cropSize=.85;
     const read = () => ({authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
       identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
@@ -38,7 +40,7 @@ export default {
       acquisition:'operator_selected_crop_no_detector',camera:stream?.getVideoTracks()[0]?.getSettings() ?? null});
     const sync = () => {
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
-      if (status) status.textContent = error ? `Stopped: ${error}${last ? ' | last computed mesh retained' : ''}` :
+      if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
         `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | diagnostic, no interaction`;
       if (overlay && video.videoWidth) {
         const [x0,y0,x1,y1]=cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
@@ -60,7 +62,7 @@ export default {
       frameCallback=video.requestVideoFrameCallback((now,metadata) => {
         flight=infer(ticket,metadata).catch(async cause => {
           error=String(cause); running=false; stream?.getTracks().forEach(track=>track.stop());stream=null; sync();
-          if(sessionId) await emit({kind:'failure',error,epochMs:Date.now()}).catch(()=>{});
+          if(sessionId) await emit({kind:'failure',error,epochMs:Date.now(),submission:lastSubmission}).catch(()=>{});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
     };
@@ -72,7 +74,17 @@ export default {
         clock:'browser_sample_not_sensor_exposure',videoFrameMetadata:metadata,
         cropBox:cameraCrop(canvas.width,canvas.height,cropX,cropY,cropSize),
         image:canvas.toDataURL('image/jpeg',.95).split(',')[1]};
-      const result=await api('/frame',request);
+      lastSubmission={captureId:capture.captureId,database:'hand-live-diagnostic',store:'captures',origin:document.location.origin};
+      const retained={captureId:capture.captureId,request,identity:health.identity,outcome:{state:'submitted'}};
+      await captures.put(retained);
+      let result;
+      try {
+        result=await api('/frame',request);
+        await captures.put({...retained,outcome:{state:'computed',serverOutput:result.output}});
+      } catch(cause) {
+        await captures.put({...retained,outcome:{state:'failed',error:String(cause),epochMs:Date.now()}});
+        throw cause;
+      }
       if(ticket!==generation || disposed) {
         await emit({kind:'not_presented_after_stop',captureId:capture.captureId,epochMs:Date.now()});return;
       }
@@ -99,6 +111,7 @@ export default {
       try {
         const created=await api('/session',{source:'browser_camera',handedness,pixelBasis:'unmirrored_camera'});
         sessionId=created.sessionId;
+        if(disposed || ticket!==generation) return read();
         const acquired=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480}},audio:false});
         if(disposed || ticket!==generation){acquired.getTracks().forEach(t=>t.stop());return read();}
         stream=acquired;video.srcObject=stream;await video.play();
@@ -128,7 +141,11 @@ export default {
         }
         root.append(status);sync();
       },
-      async dispose(){disposed=true;unsubscribe();await stop();await scene.dispose();},
+      async dispose(){
+        disposed=true;unsubscribe();
+        try {await stop();}
+        finally {captures.close();await scene.dispose();}
+      },
     };
   },
 };
