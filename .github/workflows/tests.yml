@@ -4,14 +4,19 @@ name: tests
 # Problems surface as warnings on the run and in its summary
 # (tools/ci-advisory-warnings.mjs), including a failure to set up (checkout,
 # toolchains, installs), which skips the suite and says nothing was checked.
+# Lane branches (cc/**) get a run too, so a lane can read the full suite's
+# result for its exact commit before landing instead of running it on the
+# shared machine (trial, 2026-10-17). On a branch only the newest push
+# matters, so an older run still going is cancelled; on main every push keeps
+# its run.
 on:
   push:
-    branches: [main]
+    branches: [main, 'cc/**']
   workflow_dispatch:
 
 concurrency:
   group: tests-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   suite:
@@ -23,19 +28,19 @@ jobs:
       - id: checkout
         continue-on-error: true
         timeout-minutes: 5
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: node
         continue-on-error: true
         timeout-minutes: 5
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '25'
       - id: python
         continue-on-error: true
         timeout-minutes: 5
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - id: pip
@@ -66,7 +71,9 @@ jobs:
         continue-on-error: true
         if: steps.checkout.outcome == 'success' && steps.node.outcome == 'success' && steps.python.outcome == 'success' && steps.pip.outcome == 'success' && steps.npm.outcome == 'success'
         timeout-minutes: 45
-        run: node tools/test-runner.mjs --report test-results/report.json
+        # The runner defaults to half the cores, which is one on a three-core
+        # macOS runner; the runner has the machine to itself.
+        run: node tools/test-runner.mjs --parallel 3 --report test-results/report.json
       - name: warnings
         if: always()
         continue-on-error: true
@@ -87,7 +94,7 @@ jobs:
           fi
       - if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: |

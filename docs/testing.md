@@ -9,7 +9,7 @@ npm test -- --only tests/a.mjs,tests/b.mjs
 
 `tools/test-runner.mjs` runs every top-level `.mjs` and `.py` file in `tests/` whose kind is `node` or `python`. It writes a report and one complete log per test. Pass `--report <path>` to choose where. Other flags are `--parallel <n>`, `--timeout-ms <ms>`, `--kinds node,python` and `--only <files>`.
 
-While the `tests` workflow is disabled, landing goes as `AGENTS.md` says. `docs/landing.md` describes `tools/land.mjs`, which requires a green CI run of this suite for the exact commit being landed, for a future pilot.
+Landing goes as `AGENTS.md` says: during the trial that began on 2026-10-17, the full suite's result for a lane commit comes from the advisory `tests` workflow run on its branch push, not from a local run on the shared machine. `docs/landing.md` describes the workflow, and `tools/land.mjs` for a future pilot.
 
 `requirements.txt` at the repository root lists the Python distributions the suite needs: bare distribution names (`pillow`, not `PIL`), one per line, with comments and blank lines allowed. They belong in a repo-local venv; from the repository root, `uv venv --allow-existing .venv && uv pip install --python .venv/bin/python3 -r requirements.txt` creates it, completes it, or repairs one whose interpreter is broken (the system and Homebrew interpreters are externally managed and refuse `pip install`; CI installs into its own interpreter). If you have a working python3 that is not a uv shim, `python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt` also works on a fresh tree.
 
