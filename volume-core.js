@@ -20870,6 +20870,7 @@ export function createKaminosVolumePrototype({
   let foregroundSequence = 0;
   let sceneLightingRebuildPending = false;
   let foregroundDrain = Promise.resolve();
+  let stillPresentationHeld = false;
 
   function setSceneLightingRebuildPending(pending) {
     sceneLightingRebuildPending = Boolean(pending);
@@ -20890,7 +20891,7 @@ export function createKaminosVolumePrototype({
   }
 
   function render(now) {
-    if (sceneLightingRebuildPending) { raf = 0; return; }
+    if (sceneLightingRebuildPending || stillPresentationHeld) { raf = 0; return; }
     if (!foregroundRequester) return renderOrdinaryFrame(now);
     raf = 0;
     if (!state.active || selectiveHeadLiveCapturePaused || foregroundPending) return;
@@ -20928,7 +20929,7 @@ export function createKaminosVolumePrototype({
       emitStatus({phase: 'foreground-frame-error', error: state.error});
     }).finally(() => {
       foregroundPending = null;
-      if (!sceneLightingRebuildPending && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      if (!sceneLightingRebuildPending && !stillPresentationHeld && !selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
     });
   }
 
@@ -27645,21 +27646,25 @@ export function createKaminosVolumePrototype({
     async holdPresentationForStill(renderControls = {}) {
       if (!state.active || !device) throw new Error('Flame renderer is inactive');
       if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed) throw new Error('Still output requires the ordinary flame canvas route');
-      if (sceneLightingRebuildPending || selectiveHeadLiveExactPause) throw new Error('Finish the pending flame presentation change');
+      if (sceneLightingRebuildPending || selectiveHeadLiveExactPause || stillPresentationHeld) throw new Error('Finish the pending flame presentation change');
       const pausedBefore = selectiveHeadLiveCapturePaused, controlsBefore = controlsSnapshot;
-      selectiveHeadLiveCapturePaused = true;
+      // Stop new admissions; an already-admitted service still owns its frame.
+      stillPresentationHeld = true;
       cancelAnimationFrame(raf); raf = 0;
       let released = false;
       const release = () => {
         if (released) return; released = true;
         controlsSnapshot = controlsBefore;
+        stillPresentationHeld = false;
         selectiveHeadLiveCapturePaused = pausedBefore;
         state.selectiveHeadLiveCapturePaused = pausedBefore;
         resize();
-        if (!pausedBefore && state.active) raf = requestAnimationFrame(render);
+        if (!pausedBefore && !sceneLightingRebuildPending && state.active) raf = requestAnimationFrame(render);
       };
       try {
         await foregroundDrain;
+        selectiveHeadLiveCapturePaused = true;
+        state.selectiveHeadLiveCapturePaused = true;
         if (!state.active || state.error) throw new Error(state.error || 'Flame stopped before output');
         // Rendering overrides only: never rebuild or step the simulation.
         const allowed = ['raySteps', 'renderScale', 'adaptiveRays', 'occupancySkip'];
