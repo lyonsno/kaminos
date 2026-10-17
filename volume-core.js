@@ -17246,6 +17246,7 @@ export function createKaminosVolumePrototype({
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
+    prepareRayStepCounters();
   }
 
   function updateSimCostLedger(options = {}) {
@@ -20827,6 +20828,13 @@ export function createKaminosVolumePrototype({
     return next;
   }
 
+  function prepareRayStepCounters() {
+    if (!rayStepTelemetry) return;
+    const supported=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full'&&productFrameOwner==='prototype';
+    if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
+      {supported,reason:'requires-ordinary-emissive-beauty'})) rebuildFluidBindGroups();
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
@@ -20851,7 +20859,7 @@ export function createKaminosVolumePrototype({
     const telemetrySupported=selectEmissive&&!options.opticalTrace&&!options.bindGroup
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
-      {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty'}))rebuildFluidBindGroups();
+      {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
     state.rayStepTelemetry=rayStepTelemetry.read();
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
@@ -21311,7 +21319,7 @@ export function createKaminosVolumePrototype({
 
   function invalidateRaymarchReadouts(reason) {
     if (rayStepTelemetry) {
-      if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason})) rebuildFluidBindGroups();
+      if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason,allowResize:false})) rebuildFluidBindGroups();
       state.rayStepTelemetry=rayStepTelemetry.read();
     }
     state.opticalStepping={...debugOpticalStepping,requested:debugOpticalStepping.mode,effective:null,reason,fullRay:false};
