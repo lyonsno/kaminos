@@ -16,6 +16,8 @@ const expectedRendererControls = [
   ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
   ['volume-ray-start-noise', 'volume_ray_start_noise'],
   ['volume-tone-mapping', 'volume_tone_mapping'],
+  ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+  ['volume-flame-priority', 'volume_flame_priority'],
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
   ['volume-flow-kernel-radius', 'volume_flow_kernel_radius'],
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],

@@ -8,6 +8,12 @@ fn rayStartPhase(pixel: vec2<f32>, enabled: f32, fullGridCapture: bool) -> f32 {
   // Bin centers avoid either endpoint and retain a mean phase of one half.
   return (textureLoad(rayStartNoise, texel, 0).r * 255.0 + 0.5) / 256.0;
 }
+fn rayStartPhaseAtFrame(pixel: vec2<f32>, enabled: f32, fullGridCapture: bool, phase: f32) -> f32 {
+  if (enabled < 0.5 || fullGridCapture) { return 0.5; }
+  let index = u32(phase) % 4096u;
+  let offset = vec2<f32>(f32((index * 17u) % 64u), f32((index * 29u) % 64u));
+  return fract(rayStartPhase(pixel + offset, enabled, fullGridCapture) + f32(index) * 0.61803398875);
+}
 `;
 
 export async function createRayStartTexture(device, {

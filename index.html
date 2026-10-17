@@ -2186,6 +2186,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-ray-start-noise-val">on</span>
     </div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-ray-noise-animated">Animate noise</label>
+      <input type="checkbox" id="volume-ray-noise-animated" data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-flame-priority">Flame priority</label>
+      <input type="range" id="volume-flame-priority" min="0" max="1" step="any" value="0" data-volume-settings-role="renderer">
+      <span class="slider-val" id="volume-flame-priority-val">0.00</span>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Adaptive Rays</span>
       <input type="range" id="volume-adaptive-rays" min="0" max="1" step="0.05" value="0.65">
       <span class="slider-val" id="volume-adaptive-rays-val">0.65</span>
@@ -7320,7 +7329,7 @@ function pickVisibleFlameFromViewportPointer(hits) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, .playback-controls, .scene-owner-playback');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -19137,6 +19146,8 @@ function readVolumeControls() {
     opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
+    rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
+    flamePriority: Number(document.getElementById('volume-flame-priority').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
@@ -19426,7 +19437,9 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
-  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
+  document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
@@ -19459,6 +19472,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-ray-start-noise-val').textContent = c.rayStartNoise ? 'on' : 'off';
+  document.getElementById('volume-flame-priority-val').textContent = c.flamePriority.toFixed(2);
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
@@ -20896,6 +20910,8 @@ async function initKaminosVolumeRoute() {
     ['volume-raymarch-mode', 'volume_raymarch_mode'],
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
+    ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+    ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
@@ -21248,6 +21264,8 @@ async function initKaminosVolumeRoute() {
     'volume-optical-tolerance',
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
+    'volume-ray-noise-animated',
+    'volume-flame-priority',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
     'volume-emitter-momentum-linked',

@@ -6,7 +6,7 @@ export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = 
   return {mode, value: modes.indexOf(mode), tolerance,
     authority: 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
     floor: 'four integration panels per authored base step',
-    jitter: 'off in both comparison arms; current renderer unchanged'};
+    jitter: 'shared per-ray partition phase; both clipped endpoints retained'};
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
@@ -46,6 +46,7 @@ struct OpticalStepState {
   maximum: f32,
   transfer: vec4<f32>,
   unresolved: u32,
+  phased: u32,
 }
 fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   var s: OpticalStepState;
@@ -59,6 +60,22 @@ fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   s.width = min(s.maximum, s.end);
   s.transfer = vec4<f32>(0.0, 0.0, 0.0, 1.0);
   return s;
+}
+fn opticalStepInitPhased(start: f32, end: f32, base: f32, phase: f32) -> OpticalStepState {
+  var s = opticalStepInit(start, end, base);
+  if (phase >= 0.0) {
+    // Randomize the first partition, not the ray entry. Coarse and fine
+    // quadrature share its phase, including the leading and trailing slabs.
+    s.width = min(s.end, s.maximum * (0.25 + 0.75 * phase));
+    s.phased = 1u;
+  }
+  return s;
+}
+fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximum: f32, stop: f32) {
+  if ((*s).mask > 1u) { return; }
+  (*s).minimum = minimum;
+  (*s).maximum = maximum;
+  (*s).width = min((*s).end - (*s).cursor, min(stop, clamp((*s).width, minimum, maximum)));
 }
 fn opticalStepIndex(mask: u32) -> u32 {
   for (var i = 0u; i < 5u; i++) { if ((mask & (1u << i)) == 0u) { return i; } }
@@ -104,7 +121,9 @@ fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f
   if (refine) { (*s).unresolved += 1u; }
   (*s).transfer = opticalCompose((*s).transfer, fine);
   (*s).cursor = min((*s).end, (*s).cursor + (*s).width);
-  (*s).width = min((*s).end - (*s).cursor, min((*s).maximum, (*s).width * 2.0));
+  let nextWidth = select((*s).width * 2.0, (*s).maximum, (*s).phased == 1u);
+  (*s).phased = 0u;
+  (*s).width = min((*s).end - (*s).cursor, min((*s).maximum, nextWidth));
   (*s).probes[0] = (*s).probes[4];
   (*s).mask = 1u;
 }
