@@ -115,8 +115,14 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   assert.equal(two.linked().counts.faces,2,'Ctrl+L from the cap face too');
   assert.deepEqual(two.selectionMedian().map(v=>Math.round(v*1e6)/1e6),[0,0,1],'the median of the cap is the centre of the front face, in the mesh frame');
   two.selectAll('deselect');assert.throws(()=>two.selectionMedian(),/Select something/);
-  two.setThrough(true);assert.ok(bodyMaterial.transparent&&capMaterial.transparent,'x-ray fades every primitive');
-  two.exit();assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent],[false,false],'and exit restores each');
+  // X-ray must not change the object's own materials: renderers such as the fire-light shadow pass
+  // reject transparent casters. Seeing and selecting through come from the overlays instead.
+  const versions=[bodyMaterial.version,capMaterial.version];
+  two.setThrough(true);
+  assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent,bodyMaterial.opacity,capMaterial.opacity,bodyMaterial.depthWrite],[false,false,1,1,true],'x-ray leaves the materials opaque');
+  assert.deepEqual([bodyMaterial.version,capMaterial.version],versions,'and does not touch them at all');
+  assert.ok(two.selectAll('select')&&true);
+  two.exit();assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent],[false,false]);
   const apart=new Group();apart.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));apart.children[1].position.x=1;apart.updateMatrixWorld(true);
   assert.throws(()=>two.enter(apart,{objectId:'apart'}),/share one placement/);
 }

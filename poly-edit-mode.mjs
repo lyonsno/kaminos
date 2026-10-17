@@ -79,7 +79,8 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     for(let v=0,at=0;v<kernel.vertexCount;v++)if(selection.vertices[v]){put(points,at,v);at+=3;}
     if(points.length&&selection.mode==='vertex'){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(points,3));add(new Points(g,new PointsMaterial({color:SELECTED,size:5,sizeAttenuation:false,depthTest:!edit.through})));}
     edit.wire.material.depthTest=!edit.through;edit.wire.material.needsUpdate=true;
-    for(const {material,transparent,opacity,depthWrite} of edit.materialStates){material.transparent=edit.through||transparent;material.opacity=edit.through?.3:opacity;material.depthWrite=edit.through?false:depthWrite;material.needsUpdate=true;}
+    // X-ray draws the wire and selection through the mesh; the object's own materials are left
+    // alone, since renderers such as the fire-light shadow pass reject transparent casters.
     onChange(state());
   }
   const commit=selection=>{edit.selection=selection;rebuildOverlay();return result();};
@@ -143,15 +144,13 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const ready=prepare(meshes),{arrays,kernel,wirePositions}=ready,overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
-      const materialStates=meshes.flatMap(m=>[m.material].flat()).map(material=>({material,transparent:material.transparent,opacity:material.opacity,depthWrite:material.depthWrite}));
-      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel),materialStates};
+      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel)};
       rebuildOverlay();return result();
     },
     exit(){
       if(!edit)return {editing:false};
-      const {mesh,overlay,materialStates}=edit;mesh.remove(overlay);
+      const {mesh,overlay}=edit;mesh.remove(overlay);
       overlay.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
-      for(const {material,...state} of materialStates){Object.assign(material,state);material.needsUpdate=true;}
       edit=null;onChange({editing:false});return {editing:false};
     },
     setMode(mode){need();return commit(setSelectMode(edit.selection,edit.kernel,mode));},
