@@ -91,4 +91,17 @@ function run(attention,c,seconds,start=0,step=1/30){c.base??=new Map([...c.bones
  prop.position.x=5;rows=read();assert.equal(rows[0].point[0],5,'moving the prop moves the interest');
  assert.throws(()=>sceneObjectInterests({THREE,root:()=>scene,specs:[{object:'mesh-1',interest:-1}]}),/finite and nonnegative/);
 }
+{
+ // Two equally interesting props side by side (the braziers stand in clusters):
+ // the creature holds one before considering the other, and rests after letting go.
+ const c=creature(),points={a:[.6,.5,-2.6],b:[-.6,.5,-2.6]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,interests:()=>Object.entries(points).map(([id,point])=>({id,point,interest:1,reason:'authored'}))});
+ let t=0;const trace=[];for(let i=0;i<30*30;i++){t=run(attention,c,1/30,t);trace.push({t,focus:attention.read().focus?.id??null});}
+ const spans=[];for(const row of trace){const last=spans.at(-1);if(!last||last.focus!==row.focus)spans.push({focus:row.focus,start:row.t,end:row.t});else last.end=row.t;}
+ const held=spans.slice(0,-1).filter(s=>s.focus!==null);
+ assert.ok(held.length>=2,'both props get attention over time');
+ for(const span of held)assert.ok(span.end-span.start>=1.4,`each focus is held before moving on (${span.focus} for ${(span.end-span.start).toFixed(2)} s)`);
+ const rests=spans.slice(1,-1).filter(s=>s.focus===null);
+ assert.ok(rests.length>=1&&rests.every(s=>s.end-s.start>=1.5),`after letting go the creature rests (${rests.map(s=>(s.end-s.start).toFixed(2))})`);
+}
 console.log('Creatures notice authored interests unprompted, turn the head toward them, mark them, habituate and release');

@@ -43,12 +43,12 @@ const smooth=(rate,dt)=>1-Math.exp(-dt/Math.max(rate,1e-6));
 // blended neck/head correction over the creature's own animated pose.
 export function createCreatureAttention({THREE,rigFrame,profile,interests,options={}}) {
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
- const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,boredSeconds:3.5,recoverSeconds:6,renotice:.75,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
- const policy=createAttentionPolicy({minDwellSeconds:.6,defaultMemorySeconds:1.2,switchMargin:.05});
+ const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,boredSeconds:3.5,recoverSeconds:6,renotice:.75,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:1.2,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
+ const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
  let look=lookFor(profile);
  const habituation=new Map();
- let weight=0,aim=null,lastTime=null,focus=null,noticed=[],reachable=false,error=null,enabled=true;
+ let weight=0,aim=null,lastTime=null,focus=null,restUntil=-Infinity,noticed=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
  Object.assign(reticle.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosAttentionReticle:true});
@@ -89,9 +89,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     noticed.push({id:source.id,label:source.label,distance,angle,view,novelty,fresh,score});
     // Only salient things count as observed now; a dull or unseen focus is
     // carried by the policy's brief memory and then released.
-    if(score>0)observations.push({id:source.id,point:source.point,score,reason:source.reason});
+    // Just after letting go, only something striking catches the eye.
+    const resting=!focus&&time<restUntil;noticed.at(-1).resting=resting;
+    if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:source.reason});
    }
-   focus=policy.update({time,observations}).focus;
+   const previous=focus;focus=policy.update({time,observations}).focus;
+   if(previous&&!focus)restUntil=time+o.restSeconds;
    for(const [id,seconds] of habituation)habituation.set(id,Math.max(0,seconds-dt*o.boredSeconds/o.recoverSeconds));
    if(focus)habituation.set(focus.id,(habituation.get(focus.id)??0)+dt*(1+o.boredSeconds/o.recoverSeconds));
    let want=0;
@@ -125,7 +128,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    noticed:structuredClone(noticed).sort((a,b)=>b.score-a.score),
    habituation:Object.fromEntries(habituation),options:{...o}};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;weight=0;aim=null;lastTime=null;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();});ringMaterial.dispose();}
