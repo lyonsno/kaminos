@@ -594,6 +594,8 @@ try {
   const edited = await page.evaluate(([selector, id]) => ({line: document.querySelector(selector)?.textContent ?? null,
     pin: document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status ?? null}), [spotCard, spot?.id]);
   check('after the geometry is edited, the posted note says it changed since', /since this note/.test(edited.line ?? '') && edited.pin === 'changed', edited);
+  await page.screenshot({path: path.join(out, 'point-pin.png')});
+  report.artifacts.push(path.join(out, 'point-pin.png'));
   await page.evaluate(id => window.kaminosSceneAuthoring.setGeometry(id, {parameters: {width: 1}}), red);
   // A point note on an object that is then deleted says so (same scene, before any save).
   // Put it where the viewport canvas, not the drawer or a sidebar, is under its centre.
