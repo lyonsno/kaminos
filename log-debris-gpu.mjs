@@ -41,7 +41,7 @@ fn advance(@builtin(global_invocation_id) gid:vec3<u32>){
   }
  }
  particles[i]=particle;
- let pixel=vec2<i32>(i%n,i/n);textureStore(positionOutput,pixel,particle.positionHeat);textureStore(sizeOutput,pixel,particle.sizeActive);
+ let pixel=vec2<i32>(vec2<u32>(i%n,i/n));textureStore(positionOutput,pixel,particle.positionHeat);textureStore(sizeOutput,pixel,particle.sizeActive);
 }`;
 
 function external(renderer,texture){
@@ -66,7 +66,7 @@ export async function createLogDebrisGpu({renderer,field,ground}){
   const positions=makeTexture(),sizes=makeTexture();
   const pos=external(renderer,positions),scale=external(renderer,sizes);wrappers.push(pos,scale);
   const {instanceIndex,ivec2,textureLoad,positionGeometry,vertexStage,vec3}=THREE.TSL;
-  const pixel=ivec2(instanceIndex.mod(n),instanceIndex.div(n));
+  const pixel=ivec2(instanceIndex.mod(n).toInt(),instanceIndex.div(n).toInt());
   const position=textureLoad(pos.wrapper,pixel),size=textureLoad(scale.wrapper,pixel);
   const material=new THREE.MeshStandardNodeMaterial({color:0x15110e,roughness:.5,metalness:0,alphaTest:.5});owned.push(material);
   material.positionNode=positionGeometry.mul(size.xyz).add(position.xyz);
@@ -80,8 +80,8 @@ export async function createLogDebrisGpu({renderer,field,ground}){
   const uv=vec3(x,y,z).add(.5).div(n),cellSize=bounds.getSize(new THREE.Vector3()).divideScalar(n);
   const local=vec3(...bounds.min.toArray()).add(uv.mul(vec3(...bounds.getSize(new THREE.Vector3()).toArray())));
   capMaterial.positionNode=positionGeometry.mul(vec3(...cellSize.toArray())).add(local);
-  const initialTexture=new THREE.Data3DTexture(Float32Array.from({length:count*4},(_,i)=>i%4===3&&initial[i>>2]&&!surface[i>>2]?1:0),n,n,n);
-  initialTexture.format=THREE.RGBAFormat;initialTexture.type=THREE.FloatType;initialTexture.minFilter=initialTexture.magFilter=THREE.NearestFilter;initialTexture.needsUpdate=true;owned.push(initialTexture);
+  const initialTexture=new THREE.Data3DTexture(Uint16Array.from({length:count*4},(_,i)=>i%4===3&&initial[i>>2]&&!surface[i>>2]?0x3c00:0),n,n,n);
+  initialTexture.format=THREE.RGBAFormat;initialTexture.type=THREE.HalfFloatType;initialTexture.minFilter=initialTexture.magFilter=THREE.NearestFilter;initialTexture.needsUpdate=true;owned.push(initialTexture);
   const live=field.sampleState(uv),inside=THREE.TSL.texture3D(initialTexture,uv).w;
   let neighbours=THREE.TSL.float(1);
   for(const offset of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]])neighbours=neighbours.mul(field.sampleState(uv.add(vec3(...offset).div(n))).w);

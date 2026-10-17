@@ -17,6 +17,8 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(0);
  const fail=e=>{report.errors.push(String(e));rejectError(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
  page.on('response',r=>{if(r.status()>=400)report.httpFailures.push({url:r.url(),status:r.status()});});
+ report.phase='kernel';await save();await guarded(page.goto(origin+'/tools/moving-volume-fixture.html'));
+ report.kernel=await guarded(page.evaluate(async()=>{const {runLogDebrisFixture}=await import('/tools/log-debris-fixture.mjs');return runLogDebrisFixture();}));await save();assert.equal(report.kernel.status,'passed');
  report.url=origin+'/volume-settings-preset.html?preset=vsp-5d3c953814884ed597721350fde28d275a00af04a087d8bb5ec8127984c92bcc#experiment=disintegrating-log&volume_light_field=1&volume_light_field_scene_depth=1&volume_light_field_test_scene=0&volume_collision=kiln';report.phase='startup';await save();
  await guarded(page.goto(report.url));await guarded(page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='disintegrating-log'||window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')));
  const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));assert.equal(startup.error,undefined,JSON.stringify(startup));
