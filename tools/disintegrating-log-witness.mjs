@@ -27,14 +27,15 @@ try{
  const advance=async target=>{report.inputs.push({advanceTo:target});const r=await guarded(page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.effectiveSimStepCount,target);await invoke('pause');};
  report.effective=await page.evaluate(()=>({backend:window.__kaminosVolumePrototype.debugState().backend,grid:window.__kaminosVolumePrototype.debugState().simGrid,gi:window.kaminosSceneGIDebugState(),rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value)}));
  assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
- report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','log-consumption.mjs','log-debris-gpu.mjs','experiments/sinter/disintegrating-log.experiment.mjs']){
+ report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','log-consumption.mjs','log-debris-gpu.mjs','experiments/sinter/live-log-heat.experiment.mjs','experiments/sinter/disintegrating-log.experiment.mjs']){
   const served=await(await page.request.get(origin+'/'+name)).body(),local=await fs.readFile(path.join(report.repoRoot,name));const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(served),sha(local),name);report.sources.push({name,sha256:sha(served)});
  }
+ let lastSnapshot;
  async function sample(name){
   const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),snapshots=await invoke('snapshot');assert.equal(snapshots.length,1);
   const collision=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:r.cells?Array.from(r.cells):null};});
   await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify({state,snapshots,collision}));
-  const snapshot=snapshots[0];let attached=0,detached=0,gas=0,attachedFuel=0,residue=0;const ids=[];
+  const snapshot=snapshots[0];lastSnapshot=snapshot;let attached=0,detached=0,gas=0,attachedFuel=0,residue=0;const ids=[];
   for(let i=0;i<snapshot.initial.length;i++)if(snapshot.initial[i]){
    const fuel=snapshot.material[i*8+5],active=snapshot.particles[i*16+11];assert.ok(Number.isFinite(fuel));
    if(active>.5){detached++;residue+=snapshot.particles[i*16+13];ids.push(snapshot.particles[i*16+12]);assert.equal(snapshot.particles[i*16+12],i);assert.ok(fuel<=.150002);}else{attached++;attachedFuel+=fuel;}
@@ -52,7 +53,16 @@ try{
  await invoke('run');report.phase='ignition';await save();await advance(600);await sample('hot');
  await invoke('burnerOff');await invoke('pause');await advance(900);await sample('burner-off');
  report.phase='consumption';await save();await invoke('move',{position:[.7,0,0]});await invoke('pause');await advance(1500);await sample('shedding');
+ report.phase='paused-edit';await save();await invoke('view',{mode:'char'});const pausedBefore=await sample('paused-before'),priorParticles=structuredClone(lastSnapshot.particles);
+ report.inputs.push({ordinaryEditorTransform:{position:[.7,.15,.1],rotation:[.2,1.1,0]}});
+ const frameBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);
+ await page.evaluate(()=>{const state=window.kaminosWorkbenchExperiments.read();window.kaminosSetSceneObjectTransform(state.objectId,{position:[.7,.15,.1],rotation:[.2,1.1,0]});});
+ await page.waitForFunction(frame=>window.kaminosSceneGIDebugState().sceneFrames>frame,frameBefore);
+ const pausedAfter=await sample('paused-after');assert.equal(pausedAfter.state.fields[0].steps,pausedBefore.state.fields[0].steps);assert.deepEqual(lastSnapshot.particles,priorParticles,'Paused edit cannot move independent GPU residue');
+ const pose=pausedAfter.state.debris[0];assert.ok(pose.attachedWorld.every((v,i)=>Math.abs(v-pose.sourceWorld[i])<1e-5),'Paused attached caps must follow ordinary editor transform');report.pausedEdit={status:'passed',materialSteps:pausedAfter.state.fields[0].steps,particlesUnchanged:true,sourceWorld:pose.sourceWorld,attachedWorld:pose.attachedWorld};
+ await invoke('view',{mode:'beauty'});
  await invoke('pause');await advance(2400);const consumed=await sample('consumed');assert.ok(consumed.detached>0,'Burning must release finite residue');assert.ok(consumed.attached<initial.attached);assert.ok(consumed.solidCells<initial.solidCells,'Consumed geometry must lose obstruction');
+ await invoke('view',{mode:'char'});await sample('consumed-char');await invoke('view',{mode:'beauty'});
  await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
  await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());checkDisintegrationEvidence(report);report.status='passed';report.phase='complete';

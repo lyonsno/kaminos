@@ -50,11 +50,11 @@ function external(renderer,texture){
  return {wrapper,dispose(){delete renderer.backend.get(wrapper).texture;wrapper.dispose();}};
 }
 
-export async function createLogDebrisGpu({renderer,field,ground}){
+export async function createLogDebrisGpu({renderer,field,ground,onFrame=null}){
  const device=field.device,{mesh,bounds,dimensions,initial,surface}=field.residentState(),n=dimensions[0],count=n**3;
  if(!field.disintegrate||!surface)throw Error('Debris requires a filled consumable material field');
  if(!ground||![...ground.center,ground.height,ground.radius].every(Number.isFinite)||ground.radius<=0)throw Error('Debris requires a finite ground disc');
- const owned=[],wrappers=[];let disposed=false,steps=0;
+ const owned=[],wrappers=[];let disposed=false,steps=0,unsubscribe=null;
  const allocate=resource=>{owned.push(resource);return resource;};
  try{
   const module=device.createShaderModule({label:'finite consumed wood debris',code:LOG_DEBRIS_WGSL});
@@ -90,22 +90,27 @@ export async function createLogDebrisGpu({renderer,field,ground}){
   const caps=new THREE.InstancedMesh(geometry,capMaterial,count);caps.name='Exposed char interior';caps.frustumCulled=false;caps.matrixAutoUpdate=false;
   const root=new THREE.Group();root.name='Consumed wood and char residue';root.add(caps,debris);
   mesh.updateWorldMatrix(true,false);const previous=mesh.matrixWorld.clone();
+  function present(){
+   mesh.updateWorldMatrix(true,false);root.updateWorldMatrix(true,false);
+   caps.matrix.copy(root.matrixWorld).invert().multiply(mesh.matrixWorld);caps.updateWorldMatrix(false,false);
+  }
   function reset(){if(disposed)throw Error('Debris is disposed');device.queue.writeBuffer(particles,0,new Uint32Array(count*16));
    for(const texture of [positions,sizes])device.queue.writeTexture({texture},new Float32Array(count*4),{bytesPerRow:n*16},[n,n*n]);
-   mesh.updateWorldMatrix(true,false);previous.copy(mesh.matrixWorld);caps.matrix.copy(mesh.matrixWorld);steps=0;
+   mesh.updateWorldMatrix(true,false);previous.copy(mesh.matrixWorld);present();steps=0;
   }
   reset();
+  unsubscribe=onFrame?.(present);
   return {root,particles,positions,sizes,count,
    encode(encoder,frame){
-    if(disposed)throw Error('Debris is disposed');mesh.updateWorldMatrix(true,false);caps.matrix.copy(mesh.matrixWorld);caps.matrixWorldNeedsUpdate=true;
+    if(disposed)throw Error('Debris is disposed');present();
     const values=new Float32Array(48);values.set(mesh.matrixWorld.elements);values.set(previous.elements,16);values.set([...bounds.min.toArray(),0],32);values.set([...bounds.getSize(new THREE.Vector3()).toArray(),0],36);
     values.set([ground.center[0],ground.height,ground.center[2],ground.radius],40);values.set([frame.dt,n,0,0],44);device.queue.writeBuffer(params,0,values);
     const states=field.residentState(),group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:{buffer:states.before}},{binding:1,resource:{buffer:states.after}},{binding:2,resource:{buffer:particles}},{binding:3,resource:positions.createView()},{binding:4,resource:sizes.createView()},{binding:5,resource:{buffer:params}}]});
     const pass=encoder.beginComputePass({label:'consumed wood to finite char residue'});pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(count/64));pass.end();previous.copy(mesh.matrixWorld);steps++;
-   },reset,read:()=>({identity:'finite-wood-residue-v1',steps,capacity:count,initialMaterialCells:initial.reduce((a,b)=>a+b,0),residueFraction:LOG_RESIDUE,ground,runtimeReadbacks:0}),
+   },reset,read:()=>({identity:'finite-wood-residue-v1',steps,capacity:count,initialMaterialCells:initial.reduce((a,b)=>a+b,0),residueFraction:LOG_RESIDUE,ground,runtimeReadbacks:0,sourceWorld:mesh.matrixWorld.toArray(),attachedWorld:caps.matrixWorld.toArray()}),
    async snapshot(){const source=field.residentState();const staging=device.createBuffer({size:particles.size+source.after.size,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
     try{const encoder=device.createCommandEncoder();encoder.copyBufferToBuffer(particles,0,staging,0,particles.size);encoder.copyBufferToBuffer(source.after,0,staging,particles.size,source.after.size);device.queue.submit([encoder.finish()]);await staging.mapAsync(GPUMapMode.READ);const data=new Float32Array(staging.getMappedRange());return {identity:'frozen-material-residue-snapshot-v1',particles:Array.from(data.subarray(0,count*16)),material:Array.from(data.subarray(count*16)),initial:Array.from(initial),read:this.read()};}finally{staging.unmap();staging.destroy();}},
-   dispose(){if(disposed)return;disposed=true;for(const wrapper of wrappers)wrapper.dispose();for(const resource of owned)resource.destroy?.()??resource.dispose?.();root.removeFromParent();}
+   dispose(){if(disposed)return;disposed=true;unsubscribe?.();for(const wrapper of wrappers)wrapper.dispose();for(const resource of owned)resource.destroy?.()??resource.dispose?.();root.removeFromParent();}
   };
- }catch(error){for(const wrapper of wrappers)wrapper.dispose();for(const resource of owned)resource.destroy?.()??resource.dispose?.();throw error;}
+ }catch(error){unsubscribe?.();for(const wrapper of wrappers)wrapper.dispose();for(const resource of owned)resource.destroy?.()??resource.dispose?.();throw error;}
 }
