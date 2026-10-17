@@ -59,7 +59,7 @@ for(const mode of ['continuous','finite_drop','failure']){
  const reader=application.slice(application.indexOf('function authoredWaterState(){'),application.indexOf('\nconst waterSettingTargets='));
  const pauseStart=application.indexOf('window.kaminosPauseLocalLiquid = paused => {'),pauseEnd=application.indexOf('\n};',pauseStart);
  const apiStart=application.indexOf('window.kaminosWaterSources={'),apiEnd=application.indexOf('\n',apiStart);
- Object.assign(c,{addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){},previewAuthoredWaterSetup(){}});
+ Object.assign(c,{fitAuthoredWaterBounds(){},addAuthoredWaterDrop(){},applyAuthoredWaterSettings(){},releaseAuthoredWater(){},resetAuthoredWater(){},matchAuthoredWaterSetup(){},previewAuthoredWaterSetup(){}});
  vm.runInContext(reader+application.slice(pauseStart,pauseEnd+3)+application.slice(apiStart,apiEnd),c);
  f.api.read=()=>c.window.kaminosWaterSources.read();f.api.pause=()=>c.window.kaminosWaterSources.pause();f.controls.refresh();
  const check=(paused,step)=>{

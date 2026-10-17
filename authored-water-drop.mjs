@@ -107,3 +107,21 @@ export function planAuthoredWaterMatch(records,referenceId){
  if(!Number.isSafeInteger(count)||count*16>0xffffffff)throw Error('Combined water population exceeds typed-array capacity');
  return {referenceId,referenceLabel:sourceName(reference),spacing:d.spacing,bounds:clone(d.bounds),containerEnabled:d.containerEnabled,changes,particleCount:count};
 }
+
+/** Explicit recovery: expand the existing domain around initial water without
+ * changing authored poses, resolution, wall mode, or already larger extents. */
+export function planAuthoredWaterBounds(records,sampling){
+ const checked=normalizeAuthoredWaterSampling(sampling),bounds=clone(checked.container??checked.worldBounds);
+ for(const r of finiteSources(records)){
+  const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,checked),half=(d.samplesAcross-1)*d.spacing/2,rotation=new Euler(...r.transform.rotation),origin=new Vector3(...r.transform.position);
+  for(const x of [-half,half])for(const y of [-half,half])for(const z of [-half,half]){
+   const p=new Vector3(x,y,z).applyEuler(rotation).add(origin);
+   for(let k=0;k<3;k++){const min=p.getComponent(k)-d.collisionRadius,max=p.getComponent(k)+d.collisionRadius;
+    if(min<bounds.min[k])bounds.min[k]=min-d.spacing;
+    if(max>bounds.max[k])bounds.max[k]=max+d.spacing;
+   }
+  }
+ }
+ const changed=JSON.stringify(bounds)!==JSON.stringify(checked.container??checked.worldBounds);
+ return {changed,bounds,sampling:{...checked,...(checked.container===null?{worldBounds:bounds}:{container:bounds})}};
+}
