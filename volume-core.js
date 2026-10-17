@@ -18,6 +18,9 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
+import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
+import {followingDomainShift} from './moving-volume.mjs';
+import {createMovingVolumeGpu} from './moving-volume-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
@@ -4156,6 +4159,7 @@ fn csWaveletLowPass2(@builtin(global_invocation_id) gid: vec3<u32>) {
 // pipelines, so the shared fluid layout keeps every other compute pipeline
 // inside the per-stage storage-buffer limit.
 @group(3) @binding(1) var<storage, read_write> fluidPredict: array<vec4<f32>>;
+@group(3) @binding(2) var residentGasSource: texture_3d<f32>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(0) @binding(16) var sceneSolidCells: texture_3d<u32>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
@@ -7147,6 +7151,16 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, immersedEntry);
   }
 
+  // Resident wood supplies gas to the existing reaction law, not visible flame.
+  var residentRate = 0.0;
+  if(reactantOn && all(textureDimensions(residentGasSource)==vec3<u32>(GRID,GRID_Y,GRID))){
+    let supply=textureLoad(residentGasSource,cellI,0).xy;
+    residentRate=max(0.0,supply.x);
+    let entry=1.0-exp(-residentRate*timeStep);
+    fuel=mix(fuel,1.0,entry);heat=mix(heat,max(0.0,supply.y),entry);
+    oxidizer=mix(oxidizer,0.0,entry);smoke=mix(smoke,0.0,entry);
+  }
+  let residentDivergence=residentRate/transportBacktraceScale(dynamicsSpeed());
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
   let sourceRadial = length(sourceCenter.xz);
@@ -7975,7 +7989,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (reactantOn) {
     // The candidate's burned amount, already taken from fuel and oxidizer at
     // the burn site, is the expansion source (same gain, same units).
-    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget, 0.0, 0.0, 0.0));
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
   } else {
     let fuelBurnRate = heat * 0.018 + fuelConsumption;
     // The fuel actually consumed this step, per unit time: the decrement is
@@ -12384,6 +12398,8 @@ export function createKaminosVolumePrototype({
 
   let transportPipelineLayout = null;
   let transportPredictBindGroup = null;
+  let emptyGasSourceTexture = null;
+  let transportGasSourceTexture = null;
   let analyticEmitterInjectionPipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
@@ -12759,6 +12775,34 @@ export function createKaminosVolumePrototype({
   let currentFront = 0;
   let currentQuench = 0;
   let simulationPaused = false;
+  let gpuThermalConsumer = null;
+  let thermalFluidGeneration = 0;
+  let sceneSolidGpu = null;
+  let sceneSolidGpuSupportKey = null;
+  let followingDomain = null;
+
+  function prepareFollowingDomain(lookFreeze) {
+    const owner=followingDomain;
+    if(!owner||simulationPaused||lookFreeze)return;
+    if(state.joinedBoundary?.requested||liquidFireContactDescriptor||proxyPacing)throw Error('Following domain requires standalone fire without liquid contact or proxy pacing');
+    const plan=followingDomainShift({anchor:owner.anchor,origin:owner.origin,target:owner.getPosition(),current:productTransform.translate,scale:productTransform.scale,grid:gridSize});
+    if(!plan.cells.some(Boolean))return;
+    const previous=[...productTransform.translate];productTransform.translate=[...plan.translation];
+    try{const primitives=owner.onTranslation?.([...plan.translation]);if(primitives)volumePrimitives=primitives.map(normalizePrimitiveRecord);}
+    catch(error){productTransform.translate=previous;throw error;}
+    owner.pending=plan.cells.map((v,i)=>v+(owner.pending?.[i]??0));owner.shifts++;owner.cells=plan.cells;
+    state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...plan.translation],cellSize:plan.cellSize,shifts:owner.shifts,lastShift:[...plan.cells],rotation:'world-aligned',transport:'exact-overlap-open-ambient',runtimeReadbacks:0};
+    publishVolumePrimitiveState();getPrimitiveSource();
+  }
+  function encodeFollowingDomain(encoder){
+    const owner=followingDomain;if(!owner?.pending)return;
+    owner.gpu.encode(encoder,{dimensions:[gridSize,gridHeight,gridSize],shift:owner.pending,
+      fluid:[fluidBuffers[currentFluid],fluidBuffers[1-currentFluid]],front:[frontBuffers[currentFront],frontBuffers[1-currentFront]],
+      quench:[quenchBuffers[currentQuench],quenchBuffers[1-currentQuench]],reactant:[reactantTextures[currentFluid],reactantTextures[1-currentFluid]],
+      reactantFull:reactantSidecarFull,ambientOxidizer:REACTANT_MODEL.ambientOxidizer});
+    currentFluid=1-currentFluid;currentFront=1-currentFront;currentQuench=1-currentQuench;
+    for(const buffer of pressureBuffers)encoder.clearBuffer(buffer);owner.pending=null;
+  }
   let frameTexture = null;
   let frameTextureSize = '';
   let browserResidualFeatureTexture = null;
@@ -13313,6 +13357,8 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    if(sceneSolidGpu){sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;}
+    sceneSolidGpuSupportKey=null;sceneSolidGeometryCache=null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
     sceneSolidTextureView = null;
@@ -13356,6 +13402,7 @@ export function createKaminosVolumePrototype({
     fluidPredictBuffer = null;
     fluidPredictBufferBytes = 0;
     transportPredictBindGroup = null;
+    emptyGasSourceTexture?.destroy();emptyGasSourceTexture=null;transportGasSourceTexture=null;
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
@@ -13510,22 +13557,35 @@ export function createKaminosVolumePrototype({
     // releases without a rebuild.
     if (!device || !transportPredictBindGroupLayout) return;
     const wantBytes = required ? fluidBufferBytes(gridSize) : TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES;
-    if (fluidPredictBuffer && fluidPredictBufferBytes === wantBytes) return;
-    fluidPredictBuffer?.destroy();
-    fluidPredictBuffer = device.createBuffer({
+    if (!emptyGasSourceTexture) {
+      emptyGasSourceTexture = device.createTexture({label:'empty resident gas source',dimension:'3d',size:[1,1,1],format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+      device.queue.writeTexture({texture:emptyGasSourceTexture},new Float32Array(2),{bytesPerRow:8},[1,1,1]);
+    }
+    const source = gpuThermalConsumer?.gasSource;
+    if(source?.dimensions?.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i]))gpuThermalConsumer.resizeGrid?.([gridSize,gridHeight,gridSize]);
+    if (source && (source.device !== device || !source.texture?.createView || source.dimensions?.length !== 3 || source.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i]))) throw Error('Resident gas source requires the current same-device fluid grid');
+    const gasTexture = source?.texture ?? emptyGasSourceTexture;
+    const bufferChanged = !fluidPredictBuffer || fluidPredictBufferBytes !== wantBytes;
+    if (!bufferChanged && transportGasSourceTexture === gasTexture && transportPredictBindGroup) return;
+    if (bufferChanged) {
+      fluidPredictBuffer?.destroy();
+      fluidPredictBuffer = device.createBuffer({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       size: wantBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-    fluidPredictBufferBytes = wantBytes;
-    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
+      fluidPredictBufferBytes = wantBytes;
+      device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
+    }
     transportPredictBindGroup = device.createBindGroup({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       layout: transportPredictBindGroupLayout,
       entries: [
         { binding: 1, resource: { buffer: fluidPredictBuffer } },
+        { binding: 2, resource: gasTexture.createView({dimension:'3d'}) },
       ],
     });
+    transportGasSourceTexture = gasTexture;
   }
 
   function rebuildFluidBindGroups() {
@@ -13655,6 +13715,11 @@ export function createKaminosVolumePrototype({
       : !transport.commonCharacteristic ? `unsupported-transport-regime:${transport.scheme}`
       : null;
     if (reason || !requested) {
+      if (sceneSolidGpu) {
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;
+        sceneSolidTexture=null;sceneSolidCellsCpu=null;sceneSolidRevisionKey=null;
+        installSceneSolidTexture();rebuildSceneSolidBindingViews();
+      }
       if (backWall.cells.length) {
         const key = `wall:${backWall.maskKey}`;
         if (sceneSolidRevisionKey !== key) {
@@ -13675,6 +13740,37 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
+      if (typeof device.createComputePipeline === 'function' && !state.joinedBoundary?.admitted) {
+        if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
+        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells,materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+        const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
+        if(sceneSolidGpuSupportKey!==supportKey){
+          const support=new Uint32Array(gridSize*gridHeight*gridSize);
+          countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,new Uint8Array(support.length),gridSize,gridHeight,i=>{support[i]=1;});
+          sceneSolidGpu.setSourceSupport(support);sceneSolidGpuSupportKey=supportKey;
+        }
+        const maskKey=JSON.stringify([geometry.key,backWall.maskKey,supportKey]);
+        if(sceneSolidTexture!==sceneSolidGpu.texture){
+          sceneSolidTexture?.destroy();sceneSolidTexture=sceneSolidGpu.texture;sceneSolidTextureView=sceneSolidGpu.view;
+          sceneSolidTextureSizeKey=[gridSize,gridHeight,gridSize].join('x');sceneSolidTextureDevice=device;
+          sceneSolidCellsCpu=null;rebuildSceneSolidBindingViews();
+        }
+        if(sceneSolidRevisionKey===maskKey)return;
+        const encoder=device.createCommandEncoder({label:'scene solid GPU rebuild'});
+        sceneSolidGpu.encode(encoder);device.queue.submit([encoder.finish()]);
+        sceneSolidRevisionKey=maskKey;
+        state.sceneSolidGeometryBuilds=(state.sceneSolidGeometryBuilds||0)+geometry.builds;
+        state.sceneCollision={requested:true,effective:'mesh-voxel-solid',backend:'gpu',sourceId,reason:null,
+          geometryRevision:geometry.revision,grid:gridSize,triangleCount:geometry.triangleCount,members:geometry.members,
+          solidCellCount:null,blockedFaceCount:null,surfaceCellCount:null,interiorCellCount:null,
+          sourceSupport:null,validation:'gpu-resident-unread',emitterBackWallCells:backWall.cells.length,
+          residentBytes:gridSize*gridHeight*gridSize*4,rebuildSubmitMs:performance.now()-started,rebuildStep:state.simStepCount};
+        return;
+      }
+      if(sceneSolidGpu){
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;sceneSolidTexture=null;
+        sceneSolidRevisionKey=null;installSceneSolidTexture();rebuildSceneSolidBindingViews();
+      }
       sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
       const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
       const {revision,field}=geometry;
@@ -13709,7 +13805,7 @@ export function createKaminosVolumePrototype({
       if (installSceneSolidTexture({...field, cells: composedWall.cells})) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = maskKey;
       state.sceneCollision = {
-        requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
+        requested: true, effective: 'mesh-voxel-solid', backend:state.joinedBoundary?.admitted?'cpu-joined-compatibility':'cpu-reference',sourceId, reason: null,
         emitterBackWallCells: composedWall.addedCells, geometryRevision: revision, grid: gridSize,
         triangleCount: geometry.triangleCount, members:geometry.members,
         surfaceCellCount: field.surfaceCellCount, interiorCellCount: field.interiorCellCount,
@@ -13720,6 +13816,10 @@ export function createKaminosVolumePrototype({
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
+      if (sceneSolidGpu) {
+        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;sceneSolidRevisionKey=null;
+        installSceneSolidTexture();rebuildSceneSolidBindingViews();
+      }
       if (sceneSolidCellsCpu && installSceneSolidTexture()) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = null;
       state.sceneCollision = { requested: true, effective: 'off', sourceId,
@@ -14518,6 +14618,7 @@ export function createKaminosVolumePrototype({
   }
 
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
+    state.thermalFluidAllocationId='thermal-fluid-'+(++thermalFluidGeneration);
     gridSize = normalizeGridSize(nextGridSize);
     gridHeight = gridHeightForSize(gridSize);
     updateAnalyticEmitterDebug();
@@ -15744,6 +15845,7 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group layout`,
       entries: [
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     browserResidualBindGroupLayout = device.createBindGroupLayout({
@@ -16551,6 +16653,7 @@ export function createKaminosVolumePrototype({
     if (!sceneSourceFrameConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    prepareFollowingDomain(lookFreeze);
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
     } else {
@@ -17063,11 +17166,17 @@ export function createKaminosVolumePrototype({
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
+    if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
+      state.immersedSource.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';
+      state.immersedSource.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};
+    }
+    const gasPressure=resolvePressureSolverConfig(controlsSnapshot).effective;
+    const residentGasAdmitted=!!gpuThermalConsumer?.gasSource&&gasPressure.solver===PRESSURE_SOLVER_CONVERGED&&gasPressure.dispatch===PRESSURE_SOLVER_CONVERGED&&gasPressure.openTop;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
       grid: gridSize,
       transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
       dt: resolveTimeStepConfig(controlsSnapshot).effective.dtScale,
-      sourceAdmitted: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true,
+      sourceAdmitted: residentGasAdmitted || (String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true),
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
     // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
@@ -17081,6 +17190,7 @@ export function createKaminosVolumePrototype({
     uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
     state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null, storedSlots: appearanceEffective === 'compact-3' ? 3 : 4, layout: fluidLayoutInForce };
     state.reactantCombustion = reactantCombustionConfig;
+    state.residentGasSource={registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted&&reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
     // law's oxidizer ghost).
     state.joinedGhosts = {
@@ -17786,6 +17896,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    encodeFollowingDomain(encoder);
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
     if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
@@ -17796,6 +17907,10 @@ export function createKaminosVolumePrototype({
     ensureAppearanceLayout(encoder);
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
+    if(gpuThermalConsumer?.gasSource){
+      if(!state.residentGasSource?.admitted)throw Error('Resident gas source refused: '+state.residentGasSource?.reason);
+      gpuThermalConsumer.prepareSource(encoder,thermalGpuFrame());
+    }
     if (transportConfig.effective.predictorPass) {
       if (!transportPredictPipeline || !transportPredictBindGroup) {
         throw new Error('transport predictor pipeline unavailable');
@@ -17851,6 +17966,7 @@ export function createKaminosVolumePrototype({
     encodeAnalyticEmitterInjection(encoder);
     if (state.joinedBoundary?.admitted) {
       state.simStepCount += 1;
+      encodeGpuThermalConsumer(encoder);
       updateSimCostLedger();
       return false;
     }
@@ -17858,9 +17974,17 @@ export function createKaminosVolumePrototype({
       timestampWrites: options.finalTimestampWrites,
     });
     state.simStepCount += 1;
+    encodeGpuThermalConsumer(encoder);
     updateSimCostLedger();
     return finalTimestampWritten;
   }
+
+  function thermalGpuFrame(){
+    return {device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
+      dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,backtraceScale:resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,
+      transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
+  }
+  function encodeGpuThermalConsumer(encoder){gpuThermalConsumer?.encode(encoder,thermalGpuFrame());}
 
   let pressureResidualCopySolver = null;
   // The heat-release context the probed numbers came from, taken at copy time:
@@ -27850,9 +27974,28 @@ export function createKaminosVolumePrototype({
       if(knownRevision === revision)return null;
       return {revision,cells:sceneSolidCellsCpu?.slice()??null,
         dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
-        runtime:structuredClone(state.sceneCollision)};
+        runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',texture:sceneSolidGpu?.texture??null,snapshotStatus:sceneSolidGpu?'gpu-resident':'available'};
+    },
+    async sampleSceneCollisionMask() {
+      const producer=sceneSolidGpu,revision=sceneSolidRevisionKey;
+      if(!producer)return {status:'sampled',cells:sceneSolidCellsCpu?.slice()??null,runtime:structuredClone(state.sceneCollision)};
+      const snapshot=await producer.snapshot();
+      if(producer!==sceneSolidGpu||revision!==sceneSolidRevisionKey)return {status:'stale',revision};
+      let solidCellCount=0,blockedFaceCount=0;const cells=snapshot.cells,plane=gridSize*gridHeight;
+      for(let z=0;z<gridSize;z++)for(let y=0;y<gridHeight;y++)for(let x=0;x<gridSize;x++){
+        const i=x+gridSize*(y+gridHeight*z);if(!cells[i])continue;solidCellCount++;
+        if(x>0&&!cells[i-1])blockedFaceCount++;if(x+1<gridSize&&!cells[i+1])blockedFaceCount++;
+        if(y>0&&!cells[i-gridSize])blockedFaceCount++;if(y+1<gridHeight&&!cells[i+gridSize])blockedFaceCount++;
+        if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<gridSize&&!cells[i+plane])blockedFaceCount++;
+      }
+      const sourceSupport=countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,cells,gridSize,gridHeight);
+      const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,
+        members:state.sceneCollision.members.map(m=>({...m,...snapshot.members.find(s=>s.id===m.id)})),
+        effective:snapshot.valid?'mesh-voxel-solid':'off',reason:snapshot.valid?null:snapshot.counts[0]===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support',validation:'explicit-gpu-snapshot'};
+      return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
+      if(followingDomain)throw Error('Release object-following domain before editing the simulation box');
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
       if (!Array.isArray(translation) || translation.length !== 3 || !translation.every(Number.isFinite)) {
         throw new Error('Domain translation requires three finite coordinates');
@@ -28335,6 +28478,36 @@ export function createKaminosVolumePrototype({
         simStepCount: state.simStepCount,
         authority: 'witness-owned-compute-pause-render-live-v0',
       };
+    },
+    async borrowThermalGpuContext(){
+      await ensureGpu();return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
+    },
+    async bindFollowingDomain({getPosition,onTranslation}={}) {
+      if(!device||productFrameOwner!=='prototype')throw Error('Following domain requires initialized ordinary fire');
+      if(followingDomain)throw Error('A domain-following owner is already bound');
+      if(state.joinedBoundary?.requested||liquidFireContactDescriptor||proxyPacing)throw Error('Following domain requires standalone fire without liquid contact or proxy pacing');
+      if(typeof getPosition!=='function')throw Error('Following domain needs an object position reader');
+      const anchor=getPosition();followingDomainShift({anchor,origin:productTransform.translate,target:anchor,current:productTransform.translate,scale:productTransform.scale,grid:gridSize});
+      const gpu=await createMovingVolumeGpu(device);
+      if(followingDomain){gpu.dispose();throw Error('A domain-following owner is already bound');}
+      const owner={gpu,getPosition,onTranslation,anchor:[...anchor],origin:[...productTransform.translate],pending:null,shifts:0};
+      followingDomain=owner;state.followingDomain={identity:'world-aligned-retained-cell-follow-v1',translation:[...productTransform.translate],shifts:0,rotation:'world-aligned',runtimeReadbacks:0};
+      return ()=>{if(followingDomain===owner){followingDomain=null;state.followingDomain={...state.followingDomain,status:'released'};gpu.dispose();}};
+    },
+    bindGpuThermalConsumer(consumer){
+      if(consumer&&(!device||consumer.device!==device||typeof consumer.encode!=='function'||typeof consumer.read!=='function'))throw Error('Thermal consumer requires active same-device encode/read');
+      if(gpuThermalConsumer&&consumer&&gpuThermalConsumer!==consumer)throw Error('A thermal consumer is already bound');
+      if(consumer?.gasSource && (typeof consumer.prepareSource!=='function'||consumer.gasSource.device!==device||consumer.gasSource.dimensions?.length!==3||consumer.gasSource.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i])||!consumer.gasSource.texture?.createView))throw Error('Resident gas producer requires current same-device dimensions and prepareSource');
+      gpuThermalConsumer=consumer;
+      ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);
+      return ()=>{if(gpuThermalConsumer===consumer){gpuThermalConsumer=null;ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);}};
+    },
+    thermalConsumerState:()=>gpuThermalConsumer?.read()||null,
+    resetThermalExperimentFluid(){
+      if(!device||!simulationPaused)throw Error('Thermal reset requires an initialized paused simulator');
+      rebuildFluidState(gridSize,'live-log-cold-reset');
+      for(const buffer of fluidBuffers)device.queue.writeBuffer(buffer,0,new Float32Array(gridCellCount(gridSize)*FLUID_COMPONENTS));
+      return {allocationId:state.thermalFluidAllocationId,simStepCount:state.simStepCount,dimensions:[gridSize,gridHeight,gridSize],initialization:'cold-zero-fluid'};
     },
     enableLiveCompleteFlameOpticalCoefficients,
     sampleLiveCompleteFlameOpticalCoefficientStats,
