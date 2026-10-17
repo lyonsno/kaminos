@@ -30,7 +30,7 @@ export default {
     const read = () => ({
       authority: 'recorded_diagnostic_not_live', interactionAuthority: false,
       reportUrl: reportUrl.href, reportSha256: hash, frameCount: sequence.length,
-      index, requestedIndex, playing, pending, error,
+      index, requestedIndex, playing, pending, error, visible: mesh.visible,
       captureOffsetMs: index < 0 ? null : sequence.frame(index).captureOffsetMs,
       objectId: asset?.id ?? null, view: session.readView(),
     });
@@ -120,7 +120,7 @@ export default {
         const frame = document.createElement('button'); frame.type = 'button'; frame.textContent = 'Frame comparison';
         status = document.createElement('div'); status.setAttribute('role', 'status'); status.dataset.handComparisonStatus = '';
         status.style.overflowWrap = 'anywhere';
-        const failed = cause => {status.textContent = cause.message;};
+        const failed = cause => {status.textContent = error ?? cause?.message ?? String(cause);};
         slider.addEventListener('input', () => invoke('seek', Number(slider.value)).catch(failed));
         play.addEventListener('click', () => invoke(playing ? 'pause' : 'play').catch(failed));
         frame.addEventListener('click', () => invoke('frame').catch(failed));
