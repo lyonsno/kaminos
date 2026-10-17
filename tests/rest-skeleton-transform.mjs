@@ -40,6 +40,14 @@ test('axial points stay on their prior transverse coordinates through rotation a
  const out=applyRestTransform(p,{...s,rotation:[0,0,.3],scale:[1,1.2,1]});
  assert.equal(out.joints[0].head[0],0);assert.equal(out.joints.at(-1).head[0],0);assert.notDeepEqual(out,p);
 });
+test('opposite-side explicit lateral branches both win over implicit axial-owned mirrors',()=>{
+ const p=fixture();p.joints.push(joint('hindlimb-left-hip','pelvis',[-1,-2,0]),joint('hindlimb-right-hip','pelvis',[1,-2,0]));
+ for(const active of ['forelimb-left-shoulder','hindlimb-right-hip']){
+  const s=captureRestTransform(p,{...options,selected:['pelvis','forelimb-left-shoulder','hindlimb-right-hip'],active});
+  const out=applyRestTransform(p,{...s,position:[s.position[0]+.5,s.position[1],s.position[2]]});
+  assert.deepEqual(out.joints.map(j=>j.head[0]),[0,-1.5,1.5,-1.5,1.5,-1.5,1.5]);
+ }
+});
 test('pair scaling affects each joint once, descendants remain branches, and collapse rejects atomically',()=>{
  const p=fixture(),s=captureRestTransform(p,{...options,selected:['forelimb-left-shoulder','forelimb-right-shoulder']});
  const out=applyRestTransform(p,{...s,scale:[.5,1,1]});assert.deepEqual(out.joints.map(j=>j.head),[[0,0,0],[-1,2,0],[1,2,0],[-1,1,0],[1,1,0]]);

@@ -34,9 +34,15 @@ export function applyRestTransform(plan,state){
  const lateral=new Vector3(localTranslation.x,0,0).applyMatrix4(frame).sub(new Vector3().applyMatrix4(frame));
  const translationOnly=linear.elements.every((v,i)=>Math.abs(v-identity.elements[i])<1e-12);
  const preferred=[state.active,...chosen].find(name=>partner(name)),side=preferred?.includes('-left-')?'left':'right';
+ const owners=new Map();for(const name of affected){let owner=name;while(!chosen.includes(owner))owner=by.get(owner).parent;owners.set(name,owner);}
  for(const name of affected){
-  const pair=partner(name);if(state.mirror&&pair&&affected.has(pair)&&!name.includes('-'+side+'-'))continue;
-  let owner=name;while(!chosen.includes(owner))owner=by.get(owner).parent;
+  const pair=partner(name),owner=owners.get(name);
+  if(state.mirror&&pair&&affected.has(pair)){
+   // Resolve each pair's authority locally: an explicit lateral branch wins
+   // over its counterpart inherited only through a selected central ancestor.
+   const lateralOwner=Boolean(partner(owner)),otherLateral=Boolean(partner(owners.get(pair)));
+   if(lateralOwner!==otherLateral?!lateralOwner:!name.includes('-'+side+'-'))continue;
+  }
   const centralOwner=state.mirror&&!partner(owner);
   const point=new Vector3(...original[name]).applyMatrix4(frame);
   if(state.pivot==='individual'){
