@@ -115,8 +115,8 @@ test('cockpit: the source law option, eleven bench rows with help, snapshot, lis
     assert.equal(control.additiveSinceControlCount, e.additiveSinceControlCount);
     assert.ok('additiveDefault' in control);
   }
-  assert.equal(schema.controlCount, 255);
-  assert.equal(schema.controls.length, 255);
+  assert.equal(schema.controlCount, 256);
+  assert.equal(schema.controls.length, 256);
 });
 
 // Bounded A (report section 31, after the cold bench): a solid back disc one to
@@ -166,7 +166,7 @@ test('the back wall: resolved as a toggle, its cells lie strictly behind the sou
   assert.match(index, /immersedBackWall: parseFloat\(document\.getElementById\('volume-immersed-back-wall'\)\.value\)/);
   const control = schema.controls.find(c => c.key === 'volume-immersed-back-wall');
   assert.deepEqual(control, { key: 'volume-immersed-back-wall', param: 'volume_immersed_back_wall', tagName: 'INPUT', type: 'range', additiveDefault: 0, additiveSinceControlCount: 248 });
-  assert.equal(schema.controlCount, 255);
+  assert.equal(schema.controlCount, 256);
 });
 
 // Fresh review at 25431599 (IS-01..06).
@@ -276,9 +276,7 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const shape = { grid: 64, gridHeight: 128 };
   const pose = { ...base, immersedSpeed: 0.01, immersedCapFraction: 1, immersedBackWall: 1 };
   const makeContext = () => {
-    // No joined exterior, no resident GPU solid producer (Sexy Fireman / Sinter): the
-    // collision-off branch below is the CPU back-wall path this contract covers.
-    const ctx = { joinedExterior: null, getSceneEditing: () => null, sceneSolidGpu: null, sceneSolidGpuSupportKey: null, device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
+    const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
     ctx.installSceneSolidTexture = (field = null) => { ctx.sceneSolidCellsCpu = field?.cells ?? null; };
     vm.createContext(ctx);
     const from = source.indexOf('  function immersedBackWallForState()');

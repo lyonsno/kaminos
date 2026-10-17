@@ -752,25 +752,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="transform-row">
           <div class="transform-label">Position</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z" data-display-decimals="3"></label>
           </div>
         </div>
         <div class="transform-row">
           <div class="transform-label">Rotation</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x" data-display-decimals="1"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y" data-display-decimals="1"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z" data-display-decimals="1"></label>
           </div>
         </div>
         <div class="transform-row">
           <div class="transform-label">Scale</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z" data-display-decimals="3"></label>
           </div>
         </div>
         <div class="splat-correction-panel" id="splat-correction-panel" hidden>
@@ -1213,47 +1213,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <button class="btn" id="settings-preset-inspect-fresh">Inspect Fresh</button>
       </div>
     </div>
-    <div class="panel" id="volume-joined-panel" data-volume-cockpit-layout-ui="joined-provisional" aria-label="Joined exterior (provisional)">
-      <div class="panel-title">Joined flame + exterior <span style="opacity:.6">(experimental; grid settings in URL)</span></div>
-      <div class="slider-row">
-      <span class="slider-label">Joined boundary</span>
-      <select id="volume-joined-boundary"><option value="off">off</option><option value="on">on</option></select>
-      <span class="slider-val" id="volume-joined-boundary-val">off</span>
-    </div>
-      <div class="slider-row"><button class="btn" id="volume-joined-make-admissible">Use immersed source + converged solver</button></div>
-      <span class="slider-help">Shared pressure, transported exterior smoke and heat, and one combined ray march. Requires immersed source + converged solver. Changes apply immediately. Exterior changes clear exterior state; resolution changes also restart the fine field. Material and camera controls remain live. Grid settings are kept in this URL, not in basin presets.</span>
-      <div class="slider-row">
-      <span class="slider-label">Exterior size (× fine width)</span>
-      <select id="volume-joined-exterior-size"><option value="0">none</option><option value="1.5">1.5</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select>
-      <span class="slider-val" id="volume-joined-exterior-extent-val">none</span>
-    </div>
-      <span class="slider-help">Exterior width relative to the fine width. The exterior is twice as tall as it is wide, with extra space above the flame. Changing size clears the exterior; changing resolution also restarts the fine field. None turns the joined boundary off.</span>
-      <div class="slider-row">
-      <span class="slider-label">Exterior resolution</span>
-      <select id="volume-joined-exterior-ratio"><option value="24">24×48×24</option><option value="28">28×56×28</option><option value="32" selected>32×64×32</option><option value="48">48×96×48</option><option value="64">64×128×64</option></select>
-      <span class="slider-val" id="volume-joined-exterior-ratio-val">—</span>
-    </div>
-      <span class="slider-help">Cells across the exterior, independent of the fine resolution in Simulation. Higher resolutions cost more. The readout reports effective cell width; unsupported geometry is refused explicitly.</span>
-      <div class="slider-row">
-      <span class="slider-label">Exterior solve budget</span>
-      <select id="volume-joined-exterior-budget"><option value="16">16</option><option value="32" selected>32</option><option value="64">64</option><option value="128">128</option></select>
-      <span class="slider-val" id="volume-joined-exterior-solve-val">—</span>
-    </div>
-      <span class="slider-help">Maximum shared-pressure iterations per step. Measurement briefly pauses simulation and reads the GPU; it never runs automatically.</span>
-      <button class="btn" id="volume-joined-measure">Measure pressure</button>
-      <div class="slider-row">
-      <span class="slider-label">Grid bounds</span>
-      <input type="checkbox" id="volume-joined-grid-bounds">
-      <span class="slider-val" id="volume-joined-grid-bounds-val"><span style="color:#ffb347">fine</span> · <span style="color:#d070ff">exterior</span></span>
-    </div>
-      <span class="slider-help">Thin outlines of the fine grid (orange) and the exterior grid (violet) in the viewport, drawn from the transform the volume renders with.</span>
-      <div class="slider-row">
-      <span class="slider-label">Exterior wall</span>
-      <select id="volume-joined-exterior-wall"><option value="none">none</option><option value="+y">roof (+y)</option><option value="+x">+x</option><option value="-x">−x</option><option value="+z">+z</option><option value="-z">−z</option></select>
-      <span class="slider-val" id="volume-joined-exterior-wall-val">none</span>
-    </div>
-      <span class="slider-help">A synthetic solid slab two coarse cells thick, two cells off the named fine-box side, spanning the exterior. Applies immediately and clears exterior state; the fine field continues. Not an authored scene object.</span>
-    </div>
     <div id="volume-cockpit-layout-toolbar" class="volume-cockpit-layout-toolbar" data-editing="false" data-volume-basin-drive-ignore data-volume-cockpit-layout-ui aria-label="Cockpit layout">
       <div class="volume-cockpit-layout-toolbar-row">
         <select id="volume-cockpit-layout-select" data-volume-layout-control aria-label="Saved cockpit layout"></select>
@@ -1287,6 +1246,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="field"><span class="field-key">Inflow boundary</span><span class="field-val" id="volume-inflow-boundary-state">off</span></div>
       <div class="field"><span class="field-key">Heat release</span><span class="field-val" id="volume-heat-release-state">off</span></div>
       <div class="field"><span class="field-key">Reaction law</span><span class="field-val" id="volume-reaction-law-state">authored</span></div>
+      <div class="field"><span class="field-key">Appearance model</span><span class="field-val" id="volume-appearance-model-state">authored</span></div>
       <div class="field"><span class="field-key">Velocity reading</span><span class="field-val" id="volume-velocity-staggering-state">collocated</span></div>
       <div class="field"><span class="field-key">Immersed source</span><span class="field-val" id="volume-immersed-source-state">off</span></div>
       <div class="field"><span class="field-key">Preset store</span><span class="field-val" id="volume-settings-preset-state" role="status" aria-live="polite">connecting...</span></div>
@@ -2189,6 +2149,27 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="volume-control-section" data-volume-control-section="render-budget">
       <div class="volume-control-section-title">Render Budget</div>
     <div class="slider-row">
+      <label class="slider-label" for="volume-raymarch-mode">Ray marcher</label>
+      <select id="volume-raymarch-mode" class="select-input" data-volume-settings-role="renderer">
+        <option value="current">Old adaptive</option>
+        <option value="numerical" selected>New adaptive</option>
+        <option value="fixed" title="Uniform reference: four integration panels per authored base interval">Standard (fixed)</option>
+      </select>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-optical-tolerance">Tolerance</label>
+      <input id="volume-optical-tolerance" type="number" step="any" min="0" value="0.001" data-authoring-drag-step="0.0001" data-volume-settings-role="renderer">
+    </div>
+    <output id="volume-raymarch-status" class="flame-scope" role="status">Awaiting renderer</output>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-ray-step-telemetry">Ray statistics</label>
+      <input id="volume-ray-step-telemetry" type="checkbox" data-volume-settings-role="renderer">
+    </div>
+    <div id="volume-ray-step-stats" hidden>
+      <output id="volume-ray-step-status" class="flame-scope" role="status"></output>
+      <canvas id="volume-ray-step-display" width="224" height="96" aria-label="GPU ray material samples: p50, p95, p99 and total per frame" style="display:block;width:224px;height:96px"></canvas>
+    </div>
+    <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
       <input type="range" id="volume-steps" min="6" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
@@ -2853,6 +2834,15 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-reactant-cooling-time-val">55</span>
     </div>
     <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
+    <div class="slider-row">
+      <span class="slider-label">Appearance model</span>
+      <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
+        <option value="authored">Authored (nine carriers)</option>
+        <option value="compact-3">Compact (three carriers)</option>
+      </select>
+      <span class="slider-val" id="volume-appearance-model-val">authored</span>
+    </div>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; every slider and every renderer formula is unchanged, so the only question is whether three channels carry the look. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -3546,8 +3536,6 @@ loadStartupRuntimeConfig().catch(() => {});
 import * as THREE from 'three';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
-import { syncVolumeGridOptions } from './volume-grid-options.mjs';
-import { joinedRouteParams, writeJoinedRoute } from './volume-joined-route.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
@@ -3560,9 +3548,11 @@ import { readFireShadowSceneSettings, fireShadowSceneRoute } from './fire-shadow
 import { resolveSceneGIControlState } from './scene-gi-settings.mjs';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import {collisionVoxelInstances,createGpuCollisionVoxelMesh} from './scene-collision-debug.mjs';
+import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
+import { createFlameWorkbench } from './flame-workbench.mjs';
+import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -3725,17 +3715,13 @@ function writeKilnCollisionState({enabled}) {
 
 let collisionVoxelMesh=null,collisionVoxelRevision=undefined,collisionVoxelVisible=false;
 const sceneColliderCollection=createSceneColliderCollection(THREE);
-let volumeSceneEditing=null;
 function syncCollisionVoxelView() {
   if(!collisionVoxelVisible) {if(collisionVoxelMesh)collisionVoxelMesh.visible=false;return;}
   const snapshot=volumePrototype?.readSceneCollisionMask?.(collisionVoxelRevision);
   if(snapshot) {
     collisionVoxelRevision=snapshot.revision;
-    const retainGpuView=snapshot.backend==='gpu'&&collisionVoxelMesh?.userData.gpuSolidTexture===snapshot.texture&&collisionVoxelMesh.userData.gpuSolidFrame===JSON.stringify([snapshot.dimensions,snapshot.transform]);
-    if(!retainGpuView&&collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.userData.disposeGpuSolid?.();collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
-    if(snapshot.backend==='gpu'&&!retainGpuView){
-      collisionVoxelMesh=createGpuCollisionVoxelMesh(THREE,renderer,snapshot);scene.add(collisionVoxelMesh);
-    } else if(snapshot.cells) {
+    if(collisionVoxelMesh){scene.remove(collisionVoxelMesh);collisionVoxelMesh.geometry.dispose();collisionVoxelMesh.material.dispose();collisionVoxelMesh=null;}
+    if(snapshot.cells) {
       const {centres,size}=collisionVoxelInstances(snapshot);
       collisionVoxelMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(size*.94,size*.94,size*.94),new THREE.MeshBasicMaterial({color:0x46d7dd,transparent:true,opacity:.35,depthWrite:false,depthTest:false}),centres.length);
       const matrix=new THREE.Matrix4();centres.forEach((p,i)=>collisionVoxelMesh.setMatrixAt(i,matrix.makeTranslation(...p)));
@@ -3754,7 +3740,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const text=!enabled?'Scene collisions off'
     : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
-    : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?'Active · GPU solid field':`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
+    : collision.effective==='mesh-voxel-solid'?`Active · ${collision.solidCellCount.toLocaleString()} solid cells`
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');
@@ -3763,7 +3749,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
 }
 
 function installKilnCollisionControl(host) {
-  const panel=document.createElement('section');panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label><p class="flame-scope">This fire solver uses the simulation grid for collisions. Cyan voxels show the installed solid mask, including the source backing wall when enabled.</p>';
+  const panel=document.createElement('section');panel.className='flame-collision-controls';panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label>';
   host.append(panel);
   document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
   const edits=scenePlacementTools.edits;
@@ -3826,7 +3812,7 @@ import {
 } from './scene-persistence-core.js';
 import { COMPOSITION_SCHEMA, compositionRestoreUrl, savedSceneLocation, captureComposedCanvases } from './scene-authoring.mjs';
 import {PROCEDURAL_MESH_TYPE,PROCEDURAL_MESH_SOURCE,checkedProceduralMesh,checkedGeometry,createProceduralMesh,GEOMETRY_DEFAULTS} from './scene-geometry.mjs';
-import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection,fireCollisionEdit} from './scene-collider.mjs';
+import {canCollideWithFire,checkedObjectCollision,createSceneColliderCollection} from './scene-collider.mjs';
 import {GROUP_TYPE,checkedGroupPose,checkedGroupEdit,moveGroupMembers,identityGroupPose} from './scene-group.mjs';
 import { BURNER_DEFAULTS, normalizeBurner, burnerSource, createAnnularBurner } from './annular-burner.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -3950,6 +3936,7 @@ import { installSceneControlHistory, installRelativeNumberDrag } from './scene-c
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
@@ -3997,7 +3984,6 @@ let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
-let ownerVolumeReady=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -4145,7 +4131,7 @@ window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n)
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
- fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
+ fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),pickable:!!activeSceneComposition,camera,layerId:FIRE_PROXY_LAYER,
   canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
@@ -5877,7 +5863,6 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
-  if(entry&&Object.hasOwn(metadata,'emissionEnabled')){entry.emissionEnabled=metadata.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
   if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
   return entry?.object || null;
 }
@@ -6013,7 +5998,6 @@ function writeAuthoredFlameEmitterPose(value) {
 window.kaminosFlameEmitterState = () => ({
   registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
   authoredPresent: authoredFlamePresent,
-  emissionEnabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false,
   pose: structuredClone(flameEmitterPose),
   domain: 'translated-world-aligned-volume',
   domainTranslation: [...flameDomainTranslation],
@@ -7109,9 +7093,30 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
+// Outliner line icons, one per kind; anything unlisted draws as a mesh cube.
+const SCENE_OUTLINE_ICONS = {
+  mesh: 'M8 1.8 14 5v6L8 14.2 2 11V5zM2 5l6 3.2L14 5M8 8.2v6',
+  'flame-field': 'M8 14.5c-2.8 0-4.5-1.9-4.5-4.4 0-2.6 2.2-3.9 2.6-6.6 1.6 1 2.4 2.6 2.4 3.9.7-.5 1.1-1.3 1.2-2.3 1.7 1.3 2.8 3 2.8 5 0 2.5-1.7 4.4-4.5 4.4z',
+  'water-field': 'M1.5 5.5c1.6-1.4 3.3-1.4 4.9 0s3.3 1.4 4.9 0c1.1-.9 2.2-1 3.2-.4M1.5 10.5c1.6-1.4 3.3-1.4 4.9 0s3.3 1.4 4.9 0c1.1-.9 2.2-1 3.2-.4',
+  group: 'M2 4h4.2l1.3 1.6H14v7.4H2z',
+  light: 'M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM8 1.3v1.9M8 12.8v1.9M1.3 8h1.9M12.8 8h1.9M3.3 3.3l1.3 1.3M11.4 11.4l1.3 1.3M3.3 12.7l1.3-1.3M11.4 4.6l1.3-1.3',
+  camera: 'M1.8 4.8h8.4v6.4H1.8zM10.2 7l4-2.2v6.4l-4-2.2',
+  [FLAME_EMITTER_TYPE]: 'M8 14.5c-2.8 0-4.5-1.9-4.5-4.4 0-2.6 2.2-3.9 2.6-6.6 1.6 1 2.4 2.6 2.4 3.9.7-.5 1.1-1.3 1.2-2.3 1.7 1.3 2.8 3 2.8 5 0 2.5-1.7 4.4-4.5 4.4z',
+  [LOCAL_LIQUID_EMITTER_TYPE]: 'M8 1.8c2.6 3.3 4.4 5.7 4.4 8a4.4 4.4 0 0 1-8.8 0c0-2.3 1.8-4.7 4.4-8z',
+  'simulation-domain': 'M2.5 2.5h11v11h-11z',
+};
+function sceneOutlineGlyph(kind) {
+  const known = Object.hasOwn(SCENE_OUTLINE_ICONS, kind) ? kind : 'mesh';
+  return `<svg class="scene-outline-glyph" data-outline-icon="${escapeHtml(known)}" viewBox="0 0 16 16" aria-hidden="true"><path d="${SCENE_OUTLINE_ICONS[known]}"/></svg>`;
+}
+function sceneOutlineToggle(row) {
+  if (!row?.childCount) return '<span class="scene-outline-toggle-space" aria-hidden="true"></span>';
+  return `<button type="button" class="scene-outline-toggle" data-outline-toggle="${escapeHtml(row.key)}" aria-expanded="${row.collapsed ? 'false' : 'true'}" title="${row.collapsed ? 'Expand' : 'Collapse'}">${row.collapsed ? '▸' : '▾'}</button>`;
+}
+function sceneOutlineAttributes(row) { return row ? ` data-outline-depth="${row.depth}" data-outline-key="${escapeHtml(row.key)}"` : ''; }
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
-  const grouped = options.grouped ? ' grouped' : '';
+  const grouped = options.grouped && !options.outline ? ' grouped' : '';
   const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${sceneSelectionMembers().includes(record.id)?' selected':''}${grouped}`;
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
@@ -7119,9 +7124,9 @@ function renderSceneObjectRow(record, options = {}) {
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
-    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
+        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
       </span>
       <span class="scene-object-actions">
@@ -7133,14 +7138,14 @@ function renderSceneObjectRow(record, options = {}) {
   `;
 }
 
-function renderSceneGroupRow(group) {
+function renderSceneGroupRow(group, outline = null) {
   const active = group.id === activeSceneGroupId;
   const rowClass = `scene-group-row ${active?'active':sceneSelection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
   return `
-    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
+        ${outline ? sceneOutlineToggle(outline) + sceneOutlineGlyph('group') : ''}<input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
@@ -7150,6 +7155,7 @@ function renderSceneGroupRow(group) {
   `;
 }
 
+const sceneOutlineCollapsed = new Set();
 function renderSceneObjectList() {
   updateAuthoringPropertySelection();
   refreshLocalLiquidPerformance();
@@ -7158,21 +7164,32 @@ function renderSceneObjectList() {
   if (!list || !empty) return;
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
-  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  // The outliner is a tree: fields own their emitters, groups their members.
+  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
+  const outline = visibleOutlineRows(buildSceneOutline({fields, groups: sceneGroups, objects: sceneObjects,
+    emitterFields: {[FLAME_EMITTER_TYPE]:'flame-field', [LOCAL_LIQUID_EMITTER_TYPE]:'water-field'}}), sceneOutlineCollapsed);
   const rows = [];
-  for(const [id,label,present] of [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]])if(present)rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}" role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${label}</span><small>Simulation</small></div>`);
-  for (const group of sceneGroups) {
-    rows.push(renderSceneGroupRow(group));
-    for (const objectId of group.objectIds) {
-      const record = sceneObjects.find(entry => entry.id === objectId);
-      if (record) rows.push(renderSceneObjectRow(record, { grouped: true }));
+  for (const row of outline) {
+    if (row.kind === 'field') {
+      const {id,label} = fields.find(field => field.id === row.id);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph(id)}${label}</span><small>Simulation</small></div>`);
+    } else if (row.kind === 'group') {
+      const group = sceneGroups.find(entry => entry.id === row.id);
+      if (group) rows.push(renderSceneGroupRow(group, row));
+    } else {
+      const record = sceneObjects.find(entry => entry.id === row.id);
+      if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
-  for (const record of sceneObjects) {
-    if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
-  }
   list.innerHTML = rows.join('');
-  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
+  list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    const key = button.dataset.outlineToggle;
+    if (sceneOutlineCollapsed.has(key)) sceneOutlineCollapsed.delete(key); else sceneOutlineCollapsed.add(key);
+    renderSceneObjectList();
+    list.querySelector(`[data-outline-toggle="${CSS.escape(key)}"]`)?.focus();
+  }));
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -7224,11 +7241,11 @@ function pickFlameDomainFromViewportPointer(event) {
   return pointerHitsBoxOutline(flameDomainGuide.box, camera, {x:event.clientX,y:event.clientY}, renderer.domElement.getBoundingClientRect());
 }
 
-function pickSceneObjectFromViewportPointer(event) {
-  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
+function sceneHitsFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera) return [];
   const rect = renderer.domElement.getBoundingClientRect();
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-    return null;
+    return [];
   }
   scenePointerNdc.set(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -7236,7 +7253,10 @@ function pickSceneObjectFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  const hits = visibleSceneIntersections({raycaster:sceneRaycaster,roots:sceneObjects.map(record=>record.object),camera,viewport:rect});
+  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:sceneObjects.map(record=>record.object),camera,viewport:rect});
+}
+
+function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
   // Emitter symbols are drawn through geometry. Pick that same visible layer first.
   for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
@@ -7244,6 +7264,19 @@ function pickSceneObjectFromViewportPointer(event) {
     if (record) return record;
   }
   return null;
+}
+
+function pickVisibleFlameFromViewportPointer(hits) {
+  if(!activeSceneComposition||selectionCaptureSuspended||!volumePrototype?.isActive?.())return null;
+  let maxDistance=camera.far;
+  for(const hit of hits){
+    const record=sceneObjectRecordForDescendant(hit.object);
+    if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,CAMERA_TYPE].includes(record?.type))continue;
+    const material=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material;
+    if(material?.visible!==false&&material?.depthWrite!==false&&(!material?.transparent||material.opacity>=1))maxDistance=Math.min(maxDistance,hit.distance);
+  }
+  if(groundPlane?.visible)for(const hit of sceneRaycaster.intersectObject(groundPlane,true))maxDistance=Math.min(maxDistance,hit.distance);
+  return fireProxySync?.pick({origin:sceneRaycaster.ray.origin.toArray(),direction:sceneRaycaster.ray.direction.toArray()},camera.getWorldPosition(new THREE.Vector3()).toArray(),{near:camera.near,maxDistance})??null;
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
@@ -7307,7 +7340,11 @@ function handleViewportSelectionClick(event) {
     window._kaminosDirty?.();
     return;
   }
-  const record = pickSceneObjectFromViewportPointer(event);
+  const hits=sceneHitsFromViewportPointer(event),record=pickSceneObjectFromViewportPointer(event,hits);
+  const explicitEmitter=record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type);
+  if(!explicitEmitter&&pickVisibleFlameFromViewportPointer(hits)){
+    window.selectSceneField('flame-field');setInfo('Selected: Fire & smoke domain');window._kaminosDirty?.();return;
+  }
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
@@ -7585,7 +7622,6 @@ function registerSceneObject(object, metadata = {}) {
     assetOrigin:metadata.assetOrigin?structuredClone(metadata.assetOrigin):null,
     collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
-    ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false}:{}),
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -7604,7 +7640,6 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: record.renderHandoffSchema,
     sceneTransform: record.sceneTransform,
     localLiquidEmitter: record.localLiquidEmitter,
-    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled}:{}),
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -11749,7 +11784,9 @@ async function initScene() {
   const aoOutput = mix(float(1.0), aoVisibility, aoIntensity.min(1)).div(
     float(1).add(aoIntensity.sub(1).max(0).mul(float(1).sub(aoVisibility))));
   scenePass.contextNode = builtinAOContext(aoOutput);
-  const sceneGI = createSceneGI(scene,camera,aoIntensity);
+  const lightingWorkParams=new URLSearchParams(location.search);
+  const sceneGI = createSceneGI(scene,camera,aoIntensity,{filterImplementation:lightingWorkParams.get('lighting_filter')==='separate'?'separate':'shared',surfaceReuse:lightingWorkParams.get('lighting_surface_reuse')!=='0'});
+  window.__kaminosSurfaceLighting=sceneGI.surfaceLighting;
   window.kaminosCompileSceneLighting = () => compileSceneLighting(renderer,
     sceneGISettings.mode==='combined'?[sceneGI.source,sceneGI.beauty]:[prePass,scenePass]);
   let activeSceneDepth = prePassDepth;
@@ -11763,7 +11800,7 @@ async function initScene() {
     document.body.dataset.sceneGiDiagnostic = String(diagnostic);
     const baseSceneOutput = combined ? sceneGI.output(sceneGISettings.view) : scenePass;
     activeSceneDepth = combined ? sceneGI.depth : prePassDepth;
-    const graphKey = `${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
+    const graphKey = `${sceneGI.debugState().filterImplementation}:${sceneGISettings.mode}:${sceneGISettings.denoise>0}:${sceneGISettings.temporal}:${isFireLightFieldRoute()}:${fireLightFieldRouteParams().get('volume_light_field_distributed')==='1'}`;
     const cached = giOutputGraphs.get(graphKey);
     if (cached) {
       ({rawSceneOutput,outlinedSceneOutput,outlinedCameraOutput,sceneEmissiveCamera,fireLightFieldPass} = cached);
@@ -11813,6 +11850,11 @@ async function initScene() {
   window.kaminosRefreshSceneGIOutput=rebuildSceneGIOutput;
   window.kaminosSceneGIDebugState = () => ({...sceneGI.debugState(),sceneFrames:sceneFrameCount,effectiveMode:sceneGISettings.mode,view:sceneGISettings.mode==='gtao'?'scene':sceneGISettings.view,standaloneGTAO:sceneGISettings.mode === 'gtao'});
   window.kaminosSceneGIReadback = kind => sceneGI.readback(renderer,kind);
+  window.kaminosLightingWork={
+    read:()=>window.kaminosSceneGIDebugState(),
+    setFilter(value){sceneGI.setFilterImplementation(value);rebuildSceneGIOutput();markDirty();return this.read();},
+    setSurfaceReuse(value){sceneGI.surfaceLighting.setEnabled(value);markDirty();return this.read();},
+  };
   window.kaminosGroundDebugState = () => ({visible:groundPlane.visible,height:groundPlane.position.y,
     color:'#'+groundPlane.material.color.getHexString(),linearColor:groundPlane.material.color.toArray(),
     roughness:groundPlane.material.roughness,metalness:groundPlane.material.metalness,
@@ -12081,7 +12123,6 @@ async function initScene() {
     onError: error => { document.getElementById('burner-status').textContent = error.message; },
   });
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
-  scenePlacementTools.edits.subscribe(edit=>{volumeSceneEditing=fireCollisionEdit(edit.active,sceneObjects,sceneGroups);});
   installAuthoringParameterEditing();
   const upgradedRangeFields=installLegacyRangeFields({root:document,installNumberDrag:installRelativeNumberDrag,
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
@@ -13004,7 +13045,8 @@ function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
-    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    // Add and Navigate live in the shared viewport toolbar in both workspaces.
+    inspector:authoringWorkspace,sceneActions:null,navigation:null,
     sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
@@ -13031,7 +13073,8 @@ async function installOwnerWorkbenchEntry() {
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
     select:()=>setActiveSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
-    readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)}};
+    readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
+  flame:{async open(){await workbenchViewerReady;return openFlameWorkbench();}}};
   ownerExperimentEntry=await installOwnerExperimentEntry({document,root:document.getElementById('experiment-owner-slot'),host,
     discover:async()=>{const response=await fetch('/api/workbench-experiments',{cache:'no-store'});if(!response.ok)throw Error('Experiment discovery HTTP '+response.status);return (await response.json()).modules;},
     onChange:({id,inputs})=>history.replaceState(history.state,'',writeOwnerExperimentAddress(location.href,{id,inputs})),
@@ -13039,6 +13082,34 @@ async function installOwnerWorkbenchEntry() {
   window.kaminosWorkbenchExperiments=ownerExperimentEntry;
   const {id,inputsText}=readOwnerExperimentAddress(location);if(id)await ownerExperimentEntry.open(id,JSON.parse(inputsText));
 }
+function openFlameWorkbench() {
+  const listeners=new Set();
+  const subscribe=listener=>{
+    listeners.add(listener);
+    const stopped=scenePlacementTools.edits.subscribe(listener);
+    controls.addEventListener('change',listener);
+    window.addEventListener('kaminos-flame-controls-changed',listener);
+    const changed=event=>{if(event.target?.matches?.('#tab-volume input,#tab-volume select,[data-authoring-alias],#burner-controls input,#volume-authored-mix-panel input'))listener();};
+    document.addEventListener('input',changed);document.addEventListener('change',changed);
+    return()=>{listeners.delete(listener);stopped();controls.removeEventListener('change',listener);window.removeEventListener('kaminos-flame-controls-changed',listener);document.removeEventListener('input',changed);document.removeEventListener('change',changed);};
+  };
+  const select=target=>{
+    if(target==='emitter'){if(!authoredFlamePresent)throw Error('No authored flame emitter');setActiveSceneObject(FLAME_EMITTER_ID);}
+    else if(target==='domain')window.selectSceneField('flame-field');
+    else throw Error('Unknown flame target: '+target);
+    for(const listener of listeners)listener();
+    return window.kaminosSelection.read();
+  };
+  return createFlameWorkbench({
+    readSettings:()=>window.kaminosFlameAuthoring.read(),applySettings:(next,label)=>window.kaminosFlameAuthoring.apply(next,label),
+    readRuntime:()=>volumePrototype?.debugState()??{active:false},readView:readAuthoredCameraView,
+    readScene:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),selection:window.kaminosSelection.read(),activeFieldId:activeSceneFieldId,domain:window.kaminosFlameDomain.read(),collisionEnabled:window.kaminosSceneCollision.read().enabled}),
+    async applyBasin(id){if(volumePrototype?.debugState().active)await window.kaminosFlameAuthoring.applyBasin(id);else await addFirstFlameField(id);},
+    async listBasins(){await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
+    select,frame:()=>{select('domain');return window.kaminosFrameSelected();},subscribe,
+  });
+}
+window.kaminosFlameWorkbench={async open(){await workbenchViewerReady;return openFlameWorkbench();}};
 window.kaminosMountInvestigationEntry=async(options={})=>{
   await workbenchViewerReady;const tool=options.tool||'assets';
   if(![...document.querySelectorAll('.tab[data-tab]')].some(node=>node.dataset.tab===tool))throw Error('Unknown Workbench tool: '+tool);
@@ -18830,137 +18901,6 @@ function linkedVolumeEmitterInletVelocity() {
   }).linkedInletVelocity;
 }
 
-// Provisional joined-boundary and exterior controls (Noah 2026-10-13: tune fine
-// and coarse live and independently). They drive the prototype's joined API
-// directly and are not part of the saved basin.
-function wireJoinedProvisionalControls(prototype) {
-  const $ = id => document.getElementById(id);
-  const boundary = $('volume-joined-boundary'), size = $('volume-joined-exterior-size'), ratio = $('volume-joined-exterior-ratio'), wall = $('volume-joined-exterior-wall'), budget = $('volume-joined-exterior-budget'), bounds = $('volume-joined-grid-bounds');
-  if (!boundary || !size || !ratio || !wall || !budget || !bounds || !prototype?.setJoinedBoundary) return;
-  const text = (id, value, refused = false) => { const el = $(id); el.textContent = value; el.style.color = refused ? '#ff6b6b' : ''; };
-  const fineDims = () => prototype.debugState?.()?.simGridDimensions ?? null;
-  let exteriorRevision = 0, measurementIdentity = null;
-  const currentMeasurementIdentity = () => {
-    const s = prototype.debugState?.();
-    return JSON.stringify([exteriorRevision, s?.joinedExterior?.generation ?? null, s?.simGridDimensions, Boolean(s?.joinedBoundary?.admitted)]);
-  };
-  const invalidateMeasurement = () => {
-    measurementIdentity = currentMeasurementIdentity();
-    text('volume-joined-exterior-solve-val', 'not measured for current grid/wall');
-  };
-  const refreshMeasurementIdentity = () => {
-    if (measurementIdentity !== currentMeasurementIdentity()) invalidateMeasurement();
-  };
-  const remember = () => {
-    const u = writeJoinedRoute(location.href,{volume_joined:boundary.value === 'on' ? '1':'0',volume_joined_size:size.value,volume_joined_resolution:ratio.value,volume_joined_budget:budget.value,volume_joined_wall:wall.value,volume_joined_bounds:bounds.checked?'1':'0'});
-    history.replaceState(history.state,'',u);
-  };
-  const applyExterior = () => {
-    exteriorRevision++;
-    invalidateMeasurement();
-    if (!(parseFloat(size.value) > 0)) boundary.value = 'off';
-    remember();
-    const mult = parseFloat(size.value), r = parseInt(ratio.value, 10), dims = fineDims();
-    if (boundary.value !== 'on' || !(mult > 0) || !dims) { prototype.setJoinedExterior(null); text('volume-joined-exterior-extent-val', 'none'); return; }
-    const side = wall.value === 'none' ? null : { side: wall.value.replace('−', '-'), gap: 2, thickness: 2 };
-    const res = prototype.setJoinedExterior({ enabled: true, size: mult, coarseResolution: r, wall: side, budget: parseInt(budget.value, 10) });
-    const receipt = res?.receipt;
-    const joinOn = prototype.debugState?.()?.joinedBoundary?.admitted;
-    if (!receipt?.admitted) text('volume-joined-exterior-extent-val', joinOn ? `refused: ${receipt?.reason ?? 'unknown'}` : 'waiting: turn the joined boundary on (and admitted) first', true);
-    text('volume-joined-exterior-wall-val', side ? (receipt?.solids?.wall ? `${receipt.solids.wall.thickness} cells thick, ${receipt.solids.wall.gap} off the box` : 'pending exterior') : 'none');
-  };
-  boundary.addEventListener('change', () => { prototype.setJoinedBoundary({ enabled: boundary.value === 'on' }); applyExterior(); });
-  for (const el of [size, ratio, wall, budget]) el.addEventListener('change', applyExterior);
-  $('volume-joined-make-admissible').addEventListener('click', () => {
-    const set = (id, value) => { const el = $(id); if (!el) return; el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); };
-    set('volume-pressure-solver', 'converged-open-top'); set('volume-emitter-source-law', 'immersed-source');
-    setTimeout(() => { if (boundary.value === 'on') { prototype.setJoinedBoundary({ enabled: true }); if (size.value !== '0') applyExterior(); } }, 300);
-  });
-  // Outlines of both grids, drawn on a 2D canvas pinned over the volume canvas
-  // with the volume's own local-to-clip matrix (the editor scene is not drawn
-  // on the volume route, so scene helpers would never show).
-  let overlay = null;
-  const ensureOverlay = () => {
-    const host = prototype.canvasElement?.(); if (!host) return null;
-    if (!overlay) { overlay = document.createElement('canvas'); overlay.id = 'volume-joined-bounds-overlay'; Object.assign(overlay.style, { position: 'fixed', pointerEvents: 'none', zIndex: 50 }); document.body.appendChild(overlay); }
-    const r = host.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
-    Object.assign(overlay.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
-    if (overlay.width !== Math.round(r.width * dpr) || overlay.height !== Math.round(r.height * dpr)) { overlay.width = Math.round(r.width * dpr); overlay.height = Math.round(r.height * dpr); }
-    return overlay;
-  };
-  const drawBox = (ctx, m, lo, hi, color) => {
-    const project = p => { const x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], y = m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], w = m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15]; return w > 1e-6 ? [(x / w + 1) / 2 * ctx.canvas.width, (1 - y / w) / 2 * ctx.canvas.height] : null; };
-    const c = [0, 1, 2, 3, 4, 5, 6, 7].map(i => project([i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]]));
-    ctx.strokeStyle = color; ctx.lineWidth = Math.max(1, (window.devicePixelRatio || 1) * 0.75); ctx.globalAlpha = 0.85; ctx.beginPath();
-    for (const [a, b] of [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]]) if (c[a] && c[b]) { ctx.moveTo(...c[a]); ctx.lineTo(...c[b]); }
-    ctx.stroke();
-  };
-  const updateBoxes = () => {
-    const s = prototype.debugState?.(); const dims = s?.simGridDimensions;
-    if (!bounds.checked || !Array.isArray(dims)) { if (overlay) overlay.style.display = 'none'; return; }
-    const o = ensureOverlay(); if (!o) return; o.style.display = '';
-    const ctx = o.getContext('2d'); ctx.clearRect(0, 0, o.width, o.height);
-    const m = prototype.localViewProjection?.(); if (!m) return;
-    drawBox(ctx, m, [-1, -1, -1], [1, -1 + 2 * dims[1] / dims[0], 1], '#ffb347');
-    const x = s.joinedExterior;
-    if (x?.admitted) { const cw = 2 / dims[0] * x.ratio; const lo = x.origin.map(v => -1 - v * cw); drawBox(ctx, m, lo, lo.map((v, a) => v + x.shape[a] * cw), '#d070ff'); }
-  };
-  const boundsLoop = () => { if (bounds.checked) updateBoxes(); requestAnimationFrame(boundsLoop); };
-  requestAnimationFrame(boundsLoop);
-  bounds.addEventListener('change', () => { remember(); updateBoxes(); });
-  // Live readouts.
-  let probing = false;
-  $('volume-joined-measure').addEventListener('click', async () => {
-    if(probing)return; probing=true;
-    const measuredIdentity = currentMeasurementIdentity();
-    measurementIdentity = measuredIdentity;
-    text('volume-joined-exterior-solve-val','measuring (simulation paused)…');
-    try {
-      const p=await prototype.probeJoinedExterior();
-      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
-      text('volume-joined-exterior-solve-val',p?.status==='sampled'?`snapshot at exterior step ${p.steps}: ${p.iterations}/${p.budget} iterations, worst cell ${p.maxDivergenceError.toExponential(1)} (gate 1e-3)`:`not measured: ${p?.status ?? 'no exterior'}`,p?.status!=='sampled');
-    }
-    catch(e){
-      if(measuredIdentity !== currentMeasurementIdentity()){refreshMeasurementIdentity();return;}
-      text('volume-joined-exterior-solve-val',`measurement failed: ${e.message}`,true);
-    }
-    finally{probing=false;}
-  });
-  setInterval(() => {
-    const s = prototype.debugState?.(); if (!s) return;
-    refreshMeasurementIdentity();
-    if (boundary.value === 'on') {
-      if (s.joinedEditing?.held) text('volume-joined-boundary-val', 'Editing: fine standalone · last committed collision · exterior frozen');
-      else if (s.joinedEditing?.pending) text('volume-joined-boundary-val', `Rejoining: ${s.joinedEditing.reason ?? 'rebuilding collision and pressure'}`, true);
-      else if (s.joinedBoundary?.admitted) text('volume-joined-boundary-val', `admitted · ghosts ${s.joinedGhosts?.bound ? 'bound' : 'unbound'}`);
-      else text('volume-joined-boundary-val', `REFUSED: ${s.joinedBoundary?.reason ?? 'unknown'} (the sim is running standalone)`, true);
-    } else text('volume-joined-boundary-val', 'off');
-    const x = s.joinedExterior;
-    if (x?.admitted && size.value !== '0') {
-      const stepping = x.lastStep?.stepped && s.joinedBoundary?.admitted && !s.joinedEditing?.held && !s.joinedEditing?.pending;
-      const status=s.joinedEditing?.held?'FROZEN during edit':s.joinedEditing?.pending?'waiting for placement rebuild':stepping?`stepping (${x.steps})`:'NOT STEPPING: the join is off or refused';
-      text('volume-joined-exterior-extent-val', `${x.shape.join('×')} coarse (${(x.shape[0] * x.ratio / s.simGridDimensions[0]).toFixed(2)}× fine), ${x.cells} cells · ${status}`, !stepping && !s.joinedEditing?.held);
-      text('volume-joined-exterior-ratio-val', `${x.ratio.toFixed(2)} fine cells, ${x.cellWidth.toFixed(3)} local · ${s.joinedRendering?.enabled ? 'rendered' : 'NOT RENDERED'}`, !s.joinedRendering?.enabled);
-    } else {
-      const after = s.pressureSolver?.residual?.compact?.after?.maxAbs;
-      text('volume-joined-exterior-solve-val', Number.isFinite(after) ? `standalone fine solve: ${s.pressureSolver?.effective?.iterations ?? '?'} sweeps, worst cell ${after.toExponential(1)}` : '—');
-    }
-    updateBoxes();
-  }, 2000);
-  const params=joinedRouteParams(location);
-  for(const [el,key,fallback] of [[size,'volume_joined_size','2'],[ratio,'volume_joined_resolution','32'],[budget,'volume_joined_budget','32'],[wall,'volume_joined_wall','none']]) {
-    const value=params.get(key)??fallback;
-    if([...el.options].some(o=>o.value===value))el.value=value;
-  }
-  bounds.checked=params.get('volume_joined_bounds')!=='0';
-  boundary.value=params.get('volume_joined')==='1'?'on':'off';
-  if(boundary.value==='on') {
-    const start=()=>{
-      if(!prototype.debugState?.()?.active){requestAnimationFrame(start);return;}
-      prototype.setJoinedBoundary({enabled:true});applyExterior();
-    };requestAnimationFrame(start);
-  }
-}
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
@@ -19082,6 +19022,9 @@ function readVolumeControls() {
     flowKernelRadius: parseFloat(document.getElementById('volume-flow-kernel-radius').value),
     flowKernelCoherence: parseFloat(document.getElementById('volume-flow-kernel-coherence').value),
     toneMapping: document.getElementById('volume-tone-mapping').value,
+    raymarchMode: document.getElementById('volume-raymarch-mode').value,
+    opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
+    rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
@@ -19276,6 +19219,7 @@ function readVolumeControls() {
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
+    appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
     immersedCentreY: parseFloat(document.getElementById('volume-immersed-centre-y').value),
@@ -19370,6 +19314,9 @@ function supersedeVolumeRebuildHolds() {
 
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
+  document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
   document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
@@ -19439,6 +19386,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
   document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
   document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
+  document.getElementById('volume-appearance-model-val').textContent = c.appearanceModel;
   document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
   document.getElementById('volume-immersed-centre-x-val').textContent = Number(c.immersedCentreX).toFixed(2);
@@ -19820,10 +19768,15 @@ document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
 });
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
-  syncVolumeGridOptions(document.getElementById('volume-resolution'),
-    request => volumePrototype.previewGridShape(request),
-    Number(document.getElementById('volume-grid-height-ratio').value));
   const s = volumePrototype.debugState();
+  const stepping=s.opticalStepping;
+  const requested=document.getElementById('volume-raymarch-mode').value;
+  const modeNames={current:'Old adaptive',numerical:'New adaptive',fixed:'Standard (fixed)','fixed-dense':'Fixed reference 2x'};
+  document.getElementById('volume-raymarch-status').textContent=!stepping||stepping.requested!==requested?'Awaiting renderer':
+    `${modeNames[stepping.effective]||'Unavailable'}${stepping.reason?` · ${stepping.reason.replaceAll('-',' ')}`:''}`;
+  const telemetry=s.rayStepTelemetry;
+  document.getElementById('volume-ray-step-status').textContent=telemetry?.active?'GPU · material samples':
+    telemetry?.requested?`Unavailable · ${String(telemetry.reason||'awaiting frame').replaceAll('-',' ')}`:'Awaiting frame';
   syncKilnCollisionControl(s.sceneCollision);
   flameInspector?.sync();
   syncVolumeCockpitModeAvailability(document, readVolumeControls(), s.physicalColor);
@@ -19854,6 +19807,10 @@ function refreshVolumeReadout() {
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   syncPhysicsAppearanceCockpit(s.physicsAppearance);
   syncVolumeViewerPlay(s);
+  const appearance = s.appearanceModel;
+  document.getElementById('volume-appearance-model-state').textContent = !appearance || appearance.effective !== 'compact-3'
+    ? 'authored · nine carriers + front field stored'
+    : 'compact · flame, interface shred, combustion front stored; six rebuilt at read';
   const reactant = s.reactantCombustion;
   document.getElementById('volume-reaction-law-state').textContent = !reactant || reactant.requested.law !== 'reactant-v0'
     ? 'authored'
@@ -19954,11 +19911,6 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
-  const joined=volumePrototype?.joinedWorldBounds?.();
-  if(joined){
-    frameBox(new THREE.Box3(new THREE.Vector3(...joined.min),new THREE.Vector3(...joined.max)),camera,controls);
-    window._kaminosDirty?.();return;
-  }
   const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
@@ -20228,7 +20180,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -20740,6 +20692,9 @@ async function initKaminosVolumeRoute() {
     setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
   }
   for (const [id, param] of [
+    ['volume-raymarch-mode', 'volume_raymarch_mode'],
+    ['volume-optical-tolerance', 'volume_optical_tolerance'],
+    ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
@@ -20777,7 +20732,6 @@ async function initKaminosVolumeRoute() {
       if (!isAuthoredKilnCollisionRoute()) {sceneColliderCollection.clear();return null;}
       return sceneColliderCollection.update(sceneObjects);
     },
-    getSceneEditing: () => volumeSceneEditing,
   });
   if (isFireLightFieldRoute() || isAuthoredKilnCollisionRoute()) {
     // Composition routes need the live Three scene visible under the flame:
@@ -20787,7 +20741,7 @@ async function initKaminosVolumeRoute() {
     if (volumeCanvasElement) volumeCanvasElement.style.background = 'transparent';
   }
   window.__kaminosVolumePrototype = volumePrototype;
-  wireJoinedProvisionalControls(volumePrototype);
+  volumePrototype.setRayStepTelemetryCanvas(document.getElementById('volume-ray-step-display'));
   if (fireLightFieldRouteParams().get('volume_light_field_optical_preview') === '1') {
     import('./volume-optical-native.mjs').then(({installOpticalSteppingPreview}) => {
       installOpticalSteppingPreview(volumePrototype, document);
@@ -20801,7 +20755,7 @@ async function initKaminosVolumeRoute() {
     if(distributed)renderingMode='shared';
     import(hybrid ? './scene-hybrid-radiance.mjs' : distributed ? './scene-distributed-radiance.mjs' : './scene-radiance.mjs').then(module => {
       window.__kaminosSceneRadiance = distributed
-        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{...readFireShadowSceneSettings(fireLightFieldRouteParams()),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
+        ? module.mountDistributedSceneRadiance({renderer,scene,prototype:volumePrototype,device:sharedGpu.device,...(hybrid?{surfaceLighting:window.__kaminosSurfaceLighting,...readFireShadowSceneSettings(fireLightFieldRouteParams()),rebuild:{hold:value=>volumePrototype.setSceneLightingRebuildPending(value),compile:()=>window.kaminosCompileSceneLighting()},smokeRefinement:Number(fireLightFieldRouteParams().get('volume_light_field_hybrid_smoke_refinement')??4)}:{}),getSourceGuide:()=>({position:[...flameEmitterPose.position],radius:Number(document.getElementById('volume-input-radius').value),height:Number(document.getElementById('volume-plume-height').value),depth:Number(document.getElementById('volume-emitter-source-depth').value)}),onStatus:state=>{
           window.kaminosFireLightingSettings?.syncStatus(state);
           const badge=document.getElementById('lighting-edit-status'),message=lightingEditStatus(state);
           if(badge.textContent!==message)badge.textContent=message;
@@ -20884,7 +20838,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -21126,6 +21080,7 @@ async function initKaminosVolumeRoute() {
       volumePrototype.setControls(controlsSnapshot);
     }
     refreshVolumeReadout();
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
   };
   await volumeCockpitLayoutReady;
   hideVolumeLegacyPyroSurfaceForTopologyBranch();
@@ -21134,6 +21089,9 @@ async function initKaminosVolumeRoute() {
   for (const id of [
     'volume-emitter-source-law',
     'volume-tone-mapping',
+    'volume-raymarch-mode',
+    'volume-optical-tolerance',
+    'volume-ray-step-telemetry',
     'volume-ray-start-noise',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
@@ -21158,6 +21116,7 @@ async function initKaminosVolumeRoute() {
     'volume-reaction-law',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
+    'volume-appearance-model',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
     'volume-immersed-centre-y',
@@ -21202,8 +21161,6 @@ async function initKaminosVolumeRoute() {
     const preview = () => {
       holdVolumeRebuildControl(id);
       publishVolumeGridPreview(volumePrototype?.previewGridShape?.({ gridHeightRatio: parseFloat(control.value) || 2 }) ?? null);
-      syncVolumeGridOptions(document.getElementById('volume-resolution'),
-        request => volumePrototype.previewGridShape(request), Number(control.value));
       updateVolumeRebuildControlLabel(id);
       refreshFlameDomainGuideBox();
     };
@@ -21221,6 +21178,7 @@ async function initKaminosVolumeRoute() {
       publishVolumeGridPreview(null);
       updateVolumeRebuildControlLabel(id);
       refreshFlameDomainGuideBox();
+      window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
     };
     control.addEventListener('input', preview);
     control.addEventListener('change', preview);
@@ -22525,7 +22483,7 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
-  panel.innerHTML='<h4>Simulation box</h4><p class="flame-scope">Move with G · Resize with S. Preview the box, then confirm to restart the field. The emitter stays in world space.</p>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Resizing changes world cell size; simulation speeds remain in solver units. Move the emitter separately to place it inside the box.</p>';
+  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
   host.append(panel);
   const inputs=[...panel.querySelectorAll('input')];
   for(const input of inputs)input.addEventListener('input',()=>{
@@ -22540,7 +22498,7 @@ function installFlameDomainControls(host) {
   refreshFlameDomainPreview();
 }
 function createFlameQuickFields() {
-  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><p class="flame-scope">Appearance and simulation data for this field.</p><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
+  const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
   installFlameDomainControls(shared);
   installKilnCollisionControl(shared);
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)setActiveSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
@@ -22550,8 +22508,10 @@ function createFlameQuickFields() {
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
+    readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
+    writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
-    openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
+    onError:error=>setInfo(error.message)});
 }
 
 function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt) {
@@ -22607,6 +22567,11 @@ function flameSettingsStateProblems(state) {
       immersedControlsForFlamePose({immersedRadius:Number(radius?.rawValue??radius?.value)},
         flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale),false);
     } catch(error) {problems.push({id:'volume-immersed-radius',message:error.message});}
+  }
+  if(state.rendererControls?.['volume-optical-tolerance']) {
+    try{opticalSteppingConfig({mode:state.rendererControls['volume-raymarch-mode'].value,
+      tolerance:Number(state.rendererControls['volume-optical-tolerance'].rawValue??state.rendererControls['volume-optical-tolerance'].value)});}
+    catch(error){problems.push({id:'volume-optical-tolerance',message:error.message});}
   }
   return problems;
 }
@@ -22755,15 +22720,6 @@ async function openFirstFlameFieldDialog() {
 
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
-  edits.register('@flame-source-enabled',{
-    read:()=>({enabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false}),
-    check:state=>{if(typeof state.enabled!=='boolean')throw Error('Flame source enabled must be boolean');return {enabled:state.enabled};},
-    write:({enabled})=>{
-      const entry=sceneObjects.find(row=>row.id===FLAME_EMITTER_ID);if(!entry)throw Error('Flame source is not registered');
-      entry.emissionEnabled=enabled;entry.object.userData.kaminosSceneObject.emissionEnabled=enabled;
-      writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
-    },
-  });
   authoringControlSessions.push(sceneControlHistory);
   edits.register('@first-flame-field',{read:firstFlameFieldState,write:writeFirstFlameFieldState,check:checkFirstFlameFieldState});
   // Finish a field before another control's pointerdown can begin a new target.
@@ -22798,7 +22754,7 @@ function installAuthoringParameterEditing() {
       control.dispatchEvent(new Event('input',{bubbles:true}));
       control.dispatchEvent(new Event('change',{bubbles:true}));
       if(control.dataset.volumeCommit==='confirm')control.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
-      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.checked;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
+      document.querySelectorAll(`[data-authoring-alias="${control.id}"]`).forEach(alias=>{if(alias.type==='checkbox')alias.checked=control.type==='checkbox'?control.checked:Number(control.value)>=.5;else alias.value=String(flameControlDisplayValue(control.id,control.value));});
     };
     const check=state=>{
       if(control.id==='emitter-assay-family'&&state.value==='cluster')throw Error('Cluster bowl is not a placeable flame; use Workbench');
@@ -22806,9 +22762,10 @@ function installAuthoringParameterEditing() {
       else if(control.type==='checkbox'){if(typeof state.value!=='boolean')throw Error('Expected an enabled/disabled value');}
       else if(control.type==='color'){if(!/^#[\da-f]{6}$/i.test(state.value))throw Error('Expected a hex color');}
       else if(!Number.isFinite(state.value)||(control.min!==''&&state.value<Number(control.min))||(control.max!==''&&state.value>Number(control.max)))throw Error('Parameter is outside its supported range');
-      if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+      if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
         const next=flameSettingsState();
-        next.domControls[control.id]={...next.domControls[control.id],value:state.value,rawValue:String(state.value)};
+        const axis=Object.hasOwn(next.rendererControls,control.id)?'rendererControls':'domControls';
+        next[axis][control.id]={...next[axis][control.id],value:state.value,rawValue:String(state.value)};
         checkFlameSettingsState(next);
       }
       return {value:state.value};
@@ -22818,7 +22775,7 @@ function installAuthoringParameterEditing() {
     edits.register(id,definition);authoringParameterTargets.set(id,definition);
     authoringControlSessions.push(installSceneControlHistory({edits,id:'@flame-settings',
       controls:[control,...document.querySelectorAll(`[data-authoring-alias="${control.id}"]`)],label,onError:error=>showFlameEditRefused(error)}));
-    if(['volume-immersed-radius','volume-emitter-source-law'].includes(control.id)) {
+    if(['volume-immersed-radius','volume-emitter-source-law','volume-optical-tolerance'].includes(control.id)) {
       // DOM listener exceptions cannot reject dispatchEvent in the caller.
       // Refuse an invalid aperture before the live runtime handlers see it.
       const validatePreview=event=>{
@@ -22868,7 +22825,7 @@ function installAuthoringParameterEditing() {
   }
   edits.subscribe(()=>{
     flameInspector?.sync();
-    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.checked;else alias.value=String(flameControlDisplayValue(source.id,source.value));}});
+    document.querySelectorAll('[data-authoring-alias]').forEach(alias=>{if(document.activeElement!==alias){const source=document.getElementById(alias.dataset.authoringAlias);if(alias.type==='checkbox')alias.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else alias.value=String(flameControlDisplayValue(source.id,source.value));}});
   });
   syncRimAuthoringHandle();
 }
@@ -25687,7 +25644,6 @@ function serializeSceneObject(entry) {
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
     localLiquidEmitter: metadata.localLiquidEmitter ?? entry.localLiquidEmitter ?? null,
-    ...(entry.type===FLAME_EMITTER_TYPE?{emissionEnabled:entry.emissionEnabled!==false}:{}),
     ...(entry.type===CAMERA_TYPE?{camera:structuredClone(entry.camera)}:{}),
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
 
@@ -25956,7 +25912,6 @@ async function collectSceneComposition() {
     document.getElementById('fire-light-gain-stops').value,
     document.getElementById('fire-light-test-scene-toggle').checked,
     burnerRecipe, isAuthoredKilnCollisionRoute(),
-    [...joinedRouteParams(location)],
   ]);
   const savedFingerprint = fingerprint(preset);
   const assertUnchanged = () => {
@@ -25975,7 +25930,6 @@ async function collectSceneComposition() {
     : (await saveVolumeSettingsPreset({ preset, sceneSnapshot:true, label:`${document.getElementById('composition-label').value.trim() || 'Scene'} · flame` })).effective;
   assertUnchanged();
   const route = {};
-  for(const [key,value] of joinedRouteParams(location))route[key]=value;
   for (const [key, value] of fireLightFieldRouteParams()) {
     if (key.startsWith('volume_light_field')) route[key] = value;
   }
@@ -26542,7 +26496,6 @@ async function writeSelectionMembershipUnchecked(value){
     if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
     if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
     entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
-    if(entry.type===FLAME_EMITTER_TYPE){entry.emissionEnabled=record.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
   }
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
@@ -26678,7 +26631,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
-  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
+  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
@@ -27605,7 +27558,6 @@ sceneInitialization.then(() => {
   const fireBoot = fireAtBoot(new URLSearchParams(location.search), new URLSearchParams(location.hash.slice(1)));
   window.__kaminosFireBoot = fireBoot;
   const volumeLoaded = fireBoot.boot ? initKaminosVolumeRoute() : Promise.resolve(null);
-  ownerVolumeReady=volumeLoaded;
   volumeLoaded.catch(reportKaminosVolumeRouteInitFailure);
   const startupSceneRedirect = Symbol('saved-scene-recovery-redirect');
   const startupSceneHash = new URLSearchParams(location.hash.slice(1));

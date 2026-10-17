@@ -2,7 +2,9 @@
 body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:310px minmax(0,1fr) 316px; }
 body.experiment-workspace #sidebar, body.experiment-workspace #viewport > #transform-bar, body.experiment-workspace #finger-fluid-bench-overlay { display:none !important; }
 #experiment-instruments { grid-row:2; grid-column:1; min-height:0; min-width:0; display:flex; flex-direction:column; background:#1b1c1e; border-right:1px solid #303134; }
-body.experiment-workspace.has-workbench-inspector #authoring-inspector { display:flex; flex-direction:column; grid-column:3; grid-row:2; border-left:1px solid #303134; }
+body.experiment-workspace.has-workbench-inspector #authoring-right { display:flex; grid-column:3; grid-row:2; border-left:1px solid #303134; }
+/* Workbench uses the shared viewport toolbar (authoring-workspace.mjs). */
+body.experiment-workspace #experiment-toolbar { display:none !important; }
 #experiment-instruments[hidden],#experiment-toolbar[hidden],#experiment-run-strip[hidden] { display:none; }
 .experiment-panel-heading { padding:17px 16px 13px; border-bottom:1px solid #303134; }
 .experiment-panel-heading h2 { margin:0; color:#e1e3e7; font-size:13px; text-transform:none; letter-spacing:0; }
@@ -42,8 +44,8 @@ body.experiment-workspace.has-workbench-inspector #authoring-inspector { display
 #experiment-clock { white-space:nowrap; font-variant-numeric:tabular-nums; }
 body.experiment-workspace #info-bar { bottom:91px; } body.experiment-workspace #navigation-hint { bottom:52px; } body.experiment-workspace #scene-edit-hud { bottom:70px; }
 @media(max-width:1150px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:280px minmax(0,1fr) 284px; } }
-@media(max-width:800px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr) 270px; grid-template-rows:42px minmax(260px,1fr) 190px; } body.experiment-workspace #viewport { grid-column:1; grid-row:2; width:auto; } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-inspector { grid-column:2; grid-row:2/4; } #experiment-toolbar strong,#experiment-navigation-slot,#experiment-clock { display:none; } #experiment-source { width:100%; } #experiment-toolbar { gap:4px; padding:6px; } #experiment-run-strip { flex-wrap:wrap; } }
-@media(max-width:540px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr); grid-template-rows:42px minmax(280px,1fr) minmax(170px,25vh) minmax(170px,25vh); } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-inspector { grid-column:1; grid-row:4; } #experiment-run-controls { gap:6px; flex-wrap:wrap; } }
+@media(max-width:800px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr) 270px; grid-template-rows:42px minmax(260px,1fr) 190px; } body.experiment-workspace #viewport { grid-column:1; grid-row:2; width:auto; } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-right { grid-column:2; grid-row:2/4; } #experiment-toolbar strong,#experiment-navigation-slot,#experiment-clock { display:none; } #experiment-source { width:100%; } #experiment-toolbar { gap:4px; padding:6px; } #experiment-run-strip { flex-wrap:wrap; } }
+@media(max-width:540px) { body.has-authoring-workspace.experiment-workspace[data-workspace=workbench] { grid-template-columns:minmax(0,1fr); grid-template-rows:42px minmax(280px,1fr) minmax(170px,25vh) minmax(170px,25vh); } #experiment-instruments { grid-column:1; grid-row:3; } body.experiment-workspace.has-workbench-inspector #authoring-right { grid-column:1; grid-row:4; } #experiment-run-controls { gap:6px; flex-wrap:wrap; } }
 
 #experiment-add-slot .scene-top-menu { position:relative; inset:auto; padding:0; background:transparent; border:0; box-shadow:none; }
 body.experiment-workspace #authoring-source-environment > h2 { display:none; }

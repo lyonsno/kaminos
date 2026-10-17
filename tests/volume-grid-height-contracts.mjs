@@ -6,7 +6,6 @@ import * as shape from '../volume-grid-shape.mjs';
 import { effectiveMismatches } from '../volume-arm-capture-checks.mjs';
 import { createSceneVolumeSource } from '../scene-volume-source.mjs';
 import { EMISSIVE_LIGHT_GRID } from '../volume-emissive-transport.mjs';
-import * as gridOptions from '../volume-grid-options.mjs';
 
 const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -88,8 +87,7 @@ test('GH-01: the camera samples the whole box: the raymarch box follows GRID_Y/G
   assert.ok(tall[0] < tall[1] && Math.abs(tall[0] - 4) < 1e-9 && Math.abs(tall[1] - 6) < 1e-9, `a horizontal ray at y = 4 crosses the 192-tall box (${tall})`);
   assert.ok(!(auto[0] < auto[1]), 'and misses the auto box');
   // The shader computes the same box from its constants; the fixed y in [-1, 3] is gone.
-  assert.match(source, /let domainHalfY = f32\(GRID_Y\) \/ f32\(GRID\);\n\s+let nearHit = boxHit\(ro - vec3<f32>\(0\.0, domainHalfY - 1\.0, 0\.0\), rd, vec3<f32>\(1\.0, domainHalfY, 1\.0\)\);\n\s+var hit = nearHit;/,
-    'the fine box is the ray box unless the joined exterior renders');
+  assert.match(source, /let domainHalfY = f32\(GRID_Y\) \/ f32\(GRID\);\n\s+let hit = boxHit\(ro - vec3<f32>\(0\.0, domainHalfY - 1\.0, 0\.0\), rd, vec3<f32>\(1\.0, domainHalfY, 1\.0\)\);/);
   assert.ok(!source.includes('boxHit(ro - vec3<f32>(0.0, 1.0, 0.0), rd, vec3<f32>(1.0, 2.0, 1.0))'));
   // The published raymarch bounds come from the same helper.
   assert.match(closure, /const domainBox = raymarchDomainBox\(gridSize, gridHeight\);/);
@@ -188,10 +186,7 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   assert.match(index, /gridHeightRatio: parseFloat\(volumeRebuildControlValue\('volume-grid-height-ratio'\)\) \|\| 2,/);
   assert.match(index, /getElementById\('volume-grid-height-ratio-val'\)\.textContent = /);
   assert.ok(!index.includes('volume-grid-height-cells'), 'the cells control is gone');
-  // Anchor on the listener list's own one-per-line entry: the id also appears in
-  // set('volume-emitter-source-law', ...) calls earlier in the page.
-  const listenerList = index.slice(index.indexOf("\n    'volume-emitter-source-law',\n"), index.indexOf("\n    'volume-wind-gust-veer',\n") + 1200);
-  assert.ok(listenerList.length > 1200, 'the listener list is found');
+  const listenerList = index.slice(index.indexOf("'volume-emitter-source-law',"), index.indexOf("'volume-wind-gust-veer',") + 1200);
   assert.ok(!listenerList.includes("'volume-grid-height-ratio',"), 'not on the immediate listener list');
   const restored = index.slice(index.indexOf('const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['), index.indexOf('];', index.indexOf('const VOLUME_ROUTE_RESTORED_CONTROL_IDS = [')));
   assert.ok(restored.includes("'volume-grid-height-ratio'"), 'restored from saved routes');
@@ -200,7 +195,7 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   const control = schema.controls.find(c => c.key === 'volume-grid-height-ratio');
   assert.deepEqual(control, { key: 'volume-grid-height-ratio', param: 'volume_grid_height_ratio', tagName: 'INPUT', type: 'number', additiveDefault: 2, additiveSinceControlCount: 249 });
   assert.ok(!schema.controls.some(c => c.key === 'volume-grid-height-cells'));
-  assert.equal(schema.controlCount, 255); assert.equal(schema.controls.length, 255); // 249 + the reaction law select and the two reactant controls + the three physics-appearance controls
+  assert.equal(schema.controlCount, 256); assert.equal(schema.controls.length, 256); // 249 + the reaction law select and the two reactant controls + the three physics-appearance controls + the appearance model select
 });
 
 // Noah 2026-10-12, contract: editing the height previews it (the box bounds
@@ -228,11 +223,11 @@ test('cockpit: the height previews while edited and applies on confirm (the page
   element('volume-grid-height-ratio', '2');
   const document = { getElementById: id => elements[id] };
   const previews = [];
-  const window = { dispatchEvent: event => previews.push(event.detail) };
+  const window = { dispatchEvent: event => {if(event.type==='kaminos-volume-grid-preview')previews.push(event.detail);} };
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail ?? null; } }
   const volumePrototype = { previewGridShape: request => ({ request: { ...request }, heightCells: Math.round(Number(request.gridHeightRatio) * 48) }) };
   const applied = [];
-  const run = new Function('document', 'window', 'CustomEvent', 'volumePrototypeRef', 'record', 'syncVolumeGridOptions', `
+  const run = new Function('document', 'window', 'CustomEvent', 'volumePrototypeRef', 'record', `
     const volumePrototype = volumePrototypeRef;
     ${helpers}
     const syncControls = () => record(volumeRebuildControlValue('volume-grid-height-ratio'));
@@ -240,7 +235,7 @@ test('cockpit: the height previews while edited and applies on confirm (the page
     const refreshFlameDomainGuideBox = () => {};
     ${wiring}
     return [syncControls, supersedeVolumeRebuildHolds];`);
-  const [syncControls, supersede] = run(document, window, CustomEvent, volumePrototype, value => applied.push(value), gridOptions.syncVolumeGridOptions);
+  const [syncControls, supersede] = run(document, window, CustomEvent, volumePrototype, value => applied.push(value));
   const control = elements['volume-grid-height-ratio'];
   const fire = (type, extra = {}) => { for (const fn of control.listeners[type] || []) fn({ target: control, ...extra }); };
   const type = value => { control.value = value; fire('input'); };

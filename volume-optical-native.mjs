@@ -2,17 +2,18 @@ export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = 
   const modes = ['current', 'fixed', 'numerical', 'fixed-dense'];
   if (!modes.includes(mode)) throw new Error(`unknown optical stepping mode: ${mode}`);
   if (!Number.isFinite(tolerance) || tolerance <= 0) throw new Error('positive finite optical tolerance required');
+  if (!Number.isFinite(Math.fround(tolerance)) || Math.fround(tolerance) <= 0) throw new Error('optical tolerance must fit a positive finite GPU coefficient');
   return {mode, value: modes.indexOf(mode), tolerance,
     authority: 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
     floor: 'four integration panels per authored base step',
     jitter: 'off in both comparison arms; current renderer unchanged'};
 }
 
-export function resolveOpticalStepping(config, {emissive, trace = false, explicit = false}) {
-  if (config.mode !== 'current' && (!emissive || trace)) {
-    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture');
+export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
+  if (config.mode !== 'current' && (!emissive || trace || exterior)) {
+    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
     return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
-      reason:trace?'diagnostic-trace-capture':'non-emissive-renderer'};
+      reason:exterior?'joined-exterior':trace?'diagnostic-trace-capture':'non-emissive-renderer'};
   }
   return {...config,requested:config.mode,reason:null};
 }
@@ -76,7 +77,7 @@ fn opticalPanel(q: vec4<f32>, h: f32) -> vec4<f32> {
   if (tau > 0.001) { integral = (1.0 - exp(-tau)) / q.w; }
   return vec4<f32>(q.xyz * integral, exp(-tau));
 }
-fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
+fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f32>, tolerance: f32) {
   let index = opticalStepIndex((*s).mask);
   (*s).probes[index] = q;
   (*s).mask |= 1u << index;
@@ -92,7 +93,7 @@ fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
   // Same local incoming-transmission weighting as the retained-probe controller.
   // No suffix-light bound is claimed; missed between-probe sheets remain possible.
   let disagreement = abs(fine - coarse) * (*s).transfer.w;
-  let refine = any(disagreement > vec4<f32>(OPTICAL_STEP_TOLERANCE));
+  let refine = any(disagreement > vec4<f32>(tolerance));
   if (OPTICAL_STEP_MODE == 2u && refine && (*s).width > (*s).minimum * 1.001) {
     (*s).width *= 0.5;
     (*s).probes[4] = (*s).probes[2];
@@ -106,6 +107,9 @@ fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
   (*s).width = min((*s).end - (*s).cursor, min((*s).maximum, (*s).width * 2.0));
   (*s).probes[0] = (*s).probes[4];
   (*s).mask = 1u;
+}
+fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
+  opticalStepObserveWithTolerance(s, q, OPTICAL_STEP_TOLERANCE);
 }
 `;
 

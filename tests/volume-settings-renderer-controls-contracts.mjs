@@ -11,6 +11,9 @@ const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 
 const expectedRendererControls = [
+  ['volume-raymarch-mode', 'volume_raymarch_mode'],
+  ['volume-optical-tolerance', 'volume_optical_tolerance'],
+  ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
   ['volume-ray-start-noise', 'volume_ray_start_noise'],
   ['volume-tone-mapping', 'volume_tone_mapping'],
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
@@ -106,7 +109,7 @@ assert.equal(target.searchParams.get('volume_flow_kernel_strength'), '1');
 assert.equal(target.searchParams.get('volume_flow_kernel_radius'), '0.03');
 assert.equal(target.searchParams.get('volume_flow_kernel_coherence'), '1');
 assert.equal(target.searchParams.get('volume_tone_mapping'), 'agx');
-assert.equal(receipt.rendererControlCount, 5);
+assert.equal(receipt.rendererControlCount, expectedRendererControls.length);
 assert.equal(target.searchParams.get('volume_ray_start_noise'), 'true');
 
 console.log('volume settings renderer controls contracts passed');

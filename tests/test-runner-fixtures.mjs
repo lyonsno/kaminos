@@ -28,9 +28,11 @@ export async function fixture(t, { files, manifest, quarantine }) {
 
 export const manifestOf = tests => ({ schema: 'kaminos.test-suite-manifest.v1', tests });
 // browser: null keeps these contracts independent of a KAMINOS_BROWSER set
-// in the environment that runs them.
+// in the environment that runs them. lateLaunchSettleMs: 0 skips the runner's
+// end-of-run wait for detached browser launches, which only the late-launch
+// contract needs; it passes lateLaunchSettleMs: undefined for the default.
 export const run = (f, extra = {}) => runSuite({ root: f.root, manifestPath: f.manifestPath, quarantinePath: f.quarantinePath,
-  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, browser: null, ...extra });
+  reportPath: f.reportPath, logsDir: path.join(f.root, 'out', 'logs'), parallel: 2, timeoutMs: 20000, browser: null, lateLaunchSettleMs: 0, ...extra });
 export const readReport = async f => JSON.parse(await fs.readFile(f.reportPath, 'utf8'));
 
 // Sets (or, with undefined, clears) an environment variable for one test and
@@ -45,7 +47,7 @@ export const scopedEnv = (t, name, value) => {
 // fixture so no contract ever writes the real ledger, and without an exported
 // KAMINOS_PYTHON unless a contract passes one.
 export const CLI = fileURLToPath(new URL('../tools/test-runner.mjs', import.meta.url));
-export const cliEnv = (f, extra = {}) => ({ ...process.env, HOME: path.join(f.root, 'home'), KAMINOS_RUN_LEDGER: path.join(f.root, 'run-ledger.jsonl'), KAMINOS_PYTHON: undefined, ...extra });
+export const cliEnv = (f, extra = {}) => ({ ...process.env, HOME: path.join(f.root, 'home'), KAMINOS_RUN_LEDGER: path.join(f.root, 'run-ledger.jsonl'), KAMINOS_PYTHON: undefined, KAMINOS_LATE_LAUNCH_SETTLE_MS: '0', ...extra });
 
 export const OTHER = "console.error('Error: something else broke'); process.exit(1);\n";
 

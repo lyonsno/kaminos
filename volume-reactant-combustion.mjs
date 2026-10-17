@@ -338,7 +338,9 @@ export function reactantCombustionUniformValues(config) {
 // Kernel side. Uniform block (16 floats): a = enabled, mixing time, cooling
 // time, exchange weight per reference step (D / h²); b = s, Q, soot yield,
 // soot retirement steps; c = ignition low, ignition high, ambient oxidizer,
-// inlet oxidizer; d = appearance burn reference, stable exchange weight, -, -.
+// inlet oxidizer; d = appearance burn reference, stable exchange weight,
+// quench-spread flag (a lane borrowed by the host: 1 while a liquid is bound with
+// transfer enabled; not this law's), -.
 export const REACTANT_COMBUSTION_WGSL = `// Reactant combustion (kaminos.volume.reactant-combustion.v0; see volume-reactant-combustion.mjs).
 fn reactantLawOn() -> bool {
   return u.reactant_combustion_a.x > 0.5;

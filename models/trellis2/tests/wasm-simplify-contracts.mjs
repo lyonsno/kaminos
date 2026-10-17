@@ -68,3 +68,18 @@ for(const [label,WorkerClass] of [['caller-thread',undefined],['module-worker',N
   }
 }
 assert.throws(()=>createBrowserMeshPostprocess({targetFaces:10,simplifier:'fast'}),/simplifier/);
+
+// A Wasm abort (e.g. a surface past 4 GB of Wasm memory) falls back to the JS
+// port for that and every later call on that module, with identical bytes, and
+// the engine reports the fallback.
+{const spec=MESH_FINISHING_CASES['simplify-route'],{vertices,triangles}=spec.build(),e=fixture.cases['simplify-route'].simplifyPass0;
+  let calls=0;const dead={_malloc:()=>8,_free(){},HEAPF64:new Float64Array(1<<20),HEAP32:new Int32Array(1<<20),
+    _fs_simplify(){calls++;throw new WebAssembly.RuntimeError('Aborted()');},_fs_points(){return 0;},_fs_read(){},_fs_release(){}};
+  const engine=wasmSimplifierEngine(dead);
+  for(let i=0;i<2;i++){
+    const r=simplifyMesh(vertices,triangles,{targetReduction:e.targetReduction,engine});
+    assert.equal(sha(r.points),e.pointsSha256,'fallback positions equal the native wheel');
+    assert.equal(sha(r.triangles),e.trianglesSha256,'fallback collapses equal the native wheel');
+  }
+  assert.equal(calls,1,'an aborted module is not called again');
+  assert.match(engine.fallback?.reason??'',/Aborted/,'the engine records why it fell back');}

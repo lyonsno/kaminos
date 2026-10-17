@@ -591,6 +591,7 @@ test('click selection waits while a picture holds the viewport', () => {
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
+    sceneHitsFromViewportPointer: () => [], pickVisibleFlameFromViewportPointer: () => null,
     clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
   const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
   fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
@@ -622,8 +623,7 @@ test('tool framing buttons wait while a picture holds the viewport', () => {
   for (const name of ['frameForgeHostCamera', 'frameMotionAgencyCamera', 'frameVolumeCamera']) {
     const writes = [];
     const vector = label => ({set: (...value) => writes.push([label, value]), copy: () => writes.push([label]), fromArray: () => writes.push([label])});
-    // No joined exterior (Sexy Fireman): frameVolumeCamera takes its standalone framing.
-    const scope = {vantageCaptureHeld: true, volumePrototype: {joinedWorldBounds: () => null}, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
+    const scope = {vantageCaptureHeld: true, camera: {position: vector('position'), up: vector('up'), lookAt: () => writes.push(['lookAt'])},
       controls: {target: vector('target'), update() {}}};
     fromIndexLive(name, scope)();
     assert.deepEqual(writes, [], `${name} leaves the borrowed camera alone`);

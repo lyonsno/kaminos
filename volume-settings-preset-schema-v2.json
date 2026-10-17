@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 255,
+  "controlCount": 256,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1687,6 +1687,18 @@
       "type": "range",
       "additiveDefault": 1300,
       "additiveSinceControlCount": 255
+    },
+    {
+      "key": "volume-appearance-model",
+      "param": "volume_appearance_model",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "authored",
+      "allowedValues": [
+        "authored",
+        "compact-3"
+      ],
+      "additiveSinceControlCount": 256
     }
   ],
   "retiredControls": [
@@ -1760,6 +1772,28 @@
     }
   ],
   "rendererControls": [
+    {
+      "key": "volume-raymarch-mode",
+      "param": "volume_raymarch_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["current", "numerical", "fixed"],
+      "additiveDefault": "numerical"
+    },
+    {
+      "key": "volume-optical-tolerance",
+      "param": "volume_optical_tolerance",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.001
+    },
+    {
+      "key": "volume-ray-step-telemetry",
+      "param": "volume_ray_step_telemetry",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": false
+    },
     {
       "key": "volume-ray-start-noise",
       "param": "volume_ray_start_noise",

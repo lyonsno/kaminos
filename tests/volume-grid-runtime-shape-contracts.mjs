@@ -43,7 +43,7 @@ test('no pipeline is created with a grid-shape constant', () => {
 
 test('every compute and fragment entry point seats the grid shape first; vertex entry points that need it too', () => {
   const main = entryPoints(moduleText('WGSL'));
-  assert.equal(main.filter(e => e.stage !== 'vertex').length, 24, 'every main compute/fragment entry point is checked');
+  assert.equal(main.filter(e => e.stage !== 'vertex').length, 25, 'every main compute/fragment entry point is checked');
   assert.match(sceneSource, /fn seedSceneVolumeSource\(@builtin\(global_invocation_id\) c: vec3<u32>\) \{\n  seatGridShape\(\);/, 'the scene source seed (interpolated into the main shader) seats it too');
   for (const e of main) {
     if (e.stage === 'vertex') assert.notEqual(e.firstLine, 'seatGridShape();', `${e.name}: the vertex stage cannot read the fluid uniforms`);
@@ -80,7 +80,7 @@ test('the uniforms carry the shape: fluid block, emitter words, splat camera', (
   assert.match(moduleText('BOUNDARY_SPLAT_WGSL'), /  productTransform: vec4<f32>,\n  gridShape: vec4<f32>,\n\}/);
   assert.match(source, /const splatCamera = new Float32Array\(60\);/);
   assert.match(source, /\{ incrementScale: timeStepConfig\.effective\.incrementScale, gridHeight \},/, 'the core passes the height to the emitter packer');
-  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, 0, 0\], 56\);/);
+  assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'x, y the grid shape; z the effective appearance-model flag (compact-3) for the splat module');
   assert.match(source, /label: `kaminos \$\{BOUNDARY_SPLAT_RENDERER_IDENTITY\} camera`,\n\s+size: 240,/);
 });
 
@@ -117,8 +117,6 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     EMISSIVE_TRANSPORT_WGSL: (await import('../volume-emissive-transport.mjs')).EMISSIVE_TRANSPORT_WGSL,
     SCENE_VOLUME_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_VOLUME_SOURCE_WGSL,
     SOOT_BURNOUT_WGSL: (await import('../volume-physics-appearance.mjs')).SOOT_BURNOUT_WGSL,
-    JOINED_OPTICS_WGSL: (await import('../volume-joined-optics.mjs')).JOINED_OPTICS_WGSL,
-    SCENE_JOINED_SOURCE_WGSL: (await import('../scene-volume-source.mjs')).SCENE_JOINED_SOURCE_WGSL,
   };
   assert.deepEqual([...interpolated].sort(), Object.keys(texts).sort());
   const seen = [];
@@ -211,9 +209,7 @@ test('capture: @emissiveCoefficients is refused in an arm that also sets control
 // frame without changing the simulation are non-configuring.
 test('capture: every control except the read-only debug controls counts as configuration', async () => {
   const { armSetsConfiguration, NON_CONFIGURING_CAPTURE_CONTROLS } = await import('../volume-arm-capture-checks.mjs');
-  // The joined exterior's probes and panel readout are read-only (Sexy Fireman).
-  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@fluidBandStats', '@joinedExteriorProbe', '@joinedExteriorStats', '@joinedPanelText', '@savePreset', '@simGpuProfile']);
-  assert.equal(armSetsConfiguration([['@click', 'volume-joined-admit']]), true, 'a button press can change configuration');
+  assert.deepEqual([...NON_CONFIGURING_CAPTURE_CONTROLS].sort(), ['@cameraFrame', '@emissiveCoefficients', '@fluidBandStats', '@savePreset', '@simGpuProfile']);
   assert.equal(armSetsConfiguration([['@confinementEpsilon', '0.1']]), true, 'an epsilon override is configuration');
   assert.equal(armSetsConfiguration([['volume-grid-height-ratio', '3']]), true);
   assert.equal(armSetsConfiguration([['@cameraFrame', '0:1:3:0:0:0'], ['@emissiveCoefficients', '1']]), false);

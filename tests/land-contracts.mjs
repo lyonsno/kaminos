@@ -15,6 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as L from '../tools/land.mjs';
+import { ghStub } from './land-gh-stub.mjs';
 
 const LAND_CLI = fileURLToPath(new URL('../tools/land.mjs', import.meta.url));
 const GH_STUB = fileURLToPath(new URL('./land-gh-stub.mjs', import.meta.url));
@@ -29,7 +30,7 @@ const quote = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
 // that is not the fixture's. The decoy below proves it.
 function fixtureEnv(gitconfig) {
   const env = {};
-  for (const [key, value] of Object.entries(process.env)) if (!key.startsWith('GIT_') && key !== 'NODE_TEST_CONTEXT') env[key] = value;
+  for (const [key, value] of Object.entries(process.env)) if (!key.startsWith('GIT_') && key !== 'NODE_TEST_CONTEXT' && key !== 'KAMINOS_LAND_POLL_MS') env[key] = value;
   return { ...env, GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
 }
 
@@ -61,9 +62,47 @@ const decoyBefore = await decoySnapshot();
 // A bare origin holding main, a seed clone that advances origin's main the way
 // another lane would, and the clone under test one commit ahead of main, on a
 // feature branch unless onMain asks for the commit to sit on main itself.
+// Building the origin, seed and clone takes a dozen git commands; each layout
+// is built once per file and copied for every contract, then its remotes and
+// the origin's update hook are pointed at the copy.
+const templates = new Map();
+const templatesRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-land-templates-'));
+after(() => fs.rm(templatesRoot, { recursive: true, force: true }));
+async function templateFor(onMain) {
+  if (!templates.has(onMain)) templates.set(onMain, (async () => {
+    const dir = path.join(templatesRoot, onMain ? 'on-main' : 'feature');
+    await fs.mkdir(dir);
+    const gitconfig = path.join(dir, 'gitconfig');
+    await fs.writeFile(gitconfig, GITCONFIG);
+    const env = fixtureEnv(gitconfig);
+    const git = (cwd, ...args) => execFileSync('git', args, { cwd, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    const origin = path.join(dir, 'origin.git');
+    const seed = path.join(dir, 'seed');
+    const clone = path.join(dir, 'clone');
+    const commit = async (cwd, name) => {
+      await fs.writeFile(path.join(cwd, name), `${name}\n`);
+      git(cwd, 'add', name);
+      git(cwd, 'commit', '--quiet', '-m', name);
+      return git(cwd, 'rev-parse', 'HEAD');
+    };
+    git(dir, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+    git(dir, 'init', '--quiet', '--initial-branch=main', seed);
+    const base = await commit(seed, 'base.txt');
+    git(seed, 'remote', 'add', 'origin', origin);
+    git(seed, 'push', '--quiet', 'origin', 'main');
+    git(dir, 'clone', '--quiet', origin, clone);
+    if (!onMain) git(clone, 'checkout', '--quiet', '-b', 'feature');
+    const sha = await commit(clone, 'feature.txt');
+    return { dir, base, sha };
+  })());
+  return templates.get(onMain);
+}
+
 async function fixture(t, { onMain = false } = {}) {
+  const template = await templateFor(onMain);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'kaminos-land-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  for (const part of ['origin.git', 'seed', 'clone']) await fs.cp(path.join(template.dir, part), path.join(dir, part), { recursive: true, verbatimSymlinks: true });
   const gitconfig = path.join(dir, 'gitconfig');
   await fs.writeFile(gitconfig, GITCONFIG);
   const env = fixtureEnv(gitconfig);
@@ -78,20 +117,15 @@ async function fixture(t, { onMain = false } = {}) {
     git(cwd, 'commit', '--quiet', '-m', name);
     return git(cwd, 'rev-parse', 'HEAD');
   };
-  git(dir, 'init', '--quiet', '--bare', '--initial-branch=main', origin);
+  git(seed, 'remote', 'set-url', 'origin', origin);
+  git(clone, 'remote', 'set-url', 'origin', origin);
   // The origin logs every update of a land/ ref ("<ref> <old> <new>"), which is
   // what the stub's push trigger reads, and denies them while deny-land exists.
   const updatesLog = path.join(dir, 'land-ref-updates.log');
   const denyFile = path.join(dir, 'deny-land');
   await fs.writeFile(path.join(origin, 'hooks', 'update'), `#!/bin/sh\ncase "$1" in refs/heads/land/*)\n  if [ -e ${quote(denyFile)} ]; then echo "land refs denied" >&2; exit 1; fi\n  echo "$1 $2 $3" >> ${quote(updatesLog)};;\nesac\nexit 0\n`);
   await fs.chmod(path.join(origin, 'hooks', 'update'), 0o755);
-  git(dir, 'init', '--quiet', '--initial-branch=main', seed);
-  const base = await commit(seed, 'base.txt');
-  git(seed, 'remote', 'add', 'origin', origin);
-  git(seed, 'push', '--quiet', 'origin', 'main');
-  git(dir, 'clone', '--quiet', origin, clone);
-  if (!onMain) git(clone, 'checkout', '--quiet', '-b', 'feature');
-  const sha = await commit(clone, 'feature.txt');
+  const { base, sha } = template;
 
   const statePath = path.join(dir, 'gh-state.json');
   const ghPath = path.join(dir, 'gh');
@@ -117,7 +151,13 @@ async function fixture(t, { onMain = false } = {}) {
   const lines = [];
   const clock = { now: 1_000_000, slept: [] };
   const baseRunner = L.execFileRunner({ env });
-  const run = (executable, args, options) => { calls.push([path.basename(executable), ...args]); return baseRunner(executable, args, options); };
+  // gh is answered in-process by the stub, which spares a node start per call;
+  // the CLI contracts (cli, cliSpawn) still run the stub as gh through ghPath.
+  const run = (executable, args, options) => {
+    calls.push([path.basename(executable), ...args]);
+    if (executable === ghPath) return Promise.resolve({ ...ghStub(statePath, args, { env }), error: null });
+    return baseRunner(executable, args, options);
+  };
   const receiptPath = path.join(dir, 'receipts', 'receipt.json');
   const makeRun = (over = {}) => ({ databaseId: 4242, status: 'completed', conclusion: 'success', workflowName: 'tests', _file: WORKFLOW_FILE, headSha: sha, event: 'push', headBranch: 'feature', url: `https://github.com/${REPO}/actions/runs/${over.databaseId ?? 4242}`, createdAt: '2026-10-13T12:00:00Z', attempt: 1, ...over });
   const lastArg = c => String(c.at(-1));
@@ -148,8 +188,8 @@ async function fixture(t, { onMain = false } = {}) {
       (error, stdout, stderr) => resolve({ code: error ? error.code : 0, stdout, stderr }))),
     // The CLI as a live child: onStderr sees each line as it arrives, so a
     // contract can act on a state change, such as sending a signal.
-    cliSpawn: (args, onStderr) => {
-      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env });
+    cliSpawn: (args, onStderr, extraEnv = {}) => {
+      const child = spawn(process.execPath, [LAND_CLI, ...args], { cwd: clone, env: { ...env, ...extraEnv } });
       let stdout = '', stderr = '';
       child.stdout.on('data', d => { stdout += d; });
       child.stderr.on('data', d => { stderr += d; for (const line of String(d).split('\n').filter(Boolean)) onStderr?.(line, child); });
@@ -868,9 +908,13 @@ test('an interrupted wait writes a partial receipt naming the awaited run and de
   // Through the CLI: SIGINT during the wait does the same and exits 130.
   const g = await fixture(t);
   await g.gh.pushTrigger(g.run({ databaseId: 9061, _timeline: ['in_progress'] }));
-  const { done } = g.cliSpawn(['--ci-only', '--receipt', g.receiptPath, '--gh', g.ghPath, '--repo', REPO], (line, child) => { if (/in progress/.test(line)) child.kill('SIGINT'); });
+  // KAMINOS_LAND_POLL_MS shortens the CLI's real poll so the contract does not
+  // sleep a whole 30-second interval before the run shows as in progress.
+  const { done } = g.cliSpawn(['--ci-only', '--receipt', g.receiptPath, '--gh', g.ghPath, '--repo', REPO], (line, child) => { if (/in progress/.test(line)) child.kill('SIGINT'); }, { KAMINOS_LAND_POLL_MS: '50' });
   const result = await done;
   assert.equal(result.code, 130, `${result.stdout}\n${result.stderr}`);
+  assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).effective.pollMs, 50);
+  assert.match(result.stderr, /polling every 50 ms \(KAMINOS_LAND_POLL_MS; default 30000 ms\)/);
   assert.match(result.stdout, /^interrupted\b.*run 9061/);
   assert.match(result.stderr, /pushed land\//);
   assert.equal(JSON.parse(await fs.readFile(g.receiptPath, 'utf8')).ci.run.id, 9061);
@@ -910,6 +954,9 @@ test('the CLI exits 0 when the checks pass, 1 on a refusal, 2 on bad arguments, 
   assert.ok(lines[0].includes(f.receiptPath), 'the summary names the receipt');
   assert.equal(f.originMain(), f.base);
   assert.equal(JSON.parse(await fs.readFile(f.receiptPath, 'utf8')).outcome, 'dry-run');
+  // With KAMINOS_LAND_POLL_MS unset the CLI polls at the default and says nothing about it.
+  assert.equal(JSON.parse(await fs.readFile(f.receiptPath, 'utf8')).effective.pollMs, POLL_MS);
+  assert.doesNotMatch(result.stderr, /KAMINOS_LAND_POLL_MS/);
 
   await f.gh.runs([f.run({ databaseId: 9, conclusion: 'failure' })]);
   result = await f.cli(['--no-dispatch', ...common]);

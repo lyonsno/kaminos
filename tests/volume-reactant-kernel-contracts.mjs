@@ -33,7 +33,7 @@ test('the reactant uniform block follows the immersed source and is packed and r
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_OFFSET, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + 16);
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0);
   assert.match(source, /grid_shape_b: vec4<f32>,\n(?:\s*\/\/.*\n)*\s*reactant_combustion_a: vec4<f32>,\n\s*reactant_combustion_b: vec4<f32>,\n\s*reactant_combustion_c: vec4<f32>,\n\s*reactant_combustion_d: vec4<f32>,\n\s*joined_boundary: vec4<f32>,\n\s*joined_ghost_geometry: vec4<f32>,\n\s*joined_ghost_dims: vec4<f32>,\n\};/, 'the struct carries the block right after the grid shape');
-  assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\s*\n\s*state\.reactantCombustion = reactantCombustionConfig;/);
+  assert.match(source, /uniforms\.set\(reactantCombustionUniformValues\(reactantCombustionConfig\), REACTANT_COMBUSTION_UNIFORM_OFFSET\);\n(?:\s*\/\/.*\n|\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 1[45]\] = [^\n]*;\n|\s*const appearance[A-Za-z]* = [^\n]*;\n|\s*state\.appearanceModel = [^\n]*;\n)*\s*state\.reactantCombustion = reactantCombustionConfig;/, 'the borrowed lanes (quench spread, appearance model) are packed between the block and its receipt');
   assert.match(source, /resolveReactantCombustionConfig\(controlsSnapshot, \{\s*grid: gridSize,\s*transportCommonCharacteristic: resolveTransportConfig\(controlsSnapshot\)\.effective\.commonCharacteristic,/, 'admission sees the effective transport');
 });
 
@@ -82,10 +82,7 @@ test('under the reactant law the authored reaction terms yield to the single bur
   assert.match(mainKernel, /let fuelConsumption = select\(tallPlumeFuelHeatReaction \* \(0\.012 \+ inputFlow \* 0\.010 \+ fireLickAmount \* 0\.002\) \+ tallPlumePilotReaction \* 0\.006, reactantFreshBurnRate, reactantOn\);/, 'Fire Licks no longer reaches consumption under the candidate');
   assert.match(mainKernel, /let tallPlumeReactionSmokeBirth = select\([^\n]*, 0\.0, reactantOn\);/);
   assert.match(mainKernel, /if \(!reactantOn\) \{\n\s*heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;\n\s*\}/, 'the authored heat release runs only under the authored law');
-  // A resident gas producer (burning wood) feeds gas only under the reactant law;
-  // its volume enters the pressure target beside the immersed source.
-  assert.match(mainKernel, /var residentRate = 0\.0;\n\s*if \(reactantOn && all\(textureDimensions\(residentGasSource\)/, 'the resident gas source exists only under the reactant law');
-  assert.match(mainKernel, /if \(reactantOn\) \{[^}]*textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* reactantFreshBurnRate \+ immersedTarget \+ residentDivergence, 0\.0, 0\.0, 0\.0\)\);\n\s*\} else \{\n\s*let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;/, 'expansion follows the same burned amount and gain; the authored burn is the else branch');
+  assert.match(mainKernel, /if \(reactantOn\) \{[^}]*textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* reactantFreshBurnRate \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);\n\s*\} else \{\n\s*let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;/, 'expansion follows the same burned amount and gain; the authored burn is the else branch');
   assert.match(mainKernel, /let tallPlumeNormalizedFlameHeight = select\(clamp\(\(p\.y \+ 0\.84\) \/ 1\.58, 0\.0, 1\.0\), 0\.0, reactantOn\);/, 'no box-height survival demand under the candidate');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, inflowFraction\);/, 'the inflow brings the stream oxidizer');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, immersedEntry\);/);

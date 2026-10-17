@@ -32,9 +32,7 @@ test('six authored ray steps survive the slider, gamut, route and GPU clamp', ()
 });
 test('native numerical stepping does not inherit sample-budget tail truncation', () => {
   assert.match(core, /setDebugOpticalStepping\(/, 'native camera must expose an explicit comparison switch');
-  // The joined exterior lifts the sample budget only while it renders (its traversal cap grows instead).
-  assert.match(core, /!opticalStepping && \(\(!exteriorActive && expensiveSamples >= expensiveSampleBudget\) \|\| traversalSteps >= maxTraversalSteps\)/);
-  assert.match(core, /let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1\.5 && !exteriorActive;/, 'numerical stepping is the default whenever the exterior is off');
+  assert.match(core, /!opticalStepping && \(expensiveSamples >= expensiveSampleBudget/);
   assert.match(core, /if \(opticalStepping\) \{[\s\S]*?opticalStepObserve/);
 });
 test('visual witness rejects wrong route, stale tolerance, changed state and absent pixels', () => {

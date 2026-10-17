@@ -4,6 +4,7 @@ import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
@@ -16,12 +17,9 @@ import {
 } from './volume-detail-force-isolation.mjs';
 import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
-import { createJoinedExterior } from './volume-joined-exterior.mjs';
-import { JOINED_OPTICS_WGSL } from './volume-joined-optics.mjs';
-import {createGpuSceneSolidProducer} from './scene-solid-gpu.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
-import { SCENE_VOLUME_SOURCE_WGSL, SCENE_JOINED_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
@@ -95,6 +93,7 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
+const SIM_GPU_PROFILE_IDENTITY = 'kaminos.volume.sim-gpu-profile.v0';
 const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const NONRIDGE_OPTICAL_CAPTURE_IDENTITY = 'kaminos.volume.positive-nonridge-optical-capture.v0';
 const NONRIDGE_SOURCE_BASIS_CAPTURE_IDENTITY = 'kaminos.volume.nonridge-source-basis-full-grid-capture.v0';
@@ -2190,7 +2189,7 @@ export function resolveJoinedGhosts({ geometry = null, reactantOn = false } = {}
   if (!(geometry.cellWidthFine > 0) || !(geometry.finePitchLocal > 0) || !geometry.dims?.every(n => Number.isInteger(n) && n > 0) || !geometry.originFine?.every(finite)) {
     throw new Error('joined ghost geometry needs positive cell width, pitch and dims and a finite origin');
   }
-  if (reactantOn && geometry.oxidizer !== 'passive-ambient-boundary') return { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' };
+  if (reactantOn) return { bound: false, reason: 'joined-ghosts-reactant-oxidizer-pending' };
   return { bound: true, reason: null };
 }
 // Sexy's fine lower planes: plane a holds the lowest a-faces indexed
@@ -2215,6 +2214,19 @@ export function resolveJoinedBoundary({ requested = false, sourceLaw = null, pre
   if (pressureSolver !== PRESSURE_SOLVER_CONVERGED) return { requested: true, admitted: false, reason: 'joined-boundary-needs-converged-solver' };
   if (!immersedAdmitted) return { requested: true, admitted: false, reason: `joined-boundary-needs-admitted-immersed-source:${immersedReason ?? 'unknown'}` };
   return { requested: true, admitted: true, reason: null };
+}
+// Appearance model (compression study, 2026-10-13). `compact-3` stores three
+// appearance carriers and rebuilds the other six at the slot samplers by these
+// pooled ratios ([flame, shred, front] weights; negatives from the fit dropped).
+// The flag rides the last borrowed reactant lane (d.w). `authored` is the
+// existing model, bit for bit.
+export const APPEARANCE_MODELS = Object.freeze(['authored', 'compact-3']);
+export const COMPACT_CARRIER_RATIOS = Object.freeze({
+  ember: [0.575, 0.016, 0.229], flameDetail: [0.866, 0, 0.110], fireLick: [1.258, 0.068, 0.214],
+  emberFleck: [0.111, 0.050, 2.744], microSmoke: [0, 0, 0],
+});
+export function appearanceModelUniformValue(model) {
+  return model === 'compact-3' ? 1 : 0;
 }
 export function gridShapeUniformValues({ grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight }) {
   return [grid, gridHeight, irradianceGrid, irradianceGridHeight, sceneSourceGrid, sceneSourceGridHeight, 0, 0];
@@ -3966,7 +3978,6 @@ fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
 // pipelines, so the shared fluid layout keeps every other compute pipeline
 // inside the per-stage storage-buffer limit.
 @group(3) @binding(1) var<storage, read_write> fluidPredict: array<vec4<f32>>;
-@group(3) @binding(2) var residentGasSource: texture_3d<f32>;
 @group(1) @binding(1) var productSceneDepth: texture_depth_2d;
 @group(0) @binding(16) var sceneSolidCells: texture_3d<u32>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
@@ -4080,12 +4091,59 @@ fn slotIndex(c: vec3<i32>, slot: u32) -> u32 {
   return index3(clampCell(c)) * SLOTS_PER_CELL + slot;
 }
 
-fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+// The front-topology field under compact-3 reads as the stored front times this
+// ratio (fitted 0.33 on the floor inlet, 0.71 on a raised emitter: one approximate
+// value, a known limit of the A/B).
+const COMPACT_FRONT_TOPOLOGY_RATIO: f32 = 0.4;
+
+fn compactAppearanceOn() -> bool {
+  return u.reactant_combustion_d.w > 0.5;
+}
+
+// Appearance model compact-3 (compression study, 2026-10-13): the kernel stores
+// flame (slot 2.x), interface shred (slot 3.y) and combustion front (slot 2.w);
+// the six other appearance channels are rebuilt here from those three by fixed
+// pooled ratios ([flame, shred, front] weights fitted over seven arms), so every
+// downstream formula is unchanged. Under authored the stored value is returned.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  // Stored form under compact-3: slot 2 = (flame, shred, 0, front); slot 3 unused.
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
+// Compact layout: slot 2 stores (flame, interfaceShred, 0, combustionFront) and
+// slot 3 is neither read nor written, so a carrier read is one load and the
+// per-cell traffic is three slots. With stored = true the read is the raw
+// load: the transport predictor uses it to carry the stored form forward.
+fn readSlotWith(c: vec3<i32>, slot: u32, stored: bool) -> vec4<f32> {
+  if (slot >= 2u && !stored && compactAppearanceOn()) {
+    let carriers = fluidSrc[slotIndex(c, 2u)];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
   return fluidSrc[slotIndex(c, slot)];
 }
 
+fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  return readSlotWith(c, slot, false);
+}
+
 fn readFrontField(c: vec3<i32>) -> f32 {
-  return frontSrc[index3(clampCell(c))];
+  return select(frontSrc[index3(clampCell(c))], readSlot(c, 2u).w * COMPACT_FRONT_TOPOLOGY_RATIO, compactAppearanceOn());
+}
+
+// The optical density the renderer and the legacy projection weight by: a pure
+// function of the material and micro slots. It used to be stored in slot 0's
+// fourth lane every step; that lane is now written as zero and reserved.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
 }
 
 fn readQuenchField(c: vec3<i32>) -> f32 {
@@ -4227,17 +4285,21 @@ fn sampleFrontFieldMasked(cellCenter: vec3<f32>) -> f32 {
 }
 
 fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  return sampleFluidSlotWith(cellCenter, slot, false);
+}
+
+fn sampleFluidSlotWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
   let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
   let i0 = vec3<i32>(floor(pc));
   let f = fract(pc);
-  let c000 = readSlot(i0 + vec3<i32>(0, 0, 0), slot);
-  let c100 = readSlot(i0 + vec3<i32>(1, 0, 0), slot);
-  let c010 = readSlot(i0 + vec3<i32>(0, 1, 0), slot);
-  let c110 = readSlot(i0 + vec3<i32>(1, 1, 0), slot);
-  let c001 = readSlot(i0 + vec3<i32>(0, 0, 1), slot);
-  let c101 = readSlot(i0 + vec3<i32>(1, 0, 1), slot);
-  let c011 = readSlot(i0 + vec3<i32>(0, 1, 1), slot);
-  let c111 = readSlot(i0 + vec3<i32>(1, 1, 1), slot);
+  let c000 = readSlotWith(i0 + vec3<i32>(0, 0, 0), slot, stored);
+  let c100 = readSlotWith(i0 + vec3<i32>(1, 0, 0), slot, stored);
+  let c010 = readSlotWith(i0 + vec3<i32>(0, 1, 0), slot, stored);
+  let c110 = readSlotWith(i0 + vec3<i32>(1, 1, 0), slot, stored);
+  let c001 = readSlotWith(i0 + vec3<i32>(0, 0, 1), slot, stored);
+  let c101 = readSlotWith(i0 + vec3<i32>(1, 0, 1), slot, stored);
+  let c011 = readSlotWith(i0 + vec3<i32>(0, 1, 1), slot, stored);
+  let c111 = readSlotWith(i0 + vec3<i32>(1, 1, 1), slot, stored);
   let x00 = mix(c000, c100, f.x);
   let x10 = mix(c010, c110, f.x);
   let x01 = mix(c001, c101, f.x);
@@ -4250,9 +4312,13 @@ fn sampleFluidSlot(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 // the floor (momentum only). Only the transport kernels use it, so the raymarch,
 // sidecar and irradiance passes never touch the coverage texture.
 fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
+  return sampleFluidSlotInflowWith(cellCenter, slot, false);
+}
+
+fn sampleFluidSlotInflowWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
   // Composed with the kiln collision mask: the backtrace sample excludes solid
   // cells first, then the inflow ghost blends in below the floor aperture.
-  let sample = sampleFluidSlotMasked(cellCenter, slot);
+  let sample = sampleFluidSlotMaskedWith(cellCenter, slot, stored);
   let ghost = inflowGhostBlend(cellCenter);
   return mix(sample, inflowGhostState(slot, sample, cellCenter), ghost);
 }
@@ -4261,19 +4327,19 @@ fn sampleFluidSlotInflow(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
 // cell centre blends to the exterior over half a cell (one exterior sample per
 // call, at the point).
 fn sampleFluidSlotMasked(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  let fine = sampleFluidSlotMaskedFine(cellCenter, slot);
-  if (!joinedGhosts()) { return fine; }
-  let outside = ghostOutsideAmount(cellCenter);
-  if (outside <= 0.0) { return fine; }
-  return mix(fine, ghostSlotAt(cellCenter, slot), clamp(outside * 2.0, 0.0, 1.0));
+  return sampleFluidSlotMaskedWith(cellCenter, slot, false);
 }
 
-fn sampleFluidSlotMaskedFine(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
-  if (!sceneSolidEnabled()) { return sampleFluidSlot(cellCenter, slot); }
-  let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
-  let i0 = vec3<i32>(floor(pc));
-  let f = fract(pc);
-  if (sceneSolidEnabled()) {
+// Solid-masked trilinear read through the slot seam (carrying the stored
+// flag), then the joined-ghost blend beyond the last fine cell centre.
+fn sampleFluidSlotMaskedWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> vec4<f32> {
+  var fine = vec4<f32>(0.0);
+  if (!sceneSolidEnabled()) {
+    fine = sampleFluidSlotWith(cellCenter, slot, stored);
+  } else {
+    let pc = clamp(cellCenter - vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.001, f32(GRID_Y) - 1.001, f32(GRID) - 1.001));
+    let i0 = vec3<i32>(floor(pc));
+    let f = fract(pc);
     var weighted = vec4<f32>(0.0);
     var weightSum = 0.0;
     for (var dz = 0; dz < 2; dz = dz + 1) {
@@ -4284,17 +4350,24 @@ fn sampleFluidSlotMaskedFine(cellCenter: vec3<f32>, slot: u32) -> vec4<f32> {
           let weight = select(1.0 - f.x, f.x, dx == 1)
             * select(1.0 - f.y, f.y, dy == 1)
             * select(1.0 - f.z, f.z, dz == 1);
-          weighted = weighted + readSlot(sampleCell, slot) * weight;
+          weighted = weighted + readSlotWith(sampleCell, slot, stored) * weight;
           weightSum = weightSum + weight;
         }
       }
     }
-    return weighted / max(weightSum, 1e-12);
+    fine = weighted / max(weightSum, 1e-12);
   }
-  return vec4<f32>(0.0);
+  if (!joinedGhosts()) { return fine; }
+  let outside = ghostOutsideAmount(cellCenter);
+  if (outside <= 0.0) { return fine; }
+  return mix(fine, ghostSlotAt(cellCenter, slot), clamp(outside * 2.0, 0.0, 1.0));
 }
 
 fn readPredictSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
+  if (slot >= 2u && compactAppearanceOn()) {
+    let carriers = fluidPredict[slotIndex(c, 2u)];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
   return fluidPredict[slotIndex(c, slot)];
 }
 
@@ -4457,7 +4530,7 @@ fn boundVelocity(v: vec3<f32>) -> vec3<f32> {
 // the extremum: clamping acts as a running max-filter and, over thousands of
 // steps, inflated every field to its peak (observed as a saturated domain).
 fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3<f32>, slot: u32) -> vec4<f32> {
-  let predicted = fluidPredict[idx * SLOTS_PER_CELL + slot];
+  let predicted = readPredictSlot(c, slot);
   // A forward sample that came partly from the inflow ghost (which now carries
   // the inflow velocity only) has no reverse trace to correct against: the
   // reservoir is not in the domain, so the corrector would read the injected
@@ -4475,7 +4548,10 @@ fn macCormackSlot(c: vec3<i32>, idx: u32, backCell: vec3<f32>, forwardCell: vec3
     return predicted;
   }
   let reversed = samplePredictSlot(forwardCell, slot);
-  let current = fluidSrc[idx * SLOTS_PER_CELL + slot];
+  // The current value goes through the slot seam: under the compact appearance
+  // model the prediction and the reverse trace carry expanded carriers, so the
+  // corrector must compare against the expanded current, not the stored zeros.
+  let current = readSlot(c, slot);
   let corrected = predicted + (current - reversed) * 0.5;
   let extrema = slotExtrema(backCell, slot);
   let outOfRange = (corrected < extrema.lo) | (corrected > extrema.hi);
@@ -4755,7 +4831,7 @@ fn directCellOpticalSupportFromSlots(velocityDensity: vec4<f32>, material: vec4<
   let velMag = length(velocityDensity.xyz);
   let smoke = material.x + microLayer.x * 0.52 + microLayer.y * 0.34;
   let fire = fireLayer.x * 1.25 + fireLayer.y * 0.42 + fireLayer.z * 0.55 + fireLayer.w * 0.72 + combustionFrontTopology * 0.35 + microLayer.z * 0.70 + material.y * 0.28;
-  let density = max(velocityDensity.w, smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
+  let density = max(derivedDensityFromSlots(material, microLayer), smoke * 0.82 + material.y * 0.22 + material.w * 0.18);
   let extinction = smoke * 0.62 + microLayer.y * 0.36 + material.w * 0.16;
   return clamp(density * 0.50 + extinction * 0.40 + fire * 0.44 + combustionFrontTopology * 0.12 + velMag * 0.36, 0.0, 3.0);
 }
@@ -5203,10 +5279,10 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureRead(c + vec3<i32>(0, 0, 1)).y - pressureRead(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -5214,8 +5290,12 @@ fn csProjectPressure(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  fluidDst[base + 2u] = fireLayer;
-  fluidDst[base + 3u] = microLayer;
+  if (compactAppearanceOn()) {
+    fluidDst[base + 2u] = fluidSrc[base + 2u];
+  } else {
+    fluidDst[base + 2u] = fireLayer;
+    fluidDst[base + 3u] = microLayer;
+  }
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -5238,10 +5318,10 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
     pressureReadComposite(c + vec3<i32>(0, 0, 1)).y - pressureReadComposite(c + vec3<i32>(0, 0, -1)).y
   ) * 0.5;
   let velocityDensity = fluidSrc[base];
-  let density = velocityDensity.w;
   let material = fluidSrc[base + 1u];
-  let fireLayer = fluidSrc[base + 2u];
-  let microLayer = fluidSrc[base + 3u];
+  let fireLayer = readSlot(c, 2u);
+  let microLayer = readSlot(c, 3u);
+  let density = derivedDensityFromSlots(material, microLayer);
   frontDst[idx] = frontSrc[idx];
   if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
   let activeMaterial = clamp(density * 0.48 + material.x * 0.24 + material.y * 0.18 + fireLayer.x * 0.18 + microLayer.x * 0.12, 0.0, 1.6);
@@ -5249,8 +5329,12 @@ fn csProjectPressureTiered(@builtin(global_invocation_id) gid: vec3<u32>) {
   let correctedVelocity = velocityDensity.xyz - pressureGradient * projectionGain;
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), density);
   fluidDst[base + 1u] = material;
-  fluidDst[base + 2u] = fireLayer;
-  fluidDst[base + 3u] = microLayer;
+  if (compactAppearanceOn()) {
+    fluidDst[base + 2u] = fluidSrc[base + 2u];
+  } else {
+    fluidDst[base + 2u] = fireLayer;
+    fluidDst[base + 3u] = microLayer;
+  }
 }
 
 // Converged pressure solver. Same 7-point Laplacian and wide-stencil divergence
@@ -5407,7 +5491,7 @@ fn csProjectPressureConverged(@builtin(global_invocation_id) gid: vec3<u32>) {
   fluidDst[base] = vec4<f32>(boundVelocity(correctedVelocity), velocityDensity.w);
   fluidDst[base + 1u] = fluidSrc[base + 1u];
   fluidDst[base + 2u] = fluidSrc[base + 2u];
-  fluidDst[base + 3u] = fluidSrc[base + 3u];
+  if (!compactAppearanceOn()) { fluidDst[base + 3u] = fluidSrc[base + 3u]; }
 }
 
 fn pressureResidualReduce(
@@ -5987,11 +6071,7 @@ fn sampleReactantOxidizer(cellCenter: vec3<f32>) -> f32 {
       }
     }
   }
-  let fine = select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
-  if (!joinedGhosts()) { return fine; }
-  let outside = ghostOutsideAmount(cellCenter);
-  if (outside <= 0.0) { return fine; }
-  return mix(fine, ghostScalarsAt(cellCenter).w, clamp(outside * 2.0, 0.0, 1.0));
+  return select(u.reactant_combustion_c.z, weighted / max(weightSum, 1e-12), weightSum > 0.0);
 }
 
 // The fresh burn (sidecar .y) at a cell-centred point: plain trilinear over the
@@ -6085,7 +6165,7 @@ fn reactantOxidizerExtrema(cellCenter: vec3<f32>) -> vec2<f32> {
 // order outside the source extrema), first-order semi-Lagrangian otherwise.
 fn transportReactantOxidizer(cellI: vec3<i32>, backCell: vec3<f32>, forwardCell: vec3<f32>, macCormackScalars: bool) -> f32 {
   let predicted = sampleReactantOxidizer(backCell);
-  if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0 || (joinedGhosts() && ghostOutsideAmount(backCell) > 0.0)) {
+  if (!macCormackScalars || inflowGhostBlend(backCell) > 0.0) {
     return predicted;
   }
   let reversed = sampleReactantPredicted(forwardCell);
@@ -6190,11 +6270,11 @@ ${PHYSICAL_COLOR_WGSL}
 ${AGX_WGSL}
 ${RAY_START_WGSL}
 ${OPTICAL_STEPPING_WGSL}
+override RAY_STEP_STATS: bool = false;
+@group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${EMISSIVE_TRANSPORT_WGSL}
-${JOINED_OPTICS_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
-${SCENE_JOINED_SOURCE_WGSL}
 
 fn fireColor(temp: f32) -> vec3<f32> {
   let ember = vec3<f32>(0.70, 0.10, 0.018);
@@ -6531,6 +6611,34 @@ fn csIrradianceAnalytic(@builtin(local_invocation_index) tid: u32) {
   }
 }
 
+// Appearance relayout: run once by the host when the effective appearance
+// model changes, before the first step under the new model. Reads the stored
+// form the previous model left and writes the form the new model reads. The
+// expansion carries the dropped carriers into the authored layout; the compact
+// direction keeps flame, shred and front and leaves slot 3 untouched.
+@compute @workgroup_size(4, 4, 4)
+fn csAppearanceRelayout(@builtin(global_invocation_id) gid: vec3<u32>) {
+  seatGridShape();
+  if (any(gid >= vec3<u32>(GRID, GRID_Y, GRID))) {
+    return;
+  }
+  let idx = index3(gid);
+  let base = idx * SLOTS_PER_CELL;
+  fluidDst[base] = fluidSrc[base];
+  fluidDst[base + 1u] = fluidSrc[base + 1u];
+  let fire = fluidSrc[base + 2u];
+  if (compactAppearanceOn()) {
+    let micro = fluidSrc[base + 3u];
+    fluidDst[base + 2u] = vec4<f32>(fire.x, micro.y, 0.0, fire.w);
+    frontDst[idx] = 0.0;
+  } else {
+    fluidDst[base + 2u] = expandCompactCarriers(2u, fire, fire.x, fire.y, fire.w);
+    fluidDst[base + 3u] = expandCompactCarriers(3u, fire, fire.x, fire.y, fire.w);
+    frontDst[idx] = clamp(fire.w * COMPACT_FRONT_TOPOLOGY_RATIO, 0.0, 2.0);
+  }
+  if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), textureLoad(reactantSrc, vec3<i32>(gid), 0)); }
+}
+
 @compute @workgroup_size(4, 4, 4)
 fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   seatGridShape();
@@ -6556,6 +6664,13 @@ fn csTransportPredict(@builtin(global_invocation_id) gid: vec3<u32>) {
   let centreVelocity = centreVelocityAt(vec3<i32>(gid));
   let advectVelocity = vec3<f32>(centreVelocity.x * bonfireAdvectionLateralDamping, centreVelocity.y, centreVelocity.z * bonfireAdvectionLateralDamping);
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * dynamicsBacktraceScale());
+  if (compactAppearanceOn()) {
+    // Stored form: three slots predicted, slot 3 untouched.
+    fluidPredict[base] = sampleFluidSlotInflowWith(backCell, 0u, true);
+    fluidPredict[base + 1u] = sampleFluidSlotInflowWith(backCell, 1u, true);
+    fluidPredict[base + 2u] = sampleFluidSlotInflowWith(backCell, 2u, true);
+    return;
+  }
   for (var slot = 0u; slot < SLOTS_PER_CELL; slot = slot + 1u) {
     fluidPredict[base + slot] = sampleFluidSlotInflow(backCell, slot);
   }
@@ -6841,22 +6956,6 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     emberFleck = mix(emberFleck, 0.0, immersedEntry);
     combustionFrontTopology = mix(combustionFrontTopology, 0.0, immersedEntry);
   }
-
-  // A resident material producer supplies gas, never visible flame. The gas
-  // then meets transported air and burns through the same reactant law.
-  var residentRate = 0.0;
-  if (reactantOn && all(textureDimensions(residentGasSource) == vec3<u32>(GRID, GRID_Y, GRID))) {
-    let supply = textureLoad(residentGasSource, cellI, 0).xy;
-    residentRate = max(0.0, supply.x);
-    let entry = 1.0 - exp(-residentRate * timeStep);
-    fuel = mix(fuel, 1.0, entry);
-    heat = mix(heat, max(0.0, supply.y), entry);
-    oxidizer = mix(oxidizer, 0.0, entry);
-    smoke = mix(smoke, 0.0, entry);
-  }
-  // The pressure target is in stored-velocity divergence units, whereas the
-  // producer reports gas-volume turnover per reference step.
-  let residentDivergence = residentRate / transportBacktraceScale(dynamicsSpeed());
 
   let sourceCenter = p - u.primitive_source.xyz;
   let radial = length(p.xz);
@@ -7472,7 +7571,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   var canonicalEntrainmentVelocity = vec3<f32>(0.0);
   if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {
     let canonicalTransportDelta = prev.xyz - advected.xyz;
-    let canonicalDensityDelta = prev.w - advected.w;
+    let canonicalDensityDelta = derivedDensityFromSlots(readSlot(cellI, 1u), readSlot(cellI, 3u)) - derivedDensityFromSlots(material, microLayer);
     let canonicalTangentTransport = clamp(dot(canonicalTransportDelta, canonicalTangent), -0.05, 0.05);
     let canonicalInwardTransport = clamp(dot(canonicalTransportDelta, canonicalInward) + canonicalDensityDelta * 0.035, -0.035, 0.035);
     let canonicalVerticalTransport = clamp(canonicalTransportDelta.y + canonicalDensityDelta * 0.020, -0.025, 0.025);
@@ -7682,7 +7781,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (reactantOn) {
     // The candidate's burned amount, already taken from fuel and oxidizer at
     // the burn site, is the expansion source (same gain, same units).
-    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget + residentDivergence, 0.0, 0.0, 0.0));
+    textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * reactantFreshBurnRate + immersedTarget, 0.0, 0.0, 0.0));
   } else {
     let fuelBurnRate = heat * 0.018 + fuelConsumption;
     // The fuel actually consumed this step, per unit time: the decrement is
@@ -8040,13 +8139,20 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * canonicalProofCarrierMask;
   fireLick = fireLick * canonicalProofCarrierMask;
   emberFleck = emberFleck * canonicalProofCarrierMask;
-  let quenchNeighborMax = max(
-    max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
-    max(
-      max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
-      max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
-    )
-  );
+  // The quench field spreads to neighbours only while a liquid is bound with
+  // transfer enabled (the host packs the flag); otherwise the six reads are
+  // skipped and a wetted cell only decays.
+  let quenchSpreadActive = u.reactant_combustion_d.z > 0.5;
+  var quenchNeighborMax = 0.0;
+  if (quenchSpreadActive) {
+    quenchNeighborMax = max(
+      max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
+      max(
+        max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
+        max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
+      )
+    );
+  }
   let transportedQuench = max(clamp(f32(quenchSrc[idx]) / 65536.0, 0.0, 1.0) * 0.996, quenchNeighborMax * 0.92);
   let persistentQuench = max(0.0, transportedQuench - 0.0003);
   quenchDst[idx] = u32(clamp(persistentQuench, 0.0, 1.0) * 65536.0 + 0.5);
@@ -8095,18 +8201,25 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (reactantOn) {
     smoke = smoke * sootBurnoutSurvival(heat, clamp(oxidizer / max(u.reactant_combustion_c.z, 1e-6), 0.0, 1.0), timeStep);
   }
-  let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   // The wall sponge on velocity is a per-step survival written after the
   // increment law's line, so it takes the rate law directly.
   // Reactant law: the open top passes the flow as well as the material, or the
   // material decelerates and piles up under a braked ceiling.
   vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));
   vel.y = mix(max(vel.y, -0.015), vel.y, max(bonfireScene, select(0.0, 1.0, joinedBoundary())));
-  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), density);
+  // Slot 0's fourth lane is reserved (the old stored density; now derivedDensityFromSlots where read).
+  fluidDst[base] = vec4<f32>(select(boundVelocity(vel), vel, faceForcesOn()), 0.0);
   fluidDst[base + 1u] = vec4<f32>(clamp(smoke, 0.0, 2.2), clamp(heat, 0.0, 2.4), clamp(fuel, 0.0, 1.8), clamp(materialDetail, 0.0, 1.8));
-  fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
-  fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
-  frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
+  let compact = compactAppearanceOn();
+  // compact-3 stores flame, interface shred and combustion front only; the rest
+  // is rebuilt at the slot samplers (expandCompactCarriers).
+  if (compact) {
+    fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(interfaceShred, 0.0, 1.8), 0.0, clamp(combustionFront, 0.0, 1.8));
+  } else {
+    fluidDst[base + 2u] = vec4<f32>(clamp(flame, 0.0, 2.4), clamp(ember, 0.0, 2.0), clamp(flameDetail, 0.0, 1.8), clamp(combustionFront, 0.0, 1.8));
+    fluidDst[base + 3u] = vec4<f32>(clamp(microSmoke, 0.0, 1.8), clamp(interfaceShred, 0.0, 1.8), clamp(fireLick, 0.0, 1.8), clamp(emberFleck, 0.0, 1.4));
+  }
+  frontDst[idx] = select(clamp(combustionFrontTopology, 0.0, 2.0), 0.0, compact);
   if (reactantOn) {
     textureStore(reactantDst, cellI, vec4<f32>(clamp(oxidizer, 0.0, 2.0), reactantFreshBurnRate, 0.0, 0.0));
   }
@@ -8195,6 +8308,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
   let opticalTrace = opticalCaptureMode == 5u;
   let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu; }
   if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
     return makeRaymarchResult(vec4<f32>(0), 1.0, vec4<f32>(0), vec4<f32>(0), vec4<f32>(0), vec4<f32>(0));
   }
@@ -8210,13 +8324,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   // The box spans x/z [-1, 1] and y [-1, -1 + 2 GRID_Y/GRID] at equal pitch
   // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
   let domainHalfY = f32(GRID_Y) / f32(GRID);
-  let nearHit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
-  var hit = nearHit;
-  let exteriorActive = joinedRenderOn() && !fullGridCapture && !opticalTrace;
-  if(exteriorActive){
-    let lo=joinedRender.loPitch.xyz;let hi=joinedRender.hiEnabled.xyz;
-    hit=boxHit(ro-(lo+hi)*.5,rd,(hi-lo)*.5);
-  }
+  let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
   if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
     if (opticalTrace) { writeOpticalTraceMiss(traceRay); }
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
@@ -8354,12 +8462,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);
   // Keep ordinary sample positions stable; clipping removes hidden samples,
   // rather than resampling the visible fire at a different density.
-  let standaloneDt = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
-  let dtBase = select(standaloneDt,max(2.0/f32(GRID),max(0.0,nearHit.y-max(0.0,nearHit.x)))/steps,exteriorActive);
+  let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let jitter = dtBase * rayStartPhase(in.pos.xy, u.reserved_render_controls.w, fullGridCapture);
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
-  let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5 && !exteriorActive;
+  let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5;
   var opticalStep = opticalStepInit(startT, endT, dtBase);
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
@@ -8392,12 +8499,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
   let expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
-  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u
-    + select(0u,u32(ceil(max(0.0,endT-startT)/max(.0001,joinedRender.loPitch.w*.5)))+4u,exteriorActive);
+  let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
   var expensiveSamples = 0u;
+  var rayMaterialSamples = 0u;
   var traversalSteps = 0u;
   loop {
-    if (!opticalStepping && ((!exteriorActive && expensiveSamples >= expensiveSampleBudget) || traversalSteps >= maxTraversalSteps)) { break; }
+    if (!opticalStepping && (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps)) { break; }
     if (!opticalStepping && !fullGridCapture && !opticalTrace && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
@@ -8413,14 +8520,6 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
-    if(exteriorActive && !joinedInsideFine(p)){
-      var ds=min(joinedRender.loPitch.w*.5,max(.0001,endT-t));
-      if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+.00001;}
-      let medium=joinedPassiveMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority);
-      let sigma=medium.absorption+medium.scattering;
-      color+=trans*(medium.emission+medium.scattering*joinedIncidentAt(p,medium.absorption+medium.scattering))*emissionIntegral(sigma,ds);
-      trans*=exp(-sigma*ds);t+=ds;continue;
-    }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var neighborhood: RaymarchNeighborhood;
@@ -8431,7 +8530,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     } else {
       directSupport = directCellOpticalSupport(p);
     }
-    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && (!exteriorActive || joinedOuterSample(p).x<=0.0001)) {
+    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -8450,6 +8549,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       reconstructed = sampleWorldFlowReconstructionRaw(p);
     }
     expensiveSamples = expensiveSamples + 1u;
+    rayMaterialSamples++;
     let state = reconstructed.velocityDensity;
     let material = reconstructed.material;
     let fireLayer = reconstructed.fireLayer;
@@ -9343,12 +9443,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       // Boundary Fire has its own material support; shellAmount belongs to
       // the separate topology-shell renderer (many valid basins set it to 0).
       let coverage = boundaryMaterialSupport * selectiveRaymarchFireAuthority;
-      let medium = joinedBlendMaterial(p,emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority),visibleSmokeAuthority,selectiveRaymarchFireAuthority);
+      let medium = emissiveMaterial(reconstructed, coverage, visibleSmokeAuthority);
       let sigma = medium.absorption + medium.scattering;
-      let scatteredSource = medium.scattering * joinedIncidentAt(p,medium.absorption+medium.scattering);
+      let scatteredSource = medium.scattering * incidentAt(p);
       let emission = medium.emission + scatteredSource;
       if (opticalStepping) {
-        opticalStepObserve(&opticalStep, vec4<f32>(emission, sigma));
+        opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);
         color = opticalStep.transfer.xyz;
         trans = opticalStep.transfer.w;
         continue;
@@ -9587,6 +9687,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = rayMaterialSamples; }
   return makeRaymarchResult(
     vec4<f32>(outputColor, outputAlpha),
     trans,
@@ -9840,16 +9941,8 @@ fn injectAnalyticEmitter(@builtin(global_invocation_id) localId: vec3<u32>) {
   material = clamp(material, vec4<f32>(0.0), vec4<f32>(2.2, 2.4, 1.8, 1.8));
   fireLayer = clamp(fireLayer, vec4<f32>(0.0), vec4<f32>(2.4, 2.0, 1.8, 1.8));
   microLayer = clamp(microLayer, vec4<f32>(0.0), vec4<f32>(1.8, 1.8, 1.8, 1.4));
-  let legacyInjectedDensity = clamp(max(
-    material.x * 1.08 + microLayer.x * 0.08,
-    material.y * 0.42
-      + material.w * 0.18
-      + microLayer.y * 0.20
-      + microLayer.z * 0.05
-      + material.z * 0.10
-  ), 0.0, 2.2);
-  let injectedDensity = select(previousVelocityDensity.w, legacyInjectedDensity, sourceLaw < 0.5);
-  let candidateVelocityDensity = vec4<f32>(injectedVelocity, injectedDensity);
+  // Slot 0's fourth lane is reserved (density is derived where it is read).
+  let candidateVelocityDensity = vec4<f32>(injectedVelocity, 0.0);
   let candidateMaterial = material;
   let candidateFireLayer = fireLayer;
   let candidateMicroLayer = microLayer;
@@ -10248,8 +10341,34 @@ fn boundarySplatClampCell(cell: vec3<i32>) -> vec3<u32> {
   return vec3<u32>(clamp(cell, vec3<i32>(0), vec3<i32>(i32(GRID) - 1, i32(GRID_Y) - 1, i32(GRID) - 1)));
 }
 
+// Appearance model flag for this module (the splat camera's gridShape.z lane).
+fn compactAppearanceOn() -> bool {
+  return boundarySplatCamera.gridShape.z > 0.5;
+}
+
+// Same law as the main module's expandCompactCarriers (separate shader module);
+// the appearance-model contract pins the two copies identical.
+fn expandCompactCarriers(slot: u32, value: vec4<f32>, flame: f32, shred: f32, front: f32) -> vec4<f32> {
+  // Stored form under compact-3: slot 2 = (flame, shred, 0, front); slot 3 unused.
+  if (!compactAppearanceOn()) { return value; }
+  if (slot == 2u) {
+    // flame, ember, flameDetail, combustionFront
+    return vec4<f32>(flame, 0.575 * flame + 0.016 * shred + 0.229 * front, 0.866 * flame + 0.110 * front, front);
+  }
+  if (slot == 3u) {
+    // microSmoke, interfaceShred, fireLick, emberFleck
+    return vec4<f32>(0.0, shred, 1.258 * flame + 0.068 * shred + 0.214 * front, 0.111 * flame + 0.050 * shred + 2.744 * front);
+  }
+  return value;
+}
+
 fn boundarySplatReadSlot(cell: vec3<i32>, slot: u32) -> vec4<f32> {
-  return fluid[boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL + slot];
+  let base = boundarySplatCellIndex(boundarySplatClampCell(cell)) * SLOTS_PER_CELL;
+  if (slot >= 2u && compactAppearanceOn()) {
+    let carriers = fluid[base + 2u];
+    return expandCompactCarriers(slot, carriers, carriers.x, carriers.y, carriers.w);
+  }
+  return fluid[base + slot];
 }
 
 fn boundarySplatReadSidecar(cell: vec3<i32>) -> vec4<f32> {
@@ -10396,8 +10515,14 @@ fn boundarySplatFlowReconstruction(world: vec3<f32>) -> BoundarySplatReconstruct
   return boundarySplatFlowReconstructionWithFrame(world, boundarySplatFlowFrame(world), centerWeight, neighborWeight);
 }
 
+// Same law as the main module's derivedDensityFromSlots (this is a separate
+// shader module); the channel-cleanup contract pins the two copies identical.
+fn derivedDensityFromSlots(material: vec4<f32>, microLayer: vec4<f32>) -> f32 {
+  return clamp(max(material.x * 1.08 + microLayer.x * 0.08, material.y * 0.42 + material.w * 0.18 + microLayer.y * 0.20 + microLayer.z * 0.05 + material.z * 0.10), 0.0, 2.2);
+}
+
 fn boundarySplatOpticalSupport(reconstructed: BoundarySplatReconstructionSample) -> vec4<f32> {
-  let density = max(reconstructed.velocityDensity.w, reconstructed.material.x);
+  let density = max(derivedDensityFromSlots(reconstructed.material, reconstructed.micro), reconstructed.material.x);
   let fire = reconstructed.fire.x * 1.25
     + reconstructed.fire.z * 0.52
     + reconstructed.fire.w * 0.86
@@ -11255,7 +11380,6 @@ export function createKaminosVolumePrototype({
   sharedGpuContext = null,
   getSceneDepth = null,
   getSceneCollision = null,
-  getSceneEditing = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
   externalDevice = null,
@@ -11958,7 +12082,9 @@ export function createKaminosVolumePrototype({
   let leanStockProductRaymarchPipeline = null;
   let leanEmissiveProductRaymarchPipeline = null;
   let debugRaymarchShaderSpecialization = 'auto';
-  let debugOpticalStepping = opticalSteppingConfig();
+  let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
+  let rayStepTelemetry = null;
+  let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
   let opticalTransportContributionPipeline = null;
@@ -11978,14 +12104,17 @@ export function createKaminosVolumePrototype({
   let computePipeline = null;
   let faceForcesPipeline = null;
   let transportPredictPipeline = null;
+  let appearanceRelayoutPipeline = null;
+  // The stored form the current fluid buffer holds ('authored' | 'compact-3');
+  // uploads and resets write the authored form. Converted by the relayout pass
+  // when it differs from the effective appearance model.
+  let fluidLayoutInForce = 'authored';
   let transportPredictBindGroupLayout = null;
   let sceneSolidTexture = null;
   let sceneSolidTextureView = null;
   let sceneSolidRevisionKey = null;
   let sceneSolidCellsCpu = null;
   let sceneSolidGeometryCache = null;
-  let sceneSolidGpu = null;
-  let sceneSolidGpuSupportKey = null;
   let sceneSolidSupportCache = null;
   let immersedWallCache = null;
   const immersedSourceWeightCache = createImmersedSourceWeightCache();
@@ -12055,8 +12184,6 @@ export function createKaminosVolumePrototype({
   const distributedPipelines = new Map();
   const scenePointPipelines = new Map();
   let sceneSourceFrameConsumer = null;
-  let gpuThermalConsumer = null;
-  let thermalFluidGeneration = 0;
   const sceneSourcePreparedEncoders = new WeakSet();
   let sceneMediumSource = null;
   let emissiveWhiteKelvin = null;
@@ -12277,17 +12404,6 @@ export function createKaminosVolumePrototype({
       immersedAdmitted: Boolean(immersed.effective?.admitted),
       immersedReason: immersed.effective?.reason ?? null,
     });
-    if (next.admitted && joinedExterior?.admission) {
-      const exterior = joinedExterior.admission(joinedProducerSnapshot());
-      if (!exterior.admitted) Object.assign(next,{admitted:false,reason:`exterior:${exterior.reason}`,effective:'standalone-fine'});
-    }
-    // Emitter previews can temporarily disable injection outside the box.
-    // Keep the installed join allocation while the edit uses standalone fine
-    // uniforms. Source admission remains truthful in the immersed config.
-    if (joinedExterior && getSceneEditing?.() && (state.joinedBoundary?.requested || next.requested)) {
-      state.joinedBoundary = { ...state.joinedBoundary, requested: next.requested, deferredAdmission: next };
-      return state.joinedBoundary;
-    }
     const changed = Boolean(state.joinedBoundary?.admitted) !== next.admitted;
     state.joinedBoundary = next;
     if (changed && device) rebuildFluidState(gridSize, 'joined-boundary-change');
@@ -12303,13 +12419,6 @@ export function createKaminosVolumePrototype({
   // A constant synthetic exterior written by debugFillJoinedGhosts (witnesses
   // only; the generation then follows the step).
   let joinedGhostSynthetic = null;
-  // Provisional exterior (quiescent coarse box, pressure-only coupling) that
-  // steps inside encodeSim while the joined boundary is admitted.
-  let joinedExterior = null;
-  let joinedRenderFallback = null;
-  let joinedRenderUniform = null;
-  let preparingJoinedExterior = false;
-  let fluidAllocationGeneration = 0;
   const joinedGhostView = index => joinedGhostTextures[index].createView({ dimension: '3d' });
   let forceDeltaTexture = null;
   const inletPuffProcess = new StochasticSignalSet(2, 1);
@@ -12318,8 +12427,6 @@ export function createKaminosVolumePrototype({
   let inflowCoverageMap = null;
   let fluidPredictBuffer = null;
   let fluidPredictBufferBytes = 0;
-  let emptyGasSourceTexture = null;
-  let transportGasSourceTexture = null;
   // Evidence route only: a calibrated-mode epsilon set through the debug API,
   // never persisted, always named in the receipt.
   let confinementEpsilonOverride = null;
@@ -12330,7 +12437,6 @@ export function createKaminosVolumePrototype({
   // otherwise, so the authored law allocates and touches nothing.
   let reactantTextures = [];
   let reactantSidecarFull = false;
-  let reactantAllocationGeneration = 0;
   function writeReactantAmbient(texture) {
     const texels = new Float32Array(gridCellCount(gridSize) * 2);
     for (let i = 0; i < texels.length; i += 2) texels[i] = REACTANT_MODEL.ambientOxidizer;
@@ -12339,9 +12445,6 @@ export function createKaminosVolumePrototype({
   // Returns true when the textures were (re)created, so the caller rebuilds the bind groups.
   function ensureReactantSidecar(admitted) {
     if (!device) return false;
-    // An outside-source preview must not destroy the existing oxidizer state.
-    // Admission uniforms still disable its use; settlement reconciles allocation.
-    if (!admitted && reactantSidecarFull && joinedExterior && getSceneEditing?.()) return false;
     if (reactantTextures.length === 2 && reactantSidecarFull === admitted) return false;
     for (const texture of reactantTextures) texture.destroy();
     const size = admitted ? [gridSize, gridHeight, gridSize] : [1, 1, 1];
@@ -12357,7 +12460,6 @@ export function createKaminosVolumePrototype({
       return texture;
     });
     reactantSidecarFull = admitted;
-    reactantAllocationGeneration++;
     return true;
   }
   // The sidecar view for a bind group; a scene-solid rebuild can run before the
@@ -12924,12 +13026,6 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
-    joinedRenderFallback?.destroy(); joinedRenderFallback=null;
-    joinedRenderUniform?.destroy(); joinedRenderUniform=null;
-    sceneSolidGpu?.destroy();
-    sceneSolidGpu = null;
-    sceneSolidGpuSupportKey = null;
-    sceneSolidGeometryCache = null;
     sceneSolidTexture?.destroy();
     sceneSolidTexture = null;
     sceneSolidTextureView = null;
@@ -12970,9 +13066,6 @@ export function createKaminosVolumePrototype({
     fluidPredictBuffer = null;
     fluidPredictBufferBytes = 0;
     transportPredictBindGroup = null;
-    emptyGasSourceTexture?.destroy();
-    emptyGasSourceTexture = null;
-    transportGasSourceTexture = null;
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
@@ -13107,12 +13200,11 @@ export function createKaminosVolumePrototype({
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
-        { binding: 20, resource: (joinedExterior?.optical ?? joinedRenderFallback).createView() },
-        { binding: 21, resource: { buffer: joinedRenderUniform } },
         { binding: 22, resource: forceDeltaTexture.createView({ dimension: '3d' }) },
         { binding: 23, resource: reactantRead.createView({ dimension: '3d' }) },
         { binding: 24, resource: reactantWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
+        { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
       ],
     });
   }
@@ -13124,34 +13216,22 @@ export function createKaminosVolumePrototype({
     // releases without a rebuild.
     if (!device || !transportPredictBindGroupLayout) return;
     const wantBytes = required ? fluidBufferBytes(gridSize) : TRANSPORT_PREDICTOR_PLACEHOLDER_BYTES;
-    if (!emptyGasSourceTexture) {
-      emptyGasSourceTexture = device.createTexture({label:'empty resident gas source',dimension:'3d',size:[1,1,1],format:'rg32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
-      device.queue.writeTexture({texture:emptyGasSourceTexture},new Float32Array(2),{bytesPerRow:8},[1,1,1]);
-    }
-    const source = gpuThermalConsumer?.gasSource;
-    if (source && (source.device !== device || !source.texture?.createView || source.dimensions?.length !== 3 || source.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i]))) throw Error('Resident gas source requires the current same-device fluid grid');
-    const gasTexture = source?.texture ?? emptyGasSourceTexture;
-    const bufferChanged = !fluidPredictBuffer || fluidPredictBufferBytes !== wantBytes;
-    if (!bufferChanged && transportGasSourceTexture === gasTexture && transportPredictBindGroup) return;
-    if (bufferChanged) {
-      fluidPredictBuffer?.destroy();
-      fluidPredictBuffer = device.createBuffer({
+    if (fluidPredictBuffer && fluidPredictBufferBytes === wantBytes) return;
+    fluidPredictBuffer?.destroy();
+    fluidPredictBuffer = device.createBuffer({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       size: wantBytes,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
-      fluidPredictBufferBytes = wantBytes;
-      device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
-    }
+    fluidPredictBufferBytes = wantBytes;
+    device.queue.writeBuffer(fluidPredictBuffer, 0, new Float32Array(wantBytes / Float32Array.BYTES_PER_ELEMENT));
     transportPredictBindGroup = device.createBindGroup({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group ${required ? `${gridShapeLabel(gridSize)}` : 'placeholder'}`,
       layout: transportPredictBindGroupLayout,
       entries: [
         { binding: 1, resource: { buffer: fluidPredictBuffer } },
-        { binding: 2, resource: gasTexture.createView({dimension:'3d'}) },
       ],
     });
-    transportGasSourceTexture = gasTexture;
   }
 
   function rebuildFluidBindGroups() {
@@ -13259,26 +13339,7 @@ export function createKaminosVolumePrototype({
     state.immersedWallBuilds = (state.immersedWallBuilds || 0) + 1;
     return immersedWallCache;
   }
-  function joinedEditingHeld() {
-    const active = Boolean(joinedExterior && (state.joinedBoundary?.requested || state.joinedBoundary?.admitted));
-    const edit = active && getSceneEditing?.();
-    const liveCollider = joinedExterior?.residentSolids && edit && !edit.affectsSource && !['@flame-domain','flame-emitter','@burner-controls','@selection-transform'].includes(edit.id);
-    const held = Boolean(edit && !liveCollider);
-    const prior = state.joinedEditing;
-    const pending = Boolean(active && (prior?.pending || (prior?.held && !held)));
-    state.joinedEditing = {
-      held, target: edit?.id ?? null,
-      pending,
-      fine: held ? 'standalone-last-committed-collision' : pending ? 'paused-awaiting-rejoin' : state.joinedBoundary?.admitted ? 'joined' : 'standalone',
-      reason: held ? 'scene-edit-in-progress' : pending ? prior?.reason ?? 'awaiting-current-exterior-snapshot' : null,
-    };
-    return held;
-  }
-
   function refreshSceneCollision() {
-    // Hold before collecting/translating triangles, not merely before upload.
-    // Fine continues against the last committed mask until placement/cancel.
-    if (joinedEditingHeld()) return;
     if (!device || typeof getSceneCollision !== 'function') return;
     const backWall = immersedBackWallForState();
     const source = getSceneCollision();
@@ -13293,11 +13354,6 @@ export function createKaminosVolumePrototype({
       : !transport.commonCharacteristic ? `unsupported-transport-regime:${transport.scheme}`
       : null;
     if (reason || !requested) {
-      if (sceneSolidGpu) {
-        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;
-        sceneSolidTexture=null;sceneSolidCellsCpu=null;sceneSolidRevisionKey=null;
-        installSceneSolidTexture();rebuildSceneSolidBindingViews();
-      }
       if (backWall.cells.length) {
         const key = `wall:${backWall.maskKey}`;
         if (sceneSolidRevisionKey !== key) {
@@ -13318,37 +13374,6 @@ export function createKaminosVolumePrototype({
     }
     try {
       const started = performance.now();
-      if (typeof device.createComputePipeline === 'function' && (!state.joinedBoundary?.admitted || joinedExterior?.residentSolids)) {
-        if(!sceneSolidGpu){sceneSolidGpu=createGpuSceneSolidProducer(device,{grid:gridSize,gridHeight});sceneSolidGpuSupportKey=null;}
-        const geometry=sceneSolidGpu.update(source.objects||[{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight},{wallCells:backWall.cells});
-        const supportKey=JSON.stringify([analyticEmitterDescriptorSignature,analyticEmitterDispatch.active,analyticEmitterDispatch.cellMin,analyticEmitterDispatch.cellExtent]);
-        if(sceneSolidGpuSupportKey!==supportKey){
-          const support=new Uint32Array(gridSize*gridHeight*gridSize);
-          countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,new Uint8Array(support.length),gridSize,gridHeight,i=>{support[i]=1;});
-          sceneSolidGpu.setSourceSupport(support);sceneSolidGpuSupportKey=supportKey;
-        }
-        const maskKey=JSON.stringify([geometry.key,backWall.maskKey,supportKey]);
-        if(sceneSolidTexture!==sceneSolidGpu.texture){
-          sceneSolidTexture?.destroy();sceneSolidTexture=sceneSolidGpu.texture;sceneSolidTextureView=sceneSolidGpu.view;
-          sceneSolidTextureSizeKey=[gridSize,gridHeight,gridSize].join('x');sceneSolidTextureDevice=device;
-          sceneSolidCellsCpu=null;rebuildSceneSolidBindingViews();
-        }
-        if(sceneSolidRevisionKey===maskKey)return;
-        const encoder=device.createCommandEncoder({label:'scene solid GPU rebuild'});
-        sceneSolidGpu.encode(encoder);device.queue.submit([encoder.finish()]);
-        sceneSolidRevisionKey=maskKey;
-        state.sceneSolidGeometryBuilds=(state.sceneSolidGeometryBuilds||0)+geometry.builds;
-        state.sceneCollision={requested:true,effective:'mesh-voxel-solid',backend:'gpu',sourceId,reason:null,
-          geometryRevision:geometry.revision,grid:gridSize,triangleCount:geometry.triangleCount,members:geometry.members,
-          solidCellCount:null,blockedFaceCount:null,surfaceCellCount:null,interiorCellCount:null,
-          sourceSupport:null,validation:'gpu-resident-unread',emitterBackWallCells:backWall.cells.length,
-          residentBytes:gridSize*gridHeight*gridSize*4,rebuildSubmitMs:performance.now()-started,rebuildStep:state.simStepCount};
-        return;
-      }
-      if(sceneSolidGpu){
-        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidGeometryCache=null;sceneSolidTexture=null;
-        sceneSolidRevisionKey=null;installSceneSolidTexture();rebuildSceneSolidBindingViews();
-      }
       sceneSolidGeometryCache ||= createSceneSolidGeometryCache({voxelize:voxelizeTriangleSolid});
       const geometry = sceneSolidGeometryCache.update(source.objects || [{id:sourceId,object:source.object}],productTransform,{grid:gridSize,gridHeight});
       const {revision,field}=geometry;
@@ -13383,7 +13408,7 @@ export function createKaminosVolumePrototype({
       if (installSceneSolidTexture({...field, cells: composedWall.cells})) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = maskKey;
       state.sceneCollision = {
-        requested: true, effective: 'mesh-voxel-solid', backend:state.joinedBoundary?.admitted?'cpu-joined-compatibility':'cpu-reference',sourceId, reason: null,
+        requested: true, effective: 'mesh-voxel-solid', sourceId, reason: null,
         emitterBackWallCells: composedWall.addedCells, geometryRevision: revision, grid: gridSize,
         triangleCount: geometry.triangleCount, members:geometry.members,
         surfaceCellCount: field.surfaceCellCount, interiorCellCount: field.interiorCellCount,
@@ -13394,10 +13419,6 @@ export function createKaminosVolumePrototype({
         rebuildStep: state.simStepCount,
       };
     } catch (error) {
-      if (sceneSolidGpu) {
-        sceneSolidGpu.destroy();sceneSolidGpu=null;sceneSolidTexture=null;sceneSolidRevisionKey=null;
-        installSceneSolidTexture();rebuildSceneSolidBindingViews();
-      }
       if (sceneSolidCellsCpu && installSceneSolidTexture()) rebuildSceneSolidBindingViews();
       sceneSolidRevisionKey = null;
       state.sceneCollision = { requested: true, effective: 'off', sourceId,
@@ -14195,106 +14216,9 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
-  function joinedProducerSnapshot() {
-      const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
-      return {
-        joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
-        dims: [gridSize, gridHeight, gridSize],
-        pitch: 2 / gridSize,
-        timeStep: { mode: timeStep.mode, dtScale: timeStep.dtScale, referenceSpeed: timeStep.referenceSpeed, backtraceScale: timeStep.backtraceScale },
-        transportScheme: resolveTransportConfig(controlsSnapshot).effective.scheme,
-        fluidBuffer: fluidBuffers?.[currentFluid] ?? null,
-        fluidBuffers: fluidBuffers ? [...fluidBuffers] : null,
-        allocation: fluidAllocationGeneration,
-        fluidReadIndex: currentFluid,
-        reactant: { effective: state.reactantCombustion?.effective ?? null, allocation: reactantAllocationGeneration, textures: reactantSidecarFull ? [...reactantTextures] : null },
-        physicsAppearance: state.physicsAppearance ?? null,
-        frontBuffer: frontBuffers?.[currentFront] ?? null,
-        burnRateTexture,
-        solidMask: sceneSolidGpu ? {backend:'gpu',texture:sceneSolidTexture,cells:null,revision:sceneSolidRevisionKey,dims:[gridSize,gridHeight,gridSize]}
-          : sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
-        lowerFaceTexture: joinedLowerFaceTexture,
-        prescribedInlet: null,
-        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
-          textures: joinedGhostTextures ? { a: joinedGhostTextures[0], b: joinedGhostTextures[1] } : null },
-        simStepCount: state.simStepCount,
-      };
-    }
-
-  // Builds (or rebuilds) the provisional exterior around the current producer,
-  // binds its ghost geometry, seeds the ghosts and stamps the generation so
-  // the next fine step runs. Reallocation inside setJoinedGhosts re-keys the
-  // producer, so prepare runs until the key is stable.
-  function applyJoinedGhostGeometry(geometry = null) {
-      if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
-      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal, oxidizer: geometry.oxidizer ?? 'unavailable' } : null;
-      const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
-      joinedGhostGeometry = next;
-      joinedGhostSynthetic = null;
-      // A new geometry reinterprets whatever the textures hold: a new stamp is needed.
-      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
-      if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
-      return { geometry: next };
-    }
-
-  function prepareJoinedExterior() {
-    if (!joinedExterior || preparingJoinedExterior || joinedEditingHeld()) return null;
-    preparingJoinedExterior = true;
-    try {
-      if (state.joinedBoundary?.deferredAdmission) {
-        refreshJoinedBoundary();
-      }
-      if (!state.joinedBoundary?.admitted) {
-        joinedEditingHeld();
-        state.joinedEditing = { ...state.joinedEditing, pending: false, fine: 'standalone', reason: null };
-        syncJoinedRender();
-        return { admitted: false, reason: state.joinedBoundary?.reason };
-      }
-      let result = null;
-      for (let round = 0; round < 3; round++) {
-        const snapshot = joinedProducerSnapshot();
-        result = joinedExterior.prepare(snapshot);
-        if (!result.admitted) {
-          // A failed optional adapter must leave the established fine route
-          // usable. Remember the resulting standalone allocation too, so our
-          // own downgrade cannot look like an independently repaired producer.
-          refreshJoinedBoundary();
-          joinedExterior.deferRetry?.(joinedProducerSnapshot(),result.reason);
-          state.joinedEditing = {...state.joinedEditing,pending:false,fine:'standalone',reason:result.reason};
-          break;
-        }
-        const g = joinedExterior.ghosts;
-        const same = joinedGhostGeometry && String(joinedGhostGeometry.dims) === String(g.dims) && String(joinedGhostGeometry.originFine) === String(g.originFine) && joinedGhostGeometry.cellWidthFine === g.cellWidthFine && joinedGhostGeometry.finePitchLocal === g.finePitchLocal && joinedGhostGeometry.oxidizer === g.oxidizer;
-        if (!same) { applyJoinedGhostGeometry(g); continue; }
-        if (joinedExterior.seedGhosts(joinedProducerSnapshot())) {
-          joinedGhostSynthetic = null;
-          state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation: state.simStepCount };
-          state.joinedEditing = { ...state.joinedEditing, pending: false, reason: null };
-        }
-        break;
-      }
-      state.joinedExterior = joinedExterior.receipt();
-      if (state.joinedEditing?.pending) state.joinedEditing.reason = result?.reason ?? 'awaiting-current-exterior-snapshot';
-      syncJoinedRender();
-      return result;
-    } finally { preparingJoinedExterior = false; }
-  }
-
-  function syncJoinedRender() {
-    if(!device || !joinedRenderUniform)return;
-    const r=joinedExterior?.receipt();
-    const enabled=Boolean(r?.admitted && state.joinedBoundary?.admitted);
-    const lo=enabled?r.bounds.min:[0,0,0],hi=enabled?r.bounds.max:[0,0,0];
-    device.queue.writeBuffer(joinedRenderUniform,0,new Float32Array([...lo,enabled?r.cellWidth:1,...hi,enabled?1:0]));
-    if(bindGroups?.length)rebuildFluidBindGroups();
-    state.joinedRendering={enabled,route:r?.route??'disabled',bounds:enabled?r.bounds:null,material:'same-state-transported-smoke-heat',lighting:'boundary-incident-continuation'};
-  }
-
   function rebuildFluidState(nextGridSize = gridSize, reason = 'grid-rebuilt') {
-    state.thermalFluidAllocationId='thermal-fluid-'+(++thermalFluidGeneration);
     gridSize = normalizeGridSize(nextGridSize);
     gridHeight = gridHeightForSize(gridSize);
-    fluidAllocationGeneration += 1;
     updateAnalyticEmitterDebug();
     if (boundarySplatLiveUnionOverlay) {
       state.boundarySplatLiveUnionOverlayEffectiveIdentity = null;
@@ -14302,8 +14226,6 @@ export function createKaminosVolumePrototype({
       state.boundarySplatLiveUnionOverlayStatus = 'awaiting-population-audit';
     }
     destroyFluidState();
-    joinedRenderFallback=device.createTexture({label:'disabled exterior optical',size:[1,1,1],dimension:'3d',format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING});
-    joinedRenderUniform=device.createBuffer({label:'joined render bounds',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     boundarySplatCapacityAdmissionFailureReason = null;
     state.boundarySplatCapacityLimitReceipt = null;
@@ -14580,6 +14502,11 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor compute pipeline ${gridShapeLabel(gridSize)}`,
       layout: transportPipelineLayout,
       compute: { module: shader, entryPoint: 'csTransportPredict', constants: computePipelineConstants },
+    });
+    appearanceRelayoutPipeline = device.createComputePipeline({
+      label: `kaminos appearance relayout compute pipeline ${gridShapeLabel(gridSize)}`,
+      layout: transportPipelineLayout,
+      compute: { module: shader, entryPoint: 'csAppearanceRelayout', constants: computePipelineConstants },
     });
     analyticEmitterInjectionPipeline = device.createComputePipeline({
       label: `kaminos bounded analytic emitter injection ${gridShapeLabel(gridSize)}`,
@@ -15008,6 +14935,7 @@ export function createKaminosVolumePrototype({
     currentFluid = 0;
     currentFront = 0;
     currentQuench = 0;
+    fluidLayoutInForce = 'authored';
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}x${gridHeight}x${gridSize} velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -15106,6 +15034,8 @@ export function createKaminosVolumePrototype({
       device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
     state.gpuInitStage = 'device';
+    rayStepTelemetry = createRayStepTelemetry(device);
+    rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
@@ -15316,8 +15246,6 @@ export function createKaminosVolumePrototype({
         { binding: 18, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d' } },
         // The raymarch fragment entry point reaches divergenceAtCell through the shared module, so the binding must be fragment-visible too (slice-2 lesson at 1e8996ab).
         { binding: 19, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
-        { binding: 20, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '3d' } },
-        { binding: 21, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
         { binding: 28, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '2d-array' } },
         { binding: 29, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 30, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
@@ -15329,6 +15257,7 @@ export function createKaminosVolumePrototype({
         { binding: 23, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 24, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
+        { binding: 26, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -15506,7 +15435,6 @@ export function createKaminosVolumePrototype({
       label: `kaminos ${TRANSPORT_SCHEME_IDENTITY} predictor bind group layout`,
       entries: [
         { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 2, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'3d'} },
       ],
     });
     browserResidualBindGroupLayout = device.createBindGroupLayout({
@@ -16399,7 +16327,7 @@ export function createKaminosVolumePrototype({
       ], 44);
       splatCamera.set([camera.position.x, camera.position.y, camera.position.z, 0], 48);
       splatCamera.set([...productTransform.translate, productTransform.scale], 52);
-      splatCamera.set([gridSize, gridHeight, 0, 0], 56);
+      splatCamera.set([gridSize, gridHeight, appearanceModelUniformValue(state.appearanceModel?.effective), 0], 56);
       state.fullSupportDepositionReceipt = {
         identity: 'full-support-deposition-runtime-receipt-v0',
         requested: state.fullSupportDepositionRequested,
@@ -16449,6 +16377,7 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
+    uniforms[45] = debugOpticalStepping.tolerance;
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
     const bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
     uniforms[47] = controlsSnapshot.rayStartNoise === false ? 0 : 1;
@@ -16821,32 +16750,31 @@ export function createKaminosVolumePrototype({
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
-    if(sceneSolidGpu&&immersedSourceConfig.effective.admitted){
-      // Q/normaliser is unchanged by the solid-mask fraction; the shader still
-      // skips solid cells. Host-only totals are predictions without a snapshot.
-      state.immersedSource.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';
-      state.immersedSource.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};
-    }
-    const gasPressure = resolvePressureSolverConfig(controlsSnapshot).effective;
-    const residentGasAdmitted = !!gpuThermalConsumer?.gasSource && gasPressure.solver === PRESSURE_SOLVER_CONVERGED && gasPressure.dispatch === PRESSURE_SOLVER_CONVERGED && gasPressure.openTop;
     const reactantCombustionConfig = resolveReactantCombustionConfig(controlsSnapshot, {
       grid: gridSize,
       transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
       dt: resolveTimeStepConfig(controlsSnapshot).effective.dtScale,
-      sourceAdmitted: residentGasAdmitted || (String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true),
+      sourceAdmitted: String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true,
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
+    // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
+    // spreads only while a liquid is bound with transfer enabled.
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 14] = liquidFireContactDescriptor && liquidFireContactTransferEnabled ? 1 : 0;
+    // compact-3 is fitted on, and only meaningful under, the reactant law: under
+    // the authored law the dropped carriers feed the reaction itself, so
+    // rebuilding them changes the dynamics (measured: 2.6x brighter at step 320).
+    const appearanceRequested = String(controlsSnapshot.appearanceModel ?? 'authored');
+    const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig.effective.admitted ? 'compact-3' : 'authored';
+    uniforms[REACTANT_COMBUSTION_UNIFORM_OFFSET + 15] = appearanceModelUniformValue(appearanceEffective);
+    state.appearanceModel = { requested: appearanceRequested, effective: appearanceEffective, reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' ? 'compact-3-requires-the-reactant-law' : null, storedCarriers: appearanceEffective === 'compact-3' ? ['flame', 'interfaceShred', 'combustionFront', 'materialDetail'] : null, storedSlots: appearanceEffective === 'compact-3' ? 3 : 4, layout: fluidLayoutInForce };
     state.reactantCombustion = reactantCombustionConfig;
-    state.residentGasSource = {registered:!!gpuThermalConsumer?.gasSource,identity:gpuThermalConsumer?.gasSource?.identity??null,admitted:residentGasAdmitted && reactantCombustionConfig.effective.admitted,reason:!gpuThermalConsumer?.gasSource?'unregistered':!residentGasAdmitted?'requires-converged-open-top-pressure':reactantCombustionConfig.effective.reason};
     // Joined boundary and transport ghosts (the ghosts wait for the reactant
     // law's oxidizer ghost).
     state.joinedGhosts = {
       ...resolveJoinedGhosts({ geometry: joinedGhostGeometry, reactantOn: reactantCombustionConfig.effective.admitted === true }),
       generation: state.joinedGhosts?.generation ?? -1,
     };
-    // Keep allocation/admission and visible exterior intact; only the fine
-    // transport and pressure boundary law become standalone during an edit.
-    uniforms.set(joinedBoundaryUniformValues(state.joinedEditing?.held ? null : state.joinedBoundary, !state.joinedEditing?.held && state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
+    uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     if (ensureReactantSidecar(reactantCombustionConfig.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -17231,6 +17159,7 @@ export function createKaminosVolumePrototype({
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
+    prepareRayStepCounters();
   }
 
   function updateSimCostLedger(options = {}) {
@@ -17505,54 +17434,44 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  // Converts the stored form when the effective appearance model changed since
+  // the buffer was last written: one pass into the other buffer, then the
+  // flip the sim pass would do. The relayout reads the stored form directly,
+  // so it does not depend on which model the uniforms name for the read seam.
+  function ensureAppearanceLayout(encoder) {
+    const wanted = state.appearanceModel?.effective ?? 'authored';
+    if (wanted === fluidLayoutInForce) return false;
+    if (!appearanceRelayoutPipeline || !transportPredictBindGroup) {
+      throw new Error('appearance relayout pipeline unavailable');
+    }
+    const pass = encoder.beginComputePass({ label: `kaminos appearance relayout ${fluidLayoutInForce} -> ${wanted}` });
+    pass.setPipeline(appearanceRelayoutPipeline);
+    pass.setBindGroup(0, fluidBindGroup());
+    pass.setBindGroup(3, transportPredictBindGroup);
+    const workgroups = Math.ceil(gridSize / 4);
+    pass.dispatchWorkgroups(workgroups, Math.ceil(gridHeight / 4), workgroups);
+    pass.end();
+    currentFluid = 1 - currentFluid;
+    currentFront = 1 - currentFront;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    fluidLayoutInForce = wanted;
+    state.appearanceRelayouts = (state.appearanceRelayouts || 0) + 1;
+    if (state.appearanceModel) state.appearanceModel.layout = fluidLayoutInForce;
+    return true;
+  }
+
   function encodeSim(encoder, options = {}) {
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
-    if (joinedExterior?.paused) return false;
-    // Install current collider occupancy before admitting either predictor.
-    // A changed pressure topology cannot be discovered after fine advances.
-    refreshSceneCollision();
-    const editingHeld = Boolean(state.joinedEditing?.held);
-    if (!editingHeld && state.joinedBoundary?.requested && !state.joinedBoundary.admitted && joinedExterior?.retryAvailable?.(joinedProducerSnapshot())) {
-      refreshJoinedBoundary();
-      if (state.joinedBoundary.admitted) {
-        if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-        return false;
-      }
-    }
-    if (!editingHeld && state.joinedEditing?.pending) {
-      if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-      return false;
-    }
-    // Law/sidecar switches rebuild the exterior BEFORE either grid advances.
-    // Otherwise the first reactant step can consume an authored/zero-O2 ghost.
-    if (!editingHeld && state.joinedBoundary?.admitted && joinedExterior && !joinedExterior.matches(joinedProducerSnapshot())) {
-      const snapshot=joinedProducerSnapshot();
-      if (joinedExterior.canUpdateSolids?.(snapshot)) {
-        const updated=joinedExterior.prepare(snapshot);
-        state.joinedExterior=joinedExterior.receipt();
-        if (!updated.admitted) {
-          state.joinedExterior.lastSolidFailure=updated.reason;
-          if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-          return false;
-        }
-      } else {
-        if (!preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-        return false;
-      }
-    }
-    if (!editingHeld && state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
+    if (state.joinedBoundary?.admitted && state.joinedGhosts?.bound && !joinedGhostSynthetic && state.joinedGhosts.generation !== state.simStepCount) {
       state.joinedGhosts.reason = 'stale-ghost-generation';
-      // A rebuild invalidated the stamp: the exterior re-prepares outside encoding.
-      if (joinedExterior && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
       return false;
     }
+    refreshSceneCollision();
+    ensureAppearanceLayout(encoder);
     const transportConfig = resolveTransportConfig(controlsSnapshot);
     ensureTransportPredictorBuffer(transportConfig.effective.predictorPass);
-    if (gpuThermalConsumer?.gasSource) {
-      if (!state.residentGasSource?.admitted) throw Error('Resident gas source refused: '+state.residentGasSource?.reason);
-      gpuThermalConsumer.prepareSource(encoder, thermalGpuFrame());
-    }
     if (transportConfig.effective.predictorPass) {
       if (!transportPredictPipeline || !transportPredictBindGroup) {
         throw new Error('transport predictor pipeline unavailable');
@@ -17593,16 +17512,8 @@ export function createKaminosVolumePrototype({
     state.frontFieldWriteIndex = 1 - currentFront;
     state.frontFieldProjectionPassthrough = false;
     encodeAnalyticEmitterInjection(encoder);
-    if (!editingHeld && state.joinedBoundary?.admitted) {
-      if (joinedExterior) {
-        const result = joinedExterior.step(encoder, joinedProducerSnapshot());
-        state.joinedExterior = joinedExterior.receipt();
-        // The exterior wrote the ghosts for the next step.
-        if (result.stepped && state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: state.simStepCount + 1 };
-        else if (result.reason === 'exterior-not-prepared-for-current-producer' && !preparingJoinedExterior) queueMicrotask(() => prepareJoinedExterior());
-      }
+    if (state.joinedBoundary?.admitted) {
       state.simStepCount += 1;
-      encodeGpuThermalConsumer(encoder);
       updateSimCostLedger();
       return false;
     }
@@ -17610,19 +17521,8 @@ export function createKaminosVolumePrototype({
       timestampWrites: options.finalTimestampWrites,
     });
     state.simStepCount += 1;
-    encodeGpuThermalConsumer(encoder);
     updateSimCostLedger();
     return finalTimestampWritten;
-  }
-
-  function thermalGpuFrame() {
-    return {device,fluid:fluidBuffers[currentFluid],collision:sceneSolidTexture,dimensions:[gridSize,gridHeight,gridSize],
-      simStepCount:state.simStepCount,allocationId:state.thermalFluidAllocationId,
-      dt:resolveTimeStepConfig(controlsSnapshot).effective.dtScale/60,
-      transform:{translate:[...productTransform.translate],scale:productTransform.scale}};
-  }
-  function encodeGpuThermalConsumer(encoder) {
-    gpuThermalConsumer?.encode(encoder,thermalGpuFrame());
   }
 
   let pressureResidualCopySolver = null;
@@ -18316,6 +18216,81 @@ export function createKaminosVolumePrototype({
       profile.sourceGrid = gridSize;
       return profile;
     } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  // The step's own GPU cost: timestamp queries around the sim pass and the
+  // pressure projection over N real steps from the current state (uniforms packed
+  // per step as in a normal frame; the state advances). Per-step means in
+  // microseconds; the receipt names what was in force.
+  async function sampleSimGpuProfile(options = {}) {
+    const profile = { identity: SIM_GPU_PROFILE_IDENTITY, status: 'unsupported', reason: null };
+    if (!gpuInitialized || !device) { profile.reason = 'gpu-not-initialized'; return profile; }
+    if (!device.features?.has?.('timestamp-query')) { profile.reason = 'timestamp-query-not-supported'; return profile; }
+    const steps = Math.max(1, Math.min(4096, Math.floor(Number(options.steps) || 64)));
+    // An override lets one page profile both appearance models back to back
+    // (ABAB), so GPU clock state is shared between the arms being compared.
+    const overrideModel = APPEARANCE_MODELS.includes(options.appearanceModel) ? options.appearanceModel : null;
+    const savedAppearanceModel = controlsSnapshot.appearanceModel;
+    if (overrideModel) controlsSnapshot.appearanceModel = overrideModel;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const querySet = device.createQuerySet({ type: 'timestamp', count: steps * 4 });
+    const resolveBuffer = device.createBuffer({ label: 'kaminos sim gpu profile resolve', size: steps * 4 * 8, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    const readbackBuffer = device.createBuffer({ label: 'kaminos sim gpu profile readback', size: steps * 4 * 8, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    try {
+      const startNow = performance.now();
+      const stepMs = 1000 / 60;
+      // One submit per step, like the frame loop; a single 128-step submit
+      // reads very differently from frame-sized work on a clock-ramping GPU.
+      for (let step = 0; step < steps; step += 1) {
+        const encoder = device.createCommandEncoder({ label: 'kaminos sim gpu profile' });
+        updateUniforms(startNow + step * stepMs);
+        encodeSim(encoder, {
+          timestampWrites: { querySet, beginningOfPassWriteIndex: step * 4, endOfPassWriteIndex: step * 4 + 1 },
+          finalTimestampWrites: { querySet, beginningOfPassWriteIndex: step * 4 + 2, endOfPassWriteIndex: step * 4 + 3 },
+        });
+        state.frameCount += 1;
+        if (step === steps - 1) {
+          encoder.resolveQuerySet(querySet, 0, steps * 4, resolveBuffer, 0);
+          encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, steps * 4 * 8);
+        }
+        device.queue.submit([encoder.finish()]);
+      }
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const t = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const simSamples = [], projSamples = [];
+      for (let step = 0; step < steps; step += 1) {
+        const a = t[step * 4], b = t[step * 4 + 1], c = t[step * 4 + 2], d = t[step * 4 + 3];
+        if (a !== 0n && b !== 0n && b >= a) simSamples.push(Number(b - a) / 1000);
+        if (c !== 0n && d !== 0n && d >= c) projSamples.push(Number(d - c) / 1000);
+      }
+      // Order statistics, not only the mean: GPU clock ramps and background
+      // work skew the mean; the median and the minimum are what two arms in
+      // the same page can be compared on.
+      const stats = samples => {
+        if (!samples.length) return null;
+        const sorted = samples.slice().sort((x, y) => x - y);
+        const q = f => sorted[Math.min(sorted.length - 1, Math.floor(f * sorted.length))];
+        return { mean: samples.reduce((acc, v) => acc + v, 0) / samples.length, median: q(0.5), min: sorted[0], p10: q(0.1), p90: q(0.9), count: samples.length };
+      };
+      profile.status = simSamples.length === steps ? 'sampled' : 'partial';
+      profile.steps = steps;
+      profile.validSimSteps = simSamples.length;
+      profile.validProjectionSteps = projSamples.length;
+      profile.simPass = stats(simSamples);
+      profile.projection = stats(projSamples);
+      profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;
+      profile.projectionMicrosecondsPerStep = profile.projection?.mean ?? null;
+      profile.grid = [gridSize, gridHeight, gridSize];
+      profile.inForce = { reactionLaw: state.reactantCombustion?.effective?.law ?? null, appearanceModel: state.appearanceModel?.effective ?? null, transport: state.transport?.effective?.scheme ?? null, pressureSolver: controlsSnapshot.pressureSolver ?? null };
+      return profile;
+    } finally {
+      controlsSnapshot.appearanceModel = savedAppearanceModel;
       resolveBuffer.destroy();
       readbackBuffer.destroy();
       querySet.destroy?.();
@@ -20787,9 +20762,6 @@ export function createKaminosVolumePrototype({
       return null;
     }
     sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
-      getJoinedOptics:()=>{const r=joinedExterior?.receipt();return {enabled:Boolean(r?.admitted&&state.joinedBoundary?.admitted),
-        texture:joinedExterior?.optical,uniformBuffer:joinedRenderUniform,dimensions:r?.shape,
-        localMin:r?.bounds?.min,localMax:r?.bounds?.max};},
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
@@ -20812,6 +20784,13 @@ export function createKaminosVolumePrototype({
     return next;
   }
 
+  function prepareRayStepCounters() {
+    if (!rayStepTelemetry) return;
+    const supported=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full'&&productFrameOwner==='prototype';
+    if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
+      {supported,reason:'requires-ordinary-emissive-beauty',activate:false})) rebuildFluidBindGroups();
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
@@ -20832,12 +20811,17 @@ export function createKaminosVolumePrototype({
     let drawPipeline = selectRaymarchPipeline(targetPipeline);
     const selectEmissive = drawPipeline === leanEmissivePipeline || drawPipeline === leanEmissiveReadbackPipeline;
     const optical = resolveOpticalStepping(debugOpticalStepping, {emissive:selectEmissive,
-      trace:Boolean(options.opticalTrace),explicit:debugOpticalSteppingExplicit});
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value, OPTICAL_STEP_TOLERANCE:optical.tolerance};
+      trace:Boolean(options.opticalTrace),exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+    const telemetrySupported=selectEmissive&&!options.opticalTrace&&!options.bindGroup
+      &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
+    if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
+      {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
+    state.rayStepTelemetry=rayStepTelemetry.read();
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current' };
-    const opticalKey = `:${optical.mode}:${optical.tolerance}`;
-    if (optical.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
+    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
@@ -20881,7 +20865,7 @@ export function createKaminosVolumePrototype({
       }
       const key = `${multisampled}:${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}:${selectEmissive}${opticalKey}`;
       if (!scenePointPipelines.has(key)) {
-        let code = WGSL.replaceAll('joinedIncidentAt(p,medium.absorption+medium.scattering)', '(joinedIncidentAt(p,medium.absorption+medium.scattering) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
+        let code = WGSL.replace('medium.scattering * incidentAt(p)', 'medium.scattering * (incidentAt(p) + scenePointIncident(p))') + SCENE_POINT_SMOKE_WGSL;
         if (multisampled) code = code.replace('var productSceneDepth: texture_depth_2d;', 'var productSceneDepth: texture_depth_multisampled_2d;')
           .replace('let depth = textureLoad(productSceneDepth, pixel, 0);', `var depth = textureLoad(productSceneDepth, pixel, 0);
             for (var sample = 1u; sample < textureNumSamples(productSceneDepth); sample++) {
@@ -20904,7 +20888,7 @@ export function createKaminosVolumePrototype({
       if(!distributedPipelines.has(key)) {
         // Replace internal flame incident lighting so this emission is counted
         // once. Direct camera emission and material scattering stay intact.
-        let code=WGSL.replaceAll('joinedIncidentAt(p,medium.absorption+medium.scattering)','distributedMeanIncident(p)')
+        let code=WGSL.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
           .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }',
             'fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
         if(multisampled)code=code.replace('var productSceneDepth: texture_depth_2d;','var productSceneDepth: texture_depth_multisampled_2d;')
@@ -20952,6 +20936,7 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
+    rayStepTelemetry.encode(encoder);
   }
 
   async function sampleOpticalTraceChunk(options = {}) {
@@ -21288,6 +21273,14 @@ export function createKaminosVolumePrototype({
     });
   }
 
+  function invalidateRaymarchReadouts(reason) {
+    if (rayStepTelemetry) {
+      if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason,allowResize:false})) rebuildFluidBindGroups();
+      state.rayStepTelemetry=rayStepTelemetry.read();
+    }
+    state.opticalStepping={...debugOpticalStepping,requested:debugOpticalStepping.mode,effective:null,reason,fullRay:false};
+  }
+
   function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
@@ -21299,6 +21292,7 @@ export function createKaminosVolumePrototype({
     }
     raf = 0;
     try {
+      invalidateRaymarchReadouts('presentation-without-instrumented-raymarch');
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
@@ -21988,6 +21982,7 @@ export function createKaminosVolumePrototype({
     currentFluid = 0;
     currentFront = 0;
     currentQuench = 0;
+    fluidLayoutInForce = 'authored';
     state.frameCount = upload.receiverInitialSimStepCount;
     state.simStepCount = upload.receiverInitialSimStepCount;
     state.frontFieldReadIndex = currentFront;
@@ -27429,6 +27424,7 @@ export function createKaminosVolumePrototype({
     if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
       throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
     }
+    invalidateRaymarchReadouts('caller-owned-presentation');
     updateUniforms(now);
     encodeSim(commandEncoder);
     encodeSelectiveHeadLiveFields(commandEncoder);
@@ -27510,25 +27506,7 @@ export function createKaminosVolumePrototype({
       if(knownRevision === revision)return null;
       return {revision,cells:sceneSolidCellsCpu?.slice()??null,
         dimensions:[gridSize,gridHeight,gridSize],transform:structuredClone(productTransform),
-        runtime:structuredClone(state.sceneCollision),backend:sceneSolidGpu?'gpu':'cpu',texture:sceneSolidGpu?.texture??null,snapshotStatus:sceneSolidGpu?'gpu-resident':'available'};
-    },
-    async sampleSceneCollisionMask() {
-      const producer=sceneSolidGpu,revision=sceneSolidRevisionKey;
-      if(!producer)return {status:'sampled',cells:sceneSolidCellsCpu?.slice()??null,runtime:structuredClone(state.sceneCollision)};
-      const snapshot=await producer.snapshot();
-      if(producer!==sceneSolidGpu||revision!==sceneSolidRevisionKey)return {status:'stale',revision};
-      let solidCellCount=0,blockedFaceCount=0;const cells=snapshot.cells,plane=gridSize*gridHeight;
-      for(let z=0;z<gridSize;z++)for(let y=0;y<gridHeight;y++)for(let x=0;x<gridSize;x++){
-        const i=x+gridSize*(y+gridHeight*z);if(!cells[i])continue;solidCellCount++;
-        if(x>0&&!cells[i-1])blockedFaceCount++;if(x+1<gridSize&&!cells[i+1])blockedFaceCount++;
-        if(y>0&&!cells[i-gridSize])blockedFaceCount++;if(y+1<gridHeight&&!cells[i+gridSize])blockedFaceCount++;
-        if(z>0&&!cells[i-plane])blockedFaceCount++;if(z+1<gridSize&&!cells[i+plane])blockedFaceCount++;
-      }
-      const sourceSupport=countEmitterChemicalSupport(analyticEmitterDescriptor,analyticEmitterDispatch,cells,gridSize,gridHeight);
-      const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,
-        members:state.sceneCollision.members.map(m=>({...m,...snapshot.members.find(s=>s.id===m.id)})),
-        effective:snapshot.valid?'mesh-voxel-solid':'off',reason:snapshot.valid?null:snapshot.counts[0]===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support',validation:'explicit-gpu-snapshot'};
-      return {status:'sampled',...snapshot,runtime};
+        runtime:structuredClone(state.sceneCollision)};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {
       if (productFrameOwner !== 'prototype') throw new Error('Only the ordinary prototype owns its domain translation');
@@ -27598,6 +27576,10 @@ export function createKaminosVolumePrototype({
       debugOpticalSteppingExplicit = true;
       return { ...next };
     },
+    setRayStepTelemetryCanvas(canvas) {
+      rayStepTelemetryCanvas=canvas;
+      rayStepTelemetry?.setCanvas(canvas);
+    },
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
     clearPersistentSparseCohortGpuState,
@@ -27608,6 +27590,11 @@ export function createKaminosVolumePrototype({
       return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
     },
     setControls(next) {
+      if(Object.hasOwn(next,'raymarchMode')||Object.hasOwn(next,'opticalTolerance')) {
+        const config=opticalSteppingConfig({mode:next.raymarchMode??controlsSnapshot.raymarchMode??'numerical',
+          tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
+        debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
+      }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
@@ -28005,24 +27992,6 @@ export function createKaminosVolumePrototype({
         authority: 'witness-owned-compute-pause-render-live-v0',
       };
     },
-    async borrowThermalGpuContext(){
-      await ensureGpu();return {device,dimensions:[gridSize,gridHeight,gridSize],ownership:'borrowed-device-no-destruction-authority'};
-    },
-    bindGpuThermalConsumer(consumer){
-      if(consumer&&(!device||consumer.device!==device||typeof consumer.encode!=='function'||typeof consumer.read!=='function'))throw Error('Thermal consumer requires active same-device encode/read');
-      if(gpuThermalConsumer&&consumer&&gpuThermalConsumer!==consumer)throw Error('A thermal consumer is already bound');
-      if(consumer?.gasSource && (typeof consumer.prepareSource!=='function'||consumer.gasSource.device!==device||consumer.gasSource.dimensions?.length!==3||consumer.gasSource.dimensions.some((n,i)=>n!==[gridSize,gridHeight,gridSize][i])||!consumer.gasSource.texture?.createView))throw Error('Resident gas producer requires current same-device dimensions and prepareSource');
-      gpuThermalConsumer=consumer;
-      ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);
-      return ()=>{if(gpuThermalConsumer===consumer){gpuThermalConsumer=null;ensureTransportPredictorBuffer(resolveTransportConfig(controlsSnapshot).effective.predictorPass);}};
-    },
-    thermalConsumerState:()=>gpuThermalConsumer?.read()||null,
-    resetThermalExperimentFluid(){
-      if(!device||!simulationPaused)throw Error('Thermal reset requires an initialized paused simulator');
-      rebuildFluidState(gridSize,'live-log-cold-reset');
-      for(const buffer of fluidBuffers)device.queue.writeBuffer(buffer,0,new Float32Array(gridCellCount(gridSize)*FLUID_COMPONENTS));
-      return {allocationId:state.thermalFluidAllocationId,simStepCount:state.simStepCount,dimensions:[gridSize,gridHeight,gridSize],initialization:'cold-zero-fluid'};
-    },
     enableLiveCompleteFlameOpticalCoefficients,
     sampleLiveCompleteFlameOpticalCoefficientStats,
     async pauseSelectiveHeadLiveAtSimStep(target) {
@@ -28195,6 +28164,7 @@ export function createKaminosVolumePrototype({
         }
       } else {
         state.active = false;
+        invalidateRaymarchReadouts('inactive-renderer');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
@@ -28227,42 +28197,8 @@ export function createKaminosVolumePrototype({
     // Joined boundary (Sexy's stationary two-way candidate): opt-in. Admission
     // needs the immersed source and the converged solver; a change rebuilds the
     // fluid state so the lower-plane texture has the grid's size.
-    // Provisional exterior: { enabled, extent, ratio, wall: { axis, at, thickness } | null, budget, tolerance }.
-    setJoinedExterior(config = null) {
-      joinedExterior?.destroy();
-      joinedExterior = null;
-      state.joinedExterior = null;
-      if (!device) return {enabled:false,receipt:{admitted:false,reason:'device-not-initialized'}};
-      if (!config || config.enabled === false) {
-        // No exterior owner means no shared projection or snapshot publisher.
-        // Restore the standalone fine route instead of retaining stale ghosts.
-        applyJoinedGhostGeometry(null);
-        refreshJoinedBoundary(false);
-        syncJoinedRender();
-        return { enabled: false };
-      }
-      joinedExterior = createJoinedExterior(device, {residentSolids:true,...config});
-      refreshJoinedBoundary();
-      const prepared = prepareJoinedExterior();
-      return { enabled: true, prepared, receipt: joinedExterior.receipt(), ghosts: state.joinedGhosts ?? null };
-    },
-    async probeJoinedExterior() { return joinedExterior ? joinedExterior.probe() : { status: 'disabled' }; },
-    joinedWorldBounds() {
-      const receipt=joinedExterior?.receipt();
-      if(!receipt?.admitted||!state.joinedBoundary?.admitted)return null;
-      const map=p=>p.map((v,a)=>v*productTransform.scale+productTransform.translate[a]);
-      return {min:map(receipt.bounds.min),max:map(receipt.bounds.max)};
-    },
-    // Volume-local coordinates -> clip space, as last used to render (for
-    // overlays drawn above the volume canvas).
-    localViewProjection() {
-      const transformed = productFrameOwner === 'caller' || productTransform.translate.some(value => value !== 0) || productTransform.scale !== 1;
-      return Array.from((transformed ? productViewProj : viewProj).elements);
-    },
-    async joinedExteriorStats() { return joinedExterior ? joinedExterior.stats() : { status: 'disabled' }; },
     setJoinedBoundary(request = {}) {
-      const result={ ...refreshJoinedBoundary(request.enabled === true) };
-      syncJoinedRender();return result;
+      return { ...refreshJoinedBoundary(request.enabled === true) };
     },
     // What the exterior's shared solve consumes after encodeSim stops before
     // the fine projection: the pre-projection fluid state (upper faces, fine
@@ -28271,7 +28207,17 @@ export function createKaminosVolumePrototype({
     // Transport ghosts: the exterior geometry (origin and cell width in fine
     // cells, exterior cell dims, fine pitch in exterior local units). A change
     // of presence or dims rebuilds so the four ghost textures follow.
-    setJoinedGhosts(geometry = null) { return applyJoinedGhostGeometry(geometry); },
+    setJoinedGhosts(geometry = null) {
+      if (geometry) resolveJoinedGhosts({ geometry, reactantOn: false });
+      const next = geometry ? { originFine: [...geometry.originFine], cellWidthFine: geometry.cellWidthFine, dims: [...geometry.dims], finePitchLocal: geometry.finePitchLocal } : null;
+      const reallocate = Boolean(next) !== Boolean(joinedGhostGeometry) || String(next?.dims) !== String(joinedGhostGeometry?.dims);
+      joinedGhostGeometry = next;
+      joinedGhostSynthetic = null;
+      // A new geometry reinterprets whatever the textures hold: a new stamp is needed.
+      if (state.joinedGhosts) state.joinedGhosts = { ...state.joinedGhosts, generation: -1 };
+      if (reallocate && device) rebuildFluidState(gridSize, 'joined-ghosts-change');
+      return { geometry: next };
+    },
     // Witness-only: fill all four ghost textures with a constant exterior
     // (A = velocity in exterior local units + raw soot, B = 0, heat, fuel, 0)
     // and let the generation follow the step. Receipted as synthetic.
@@ -28313,13 +28259,32 @@ export function createKaminosVolumePrototype({
       state.joinedGhosts = { ...(state.joinedGhosts ?? { bound: false, reason: null }), generation };
       return { ...state.joinedGhosts };
     },
-    joinedProducerState() { return joinedProducerSnapshot(); },
+    joinedProducerState() {
+      const timeStep = resolveTimeStepConfig(controlsSnapshot).effective;
+      return {
+        joined: { ...(state.joinedBoundary ?? resolveJoinedBoundary()) },
+        dims: [gridSize, gridHeight, gridSize],
+        pitch: 2 / gridSize,
+        timeStep: { mode: timeStep.mode, dtScale: timeStep.dtScale, referenceSpeed: timeStep.referenceSpeed, backtraceScale: timeStep.backtraceScale },
+        transportScheme: resolveTransportConfig(controlsSnapshot).effective.scheme,
+        fluidBuffer: fluidBuffers?.[currentFluid] ?? null,
+        fluidReadIndex: currentFluid,
+        frontBuffer: frontBuffers?.[currentFront] ?? null,
+        burnRateTexture,
+        solidMask: sceneSolidCellsCpu ? { cells: sceneSolidCellsCpu, revision: sceneSolidRevisionKey, dims: [gridSize, gridHeight, gridSize] } : null,
+        lowerFaceTexture: joinedLowerFaceTexture,
+        prescribedInlet: null,
+        ghosts: { ...(state.joinedGhosts ?? { bound: false, reason: null }), geometry: joinedGhostGeometry, synthetic: joinedGhostSynthetic,
+          textures: joinedGhostTextures ? { a: joinedGhostTextures[0], b: joinedGhostTextures[1] } : null },
+        simStepCount: state.simStepCount,
+      };
+    },
     previewGridShape(request = {}) {
       const width = normalizeGridSize(request.resolution ?? controlsSnapshot.resolution);
       const shape = resolveGridHeight({ gridHeightRatio: request.gridHeightRatio ?? controlsSnapshot.gridHeightRatio }, width);
       const admission = device ? gridShapeAdmission(shape, device.limits) : { admitted: true, reason: null };
       const box = raymarchDomainBox(shape.widthCells, shape.heightCells);
-      return { ...shape, limitsChecked: Boolean(device), admitted: admission.admitted, admissionReason: admission.reason,
+      return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
         dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
     },
     debugState() {
@@ -28627,6 +28592,7 @@ export function createKaminosVolumePrototype({
     sampleBoundarySplatFootprintAudit,
     sampleBoundarySplatInstanceResidency,
     sampleDeterministicReplayFrame,
+    sampleSimGpuProfile,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
@@ -28660,9 +28626,8 @@ export function createKaminosVolumePrototype({
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
     dispose() {
-      distributedBindings?.destroy(); distributedBindings=null; distributedGroup=null;
+      rayStepTelemetry?.dispose();rayStepTelemetry=null;
       this.setActive(false);
-      joinedExterior?.destroy(); joinedExterior=null;
       scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;

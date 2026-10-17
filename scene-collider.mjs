@@ -2,24 +2,6 @@ import {FIRE_DOMAIN_ID,FIRE_DOMAIN_TYPE} from './scene-fire-domain.mjs';
 
 export const SCENE_COLLIDER_SOURCE_ID='authored-fire-solids';
 export const canCollideWithFire=record=>['glb','pbr','procedural-mesh'].includes(record?.type);
-// Shared geometry edit targets, including grouped transforms. Camera/light
-// edits do not hold smoke. Emitter/domain edits can move the collision frame.
-export function fireCollisionEdit(active, records, groups=[]) {
-  if (!active) return null;
-  const affects = (id, seen=new Set()) => {
-    if (seen.has(id)) return 0;
-    seen.add(id);
-    if (['@flame-domain','@burner-controls','flame-emitter'].includes(id)) return 2;
-    if (id==='@selection-transform') return Object.keys(active.before?.roots??{}).reduce((bits,key)=>bits|affects(key,seen),0);
-    if (id?.startsWith('@group:') || id?.startsWith('@assembly:')) return (groups.find(g=>g.id===id.slice(id.indexOf(':')+1))?.objectIds??[]).reduce((bits,key)=>bits|affects(key,seen),0);
-    if (id?.startsWith('@object-collision:')) return Number(canCollideWithFire(records.find(r=>r.id===id.slice('@object-collision:'.length))));
-    const record=records.find(r=>r.id===(id?.startsWith('@mesh-data:')?id.slice('@mesh-data:'.length):id));
-    if(record?.type==='flame-emitter'||record?.type===FIRE_DOMAIN_TYPE)return 2;
-    return Number(Boolean(canCollideWithFire(record)&&record.collision?.enabled));
-  };
-  const bits=affects(active.id);
-  return bits?{id:active.id,...(bits&2?{affectsSource:true}:{})}:null;
-}
 export function checkedObjectCollision(record,value=record?.collision) {
   if(value==null)return null;
   if(!canCollideWithFire(record))throw Error('Fire collision requires a mesh object');
