@@ -38,6 +38,7 @@ export function authoredRestPlan(plan,{baselineSha256,displayMatrix,reference=nu
  if(referenceDisplay!==null&&(!['off','side','overlay'].includes(referenceDisplay.mode)||!['x','z'].includes(referenceDisplay.axis)||typeof referenceDisplay.baseline!=='boolean'))throw Error('Invalid reference display');
  p.rest_authoring={schema:'kaminos.rest-skeleton-authoring.v1',baselineSha256,displayMatrix:[...displayMatrix],reference:structuredClone(reference),view:structuredClone(view),referenceDisplay:structuredClone(referenceDisplay)};
  if(scene!==null){
+  if(scene.referenceVisible!==undefined&&typeof scene.referenceVisible!=='boolean')throw Error('Invalid reference visibility');
   for(const key of ['skeleton','reference']){const pose=scene[key];if(pose===null&&key==='reference')continue;if(!pose||!['position','rotation','scale'].every(k=>vector(pose[k]))||pose.scale.some(v=>Math.abs(v)<1e-10))throw Error('Invalid skeleton scene transform');}
   p.rest_authoring.scene=structuredClone(scene);
  }

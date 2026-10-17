@@ -13212,7 +13212,7 @@ function installSharedWorkbench() {
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
   sceneOwnerControls=createSceneOwnerControls({document,viewport:document.getElementById('viewport'),inspector:document.getElementById('transform-inspector'),selected:selectedPlacementEntry,onContext:value=>sharedWorkbench?.setOwnerControlsActive(value)});
-  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},scene:{
+  const host={controls:{document,installNumberDrag:installRelativeNumberDrag,mountObject:sceneOwnerControls.mount,transformSettings:()=>({...transformPreferences}),components:{register:(id,adapter)=>sceneComponents.register(id,adapter)}},scene:{
     async open(){await workbenchViewerReady;if(!workbenchSceneHost)throw Error('Shared scene host unavailable');setActiveTab('assets');return workbenchSceneHost.open();},
     refreshPresentation:refreshWorkbenchAssetPresentation,
     renderer:()=>renderer,objects:()=>sceneObjects,select:id=>window.selectSceneObject(id),
@@ -26963,6 +26963,7 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
+  if(sceneComponents?.active()){const objects=sceneComponents.target()?.frameObjects;if(objects?.length)return frameObjects(objects,camera,controls);return;}
   if(sceneSelection.ids.length>1&&sceneSelection.ids.some(id=>id==='flame-field'||id==='water-field')){const box=new THREE.Box3();for(const id of sceneSelection.ids){if(id==='flame-field'&&flameDomainGuide)box.union(flameDomainGuide.box);else if(id==='water-field'&&localLiquidDomainGuide)box.union(localLiquidDomainGuide.box);}for(const entry of sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)))box.expandByObject(entry.object);return !box.isEmpty()&&frameBox(box,camera,controls);}
   if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
   if(activeSceneFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);

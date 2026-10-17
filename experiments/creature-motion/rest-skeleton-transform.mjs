@@ -13,19 +13,33 @@ function selection(plan,options){
 }
 export function captureRestTransform(plan,options){
  plan=validateRestPlan(plan);const selected=selection(plan,options),frame=matrix(options.localToWorld),heads=restHeads(plan);
+ const pivot=options.pivot??'median';if(!['median','active','individual'].includes(pivot))throw Error('Unknown component pivot');
  const center=new Vector3();for(const name of selected)center.add(new Vector3(...heads[name]).applyMatrix4(frame));center.multiplyScalar(1/selected.length);
- const anchor={position:center.toArray(),rotation:[0,0,0],scale:[1,1,1]};
- return {...structuredClone(options),heads,anchor,...structuredClone(anchor)};
+ if(pivot==='active')center.fromArray(heads[options.active]).applyMatrix4(frame);
+ const anchor=checkedPose({position:center.toArray(),rotation:options.rotation??[0,0,0],scale:[1,1,1]});
+ return {...structuredClone(options),pivot,heads,anchor,...structuredClone(anchor)};
 }
 export function applyRestTransform(plan,state){
  plan=validateRestPlan(plan);const chosen=selection(plan,state),frame=matrix(state.localToWorld),inverse=frame.clone().invert(),anchor=poseMatrix(state.anchor),delta=poseMatrix(state).multiply(anchor.invert());
  const original=restHeads(withRestHeads(plan,state.heads)),heads=structuredClone(original),by=new Map(plan.joints.map(j=>[j.name,j]));
  const affected=new Set(chosen);if(state.descendants)for(const j of plan.joints){for(let p=j.parent;p;p=by.get(p).parent)if(affected.has(p)){affected.add(j.name);break;}}
  const identity=new Matrix4();if(delta.elements.every((v,i)=>Math.abs(v-identity.elements[i])<1e-12))return withRestHeads(plan,heads);
+ if(!['median','active','individual'].includes(state.pivot??'median'))throw Error('Unknown component pivot');
+ const linear=delta.clone();linear.elements[12]=linear.elements[13]=linear.elements[14]=0;
+ const translation=new Vector3(...state.position).sub(new Vector3(...state.anchor.position));
  const preferred=[state.active,...chosen].find(name=>partner(name)),side=preferred?.includes('-left-')?'left':'right';
  for(const name of affected){
   const pair=partner(name);if(state.mirror&&pair&&affected.has(pair)&&!name.includes('-'+side+'-'))continue;
-  const next=new Vector3(...original[name]).applyMatrix4(frame).applyMatrix4(delta).applyMatrix4(inverse).toArray();heads[name]=next;
+  const point=new Vector3(...original[name]).applyMatrix4(frame);
+  if(state.pivot==='individual'){
+   // Each chosen joint owns its branch; a chosen descendant starts its own pivot.
+   let origin=name;while(!chosen.includes(origin))origin=by.get(origin).parent;
+   const pivot=new Vector3(...original[origin]).applyMatrix4(frame);point.sub(pivot).applyMatrix4(linear).add(pivot).add(translation);
+  }else point.applyMatrix4(delta);
+  // A pivot origin is mathematically unchanged by rotation/scale. Keep its
+  // source bytes instead of manufacturing an anatomy edit from frame roundoff.
+  const fixedOrigin=(state.pivot==='active'&&name===state.active)||(state.pivot==='individual'&&chosen.includes(name));
+  const next=fixedOrigin&&translation.lengthSq()===0?[...original[name]]:point.applyMatrix4(inverse).toArray();heads[name]=next;
   if(state.mirror&&pair){if(!original[pair])throw Error('Mirrored component missing: '+pair);heads[pair]=original[pair].map((v,k)=>v+(k===0?-1:1)*(next[k]-original[name][k]));}
  }
  return withRestHeads(plan,heads);

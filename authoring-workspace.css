@@ -164,6 +164,9 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 .scene-field-row small { font-size:9px; font-weight:400; color:#92969c; }
 #selected-object-relations, #selected-mesh-properties, #selected-group-properties { padding:12px 0; }
 body[data-component-editing="true"] #selected-object-relations,
+body[data-component-editing="true"] #authoring-box,
+body[data-component-editing="true"] #authoring-delete,
+body[data-component-editing="true"] #authoring-duplicate,
 body[data-component-editing="true"] #authoring-object-tools,
 body[data-component-editing="true"] button[onclick="snapToGround()"] { display:none; }
 #selected-object-relations h3, #selected-mesh-properties h3, #selected-group-properties h3 { font-size:12px; margin:12px 0; }
