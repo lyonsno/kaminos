@@ -74,7 +74,7 @@ test('switching the model converts the stored form once (relayout pass), so the 
   assert.match(host, /const wanted = state\.appearanceModel\?\.effective \?\? 'authored';\n\s*if \(wanted === fluidLayoutInForce\) return false;/);
   assert.match(host, /currentFluid = 1 - currentFluid;\n\s*currentFront = 1 - currentFront;/, 'the pass writes the other buffer and flips like a step');
   assert.match(host, /fluidLayoutInForce = wanted;/);
-  assert.match(source, /function encodeSim\(encoder, options = \{\}\) \{\n\s*refreshSceneCollision\(\);\n\s*ensureAppearanceLayout\(encoder\);/, 'every step starts by seating the layout');
+  assert.match(source, /function encodeSim\(encoder, options = \{\}\) \{\n(?:\s*\/\/.*\n)*\s*if \(joinedExterior\?\.paused\) return false;\n(?:\s*\/\/.*\n)*\s*refreshSceneCollision\(\);\n\s*ensureAppearanceLayout\(encoder\);/, 'every step starts by seating the layout');
   assert.equal([...source.matchAll(/(?<!let )fluidLayoutInForce = 'authored';/g)].length, 2, 'grid rebuild and full-field import both write the authored form');
   assert.match(source, /entryPoint: 'csAppearanceRelayout', constants: computePipelineConstants/);
   assert.match(source, /storedSlots: appearanceEffective === 'compact-3' \? 3 : 4, layout: fluidLayoutInForce \}/, 'the receipt names the stored slot count and the layout in force');
@@ -85,8 +85,8 @@ test('the cockpit carries the Appearance model select; saved basins load on auth
   assert.match(index, /appearanceModel: document\.getElementById\('volume-appearance-model'\)\.value \|\| 'authored',/);
   assert.match(index, /id="volume-appearance-model-state"/);
   const control = schema.controls.find(c => c.key === 'volume-appearance-model');
-  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3'], additiveSinceControlCount: 253 });
-  assert.equal(schema.controlCount, 253);
+  assert.deepEqual(control, { key: 'volume-appearance-model', param: 'volume_appearance_model', tagName: 'SELECT', type: 'select-one', additiveDefault: 'authored', allowedValues: ['authored', 'compact-3'], additiveSinceControlCount: 256 });
+  assert.equal(schema.controlCount, 256);
   assert.match(source, /const appearanceEffective = appearanceRequested === 'compact-3' && reactantCombustionConfig\.effective\.admitted \? 'compact-3' : 'authored';\n\s*uniforms\[REACTANT_COMBUSTION_UNIFORM_OFFSET \+ 15\] = appearanceModelUniformValue\(appearanceEffective\);/, 'packed in the last borrowed reactant lane (d.w); compact-3 is effective only under the admitted reactant law (under the authored law the dropped carriers feed the reaction)');
   assert.match(source, /reason: appearanceRequested === 'compact-3' && appearanceEffective !== 'compact-3' \? 'compact-3-requires-the-reactant-law' : null/, 'the receipt names the refusal');
   assert.match(source, /splatCamera\.set\(\[gridSize, gridHeight, appearanceModelUniformValue\(state\.appearanceModel\?\.effective\), 0\], 56\);/, 'the splat lane follows the effective model');

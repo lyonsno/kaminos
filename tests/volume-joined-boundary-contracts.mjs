@@ -187,8 +187,11 @@ test('ghost reads: one exterior sample per transport call, blended beyond the la
   assert.match(shader, /fn joinedGhosts\(\) -> bool \{\n  return joinedBoundary\(\) && u\.joined_boundary\.y > 0\.5;\n\}/);
   // Every transport path funnels through sampleFluidSlotMasked (main kernel,
   // advection helpers, and the predictor through sampleFluidSlotInflow).
-  const masked = shader.slice(shader.indexOf('fn sampleFluidSlotMasked('), shader.indexOf('\n}\n', shader.indexOf('fn sampleFluidSlotMasked(')));
-  assert.match(masked, /let fine = sampleFluidSlotMaskedFine\(cellCenter, slot\);\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  let outside = ghostOutsideAmount\(cellCenter\);\n  if \(outside <= 0\.0\) \{ return fine; \}\n  return mix\(fine, ghostSlotAt\(cellCenter, slot\), clamp\(outside \* 2\.0, 0\.0, 1\.0\)\);/);
+  // The masked read carries the stored flag through the slot seam (Snuffbox's
+  // appearance model); the ghost blend wraps it in the same function.
+  const masked = shader.slice(shader.indexOf('fn sampleFluidSlotMaskedWith('), shader.indexOf('\n}\n', shader.indexOf('fn sampleFluidSlotMaskedWith(')));
+  assert.match(shader, /fn sampleFluidSlotMasked\(cellCenter: vec3<f32>, slot: u32\) -> vec4<f32> \{\n  return sampleFluidSlotMaskedWith\(cellCenter, slot, false\);\n\}/);
+  assert.match(masked, /fine = weighted \/ max\(weightSum, 1e-12\);\n  \}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  let outside = ghostOutsideAmount\(cellCenter\);\n  if \(outside <= 0\.0\) \{ return fine; \}\n  return mix\(fine, ghostSlotAt\(cellCenter, slot\), clamp\(outside \* 2\.0, 0\.0, 1\.0\)\);/);
   // The general samplers are untouched (the raymarch uses them; no ghost
   // texture reaches a fragment stage).
   for (const fn of ['sampleFluidSlot', 'slotExtrema', 'samplePredictSlot']) {
