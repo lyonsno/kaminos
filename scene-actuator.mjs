@@ -98,6 +98,7 @@ export function createActuatorController({edits,readPose,writePoses,validatePose
   return edits.apply('@actuators',{actuators:checked},label);
  };
  const acceptLive=()=>{const id=running;if(!id)return;recipes=recipes.map(r=>r.id===id?{...r,length:lastLength}:r);running=null;};
+ const stop=()=>{if(!running)return;const id=running;apply(recipes.map(r=>r.id===id?{...r,length:lastLength}:r),'Stop piston',[id]);};
  let previousHistory=edits.state();
  edits.subscribe(state=>{
   const previous=previousHistory;previousHistory=state;
@@ -116,12 +117,12 @@ export function createActuatorController({edits,readPose,writePoses,validatePose
   read,restore:rows=>restore({actuators:rows}),clear(){running=null;if(edits.state().active?.id==='@actuators')edits.cancel();recipes=[];error=null;changed();},
   install(raw){const r=checkedActuator(raw);apply([...recipes,r],'Install piston',[r.id]);return copy(r);},
   configure(id,patch){const next=recipes.map(r=>r.id===id?{...r,...(running===id?{length:lastLength}:{}),...patch,drive:{...r.drive,...patch.drive}}:r);find(id);apply(next,'Adjust piston',[id]);return copy(find(id));},
-  scrub(id,length){admit();const next=checkedActuators(recipes.map(r=>r.id===id?{...r,length}:r));find(id);stage(next,[id]);if(!edits.state().active)edits.begin('@actuators','Hand crank piston');if(edits.state().active.id!=='@actuators')throw Error('Finish the current edit');edits.preview({actuators:next});},
+  scrub(id,length){admit();const next=checkedActuators(recipes.map(r=>r.id===id?{...r,length}:r.id===running?{...r,length:lastLength}:r));find(id);stage(next,[id]);stop();if(!edits.state().active)edits.begin('@actuators','Hand crank piston');if(edits.state().active.id!=='@actuators')throw Error('Finish the current edit');edits.preview({actuators:next});},
   finishScrub(){if(edits.state().active?.id==='@actuators')edits.commit();},
   cancelScrub(){if(edits.state().active?.id==='@actuators')edits.cancel();},
   detach(id){find(id);apply(recipes.filter(r=>r.id!==id),'Detach piston');},
-  play(id){admit();if(edits.state().active||edits.state().replaying)throw Error('Finish the current scene edit');const r=find(id);present(r);running=id;lastLength=r.length;const fraction=Math.max(0,Math.min(1,(r.length-r.drive.min)/(r.drive.max-r.drive.min)));elapsed=(.5-Math.sin(Math.asin(1-2*fraction)/3))*r.drive.outward*r.drive.period;error=null;changed();},
-  pause(){if(!running)return;const id=running;apply(recipes.map(r=>r.id===id?{...r,length:lastLength}:r),'Stop piston',[id]);},
+  play(id){admit();if(edits.state().active||edits.state().replaying)throw Error('Finish the current scene edit');const r=find(id);stage([r],[id]);if(running===id)return;stop();present(r);running=id;lastLength=r.length;const fraction=Math.max(0,Math.min(1,(r.length-r.drive.min)/(r.drive.max-r.drive.min)));elapsed=(.5-Math.sin(Math.asin(1-2*fraction)/3))*r.drive.outward*r.drive.period;error=null;changed();},
+  pause:stop,
   tick(dt){if(!running)return;try{admit();if(!Number.isFinite(dt)||dt<0)throw Error('Invalid actuator frame delta');const nextTime=elapsed+dt,nextLength=driveLength(find(running),nextTime);present(find(running),nextLength);elapsed=nextTime;lastLength=nextLength;changed();}catch(e){acceptLive();error=e.message;changed();}},
   state(){return {running,error,actuators:recipes.map(r=>({id:r.id,label:r.label,available:available(r),length:running===r.id?driveLength(r,elapsed):r.length,reach:actuatorReach(r)}))};},
  };

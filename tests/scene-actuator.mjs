@@ -60,3 +60,14 @@ test('Undo during playback stops without erasing the ordinary edit Redo',async()
  await edits.undo();assert.equal(c.state().running,null);near(c.read()[0].length,length);assert.equal(edits.state().redoCount,1);c.tick(.1);assert.deepEqual(poses.base.position,[0,0,0]);
  await edits.redo();assert.deepEqual(poses.base.position,[3,0,0]);assert.equal(edits.state().redoCount,0);
 });
+function pair(){const s=setup(),other=structuredClone(s.r);other.id='p2';for(const k of ['fixedId','followerId','barrelId','rodId'])other[k]+='2';other.reference=Object.fromEntries(Object.entries(other.reference).map(([id,p])=>[id+'2',p]));Object.assign(s.poses,other.reference);s.c.install(other);return s;}
+test('Run transfer accepts the previous visible position with its own reversible Stop',async()=>{
+ const {c,edits,poses,r}=pair();c.play('p');c.tick(.25);const length=c.state().actuators[0].length,live=structuredClone(poses.boom),count=edits.state().undoCount;
+ c.play('p2');near(c.read()[0].length,length);assert.equal(edits.state().undoCount,count+1);c.tick(.25);c.pause();assert.deepEqual(poses.boom,live);
+ await edits.undo();near(c.read()[0].length,length);await edits.undo();near(c.read()[0].length,r.length);await edits.redo();near(c.read()[0].length,length);
+});
+test('crank transfer settles the previous motor before the gesture, including cancel and Undo',async()=>{
+ const {c,edits,poses,r}=pair();c.play('p');c.tick(.25);const length=c.state().actuators[0].length,live=structuredClone(poses.boom),count=edits.state().undoCount;
+ c.scrub('p2',1.3);c.cancelScrub();assert.equal(c.state().running,null);near(c.read()[0].length,length);near(c.read()[1].length,r.length);assert.deepEqual(poses.boom,live);assert.equal(edits.state().undoCount,count+1);
+ c.scrub('p2',1.3);c.finishScrub();await edits.undo();near(c.read()[0].length,length);near(c.read()[1].length,r.length);await edits.undo();near(c.read()[0].length,r.length);await edits.redo();near(c.read()[0].length,length);
+});
