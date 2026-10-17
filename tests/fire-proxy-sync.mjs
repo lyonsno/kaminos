@@ -36,6 +36,23 @@ function harness() {
 }
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 
+test('Full can retain picking snapshots without drawing a proxy or changing pacing',()=>{
+ const h=harness();
+ h.sync.sync({prototype:h.prototype,pickable:true,display:false,required:false,camera:h.camera,layerId:4,canvas:h.canvas,bridge:h.bridge});
+ h.prototype.readback(.8);
+ assert.equal(h.registry.latest('fire')?.count,1);
+ assert.equal(h.layers.length,0);
+ assert.equal(h.prototype.suppressed,false);
+ assert.equal(h.prototype.pacing,null);
+ assert.equal(h.canvas.style.visibility,'');
+ const ray={origin:[0,0,5],direction:[0,0,-1]};
+ assert.ok(h.sync.pick(ray,[0,0,5]));
+ h.prototype.setGeneration(2);
+ assert.equal(h.sync.pick(ray,[0,0,5]),null,'reset invalidates before the next frame');
+ h.prototype.setActive(false);
+ assert.equal(h.sync.pick(ray,[0,0,5]),null);
+});
+
 test('Proxy stands in once a snapshot of the current field exists, and Full brings the fire back', () => {
  const h = harness();
  h.frame(true);

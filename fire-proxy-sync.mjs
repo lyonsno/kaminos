@@ -5,10 +5,11 @@
 // the display request, the viewport camera, the fire canvas and the bridge.
 // Prototype pending the probe owner's answer on the readback seam.
 import {decodeHeatBlocks,nextHeatReference} from './proxy-snapshot.mjs';
+import {pickFireSplats} from './fire-splat-picking.mjs';
 
 export function createFireProxySync({registry, createLayer, readDomain, now = () => performance.now(), onDirty = () => {}}) {
  let fireProxy = null;
- function sync({prototype, display: displayRequested, required, camera, layerId, canvas, bridge, stepEvery = 1}) {
+ function sync({prototype, display: displayRequested, required, pickable=false, camera, layerId, canvas, bridge, stepEvery = 1}) {
   // A disabled volume shows no fire in any mode, so its proxy draws nothing;
   // pausing is different and keeps the held field on screen.
   const present = !!prototype && (prototype.isActive?.() ?? true);
@@ -27,7 +28,7 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   // readback lands before this runs.
   const adoptFireField = generation => { if (!fireProxy || generation === fireProxy.fieldGeneration) return; fireProxy.fieldGeneration = generation; fireProxy.heatPeak = 0; registry.clear('fire'); fireProxy.layer?.clear(); };
   adoptFireField(prototype?.getResidualFieldGeneration?.() ?? null);
-  const produce = !!fireProxy && (wanted || registry.wanted('fire'));
+  const produce = !!fireProxy && (wanted || (present&&pickable) || registry.wanted('fire'));
   if (produce && !fireProxy.attached) fireProxy.attached = prototype.setResidualPartialsConsumer?.(info => {
    const current = prototype.getResidualFieldGeneration?.() ?? null;
    if (info.fieldGeneration != null && info.fieldGeneration !== current) return;
@@ -73,6 +74,12 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
  }
  return {
   sync,
+  pick(ray,cameraPosition,options={}) {
+   const prototype=fireProxy?.prototype;
+   if(!prototype||(prototype.isActive?.()??true)===false)return null;
+   return pickFireSplats(registry.latest('fire'),ray,cameraPosition,{...options,
+    fieldGeneration:prototype.getResidualFieldGeneration?.()??null,style:fireProxy.layer?.state().style});
+  },
   // Proxy is standing in for the fire this frame.
   effective: () => fireProxy?.ready === true,
   layer: () => fireProxy?.layer ?? null,

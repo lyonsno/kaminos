@@ -4145,7 +4145,7 @@ window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n)
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
- fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
+ fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),pickable:!!activeSceneComposition,camera,layerId:FIRE_PROXY_LAYER,
   canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
@@ -7224,11 +7224,11 @@ function pickFlameDomainFromViewportPointer(event) {
   return pointerHitsBoxOutline(flameDomainGuide.box, camera, {x:event.clientX,y:event.clientY}, renderer.domElement.getBoundingClientRect());
 }
 
-function pickSceneObjectFromViewportPointer(event) {
-  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera || !sceneObjects.length) return null;
+function sceneHitsFromViewportPointer(event) {
+  if (!sceneRaycaster || !scenePointerNdc || !renderer || !camera) return [];
   const rect = renderer.domElement.getBoundingClientRect();
   if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) {
-    return null;
+    return [];
   }
   scenePointerNdc.set(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
@@ -7236,7 +7236,10 @@ function pickSceneObjectFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  const hits = sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible).map(record => record.object), true);
+  return sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible).map(record => record.object), true);
+}
+
+function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
   // Emitter symbols are drawn through geometry. Pick that same visible layer first.
   for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
@@ -7244,6 +7247,19 @@ function pickSceneObjectFromViewportPointer(event) {
     if (record) return record;
   }
   return null;
+}
+
+function pickVisibleFlameFromViewportPointer(hits) {
+  if(!activeSceneComposition||selectionCaptureSuspended||!volumePrototype?.isActive?.())return null;
+  let maxDistance=camera.far;
+  for(const hit of hits){
+    const record=sceneObjectRecordForDescendant(hit.object);
+    if([FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE,CAMERA_TYPE].includes(record?.type))continue;
+    const material=Array.isArray(hit.object.material)?hit.object.material[hit.face?.materialIndex??0]:hit.object.material;
+    if(material?.visible!==false&&material?.depthWrite!==false&&(!material?.transparent||material.opacity>=1))maxDistance=Math.min(maxDistance,hit.distance);
+  }
+  if(groundPlane?.visible)for(const hit of sceneRaycaster.intersectObject(groundPlane,true))maxDistance=Math.min(maxDistance,hit.distance);
+  return fireProxySync?.pick({origin:sceneRaycaster.ray.origin.toArray(),direction:sceneRaycaster.ray.direction.toArray()},camera.getWorldPosition(new THREE.Vector3()).toArray(),{near:camera.near,maxDistance})??null;
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
@@ -7307,7 +7323,11 @@ function handleViewportSelectionClick(event) {
     window._kaminosDirty?.();
     return;
   }
-  const record = pickSceneObjectFromViewportPointer(event);
+  const hits=sceneHitsFromViewportPointer(event),record=pickSceneObjectFromViewportPointer(event,hits);
+  const explicitEmitter=record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type);
+  if(!explicitEmitter&&pickVisibleFlameFromViewportPointer(hits)){
+    window.selectSceneField('flame-field');setInfo('Selected: Fire & smoke domain');window._kaminosDirty?.();return;
+  }
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
