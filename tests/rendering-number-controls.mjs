@@ -43,10 +43,13 @@ try {
  firstScrub.dispose();evenScrub.dispose();historyScrub.dispose();
  const baseline=doc.listenerCount()+win.listenerCount();
  for(let cycle=0;cycle<3;cycle++){
-   const scrubs=Array.from({length:4},()=>{const input=new Control();input.ownerDocument=doc;return installRenderingNumberControl(input);});
+   let retiredCancel=0;const retired=[];
+   const scrubs=Array.from({length:4},()=>{const input=new Control();input.ownerDocument=doc;input.addEventListener('pointercancel',()=>retiredCancel++);retired.push(input);return installRenderingNumberControl(input);});
    assert.equal(doc.listenerCount()+win.listenerCount(),baseline+12);
    for(const scrub of scrubs)scrub.dispose?.();
    assert.equal(doc.listenerCount()+win.listenerCount(),baseline,'retiring the lighting panel must release every global scrub subscription');
+   for(const input of retired){doc.activeElement=input;doc.fire('keydown',{key:'Escape'});}
+   assert.equal(retiredCancel,0,'retired inputs must not receive global keyboard callbacks');
  }
 }finally{delete globalThis.document;delete globalThis.window;}
 console.log('PASS Rendering scrubs preserve live handlers, commit on release and restore cancellation');
