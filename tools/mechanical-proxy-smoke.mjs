@@ -30,7 +30,7 @@ try{
  if(report.result.status!=='passed')throw Error('Mechanical proxy did not complete: '+JSON.stringify(report.result));
  report.phase='views';save();
  const pixelCheck=async(name)=>{
-  const buffer=await page.locator('#viewport canvas').first().screenshot({path:path.join(out,name+'-canvas.png')});
+  const buffer=await page.locator('#kaminos-host-renderer-canvas').screenshot({path:path.join(out,name+'-canvas.png')});
   report.pixels[name]=await page.evaluate(async base64=>{const img=new Image();img.src='data:image/png;base64,'+base64;await img.decode();const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height;const context=canvas.getContext('2d');context.drawImage(img,0,0);const pixels=context.getImageData(0,0,canvas.width,canvas.height).data;const colors=new Set();let teal=0;for(let i=0;i<pixels.length;i+=4){const [r,g,b]=pixels.slice(i,i+3);colors.add(`${r>>4}/${g>>4}/${b>>4}`);if(g>r*1.08&&b>r*1.08)teal++;}return{width:canvas.width,height:canvas.height,colors:colors.size,teal};},buffer.toString('base64'));
   if(report.pixels[name].colors<8||report.pixels[name].teal<20)throw Error('Proxy canvas is blank or expected proxy pixels are missing: '+name);
  };
@@ -40,8 +40,8 @@ try{
  await page.locator('[data-mode="original"]').click();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'original.png')});
  await page.locator('[data-mode="overlay"]').click();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'overlay.png')});
  await page.locator('[data-mode="proxy"]').click();await page.locator('[data-mp="interior"]').selectOption('section');
- await page.locator('[data-mp="offset"]').fill('0.25');await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'section-quarter.png')});
- await page.locator('[data-mp="offset"]').fill('0.75');await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'section-three-quarter.png')});
+ await page.locator('[data-mp="offset"]').evaluate(el=>{el.value='0.25';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'section-quarter.png')});
+ await page.locator('[data-mp="offset"]').evaluate(el=>{el.value='0.75';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'section-three-quarter.png')});
  report.views=await page.evaluate(()=>{const p=window.kaminosMechanicalProxy;const before=p.read();p.selectElement(0);return{before,selected:p.read()};});
  if(report.views.selected.selectedTet!==0)throw Error('Element selection failed');
  await page.locator('[data-mp="keep"]').click();await page.waitForFunction(()=>document.querySelector('[data-mp="status"]').textContent==='Kept');report.kept=await page.evaluate(()=>window.kaminosMechanicalProxy.read());
