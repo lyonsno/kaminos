@@ -51,3 +51,17 @@ test('GPU work is encoded only on demand, with enough dispatch groups for every 
   assert.deepEqual(dispatches,Array.from({length:4},()=>[[2,1],[1]]).flat());assert.deepEqual(draws,[3]);
   meter.dispose();
 });
+test('a draw cannot replace counters already referenced by an earlier pass',()=>{
+  const {meter,canvas}=fixture();meter.setCanvas(canvas);
+  const placeholder=meter.counterBuffer;
+  meter.ensure(8,8,true,{allowResize:false});
+  assert.equal(placeholder.destroyed,undefined,'first enable must wait for frame preflight');
+  assert.equal(meter.active,false);assert.equal(meter.read().reason,'counter-buffer-not-prepared');
+  meter.ensure(8,8,true);const recorded=meter.counterBuffer;
+  meter.ensure(16,16,true,{allowResize:false});
+  assert.equal(recorded.destroyed,undefined,'a resize cannot retire an encoded dependency');
+  assert.equal(meter.active,false);assert.equal(meter.read().reason,'counter-buffer-not-prepared');
+  meter.ensure(16,16,true);assert.equal(recorded.destroyed,true);
+  assert.equal(meter.ensure(16,16,true,{allowResize:false}),false);assert.equal(meter.active,true);
+  meter.dispose();
+});
