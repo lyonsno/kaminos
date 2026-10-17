@@ -3954,12 +3954,15 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
+import {createActuatorController,prepareActuator} from './scene-actuator.mjs';
+import {mountActuatorControls} from './scene-actuator-ui.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
 let cameraViews=null,cameraViewsPanel=null;
 let sceneCameras=null,cameraAuthoring=null,cameraProjectionBase=null,viewPie=null;
 let sharedWorkbench=null,ownerExperimentEntry=null,workbenchSceneHost=null,sceneOwnerControls=null;
+let sceneActuators=null,actuatorControls=null,actuatorPointPick=null;
 let resolveWorkbenchViewerReady,rejectWorkbenchViewerReady;
 const workbenchViewerReady=new Promise((resolve,reject)=>{resolveWorkbenchViewerReady=resolve;rejectWorkbenchViewerReady=reject;});
 workbenchViewerReady.catch(()=>{});
@@ -6899,6 +6902,7 @@ function updateTransformInspector() {
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   sceneOwnerControls?.update();
+  actuatorControls?.refresh();
   inspector.dataset.selectedObjectId = entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
   inspector.dataset.selectionCount=String(sceneSelection.ids.length);
@@ -12063,6 +12067,7 @@ async function initScene() {
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   window.kaminosSceneEdits = scenePlacementTools.edits;
+  installSceneActuators();
   window.kaminosPlacementDebugState = scenePlacementTools.state;
   await volumeCockpitLayoutReady;
   const workspaceParam = initialViewerParams.get('workspace') ?? new URLSearchParams(location.hash.slice(1)).get('workspace');
@@ -12522,6 +12527,7 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene({loadRequestId = null} = {}) {
+  sceneActuators?.clear();actuatorPointPick=null;
   if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
@@ -12991,6 +12997,49 @@ function installSharedWorkbench() {
   window.kaminosWorkbenchState=sharedWorkbench.state;
   window.kaminosWorkbenchSetInvestigation=sharedWorkbench.setInvestigation;
   sharedWorkbench.setTool(window.__kaminosActiveTab());sharedWorkbench.setActive(authoringWorkspace.state().mode==='workbench');
+}
+function installSceneActuators(){
+  const members=id=>id?.startsWith('@group:')?sceneGroups.find(g=>g.id===id.slice(7))?.objectIds||[]:[id];
+  const readPose=id=>{if(id?.startsWith('@group:'))return structuredClone(sceneGroups.find(g=>g.id===id.slice(7))?.transform||null);const e=sceneObjects.find(e=>e.id===id);return e?sceneObjectTransformState(e.object):null;};
+  const supported=id=>{const ids=members(id);return ids.length&&ids.every(key=>{const e=sceneObjects.find(e=>e.id===key);return e&&['glb',PROCEDURAL_MESH_TYPE,FLAME_EMITTER_TYPE].includes(e.type)&&(id.startsWith('@group:')||!e.groupId);});};
+  const writePoses=poses=>{
+    const before={},seen=new Set();for(const [id,pose]of Object.entries(poses)){
+      if(!supported(id))throw Error('Actuator parts need ungrouped rigid meshes (or a carried flame source)');
+      for(const member of members(id)){if(seen.has(member))throw Error('Actuator groups overlap');seen.add(member);}
+      checkedGroupPose(pose);const e=sceneObjects.find(e=>e.id===id);if(e?.type===FLAME_EMITTER_TYPE)normalizeFlameEmitterPose(pose);before[id]=readPose(id);
+    }
+    try{for(const [id,pose]of Object.entries(poses))applyAuthoredScenePose(id,pose);}
+    catch(error){for(const [id,pose]of Object.entries(before))applyAuthoredScenePose(id,pose);throw error;}
+  };
+  const controller=createActuatorController({edits:scenePlacementTools.edits,readPose,writePoses,
+    changed:()=>{actuatorControls?.refresh();window._kaminosDirty?.();},
+    admit:()=>{if(authoringBusy||sceneSaveBlockedByFailedRestore||vantageCaptureHeld||polyEdit?.active()||greenroomPreviewIsActive())throw Error('Finish the current document, edit or capture action');}});
+  sceneActuators=controller;
+  const api={...controller,
+    install(raw){
+      assertSceneConstructionAvailable();
+      const ids=[raw.fixedId,raw.followerId,raw.barrelId,raw.rodId,...(raw.carried||[])];
+      if(ids.some(id=>!supported(id)))throw Error('Choose distinct ungrouped rigid parts');
+      const expanded=ids.flatMap(members);if(new Set(expanded).size!==expanded.length)throw Error('Actuator roles contain the same part');
+      const r=prepareActuator({...raw,id:raw.id||makeSceneObjectId('piston'),label:raw.label||'Piston',reference:Object.fromEntries(ids.map(id=>[id,readPose(id)]))});
+      controller.install(r);window.selectSceneObject(r.barrelId);return r;
+    },
+    mountInstaller:root=>actuatorControls.mountInstaller(root),
+  };
+  actuatorControls=mountActuatorControls({document,root:document.getElementById('transform-inspector'),api,
+    readObjects:()=>[...sceneObjects.filter(e=>!e.groupId).map(e=>({id:e.id,type:e.type,label:e.label||e.fileName})),...sceneGroups.map(g=>({id:'@group:'+g.id,type:'group',label:g.label}))],selectedId:()=>activeSceneGroupId?'@group:'+activeSceneGroupId:activeSceneObjectId,
+    pickPoint:callback=>{actuatorPointPick=callback;},cancelPick:()=>{actuatorPointPick=null;},installNumberDrag:installRelativeNumberDrag});
+  window.kaminosActuators=api;
+  workbenchSceneFrames.onFrame(({deltaSeconds})=>controller.tick(deltaSeconds));
+  document.addEventListener('keydown',event=>{if(actuatorPointPick&&event.key==='Escape'){actuatorPointPick=null;setInfo('Mount placement cancelled');event.preventDefault();event.stopImmediatePropagation();}},true);
+  document.addEventListener('pointerdown',event=>{
+    if(!actuatorPointPick||event.button!==0||!renderer.domElement.contains(event.target))return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const rect=renderer.domElement.getBoundingClientRect(),ray=new THREE.Raycaster();ray.setFromCamera(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);
+    const hit=ray.intersectObjects(sceneObjects.filter(e=>['glb',PROCEDURAL_MESH_TYPE].includes(e.type)).map(e=>e.object),true)[0];
+    if(!hit){setInfo('Click a mesh surface for the mount');return;}
+    const callback=actuatorPointPick;actuatorPointPick=null;callback(hit.point.toArray());
+  },true);
 }
 async function installOwnerWorkbenchEntry() {
   if(ownerExperimentEntry)return;
@@ -25685,6 +25734,7 @@ function buildSceneData(capture = null) {
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
   const data = buildSceneDocument({
+    actuators:sceneActuators?.read()||[],
     timestamp: new Date().toISOString(),
     objects,
     groups: serializeSceneGroups(),
@@ -26896,6 +26946,7 @@ function sceneIsEmpty() {
 }
 
 function sceneSaveIsBlocked() {
+  if(sceneActuators?.state().running){setInfo('Stop the piston drive before saving its position');return true;}
   if (scenePlacementTools?.edits.state().active) { setInfo('Finish or cancel the active edit before saving'); return true; }
   if (scenePlacementTools?.edits.state().replaying) {
     setInfo('Wait for the current scene history action to finish');
@@ -27283,6 +27334,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     compositionStatus(`${data.label || 'Composition'} | ${activeSceneComposition.flame.label}`);
   }
   sceneCameras?.restore(restorePlan.sceneCamera);
+  sceneActuators?.restore(restorePlan.actuators);
   sceneCameras?.restoreViewport(restorePlan.viewport);
   cameraViews?.restore(restorePlan.cameraViews);
   sceneNavigation?.resetView();

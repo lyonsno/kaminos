@@ -1,4 +1,5 @@
 import {checkedViewportDisplay} from './viewport-display-settings.mjs';
+import {checkedActuators} from './scene-actuator.mjs';
 import {checkedObjectCollision,canCollideWithFire,checkSceneCollisionReferences} from './scene-collider.mjs';
 import {FIRE_DOMAIN_TYPE,checkedFireDomainRecord,authorFireObjects,readFireObjects,fireRenderingSettings} from './scene-fire-domain.mjs';
 import {RIM_LIGHT_ID,checkedRimRecipe,rimRecipePose,checkedSceneLightRecord} from './scene-rim-light.mjs';
@@ -13,7 +14,7 @@ import {normalizeCameraViews} from './scene-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,normalizeSceneCamera,normalizeCameraViewport} from './scene-camera.mjs';
 export const SCENE_SCHEMA = 'kaminos.scene.v1';
 export const VOLUME_PRIMITIVE_SCHEMA = 'kaminos.volume-primitives.v0';
-export const SCENE_VERSION = 10;
+export const SCENE_VERSION = 11;
 
 function cloneJson(value) {
   if (value === undefined) return undefined;
@@ -191,6 +192,7 @@ export function planSceneRestore(data) {
   const activeObjectId = requestedActiveId || (Array.isArray(data.selectionIds)?null:objects.at(-1)?.id || null);
   return {
     schema: data.schema || null,
+    actuators:checkedActuators(data.actuators),
     cameraViews: normalizeCameraViews(data.cameraViews),
     sceneCamera:normalizeSceneCamera(data.sceneCamera,objects),
     editorDisplay:data.editorDisplay==null?null:checkedViewportDisplay(data.editorDisplay),
@@ -211,6 +213,7 @@ export function planSceneRestore(data) {
 }
 
 export function buildSceneDocument({
+  actuators = [],
   timestamp = new Date().toISOString(),
   objects = [],
   groups = [],
@@ -257,7 +260,8 @@ export function buildSceneDocument({
   }
   const document = {
     schema: SCENE_SCHEMA,
-    version: fireSettings ? SCENE_VERSION : 8,
+    version: actuators.length ? SCENE_VERSION : fireSettings ? 10 : 8,
+    ...(actuators.length?{actuators:checkedActuators(actuators)}:{}),
     timestamp,
     objects: fireSettings ? authorFireObjects(sceneObjects,fireSettings,{translation:authoredFlameDomain,scale:flameDomainScale,followSource:flameDomainFollowSource,collision:composition?.route?.volume_collision==='kiln'}) : sceneObjects,
     ...(fireSettings?{fireRendering:fireRenderingSettings(fireSettings)}:{}),
