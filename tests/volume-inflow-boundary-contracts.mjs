@@ -177,7 +177,7 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 12, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape, the reactant combustion block and the joined boundary');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 12 + 4, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape, the reactant combustion block, the joined boundary and wavelet turbulence');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 
@@ -299,7 +299,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.ok(keys.includes('volume-emitter-inlet-temperature'));
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-fuel-fraction').additiveDefault, 0.56);
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
-  assert.equal(schema.controlCount, 256);
+  assert.equal(schema.controlCount, 259);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');

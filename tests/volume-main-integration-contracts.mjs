@@ -40,6 +40,8 @@ const resources = {
   forceDeltaTexture: { createView: () => ({ label: 'force increment view' }) },
   // The reactant sidecar textures (bindings 23/24) live in the same closure.
   reactantTextures: [{ createView: () => ({ label: 'reactant A view' }) }, { createView: () => ({ label: 'reactant B view' }) }],
+  // The wavelet turbulence coordinate textures (bindings 31/32), same closure.
+  waveletTextures: [{ createView: () => ({ label: 'wavelet A view' }) }, { createView: () => ({ label: 'wavelet B view' }) }],
   // The joined boundary's lower-plane texture (binding 28), same closure.
   joinedLowerFaceView: () => ({ label: 'joined lower planes view' }),
   joinedGhostView: index => ({ label: `joined ghost view ${index}` }),

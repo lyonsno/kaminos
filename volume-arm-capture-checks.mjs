@@ -238,9 +238,21 @@ export function emissiveCoefficientsMismatch(sample, { minProducerStep = null } 
 // other control, including any other debug control, is configuration
 // (post-landing review of 2eef9ccdd: @confinementEpsilon slipped through a
 // guard that exempted every debug control).
-export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients', '@cameraFrame', '@savePreset', '@simGpuProfile', '@fluidBandStats']);
+export const NON_CONFIGURING_CAPTURE_CONTROLS = new Set(['@emissiveCoefficients', '@cameraFrame', '@savePreset', '@simGpuProfile', '@fluidBandStats', '@waveletBandEnergy']);
 export function armSetsConfiguration(set) {
   return set.some(([id]) => !NON_CONFIGURING_CAPTURE_CONTROLS.has(id));
+}
+
+// A wavelet band-energy readback is evidence for a configuration only when it
+// was taken after that configuration's last settled step and the kernel reports
+// the closure state the arm intends (review WT-02: a readback inside a
+// configuring arm could carry the previous configuration's gain).
+export function waveletBandEnergyMismatch(sample, { minStep = 0 } = {}) {
+  if (!sample || sample.status !== 'sampled') return `wavelet band energy ${sample?.status ?? 'missing'}`;
+  if (!Number.isFinite(sample.simStepCount) || sample.simStepCount < minStep) return `wavelet band energy sampled at step ${sample?.simStepCount} before the configuration settled at step ${minStep}`;
+  if (!sample.wavelet || !['gain', 'octaves', 'strength', 'admitted'].every(key => key in sample.wavelet)) return 'wavelet band energy sample carries no closure state';
+  if ((sample.wavelet.gain > 0) !== (sample.wavelet.admitted === true)) return `wavelet band energy sample is incoherent: gain ${sample.wavelet.gain} admitted ${sample.wavelet.admitted}`;
+  return null;
 }
 
 // Joined boundary arm (Sexy's stationary candidate): a requested join must be

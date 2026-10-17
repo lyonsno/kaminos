@@ -74,8 +74,8 @@ test('cockpit: the staggering select with help, snapshot, listener, route restor
   assert.match(index, /staggered — NOT ADMITTED \(\$\{/, 'a refused request is named');
   const control = schema.controls.find(c => c.key === 'volume-velocity-staggering');
   assert.deepEqual(control, { key: 'volume-velocity-staggering', param: 'volume_velocity_staggering', tagName: 'SELECT', type: 'select-one', additiveDefault: 'collocated', additiveSinceControlCount: 235 });
-  assert.equal(schema.controlCount, 256);
-  assert.equal(schema.controls.length, 256);
+  assert.equal(schema.controlCount, 259);
+  assert.equal(schema.controls.length, 259);
 });
 
 test('the capture carries the staggering receipt and its check cannot be satisfied by a refused or absent receipt', () => {
@@ -107,7 +107,7 @@ test('staggered: the main kernel separates the force increment and the face-forc
   assert.equal(on.effective.faceForces, true);
   assert.match(source, /@group\(0\) @binding\(22\) var forceDelta: texture_storage_3d<r32float, read_write>;/, 'one r32float storage texture, components stacked along depth (compute is at its storage-buffer limit)');
   assert.match(source, /\{ binding: 22, visibility: GPUShaderStage\.FRAGMENT \| GPUShaderStage\.COMPUTE, storageTexture: \{ access: 'read-write', format: 'r32float', viewDimension: '3d' \} \}/, 'fluid layout carries the force texture');
-  assert.match(source, /size: \[gridSize, gridHeight, gridSize \* 3\],/, 'three components along depth');
+  assert.match(source, /const planes = waveletSidecarFull \? 9 : 3;[\s\S]*?size: \[gridSize, gridHeight, gridSize \* planes\],/, 'three components along depth');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let forceIncrement = \(vel - velTransported\) \* timeStep;/);
   assert.match(main, /var centredForce = vec3<f32>\(0\.0\);/);

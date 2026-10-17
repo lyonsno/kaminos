@@ -37,7 +37,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { armSetsConfiguration, cameraFrameMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseSyntheticGhosts, parseArms, parseCameraFrame, resolveHeadlessBrowser, syntheticGhostSettlementMismatch } from './volume-arm-capture-checks.mjs';
+import { armSetsConfiguration, cameraFrameMismatch, waveletBandEnergyMismatch, effectiveMismatches, emissiveCoefficientsMismatch, joinedBoundaryMismatch, parseSyntheticGhosts, parseArms, parseCameraFrame, resolveHeadlessBrowser, syntheticGhostSettlementMismatch } from './volume-arm-capture-checks.mjs';
 
 const CAPTURE_IDENTITY = 'kaminos.volume.transport-arm-capture.v1';
 const positional = [];
@@ -247,6 +247,17 @@ try {
         if (sample?.status !== 'sampled') { report.lastTrustworthyEvidence.fluidBandStats = sample; fail(report.failurePhase, `fluid band stats ${sample?.status ?? 'missing'}`); }
         continue;
       }
+      if (cid === '@waveletBandEnergy') {
+        if (armSetsConfiguration(arm.set)) fail(report.failurePhase, '@waveletBandEnergy must be its own arm, after the configuration arm has settled');
+        // Read-only: velocity energy by band and a hash of the velocity bits,
+        // accepted only when taken after the last configuration settled.
+        const sample = await evaluate(op(`(async () => { const p = w.__kaminosVolumePrototype; if (!p?.debugWaveletBandEnergy) return { status: 'missing-api' }; return await p.debugWaveletBandEnergy(); })()`));
+        (arm.waveletBandEnergy ||= []).push(sample);
+        applied.push([cid, value, sample?.status ?? null]);
+        const mismatch = waveletBandEnergyMismatch(sample, { minStep: lastConfigStep });
+        if (mismatch) { report.lastTrustworthyEvidence.applied = applied; report.lastTrustworthyEvidence.waveletBandEnergy = sample; fail(report.failurePhase, mismatch); }
+        continue;
+      }
       if (cid === '@joinedGhostsSynthetic') {
         // Witness only: bind an exterior geometry around the box and fill it with
         // a constant synthetic exterior; fails unless the ghosts are bound.
@@ -310,7 +321,7 @@ try {
     let end = await evaluate(stateExpr);
     if (!end) fail(report.failurePhase, 'renderer state unavailable after settle');
     if (fault === 'arm-error' && report.arms.length === 0) end = { ...end, error: 'synthetic-fault:arm-error' };
-    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], fluidBandStats: arm.fluidBandStats || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
+    const entry = { arm: arm.name, set: arm.set, applied, presetSaves: arm.presetSaves || [], emissiveCoefficients: arm.emissiveCoefficients || [], joinedBoundary: arm.joinedBoundary || [], joinedGhosts: arm.joinedGhosts || [], fluidBandStats: arm.fluidBandStats || [], waveletBandEnergy: arm.waveletBandEnergy || [], afterSwitch: after, samples, settledBySteps, settleStepsRequested: settleSteps, end, residualMeasurement: end.residual?.residualMeasurement ?? null, stepsPerSecond: (end.simStepCount - s0) / ((Date.now() - t0) / 1000), screenshot: null, errorsSoFar: errors.length };
     report.arms.push(entry);
     report.lastTrustworthyEvidence.lastArm = arm.name;
     writeReport();
