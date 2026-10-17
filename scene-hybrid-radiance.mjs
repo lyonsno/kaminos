@@ -14,7 +14,7 @@ import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
-export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null}) {
+export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,smokeRefinement=4,pointCount=4,pointSampling='all',shadowComparison={},shadowResolution=256,shadowSoftness=0,shadowSampling='fixed',blockerSamples=9,filterSamples=16,getSourceGuide=null,onStatus=()=>{},createShadow=createFireLightFieldShadow,rebuild=null,surfaceLighting=null}) {
   validateShadowQuality({resolution:shadowResolution,blockerSamples,filterSamples},device.limits);
   if(!Number.isFinite(shadowSoftness)||shadowSoftness<0)throw Error('shadow softness must be finite and nonnegative');
   validateShadowSampling(shadowSampling);
@@ -24,7 +24,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const paired=uniform(pointSampling==='paired','bool');
   let comparison=validateShadowComparison(shadowComparison);
   const worldCellSize=uniform(comparison.worldCellSize);
-  let points,external,lights,irradiance;
+  let points,external,lights,irradiance,prepareSurfaceSampling;
   function buildPoints(count){
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
@@ -45,10 +45,13 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     return {shadow,irradiance:energy.div(distance2.add(region.w)).mul(normalWorld.dot(direction).max(0)).mul(shadow.visibility)};
   });
   const currentLights=lights;
-  irradiance=Fn(()=>{
+  prepareSurfaceSampling=()=>{
     grain?.bits.toStack();
     // Derivatives must be evaluated in uniform flow, before source selection.
     for(const light of currentLights)light.shadow.prepareSampling?.();
+  };
+  irradiance=Fn(()=>{
+    prepareSurfaceSampling();
     const sum=vec3(0).toVar();
     const add=indices=>{for(const i of indices)sum.addAssign(currentLights[i].irradiance.mul(2));};
     if(count===4)If(paired,()=>{
@@ -69,7 +72,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let rebuildRevision=0,rebuildTask=null,rebuilding=false;
   function replaceLighting(){
     releasePoints();buildPoints(pointCount);installMaterials();
-    for(const row of originals.values())for(const material of row.owned)material.needsUpdate=true;
+    for(const row of originals.values())for(const material of row.owned){surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);material.needsUpdate=true;}
   }
   function requestRebuild(){
     rebuildRevision++;
@@ -99,7 +102,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     scene.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
       const prior=originals.get(mesh);if(prior&&mesh.material===prior.installed)return;
-      if(prior){for(const m of prior.owned)m.dispose();originals.delete(mesh);}
+      if(prior){for(const m of prior.owned){surfaceLighting?.unbind(m);m.dispose();}originals.delete(mesh);}
       const source=mesh.material,list=Array.isArray(source)?source:[source];
       if(!list.every(m=>m.isMeshStandardMaterial||m.isMeshStandardNodeMaterial||m.isMeshPhysicalMaterial||m.isMeshPhysicalNodeMaterial))return;
       const owned=list.map(original=>{
@@ -108,7 +111,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         // This injected graph is not one of NodeMaterial's enumerated node
         // properties. A version bump alone can reuse its old texture bindings.
         material.customProgramCacheKey=function(){return `${cacheKey.call(this)}:hybrid:${irradiance.uuid}`;};
-        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(irradiance)];};return material;
+        surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);
+        material.setupMaterialLightings=function(builder){return [...setup.call(this,builder),new THREE.IrradianceNode(surfaceLighting?.forMaterial(builder,this,irradiance)??irradiance)];};return material;
       });
       const installed=Array.isArray(source)?owned:owned[0];originals.set(mesh,{source,installed,owned});mesh.material=installed;
     });
@@ -202,7 +206,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
             type.prototype.copy.call(copy,row.owned[i]);return copy;
           });mesh.material=Array.isArray(row.source)?restored:restored[0];
         }
-        for(const material of row.owned)material.dispose();
+        for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
       }
       originals.clear();releasePoints();gather?.destroy();
       };

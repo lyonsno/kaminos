@@ -23,7 +23,13 @@ try {
   const manifest = JSON.parse(fs.readFileSync(path.join(staged, 'package.json'), 'utf8'));
   assert.equal(manifest.name, '@kaminos/flux2-klein');
   assert.equal(manifest.type, 'module');
-  assert.equal(manifest.private, true, 'publication is an operator decision; the package must not be publishable by accident');
+  // Published under MIT (operator decision, 2026-10-17) as a public scoped package, with its source location.
+  assert.equal(manifest.private, undefined, 'the package must be publishable');
+  assert.equal(manifest.license, 'MIT');
+  assert.deepEqual(manifest.publishConfig, { access: 'public' });
+  assert.deepEqual(manifest.repository, { type: 'git', url: 'git+https://github.com/lyonsno/kaminos.git', directory: 'models/flux2-klein' });
+  assert.ok(manifest.files.includes('LICENSE'), 'LICENSE must ship');
+  assert.match(fs.readFileSync(path.join(staged, 'LICENSE'), 'utf8'), /^MIT License\n\nCopyright \(c\) 2026 Noah Lyons\n[\s\S]*Permission is hereby granted, free of charge/);
   assert.ok(manifest.dependencies['@kaminos/webgpu-inference-kit'], 'Klein must depend on the kit package');
   const files = fs.readdirSync(staged).filter(f => f.endsWith('.js')).sort();
   for (const required of ['index.js', 'klein-pipeline.js', 'klein-weights.js', 'qwen-tokenizer.js']) assert.ok(files.includes(required), `${required} must ship`);

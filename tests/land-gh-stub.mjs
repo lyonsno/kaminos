@@ -1,5 +1,7 @@
 // kaminos-test: helper — stands in for gh under tests/land-contracts.mjs; executed by the fixture, not a test
-// Usage: node land-gh-stub.mjs <state.json> <gh arguments...>
+// Usage: node land-gh-stub.mjs <state.json> <gh arguments...>, or in-process
+// as ghStub(statePath, argv, { env }), which returns { code, stdout, stderr };
+// env is what the stub's own git and hook commands run with.
 //
 // The state file holds the canned answers and is rewritten on every call:
 //   calls           every invocation's arguments, one string each
@@ -32,103 +34,112 @@
 //   ignoreCommit    answer `run list` with every commit's runs, ignoring --commit
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
-const [statePath, ...argv] = process.argv.slice(2);
-const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-state.calls.push(argv.join(' '));
-const save = () => fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
-const flag = name => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
-const command = argv.slice(0, 2).join(' ');
-const allRuns = () => Object.values(state.runsByCommit).flat();
+export function ghStub(statePath, argv, { env = process.env } = {}) {
+  const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+  state.calls.push(argv.join(' '));
+  const save = () => fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
+  const flag = name => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
+  const command = argv.slice(0, 2).join(' ');
+  const allRuns = () => Object.values(state.runsByCommit).flat();
+  const done = (code, stdout = '', stderr = '') => ({ code, stdout, stderr });
 
-// The push trigger: register one push run per push of land/<headSha> seen so far.
-function registerPushRuns() {
-  const trigger = state.pushTrigger;
-  if (!trigger) return;
-  const ref = `refs/heads/land/${trigger.headSha}`;
-  let pushes;
-  if (trigger.updatesLog) {
-    const lines = fs.existsSync(trigger.updatesLog) ? fs.readFileSync(trigger.updatesLog, 'utf8').split('\n').filter(Boolean) : [];
-    pushes = lines.slice(trigger.logOffset || 0).filter(line => { const [name, , next] = line.split(' '); return name === ref && !/^0+$/.test(next); }).length;
-  } else {
-    let exists = false;
-    try { execFileSync('git', [`--git-dir=${trigger.originDir}`, 'rev-parse', '--verify', '-q', ref], { stdio: 'ignore' }); exists = true; } catch { exists = false; }
-    pushes = exists ? 1 : 0;
+  // The push trigger: register one push run per push of land/<headSha> seen so far.
+  function registerPushRuns() {
+    const trigger = state.pushTrigger;
+    if (!trigger) return;
+    const ref = `refs/heads/land/${trigger.headSha}`;
+    let pushes;
+    if (trigger.updatesLog) {
+      const lines = fs.existsSync(trigger.updatesLog) ? fs.readFileSync(trigger.updatesLog, 'utf8').split('\n').filter(Boolean) : [];
+      pushes = lines.slice(trigger.logOffset || 0).filter(line => { const [name, , next] = line.split(' '); return name === ref && !/^0+$/.test(next); }).length;
+    } else {
+      let exists = false;
+      try { execFileSync('git', [`--git-dir=${trigger.originDir}`, 'rev-parse', '--verify', '-q', ref], { stdio: 'ignore', env }); exists = true; } catch { exists = false; }
+      pushes = exists ? 1 : 0;
+    }
+    trigger.pushesSeen ||= 0;
+    for (; trigger.pushesSeen < pushes; trigger.pushesSeen += 1) {
+      const run = JSON.parse(JSON.stringify(trigger.run));
+      Object.assign(run, { databaseId: trigger.run.databaseId + trigger.pushesSeen, headSha: trigger.headSha, event: 'push', headBranch: `land/${trigger.headSha}` });
+      run.url = run.url ? run.url.replace(/\d+$/, String(run.databaseId)) : run.url;
+      (state.runsByCommit[trigger.headSha] ||= []).push(run);
+    }
   }
-  trigger.pushesSeen ||= 0;
-  for (; trigger.pushesSeen < pushes; trigger.pushesSeen += 1) {
-    const run = JSON.parse(JSON.stringify(trigger.run));
-    Object.assign(run, { databaseId: trigger.run.databaseId + trigger.pushesSeen, headSha: trigger.headSha, event: 'push', headBranch: `land/${trigger.headSha}` });
-    run.url = run.url ? run.url.replace(/\d+$/, String(run.databaseId)) : run.url;
-    (state.runsByCommit[trigger.headSha] ||= []).push(run);
-  }
-}
-if (command === 'run list' || command === 'run view') registerPushRuns();
+  if (command === 'run list' || command === 'run view') registerPushRuns();
 
-// A run's answer for this call: hidden runs are skipped, timelines advance.
-function answer(run) {
-  if (run._hiddenFor > 0) { run._hiddenFor -= 1; return null; }
-  if (Array.isArray(run._timeline) && run._timeline.length) {
-    const [status, conclusion] = String(run._timeline[0]).split(':');
-    run.status = status;
-    run.conclusion = conclusion || '';
-    if (run._timeline.length > 1) run._timeline.shift();
+  // A run's answer for this call: hidden runs are skipped, timelines advance.
+  function answer(run) {
+    if (run._hiddenFor > 0) { run._hiddenFor -= 1; return null; }
+    if (Array.isArray(run._timeline) && run._timeline.length) {
+      const [status, conclusion] = String(run._timeline[0]).split(':');
+      run.status = status;
+      run.conclusion = conclusion || '';
+      if (run._timeline.length > 1) run._timeline.shift();
+    }
+    return run;
   }
-  return run;
-}
-const project = (run, fields) => Object.fromEntries(fields.map(f => [f, run[f] ?? (f === 'conclusion' ? '' : null)]));
-const fields = () => (flag('--json') || '').split(',').filter(Boolean);
+  const project = (run, fields) => Object.fromEntries(fields.map(f => [f, run[f] ?? (f === 'conclusion' ? '' : null)]));
+  const fields = () => (flag('--json') || '').split(',').filter(Boolean);
 
-if (state.hook && command === 'run list') {
-  const hook = state.hook;
-  state.hook = null;
-  save();
-  execFileSync('sh', [hook], { stdio: ['ignore', 'ignore', 'inherit'] });
-}
-if (state.fail && state.fail.command === command) {
-  save();
-  process.stderr.write(state.fail.stderr || 'gh: stub failure\n');
-  process.exit(state.fail.code ?? 1);
-}
-
-if (command === 'run list') {
-  if (state.raw != null) { save(); process.stdout.write(state.raw); process.exit(0); }
-  const commit = flag('--commit');
-  const workflow = flag('--workflow');
-  const limit = Number(flag('--limit') || 20);
-  const candidates = state.ignoreCommit ? allRuns() : (state.runsByCommit[commit] || []);
-  const listed = [];
-  for (const run of candidates) {
-    if (workflow && run._file !== workflow) continue;
-    const shown = answer(run);
-    if (shown) listed.push(shown);
-  }
-  save();
-  process.stdout.write(`${JSON.stringify(listed.slice(0, limit).map(run => project(run, fields())))}\n`);
-} else if (command === 'run view') {
-  const id = Number(argv[2]);
-  const run = allRuns().find(r => r.databaseId === id);
-  const shown = run && answer(run);
-  save();
-  if (!shown) { process.stderr.write(`could not find run ${id}\n`); process.exit(1); }
-  process.stdout.write(`${JSON.stringify(project(shown, fields()))}\n`);
-} else if (command === 'workflow run') {
-  state.dispatches.push(argv.join(' '));
-  if (state.dispatchFails) {
+  if (state.hook && command === 'run list') {
+    const hook = state.hook;
+    state.hook = null;
     save();
-    process.stderr.write(state.dispatchFails.stderr || 'gh: dispatch refused\n');
-    process.exit(state.dispatchFails.code ?? 1);
+    execFileSync('sh', [hook], { stdio: ['ignore', 'ignore', 'inherit'], env });
   }
-  let created = null;
-  if (state.dispatch) {
-    const { headSha, run } = state.dispatch;
-    created = JSON.parse(JSON.stringify(run));
-    (state.runsByCommit[headSha] ||= []).push(created);
+  if (state.fail && state.fail.command === command) {
+    save();
+    return done(state.fail.code ?? 1, '', state.fail.stderr || 'gh: stub failure\n');
+  }
+
+  if (command === 'run list') {
+    if (state.raw != null) { save(); return done(0, state.raw); }
+    const commit = flag('--commit');
+    const workflow = flag('--workflow');
+    const limit = Number(flag('--limit') || 20);
+    const candidates = state.ignoreCommit ? allRuns() : (state.runsByCommit[commit] || []);
+    const listed = [];
+    for (const run of candidates) {
+      if (workflow && run._file !== workflow) continue;
+      const shown = answer(run);
+      if (shown) listed.push(shown);
+    }
+    save();
+    return done(0, `${JSON.stringify(listed.slice(0, limit).map(run => project(run, fields())))}\n`);
+  }
+  if (command === 'run view') {
+    const id = Number(argv[2]);
+    const run = allRuns().find(r => r.databaseId === id);
+    const shown = run && answer(run);
+    save();
+    if (!shown) return done(1, '', `could not find run ${id}\n`);
+    return done(0, `${JSON.stringify(project(shown, fields()))}\n`);
+  }
+  if (command === 'workflow run') {
+    state.dispatches.push(argv.join(' '));
+    if (state.dispatchFails) {
+      save();
+      return done(state.dispatchFails.code ?? 1, '', state.dispatchFails.stderr || 'gh: dispatch refused\n');
+    }
+    let created = null;
+    if (state.dispatch) {
+      const { headSha, run } = state.dispatch;
+      created = JSON.parse(JSON.stringify(run));
+      (state.runsByCommit[headSha] ||= []).push(created);
+    }
+    save();
+    return done(0, created && !state.dispatchSilent ? `https://github.com/${flag('-R')}/actions/runs/${created.databaseId}\n` : '');
   }
   save();
-  if (created && !state.dispatchSilent) process.stdout.write(`https://github.com/${flag('-R')}/actions/runs/${created.databaseId}\n`);
-} else {
-  save();
-  process.stderr.write(`gh stub: unexpected command ${argv.join(' ')}\n`);
-  process.exit(64);
+  return done(64, '', `gh stub: unexpected command ${argv.join(' ')}\n`);
+}
+
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
+  const [statePath, ...argv] = process.argv.slice(2);
+  const { code, stdout, stderr } = ghStub(statePath, argv);
+  if (stdout) process.stdout.write(stdout);
+  if (stderr) process.stderr.write(stderr);
+  process.exitCode = code;
 }

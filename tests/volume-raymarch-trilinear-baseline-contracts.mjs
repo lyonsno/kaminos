@@ -87,7 +87,7 @@ const sampleBranch = traversal.slice(
 );
 assert.match(
   sampleBranch,
-  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*$/,
+  /^var reconstructed: FlowReconstructionSample;\s*if \(flowKernelReconstructionActive\) \{\s*reconstructed = sampleWorldFlowReconstruction\(p\);\s*\} else if \(LEAN_EMISSIVE_RAYMARCH\) \{\s*reconstructed = reconstructRaymarchNeighborhood\(neighborhood\);\s*\} else \{\s*reconstructed = sampleWorldFlowReconstructionRaw\(p\);\s*\}\s*expensiveSamples = expensiveSamples \+ 1u;\s*rayMaterialSamples\+\+;\s*$/,
   'raw zero route must contain one direct trilinear assignment and no filtering',
 );
 }

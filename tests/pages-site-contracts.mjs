@@ -37,7 +37,7 @@ test("Pages site keeps the flame boutique at the root and publishes the model di
   }
   const extra = walk(site).filter(file => !fs.existsSync(path.join(atlas, file)));
   for (const file of extra) {
-    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-(?:settings|history))?\.mjs|finger-fluid-webgpu-core\.js)$/, `${file} is outside the published set`);
+    assert.match(file, /^(inference-kit\/index\.html|inference-kit\/klein\/(?:[^/]+\.(html|js)|assets\/[^/]+\.(jpg|png))|inference-kit\/unimate\/(index\.html|unimate-[\w-]+\.js|clips\/[\w-]+\.json)|inference-kit\/flux2-klein\/klein-duties\.js|inference-kit\/material-photo\/(?:[^/]+\.(html|js|css|png)|(?:images|examples|icons)\/[^/]+)|webgpu-inference-kit\/src\/.+\.js|models\/supermat\/supermat-[^/]+\.js|lib\/(?:three\.[^/]+\.js|addons\/math\/SimplexNoise\.js|addons\/tsl\/display\/[^/]+\.(js|LICENSE))|assets\/hdr\/[^/]+|scene-gi(?:-(?:settings|history))?\.mjs|scene-(?:lighting-filter|surface-lighting)\.mjs|finger-fluid-webgpu-core\.js)$/, `${file} is outside the published set`);
   }
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "klein", "index.html")));
   assert.ok(fs.existsSync(path.join(site, "inference-kit", "unimate", "index.html")));
@@ -121,7 +121,7 @@ test("Material Photograph publishes real results and renderer assets without loc
     const source=path.join(repoRoot,"demos","material-photo","examples",sample+".json.gz");
     assert.ok(fs.readFileSync(path.join(demo,"examples",sample+".json.gz")).equals(fs.readFileSync(source)));
   }
-  for(const file of ["lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js","lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE","scene-gi.mjs","scene-gi-settings.mjs","finger-fluid-webgpu-core.js","assets/hdr/empty_warehouse_01_1k.hdr"]){
+  for(const file of ["lib/three.webgpu.js","lib/three.core.js","lib/three.tsl.js","lib/addons/tsl/display/BloomNode.js","lib/addons/tsl/display/BloomNode.LICENSE","scene-gi.mjs","scene-gi-settings.mjs","scene-lighting-filter.mjs","scene-surface-lighting.mjs","finger-fluid-webgpu-core.js","assets/hdr/empty_warehouse_01_1k.hdr"]){
     assert.ok(fs.existsSync(path.join(site,file)),file+" must be served");
   }
   const config=await import(path.join(demo,"deployment.js"));

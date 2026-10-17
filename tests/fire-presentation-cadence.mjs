@@ -20,11 +20,11 @@ test('no phase without opted-in advection or with the sim stepping every frame',
 test('the raymarch carries each sample point forward by the phase, clipped against scene solids, and the frame writes the phase', () => {
  const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
  const fn = /fn presentationAdvect\([\s\S]*?\n}\n/.exec(source)?.[0] ?? '';
- assert.match(fn, /u\.reserved_render_controls\.y/, 'the phase rides the free reserved render lane');
+ assert.match(fn, /u\.occupancy_controls\.z/, 'the phase rides a free occupancy lane');
  assert.match(fn, /sceneClipCharacteristic\(/, 'the carried point stops at scene solids like the sim backtrace');
  assert.match(fn, /dynamicsBacktraceScale\(\)/, 'one real step carries as far as the sim transport does');
  assert.match(source, /let p = presentationAdvect\(select\(ro \+ rd \* t, fullGridP, fullGridCapture\)/);
- assert.match(source, /uniforms\[45\] = presentationPhase\(/);
+ assert.match(source, /uniforms\[42\] = presentationPhase\(/);
 });
 
 test('blend shows the previous real state on a step frame and moves toward the new one between steps', () => {
@@ -75,4 +75,12 @@ test('a saved cockpit layout gains the cadence controls directly under Speed, no
   authorableControlIds: ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-fire-scale']});
  assert.deepEqual(result.document.groups.map(group => [group.id, group.controlIds]),
   [['organized-simulation', ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-fire-scale']]]);
+});
+
+test('the Flame inspector shows the cadence directly under Speed in Motion', async () => {
+ const {FLAME_PROPERTY_GROUPS} = await import('../flame-authoring.mjs');
+ const motion = FLAME_PROPERTY_GROUPS.find(group => group.name === 'Motion');
+ const ids = motion.fields.map(([id]) => id);
+ assert.deepEqual(ids.slice(ids.indexOf('volume-speed'), ids.indexOf('volume-speed') + 3), ['volume-speed', 'volume-sim-every', 'volume-sim-between']);
+ assert.equal(motion.fields.find(([id]) => id === 'volume-speed')[1], 'Speed (× world)');
 });

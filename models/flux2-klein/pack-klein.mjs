@@ -4,7 +4,7 @@
 // adds index.js with the public API, writes package.json and runs npm pack. Fails when a staged file
 // still imports anything outside the package other than that entry.
 // Usage: node pack-klein.mjs --out <staging dir> [--version 0.1.0] [--json]
-// The package stays private: publishing and licensing are decided separately.
+// MIT-licensed; publish the staged directory with npm publish (publishConfig makes the scoped package public).
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,15 +37,18 @@ export { KleinPipeline, kleinWeightStatus, gaussianNoise, transferBytes, WEIGHT_
 export { KLEIN_HOSTED_WEIGHTS, KLEIN_LEVELS, kleinWeightUrls } from './klein-weights.js';
 `);
 fs.copyFileSync(path.join(here, 'package-README.md'), path.join(out, 'README.md'));
+fs.copyFileSync(path.join(here, 'LICENSE'), path.join(out, 'LICENSE'));
 const manifest = {
   name: '@kaminos/flux2-klein',
   version: opt('--version', '0.1.0'),
-  private: true,
   description: 'FLUX.2 [klein] 4B text-to-image in the browser on WebGPU: text encoder, transformer and decoder as compute shaders.',
-  license: 'UNLICENSED',
+  license: 'MIT',
+  repository: { type: 'git', url: 'git+https://github.com/lyonsno/kaminos.git', directory: 'models/flux2-klein' },
+  homepage: 'https://lyonsno.github.io/kaminos/inference-kit/klein/',
+  publishConfig: { access: 'public' },
   type: 'module',
   exports: { '.': './index.js' },
-  files: ['index.js', ...FILES, 'README.md'],
+  files: ['index.js', ...FILES, 'README.md', 'LICENSE'],
   dependencies: { '@kaminos/webgpu-inference-kit': `^${kitManifest.version}` },
 };
 fs.writeFileSync(path.join(out, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);

@@ -36,6 +36,23 @@ function harness() {
 }
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 
+test('Full can retain picking snapshots without drawing a proxy or changing pacing',()=>{
+ const h=harness();
+ h.sync.sync({prototype:h.prototype,pickable:true,display:false,required:false,camera:h.camera,layerId:4,canvas:h.canvas,bridge:h.bridge});
+ h.prototype.readback(.8);
+ assert.equal(h.registry.latest('fire')?.count,1);
+ assert.equal(h.layers.length,0);
+ assert.equal(h.prototype.suppressed,false);
+ assert.equal(h.prototype.pacing,null);
+ assert.equal(h.canvas.style.visibility,'');
+ const ray={origin:[0,0,5],direction:[0,0,-1]};
+ assert.ok(h.sync.pick(ray,[0,0,5]));
+ h.prototype.setGeneration(2);
+ assert.equal(h.sync.pick(ray,[0,0,5]),null,'reset invalidates before the next frame');
+ h.prototype.setActive(false);
+ assert.equal(h.sync.pick(ray,[0,0,5]),null);
+});
+
 test('Proxy stands in once a snapshot of the current field exists, and Full brings the fire back', () => {
  const h = harness();
  h.frame(true);
@@ -68,6 +85,19 @@ test('a disabled volume draws no proxy, and enabling it again brings the held fi
  h.prototype.setActive(true); h.frame(true);
  assert.equal(h.sync.effective(), true, 'the held field stands in again without a new readback');
  assert.equal(h.sync.layer().state().count, 1);
+});
+
+test('hidden Proxy fire is not pickable, while visible Proxy and snapshot-only Full still are',()=>{
+ const h=harness(),ray={origin:[0,0,5],direction:[0,0,-1]},eye=[0,0,5];
+ h.frame(true);h.prototype.readback(.8);h.frame(true);
+ assert.ok(h.sync.pick(ray,eye));
+ h.sync.layer().setStyle({visible:false});
+ assert.equal(h.sync.pick(ray,eye),null,'the suppressed Full canvas cannot make hidden Proxy fire pickable');
+ assert.equal(h.registry.latest('fire').count,1,'visibility does not delete shared consumer data');
+ h.sync.layer().setStyle({visible:true});assert.ok(h.sync.pick(ray,eye));
+ h.sync.layer().setStyle({visible:false});h.frame(false,true);
+ assert.ok(h.sync.pick(ray,eye),'a hidden secondary-camera proxy does not hide the Full flame');
+ h.frame(false);assert.equal(h.sync.layer(),null);assert.ok(h.sync.pick(ray,eye));
 });
 
 test('switching to Full and back keeps the field heat peak; a new field starts its own', () => {

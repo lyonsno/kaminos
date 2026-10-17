@@ -16,7 +16,7 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
     return elements.get(id);
   } };
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = vm.createContext({ checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
+  const context = vm.createContext({ createUserPreferences:()=>({load:async()=>null}),checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
@@ -125,7 +125,8 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     const c=vm.createContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
-      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{},document:{body:{dataset:{}}},prePassDepth:{},
+      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'})},document:{body:{dataset:{}}},prePassDepth:{},
+      URLSearchParams,location:{search:''},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
       fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
     vm.runInContext(part('  const aoVisibility =','  const sceneGI =')

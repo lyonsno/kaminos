@@ -562,7 +562,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
   const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, vantageCaptureHeld: true, controls: {enabled: true},
     scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
     greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
-    objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, setSceneSelection: ids => { selection = ids; },
+    objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, sceneSelectionHistory:{set:ids=>{selection=ids;}}, setSceneSelection: ids => { selection = ids; },
     renderer: {domElement: {getBoundingClientRect: () => ({left: 0, top: 0, width: 800, height: 600})}}};
   fromIndexLive('installSelectionInput', scope)();
   const fire = (type, values = {}) => {
@@ -590,8 +590,10 @@ test('click selection waits while a picture holds the viewport', () => {
   const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
+    pickWaterDomainFromViewportPointer: () => false,
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
-    clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
+    sceneHitsFromViewportPointer: () => [], pickVisibleFlameFromViewportPointer: () => null,
+    clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {kaminosSelection:{clear:()=>calls.push('clear')}}};
   const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
   fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
   fromIndexLive('handleViewportSelectionClick', scope)(event('click'));

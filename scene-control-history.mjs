@@ -43,9 +43,15 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
   return {commit,cancel,state:()=>({pending:!!active(),id:active()?ownedId:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
 }
 
-export function formatAuthoringNumber(value) {
+// Three significant figures by default; a field that declares decimals (a
+// position in metres, an angle in degrees) keeps that many instead, so large
+// values keep their integer digits and small ones keep their resolution.
+export function formatAuthoringNumber(value, decimals) {
   const number=Number(value);
-  return value!=='' && Number.isFinite(number) ? String(Number(number.toPrecision(3))) : String(value);
+  if(value==='' || !Number.isFinite(number))return String(value);
+  const places=decimals===undefined || decimals===null || decimals==='' ? null : Number(decimals);
+  const shown=places===null ? Number(number.toPrecision(3)) : Number(number.toFixed(places));
+  return String(shown===0 ? 0 : shown);
 }
 
 export function authoringRangeFraction(value,min,max) {
@@ -67,7 +73,7 @@ function installNumberPresentation(input) {
   input.before(wrapper);wrapper.append(input,fill,display);
   let shownText,shownFraction;
   const update=()=>{
-    const value=descriptor.get.call(input),text=formatAuthoringNumber(value);
+    const value=descriptor.get.call(input),text=formatAuthoringNumber(value, input.dataset?.displayDecimals);
     const fraction=input.disabled?null:authoringRangeFraction(value,input.min,input.max);
     if(text!==shownText){display.textContent=text;shownText=text;}
     if(fraction!==shownFraction){
@@ -92,7 +98,14 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
   input.classList?.add('authoring-number');
   installNumberPresentation(input);
   input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
-  input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
+  // Typing starts from the value at float precision (seven significant
+  // digits), not its binary noise; untouched, the stored value is unchanged.
+  const beginTyping=()=>{
+    input.readOnly=false;
+    const number=Number(input.value);
+    if(input.value!=='' && Number.isFinite(number)){const tidy=String(Number(number.toPrecision(7)));if(tidy!==input.value)input.value=tidy;}
+  };
+  input.addEventListener('focus',()=>{if(!gesture)beginTyping();}); // Tab preserves normal keyboard editing.
   input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});
   function releaseGesture() {
     if(!gesture)return null;
@@ -105,7 +118,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     const ended=releaseGesture();if(!ended)return;
     if(cancel) {input.dispatchEvent(new Event('pointercancel'));suppressClick=true;}
     else if(ended.moved) {input.dispatchEvent(new Event('change',{bubbles:true}));suppressClick=true;input.readOnly=true;input.blur?.();}
-    else {input.readOnly=false;input.focus?.();input.select?.();}
+    else {beginTyping();input.focus?.();input.select?.();}
     onEnd();
   }
   function adjust(dx,fine) {

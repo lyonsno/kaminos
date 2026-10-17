@@ -92,4 +92,4 @@ To share the GPU with a renderer, pass a `schedule` with an inference-kit route 
 
 ## License
 
-FLUX.2 [klein] 4B is by Black Forest Labs and its text encoder, Qwen3-4B, is by the Qwen team; both are released under the Apache License 2.0, as are the converted weights.
+The code in this directory is MIT ([LICENSE](LICENSE)). FLUX.2 [klein] 4B is by Black Forest Labs and its text encoder, Qwen3-4B, is by the Qwen team; both are released under the Apache License 2.0, as are the converted weights.

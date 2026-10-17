@@ -4,6 +4,7 @@ import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
+import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { presentationPhase, presentationBlendPhase } from './fire-presentation-cadence.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
@@ -4752,7 +4753,7 @@ fn sampleWorldVelocity(p: vec3<f32>) -> vec4<f32> {
 // phase is 0 on the frame a step lands; diagnostic captures read the real
 // field; nothing is written back.
 fn presentationAdvect(p: vec3<f32>, readRealField: bool) -> vec3<f32> {
-  let phase = clamp(u.reserved_render_controls.y, 0.0, 1.0);
+  let phase = clamp(u.occupancy_controls.z, 0.0, 1.0);
   if (phase <= 0.0 || readRealField) { return p; }
   let cell = worldToCell(p);
   let velocity = sampleFluidSlot(cell, 0u).xyz;
@@ -6466,6 +6467,8 @@ ${PHYSICAL_COLOR_WGSL}
 ${AGX_WGSL}
 ${RAY_START_WGSL}
 ${OPTICAL_STEPPING_WGSL}
+override RAY_STEP_STATS: bool = false;
+@group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${EMISSIVE_TRANSPORT_WGSL}
 ${SOOT_BURNOUT_WGSL}
 ${SCENE_VOLUME_SOURCE_WGSL}
@@ -8517,6 +8520,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
   let opticalTrace = opticalCaptureMode == 5u;
   let traceRay = u32(in.pos.x) + u32(in.pos.y) * u32(u.viewport_steps_density.x);
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = 0xffffffffu; }
   if (opticalTrace && (traceRay < nonRidgeOpticalCaptureHeader.firstRay || traceRay >= nonRidgeOpticalCaptureHeader.firstRay + nonRidgeOpticalCaptureHeader.rayCount)) {
     return makeRaymarchResult(vec4<f32>(0), 1.0, vec4<f32>(0), vec4<f32>(0), vec4<f32>(0), vec4<f32>(0));
   }
@@ -8709,6 +8713,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let expensiveSampleBudget = select(u32(ceil(steps)), nonRidgeOpticalCaptureHeader.sampleCount, opticalTrace);
   let maxTraversalSteps = GRID_Y * 3u + expensiveSampleBudget + 3u;
   var expensiveSamples = 0u;
+  var rayMaterialSamples = 0u;
   var traversalSteps = 0u;
   loop {
     if (!opticalStepping && (expensiveSamples >= expensiveSampleBudget || traversalSteps >= maxTraversalSteps)) { break; }
@@ -8756,6 +8761,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       reconstructed = sampleWorldFlowReconstructionRaw(p);
     }
     expensiveSamples = expensiveSamples + 1u;
+    rayMaterialSamples++;
     let state = reconstructed.velocityDensity;
     let material = reconstructed.material;
     let fireLayer = reconstructed.fireLayer;
@@ -9654,7 +9660,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let scatteredSource = medium.scattering * incidentAt(p);
       let emission = medium.emission + scatteredSource;
       if (opticalStepping) {
-        opticalStepObserve(&opticalStep, vec4<f32>(emission, sigma));
+        opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);
         color = opticalStep.transfer.xyz;
         trans = opticalStep.transfer.w;
         continue;
@@ -9893,6 +9899,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
+  if (RAY_STEP_STATS) { rayStepCounters[traceRay] = rayMaterialSamples; }
   return makeRaymarchResult(
     vec4<f32>(outputColor, outputAlpha),
     trans,
@@ -12287,7 +12294,9 @@ export function createKaminosVolumePrototype({
   let leanStockProductRaymarchPipeline = null;
   let leanEmissiveProductRaymarchPipeline = null;
   let debugRaymarchShaderSpecialization = 'auto';
-  let debugOpticalStepping = opticalSteppingConfig();
+  let debugOpticalStepping = opticalSteppingConfig({mode:controlsSnapshot.raymarchMode??'numerical',tolerance:controlsSnapshot.opticalTolerance??0.001});
+  let rayStepTelemetry = null;
+  let rayStepTelemetryCanvas = null;
   let debugOpticalSteppingExplicit = false;
   const opticalSteppingPipelines = new Map();
   let opticalTransportContributionPipeline = null;
@@ -13472,6 +13481,7 @@ export function createKaminosVolumePrototype({
         { binding: 31, resource: waveletRead.createView({ dimension: '3d' }) },
         { binding: 32, resource: waveletWrite.createView({ dimension: '3d' }) },
         { binding: 25, resource: rayStartNoiseTexture.createView() },
+        { binding: 26, resource: { buffer: rayStepTelemetry.counterBuffer } },
       ],
     });
   }
@@ -15359,6 +15369,8 @@ export function createKaminosVolumePrototype({
       device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
     state.gpuInitStage = 'device';
+    rayStepTelemetry = createRayStepTelemetry(device);
+    rayStepTelemetry.setCanvas(rayStepTelemetryCanvas);
     rayStartNoiseTexture = await createRayStartTexture(device);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
@@ -15584,6 +15596,7 @@ export function createKaminosVolumePrototype({
         { binding: 23, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 24, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
+        { binding: 26, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -16703,11 +16716,12 @@ export function createKaminosVolumePrototype({
     uniforms.fill(0, 41, 47);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
-    // Decoupled fire cadence: the fraction of a sim step this frame shows
-    // (0 unless opted in). typeof: source-extraction harnesses run this body
+    uniforms[45] = debugOpticalStepping.tolerance;
+    // Decoupled fire cadence: carry's fraction of a sim step this frame shows
+    // (0 unless opted in; occupancy_controls.z). typeof: source-extraction harnesses run this body
     // without the closure that declares the pacing.
     const presentationPaused = { paused: (typeof simulationPaused !== 'undefined' && simulationPaused) || state.lookFreeze === 1 };
-    uniforms[45] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null, presentationPaused);
+    uniforms[42] = presentationPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null, presentationPaused);
     // Blend mode's step fraction, for the presentation blend pass (unread by WGSL).
     uniforms[41] = presentationBlendPhase(typeof proxyPacing !== 'undefined' ? proxyPacing : null, presentationPaused);
     uniforms[46] = controlsSnapshot.toneMapping === 'custom' ? 0 : 1;
@@ -17499,6 +17513,7 @@ export function createKaminosVolumePrototype({
     state.bonfireAblation = { ...bonfireAblation };
     state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth);
+    prepareRayStepCounters();
   }
 
   function updateSimCostLedger(options = {}) {
@@ -21136,6 +21151,13 @@ export function createKaminosVolumePrototype({
     return next;
   }
 
+  function prepareRayStepCounters() {
+    if (!rayStepTelemetry) return;
+    const supported=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full'&&productFrameOwner==='prototype';
+    if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
+      {supported,reason:'requires-ordinary-emissive-beauty',activate:false})) rebuildFluidBindGroups();
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     if (sceneSourceFrameConsumer && !sceneSourcePreparedEncoders.has(encoder)) {
       throw new Error('shared-scene-source-frame-not-prepared');
@@ -21156,12 +21178,17 @@ export function createKaminosVolumePrototype({
     let drawPipeline = selectRaymarchPipeline(targetPipeline);
     const selectEmissive = drawPipeline === leanEmissivePipeline || drawPipeline === leanEmissiveReadbackPipeline;
     const optical = resolveOpticalStepping(debugOpticalStepping, {emissive:selectEmissive,
-      trace:Boolean(options.opticalTrace),explicit:debugOpticalSteppingExplicit});
-    const opticalConstants = {OPTICAL_STEP_MODE:optical.value, OPTICAL_STEP_TOLERANCE:optical.tolerance};
+      trace:Boolean(options.opticalTrace),exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+    const telemetrySupported=selectEmissive&&!options.opticalTrace&&!options.bindGroup
+      &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
+    if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
+      {supported:telemetrySupported,reason:'requires-ordinary-emissive-beauty',allowResize:false}))rebuildFluidBindGroups();
+    state.rayStepTelemetry=rayStepTelemetry.read();
+    const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current' };
-    const opticalKey = `:${optical.mode}:${optical.tolerance}`;
-    if (optical.mode !== 'current' && !multisampled && !scenePointBindGroup && !distributedGroup) {
+    const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
+    if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;
       if (!opticalSteppingPipelines.has(key)) {
         opticalSteppingPipelines.set(key,device.createRenderPipeline({label:'experimental optical stepping',
@@ -21276,6 +21303,7 @@ export function createKaminosVolumePrototype({
     if (distributedGroup) pass.setBindGroup(2,distributedGroup);
     pass.draw(3);
     pass.end();
+    rayStepTelemetry.encode(encoder);
   }
 
   async function sampleOpticalTraceChunk(options = {}) {
@@ -21612,6 +21640,14 @@ export function createKaminosVolumePrototype({
     });
   }
 
+  function invalidateRaymarchReadouts(reason) {
+    if (rayStepTelemetry) {
+      if (rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,{supported:false,reason,allowResize:false})) rebuildFluidBindGroups();
+      state.rayStepTelemetry=rayStepTelemetry.read();
+    }
+    state.opticalStepping={...debugOpticalStepping,requested:debugOpticalStepping.mode,effective:null,reason,fullRay:false};
+  }
+
   function renderOrdinaryFrame(now, foregroundService = null) {
     if (productFrameOwner === 'caller') {
       throw new Error('private-frame-submit-forbidden:use-encodeProductFrame');
@@ -21623,6 +21659,7 @@ export function createKaminosVolumePrototype({
     }
     raf = 0;
     try {
+      invalidateRaymarchReadouts('presentation-without-instrumented-raymarch');
       const cpuStart = performance.now();
       controls?.update?.();
       updateUniforms(now);
@@ -21658,7 +21695,7 @@ export function createKaminosVolumePrototype({
       }
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
       if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, presentationAdvect: pacing.presentationAdvect === true,
-        presentationPhase: uniforms[45], presentationBlend: pacing.presentationBlend === true, presentationBlendPhase: uniforms[41],
+        presentationPhase: uniforms[42], presentationBlend: pacing.presentationBlend === true, presentationBlendPhase: uniforms[41],
         presentationBlendActive: typeof presentationBlendActive !== 'undefined' && presentationBlendActive, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
@@ -27769,6 +27806,7 @@ export function createKaminosVolumePrototype({
     if (!commandEncoder || !colorView || !sceneDepthView || !depthView) {
       throw new Error('product-frame-requires-command-encoder-color-view-scene-depth-view-and-depth-view');
     }
+    invalidateRaymarchReadouts('caller-owned-presentation');
     updateUniforms(now);
     encodeSim(commandEncoder);
     encodeSelectiveHeadLiveFields(commandEncoder);
@@ -27921,6 +27959,10 @@ export function createKaminosVolumePrototype({
       debugOpticalSteppingExplicit = true;
       return { ...next };
     },
+    setRayStepTelemetryCanvas(canvas) {
+      rayStepTelemetryCanvas=canvas;
+      rayStepTelemetry?.setCanvas(canvas);
+    },
     applyPersistentSparseCohortGpuState,
     applyFourArmHeldStateApplication,
     clearPersistentSparseCohortGpuState,
@@ -27931,6 +27973,11 @@ export function createKaminosVolumePrototype({
       return encodeCallerProductFrame({ commandEncoder, colorView, sceneDepthView, depthView, now });
     },
     setControls(next) {
+      if(Object.hasOwn(next,'raymarchMode')||Object.hasOwn(next,'opticalTolerance')) {
+        const config=opticalSteppingConfig({mode:next.raymarchMode??controlsSnapshot.raymarchMode??'numerical',
+          tolerance:next.opticalTolerance??controlsSnapshot.opticalTolerance??0.001});
+        debugOpticalStepping=config;debugOpticalSteppingExplicit=false;
+      }
       const previousGrid = gridSize;
       const previousBoundarySplatTelemetryControlSignature = boundarySplatTelemetryControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
@@ -28500,6 +28547,7 @@ export function createKaminosVolumePrototype({
         }
       } else {
         state.active = false;
+        invalidateRaymarchReadouts('inactive-renderer');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
@@ -28985,6 +29033,7 @@ export function createKaminosVolumePrototype({
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
     dispose() {
+      rayStepTelemetry?.dispose();rayStepTelemetry=null;
       this.setActive(false);
       scenePointBindings?.dispose();
       persistentSparseCohortGpuState = null;

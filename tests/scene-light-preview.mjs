@@ -36,6 +36,7 @@ function context() {
   state.setActiveSceneObject = id => { state.activeSceneObjectId = id; state.activeSceneFieldId = null; };
   state.setActiveSceneGroup = id => { state.activeSceneGroupId = id; state.activeSceneFieldId = null; };
   state.window.selectSceneField = id => { state.activeSceneFieldId = id; };
+  state.setSceneSelection=(ids,activeId=ids.at(-1)??null)=>{state.sceneSelection={ids:[...ids],activeId};state.activeSceneFieldId=['flame-field','water-field'].includes(activeId)?activeId:null;state.activeSceneObjectId=state.activeSceneFieldId?null:activeId;};
   state.recordedInsertions = [];
   state.recordSceneObjectInsertion = async id => { state.recordedInsertions.push(id); return true; };
   state.sceneObjectRecordForDescendant = object => state.sceneObjects.find(entry => entry.object === object);
