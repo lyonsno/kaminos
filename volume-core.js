@@ -20,6 +20,7 @@ import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, 
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
+import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
@@ -8227,6 +8228,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 struct RaymarchResult {
   color: vec4<f32>,
+  linearRadiance: vec3<f32>,
   transmittance: f32,
   residualFeature: vec4<f32>,
   sharedRidgeContribution: vec4<f32>,
@@ -8255,6 +8257,7 @@ fn makeRaymarchResult(
 ) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
+  result.linearRadiance = vec3<f32>(0.0);
   result.transmittance = transmittance;
   result.residualFeature = residualFeature;
   result.sharedRidgeContribution = sharedRidgeContribution;
@@ -8315,7 +8318,7 @@ fn writeOpticalTraceMiss(ray: u32) {
   }
 }
 
-fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
+fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool, sceneDepthStartT: f32) -> RaymarchResult {
   let physicalColorMode = select(u.physical_fire.x, 2.0, LEAN_EMISSIVE_RAYMARCH);
   let opticalCaptureMode = select(select(nonRidgeOpticalCaptureHeader.mode, 0u, LEAN_EMISSIVE_RAYMARCH), 5u, OPTICAL_TRACE_CAPTURE);
   let fullGridCapture = !LEAN_STOCK_RAYMARCH && opticalCaptureMode >= 3u && opticalCaptureMode <= 4u;
@@ -8338,7 +8341,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   // (grid height control, report §34; raymarchDomainBox is the CPU mirror).
   let domainHalfY = f32(GRID_Y) / f32(GRID);
   let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));
-  if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {
+  if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, sceneDepthStartT)) {
     if (opticalTrace) { writeOpticalTraceMiss(traceRay); }
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
     return makeRaymarchResult(
@@ -8480,7 +8483,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
   let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5;
-  var opticalStep = opticalStepInit(startT, endT, dtBase);
+  var opticalStep = opticalStepInit(max(startT, sceneDepthStartT), endT, dtBase);
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   if (physicalColorMode > 0.5) { color = vec3<f32>(0.0); }
@@ -9502,8 +9505,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         atomicAdd(&nonRidgeOpticalCaptureHeader.rowCount, 1u);
         continue;
       }
-      standardRadianceContribution = emission * emissionIntegral(sigma, localDt);
-      standardExtinctionStep = sigma * localDt;
+      // Keep native adaptive sample positions, including samples before the
+      // split. Only their overlap with this segment transports light. The
+      // ordinary zero-start route retains its original floating-point inputs.
+      let transportedDt = select(localDt, max(0.0, t + localDt - max(t, sceneDepthStartT)), sceneDepthStartT > 0.0);
+      standardRadianceContribution = emission * emissionIntegral(sigma, transportedDt);
+      standardExtinctionStep = sigma * transportedDt;
     } else if (physicalColorMode > 0.5) {
       // Retain the existing support/extinction; replace color authority only.
       // Pyro pigments and legacy pale repaints are excluded from this arm.
@@ -9701,7 +9708,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
   );
   if (RAY_STEP_STATS) { rayStepCounters[traceRay] = rayMaterialSamples; }
-  return makeRaymarchResult(
+  var result = makeRaymarchResult(
     vec4<f32>(outputColor, outputAlpha),
     trans,
     residualFeature,
@@ -9709,12 +9716,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     vec4<f32>(sharedNonRidgeContribution, 0.0),
     vec4<f32>(sharedRidgeContribution + sharedNonRidgeContribution, 0.0),
   );
+  result.linearRadiance = color;
+  return result;
 }
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
   seatGridShape();
-  let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true);
+  let result = raymarchVolume(in, ordinarySceneDepthEndT(in), true, 0.0);
   return result.color;
 }
 
@@ -9726,7 +9735,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
   let farWorldRaw = u.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
   let ro = viewRayOrigin(ndc);
   let rd = normalize(farWorldRaw.xyz / farWorldRaw.w - nearWorldRaw.xyz / nearWorldRaw.w);
-  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false);
+  let result = raymarchVolume(in, productSceneDepthEndT(in, ro, rd), false, 0.0);
   let alpha = clamp(1.0 - result.transmittance, 0.0, 1.0);
   let premultipliedRadiance = max(result.color.rgb - vec3<f32>(0.004, 0.005, 0.006), vec3<f32>(0.0));
   return vec4<f32>(premultipliedRadiance, alpha);
@@ -9735,7 +9744,7 @@ fn fsProduct(in: VSOut) -> @location(0) vec4<f32> {
 @fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
   seatGridShape();
-  let result = raymarchVolume(in, 1.0e6, false);
+  let result = raymarchVolume(in, 1.0e6, false, 0.0);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
@@ -9745,7 +9754,7 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 @fragment
 fn fsOpticalTransportContributions(in: VSOut) -> OpticalTransportContributionOutput {
   seatGridShape();
-  let result = raymarchVolume(in, 1.0e6, false);
+  let result = raymarchVolume(in, 1.0e6, false, 0.0);
   var out: OpticalTransportContributionOutput;
   out.sharedRidge = result.sharedRidgeContribution;
   out.sharedNonRidge = result.sharedNonRidgeContribution;
@@ -12187,6 +12196,9 @@ export function createKaminosVolumePrototype({
   let emissiveSeedProducer = null;
   let sceneVolumeSource = null;
   let sceneVolumeSourceRequested = false;
+  let sceneTransportConsumer = null;
+  let sceneTransport = null;
+  const sceneTransportLightEncoders = new WeakSet();
   let scenePointBindings = null;
   let scenePointBindGroup = null;
   let scenePointFrame = null;
@@ -16252,7 +16264,7 @@ export function createKaminosVolumePrototype({
 
   function updateUniforms(now) {
     resize();
-    if (!sceneSourceFrameConsumer) updateOrdinarySceneDepth();
+    if (!sceneSourceFrameConsumer && !sceneTransportConsumer) updateOrdinarySceneDepth();
     camera.updateMatrixWorld();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
@@ -20781,17 +20793,69 @@ export function createKaminosVolumePrototype({
     return {source: sceneVolumeSource.describe(), medium: sceneVolumeSource.opticalDepthField(), simStepCount: state.simStepCount};
   }
 
+  function renderSceneTransportHost() {
+    if (!sceneTransportConsumer) return updateOrdinarySceneDepth();
+    if (uniforms[368] !== 2 || appearanceDecompositionActive() || boundarySplatRequested() || browserResidualCanApply()) {
+      throw new Error('native scene transport requires ordinary emissive beauty');
+    }
+    if (!camera.isPerspectiveCamera) throw new Error('native scene transport requires a perspective camera');
+    let current=true;
+    const sourceFrame=state.frameCount,sourceStep=state.simStepCount;
+    const forward=camera.getWorldDirection(new THREE.Vector3()).toArray();
+    try {
+      const result=sceneTransportConsumer({device,camera,sourceFrame,sourceStep,renderHost:updateOrdinarySceneDepth,
+        encode(input) {
+          if(!current||sourceFrame!==state.frameCount||sourceStep!==state.simStepCount)throw new Error('Native scene transport frame expired');
+          if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
+          const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
+          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+          let code=WGSL,lighting=null;
+          if(distributedGroup) {
+            if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
+            code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
+              .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
+            lighting={layout:distributedLayout,group:distributedGroup};
+          } else {
+            if(!sceneTransportLightEncoders.has(input.encoder)) {
+              emissiveLightField.encode(input.encoder,currentFluid);sceneTransportLightEncoders.add(input.encoder);
+            }
+            if(scenePointBindGroup) {
+              if(scenePointFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport point lighting is stale');
+              code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
+              lighting={layout:scenePointBindings.layout,group:scenePointBindGroup};
+            }
+          }
+          sceneTransport ||= createSceneVolumeTransport(device);
+          const receipt=sceneTransport.encode({...input,width:state.width,height:state.height,code,mainLayout:bindGroupLayout,mainGroup:fluidBindGroup(),lighting,
+            forwardScale:[...forward,productTransform.scale],constants:{LEAN_EMISSIVE_RAYMARCH:lean,OPTICAL_STEP_MODE:optical.value}});
+          state.sceneTransport={...receipt,sourceFrame,sourceStep,sourceIndex:currentFluid,
+            worldTransform:{translate:[...productTransform.translate],scale:productTransform.scale},renderScale:state.renderScale,
+            material:'native-emissive-transport-v2',lighting:distributedGroup?'distributed':scenePointBindGroup?'native-six-direction-plus-point':'native-six-direction',
+            stepping:optical.mode,authority:'native-material-current-field-ordered-host-encoder'};
+          return {...state.sceneTransport};
+        },
+      });
+      if(result&&typeof result.then==='function')throw new Error('Native scene transport host must render synchronously');
+      return result;
+    } finally {current=false;}
+  }
+
   function prepareSharedSceneConsumers(encoder, foregroundService = null) {
-    if (!sceneSourceFrameConsumer) return encoder;
+    if (!sceneSourceFrameConsumer && !sceneTransportConsumer) return encoder;
     if (boundarySplatRequested() || browserResidualCanApply() || productFrameOwner !== 'prototype') {
       throw new Error('shared-scene-source-first-experiment-requires-ordinary-raymarch');
     }
-    const next = prepareSceneSourceFrame({encoder, encode: encodeSharedSceneSource,
-      submit: commands => foregroundService
+    const submit=commands => foregroundService
         ? foregroundService.submit(commands, {metadata:{renderer:'scene-source-preparation',simStepCount:state.simStepCount}})
-        : device.queue.submit(commands),
-      consume: sceneSourceFrameConsumer, renderHost: updateOrdinarySceneDepth,
-      createEncoder: () => device.createCommandEncoder({label:'same-source scene volume presentation'})});
+        : device.queue.submit(commands);
+    const createEncoder=()=>device.createCommandEncoder({label:'same-source scene volume presentation'});
+    let next;
+    if(sceneSourceFrameConsumer) {
+      next=prepareSceneSourceFrame({encoder,encode:encodeSharedSceneSource,submit,consume:sceneSourceFrameConsumer,
+        renderHost:renderSceneTransportHost,createEncoder});
+    } else {
+      submit([encoder.finish()]);renderSceneTransportHost();next=createEncoder();
+    }
     sceneSourcePreparedEncoders.add(next);
     if (scenePointFrame) scenePointFrame.hostDepthEffective = true;
     return next;
@@ -21470,7 +21534,7 @@ export function createKaminosVolumePrototype({
           residualApplied,
           compositionEffective: 'authored-raymarch-plus-browser-residual-v0',
         });
-      } else if (typeof canvasPresentationSuppressed !== 'undefined' && canvasPresentationSuppressed) {
+      } else if (sceneTransportConsumer || (typeof canvasPresentationSuppressed !== 'undefined' && canvasPresentationSuppressed)) {
         // typeof: source-extraction contract harnesses run this body without
         // the closure that declares the flag.
         recordBrowserResidualCost({ applied: false });
@@ -28551,6 +28615,13 @@ export function createKaminosVolumePrototype({
       if (consumer) sceneVolumeSourceRequested = true;
       return {enabled: Boolean(consumer), authority: 'ordered-submission-not-gpu-completion'};
     },
+    setSceneTransportConsumer(consumer) {
+      if(consumer!==null&&typeof consumer!=='function')throw new Error('Native scene transport consumer must be a function or null');
+      if(consumer&&(productFrameOwner!=='prototype'||typeof getSceneDepth!=='function'))throw new Error('Native scene transport requires the shared ordinary scene host');
+      sceneTransportConsumer=consumer;
+      if(!consumer)state.sceneTransport={requested:false,effective:false};
+      return {requested:Boolean(consumer)};
+    },
     setScenePointLightFrame(input) {
       if (input === null) {scenePointBindGroup=null;scenePointFrame=null;return;}
       if (!device || !sceneSourceFrameConsumer || input.medium.generation !== sceneVolumeSource?.describe().generation) {
@@ -28639,6 +28710,7 @@ export function createKaminosVolumePrototype({
     readFlowKernelDescriptorCaptureChunk,
     releaseFlowKernelDescriptorCapture,
     dispose() {
+      sceneTransportConsumer=null;sceneTransport?.dispose();sceneTransport=null;
       rayStepTelemetry?.dispose();rayStepTelemetry=null;
       this.setActive(false);
       scenePointBindings?.dispose();
