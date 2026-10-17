@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
-import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests} from '../experiments/creature-motion/creature-attention.mjs';
+import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests} from '../experiments/creature-motion/creature-attention.mjs';
 
 // A small quadruped spine in the retained rigs' convention: rest rotations map
 // head-local +Y to rest -Z (forward) and head-local +Z to rest +Y (up).
@@ -103,6 +103,27 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // Flame: an unlit flame draws nothing; lighting it is a reason to look;
+ // turning it up is another; a burning flame keeps drawing glances.
+ const c=creature(),flame={id:'flame',label:'flame',point:[.9,.6,-2.5],interest:1,active:false,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame,point:[...flame.point]}]});
+ let w=watch(attention,c,3,0),t=w.t;
+ assert.equal(looks(w.rows).length,0,'an unlit flame is not looked at');
+ flame.active=true;w=watch(attention,c,6,t);t=w.t;
+ assert.deepEqual(looks(w.rows).map(l=>l.cause),['flame lit'],`lighting it draws a look (${JSON.stringify(looks(w.rows))})`);
+ flame.version++;w=watch(attention,c,4,t);t=w.t;
+ assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],'turning it up draws a look');
+ w=watch(attention,c,60,t);t=w.t;const again=looks(w.rows);
+ assert.ok(again.length>=2&&again.every(l=>l.cause==='flickering'),`a burning flame keeps drawing glances (${JSON.stringify(again)})`);
+ const busy=w.rows.filter(r=>r.focus).length/w.rows.length;
+ assert.ok(busy<.6,`but not a fixed stare (${busy.toFixed(2)} of the time)`);
+ flame.active=false;w=watch(attention,c,20,t);
+ const ended=w.rows.findIndex(r=>!r.focus);
+ assert.ok(ended>=0&&w.rows[ended].t-t<1,'putting it out ends any look at it promptly');
+ assert.equal(looks(w.rows.slice(ended)).length,0,'and once out it draws nothing');
+}
+
+{
  // Familiarity fades over minutes: a long absence makes the prop worth a look again.
  const c=creature(),point=[1,.5,-2.6];
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,forgetSeconds:20},interests:()=>[{id:'brazier',point,interest:1}]});
@@ -157,6 +178,24 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const spans=[];for(const row of w.rows){const last=spans.at(-1);if(!last||last.focus!==row.focus)spans.push({focus:row.focus,start:row.t,end:row.t});else last.end=row.t;}
  for(const span of spans.filter(s=>s.focus))assert.ok(span.end-span.start>=1.4,`each look is held (${span.focus} ${(span.end-span.start).toFixed(2)} s)`);
  assert.equal(w.rows.at(-1).focus,null,'with nothing new, the creature settles');
+}
+
+{
+ // The flame source reads the shared flame workbench: burning (and not frozen),
+ // edits as changes, position from the flame source object.
+ const scene=new THREE.Scene(),emitter=new THREE.Object3D();emitter.userData.kaminosSceneObject={id:'flame-emitter',label:'Flame source'};emitter.position.set(1,2,3);scene.add(emitter);scene.updateMatrixWorld(true);
+ let state={active:false,paused:false},listener=null,clock=0,reads=0;
+ const workbench={read:()=>{reads++;return structuredClone(state);},subscribe:fn=>{listener=fn;return ()=>{listener=null;};}};
+ const flames=flameInterests({THREE,root:()=>scene,workbench,interest:1.5,now:()=>clock});
+ let [row]=flames.read();
+ assert.equal(row.active,false,'unlit flame is reported as not active');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
+ state.active=true;clock+=100;[row]=flames.read();assert.equal(row.active,false,'not re-read within the poll interval');
+ clock+=600;[row]=flames.read();assert.equal(row.active,true);assert.equal(row.restless,true,'a burning flame is restless');
+ const before=row.version;listener();[row]=flames.read();assert.equal(row.version,before+1,'a flame edit is a change');
+ state.paused=true;clock+=600;[row]=flames.read();assert.equal(row.restless,false,'a frozen flame does not flicker');
+ const polled=reads;for(let i=0;i<10;i++)flames.read();assert.equal(reads,polled,'reads are throttled, not per call');
+ emitter.removeFromParent();clock+=600;assert.deepEqual(flames.read(),[],'no flame source, no flame interest');
+ flames.dispose();assert.equal(listener,null,'dispose unsubscribes');
 }
 
 console.log('Creatures look for reasons: first sight, change, renewed sight after forgetting, and idle looking around, each recorded');

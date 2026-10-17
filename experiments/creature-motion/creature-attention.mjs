@@ -100,26 +100,35 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    candidates=[];const observations=[];
    for(const source of interests()){
-    const m=memo(source.id),s=sight(source.point),significance=source.interest;
+    const m=memo(source.id),significance=source.interest,active=source.active!==false;
+    // Per-source cause names (a flame is lit, flares up, flickers) and its own
+    // forgetting time: a restless source never stays familiar for long.
+    const names={lit:'lit',changed:'changed',again:'noticed again',...source.causes};
+    const s=active?sight(source.point):{distance:Infinity,angle:Math.PI,view:0,visible:false};
+    const forgetThis=Math.exp(-dt/(source.forgetSeconds??o.forgetSeconds));
+    const lit=active&&m.wasActive===false,changed=m.version!==undefined&&source.version!==undefined&&source.version!==m.version;
+    m.wasActive=active;m.version=source.version;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;
     if(s.visible){
      // Causes fire on transitions and changes, not on mere presence.
-     if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
-     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?'noticed again':m.started?'back to it':'first sight';}
+     if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
+     else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
+     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
+     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
      m.everSeen=true;
-    }else if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;
+    }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
     // Inspected once familiar enough; forgotten only after it fades well below.
     if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
-    else{m.familiarity*=forget;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
+    else{m.familiarity*=forgetThis;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
     // A thing seen but not yet inspected keeps its pull while in view; an
     // inspected (familiar) thing pulls only through a fresh cause.
     // It waits its turn: only a fresh event interrupts an ongoing inspection.
     const inspecting=focus&&!focus.id.startsWith('look-around-');
     const pending=m.everSeen&&!m.inspected&&(!inspecting||attended)?significance*(1-m.familiarity):0;
-    if(pending>m.impulse&&!attended)m.cause=m.forgotten?'noticed again':m.started?'back to it':'first sight';
+    if(pending>m.impulse&&!attended)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
     const near=Math.max(0,1-s.distance/o.noticeRadius),score=s.visible?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
@@ -216,4 +225,23 @@ export function sceneObjectInterests({THREE,root,specs}) {
   const box=localBox(object),center=box.getCenter(new THREE.Vector3());if(spec.anchor==='top')center.y=box.max.y;
   return [{id:spec.object,label:spec.label??object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason}];
  });
+}
+
+// The scene's flame as an interest, read through the shared flame workbench.
+// It can be seen only while burning; edits are changes; while burning and not
+// frozen it is restless, so creatures keep glancing back at it.
+export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emitter',pollMs=500,now=()=>performance.now()}) {
+ if(typeof workbench?.read!=='function')throw Error('Flame interest requires the shared flame workbench');
+ if(!Number.isFinite(interest)||interest<0)throw Error('Flame interest must be finite and nonnegative');
+ let version=0,state={active:false,paused:false},polled=-Infinity,cached=null;
+ const unsubscribe=workbench.subscribe?.(()=>{version++;})??(()=>{});
+ function find(){const scene=root();if(cached&&cached.userData?.kaminosSceneObject?.id===id){let node=cached;while(node.parent)node=node.parent;if(node===scene)return cached;}
+  cached=null;scene.traverse(node=>{if(!cached&&node.userData?.kaminosSceneObject?.id===id)cached=node;});return cached;}
+ function read(){
+  const object=find();if(!object)return [];
+  const time=now();if(time-polled>=pollMs){polled=time;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};}catch{state={active:false,paused:false};}}
+  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,active:state.active,version,
+   restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}}];
+ }
+ return Object.freeze({read,dispose(){unsubscribe();}});
 }
