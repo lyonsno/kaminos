@@ -36,6 +36,10 @@ try{
  };
  for(const interior of ['section','slab','surface']){
   await page.locator('[data-mp="interior"]').selectOption(interior);await page.waitForTimeout(700);await page.screenshot({path:path.join(out,interior+'.png')});await pixelCheck(interior);
+  if(interior==='section'){
+   const rect=await page.locator('#kaminos-host-renderer-canvas').boundingBox();report.pointer={x:rect.x+rect.width*.4,y:rect.y+rect.height*.45};await page.mouse.click(report.pointer.x,report.pointer.y);report.pointer.result=await page.evaluate(()=>window.kaminosMechanicalProxy.read());
+   if(report.pointer.result.selectedTet===null||report.pointer.result.targetId!==report.result.targetId)throw Error('Actual section pointer did not select an element in the same source');
+  }
  }
  await page.locator('[data-mode="original"]').click();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'original.png')});
  await page.locator('[data-mode="overlay"]').click();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'overlay.png')});
@@ -44,13 +48,16 @@ try{
  await page.locator('[data-mp="offset"]').evaluate(el=>{el.value='0.75';el.dispatchEvent(new Event('input',{bubbles:true}));});await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'section-three-quarter.png')});
  report.views=await page.evaluate(()=>{const p=window.kaminosMechanicalProxy;const before=p.read();p.selectElement(0);return{before,selected:p.read()};});
  if(report.views.selected.selectedTet!==0)throw Error('Element selection failed');
+ await page.locator('[data-mp="isolate"]').check();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'isolated.png')});await page.locator('[data-mp="isolate"]').uncheck();
+ await page.locator('[data-mp="deviation"]').check();await page.waitForTimeout(300);await page.screenshot({path:path.join(out,'distance.png')});await page.locator('[data-mp="deviation"]').uncheck();
  await page.locator('[data-mp="keep"]').click();await page.waitForFunction(()=>document.querySelector('[data-mp="status"]').textContent==='Kept');report.kept=await page.evaluate(()=>window.kaminosMechanicalProxy.read());
  report.reopened=await page.evaluate(async()=>{const p=window.kaminosMechanicalProxy;p.close();return p.open();});
  if(report.reopened.resultId!==report.result.resultId)throw Error('Kept result did not reopen');
- await page.setViewportSize({width:390,height:844});await page.waitForTimeout(500);await page.locator('[data-mp="interior"]').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'mobile.png')});await pixelCheck('mobile');
+ await page.setViewportSize({width:390,height:844});await page.locator('#authoring-frame').click();await page.waitForTimeout(500);await page.locator('[data-mp="interior"]').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'mobile.png')});await pixelCheck('mobile');
  report.mobile=await page.evaluate(()=>({width:innerWidth,scrollWidth:document.documentElement.scrollWidth,controls:[...document.querySelectorAll('#mechanical-proxy-tool input,#mechanical-proxy-tool select,#mechanical-proxy-tool button')].map(el=>({name:el.dataset.mp??el.dataset.mode,width:el.getBoundingClientRect().width,scrollWidth:el.scrollWidth,clientWidth:el.clientWidth}))}));
  if(report.mobile.scrollWidth>report.mobile.width)throw Error('Mobile document overflows');
- report.checks=['exact asset route','actual tetrahedral result','ordinary generate and view controls','section/slab/surface pixels','original/overlay','movable section plane','element selection','ordinary keep/reopen','mobile canvas and document'];
+ if(report.mobile.controls.find(c=>c.name==='results').width<120)throw Error('Narrow result choice is illegible');
+ report.checks=['exact asset route','actual tetrahedral result','ordinary generate and view controls','section/slab/surface pixels','original/overlay','movable section plane','pointer and API element selection','isolation and measured source distance','ordinary keep/reopen','mobile canvas and document'];
  report.hostResiduals=report.messages.filter(m=>m.type==='console'&&new URL(m.location?.url??url).pathname==='/api/volume-cockpit-layouts');
  const errors=report.messages.filter(m=>!report.hostResiduals.includes(m));
  if(errors.length)throw Error('Browser errors: '+JSON.stringify(errors));

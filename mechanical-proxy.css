@@ -13,3 +13,5 @@
 .mp-body pre { font-size:10px; overflow:auto; max-height:200px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .mp-body output,[data-mp=status],[data-mp=element] { color:#adc4c6; overflow-wrap:anywhere; font-size:11px; }
 .mp-body a { color:#9bcac7; overflow-wrap:anywhere; }
+.mp-body label:has([data-mp=results]) { display:grid; gap:5px; }
+.mp-body [data-mp=results] { width:100%; }
