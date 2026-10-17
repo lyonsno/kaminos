@@ -56,7 +56,7 @@ try{
  report.phase='paused-edit';await save();await invoke('view',{mode:'char'});const pausedBefore=await sample('paused-before'),priorParticles=structuredClone(lastSnapshot.particles);
  report.inputs.push({ordinaryEditorTransform:{position:[.7,.15,.1],rotation:[.2,1.1,0]}});
  const frameBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);
- await page.evaluate(()=>{const state=window.kaminosWorkbenchExperiments.read();window.kaminosSetSceneObjectTransform(state.objectId,{position:[.7,.15,.1],rotation:[.2,1.1,0]});});
+ await page.evaluate(async()=>{const state=await window.kaminosWorkbenchExperiments.read();if(typeof state.objectId!=='string')throw Error('Experiment has no authored object id');window.kaminosSetSceneObjectTransform(state.objectId,{position:[.7,.15,.1],rotation:[.2,1.1,0]});});
  await page.waitForFunction(frame=>window.kaminosSceneGIDebugState().sceneFrames>frame,frameBefore);
  const pausedAfter=await sample('paused-after');assert.equal(pausedAfter.state.fields[0].steps,pausedBefore.state.fields[0].steps);assert.deepEqual(lastSnapshot.particles,priorParticles,'Paused edit cannot move independent GPU residue');
  const pose=pausedAfter.state.debris[0];assert.ok(pose.attachedWorld.every((v,i)=>Math.abs(v-pose.sourceWorld[i])<1e-5),'Paused attached caps must follow ordinary editor transform');report.pausedEdit={status:'passed',materialSteps:pausedAfter.state.fields[0].steps,particlesUnchanged:true,sourceWorld:pose.sourceWorld,attachedWorld:pose.attachedWorld};
