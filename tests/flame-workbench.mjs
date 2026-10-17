@@ -8,6 +8,7 @@ import {openExperiment} from '../workbench-experiments.mjs';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
+import {volumeSettingsPresetControlValuesEqual} from '../volume-settings-preset-contract.mjs';
 import * as THREE from '../lib/three.core.js';
 import * as framing from '../scene-frame-selected.mjs';
 
@@ -56,6 +57,19 @@ test('inactive flame is explicit, not an implicit replacement fixture',()=>{
   assert.equal(api.read().active,false);
   assert.throws(()=>api.setControls({'volume-flow-rate':2}),/not active/);
   assert.equal(f.history.length,0);
+});
+test('agent checkbox edits preserve Boolean values through the real applied-settings comparison',()=>{
+  const f=fixture(),read=f.options.readSettings,apply=f.options.applySettings;
+  f.options.readSettings=()=>{const state=read();state.rendererControls['volume-ray-step-telemetry']??={type:'checkbox',value:true};return state;};
+  f.options.applySettings=next=>{
+    const applied=structuredClone(next);
+    for(const descriptor of Object.values(applied.rendererControls))delete descriptor.rawValue;
+    assert.equal(volumeSettingsPresetControlValuesEqual(applied,next),true,'a Boolean patch must compare equal to its actual DOM readback');
+    apply(next);
+  };
+  const api=createFlameWorkbench(f.options);
+  api.setControls({'volume-ray-step-telemetry':false});
+  assert.equal(api.read().settings.rendererControls['volume-ray-step-telemetry'].value,false);
 });
 
 test('source recording includes ordinary edits, navigation and scene changes exactly once',()=>{
