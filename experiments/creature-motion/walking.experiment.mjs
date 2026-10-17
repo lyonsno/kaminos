@@ -111,7 +111,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    // Interests resolve from the live scene this creature stands in; the
    // muzzle is measured from the current cast's own skin.
    const sceneRoot=()=>{let node=placement;while(node.parent)node=node.parent;return node;};
-   attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:sceneObjectInterests({THREE,root:sceneRoot,specs:inputs.attention.interests})});
+   attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:sceneObjectInterests({THREE,root:sceneRoot,specs:inputs.attention.interests}),
+    options:{document,onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
    if(inputs.attention.enabled===false)attention.setEnabled(false);
   }
