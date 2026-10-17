@@ -181,6 +181,19 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // A flame flaring up behind the creature is still noticed, and the head turns
+ // as far as it can toward it even beyond comfortable reach.
+ const c=creature(),flame={id:'flame',label:'flame',point:[1.2,.6,.5],interest:1.5,noticeRadius:12,eventFieldOfView:2*Math.PI,active:true,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
+ let w=watch(attention,c,3,0),t=w.t;
+ assert.equal(looks(w.rows).length,0,'a steady flame behind it is not seen');
+ const before=alignment(c.bones,flame.point);
+ flame.version++;w=watch(attention,c,1.5,t);t=w.t;
+ assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],`a flare behind it draws a look (${JSON.stringify(looks(w.rows))})`);
+ assert.ok(alignment(c.bones,flame.point)>before+.15,`the head turns toward it as far as it can (${before.toFixed(3)} -> ${alignment(c.bones,flame.point).toFixed(3)})`);
+}
+
+{
  // A flame is seen from much farther than an ordinary prop: per-source range.
  const c=creature(),far=[1.5,.9,-6];
  const prop=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'prop',point:far,interest:1}]});
@@ -193,14 +206,16 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // The flame source reads the shared flame workbench: burning (and not frozen),
  // edits as changes, position from the flame source object.
  const scene=new THREE.Scene(),emitter=new THREE.Object3D();emitter.userData.kaminosSceneObject={id:'flame-emitter',label:'Flame source'};emitter.position.set(1,2,3);scene.add(emitter);scene.updateMatrixWorld(true);
- let state={active:false,paused:false},listener=null,clock=0,reads=0;
+ let state={active:false,paused:false,settings:{domControls:{'volume-fuel':{value:1}}}},listener=null,clock=0,reads=0;
  const workbench={read:()=>{reads++;return structuredClone(state);},subscribe:fn=>{listener=fn;return ()=>{listener=null;};}};
  const flames=flameInterests({THREE,root:()=>scene,workbench,interest:1.5,now:()=>clock});
  let [row]=flames.read();
- assert.equal(row.active,false,'unlit flame is reported as not active');assert.ok(row.noticeRadius>=10,'a flame is visible from afar');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
+ assert.equal(row.active,false,'unlit flame is reported as not active');assert.ok(row.noticeRadius>=10,'a flame is visible from afar');assert.ok(row.eventFieldOfView>=2*Math.PI-1e-9,'its changes are noticed all around');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
  state.active=true;clock+=100;[row]=flames.read();assert.equal(row.active,false,'not re-read within the poll interval');
  clock+=600;[row]=flames.read();assert.equal(row.active,true);assert.equal(row.restless,true,'a burning flame is restless');
- const before=row.version;listener();[row]=flames.read();assert.equal(row.version,before+1,'a flame edit is a change');
+ const before=row.version;listener();[row]=flames.read();assert.equal(row.version,before,'an unrelated edit notification is not a flame change');
+ state.settings={domControls:{'volume-fuel':{value:2}}};listener();[row]=flames.read();assert.equal(row.version,before+1,'a change in the flame settings is a change, picked up at once');
+ listener();[row]=flames.read();assert.equal(row.version,before+1,'and counted once');
  state.paused=true;clock+=600;[row]=flames.read();assert.equal(row.restless,false,'a frozen flame does not flicker');
  const polled=reads;for(let i=0;i<10;i++)flames.read();assert.equal(reads,polled,'reads are throttled, not per call');
  emitter.removeFromParent();clock+=600;assert.deepEqual(flames.read(),[],'no flame source, no flame interest');

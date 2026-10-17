@@ -94,8 +94,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const head=bones.get('head'),chest=bones.get('spine-chest');
    const headAt=worldPosition(head),body=headAt.clone().sub(worldPosition(chest));body.y=0;
    if(body.lengthSq()<1e-12)throw Error('Creature body heading is degenerate');body.normalize();
-   const sight=(point,range=o.noticeRadius)=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
-    const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=Math.max(0,1-Math.max(0,angle-o.fieldOfView*.5)/(o.fieldOfView*.35));
+   const sight=(point,range=o.noticeRadius,fov=o.fieldOfView)=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
+    const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=fov>=2*Math.PI?1:Math.max(0,1-Math.max(0,angle-fov*.5)/(fov*.35));
     return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    candidates=[];const observations=[];
@@ -106,10 +106,16 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const names={lit:'lit',changed:'changed',again:'noticed again',...source.causes};
     // Bright things such as flame are seen from farther than ordinary props.
     const range=source.noticeRadius??o.noticeRadius;
-    const s=active?sight(source.point,range):{distance:Infinity,angle:Math.PI,view:0,visible:false};
     const forgetThis=Math.exp(-dt/(source.forgetSeconds??o.forgetSeconds));
     const lit=active&&m.wasActive===false,changed=m.version!==undefined&&source.version!==undefined&&source.version!==m.version;
     m.wasActive=active;m.version=source.version;
+    const hidden={distance:Infinity,angle:Math.PI,view:0,visible:false};
+    const plain=active?sight(source.point,range):hidden;
+    // Sudden changes (a flame lit or flaring) are noticed over a wider field
+    // than steady presence; once alerted, the creature looks until it has seen it.
+    const wide=active&&source.eventFieldOfView?sight(source.point,range,source.eventFieldOfView):plain;
+    if((lit||changed)&&wide.visible&&!plain.visible)m.alerted=true;
+    const s=m.alerted&&wide.visible?wide:plain;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;
     if(s.visible){
@@ -123,7 +129,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
     // Inspected once familiar enough; forgotten only after it fades well below.
-    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
+    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;m.alerted=false;}}
     else{m.familiarity*=forgetThis;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
     // A thing seen but not yet inspected keeps its pull while in view; an
     // inspected (familiar) thing pulls only through a fresh cause.
@@ -162,7 +168,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    let want=0;
    if(focus){
     const target=new THREE.Vector3(...focus.point),flat=target.clone().sub(headAt);flat.y=0;
-    reachable=flat.lengthSq()<1e-12||body.angleTo(flat)<=o.reach;want=reachable?1:0;
+    // Beyond comfortable reach the head stays put, unless the creature was
+    // alerted by a sudden change: then it turns as far as it can.
+    reachable=flat.lengthSq()<1e-12||body.angleTo(flat)<=o.reach;want=reachable||memory.get(focus.id)?.alerted?1:0;
     aim=aim?aim.lerp(target,smooth(o.aimSeconds,dt)):target;
    }else reachable=false;
    weight+=(want-weight)*smooth(want>weight?o.acquireSeconds:o.releaseSeconds,dt);
@@ -235,14 +243,18 @@ export function sceneObjectInterests({THREE,root,specs}) {
 export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emitter',pollMs=500,now=()=>performance.now()}) {
  if(typeof workbench?.read!=='function')throw Error('Flame interest requires the shared flame workbench');
  if(!Number.isFinite(interest)||interest<0)throw Error('Flame interest must be finite and nonnegative');
- let version=0,state={active:false,paused:false},polled=-Infinity,cached=null;
- const unsubscribe=workbench.subscribe?.(()=>{version++;})??(()=>{});
+ let version=0,state={active:false,paused:false},polled=-Infinity,cached=null,fingerprint=null,dirty=false;
+ // Edit notifications cover any scene edit; only a change in the flame's own
+ // settings counts as the flame changing. A notification just re-reads now.
+ const unsubscribe=workbench.subscribe?.(()=>{dirty=true;})??(()=>{});
+ const settingsPrint=settings=>JSON.stringify(['domControls','rendererControls'].map(axis=>Object.entries(settings?.[axis]??{}).map(([id,d])=>[id,d?.value]).sort()));
  function find(){const scene=root();if(cached&&cached.userData?.kaminosSceneObject?.id===id){let node=cached;while(node.parent)node=node.parent;if(node===scene)return cached;}
   cached=null;scene.traverse(node=>{if(!cached&&node.userData?.kaminosSceneObject?.id===id)cached=node;});return cached;}
  function read(){
   const object=find();if(!object)return [];
-  const time=now();if(time-polled>=pollMs){polled=time;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};}catch{state={active:false,paused:false};}}
-  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,active:state.active,version,
+  const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};
+   const print=settingsPrint(r?.settings);if(fingerprint!==null&&print!==fingerprint)version++;fingerprint=print;}catch{state={active:false,paused:false};}}
+  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,eventFieldOfView:2*Math.PI,active:state.active,version,
    restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}}];
  }
  return Object.freeze({read,dispose(){unsubscribe();}});
