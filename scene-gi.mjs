@@ -2,10 +2,13 @@ import { DataUtils } from 'three/webgpu';
 import { pass, mrt, output, normalView, positionViewDirection, diffuseColor, metalness, context, builtinAOContext, texture, screenUV, vec3, vec4, float, mix, uniform, convertToTexture } from 'three/tsl';
 import { ssgi } from './lib/addons/tsl/display/SSGINode.js';
 import SceneGIHistory from './scene-gi-history.mjs';
+import SceneLightingFilter from './scene-lighting-filter.mjs';
+import SceneSurfaceLighting from './scene-surface-lighting.mjs';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { resolveSceneGISettings, resolveSceneGIEstimatorSettings, sceneGIReceives } from './scene-gi-settings.mjs';
 
-export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}={}) {
+export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,filterImplementation='shared',surfaceReuse=true}={}) {
+  if(!['shared','separate'].includes(filterImplementation))throw Error('Unknown lighting filter implementation');
   // The screen-space field samples one depth/normal per pixel on both device routes.
   // Keep MSAA on the receiving beauty pass, not on the GI source attachments.
   const source = pass(scene, camera, { samples: 0 });
@@ -13,6 +16,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
   source.transparent = false;
   const visibleNormal = normalView.dot(positionViewDirection).lessThan(0).select(normalView.negate(),normalView);
   source.setMRT(mrt({output, normal:visibleNormal}));
+  const surfaceLighting=new SceneSurfaceLighting(source,camera,{enabled:surfaceReuse});
   const depth = source.getTextureNode('depth');
   const normal = source.getTextureNode('normal');
   const effect = ssgi(source.getTextureNode('output'),depth,normal,camera);
@@ -29,9 +33,18 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
   // alive across toggles because Three bindings can still reference their RTs.
   const routes = new Map();
   const filterFrames = {ao:0,gi:0};
+  const filterKey=temporal=>`${filterImplementation}:${temporal}`;
   function filterPair(temporal) {
-    if(filters.has(temporal))return filters.get(temporal);
+    const key=filterKey(temporal);
+    if(filters.has(key))return filters.get(key);
     const pair={};
+    if(filterImplementation==='shared'){
+      const filter=new SceneLightingFilter(temporal?history.getAONode():rawAO,temporal?history.getGINode():rawGI,depth,normal,camera);
+      for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=estimator[key];
+      filter.radius.value=settings.denoise;filter.resolutionScale=settings.resolutionScale;
+      pair.shared=filter;pair.ao={filter,node:filter.getAONode()};pair.gi={filter,node:filter.getGINode()};
+      filters.set(key,pair);return pair;
+    }
     for(const [name,input] of [['ao',temporal?history.getAONode():rawAO],['gi',temporal?history.getGINode():rawGI]]) {
       const filter=denoise(input,depth,normal,camera);
       for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=estimator[key];
@@ -41,11 +54,11 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       node.updateBefore=function(frame){const result=update.call(this,frame);filterFrames[name]++;return result;};
       pair[name]={filter,node};
     }
-    filters.set(temporal,pair);return pair;
+    filters.set(key,pair);return pair;
   }
   function route() {
     const filtered=settings.denoise>0;
-    const key=`${filtered}:${settings.temporal}`;
+    const key=`${filterImplementation}:${filtered}:${settings.temporal}`;
     if(routes.has(key))return routes.get(key);
     const pair=filtered?filterPair(settings.temporal):null;
     const aoInput=filtered?pair.ao.node:settings.temporal?history.getAONode():rawAO;
@@ -56,6 +69,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
     const beauty=pass(scene,camera);
     beauty.name='SSGI material receiving '+(filtered?'filtered':'raw');
     beauty.contextNode=context({
+      sceneSurfaceLighting:surfaceLighting,
       ...builtinAOContext(ao).getFlowContextData(),
       getOutput(node,{material}) {
         const diffuseReceiver=diffuseColor.rgb.mul(metalness.oneMinus());
@@ -80,7 +94,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
   const update = effect.updateBefore;
   effect.updateBefore = function(frame) { update.call(this,frame); frames++; };
   return {
-    depth, source,
+    depth, source, surfaceLighting,
+    setFilterImplementation(value){if(!['shared','separate'].includes(value))throw Error('Unknown lighting filter implementation');filterImplementation=value;},
     get beauty() { return route().beauty; },
     output() { return route().output; },
     setSettings(value) {
@@ -98,7 +113,10 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
       gain.value = settings.gain;
       effect.resolutionScale=settings.resolutionScale;
-      for(const pair of filters.values())for(const {filter,node} of Object.values(pair)){node.setResolutionScale(settings.resolutionScale);filter.radius.value=settings.denoise;}
+      for(const pair of filters.values()){
+        if(pair.shared)pair.shared.resolutionScale=settings.resolutionScale;
+        for(const {filter,node} of [pair.ao,pair.gi]){node.setResolutionScale?.(settings.resolutionScale);filter.radius.value=settings.denoise;}
+      }
       viewMode.value = ['scene','ao','gi','incoming'].indexOf(settings.view);
 
     },
@@ -109,7 +127,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       effect.useLinearThickness.value = next.linearThickness;
       effect.backfaceLighting.value = next.backfaceLighting;
       if(Object.keys(next).some(key=>next[key]!==estimator[key]))history.reset('estimator-parameters');
-      for(const pair of filters.values())for(const {filter} of Object.values(pair))for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
+      for(const pair of filters.values())for(const {filter} of [pair.ao,pair.gi])for(const key of ['depthPhi','normalPhi','lumaPhi'])filter[key].value=next[key];
       estimator = next;
     },
     requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
@@ -130,7 +148,8 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1}=
       history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:34,weight:history.weight.value,pendingFrames:history.pendingFrames,settlingInitialInfluence:.01},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
-      filtering:settings.denoise>0,filterFrames:{...filterFrames},
+      filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
+      surfaceLighting:surfaceLighting.state(),
       standaloneGTAO:false,format:'rgba16float',gainSemantics:'artistic-relative-estimator-gain',
       viewSemantics:settings.view==='gi'?'material-weighted-added-diffuse-radiance':settings.view==='incoming'?'incoming-irradiance-over-pi':settings.view}),
   };
