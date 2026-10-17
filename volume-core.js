@@ -11598,6 +11598,7 @@ export function createKaminosVolumePrototype({
   onStatus,
   sharedGpuContext = null,
   getSceneDepth = null,
+  getPresentationSize = () => null,
   getSceneCollision = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
@@ -15855,6 +15856,7 @@ export function createKaminosVolumePrototype({
   }
 
   function resize() {
+    const presentationSize = getPresentationSize();
     const rect = viewport.getBoundingClientRect();
     const win = viewport.ownerDocument?.defaultView || globalThis;
     const fallbackWidth = Math.max(1, Math.floor((win?.innerWidth || 1280) - Math.max(0, rect.left || 0)));
@@ -15863,10 +15865,10 @@ export function createKaminosVolumePrototype({
     const cssWidth = useFallbackSize ? fallbackWidth : rect.width;
     const cssHeight = useFallbackSize ? fallbackHeight : rect.height;
     const nativeDevicePixelRatio = Math.max(1, Number(win?.devicePixelRatio) || 1);
-    const canvasDevicePixelRatio = boundarySplatRequested() ? nativeDevicePixelRatio : 1;
+    const canvasDevicePixelRatio = presentationSize ? 1 : (boundarySplatRequested() ? nativeDevicePixelRatio : 1);
     const dpr = canvasDevicePixelRatio;
-    const displayWidth = Math.max(1, Math.floor(cssWidth * dpr));
-    const displayHeight = Math.max(1, Math.floor(cssHeight * dpr));
+    const displayWidth = Math.max(1, Math.floor((presentationSize?.width ?? cssWidth) * dpr));
+    const displayHeight = Math.max(1, Math.floor((presentationSize?.height ?? cssHeight) * dpr));
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
     const renderWidth = Math.max(1, Math.floor(displayWidth * renderScale));
     const renderHeight = Math.max(1, Math.floor(displayHeight * renderScale));
@@ -28279,6 +28281,39 @@ export function createKaminosVolumePrototype({
         compositionChanged,
         routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       };
+    },
+    async holdPresentationForStill(renderControls = {}) {
+      if (!state.active || !device) throw new Error('Flame renderer is inactive');
+      if (productFrameOwner !== 'prototype' || boundarySplatRequested() || browserResidualCanApply() || canvasPresentationSuppressed) throw new Error('Still output requires the ordinary flame canvas route');
+      if (sceneLightingRebuildPending || selectiveHeadLiveExactPause) throw new Error('Finish the pending flame presentation change');
+      const pausedBefore = selectiveHeadLiveCapturePaused, controlsBefore = controlsSnapshot;
+      selectiveHeadLiveCapturePaused = true;
+      cancelAnimationFrame(raf); raf = 0;
+      let released = false;
+      const release = () => {
+        if (released) return; released = true;
+        controlsSnapshot = controlsBefore;
+        selectiveHeadLiveCapturePaused = pausedBefore;
+        state.selectiveHeadLiveCapturePaused = pausedBefore;
+        resize();
+        if (!pausedBefore && state.active) raf = requestAnimationFrame(render);
+      };
+      try {
+        await foregroundDrain;
+        if (!state.active || state.error) throw new Error(state.error || 'Flame stopped before output');
+        // Rendering overrides only: never rebuild or step the simulation.
+        const allowed = ['raySteps', 'renderScale', 'adaptiveRays', 'occupancySkip'];
+        controlsSnapshot = {...controlsBefore, ...Object.fromEntries(allowed.filter(key => Object.hasOwn(renderControls,key)).map(key => [key,renderControls[key]]))};
+        resize();
+        if (state.width > device.limits.maxTextureDimension2D || state.height > device.limits.maxTextureDimension2D) throw new Error('Fire output exceeds the GPU texture dimensions');
+        const now = performance.now();
+        return {release, async draw() {
+          if (released) throw new Error('Still presentation was released');
+          const frame = await sampleFrame({advanceSim:false,now,includeRgba:true});
+          if (!frame.ok) throw new Error(frame.reason || 'Flame output failed');
+          return {image:frame.image,receipt:{width:state.width,height:state.height,simStepCount:state.simStepCount,effectiveRoute:state.effectiveRoute,backend:state.backend,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps}};
+        }};
+      } catch (error) { release(); throw error; }
     },
     setSelectiveHeadLiveCapturePaused(paused) {
       if (Boolean(paused) && selectiveHeadLiveExactPause) {
