@@ -2803,6 +2803,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-pressure-solver-val">legacy</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Pressure grid (experimental)</span>
+      <select id="volume-pressure-resolution" class="select-input" data-volume-settings-param="volume_pressure_resolution">
+        <option value="off" selected>Original coupled grid</option>
+        <option value="equal">Separate · same resolution</option>
+        <option value="half">Separate · half each dimension</option>
+      </select>
+      <span class="slider-val" id="volume-pressure-resolution-val">original</span>
+    </div>
+    <span class="slider-help">First material/dynamics separation checkpoint: only pressure is cheaper. Material transport, reaction, forces, lighting and rendering keep their current resolution and cadence. Half dimensions gives 1/8 as many pressure cells, with coarser obstacle boundaries. Requires converged pressure; floor-inflow and joined routes retain original pressure with an explicit reason. Switch live without clearing the flame. Same resolution is the transfer parity control.</span>
     <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1.0 the divergence converges to the target S, and a partial projection leaves (1 − gain) × D(v_before) + gain × S. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
     <div class="slider-row">
       <span class="slider-label">Heat release</span>
@@ -3554,6 +3564,8 @@ import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-l
 import { createSceneLoadRequests } from './scene-load-generation.mjs';
 import { createSceneObjectPublicationGuard, publishSceneObjectIfCurrent } from './scene-object-publication.mjs';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice, resolvePressureSolverConfig, resolveTransportConfig, resolveConfinementConfig, resolveTimeStepConfig, emitterCompilerControls } from './volume-core.js?v=flame-doctor-inlet-1006';
+import { pressureResolutionPlan } from './volume-pressure-resolution.mjs';
+import { resolveGridHeight } from './volume-grid-shape.mjs';
 import { applyVolumeEmitterFamilyRuntime, VOLUME_RUNTIME_EMITTER_FAMILIES } from './volume-emitter-runtime.mjs?v=flame-doctor-inlet-1006';
 import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
@@ -17500,6 +17512,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pyroOverdrive', 'volume_pyro_overdrive'],
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
+  ['pressureResolution', 'volume_pressure_resolution'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
   ['confinement', 'volume_confinement'],
@@ -19129,6 +19142,7 @@ function readVolumeControls() {
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
     pressureSolver: document.getElementById('volume-pressure-solver').value,
+    pressureResolution: document.getElementById('volume-pressure-resolution').value,
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -19422,6 +19436,11 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
   {
     const solverConfig = resolvePressureSolverConfig(c);
+    const pressureResolution = pressureResolutionPlan({dims:[c.resolution,resolveGridHeight(c,c.resolution).heightCells,c.resolution],mode:c.pressureResolution,
+      solver:solverConfig.effective.solver,inflow:c.emitterSourceLaw==='inflow-boundary'});
+    document.getElementById('volume-pressure-resolution-val').textContent = pressureResolution.reason
+      ? `original (${pressureResolution.reason})` : pressureResolution.effective==='off' ? 'original'
+      : `requested ${pressureResolution.pressureDims.join('×')} pressure · ${pressureResolution.materialDims.join('×')} material`;
     const solver = String(c.pressureSolver || 'legacy');
     const sweeps = Math.round(Number(c.pressureSolverIterations) || 60);
     const gain = solverConfig.effective.projectionGain;
@@ -20606,6 +20625,7 @@ async function initKaminosVolumeRoute() {
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
+    ['volume-pressure-resolution', 'volume_pressure_resolution'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -20625,6 +20645,10 @@ async function initKaminosVolumeRoute() {
     getControls: readVolumeControls,
     onStatus: status => {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
+      const p = status.pressureResolution;
+      if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
+        ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
+        : `original${p.reason ? ` (${p.reason})` : ''}`;
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
@@ -21039,6 +21063,7 @@ async function initKaminosVolumeRoute() {
     'volume-wind-gust-veer',
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
+    'volume-pressure-resolution',
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',

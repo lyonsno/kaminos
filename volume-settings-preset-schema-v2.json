@@ -1,7 +1,16 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 259,
+  "controlCount": 260,
   "controls": [
+    {
+      "key": "volume-pressure-resolution",
+      "param": "volume_pressure_resolution",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "additiveDefault": "off",
+      "allowedValues": ["off", "equal", "half"],
+      "additiveSinceControlCount": 260
+    },
     {
       "key": "volume-physical-material-law",
       "param": "volume_physical_material_law",
