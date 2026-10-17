@@ -109,6 +109,7 @@ test('interpolated modules: every entry point seats first except the lattice-onl
     PASSIVE_MATERIAL_WGSL: core.PASSIVE_MATERIAL_WGSL,
     // Include helper-only modules so new entry points cannot evade this check.
     RAYMARCH_NEIGHBORHOOD_WGSL: (await import('../volume-raymarch-sampling.mjs')).RAYMARCH_NEIGHBORHOOD_WGSL,
+    FLAME_GUIDANCE_WGSL: (await import('../volume-raymarch-sampling.mjs')).FLAME_GUIDANCE_WGSL,
     AGX_WGSL: (await import('../volume-agx.mjs')).AGX_WGSL,
     RAY_START_WGSL: (await import('../volume-ray-start.mjs')).RAY_START_WGSL,
     OPTICAL_STEPPING_WGSL: (await import('../volume-optical-native.mjs')).OPTICAL_STEPPING_WGSL,
