@@ -75,7 +75,7 @@ Then open `http://localhost:18709/index.html?weights=` (an empty base loads from
 
 ## Using it in an application
 
-Klein installs as its own package, `@kaminos/flux2-klein`, alongside `@kaminos/webgpu-inference-kit`. `node pack-klein.mjs --out <dir>` builds the package tarball; its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs. Your application creates the WebGPU device and lends it to Klein:
+Klein is on npm as [`@kaminos/flux2-klein`](https://www.npmjs.com/package/@kaminos/flux2-klein), which brings `@kaminos/webgpu-inference-kit` with it: `npm install @kaminos/flux2-klein`. Its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs; `node pack-klein.mjs --out <dir>` builds the same package from this checkout. Your application creates the WebGPU device and lends it to Klein:
 
 ```js
 import { KleinPipeline } from '@kaminos/flux2-klein';
