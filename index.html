@@ -876,6 +876,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="exposure-val">1.1</span>
     </div>
     <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera</span></label>
+    <p class="slider-help" id="rendering-camera-status" hidden></p>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
       <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="0.7">
@@ -3475,7 +3476,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option><option value="guided">Emitter-informed progressive (experimental)</option></select>
         <p class="rendering-description" id="rendering-source-guide-status" hidden>Stable authored emitter envelope plus full-volume coverage. Sampling weights change, not source energy.</p>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
-        <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
         <label for="rendering-smoke-solver">Smoke illumination</label><select id="rendering-smoke-solver"><option value="distributed">Distributed · geometry-visible, full height</option><option value="legacy">Legacy comparison · lower cube, no solid visibility</option></select>
@@ -12352,9 +12352,14 @@ async function initScene() {
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
-      if(text!==sceneCameraStatusText){document.getElementById('rendering-camera-status').textContent=text;sceneCameraStatusText=text;}
+      const cameraStatus=document.getElementById('rendering-camera-status');
+      cameraStatus.hidden=!requested||state.effective;
+      if(text!==sceneCameraStatusText){cameraStatus.textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
       applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
+      const cameraStatus=document.getElementById('rendering-camera-status');
+      cameraStatus.hidden=!document.getElementById('rendering-match-flame-camera').checked;
+      cameraStatus.textContent='Flame camera matching is inactive while inspecting indirect lighting.';
     }
     syncWaterProxy();
     syncFireProxy();
