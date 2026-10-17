@@ -18,6 +18,7 @@ def mesh(directory):
     vertices = np.array(request['positions'], dtype=np.float64)
     faces = np.array(request['triangles'], dtype=np.int32)
     settings = request['settings']; start = time.monotonic()
+    write_json(directory/'meshing-started.json', {'monotonic': start, 'wall': time.time()})
     mesher = wm.Tetrahedralizer(epsilon=settings['envelope'], edge_length_r=settings['spacing'])
     mesher.set_mesh(vertices, faces); mesher.tetrahedralize()
     positions, tetrahedra, flags = mesher.get_tet_mesh(use_input_for_wn=True)
@@ -34,21 +35,25 @@ def mesh(directory):
 
 def run(directory):
     data = json.loads((directory/'input.json').read_text())
-    report = {'status':'running','phase':'meshing','route':ROUTE,'requested':data['settings'],'sourceDigest':data['sourceDigest'],'startedAt':time.time()}
+    report = {'status':'running','phase':'initializing','route':ROUTE,'requested':data['settings'],'sourceDigest':data['sourceDigest'],'startedAt':time.time()}
     write_json(directory/'report.json',report)
-    start = time.monotonic(); process = None
+    start = time.monotonic(); process = None; meshing_start = None
     try:
         if (directory/'cancel').exists():
             report.update(status='cancelled',phase='before-meshing'); return
         with (directory/'mesher.log').open('wb') as log:
-            process = subprocess.Popen([sys.executable,str(Path(__file__).resolve()),'--mesh',str(directory)],cwd=directory,stdout=log,stderr=subprocess.STDOUT)
+            process = subprocess.Popen([sys.executable,'-u',str(Path(__file__).resolve()),'--mesh',str(directory)],cwd=directory,stdout=log,stderr=subprocess.STDOUT)
             while process.poll() is None:
+                if meshing_start is None and (directory/'meshing-started.json').exists():
+                    meshing_start = json.loads((directory/'meshing-started.json').read_text())['monotonic']
+                    report.update(phase='meshing',initializationSeconds=meshing_start-start)
+                    write_json(directory/'report.json',report)
                 cancelled = (directory/'cancel').exists()
-                if cancelled or time.monotonic()-start >= data['settings']['budgetSeconds']:
+                if cancelled or meshing_start is not None and time.monotonic()-meshing_start >= data['settings']['budgetSeconds']:
                     process.terminate()
                     try: process.wait(timeout=2)
                     except subprocess.TimeoutExpired: process.kill(); process.wait()
-                    report.update(status='cancelled' if cancelled else 'over-budget',phase='meshing'); return
+                    report.update(status='cancelled' if cancelled else 'over-budget',phase=report['phase']); return
                 time.sleep(.05)
         if process.returncode:
             raise RuntimeError(f'Mesher exited {process.returncode}; full log retained at mesher.log')

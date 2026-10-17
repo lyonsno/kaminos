@@ -7,14 +7,14 @@ const [url,out,modulePath,executable]=process.argv.slice(2);
 if(!url||!out||!modulePath||!executable)throw Error('URL OUTPUT PLAYWRIGHT_MODULE INDEPENDENT_CHROMIUM required');
 if(fs.realpathSync(executable).includes('/Applications/Google Chrome.app/'))throw Error('Independent Chromium required');
 fs.mkdirSync(out,{recursive:true});
-const report={status:'running',phase:'launch',requestedUrl:url,executable:fs.realpathSync(executable),messages:[],checks:[],sourceFiles:{}};
+const report={status:'running',phase:'launch',requestedUrl:url,executable:fs.realpathSync(executable),messages:[],httpErrors:[],checks:[],sourceFiles:{}};
 for(const file of ['mechanical-proxy-tool.mjs','mechanical-proxy-core.mjs','mechanical_proxy.py','mechanical_proxy_backend.py'])report.sourceFiles[file]=createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));save();
 let browser;
 try{
  const {chromium}=await import(pathToFileURL(modulePath));
  browser=await chromium.launchPersistentContext(path.join(out,'profile'),{executablePath:executable,headless:true,viewport:{width:1560,height:1050},args:['--enable-unsafe-webgpu','--use-gl=angle','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
- const page=browser.pages()[0]??await browser.newPage();page.on('console',m=>{if(m.type()==='error')report.messages.push({type:'console',text:m.text()});});page.on('pageerror',e=>report.messages.push({type:'pageerror',text:String(e)}));
+ const page=browser.pages()[0]??await browser.newPage();page.on('console',m=>{if(m.type()==='error')report.messages.push({type:'console',text:m.text(),location:m.location()});});page.on('pageerror',e=>report.messages.push({type:'pageerror',text:String(e)}));page.on('response',r=>{if(r.status()>=400)report.httpErrors.push({url:r.url(),status:r.status()});});
  await page.goto(url,{waitUntil:'domcontentloaded'});
  await page.waitForFunction(()=>window.kaminosAssetSmokeLinkDebugState?.().status==='loaded'&&window.kaminosMechanicalProxy);
  report.effectiveUrl=page.url();report.server=await(await page.request.get(new URL('/api/workbench-experiments',url).href)).json();report.link=await page.evaluate(()=>window.kaminosAssetSmokeLinkDebugState());

@@ -84,7 +84,7 @@ export function installMechanicalProxy({document,scene,camera,canvas,selected,re
  async function loadResult(id){const next=await request(null,`?id=${id}&result=1`);if(next.sourceDigest!==identity?.sourceDigest)throw Error('Result belongs to another source');if(next.status!=='passed')throw Error(`Result is ${next.status}`);admitProxy(next.mesh);result=next.mesh;job=next;state.status='passed';state.selectedTet=null;$('keep').disabled=false;$('download').href=`/api/read?root=mechanical-proxies&path=${id}%2Fmesh.json`;$('facts').textContent=JSON.stringify({...next,mesh:undefined},null,2);status(next.cached?'Cached result':'Complete');render();return read();}
  async function observe(id,generation){
   const row=await request(null,`?id=${id}`);if(generation!==token||disposed)return;
-  job=row;state.status=row.status;status(row.status==='running'?`Meshing · ${(row.elapsedSeconds??0).toFixed(1)} s`:row.status);
+  job=row;state.status=row.status;status(row.status==='running'?`${row.phase==='initializing'?'Initializing':'Meshing'} · ${(row.elapsedSeconds??0).toFixed(1)} s total`:row.status);
   if(['pending','running','submitting'].includes(row.status)){timer=setTimeout(()=>observe(id,generation).catch(fail),500);return;}
   setBusy(false);await refreshRows();if(row.status==='passed')await loadResult(id);else{status(`${row.status}${row.error?': '+row.error:''}`);$('facts').textContent=JSON.stringify(row,null,2);}
  }
