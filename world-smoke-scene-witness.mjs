@@ -21,7 +21,7 @@ try{
  report.add=await page.evaluate(id=>window.kaminosSceneAuthoring.addFlameEmitter(id),basin);
  const control=async(id,value)=>page.evaluate(({id,value})=>{const c=document.getElementById(id);if(!c)throw Error(`Missing ${id}`);c.value=value;c.dispatchEvent(new Event('input',{bubbles:true}));c.dispatchEvent(new Event('change',{bubbles:true}));if(c.value!==value)throw Error(`Rejected ${id}=${value}`);},{id,value:String(value)});
  await control('volume-render-scale',.5);await control('volume-steps',64);await control('volume-look-freeze',0);
- await control('volume-pressure-resolution','off');await control('volume-wavelet-turbulence','on');
+ await control('volume-pressure-resolution','off');await control('volume-wavelet-turbulence',1);
  await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosFrameSelected();});
  for(const mode of ['off','on']){
   report.phase=`world-${mode}`;await save();await control('volume-world-smoke',mode);
