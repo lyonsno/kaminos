@@ -26,5 +26,5 @@ test('moving the source updates the pose-derived saved supply controls rather th
  const t=source();t.objects.find(o=>o.type==='flame-emitter').emission.settings=Object.fromEntries(['centre-x','centre-y','centre-z','yaw','pitch'].map(key=>['volume-immersed-'+key,{value:-.3}]));
  const s=pistonArmScene(t),f=s.objects.find(o=>o.type==='flame-emitter'),d=s.objects.find(o=>o.type==='simulation-domain'),scale=d.transform.scale[0],translation=d.transform.position.map((v,i)=>v-(i===1?scale:0));
  const expected=immersedControlsForFlamePose({},flamePoseToDomain(f.transform,translation,scale),false);
- for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']])assert.equal(f.emission.settings['volume-immersed-'+suffix].value,expected[key]);
+ for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]){const c=f.emission.settings['volume-immersed-'+suffix];assert.equal(c.value,Number(expected[key].toPrecision(15)));assert.ok(Math.abs(c.value-expected[key])<1e-12);assert.equal(Object.hasOwn(c,'rawValue'),false);}
 });

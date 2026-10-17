@@ -48,7 +48,10 @@ export function pistonArmScene(template, options={}) {
  const scale=domain.transform.scale[0],translation=domain.transform.position.map((v,i)=>v-(i===1?scale:0));
  const mapped=immersedControlsForFlamePose({},flamePoseToDomain(source.transform,translation,scale),false);
  for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]){
-  const control=source.emission?.settings?.[`volume-immersed-${suffix}`];if(control){control.value=mapped[key];control.rawValue=String(mapped[key]);}
+  // Observed Chromium range serialization in the retained source-diagnosis
+  // witness uses 15 significant digits. Preserve full authored source TRS;
+  // serialize only its duplicated UI backing at that effective route precision.
+  const control=source.emission?.settings?.[`volume-immersed-${suffix}`];if(control){control.value=Number(mapped[key].toPrecision(15));delete control.rawValue;}
  }
  source.groupId=`${prefix}-boom`;parts.boom.push(source.id);
  const groups=Object.entries(parts).map(([role,objectIds])=>({id:`${prefix}-${role}`,type:'group',label:`Analytical ${role}`,objectIds,transform:pose(),source:null}));
