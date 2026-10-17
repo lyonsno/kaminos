@@ -87,6 +87,21 @@ try{
  await invoke('view',{mode:'beauty'});
  await invoke('pause');await advance(2400);const consumed=await sample('consumed');assert.ok(consumed.detached>0,'Burning must release finite residue');assert.ok(consumed.attached<initial.attached);assert.ok(consumed.solidCells<initial.solidCells,'Consumed geometry must lose obstruction');
  await invoke('view',{mode:'char'});await sample('consumed-char');await invoke('view',{mode:'beauty'});
+ if(process.env.BURN_GRID_RESIZE==='1'){
+  report.phase='grid-resize';await save();
+  const retained=await invoke('snapshot');report.gridChanges=[];
+  for(const grid of [48,32]){
+   report.inputs.push({flameSettings:{resolution:grid}});
+   await guarded(page.evaluate(grid=>{const api=window.kaminosFlameAuthoring,next=api.read();next.domControls['volume-resolution'].value=String(grid);delete next.domControls['volume-resolution'].rawValue;return api.apply(next,'Change fire grid');},grid));
+   await guarded(page.waitForFunction(grid=>window.__kaminosVolumePrototype.debugState().simGrid===grid,grid));
+   const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),frozen=await invoke('snapshot');
+   assert.deepEqual(state.gasSource.dimensions,[grid,grid,grid]);
+   assert.deepEqual(frozen[0].material,retained[0].material,'Grid edits must retain burned material');
+   assert.deepEqual(frozen[0].particles,retained[0].particles,'Paused grid edits must retain independent residue');
+   report.gridChanges.push({grid,state});await fs.writeFile(path.join(out,'grid-'+grid+'-raw.json'),JSON.stringify({state,snapshots:frozen}));
+  }
+  await save();
+ }
  await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
  await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
  if(experiment==='bear-altar'){
