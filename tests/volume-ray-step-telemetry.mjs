@@ -51,6 +51,17 @@ test('GPU work is encoded only on demand, with enough dispatch groups for every 
   assert.deepEqual(dispatches,Array.from({length:4},()=>[[2,1],[1]]).flat());assert.deepEqual(draws,[3]);
   meter.dispose();
 });
+test('resource preflight allocates without presenting an unrendered summary',()=>{
+  const {meter,canvas}=fixture();meter.setCanvas(canvas);
+  assert.equal(meter.ensure(8,8,true,{activate:false}),true);
+  const prepared=meter.counterBuffer;assert.equal(prepared.size,256);
+  assert.equal(meter.active,false);assert.equal(canvas.style.visibility,'hidden');
+  assert.equal(meter.encode({}),false);
+  assert.equal(meter.read().reason,'awaiting-instrumented-draw');
+  assert.equal(meter.ensure(8,8,true,{allowResize:false}),false);
+  assert.equal(meter.counterBuffer,prepared);assert.equal(meter.active,true);
+  meter.dispose();
+});
 test('a draw cannot replace counters already referenced by an earlier pass',()=>{
   const {meter,canvas}=fixture();meter.setCanvas(canvas);
   const placeholder=meter.counterBuffer;
