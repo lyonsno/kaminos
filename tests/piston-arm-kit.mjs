@@ -29,3 +29,13 @@ test('moving the source updates the pose-derived saved supply controls rather th
  const expected=immersedControlsForFlamePose({},flamePoseToDomain(f.transform,translation,scale),false);
  for(const [suffix,key]of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]){const c=f.emission.settings['volume-immersed-'+suffix];assert.equal(c.value,Number(expected[key].toPrecision(15)));assert.ok(Math.abs(c.value-expected[key])<1e-12);assert.equal(Object.hasOwn(c,'rawValue'),false);}
 });
+test('thin and tall variants keep both mounting eyes in contact with their visible supports',()=>{
+ for(const options of [{thickness:.05},{height:1.2},{height:1.2,thickness:.05}]){
+  const s=pistonArmScene(source(),options),find=key=>s.objects.find(o=>o.id.endsWith('-'+key)),rod=find('rod-eye'),bracket=find('mount-bracket'),base=find('base-eye'),post=find('upright');
+  const rodTop=rod.transform.position[1]+rod.geometry.parameters.radius,bracketBottom=bracket.transform.position[1]-bracket.geometry.parameters.height/2;
+  assert.ok(rodTop>=bracketBottom,`moving eye gap ${bracketBottom-rodTop}`);
+  const postFront=post.transform.position[2]+post.geometry.parameters.depth/2,eyeBack=base.transform.position[2]-base.geometry.parameters.radius;
+  assert.ok(postFront>=eyeBack,`base eye gap ${eyeBack-postFront}`);
+  assert.deepEqual(s.actuators[0].baseMount,base.transform.position);assert.deepEqual(s.actuators[0].movingMount,rod.transform.position);
+ }
+});

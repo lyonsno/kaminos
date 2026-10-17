@@ -10,7 +10,7 @@ export function pistonArmScene(template, options={}) {
  if(typeof prefix!=='string'||!prefix.trim())throw Error('prefix is required');
  const scene=structuredClone(template),source=scene.objects?.find(o=>o.type==='flame-emitter');
  if(!source)throw Error('A template with a flame emitter is required');
- const floor=-.6,hinge=[0,floor+height,-.48],base=[0,floor+height*.32,-.36],end=[0,hinge[1]-height*.165,hinge[2]+reach*.49];
+ const floor=-.6,hinge=[0,floor+height,-.48],base=[0,floor+height*.32,hinge[2]+thickness*1.05],end=[0,hinge[1]-thickness*.9,hinge[2]+reach*.49];
  const cup=[0,hinge[1]+thickness*.85,hinge[2]+reach*.9],objects=[],parts={base:[],boom:[],barrel:[],rod:[]};
  const colors={base:'#8998a3',boom:'#d9d3bd',barrel:'#668698',rod:'#c9d5dc'};
  const add=(role,key,kind,parameters,transform,color=colors[role])=>{
@@ -29,7 +29,7 @@ export function pistonArmScene(template, options={}) {
  pin('base','boom-hinge',hinge,thickness*.95);
  // Both cheeks and their crossbar belong to one rigid boom, with visible gaps.
  for(const side of [-1,1])add('boom',`boom-cheek-${side===1?'right':'left'}`,'box',{width:thickness*.28,height:thickness*.7,depth:reach},pose([side*thickness*.43,hinge[1],hinge[2]+reach/2]));
- add('boom','mount-bracket','box',{width:thickness*.8,height:thickness*1.35,depth:thickness*.6},pose([0,hinge[1]-thickness*.45,end[2]]));
+ add('boom','mount-bracket','box',{width:thickness*.8,height:hinge[1]-end[1]+thickness*.35,depth:thickness*.6},pose([0,(hinge[1]+end[1])/2,end[2]]));
  add('boom','burner-neck','cylinder',{radius:cupRadius*.3,height:thickness},pose([0,cup[1]-thickness*.5,cup[2]]));
  add('boom','burner-floor','cylinder',{radius:cupRadius,height:thickness*.22},pose(cup));
  for(let i=0;i<12;i++){
