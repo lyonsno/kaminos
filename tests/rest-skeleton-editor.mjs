@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createRestSkeletonEditor} from '../experiments/creature-motion/rest-skeleton.experiment.mjs';
 import {createSceneEdits,axisVector} from '../scene-edit-session.mjs';
+const explicitProfile=()=>({schema:'kaminos.quadruped-correspondence.v1',id:'synthetic-partial',authority:'Test only',trunk:['root','forelimb-left-shoulder'],fore:{left:['forelimb-left-shoulder','elbowL','wristL'],right:['forelimb-right-shoulder','elbowR','wristR']},hind:{left:['hipL','kneeL','ankleL'],right:['hipR','kneeR','ankleR']}});
 const pose=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
 const joint=(name,parent,head)=>({name,parent,head,tail:head.map((v,k)=>v+(k===1?1:0)),matrix:[[1,0,0,head[0]],[0,1,0,head[1]],[0,0,1,head[2]],[0,0,0,1]]});
 const plan=()=>({schema:'kaminos.complete-creature-joints.v0',joints:[joint('root',null,[0,0,0]),joint('forelimb-left-shoulder','root',[-2,2,0]),joint('forelimb-right-shoulder','root',[2,2,0])]});
@@ -32,4 +33,12 @@ test('rotated object gives Local keyboard and gizmo the same frame and an identi
 test('actual editor consumes Active and Individual pivot choices from the shared toolbar',async()=>{
  const ctx=await open();ctx.adapter.enter();ctx.editor.operations.select({name:'forelimb-left-shoulder',pair:true});ctx.preferences.pivot='active';let target=ctx.adapter.target();assert.deepEqual(target.object.position.toArray(),[-2,2,0]);ctx.edits.apply(target.id,{...target.read(),scale:[2,2,2]});assert.deepEqual(ctx.editor.read().joints[1].head,[-2,2,0]);await ctx.edits.undo();
  ctx.preferences.pivot='individual';target=ctx.adapter.target();ctx.edits.apply(target.id,{...target.read(),scale:[2,2,2]});assert.deepEqual(ctx.editor.read().joints.map(j=>j.head),plan().joints.map(j=>j.head));await ctx.editor.dispose();
+});
+test('atlas follows actual edits, keeps unsupported cells visible, and survives export/reopen',async()=>{
+ const inputs=input(),reference={...inputs.reference,id:'test-ref',label:'Explicit test reference',source:{path:'synthetic-ref',sha256:'b'.repeat(64)},profile:explicitProfile()};
+ inputs.proportion_atlas={schema:'kaminos.skeleton-proportion-atlas.v1',profile:explicitProfile(),activeReference:'test-ref',references:[reference,{...reference,id:'test-ref-2',label:'Second reference'}]};
+ const ctx=await open(inputs);let read=ctx.editor.read();assert.equal(read.proportions.status,'partial');assert.equal(read.proportions.activeReference,'test-ref');assert.ok(read.proportions.references[0].comparison.rows.some(r=>r.candidate===null||r.reference===null));
+ ctx.adapter.enter();const before=read.proportions.candidate.trunk.length;ctx.editor.operations.move({name:'forelimb-left-shoulder',position:[-4,2,0]});read=ctx.editor.read();assert.notEqual(read.proportions.candidate.trunk.length,before);await ctx.editor.operations.undo();assert.equal(ctx.editor.read().proportions.candidate.trunk.length,before);
+ const heads=ctx.editor.read().joints.map(j=>j.head);ctx.objects[1].root.position.set(3,4,5);ctx.editor.operations.reference({id:'test-ref-2'});assert.equal(ctx.editor.read().proportions.activeReference,'test-ref-2');assert.deepEqual(ctx.editor.read().joints.map(j=>j.head),heads);assert.deepEqual(ctx.objects[1].root.position.toArray(),[3,4,5]);await ctx.editor.operations.undo();assert.equal(ctx.editor.read().proportions.activeReference,'test-ref');await ctx.editor.operations.redo();assert.equal(ctx.editor.read().proportions.activeReference,'test-ref-2');
+ const saved=ctx.editor.operations.export();assert.equal(saved.rest_authoring.proportionAtlas.activeReference,'test-ref-2');const reopened=await open({plan:saved});assert.deepEqual(reopened.editor.read().proportions,ctx.editor.read().proportions);await reopened.editor.dispose();await ctx.editor.dispose();
 });

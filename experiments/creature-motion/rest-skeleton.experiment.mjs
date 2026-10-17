@@ -2,6 +2,7 @@ import * as THREE from '../../lib/three.core.js';
 import {validateRestPlan,restHeads,authoredRestPlan} from './rest-skeleton-edit.mjs';
 import {captureRestTransform,applyRestTransform} from './rest-skeleton-transform.mjs';
 import {checkedPose} from '../../scene-edit-session.mjs';
+import {validateProportionAtlas,measureProportionAtlas} from './skeleton-proportions.mjs';
 
 const digest=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),x=>x.toString(16).padStart(2,'0')).join('');
 const identity=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
@@ -13,12 +14,12 @@ export async function loadRestEditorInput(inputs,{fetchImpl=globalThis.fetch}={}
  let plan,sha=inputs.baseline_sha256;
  if(inputs.plan){if(inputs.plan_url)throw Error('Choose a plan file or inline plan');plan=validateRestPlan(inputs.plan);sha=plan.rest_authoring?.baselineSha256??sha;}
  else {if(!inputs.plan_url||!/^[a-f0-9]{64}$/i.test(inputs.plan_sha256??''))throw Error('Explicit plan URL and digest required');const r=await fetchImpl(inputs.plan_url,{cache:'no-store'});if(!r.ok)throw Error('Plan HTTP '+r.status);const bytes=await r.arrayBuffer();if(await digest(bytes)!==inputs.plan_sha256)throw Error('Plan digest mismatch');plan=validateRestPlan(JSON.parse(new TextDecoder().decode(bytes)));sha=plan.rest_authoring?.baselineSha256??inputs.plan_sha256;}
- const displayMatrix=plan.rest_authoring?.displayMatrix??inputs.display_matrix,reference=plan.rest_authoring?.reference??inputs.reference??null;
- const result=authoredRestPlan(plan,{baselineSha256:sha,displayMatrix,reference,view:plan.rest_authoring?.view??inputs.view??null,referenceDisplay:plan.rest_authoring?.referenceDisplay??null,scene:plan.rest_authoring?.scene??null});
+ const displayMatrix=plan.rest_authoring?.displayMatrix??inputs.display_matrix,proportionAtlas=validateProportionAtlas(plan.rest_authoring?.proportionAtlas??inputs.proportion_atlas??null,plan),reference=proportionAtlas?proportionAtlas.references.find(r=>r.id===proportionAtlas.activeReference):plan.rest_authoring?.reference??inputs.reference??null;
+ const result=authoredRestPlan(plan,{baselineSha256:sha,displayMatrix,reference,view:plan.rest_authoring?.view??inputs.view??null,referenceDisplay:plan.rest_authoring?.referenceDisplay??null,scene:plan.rest_authoring?.scene??null,proportionAtlas});
  const m=new THREE.Matrix4().fromArray(result.rest_authoring.displayMatrix);
  if(Math.abs(m.determinant())<1e-12||m.elements[3]!==0||m.elements[7]!==0||m.elements[11]!==0||m.elements[15]!==1)throw Error('Invertible affine display frame required');
  if(reference){const J=reference.jointNames?.length;if(!J||reference.parents?.length!==J||reference.positions?.length!==J*3||!reference.positions.every(Number.isFinite)||reference.parents.some((p,j)=>!Number.isInteger(p)||p< -1||p>=j))throw Error('Invalid reference skeleton');}
- return {plan:result,baselineSha256:sha,displayMatrix:m,reference};
+ return {plan:result,baselineSha256:sha,displayMatrix:m,reference,proportionAtlas};
 }
 
 function links(joints,positions,color){
@@ -31,12 +32,13 @@ function links(joints,positions,color){
 }
 
 export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{fetchImpl=globalThis.fetch}={}){
- const loaded=await loadRestEditorInput(inputs,{fetchImpl}),baseline=loaded.plan,matrix=loaded.displayMatrix,reference=loaded.reference;
+ const loaded=await loadRestEditorInput(inputs,{fetchImpl}),baseline=loaded.plan,matrix=loaded.displayMatrix,atlas=loaded.proportionAtlas;let reference=loaded.reference;
  const document=host.controls.document,win=document.defaultView,session=await host.scene.open(),edits=win?.kaminosSceneEdits;
  if(!edits||!host.controls.components){await session.dispose();throw Error('Shared component editing host unavailable');}
  let plan=structuredClone(baseline),selected=[plan.joints.find(j=>j.name.includes('shoulder'))?.name??plan.joints[0].name],active=selected[0],mirror=false,descendants=false,editMode=false,disposed=false;
  let refresh=()=>{},componentSeat,controlSeat,unsubscribe=()=>{},draft=null,error=null;
  const target='@rest-components:'+crypto.randomUUID(),root=new THREE.Group(),proxy=new THREE.Group(),markers=new Map();root.name='Creature · rest skeleton';proxy.name='Rest joint transform';proxy.userData.kaminosEditorHelper=true;
+ const referenceTarget=target+':reference';
  const positions=()=>plan.joints.map(j=>new THREE.Vector3(...j.head).applyMatrix4(matrix).toArray());
  const graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
  for(const [i,j]of plan.joints.entries()){
@@ -53,11 +55,13 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   }graph.update(p);root.updateMatrixWorld(true);session.redraw();refresh();
  }
  function placeProxy(){if(!editMode||!selected.length)return;draft=null;putPose(proxy,capture());}
- const exported=()=>{assertLive();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,view:session.readView(),referenceDisplay:null,scene:{skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null,referenceVisible:referenceRoot?.visible??false}});};
+ const exported=()=>{assertLive();return authoredRestPlan(plan,{baselineSha256:loaded.baselineSha256,displayMatrix:matrix.toArray(),reference,proportionAtlas:atlas,view:session.readView(),referenceDisplay:null,scene:{skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null,referenceVisible:referenceRoot?.visible??false}});};
  const read=()=>({status:error?'invalid':editMode?'editing-rest-joints':'object-mode',error,selected:[...selected],active,mirror,descendants,objectId:asset?.id,referenceId:referenceAsset?.id,targetId:target,baselineSha256:loaded.baselineSha256,objectPose:poseOf(root),referencePose:referenceRoot?poseOf(referenceRoot):null,
-  joints:plan.joints.map(j=>({name:j.name,parent:j.parent,head:[...j.head],position:markers.get(j.name).getWorldPosition(new THREE.Vector3()).toArray()})),semantics:'Rest-joint candidate; placement does not change anatomy; fresh motion generation is separate'});
+  proportions:measureProportionAtlas(plan,atlas),referenceSource:structuredClone(reference?.source??null),joints:plan.joints.map(j=>({name:j.name,parent:j.parent,head:[...j.head],position:markers.get(j.name).getWorldPosition(new THREE.Vector3()).toArray()})),semantics:'Rest-joint candidate; placement does not change anatomy; fresh motion generation is separate'});
  const operations={
   read,
+  reference({id}={}){assertLive();if(!atlas)throw Error('No proportion atlas supplied');edits.apply(referenceTarget,{id},'Change reference skeleton');record({kind:'skeleton.reference',phase:'applied',effective:{id,source:reference.source}});return read();},
+  proportions:()=>measureProportionAtlas(plan,atlas),
   select({name,extend=false,pair=false}={}){
    assertLive();if(!markers.has(name))throw Error('Unknown joint');if(!editMode)throw Error('Press Tab to edit skeleton joints');
    componentSeat.changed(()=>{if(extend){if(selected.includes(name)&&selected.length>1)selected=selected.filter(n=>n!==name);else if(!selected.includes(name))selected.push(name);}else selected=[name];active=selected.includes(name)?name:selected.at(-1);
@@ -80,12 +84,11 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   putPose(root,baseline.rest_authoring.scene?.skeleton??identity());
   asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'authored-rest-skeleton:'+loaded.baselineSha256}});root.parent.add(proxy);
   if(reference){
-   referenceRoot=new THREE.Group();referenceRoot.name=reference.label??'Reference skeleton';const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));
-   referenceRoot.add(links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff).mesh);
-   for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
+   referenceRoot=new THREE.Group();drawReference();
    const legacy=baseline.rest_authoring.referenceDisplay,initial=identity();initial.position[legacy?.axis==='x'?0:2]=legacy?.mode==='overlay'?0:1.6;
    putPose(referenceRoot,baseline.rest_authoring.scene?.reference??initial);referenceRoot.visible=baseline.rest_authoring.scene?.referenceVisible??(legacy?.mode!=='off');
-   referenceAsset=await session.attach(referenceRoot,{owned:true,metadata:{label:referenceRoot.name,source:typeof reference.source==='string'?reference.source:reference.source?.path??'caller-reference'}});
+   referenceAsset=await session.attach(referenceRoot,{owned:true,metadata:{label:atlas?'Reference atlas':referenceRoot.name,source:atlas?'caller-proportion-atlas':typeof reference.source==='string'?reference.source:reference.source?.path??'caller-reference'}});
+   if(atlas)edits.register(referenceTarget,{read:()=>({id:atlas.activeReference}),check:value=>{if(!atlas.references.some(r=>r.id===value.id))throw Error('Unknown atlas reference');return {id:value.id};},write:value=>{assertLive();atlas.activeReference=value.id;reference=atlas.references.find(r=>r.id===value.id);drawReference();session.redraw();refresh();}});
   }
   edits.register(target,{read:snapshot,check:value=>{applyRestTransform(baseline,value);return structuredClone(value);},write:value=>{assertLive();const next=applyRestTransform(baseline,value);plan=next;draft=structuredClone(value);putPose(proxy,value);error=null;repaint();}});
   componentSeat=host.controls.components.register(asset.id,{
@@ -97,9 +100,15 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   unsubscribe=edits.subscribe(state=>{if(disposed)return;if(!state.active&&!state.replaying){draft=null;placeProxy();}refresh();});
   if(baseline.rest_authoring.view)session.setView(baseline.rest_authoring.view);else operations.frame();
   win.kaminosSelection.set([asset.id],asset.id);
- }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target);edits.unregister(target);proxy.removeFromParent();await session.dispose();throw e;}
+ }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===referenceTarget);edits.unregister(target);edits.unregister(referenceTarget);proxy.removeFromParent();await session.dispose();throw e;}
+ function drawReference(){
+  for(const child of [...referenceRoot.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
+  referenceRoot.name=reference.label??'Reference skeleton';referenceRoot.userData.proportionReference={id:atlas?.activeReference??null,source:structuredClone(reference.source??null)};
+  const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));referenceRoot.add(links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff).mesh);
+  for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
+ }
  return {read,operations,async dispose(){
-  if(disposed)return;componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===asset.id||entry.id===referenceAsset?.id||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);proxy.removeFromParent();disposed=true;await session.dispose();
+  if(disposed)return;componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===referenceTarget||entry.id===asset.id||entry.id===referenceAsset?.id||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);edits.unregister(referenceTarget);proxy.removeFromParent();disposed=true;await session.dispose();
  },mount({root:panel,document,invoke}){
   const properties=document.createElement('section'),playback=document.createElement('div'),title=document.createElement('h3'),hint=document.createElement('p'),selection=document.createElement('p'),options=document.createElement('div');
   title.textContent='Rest skeleton';properties.append(title,hint,selection,options);properties.style.cssText='font-size:12px;line-height:1.45';
@@ -115,7 +124,18 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   }catch(e){if(e.name!=='AbortError')status.textContent=e.message;}};
   const open=document.createElement('button'),file=document.createElement('input');open.type='button';open.textContent='Open skeleton…';file.type='file';file.accept='.json,application/json';file.hidden=true;open.onclick=()=>file.click();file.onchange=async()=>{try{const plan=JSON.parse(await file.files[0].text());if(!plan.rest_authoring)throw Error('Choose a saved authoring skeleton');await win.kaminosWorkbenchExperiments.open('marionette/rest-skeleton',{plan});}catch(e){status.textContent=e.message;}finally{file.value='';}};
   files.append(save,open,file);properties.append(files);panel.textContent='Select the skeleton. Tab edits joints. The purple reference is a separate scene object.';
-  refresh=()=>{hint.textContent=error??(editMode?'Edit Mode · click joints · Shift-click adds · G / R / S · Tab returns to Object Mode':'Object Mode · G / R / S places the whole skeleton · Tab edits its joints');selection.hidden=options.hidden=!editMode;selection.textContent=selected.length===1?active:`${selected.length} joints · ${active}`;for(const input of options.querySelectorAll('input'))input.checked=input.dataset.restOption==='mirror'?mirror:descendants;};
+  const proportions=document.createElement('details'),proportionTitle=document.createElement('summary'),referenceChoice=document.createElement('select'),comparison=document.createElement('div'),proportionNote=document.createElement('p');
+  proportions.open=true;proportions.dataset.proportionAtlas='';proportionTitle.textContent='Proportions · reference comparison';proportions.append(proportionTitle);referenceChoice.setAttribute('aria-label','Reference skeleton');
+  if(atlas){for(const r of atlas.references){const o=document.createElement('option');o.value=r.id;o.textContent=r.label;referenceChoice.append(o);}referenceChoice.onchange=()=>{referenceChoice.blur();invoke('reference',{id:referenceChoice.value}).catch(e=>{proportionNote.textContent=e.message;});};proportions.append(referenceChoice,proportionNote,comparison);properties.append(proportions);}
+  const format=(v,unit)=>v===null?'—':unit==='degrees'?v.toFixed(1)+'°':v.toFixed(3);
+  refresh=()=>{hint.textContent=error??(editMode?'Edit Mode · click joints · Shift-click adds · G / R / S · Tab returns to Object Mode':'Object Mode · G / R / S places the whole skeleton · Tab edits its joints');selection.hidden=options.hidden=!editMode;selection.textContent=selected.length===1?active:`${selected.length} joints · ${active}`;for(const input of options.querySelectorAll('input'))input.checked=input.dataset.restOption==='mirror'?mirror:descendants;
+   if(atlas){const measurement=measureProportionAtlas(plan,atlas),r=measurement.references.find(r=>r.id===atlas.activeReference);referenceChoice.value=r.id;proportionNote.textContent='Rest geometry only · not motion support. '+(measurement.status==='partial'||r.comparison.reference.status==='partial'?'Partial correspondence; — means unmeasured. ':'')+r.label+' · '+r.source.sha256.slice(0,8);comparison.replaceChildren();
+    const table=document.createElement('table');table.style.cssText='width:100%;font-size:11px;border-collapse:collapse';const head=document.createElement('tr');for(const label of ['Measure','Yours','Reference','Δ']){const th=document.createElement('th');th.textContent=label;th.style.textAlign=label==='Measure'?'left':'right';head.append(th);}table.append(head);
+    const order=['shoulderWidth','hipWidth','shoulderHipRatio','foreReach','hindReach','foreHindRatio','foreProximalFraction','hindProximalFraction','foreBend','hindBend','foreAsymmetry','hindAsymmetry'];
+    for(const id of order){const row=r.comparison.rows.find(x=>x.id===id);if(!row)continue;const tr=document.createElement('tr');tr.dataset.proportion=id;tr.style.background=editMode&&selected.some(n=>row.joints.includes(n))?'#ad6b162b':'';const delta=row.unit==='degrees'?row.delta===null?'—':(row.delta>=0?'+':'')+row.delta.toFixed(1)+'°':row.relativeDelta===null?'—':(row.relativeDelta>=0?'+':'')+(row.relativeDelta*100).toFixed(0)+'%';for(const [i,label]of [row.label,format(row.candidate,row.unit),format(row.reference,row.unit),delta].entries()){const td=document.createElement('td');td.textContent=label;td.style.cssText='padding:3px 2px;text-align:'+(i?'right':'left');tr.append(td);}table.append(tr);}comparison.append(table);
+    const missing=[...measurement.candidate.missing,...r.comparison.reference.missing];if(missing.length){const note=document.createElement('p');note.textContent=missing.join('; ');comparison.append(note);}
+   }
+  };
   controlSeat=host.controls.mountObject({asset,properties,playback});refresh();
  }};
 }
