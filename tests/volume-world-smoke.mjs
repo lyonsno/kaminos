@@ -18,3 +18,11 @@ test('world storage stays anchored when the fine domain moves',()=>{
 test('invalid requested resolution fails rather than silently using another field',()=>{
   for(const options of [{flow:0},{material:3.5},{extent:1},{flow:32,material:16}])assert.throws(()=>worldSmokePlan(options));
 });
+test('every admitted fine height has exterior storage beyond its outlet',()=>{
+  for(const ratio of [1,1.5,2,3,4])for(const extent of [2,3,4,6]){
+    const p=worldSmokePlan({flow:16,material:32,extent,fineHeightRatio:ratio});
+    assert.ok(p.max[1]>=2*ratio-1+extent, `ratio ${ratio}, extent ${extent}`);
+    assert.equal(p.flowDims[1]*p.flowPitch,p.max[1]-p.min[1]);
+    assert.equal(p.materialDims[1]*p.materialPitch,p.max[1]-p.min[1]);
+  }
+});
