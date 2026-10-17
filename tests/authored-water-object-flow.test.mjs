@@ -59,3 +59,13 @@ q.activeSceneObjectId=row.id;q.updateWaterSourceGuides();guide(.75);
 const flows=Array.from({length:5},(_,i)=>createLocalLiquidEmitterSceneRecord({id:'flow'+i,transform:{position:[0,1,0],rotation:[0,0,0],scale:[1,1,1]}}));
 c.sceneObjects=flows;c.localLiquidEmitterRecords=()=>flows;c.LOCAL_LIQUID_EMITTER_CAPACITY=5;
 const beforeDuplicates=created.length;assert.throws(()=>c.duplicateSceneObject('flow0'),/capacity/);assert.equal(created.length,beforeDuplicates);
+
+// Initial particle/guide materials are preview state, never saved water
+// settings. Restoring an older scene can apply its legacy opacity to both.
+const serializer={THREE,LOCAL_LIQUID_EMITTER_TYPE,CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',structuredClone,
+ sceneObjectMetadataFor:o=>o.userData.kaminosSceneObject,sceneObjectTransformState:q.sceneObjectTransformState,canCollideWithFire:()=>false};
+vm.createContext(serializer);for(const name of ['getMaterialStateForObject','serializeSceneObject']){const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a);vm.runInContext(html.slice(a,b+2),serializer);}
+const savedPreview=()=>JSON.parse(JSON.stringify(serializer.serializeSceneObject(row)));
+row.object.traverse(o=>{if(o.material)o.material.opacity=.55;});const beforeDraft=savedPreview();
+row.object.children.find(o=>o.userData.kaminosWaterSourceGuide).material.opacity=.7;
+assert.deepEqual(savedPreview(),beforeDraft,'Transient preview replacement must not change the serialized authored scene');

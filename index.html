@@ -25285,7 +25285,8 @@ function serializeSceneObject(entry) {
     createdAt: metadata.createdAt ?? entry.createdAt,
     transform: entry.type === 'splat' ? splatSceneTransformState(entry) : sceneObjectTransformState(object),
     sceneTransform: entry.type === 'splat' ? splatSceneTransformState(entry) : null,
-    materials: getMaterialStateForObject(object),
+    // Finite source geometry is a transient initial-particle/guide preview.
+    materials: entry.type===LOCAL_LIQUID_EMITTER_TYPE&&(metadata.localLiquidEmitter??entry.localLiquidEmitter)?.mode==='finite_drop'?null:getMaterialStateForObject(object),
     splat: metadata.splat ?? entry.splat ?? null,
     image: metadata.image ?? entry.image ?? null,
     ...((metadata.generation ?? entry.generation)?{generation:structuredClone(metadata.generation ?? entry.generation)}:{}),
