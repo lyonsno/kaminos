@@ -42,6 +42,9 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
  function play(){active();if(status==='restored')seek(0);if(status==='held')return read();if(status!=='playing'){startedAt=now();startedFrame=frame;status='playing';refresh();dirty();}return read();}
  function pause(){active();if(status==='restored')return read();status=frame===adapter.frames-1?'held':'paused';startedAt=null;refresh();dirty();return read();}
  function replay(){seek(0);return play();}
+ // Show the frame already displayed again (e.g. after a pose overlay changed)
+ // without changing frame, status or the caller's action state.
+ function represent(){active();if(status!=='restored')apply(frame);return read();}
  function restore(){active();const pose={actorMatrix:initial.actor,bones:initial.bones.map(b=>({name:b.name,parent:runtime.bones.get(b.name).parent?.isBone?runtime.bones.get(b.name).parent.name:null,localMatrix:b.matrix}))};assign(group,posePresentation?posePresentation.apply(pose):initial.actor);for(const b of initial.bones)assign(runtime.bones.get(b.name),b.matrix);group.updateMatrixWorld(true);original.call(runtime);status='restored';frame=0;startedAt=null;expected=matrices();error=null;refresh();dirty();return read();}
  function tick(timestamp=now()){
   if(disposed)return false;
@@ -66,5 +69,5 @@ export function attachGivenPalettePlayback({THREE,runtime,adapter,source,documen
   }
  }
  try{apply(0);}catch(failure){panel.remove();throw failure;}
- return Object.freeze({read,seek,play,pause,replay,restore,tick,dispose(){if(disposed)return;let restored=false;try{if(mounted()&&!edited()){restore();restored=true;}}finally{disposed=true;status='disposed';startedAt=null;panel.remove();}return {restored};}});
+ return Object.freeze({read,seek,play,pause,replay,restore,represent,tick,dispose(){if(disposed)return;let restored=false;try{if(mounted()&&!edited()){restore();restored=true;}}finally{disposed=true;status='disposed';startedAt=null;panel.remove();}return {restored};}});
 }

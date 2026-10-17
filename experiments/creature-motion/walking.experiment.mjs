@@ -265,8 +265,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    }),
    attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
     // While not playing no frame will come to clear or apply the turn: show
-    // the current source frame again, without moving time or playback state.
-    const shown=player.read();if(shown.status!=='playing'&&shown.frame!==null){if(wander)presentWander(0,false);else player.seek(shown.frame);host.scene.refreshPresentation?.(asset);}
+    // the displayed source frame again without touching Wander or time.
+    if(player.read().status!=='playing'){player.represent();host.scene.refreshPresentation?.(asset);}
     return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };

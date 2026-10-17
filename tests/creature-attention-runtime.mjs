@@ -65,5 +65,24 @@ try{
  assert.ok(q.angleTo(new THREE.Quaternion())<1e-9,'head returns to the unmodified source orientation');
  assert.ok(creature.inspect().vertices.some((v,i)=>Math.abs(v-turnedVertices[i])>1e-6),'the deformed body follows');
  await creature.dispose();
+
+ // Wander: switching attention while held at the final frame keeps that exact
+ // frame and action state; with the area removed the turn still clears.
+ const wanderer=await createWalkingCreature({host,inputs:{...inputs,action:'wander',play:false}},dependencies);
+ const actionState=()=>{const r=wanderer.read();return {status:r.playback.status,frame:r.playback.frame,cycle:r.cycle,motion:JSON.stringify(r.action.motion)};};
+ wanderer.operations.seek({frame:frames-1});const held=actionState(),heldHead=wanderer.inspect().boneWorld.find(b=>b.name==='head').matrix;
+ wanderer.operations.attention({enabled:false});
+ assert.deepEqual(actionState(),held,'toggling attention at a held Wander endpoint keeps frame, status, cycle and path');
+ assert.deepEqual(wanderer.inspect().boneWorld.find(b=>b.name==='head').matrix,heldHead,'the held source sample is unchanged');
+ wanderer.operations.attention({enabled:true});
+ wanderer.operations.play();for(let i=0;i<45;i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}
+ assert.ok(wanderer.read().attention.weight>.8,`wandering attention blended in (${wanderer.read().attention.weight})`);
+ wanderer.operations.pause();
+ scene.getObjectByName('Wander area').removeFromParent();
+ const turnedWhileHeld=wanderer.inspect().boneWorld.find(b=>b.name==='head').matrix,before=actionState();
+ wanderer.operations.attention({enabled:false});
+ assert.deepEqual(actionState(),before,'removed area: action state unchanged');
+ assert.ok(wanderer.inspect().boneWorld.find(b=>b.name==='head').matrix.some((v,i)=>Math.abs(v-turnedWhileHeld[i])>1e-6),'removed area: disabling still clears the turn');
+ await wanderer.dispose();
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}
 console.log('Attention uses the applied cast profile and clears its turn when switched off while paused');
