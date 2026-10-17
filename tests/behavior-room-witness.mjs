@@ -8,4 +8,7 @@ const state={running:false,zones:[{id:'yard',label:'Yard',transform:t,mounted:tr
 api.validateBehaviorRoom(state,setup);
 for(const mutate of [s=>s.zones=[],s=>s.zones[0].mounted=false,s=>s.actors[0].places[0].enabled=false,s=>s.actors[0].active=false,s=>s.running=true,s=>s.actors[0].state.skin.bones=28,s=>s.actors[0].state.deformation.effective='cpu-reference',s=>s.actors[0].state.source.motionSha256='stale']){const wrong=structuredClone(state);mutate(wrong);assert.throws(()=>api.validateBehaviorRoom(wrong,setup));}
 api.validateBehaviorRoom({...state,newField:123},setup);
+assert.equal(typeof api.validateRendererConsole,'function','Renderer-rejected visible output can silently pass the witness');
+assert.throws(()=>api.validateRendererConsole([{type:'error',text:'THREE.Renderer: Objects of type THREE.LineLoop are not supported.'}]),/Renderer/);
+api.validateRendererConsole([{type:'warning',text:'Optional adapter information unavailable'}]);
 console.log('Missing/stale/shared-world and source/backend false closure rejected; additive state remains compatible');
