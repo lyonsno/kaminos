@@ -324,8 +324,12 @@ function admitSurface(vertices,faces){
 // onProgress, if given, sees {kind,...,elapsedSeconds} as the work happens:
 // entered, simplify-iteration, cleanup-step, and pass (each receipt trace row).
 // simplifier: an engine from wasm-simplify.js loadSimplifier, or undefined for the JS port.
-export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onProgress,simplifier}={}){
+// order: 'simplify-first' (the accepted finisher route, default) or 'cleanup-first'
+// (generate.py's general path: clean, then coarse/final simplify, then clean),
+// which repairs non-manifold edges before any collapse.
+export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,keepLargest=false,onProgress,simplifier,order='simplify-first'}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive targetFaces required');
+  if(order!=='simplify-first'&&order!=='cleanup-first')throw TypeError("order must be 'simplify-first' or 'cleanup-first'");
   admitSurface(vertices,faces);
   const started=performance.now(),emit=onProgress?e=>onProgress({...e,elapsedSeconds:(performance.now()-started)/1000}):()=>{};
   const onPass=row=>emit({kind:'pass',...row});
@@ -333,7 +337,7 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
   const onIteration=operation=>(iteration,faces)=>emit({kind:'simplify-iteration',operation,iteration,faces});
   emit({kind:'entered',inputVertices:vertices.length/3,inputFaces:faces.length/3});
   let v=vertices,f=faces;const trace=[];
-  if(f.length/3<=targetFaces){
+  if(order==='cleanup-first'||f.length/3<=targetFaces){
     // Source falls through to its general path: cleanup without winding
     // repair, then decisions on the resulting count (hole filling can lift it
     // over the target). Every later cleanup keeps the already-filtered parts.
@@ -378,10 +382,11 @@ export function cleanupAndSimplifyPreservingSurface(vertices,faces,{targetFaces,
 // thread. Either way the input arrays are copied, never detached from the caller.
 // simplifier: 'auto' (Wasm where relaxed-SIMD multiply-adds fuse, else the JS
 // port) or 'js'; the receipt records which one ran.
-export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress,simplifier='auto'}={}){
+export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,WorkerClass,signal,onProgress,simplifier='auto',order='simplify-first'}={}){
   if(!Number.isSafeInteger(targetFaces)||targetFaces<1)throw RangeError('positive caller-selected targetFaces required');
   if(onProgress!==undefined&&typeof onProgress!=='function')throw TypeError('onProgress must be a function');
   if(simplifier!=='auto'&&simplifier!=='js')throw TypeError("simplifier must be 'auto' or 'js'");
+  if(order!=='simplify-first'&&order!=='cleanup-first')throw TypeError("order must be 'simplify-first' or 'cleanup-first'");
   // An observer that throws is the caller's problem, never the finisher's.
   const observe=onProgress&&(e=>{try{onProgress(e);}catch{}});
   if(WorkerClass!==undefined&&typeof WorkerClass!=='function')throw TypeError('WorkerClass must be a Worker constructor');
@@ -390,14 +395,14 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
     admitSurface(mesh.vertices,mesh.triangles); // before copying, so nothing is coerced
     const vertices=Float32Array.from(mesh.vertices),triangles=Uint32Array.from(mesh.triangles);
     const data=await runFinishingWorker({WorkerClass,url:new URL('./mesh-cleanup-worker.js',import.meta.url),signal,label:'mesh finisher',
-      message:{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest,progress:!!observe,simplifier},transfer:[vertices.buffer,triangles.buffer],onProgress:observe});
+      message:{vertices:vertices.buffer,triangles:triangles.buffer,targetFaces,keepLargest,progress:!!observe,simplifier,order},transfer:[vertices.buffer,triangles.buffer],onProgress:observe});
     return {vertices:new Float32Array(data.vertices),faces:new Uint32Array(data.triangles),trace:data.trace,simplifier:data.simplifier};
   }:async mesh=>{
     // Synchronous on this thread: Stop is honoured before and after, not mid-call.
     if(signal?.aborted)throw abortError(signal);
     const {engine,route,reason}=await loadSimplifier({prefer:simplifier});
     if(signal?.aborted)throw abortError(signal);
-    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe,simplifier:engine??undefined});
+    const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe,simplifier:engine??undefined,order});
     if(signal?.aborted)throw abortError(signal);
     return {...result,simplifier:reason?{route,reason}:{route}};
   };
@@ -408,7 +413,7 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
       schema:'trellis2.mesh-postprocess.v0',status:'succeeded',requestedMode:'mlx-surface-preserving',
       effectiveRoute:MESH_POSTPROCESS_ROUTE,execution:WorkerClass?'module-worker':'caller-thread',
       parityReference:'TRELLIS2MLX 1201553 postprocess-retained-mesh.py mlx-surface-preserving',
-      modelCalls:0,targetFaces,keepLargest,inputVertices,inputFaces,outputVertices:result.vertices.length/3,
+      modelCalls:0,targetFaces,keepLargest,order,inputVertices,inputFaces,outputVertices:result.vertices.length/3,
       outputFaces:result.faces.length/3,operationTrace:result.trace,simplifier:result.simplifier,elapsedSeconds:(performance.now()-started)/1000}}};
   };
 }
