@@ -1,9 +1,12 @@
 import { REACTANT_COMBUSTION_WGSL, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { SOOT_BURNOUT_WGSL, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 // An independently allocated world field. Fine pressure is never read or written.
-export function worldSmokePlan({flow=16,material=32,extent=3}={}) {
-  if(!Number.isInteger(flow)||flow<2||!Number.isInteger(material)||material<flow||!Number.isFinite(extent)||extent<=1)throw Error('Invalid world smoke dimensions');
-  return {flowDims:[flow,2*flow,flow],materialDims:[material,2*material,material],flowCells:2*flow**3,materialCells:2*material**3,flowPitch:2*extent/flow,materialPitch:2*extent/material,min:[-extent,-extent,-extent],max:[extent,3*extent,extent],fineFeedback:false};
+export function worldSmokePlan({flow=16,material=32,extent=3,fineHeightRatio=2}={}) {
+  if(!Number.isInteger(flow)||flow<2||!Number.isInteger(material)||material<flow||!Number.isFinite(extent)||extent<=1||!Number.isFinite(fineHeightRatio)||fineHeightRatio<=0)throw Error('Invalid world smoke dimensions');
+  // Preserve cubic cells and the default field, while retaining at least one
+  // extent of headroom above every admitted fine outlet.
+  const height=Math.max(2,Math.ceil((2*fineHeightRatio-1+2*extent)/(2*extent)));
+  return {flowDims:[flow,height*flow,flow],materialDims:[material,height*material,material],flowCells:height*flow**3,materialCells:height*material**3,flowPitch:2*extent/flow,materialPitch:2*extent/material,min:[-extent,-extent,-extent],max:[extent,(2*height-1)*extent,extent],fineFeedback:false};
 }
 export function worldSmokeMapping(plan,anchor,fine){
   for(const t of [anchor,fine])if(!t.translate?.every(Number.isFinite)||!(t.scale>0))throw Error('Invalid world smoke transform');
@@ -88,7 +91,7 @@ fn clipped(p:vec3<f32>,q:vec3<f32>)->vec3<f32>{
  for(var a=0u;a<3u;a++){
  let p=center+vec3<f32>(axis(a))*.5*u.flow.w;let back=clipped(p,p-velocity(p)*u.time.y);v[a]=velocity(back)[a];
  if(a==1u){v[a]+=gas(p).a.y*u.time.z*u.time.x;}
- if(donor(p)){var o=vec3<f32>(.5);o[a]=1;v[a]=fineSlot(p,0u,o)[a]*2.0/u.near.x*u.mapping.w;}
+ if(donor(p)){var o=vec3<f32>(.5);if(u.near.w>.5){o[a]=1;}v[a]=fineSlot(p,0u,o)[a]*2.0/u.near.x*u.mapping.w;}
  if(blocked(c)||blocked(c+axis(a))){v[a]=0;}
  }vout[idx(c,u.flow.xyz)]=vec4<f32>(v,0);
 }
@@ -139,10 +142,11 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid;
   const values=new Float32Array(44);
   return {optical,plan,anchor,
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,transform,time,reactant,physics,iterations=16,buoyancy=.002,solids=solidTexture??fallback}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,solids=solidTexture??fallback,collisionSource=null}){
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
+      if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
       const mapping=worldSmokeMapping(plan,anchor,transform);
-      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,0,...mapping.fineToField,...plan.min,0,time.dtScale,time.backtraceScale,buoyancy,0]);
+      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,0,time.dtScale,time.backtraceScale,buoyancy,0]);
       values.set(reactantCombustionUniformValues(reactant),24);
       // Diffusivity is in fine-local length units; scale to the anchored field.
       if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*mapping.fineToField[3]**2/plan.materialPitch**2;
@@ -155,7 +159,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
       for(let i=0;i<iterations;i++){run('pressure',plan.flowDims);p=1-p;}
       run('project',plan.flowDims);v=1-v;
       run('transportMaterial',plan.materialDims);m=1-m;steps++;
-      return {identity:'world-smoke-one-way-v0',steps,flowDims:plan.flowDims,materialDims:plan.materialDims,anchor,pressureIterations:iterations,fineFeedback:false,materialLaw:reactant?.effective?.admitted?'reactant-v0':'passive-authored',handoff:'interior-overwrite-not-conservative-flux',collision:'coarse-resident-mask',worldAnchored:true};
+      return {identity:'world-smoke-one-way-v0',steps,flowDims:plan.flowDims,materialDims:plan.materialDims,anchor,pressureIterations:iterations,fineVelocityMode,fineFeedback:false,materialLaw:reactant?.effective?.admitted?'reactant-v0':'passive-authored',handoff:'interior-overwrite-not-conservative-flux',collision:solids===fallback?'empty-fallback':'coarse-resident-mask',collisionSource:solids===fallback?null:collisionSource,collisionVerification:solids===fallback?'empty-by-construction':'submitted-unverified',worldAnchored:true};
     },
     destroy(){for(const x of [...flows,...materials,...pressures,uniform,optical,fallback])x?.destroy();groups.clear();}
   };

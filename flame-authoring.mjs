@@ -203,7 +203,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
     const world=readWorldRuntime();
-    worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
+    worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw} · ${world.collision==='empty-fallback'?'no collision mask':'GPU collisions (unverified occupancy)'}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
     const pressure=readPressureRuntime();
     pressureStatus.textContent=!pressure||pressure.requested!==byId('volume-pressure-resolution').value?'Pressure choice awaiting simulation step'
       : pressure.dispatched?`${pressure.pressureDims.join('×')} pressure · ${pressure.materialDims.join('×')} material. Transport and reaction remain fine.`

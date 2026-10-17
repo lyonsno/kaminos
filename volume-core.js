@@ -12329,7 +12329,7 @@ export function createKaminosVolumePrototype({
       return;
     }
     let plan;
-    try {plan=worldSmokePlan({flow:Number(controlsSnapshot.worldSmokeFlow??16),material:Number(controlsSnapshot.worldSmokeMaterial??32),extent:Number(controlsSnapshot.worldSmokeExtent??3)});}
+    try {plan=worldSmokePlan({flow:Number(controlsSnapshot.worldSmokeFlow??16),material:Number(controlsSnapshot.worldSmokeMaterial??32),extent:Number(controlsSnapshot.worldSmokeExtent??3),fineHeightRatio:gridHeight/gridSize});}
     catch(error){device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));state.worldSmoke={requested,effective:'off',reason:error.message};return;}
     const key=JSON.stringify(plan);
     if(!worldSmoke||worldSmokeKey!==key){
@@ -12338,15 +12338,17 @@ export function createKaminosVolumePrototype({
       worldSmoke=createWorldSmoke(device,plan,{translate:[...productTransform.translate],scale:productTransform.scale});worldSmokeKey=key;
       rebuildFluidBindGroups();
     }
-    const source=getSceneCollision?.();let solids;
+    const source=getSceneCollision?.();let solids,collisionSource=null;
     if(source?.requested&&source.object){
       const a=worldSmoke.anchor;
-      worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
-      worldSolidProducer.encode(encoder);solids=worldSolidProducer.texture;
+      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
+      // An empty producer has no presentation dispatch. Never reuse its last
+      // nonempty texture after the last collision object has been removed.
+      if(produced.triangleCount>0){worldSolidProducer.encode(encoder);solids=worldSolidProducer.texture;collisionSource={revision:produced.revision,members:produced.members,backend:produced.backend};}
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],transform:productTransform,time,reactant:state.reactantCombustion,physics,solids})};
+    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,solids,collisionSource})};
     const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
   }
