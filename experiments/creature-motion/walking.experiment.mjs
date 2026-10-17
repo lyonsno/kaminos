@@ -179,9 +179,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   placement.name=inputs.label??'Creature';
   asset=await session.attach(placement,{owned:true,metadata:{fileName:placement.name,source:inputs.case,label:placement.name}});
   player=makePlayer();
-  let loadedSkin=null;
-  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:async input=>(loadedSkin=await loadSkin(input)),onApplied:state=>{
-   if(attention&&loadedSkin){attention.setProfile(deriveHeadProfile({skin:loadedSkin,frame:data.frame}));attentionSkin=loadedSkin.source.caseSha256;}
+  // Keep each loaded skin with its own request so a superseded load that
+  // finishes late cannot supply the muzzle profile for the applied cast.
+  const loadedSkins=new Map();
+  if(inputs.choices?.length)skinSelection=createSkinCaseSelection({runtime,choices:inputs.choices,currentCaseSha256:data.source.caseSha256,loadCase:async input=>{const loaded=await loadSkin(input);loadedSkins.set(input.case_sha256,loaded);return loaded;},onApplied:state=>{
+   const applied=loadedSkins.get(state.current.case_sha256);loadedSkins.clear();
+   if(attention&&applied){attention.setProfile(deriveHeadProfile({skin:applied,frame:data.frame}));attentionSkin=applied.source.caseSha256;}
    chosenInputs={...chosenInputs,case:state.current.case,case_sha256:state.current.case_sha256};source.caseSha256=state.current.case_sha256;
    host.scene.refreshPresentation?.(asset);session.redraw();refresh();
   }});
@@ -260,7 +263,11 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      throw error;
     }
    }),
-   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};return read();}),
+   attention:operation('attention',input=>{if(!attention)throw Error('This creature has no attention setup');if(typeof input?.enabled!=='boolean')throw Error('Attention enabled must be boolean');attention.setEnabled(input.enabled);chosenInputs={...chosenInputs,attention:{...chosenInputs.attention,enabled:input.enabled}};
+    // While not playing no frame will come to clear or apply the turn: show
+    // the current source frame again, without moving time or playback state.
+    const shown=player.read();if(shown.status!=='playing'&&shown.frame!==null){if(wander)presentWander(0,false);else player.seek(shown.frame);host.scene.refreshPresentation?.(asset);}
+    return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
   if(inputs.mode!==undefined&&!wander)operations.mode({mode:inputs.mode});
