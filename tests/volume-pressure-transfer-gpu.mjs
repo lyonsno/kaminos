@@ -1,4 +1,4 @@
-// Explicit native conformance witness, invoked through Greenroom.
+// kaminos-test: manual — needs explicit served worktree, independent browser and Greenroom admission
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {execFileSync} from 'node:child_process';
