@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {loadRestEditorInput} from '../experiments/creature-motion/rest-skeleton.experiment.mjs';
 import {run} from '../scripts/skeleton-proportions.mjs';
 import {measureSkeleton,compareSkeletons,referenceJoints,validateProportionAtlas} from '../experiments/creature-motion/skeleton-proportions.mjs';
 const fixture=()=>({joints:[
@@ -34,6 +36,13 @@ test('comparison preserves paired features and reports signed relative deltas, n
  const a=measureSkeleton(s,profile()),b=measureSkeleton(fixture(),profile()),r=compareSkeletons(a,b),width=r.rows.find(x=>x.id==='shoulderWidth');assert.equal(width.delta,1);assert.equal(width.relativeDelta,1);assert.equal(r.valid,undefined);
  const partial=fixture();partial.joints=partial.joints.filter(j=>j.name!=='Lwrist');const p=compareSkeletons(measureSkeleton(partial,profile()),b);assert.equal(p.rows.find(x=>x.id==='foreReach').candidate,null);
 });
+test('bilateral near-zero differences use absolute fraction differences, not inflated relative percentages',()=>{
+ const m=measureSkeleton(fixture(),profile());assert.equal(m.features.find(f=>f.id==='foreAsymmetry').unit,'fraction');const r=compareSkeletons(m,m);assert.equal(r.rows.find(x=>x.id==='foreAsymmetry').relativeDelta,null);
+});
+test('terminal foot direction changes are measured even when lengths and proximal bends are unchanged',()=>{
+ const s=fixture(),p=profile();for(const side of ['L','R']){const wrist=s.joints.find(j=>j.name===side+'wrist');s.joints.push({name:side+'toe',parent:wrist.name,head:[wrist.head[0],wrist.head[1],5]});p.fore[side==='L'?'left':'right'].push(side+'toe');}
+ const before=values(measureSkeleton(s,p));for(const j of s.joints)if(j.name.endsWith('toe'))j.head[2]=3;const after=values(measureSkeleton(s,p));assert.equal(after.foreReach,before.foreReach);assert.equal(before.foreFootForward,0);assert.equal(after.foreFootForward,180);
+});
 test('degenerate trunk and malformed correspondence fail visibly',()=>{
  const s=fixture();s.joints[1].head=[0,0,0];assert.throws(()=>measureSkeleton(s,profile()),/trunk/i);
  const p=profile();p.fore.left=['Lshoulder'];assert.throws(()=>measureSkeleton(fixture(),p),/chain/i);
@@ -43,7 +52,17 @@ test('malformed reference parents, duplicate sample ids and missing source ident
  const reference={id:'r',label:'r',source:{path:'synthetic',sha256:'a'.repeat(64)},jointNames:fixture().joints.map(j=>j.name),parents:fixture().joints.map(j=>j.parent?fixture().joints.findIndex(x=>x.name===j.parent):-1),positions:fixture().joints.flatMap(j=>j.head),profile:profile()};
  const atlas={schema:'kaminos.skeleton-proportion-atlas.v1',profile:profile(),activeReference:'r',references:[reference,reference]};assert.throws(()=>validateProportionAtlas(atlas,fixture()),/atlas/i);atlas.references=[{...reference,source:null}];assert.throws(()=>validateProportionAtlas(atlas,fixture()),/identity/i);
 });
-test('file tool retains effective input identity and a failure report before primary measurement',()=>{
+test('file tool retains effective input identity and a failure report before primary measurement',async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'kaminos-proportions-')),input=path.join(root,'input.json'),out=path.join(root,'report.json');
- try{fs.writeFileSync(input,'{');assert.equal(run({input,out}).status,'failed');assert.equal(JSON.parse(fs.readFileSync(out)).phase,'read');fs.writeFileSync(input,JSON.stringify(fixture()));const report=run({input,out});assert.equal(report.status,'unsupported');assert.equal(report.inputSha256.length,64);assert.equal(report.route,'deterministic-rest-origin-measurements');}finally{for(const file of [input,out])fs.unlinkSync(file);fs.rmdirSync(root);}
+ try{fs.writeFileSync(input,'{');assert.equal((await run({input,out})).status,'failed');assert.equal(JSON.parse(fs.readFileSync(out)).phase,'read');fs.writeFileSync(input,JSON.stringify(fixture()));const report=await run({input,out});assert.equal(report.status,'failed');assert.equal(report.phase,'resolve');assert.equal(report.inputSha256.length,64);assert.equal(report.route,'deterministic-rest-origin-measurements');}finally{for(const file of [input,out])fs.unlinkSync(file);fs.rmdirSync(root);}
+});
+test('file tool resolves the same digested plan and recipe forms as the editor, with explicit wrong-digest failures',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'kaminos-proportion-inputs-')),input=path.join(root,'input.json'),out=path.join(root,'report.json'),hash=s=>createHash('sha256').update(s).digest('hex'),plan={...fixture(),schema:'kaminos.complete-creature-joints.v0'};
+ for(const j of plan.joints){j.tail=j.head.map((v,k)=>v+(k===1?1:0));j.matrix=[[1,0,0,j.head[0]],[0,1,0,j.head[1]],[0,0,1,j.head[2]],[0,0,0,1]];}
+ const reference={id:'r',label:'r',source:{path:'synthetic',sha256:'a'.repeat(64)},jointNames:fixture().joints.map(j=>j.name),parents:fixture().joints.map(j=>j.parent?fixture().joints.findIndex(x=>x.name===j.parent):-1),positions:fixture().joints.flatMap(j=>j.head),profile:profile()},atlas={schema:'kaminos.skeleton-proportion-atlas.v1',profile:profile(),activeReference:'r',references:[reference]},planText=JSON.stringify(plan),inline={plan,baseline_sha256:hash(planText),display_matrix:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],proportion_atlas:atlas},recipeText=JSON.stringify(inline);
+ const fetchImpl=async url=>new Response(String(url).endsWith('recipe')?recipeText:planText);
+ try{const saved=(await loadRestEditorInput(inline,{fetchImpl})).plan;for(const value of [inline,saved,{...inline,plan:undefined,plan_url:'https://fixture.invalid/plan',plan_sha256:hash(planText)},{recipe:'https://fixture.invalid/recipe',recipe_sha256:hash(recipeText)}]){
+  fs.writeFileSync(input,JSON.stringify(value));const loaded=await loadRestEditorInput(value.rest_authoring?{plan:value}:value,{fetchImpl}),report=await run({input,out,fetchImpl});assert.equal(report.status,'measured');assert.deepEqual(report.measurement.candidate,measureSkeleton(loaded.plan,loaded.proportionAtlas.profile));
+ }for(const value of [{...inline,plan:undefined,plan_url:'https://fixture.invalid/plan',plan_sha256:'f'.repeat(64)},{recipe:'https://fixture.invalid/recipe',recipe_sha256:'f'.repeat(64)}]){fs.writeFileSync(input,JSON.stringify(value));const report=await run({input,out,fetchImpl});assert.equal(report.status,'failed');assert.equal(report.phase,'resolve');assert.match(report.error,/digest mismatch/i);}}
+ finally{for(const file of [input,out])fs.unlinkSync(file);fs.rmdirSync(root);}
 });
