@@ -11,7 +11,6 @@ export function organizeFireRenderingPanel(document) {
   moveRow('rendering-shared-gain');
   moveRow('rendering-surface-gain');
   moveRow('rendering-source-softness');
-  moveRow('rendering-match-flame-camera');
   heading('Smoke lighting');
   panel.append(document.querySelector('label[for="rendering-angular-samples"]'),document.getElementById('rendering-angular-samples'));
   panel.append(document.getElementById('rendering-fire-shadows'));

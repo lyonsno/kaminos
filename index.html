@@ -871,10 +871,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="env-grid" id="env-buttons"></div>
 
     <div class="slider-row" style="margin-top: 10px;">
-      <span class="slider-label">Exposure</span>
+      <label class="slider-label" for="exposure-slider" id="scene-exposure-label">Exposure</label>
       <input type="range" id="exposure-slider" min="0.2" max="4" step="0.1" value="1.1">
       <span class="slider-val" id="exposure-val">1.1</span>
     </div>
+    <label class="import-mode" id="scene-match-flame-camera-row"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera</span></label>
     <div class="slider-row">
       <span class="slider-label">Env Intensity</span>
       <input type="range" id="env-intensity-slider" min="0.1" max="5" step="0.1" value="0.7">
@@ -3453,7 +3454,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <label for="rendering-angular-pattern">Angular pattern</label><select id="rendering-angular-pattern"><option value="fixed">Fixed constellation (baseline)</option><option value="spatial">Stable spatial jitter (experimental)</option><option value="source">Source-aware progressive (experimental)</option><option value="guided">Emitter-informed progressive (experimental)</option></select>
         <p class="rendering-description" id="rendering-source-guide-status" hidden>Stable authored emitter envelope plus full-volume coverage. Sampling weights change, not source energy.</p>
         <p class="rendering-description" id="rendering-angular-cache">First visit prepares visibility. Retention uses extra GPU memory; geometry edits invalidate every set. Only the selected set runs each frame.</p>
-        <label class="import-mode"><input type="checkbox" id="rendering-match-flame-camera"><span>Match flame camera on scene (experimental)</span></label>
         <p class="rendering-description" id="rendering-camera-status">Off: scene uses its existing camera transform. Matching applies the flame's white balance, EV and highlight shoulder to the whole mesh scene, including environment and rim light; source energy is unchanged.</p>
         <div class="slider-row"><label class="slider-label" for="rendering-source-softness">Lighting source softness</label><input type="range" id="rendering-source-softness" min="0" max="16" step="1" value="0"><span class="slider-val" id="rendering-source-softness-value">0</span></div>
         <p class="rendering-description">Artistic lighting-source redistribution. Zero is unfiltered. Spreading emission while keeping extinction fixed can increase escaped light and reduce flicker; this is not brightness-neutral reconstruction. Visible flame and saved settings are unchanged.</p>
@@ -3524,7 +3524,7 @@ import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
-import { createSceneEmissiveCamera, applySceneEmissiveCamera } from './scene-emissive-camera.mjs';
+import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
 import { pass, mrt, normalView, positionViewDirection, vec2, vec3, vec4, mix, float, uniform, texture, pmremTexture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, viewportUV, screenUV, builtinAOContext, step, floor, mod, getViewPosition, cameraProjectionMatrixInverse, cameraWorldMatrix, Fn, agxToneMapping } from 'three/tsl';
 import { configureMaterialSideAODepth } from './scene-ao-depth.mjs';
 import { createSceneGI } from './scene-gi.mjs';
@@ -4022,6 +4022,7 @@ function escapeHtml(s) {
 
 // --- State ---
 let scene, camera, renderer, controls, pmremGenerator, transformControls;
+let sceneExposureControls=null;
 let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
@@ -12208,6 +12209,7 @@ async function initScene() {
     updateSelectionFeedback();
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
+    sceneExposureControls?.sync();
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
       const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
@@ -12434,7 +12436,7 @@ function normalizeEnvironmentRecipes(recipes = {}) {
 }
 
 function readEnvironmentRecipe() {
-  return Object.fromEntries(Object.entries(environmentRecipeFields).map(([key,id]) => [key, Number(document.getElementById(id).value)]));
+  return Object.fromEntries(Object.entries(environmentRecipeFields).map(([key,id]) => [key, key==='exposure'&&sceneExposureControls?sceneExposureControls.read().independent:Number(document.getElementById(id).value)]));
 }
 
 function rememberEnvironmentRecipe() {
@@ -12453,6 +12455,7 @@ function applyEnvironmentRecipe(recipe) {
     label.textContent = recipe[key].toFixed(2);
   }
   renderer.toneMappingExposure = recipe.exposure;
+  sceneExposureControls?.sync();
   scene.environmentIntensity = recipe.intensity;
   scene.environmentRotation = new THREE.Euler(0, recipe.rotation, 0);
   updateBackground();
@@ -22695,6 +22698,11 @@ function installAuthoringParameterEditing() {
   }
   for(const id of ['fire-light-gain-stops','exposure-slider','env-intensity-slider','env-rotation-slider','env-bg-brightness','env-bg-contrast']) {
     const control=document.getElementById(id);if(!control)continue;
+    if(id==='exposure-slider') {
+      bind('@parameter:exposure-slider',{controls:[control,document.getElementById('rendering-match-flame-camera')],label:'Adjust scene camera',
+        read:()=>sceneExposureControls.read(),write:state=>sceneExposureControls.write(state),check:state=>sceneExposureControls.check(state)});
+      continue;
+    }
     bind(`@parameter:${id}`,{controls:[control],label:`Adjust ${id}`,read:()=>({value:Number(control.value)}),
       write:state=>{control.value=state.value;control.dispatchEvent(new Event('input',{bubbles:true}));},
       check:state=>{if(!Number.isFinite(state.value)||state.value<Number(control.min)||state.value>Number(control.max))throw Error('Parameter is outside its supported range');return {value:state.value};}});
@@ -22731,11 +22739,11 @@ function installAuthoringParameterEditing() {
 }
 
 // --- Exposure / Intensity Controls ---
-document.getElementById('exposure-slider').addEventListener('input', e => {
-  const v = parseFloat(e.target.value);
-  renderer.toneMappingExposure = v;
-  document.getElementById('exposure-val').textContent = v.toFixed(1);
-  window._kaminosDirty?.();
+sceneExposureControls=bindSceneExposureControls({
+  exposure:document.getElementById('exposure-slider'),flame:document.getElementById('volume-physical-exposure'),
+  match:document.getElementById('rendering-match-flame-camera'),label:document.getElementById('scene-exposure-label'),output:document.getElementById('exposure-val'),
+  readIndependent:()=>renderer?.toneMappingExposure??1.1,
+  writeIndependent:value=>{if(renderer)renderer.toneMappingExposure=value;},redraw:()=>window._kaminosDirty?.(),
 });
 
 document.getElementById('env-intensity-slider').addEventListener('input', e => {
