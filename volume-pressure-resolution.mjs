@@ -1,5 +1,10 @@
 // First separation checkpoint: material/forces/transport keep their grid;
 // only pressure is restricted. This is not a coarse dynamics implementation.
+export function pressureProfileWindows(t) {
+  if(t.length!==4 || t.some(v=>v<=0n) || t.some((v,i)=>i>0 && v<t[i-1]))return null;
+  return {mainThroughProjectionUs:Number(t[3]-t[0])/1000,afterMainThroughProjectionUs:Number(t[3]-t[1])/1000};
+}
+
 export function pressureResolutionPlan({ dims, mode = 'off', solver = 'converged', inflow = false, joined = false } = {}) {
   if (!Array.isArray(dims) || dims.length !== 3 || !dims.every(n => Number.isInteger(n) && n > 0)) throw Error('Invalid material dimensions');
   const divisor = mode === 'half' ? 2 : 1;

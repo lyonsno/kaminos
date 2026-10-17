@@ -1,6 +1,6 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
-import { pressureResolutionPlan, createPressureTransfer } from './volume-pressure-resolution.mjs';
+import { pressureResolutionPlan, createPressureTransfer, pressureProfileWindows } from './volume-pressure-resolution.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
 import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
@@ -18342,11 +18342,13 @@ export function createKaminosVolumePrototype({
       await readbackBuffer.mapAsync(GPUMapMode.READ);
       const t = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
       readbackBuffer.unmap();
-      const simSamples = [], projSamples = [];
+      const simSamples = [], projSamples = [], spanSamples = [], afterMainSamples = [];
       for (let step = 0; step < steps; step += 1) {
         const a = t[step * 4], b = t[step * 4 + 1], c = t[step * 4 + 2], d = t[step * 4 + 3];
         if (a !== 0n && b !== 0n && b >= a) simSamples.push(Number(b - a) / 1000);
         if (c !== 0n && d !== 0n && d >= c) projSamples.push(Number(d - c) / 1000);
+        const windows=pressureProfileWindows([a,b,c,d]);
+        if(windows){spanSamples.push(windows.mainThroughProjectionUs);afterMainSamples.push(windows.afterMainThroughProjectionUs);}
       }
       // Order statistics, not only the mean: GPU clock ramps and background
       // work skew the mean; the median and the minimum are what two arms in
@@ -18363,6 +18365,11 @@ export function createKaminosVolumePrototype({
       profile.validProjectionSteps = projSamples.length;
       profile.simPass = stats(simSamples);
       profile.projection = stats(projSamples);
+      profile.mainThroughProjection = stats(spanSamples);
+      profile.afterMainThroughProjection = stats(afterMainSamples);
+      profile.windowScope = 'GPU elapsed intervals: main kernel through final projection/prolong; excludes preceding transport predictor, collision rebuild and all rendering. After-main includes force pass, injection, pressure and transfer; not pressure-exclusive.';
+      profile.timestampsNs = Array.from(t,String);
+      profile.pressureResolution = structuredClone(state.pressureResolution);
       profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;
       profile.projectionMicrosecondsPerStep = profile.projection?.mean ?? null;
       profile.grid = [gridSize, gridHeight, gridSize];
