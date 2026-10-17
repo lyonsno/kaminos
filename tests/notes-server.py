@@ -43,6 +43,18 @@ PAGE = {"via": "page", "pageId": "page-aaaaaaaa", "source": SOURCE}
 CLI = {"via": "cli", "source": SOURCE}
 
 
+def scene_id_contracts(notes):
+    with tempfile.TemporaryDirectory() as tmp:
+        a = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        b = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        # A note names the scene it was written in by id; its replies keep it.
+        placed = a.post({"kind": "note", "text": "this beam", "anchor": {"kind": "scene"}, "subject": {"scene": None, "sceneId": "scene-aaaaaaaaaaaaaaaa"}}, origin=PAGE)
+        assert placed["subject"]["sceneId"] == "scene-aaaaaaaaaaaaaaaa", placed["subject"]
+        answer = b.post({"kind": "note", "text": "on it", "parent": placed["id"], "author": "sub-pilot"}, origin=CLI)
+        assert answer["subject"]["sceneId"] == "scene-aaaaaaaaaaaaaaaa", answer["subject"]
+        expect_error(notes, 400, "request", lambda: a.post({"kind": "note", "text": "x", "anchor": {"kind": "scene"}, "subject": {"sceneId": 7}}, origin=PAGE))
+
+
 def log_contracts(notes):
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "notes"
@@ -574,6 +586,7 @@ def point_anchor_contracts(notes):
 if __name__ == "__main__":
     notes = load_notes()
     log_contracts(notes)
+    scene_id_contracts(notes)
     follow_up_contracts(notes)
     participant_contracts(notes)
     point_anchor_contracts(notes)

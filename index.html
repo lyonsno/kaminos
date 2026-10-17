@@ -3773,7 +3773,7 @@ import {
 } from './motion-core.js';
 import {
   SCENE_SCHEMA,
-  buildSceneDocument,
+  buildSceneDocument, mintSceneId,
   isReloadableSceneObjectRecord,
   planSceneRestore,
 } from './scene-persistence-core.js';
@@ -4160,6 +4160,8 @@ let glbFileName = 'model.glb';
 let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
+// The open scene's own identity, saved with it; null while a load is replacing the scene.
+let currentSceneId = mintSceneId();
 let activeSceneComposition = null;
 let authoringBusy = false;
 // Set while the agent vantage borrows the viewport camera for a picture.
@@ -5717,6 +5719,7 @@ function captureAuthoredSceneStateForPreview() {
     sceneSelection:structuredClone(sceneSelection),
     currentMesh,
     currentSceneFile,
+    currentSceneId,
     sceneSaveBlockedByFailedRestore,
     volumePrimitives: getVolumePrimitiveState(),
     modelSourceUrl,
@@ -6553,6 +6556,7 @@ async function restoreAuthoredSceneFromPreview(options = {}) {
   activeSceneObjectId = authored.activeSceneObjectId;
   activeSceneGroupId = authored.activeSceneGroupId;
   currentSceneFile = authored.currentSceneFile;
+  currentSceneId = authored.currentSceneId;
   sceneSaveBlockedByFailedRestore = authored.sceneSaveBlockedByFailedRestore;
   modelSourceUrl = authored.modelSourceUrl;
   modelSourceType = authored.modelSourceType;
@@ -12337,7 +12341,7 @@ async function initScene() {
         linkedNote:pageQuery.get('note')??new URLSearchParams(location.hash.slice(1)).get('note'),ready:()=>workbenchViewerReady,
         avatarOf:name=>window.kaminosAgentVantage?.avatarOf?.(name)??null,avoid:()=>[document.getElementById('agent-vantage-hud')],ownView:viewportOwnForNotes,
         pickAt:at=>window.kaminosAgentVantage?.run?.('pick',{from:'operator',at})??null,pickCanvas:()=>renderer.domElement,selectionToken:()=>sceneSelection,
-        recheck:anchor=>window.kaminosAgentVantage?.run?.('recheck',anchor)??null,sceneLoad:()=>sceneLoadRequests.current()});
+        recheck:anchor=>window.kaminosAgentVantage?.run?.('recheck',anchor)??null,sceneId:()=>currentSceneId});
       window.kaminosNotes={pageId:notes.pageId,open:notes.open,compose:notes.compose,session:notes.session};
     }catch(error){console.error('Notes unavailable',error);}
   }
@@ -12494,7 +12498,8 @@ function applyEnvMap(envMap, intensity) {
 
 // --- File Loading ---
 function clearScene({loadRequestId = null} = {}) {
-  if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) sceneLoadRequests.invalidate();
+  // Cleared outside a load, this is a new scene.
+  if (loadRequestId === null || !sceneLoadRequests.isCurrent(loadRequestId)) { sceneLoadRequests.invalidate(); currentSceneId = mintSceneId(); }
   authoringControlSessions.forEach(session => session.cancel());
   sceneControlHistory?.cancel();
   scenePlacementTools?.clear();
@@ -25649,6 +25654,7 @@ function buildSceneData(capture = null) {
   const provenance = provenanceForSource(activeObject?.source || modelSourceUrl);
 
   const data = buildSceneDocument({
+    sceneId: currentSceneId ??= mintSceneId(),
     timestamp: new Date().toISOString(),
     objects,
     groups: serializeSceneGroups(),
@@ -27020,6 +27026,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location)));
     return;
   }
+  // From here the open scene is being replaced: it has no identity until the load settles.
+  currentSceneId = null;
   if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
   activeSceneComposition = restorePlan.composition;
   if(restorePlan.fireDomain)writeKilnCollisionState({enabled:restorePlan.fireDomain.simulation.collision});
@@ -27239,6 +27247,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
 
   if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
   claimLoadedSceneFile(file, sceneFile);
+  currentSceneId = restorePlan.sceneId || mintSceneId();
   if (data.label) document.getElementById('composition-label').value = data.label;
   if (activeSceneComposition) {
     const gain = document.getElementById('fire-light-gain-stops');
