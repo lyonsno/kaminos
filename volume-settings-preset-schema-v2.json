@@ -1,7 +1,11 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 260,
+  "controlCount": 264,
   "controls": [
+    {"key":"volume-world-smoke","param":"volume_world_smoke","tagName":"SELECT","type":"select-one","additiveDefault":"off","allowedValues":["off","on"],"additiveSinceControlCount":261},
+    {"key":"volume-world-smoke-flow","param":"volume_world_smoke_flow","tagName":"SELECT","type":"select-one","additiveDefault":"16","allowedValues":["8","16","24","32"],"additiveSinceControlCount":262},
+    {"key":"volume-world-smoke-material","param":"volume_world_smoke_material","tagName":"SELECT","type":"select-one","additiveDefault":"32","allowedValues":["16","32","48","64"],"additiveSinceControlCount":263},
+    {"key":"volume-world-smoke-extent","param":"volume_world_smoke_extent","tagName":"SELECT","type":"select-one","additiveDefault":"3","allowedValues":["2","3","4","6"],"additiveSinceControlCount":264},
     {
       "key": "volume-pressure-resolution",
       "param": "volume_pressure_resolution",

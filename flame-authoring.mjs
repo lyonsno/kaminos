@@ -67,6 +67,10 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', open:true, scope:'Grid changes restart the fluid. Raymarch controls tune the viewport.', fields:[
     ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-resolution','Pressure grid (experimental)'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-render-scale','Screen resolution (%)'],
+    ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Wavelet octaves'], ['volume-wavelet-strength','Wavelet strength'],
+  ] },
+  { name:'World smoke', open:true, scope:'One-way, world-anchored field. Changing its dimensions resets only this field; fine pressure stays independent. Material width must be ≥ flow width.', fields:[
+    ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
   ] },
   { name:'Appearance', open:true, scope:'Shared flame and smoke appearance', fields:[
     ['volume-physical-temperature','Temperature'], ['volume-physical-spread','Temperature spread'],
@@ -114,7 +118,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readControlBounds = () => null, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readControlBounds = () => null, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   sharedHost.append(basin);
@@ -145,6 +149,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   const aliases=[], emissionRows=[];
   const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
   const pressureStatus=document.createElement('p');pressureStatus.className='flame-scope';pressureStatus.id='selected-pressure-resolution-status';pressureStatus.setAttribute('role','status');
+  const worldStatus=document.createElement('p');worldStatus.className='flame-scope';worldStatus.id='selected-world-smoke-status';worldStatus.setAttribute('role','status');
   for(const group of FLAME_PROPERTY_GROUPS) {
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
@@ -190,12 +195,15 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     }
     if(group.name==='Emission')section.append(runtimeStatus);
     if(group.name==='Quality')section.append(pressureStatus);
+    if(group.name==='World smoke')section.append(worldStatus);
     if(group.name==='Quality')sharedHost.insertBefore(section,sharedHost.querySelector('.flame-domain-controls')||basin);
     else (group.name==='Emission'?host:sharedHost).append(section);
   }
   const more=document.createElement('button');more.type='button';more.className='btn';more.textContent='All controls in Workbench';more.onclick=openWorkbench;sharedHost.append(more);
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
+    const world=readWorldRuntime();
+    worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
     const pressure=readPressureRuntime();
     pressureStatus.textContent=!pressure||pressure.requested!==byId('volume-pressure-resolution').value?'Pressure choice awaiting simulation step'
       : pressure.dispatched?`${pressure.pressureDims.join('×')} pressure · ${pressure.materialDims.join('×')} material. Transport and reaction remain fine.`
