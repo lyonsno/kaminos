@@ -94,6 +94,15 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // A look cut short before the prop is inspected: coming back to it is not a first sight.
+ const c=creature(),point=[1,.5,-2.6];
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'brazier',point,interest:1}]});
+ let {t}=watch(attention,c,.8,0);turnAway(c,Math.PI);({t}=watch(attention,c,4,t));turnAway(c,0);
+ const w=watch(attention,c,6,t);
+ assert.deepEqual(looks(w.rows).map(l=>l.cause),['back to it'],`an unfinished look resumes as such (${JSON.stringify(looks(w.rows))})`);
+}
+
+{
  // Familiarity fades over minutes: a long absence makes the prop worth a look again.
  const c=creature(),point=[1,.5,-2.6];
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,forgetSeconds:20},interests:()=>[{id:'brazier',point,interest:1}]});
