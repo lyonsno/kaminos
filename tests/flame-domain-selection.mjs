@@ -7,7 +7,7 @@ import * as THREE from '../lib/three.core.js';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 test('visible domain edge click selects field after emitter editing',()=>{
- const ctx={performance,polyEdit:null,vantageCaptureHeld:false,viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:null,
+ const ctx={isSceneItemVisible:()=>true,performance,polyEdit:null,vantageCaptureHeld:false,viewportSuppressedClick:null,viewportPointerDown:null,transformGizmoDragging:false,transformControls:null,
  viewportEventHitsInteractiveOverlay:()=>false,viewportEventIsInsideCanvas:()=>true,greenroomPreviewIsActive:()=>false,
  pickFlameDomainFromViewportPointer:()=>true,pickSceneObjectFromViewportPointer:()=>null,
  selected:'flame-emitter',setActiveSceneObject(id){ctx.selected=id;},clearActiveSceneObjectSelection(){ctx.selected=null;},setInfo(){},
@@ -17,8 +17,8 @@ test('visible domain edge click selects field after emitter editing',()=>{
  assert.equal(ctx.selected,'flame-field');
 });
 test('domain outline remains visible after unrelated selection, but respects helper hiding',()=>{
- const ctx={THREE,scene:{},activeSceneComposition:{},flameDomainGuide:{box:new THREE.Box3()},selectionCaptureSuspended:false,viewportHelpersVisible:true,
- viewportDisplay:{domains:true,domainOpacity:.82},styleHelperLines(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:null,flameDomainDraft:null,flameDomainProxy:null,
+ const ctx={isSceneItemVisible:()=>true,THREE,scene:{},activeSceneComposition:{},flameDomainGuide:{box:new THREE.Box3()},selectionCaptureSuspended:false,viewportHelpersVisible:true,
+ viewportDisplay:{domains:true,domainOpacity:.82},styleHelperLines(){},styleSimulationDomainGuide(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:null,flameDomainDraft:null,flameDomainProxy:null,
  acceptedFlameDomainPose:()=>({position:[0,1,0],scale:[1,1,1]}),domainTransformForPose:()=>({translation:[0,0,0],scale:1}),document:{getElementById:()=>null},window:{}};
  vm.createContext(ctx);vm.runInContext(grab('flameDomainTopY')+grab('refreshFlameDomainPreview'),ctx);ctx.refreshFlameDomainPreview();
  assert.equal(ctx.flameDomainGuide.visible,true);ctx.window.__kaminosVolumeGridDimensions=[32,96,32];ctx.refreshFlameDomainPreview();assert.deepEqual(ctx.flameDomainGuide.box.max.toArray(),[1,5,1],'outline follows actual tall grid bounds');
@@ -45,7 +45,7 @@ test('outline picking uses a fixed pixel margin, leaves interior free, and rejec
  assert.equal(pointerHitsBoxOutline(crossing,camera,{x:200,y:200},viewport),false);
 });
 test('hidden domain outline cannot intercept viewport input',()=>{
- const ctx={activeSceneComposition:{},flameDomainGuide:{visible:false},selectionCaptureSuspended:false,viewportHelpersVisible:true,
+ const ctx={isSceneItemVisible:()=>true,activeSceneComposition:{},flameDomainGuide:{visible:false},selectionCaptureSuspended:false,viewportHelpersVisible:true,
  renderer:{},camera:{},pointerHitsBoxOutline(){throw Error('hidden helper was picked');}};
  vm.createContext(ctx);vm.runInContext(grab('pickFlameDomainFromViewportPointer'),ctx);
  assert.equal(ctx.pickFlameDomainFromViewportPointer({clientX:0,clientY:0}),false);

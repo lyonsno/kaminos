@@ -1,4 +1,5 @@
-export const DEFAULT_VIEWPORT_DISPLAY=Object.freeze({overlays:true,gizmos:true,outlines:true,bounds:false,helpers:true,bones:true,paths:false,domains:true,emitters:true,hints:true,outlineWidth:1.5,outlineOpacity:1,domainWidth:1,domainOpacity:.82,emitterWidth:1,emitterOpacity:.55,shading:'solid',water:'full',fire:'full',quality:'full'});
+import {checkedHiddenIds} from './scene-visibility.mjs';
+export const DEFAULT_VIEWPORT_DISPLAY=Object.freeze({overlays:true,gizmos:true,outlines:true,bounds:false,helpers:true,bones:true,paths:false,domains:true,emitters:true,hints:true,outlineWidth:1.5,outlineOpacity:1,domainWidth:1,domainOpacity:.82,emitterWidth:1,emitterOpacity:.55,shading:'solid',water:'full',fire:'full',quality:'full',hiddenIds:Object.freeze([])});
 export const VIEWPORT_SHADING_MODES=Object.freeze(['solid','wireframe']);
 export const VIEWPORT_WATER_DISPLAYS=Object.freeze(['full','proxy']);
 export const VIEWPORT_FIRE_DISPLAYS=Object.freeze(['full','proxy']);
@@ -18,6 +19,7 @@ export function checkedViewportDisplay(value={}) {
  if(!VIEWPORT_WATER_DISPLAYS.includes(result.water))throw Error('Invalid viewport water display');
  if(!VIEWPORT_FIRE_DISPLAYS.includes(result.fire))throw Error('Invalid viewport fire display');
  if(!VIEWPORT_QUALITY_MODES.includes(result.quality))throw Error('Invalid viewport quality');
+ result.hiddenIds=checkedHiddenIds(result.hiddenIds);
  return result;
 }
 // Explicit editor helpers only: never toggle the creature, actual Bone tree,

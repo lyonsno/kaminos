@@ -3579,7 +3579,7 @@ let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
-let flameDomainGuide = null;
+let flameDomainGuide = null, localLiquidDomainGuide = null;
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
 let flameDomainDraft = null, flameDomainProxy = null;
@@ -3924,6 +3924,7 @@ import {
   measureFingerFluidParticleAllocationCapacity,
   evaluateFingerFluidParticleAllocationRequest,
   resolveFingerFluidWaterfallOraclePreset,
+  fingerFluidAnalyticalSupportGeometry,
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -3931,7 +3932,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
-import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { SceneTransformControls as TransformControls } from './scene-transform-gizmo.mjs';
 import {clone as cloneSceneObjectHierarchy} from 'three/addons/utils/SkeletonUtils.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
@@ -3950,6 +3951,9 @@ import { installSceneControlHistory, installRelativeNumberDrag } from './scene-c
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
+import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import { installCommandSearch } from './scene-command-search.mjs';
+import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
 import {createCameraViews,cameraViewsMatch,checkedCameraView} from './scene-camera-views.mjs';
 import {installCameraViewsPanel} from './authoring-camera-views.mjs';
 import {CAMERA_TYPE,CAMERA_SOURCE,checkedCameraRecord,cameraViewFromRecord,createSceneCameras} from './scene-camera.mjs';
@@ -4048,11 +4052,23 @@ let viewportGizmosVisible=true;
 let viewportDisplay=checkedViewportDisplay();
 let selectionFeedback=null,selectionCaptureSuspended=false,viewportBoundsVisible=false,authoringAssets=null,authoringAssetsUI=null,authoringGenerator=null,authoringImageGenerator=null,authoringImageUI=null,authoringForegroundHandoff=null,authoringTrellisGenerator=null,authoringMeshModel=null,authoringGenerateLayout=null,authoringBrowseLayout=null;
 function attachViewportGizmo(target) {
+  if(window.kaminosSceneVisibility&&readSceneSelection().ids.some(id=>!isSceneItemVisible(id))){transformControls.detach();return;}
   if(selectionTransforms&&sceneSelection.ids.length&&!splatCorrectionMode&&selectedSceneObjectEntry()?.type!=='splat')target=selectionTransformProxy();
   transformControls.attach(target);
   transformControls.getHelper().visible=viewportGizmosVisible;
   transformControls.enabled=viewportGizmosVisible;
 }
+// Visibility owns this selection change inside its existing edit transaction;
+// reuse the graph-write guard so changing the target cannot cancel that edit.
+function restoreVisibilitySelection(ids,activeId){
+ const previous=burnerGraphWriting;burnerGraphWriting=true;
+ try{return setSceneSelection(ids,activeId);}finally{burnerGraphWriting=previous;}
+}
+function viewportVisibilityObjects(){
+ return [...sceneObjects,...Array.from(sceneSpotLights,([id,{light}])=>({id,object:light}))];
+}
+function sceneVisibilityContext(){return {objects:sceneObjects,groups:sceneGroups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(localLiquidSetup?[{id:'water-field'}]:[])]};}
+function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function syncViewportDisplayControls() {
  for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
@@ -4116,7 +4132,7 @@ window.kaminosProxyPreview={layer:PROXY_LAYER,layers:{water:PROXY_LAYER,fire:FIR
 // disposal need no extra hooks.
 let waterProxy=null;
 function syncWaterProxy() {
- const host=localLiquidHost,display=viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
+ const host=localLiquidHost,display=isSceneItemVisible('water-field')&&viewportDisplay.water==='proxy'&&!!host,wanted=display||(!!host&&proxyRequirements.has('water'));
  camera?.layers[display?'enable':'disable'](PROXY_LAYER);
  if(waterProxy&&waterProxy.host!==host){waterProxy.producer.dispose();waterProxy.unsubscribe?.();waterProxy.layer?.dispose();proxySnapshots.clear('water');waterProxy=null;}
  if(host&&!waterProxy){
@@ -4133,7 +4149,8 @@ function syncWaterProxy() {
   waterProxy.unsubscribe=proxySnapshots.subscribe('water',snapshot=>{layer.setSnapshot(snapshot);window._kaminosDirty?.();},{replayLatest:true});
  }
  if(waterProxy&&!wanted&&waterProxy.layer){waterProxy.unsubscribe();waterProxy.layer.dispose();waterProxy.layer=null;waterProxy.unsubscribe=null;}
- if(host&&host.presentation!==(display?'proxy':'full'))host.setPresentation(display?'proxy':'full');
+ const mode=!isSceneItemVisible('water-field')?'hidden':display?'proxy':'full';
+ if(host&&host.presentation!==mode)host.setPresentation(mode);
  if(waterProxy?.layer){waterProxy.layer.mesh.visible=true;waterProxy.layer.update({simTimeS:(host.interfaceRecordDescriptor()?.writeTick??0)/60});}
 }
 // Fire proxy: heat-block splats on their own layer stand in for the flame in
@@ -4144,7 +4161,7 @@ window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n)
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
- fireProxySync.sync({prototype:volumePrototype,display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
+ fireProxySync.sync({prototype:volumePrototype,visible:isSceneItemVisible('flame-field'),display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),camera,layerId:FIRE_PROXY_LAYER,
   canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
@@ -5363,6 +5380,7 @@ function updateHybridSplatOverlayFrame() {
   const handle = hybridSplatOverlayState.handle;
   const record = selectedSplatRecord(hybridSplatOverlayState.objectId);
   if (!handle || !record?.object || !camera) return null;
+  document.getElementById('hybrid-splat-overlay-host').style.visibility=isSceneItemVisible(record.id)?'':'hidden';
   camera.updateMatrixWorld?.();
   record.object.updateMatrixWorld?.(true);
   const visualRoot = splatVisualRootFor(record.object) || record.object;
@@ -5873,11 +5891,11 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
     if (previous && previous !== FLAME_EMITTER_ID) setActiveSceneObject(previous);
   }
   refreshFlameDomainPreview();
-  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   if (entry) updateFlameEmitterSupportOutline(THREE, entry.object,
     window.__kaminosVolumeEmitterReceipt?.requested);
   if(entry&&Object.hasOwn(metadata,'emissionEnabled')){entry.emissionEnabled=metadata.emissionEnabled!==false;entry.object.userData.kaminosSceneObject.emissionEnabled=entry.emissionEnabled;}
-  if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
+  if (entry) {applySceneObjectTransformState(entry.object, flameEmitterPose);styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});entry.object.visible=isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;}
   return entry?.object || null;
 }
 
@@ -5910,10 +5928,10 @@ function refreshFlameDomainPreview() {
     flameDomainGuide.renderOrder = 1000;
     scene.add(flameDomainGuide);
   }
-  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const pose=flameDomainDraft||acceptedFlameDomainPose(),{translation,scale}=domainTransformForPose(pose);
   if(flameDomainGuide)flameDomainGuide.box.set(new THREE.Vector3(-scale,-scale,-scale).add(new THREE.Vector3(...translation)),new THREE.Vector3(scale,flameDomainTopY()*scale,scale).add(new THREE.Vector3(...translation)));
-  if(flameDomainGuide)styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});
+  if(flameDomainGuide)styleSimulationDomainGuide(flameDomainGuide,'flame-field');
   if(flameDomainProxy&&!transformControls?.dragging)applySceneObjectTransformState(flameDomainProxy,pose);
   for(const [key,value] of [['x',pose.position[0]],['y',pose.position[1]],['z',pose.position[2]],['scale',pose.scale[0]]]){const input=document.getElementById('flame-domain-'+key);if(input&&document.activeElement!==input)input.value=String(value);}
   const size=document.getElementById('flame-domain-size');if(size)size.textContent=`World size ${[2,flameDomainTopY()+1,2].map(n=>Number((n*pose.scale[0]).toPrecision(3))).join(' × ')} · cell count unchanged`;
@@ -6931,16 +6949,16 @@ async function resetSelectedSplatCorrection() {
 
 function updateTransformInspector() {
   syncLevelingButton();
-  if (flameDomainGuide) flameDomainGuide.visible = !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
+  if (flameDomainGuide) flameDomainGuide.visible = isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains && viewportDisplay.domainOpacity>0;
   const inspector = document.getElementById('transform-inspector');
   const empty = document.getElementById('transform-inspector-empty');
   const fields = document.getElementById('transform-inspector-fields');
   if (!inspector || !empty || !fields) return;
   const entry = selectedPlacementEntry();
   sceneOwnerControls?.update();
-  inspector.dataset.selectedObjectId = entry?.id || '';
+  inspector.dataset.selectedObjectId = activeSceneFieldId || entry?.id || '';
   inspector.dataset.selectedGroupId = activeSceneGroupId || '';
-  inspector.dataset.selectionCount=String(sceneSelection.ids.length);
+  inspector.dataset.selectionCount=String(activeSceneFieldId?1:sceneSelection.ids.length);
   inspector.dataset.selectedFieldId=activeSceneFieldId||'';
   inspector.hidden=!!activeSceneFieldId;
   empty.hidden = !!entry;
@@ -7108,9 +7126,17 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
+const SCENE_OUTLINE_GLYPHS = {field:'◈', group:'▣', light:'✦', camera:'◉', [FLAME_EMITTER_TYPE]:'▲', [LOCAL_LIQUID_EMITTER_TYPE]:'▲'};
+function sceneVisibilityButton(id,label){const visible=isSceneItemVisible(id);return `<button type="button" class="scene-visibility-eye" data-scene-visibility-id="${escapeHtml(id)}" aria-label="${visible?'Hide':'Show'} ${escapeHtml(label)} in viewport" aria-pressed="${visible}" title="${visible?'Hide':'Show'} in viewport · H / Shift H / Alt H">${visible?'<svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 8Q10-4 19 8Q10 20 1 8Z"/><circle cx="10" cy="8" r="3"/></svg>':'<svg viewBox="0 0 20 16" aria-hidden="true"><path d="M1 8Q10-4 19 8Q10 20 1 8ZM2 1L18 15"/></svg>'}</button>`;}
+function sceneOutlineGlyph(kind) { return `<span class="scene-outline-glyph" aria-hidden="true">${SCENE_OUTLINE_GLYPHS[kind] || '◆'}</span>`; }
+function sceneOutlineToggle(row) {
+  if (!row?.childCount) return '<span class="scene-outline-toggle-space" aria-hidden="true"></span>';
+  return `<button type="button" class="scene-outline-toggle" data-outline-toggle="${escapeHtml(row.key)}" aria-expanded="${row.collapsed ? 'false' : 'true'}" title="${row.collapsed ? 'Expand' : 'Collapse'}">${row.collapsed ? '▸' : '▾'}</button>`;
+}
+function sceneOutlineAttributes(row) { return row ? ` data-outline-depth="${row.depth}" data-outline-key="${escapeHtml(row.key)}"` : ''; }
 function renderSceneObjectRow(record, options = {}) {
   const active = record.id === activeSceneObjectId;
-  const grouped = options.grouped ? ' grouped' : '';
+  const grouped = options.grouped && !options.outline ? ' grouped' : '';
   const rowClass = active ? `scene-object-row active${grouped}` : `scene-object-row${sceneSelectionMembers().includes(record.id)?' selected':''}${grouped}`;
   const label = sceneObjectDisplayLabel(record);
   const typeLabel = record.type || 'object';
@@ -7118,13 +7144,13 @@ function renderSceneObjectRow(record, options = {}) {
   const pausedFlame = record.type === FLAME_EMITTER_TYPE && flameEmitterInjectionSuspended;
   const source = record.id === RIM_LIGHT_ID ? 'saved scene light' : record.source || 'no source';
   return `
-    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-object-id="${escapeHtml(record.id)}"${sceneOutlineAttributes(options.outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
+        ${options.outline ? sceneOutlineToggle(options.outline) + sceneOutlineGlyph(record.type) : ''}<input class="scene-name-input scene-object-name" data-scene-object-name="${escapeHtml(record.id)}" value="${escapeHtml(label)}" aria-label="Object name" ${record.id === RIM_LIGHT_ID ? 'readonly' : ''}>
         <span class="scene-object-meta">${escapeHtml(typeLabel)} / ${escapeHtml(source)}</span>
       </span>
       <span class="scene-object-actions">
-        <span class="scene-object-chip">${escapeHtml(reloadability)}</span>
+        ${sceneVisibilityButton(record.id,label)}<span class="scene-object-chip">${escapeHtml(reloadability)}</span>
         ${pausedFlame ? '<span class="scene-object-chip paused">injection paused</span>' : ''}
         ${false ? '' : `<button type="button" class="scene-object-remove" data-scene-object-remove-id="${escapeHtml(record.id)}" title="Remove ${escapeHtml(label)}">×</button>`}
       </span>
@@ -7132,23 +7158,24 @@ function renderSceneObjectRow(record, options = {}) {
   `;
 }
 
-function renderSceneGroupRow(group) {
+function renderSceneGroupRow(group, outline = null) {
   const active = group.id === activeSceneGroupId;
   const rowClass = `scene-group-row ${active?'active':sceneSelection.ids.includes('@group:'+group.id)?'selected':''}`;
   const label = sceneGroupDisplayLabel(group);
   return `
-    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}" role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
+    <div class="${rowClass}" data-scene-group-id="${escapeHtml(group.id)}"${sceneOutlineAttributes(outline)} role="button" tabindex="0" aria-pressed="${active ? 'true' : 'false'}">
       <span>
-        <input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
+        ${outline ? sceneOutlineToggle(outline) + sceneOutlineGlyph('group') : ''}<input class="scene-name-input scene-group-name" data-scene-group-name="${escapeHtml(group.id)}" value="${escapeHtml(label)}" aria-label="Group name">
         <span class="scene-object-meta">${group.objectIds.length === 1 ? '1 object' : `${group.objectIds.length} objects`}</span>
       </span>
       <span class="scene-object-actions">
-        <span class="scene-object-chip">group</span>
+        ${sceneVisibilityButton('@group:'+group.id,label)}<span class="scene-object-chip">group</span>
       </span>
     </div>
   `;
 }
 
+const sceneOutlineCollapsed = new Set();
 function renderSceneObjectList() {
   updateAuthoringPropertySelection();
   refreshLocalLiquidPerformance();
@@ -7157,21 +7184,33 @@ function renderSceneObjectList() {
   if (!list || !empty) return;
   pruneSceneGroups();
   empty.style.display = sceneObjects.length ? 'none' : '';
-  const groupedIds = new Set(sceneGroups.flatMap(group => group.objectIds));
+  // The outliner is a tree: fields own their emitters, groups their members.
+  const fields = [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]].filter(([, , present]) => present).map(([id,label]) => ({id,label}));
+  const outline = visibleOutlineRows(buildSceneOutline({fields, groups: sceneGroups, objects: sceneObjects,
+    emitterFields: {[FLAME_EMITTER_TYPE]:'flame-field', [LOCAL_LIQUID_EMITTER_TYPE]:'water-field'}}), sceneOutlineCollapsed);
   const rows = [];
-  for(const [id,label,present] of [['flame-field','Fire & smoke',!!activeSceneComposition],['water-field','Water simulation',!!localLiquidSetup]])if(present)rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}" role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${label}</span><small>Simulation</small></div>`);
-  for (const group of sceneGroups) {
-    rows.push(renderSceneGroupRow(group));
-    for (const objectId of group.objectIds) {
-      const record = sceneObjects.find(entry => entry.id === objectId);
-      if (record) rows.push(renderSceneObjectRow(record, { grouped: true }));
+  for (const row of outline) {
+    if (row.kind === 'field') {
+      const {id,label} = fields.find(field => field.id === row.id);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><span class="scene-object-actions">${sceneVisibilityButton(id,label)}<small>Simulation</small></span></div>`);
+    } else if (row.kind === 'group') {
+      const group = sceneGroups.find(entry => entry.id === row.id);
+      if (group) rows.push(renderSceneGroupRow(group, row));
+    } else {
+      const record = sceneObjects.find(entry => entry.id === row.id);
+      if (record) rows.push(renderSceneObjectRow(record, { grouped: row.depth > 0, outline: row }));
     }
   }
-  for (const record of sceneObjects) {
-    if (!groupedIds.has(record.id)) rows.push(renderSceneObjectRow(record));
-  }
   list.innerHTML = rows.join('');
-  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
+  list.querySelectorAll('[data-scene-visibility-id]').forEach(button=>button.addEventListener('click',event=>{event.stopPropagation();const id=button.dataset.sceneVisibilityId;try{window.kaminosSceneVisibility.set(id,!isSceneItemVisible(id));list.querySelector(`[data-scene-visibility-id="${CSS.escape(id)}"]`)?.focus();}catch(error){setInfo(error.message);}}));
+  list.querySelectorAll('[data-outline-toggle]').forEach(button => button.addEventListener('click', event => {
+    event.stopPropagation();
+    const key = button.dataset.outlineToggle;
+    if (sceneOutlineCollapsed.has(key)) sceneOutlineCollapsed.delete(key); else sceneOutlineCollapsed.add(key);
+    renderSceneObjectList();
+    list.querySelector(`[data-outline-toggle="${CSS.escape(key)}"]`)?.focus();
+  }));
+  list.querySelectorAll('[data-scene-field-id]').forEach(row=>{row.onclick=()=>window.selectSceneField(row.dataset.sceneFieldId);row.onkeydown=e=>{if(e.target!==row)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();window.selectSceneField(row.dataset.sceneFieldId);}};});
   bindSceneHierarchyRows(list,{selectObject:window.selectSceneObject,selectGroup:window.selectSceneGroup,renameObject:renameSceneObject,renameGroup:renameSceneGroup});
   list.querySelectorAll('[data-scene-object-remove-id]').forEach(button => {
     button.addEventListener('click', event => {
@@ -7182,6 +7221,7 @@ function renderSceneObjectList() {
 }
 
 function clearActiveSceneObjectSelection() {
+  if(window.kaminosPolyEdit?.active())window.kaminosPolyEdit.exit();
   sceneSelection={ids:[],activeId:null};updateSelectionFeedback();
   if (!burnerGraphWriting) scenePlacementTools?.selectionChanged();
   if (splatCorrectionMode) exitSplatCorrectionMode({ revert: false, silent: true });
@@ -7198,6 +7238,7 @@ function clearActiveSceneObjectSelection() {
 }
 
 function setActiveSceneObject(id,options={}) {
+  if(id==='flame-field'||id==='water-field')return window.selectSceneField(id);
   if(!sceneObjects.some(o=>o.id===id)){clearActiveSceneObjectSelection();return;}
   if(splatCorrectionMode&&splatCorrectionMode.objectId!==id)exitSplatCorrectionMode({revert:false,silent:true});
   const next=changeSelection(sceneSelection,id,options);return setSceneSelection(next.ids,next.activeId);
@@ -7235,7 +7276,7 @@ function pickSceneObjectFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  const hits = sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible).map(record => record.object), true);
+  const hits = sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible&&isSceneItemVisible(record.id)).map(record => record.object), true);
   // Emitter symbols are drawn through geometry. Pick that same visible layer first.
   for(const hit of hits){const record=sceneObjectRecordForDescendant(hit.object);if(record?.object.visible&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type))return record;}
   for (const hit of hits) {
@@ -7261,6 +7302,7 @@ function handleViewportPointerDown(event) {
     x: event.clientX,
     y: event.clientY,
     pointerId: event.pointerId,
+    gizmo: !!(transformGizmoDragging || transformControls?.dragging || (transformControls?.enabled && transformControls.getHelper?.()?.visible && transformControls.axis)),
   };
 }
 
@@ -7276,7 +7318,7 @@ function handleViewportSelectionClick(event) {
     }
     viewportSuppressedClick = null;
   }
-  if (greenroomPreviewIsActive() || transformGizmoDragging || transformControls?.dragging) {
+  if (greenroomPreviewIsActive()) {
     viewportPointerDown = null;
     return;
   }
@@ -7291,22 +7333,30 @@ function handleViewportSelectionClick(event) {
     return;
   }
   const drift = Math.hypot(event.clientX - start.x, event.clientY - start.y);
-  if (drift > 5) {
+  if (event.type === 'pointerup' || drift > 5) {
     viewportSuppressedClick = {
       x: event.clientX,
       y: event.clientY,
       at: performance.now(),
     };
-    return;
   }
+  if (drift > 5 || start.gizmo || transformGizmoDragging || transformControls?.dragging) return;
 
+  const record = pickSceneObjectFromViewportPointer(event);
+  // Source symbols are drawn through the scene, including domain edges.
+  if(record&&[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(record.type)){
+    setActiveSceneObject(record.id,{extend:!!event.shiftKey});
+    setInfo(`Selected: ${record.label||record.id}`);window._kaminosDirty?.();return;
+  }
   if (pickFlameDomainFromViewportPointer(event)) {
     window.selectSceneField('flame-field');
     setInfo('Selected: Fire & smoke domain');
     window._kaminosDirty?.();
     return;
   }
-  const record = pickSceneObjectFromViewportPointer(event);
+  if (pickWaterDomainFromViewportPointer(event)) {
+    window.selectSceneField('water-field');window._kaminosDirty?.();return;
+  }
   if (record) {
     setActiveSceneObject(record.id,{extend:!!event.shiftKey});
     setInfo(`Selected: ${record.label || record.fileName || record.id}`);
@@ -7621,6 +7671,7 @@ function registerSceneObject(object, metadata = {}) {
 
 window.selectSceneField=function(id) {
   if(!['flame-field','water-field'].includes(id)||!(id==='flame-field'?activeSceneComposition:localLiquidSetup))throw Error('This simulation field is not present');
+  if(window.kaminosPolyEdit?.active())window.kaminosPolyEdit.exit();
   if(!burnerGraphWriting)scenePlacementTools?.selectionChanged();sceneSelection={ids:[],activeId:null};updateSelectionFeedback();activeSceneFieldId=id;activeSceneObjectId=null;activeSceneGroupId=null;currentMesh=null;
   transformControls?.detach();if(id==='flame-field'){currentMesh=flameDomainEditObject();if(transformControls){attachViewportGizmo(currentMesh);transformControls.setMode('translate');}}document.getElementById('transform-bar').classList.remove('visible');renderSceneObjectList();updateTransformInspector();
   refreshFlameDomainPreview();authoringWorkspace?.setContext('object');setInfo(id==='flame-field'?'Selected: Fire & smoke domain':'Selected: Water simulation');
@@ -7628,7 +7679,7 @@ window.selectSceneField=function(id) {
 
 window.selectSceneObject = function(id,options={}) {
   setActiveSceneObject(id,options);
-  if (currentMesh) {
+  if (currentMesh && !activeSceneFieldId) {
     const entry = sceneObjects.find(obj => obj.id === activeSceneObjectId);
     setInfo(`Selected: ${entry?.label || entry?.fileName || activeSceneObjectId}`);
     window._kaminosDirty?.();
@@ -11957,15 +12008,11 @@ async function initScene() {
   });
   initTransformInspector();
   const viewportEl = document.getElementById('viewport');
-  renderer.domElement.addEventListener('pointerdown', handleViewportPointerDown);
-  renderer.domElement.addEventListener('pointerup', handleViewportSelectionClick);
-  renderer.domElement.addEventListener('pointercancel', () => { viewportPointerDown = null; });
-  renderer.domElement.addEventListener('mousedown', handleViewportPointerDown);
-  renderer.domElement.addEventListener('click', handleViewportSelectionClick);
-  renderer.domElement.addEventListener('dblclick', handleViewportDoubleClick);
+  // One bubbling route handles each gesture. Its click is suppressed after
+  // pointerup, including a gizmo release, so selection cannot toggle twice.
   viewportEl.addEventListener('pointerdown', handleViewportPointerDown);
   viewportEl.addEventListener('pointerup', handleViewportSelectionClick);
-  viewportEl.addEventListener('mousedown', handleViewportPointerDown);
+  viewportEl.addEventListener('pointercancel', () => { viewportPointerDown = null; });
   viewportEl.addEventListener('click', handleViewportSelectionClick);
   viewportEl.addEventListener('dblclick', handleViewportDoubleClick);
   renderer.domElement.addEventListener('pointerdown', markDirty);
@@ -11988,11 +12035,11 @@ async function initScene() {
     camera,
     controls,
     gizmo: transformControls,
-    roots: () => [...sceneObjects.filter(entry => entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
+    roots: () => [...sceneObjects.filter(entry => isSceneItemVisible(entry.id) && entry.type !== 'splat' && entry.type!=='light' && entry.type!==CAMERA_TYPE).map(entry => entry.object),
       ...(currentMesh && !sceneObjects.some(entry => entry.object === currentMesh) ? [currentMesh] : [])],
     occluders: () => groundPlane ? [groundPlane] : [],
     navigationHook:{viewChange:()=>sceneCameras?.leave({continueFromCamera:true}),frameBounds:()=>sceneCameras?.frameBounds(),begin:mode=>sceneCameras?.beginNavigation(mode)??false,changed:()=>sceneCameras?.navigationChanged(),end:cancel=>sceneCameras?.endNavigation(cancel),wheelEnd:()=>sceneCameras?.wheelEnd(),frameLayout:()=>sceneCameras?.frameLayout(),restoreFrameLayout:value=>sceneCameras?.restoreFrameLayout(value),pan:(dx,dy)=>sceneCameras?.panFrame(dx,dy),zoom:factor=>sceneCameras?.zoomFrame(factor)},
-    frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects), camera, controls); if (framed) markDirty(); return framed; },
+    frameAll: () => { const framed = frameObjects(sceneObjectsForFraming(sceneObjects.filter(entry=>isSceneItemVisible(entry.id))), camera, controls); if (framed) markDirty(); return framed; },
     frameSelected: () => { const framed = frameAuthoredSelection(); if (framed) markDirty(); return framed; },
     blocked: () => !!viewPie?.state() || authoringBusy || vantageCaptureHeld || scenePlacementTools?.edits.state().active?.id==='@viewport-lens' || transformGizmoDragging || transformControls.dragging || splatCorrectionMode !== null,
     inputMode: () => navigationInput.value,
@@ -12129,11 +12176,65 @@ async function initScene() {
   viewPie=installViewPie({document,viewport:viewportEl,invoke:cameraViewAction,allowed:()=>!authoringBusy&&!vantageCaptureHeld&&!scenePlacementTools.edits.state().active&&!scenePlacementTools.edits.state().replaying,onError:error=>setInfo(error.message)});
   // Polygon Edit Mode (Tab) on the selected mesh object; the object tools above yield to it through polyEdit.active().
   polyEdit=installPolyEditMode({document,viewport:viewportEl,canvas:renderer.domElement,camera,setInfo,gizmo:transformControls,
-    objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible?record.object:null;},
+    objectFor:id=>{const record=sceneObjects.find(item=>item.id===id);return record?.object?.visible&&isSceneItemVisible(record.id)?record.object:null;},
     selectedId:()=>selectedSceneObjectEntry()?.id??null,
     blocked:()=>!!(viewPie?.state()||vantageCaptureHeld||authoringBusy||greenroomPreviewIsActive()||splatCorrectionMode||scenePlacementTools?.state().modal||scenePlacementTools?.edits.state().active),
     overlayHit:viewportEventHitsInteractiveOverlay,redraw:()=>window._kaminosDirty?.(),separate:separatePolySelection});
   window.kaminosPolyEdit=polyEdit.api;
+  const sceneCommandBlocked=()=>{
+      const edit=scenePlacementTools.edits.state();
+      if(authoringBusy||sceneSaveBlockedByFailedRestore)return 'Finish the scene document action first';
+      if(vantageCaptureHeld)return 'The agent sub is taking a picture';
+      if(edit.active||edit.replaying||scenePlacementTools.edits.isSettling())return 'Finish or cancel the current edit first';
+      if(transformGizmoDragging||transformControls.dragging||sceneNavigation.state().gesture||(controls.state??-1)!==-1)return 'Finish navigating or dragging first';
+      if(viewPie?.state()||polyEdit?.active())return 'Finish the view menu or leave polygon Edit Mode first';
+      if(window.kaminosSelection?.boxing?.())return 'Finish box selection first';
+      if(greenroomPreviewIsActive()||splatCorrectionMode)return 'Finish preview or correction first';
+      if(document.querySelector('.file-name-prompt,dialog[open],[aria-modal="true"]:not(#scene-command-search section)'))return 'Finish the open dialog first';
+      return null;
+  };
+  window.kaminosSceneVisibility=installSceneVisibility({document,viewport:viewportEl,outliner:document.getElementById('authoring-hierarchy'),edits:scenePlacementTools.edits,scene:sceneVisibilityContext,
+    readHidden:()=>viewportDisplay.hiddenIds,writeHidden:hiddenIds=>{viewportDisplay=checkedViewportDisplay({...viewportDisplay,hiddenIds});syncEditorHelperVisibility();},
+    selection:()=>{const value=readSceneSelection();return {ids:value.ids,activeId:value.activeId};},setSelection:restoreVisibilitySelection,
+    blocked:()=>polyEdit?.active()?'Leave Edit Mode to hide objects':sceneCommandBlocked(),changed:()=>{syncEditorHelperVisibility();renderSceneObjectList();updateSelectionFeedback();markDirty();},onError:error=>setInfo(error.message)});
+  window.kaminosCommandSearch=installCommandSearch({document,viewport:viewportEl,button:document.getElementById('authoring-search'),
+    blocked:sceneCommandBlocked,onError:error=>setInfo(error.message),commands:()=>{
+      const edits=scenePlacementTools.edits,state=edits.state(),selection=readSceneSelection();
+      const objectReason=()=>sceneSelection.ids.length?null:'Select an object first';
+      const duplicateReason=()=>objectReason()||(sceneSelectionMembers(selectedRootIds()).some(id=>!canDuplicateObject(sceneObjects.find(object=>object.id===id)))?'Independent duplication of simulation sources is unsupported':null);
+      const transformReason=()=>selectedPlacementEntry()?null:'Select an object or the Fire & smoke domain first';
+      const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
+      const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
+      const result=[
+        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        command('add.camera','Add','Camera',()=>addAuthoredCamera()),
+        command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
+        command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
+        command('add.fire','Add','Fire & Smoke',()=>openFirstFlameFieldDialog(),{aliases:['flame','emitter','volume','source','burner']}),
+        command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
+        ...[['translate','Move','G'],['rotate','Rotate','R'],['scale','Scale','S']].map(([mode,label,shortcut])=>command('transform.'+mode,'Transform',label,()=>{if(!scenePlacementTools.start(mode))throw Error('Could not start transform');},{shortcut,aliases:mode==='translate'?['translate','grab']:mode==='rotate'?['rotation','turn']:['resize','size'],disabled:transformReason})),
+        command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:duplicateReason}),
+        command('object.delete','Object','Delete',()=>removeSelectedSceneObjects(),{aliases:['remove'],disabled:objectReason}),
+        command('object.group','Object','Group Selection',()=>groupSelectedObjects(),{disabled:objectReason}),
+        command('object.ungroup','Object','Unparent Selection',()=>ungroupSelectedObjects(),{aliases:['ungroup','detach'],disabled:objectReason}),
+        command('selection.box','Select','Box Select',()=>window.kaminosSelection.box(),{shortcut:'B'}),
+        command('selection.all','Select','Select All',()=>window.kaminosSelection.all(),{shortcut:'A'}),
+        command('selection.clear','Select','Deselect All',()=>window.kaminosSelection.clear(),{aliases:['clear selection'],shortcut:'Alt A'}),
+        command('view.selected','View','Frame Selected',()=>cameraViewAction('selected'),{aliases:['focus','zoom selection'],shortcut:'F',disabled:selectedReason}),
+        command('view.all','View','Frame All',()=>{sceneCameras.leave();if(frameObjects(sceneObjectsForFraming(sceneObjects.filter(entry=>isSceneItemVisible(entry.id))),camera,controls))markDirty();},{aliases:['home'],shortcut:'Home'}),
+        ...[['front','Front','Numpad 1'],['back','Back','Ctrl Numpad 1'],['right','Right','Numpad 3'],['left','Left','Ctrl Numpad 3'],['top','Top','Numpad 7'],['bottom','Bottom','Ctrl Numpad 7']].map(([id,label,shortcut])=>command('view.'+id,'View',label,()=>cameraViewAction(id),{shortcut})),
+        command('history.undo','Edit','Undo',()=>edits.undo(),{shortcut:'⌘/Ctrl Z',disabled:()=>state.undoCount?null:'Nothing to undo'}),
+        command('history.redo','Edit','Redo',()=>edits.redo(),{shortcut:'⌘/Ctrl Shift Z',disabled:()=>state.redoCount?null:'Nothing to redo'}),
+        command('view.hide','View','Hide Selected',()=>window.kaminosSceneVisibility.hideSelected(),{shortcut:'H',disabled:selectedReason}),
+        command('view.isolate','View','Hide Unselected',()=>window.kaminosSceneVisibility.hideUnselected(),{shortcut:'Shift H',aliases:['isolate'],disabled:selectedReason}),
+        command('view.reveal','View','Show All Hidden',()=>window.kaminosSceneVisibility.showAll(),{shortcut:'Alt H',aliases:['unhide','reveal']}),
+        command('view.overlays','View','Toggle Overlays',()=>window.kaminosViewportSettings.set({overlays:!viewportDisplay.overlays}),{aliases:['helpers','outlines'],shortcut:'Shift Alt Z'}),
+        command('view.gizmos','View','Toggle Transform Gizmos',()=>window.kaminosViewportSettings.set({gizmos:!viewportDisplay.gizmos}),{aliases:['handles'],shortcut:'Ctrl ~'}),
+        command('document.save','Scene','Save',()=>window.saveScene(),{aliases:['file','composition']}),
+        command('document.open','Scene','Open Saved Scene…',()=>window.openSavedScene(),{aliases:['load','file','composition']}),
+      ];return result;
+    }});
+
   document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.repeat||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||authoringBusy||vantageCaptureHeld)return;if(event.code==='Numpad0'){event.preventDefault();event.stopImmediatePropagation();try{if((event.ctrlKey||event.metaKey)&&event.altKey)sceneCameras.align();else if(event.ctrlKey||event.metaKey){sceneCameras.setActive(selectedSceneObjectEntry()?.id);sceneCameras.enter();}else sceneCameras.toggle();}catch(error){setInfo(error.message);}}},true);
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-camera-properties'));
   scenePlacementTools.addHistoryScope(document.getElementById('authoring-viewport-settings'));
@@ -12215,7 +12316,7 @@ async function initScene() {
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
-    const shadingReceipt = renderWithViewportShading(() => {
+    const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
         try { localLiquidHost.render(); }
         catch (error) {
@@ -12228,7 +12329,7 @@ async function initScene() {
           setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
         }
       } else renderPipeline.render();
-    });
+    }));
     // Copy the surface records this frame's step wrote; queue order puts the
     // copy after the step.
     if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
@@ -12265,7 +12366,7 @@ async function initScene() {
     // Kiln composition already overlays the depth-clipped native canvas. Do
     // not upload that canvas back into the scene rendered by its depth provider.
     const fireProxyEffective = fireProxySync?.effective() ?? false;
-    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && volumeBridge ? volumeBridge.update() === true : false;
+    const volumeBridgeActive = !liquidFireCompositionActive && !fireLightFieldRouteActive && !isAuthoredKilnCollisionRoute() && !fireProxyEffective && isSceneItemVisible('flame-field') && volumeBridge ? volumeBridge.update() === true : false;
     const fireLightFieldActive = fireLightFieldPass ? fireLightFieldPass.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || fireLightFieldActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
     const localWaterActive = localLiquidHost && !localLiquidHost.paused;
@@ -12382,7 +12483,7 @@ async function initScene() {
       // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
       const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
           if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
-        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition?volumePrototype?.canvasElement?.()??null:null,document,label:'note'});};
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>setActiveSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
@@ -12557,6 +12658,7 @@ function clearScene({loadRequestId = null} = {}) {
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
+  if(localLiquidDomainGuide){scene.remove(localLiquidDomainGuide);disposeObjectTree(localLiquidDomainGuide);localLiquidDomainGuide=null;}
   if (flameDomainGuide) {
     scene.remove(flameDomainGuide);
     disposeObjectTree(flameDomainGuide);
@@ -13003,7 +13105,8 @@ function installSharedWorkbench() {
   if(sharedWorkbench)return;
   const byId=id=>document.getElementById(id);
   sharedWorkbench=installExperimentWorkspace({document,title:'Workbench',subtitle:'Experiments in the shared scene',instruments:null,setup:null,
-    inspector:authoringWorkspace,sceneActions:byId('scene-add-menu').closest('nav'),navigation:byId('navigation-input-mode').closest('label'),
+    // Add and Navigate live in the shared viewport toolbar in both workspaces.
+    inspector:authoringWorkspace,sceneActions:null,navigation:null,
     sceneOutline:byId('scene-object-list').closest('.panel'),
     tools:[...document.querySelectorAll('.tab[data-tab]')].map(node=>({id:node.dataset.tab,label:node.textContent.trim()})),
     toolPanels:[...document.querySelectorAll('.tab-content')],extraPanels:[{node:byId('volume-authored-mix-panel'),destination:byId('tab-volume')}],
@@ -26054,7 +26157,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
     const capture = captureComposedCanvases({
       crop,
       host: renderer.domElement,
-      volume: activeSceneComposition ? volumePrototype.canvasElement() : null,
+      volume: activeSceneComposition && isSceneItemVisible('flame-field') ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });
@@ -26472,38 +26575,68 @@ function selectionTransformProxy(){
   selectionProxy.userData.kaminosSceneObject={label:`${sceneSelection.ids.length} selected`};selectionProxy.updateMatrixWorld(true);return selectionProxy;
 }
 function setSceneSelection(ids,activeId=ids.at(-1)??null){
+  if(ids.some(id=>id==='flame-field'||id==='water-field')){
+    if(ids.length!==1||activeId!==ids[0])throw Error('Select a simulation field on its own');
+    window.selectSceneField(ids[0]);return readSceneSelection();
+  }
   const valid=new Set([...sceneObjects.map(o=>o.id),...sceneGroups.map(g=>'@group:'+g.id)]);
   if(ids.some(id=>!valid.has(id)))throw Error('Selection contains an absent scene item');
   const next=checkedSelection(ids,activeId);
+  if(window.kaminosPolyEdit?.active()&&(next.ids.length!==1||window.kaminosPolyEdit.read().objectId!==next.activeId))window.kaminosPolyEdit.exit();
   if(JSON.stringify(next)!==JSON.stringify(sceneSelection)&&!burnerGraphWriting)scenePlacementTools?.selectionChanged();
   sceneSelection=next;activeSceneFieldId=null;
   activeSceneGroupId=next.activeId?.startsWith('@group:')?next.activeId.slice(7):null;
   activeSceneObjectId=activeSceneGroupId?null:next.activeId;
   currentMesh=next.ids.length>1?selectionTransformProxy():activeSceneGroupId?groupProxy(selectedSceneGroupEntry()):selectedSceneObjectEntry()?.object||null;
   renderSceneObjectList();updateTransformInspector();authoringWorkspace?.setContext('object');
-  if(transformControls){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
+  if(transformControls&&!window.kaminosPolyEdit?.active()){transformControls.detach();if(currentMesh){attachViewportGizmo(currentMesh);transformControls.setSpace(transformPreferences.orientation);}transformControls.visible=!!currentMesh;}
   updateSelectionFeedback();window._kaminosDirty?.();return structuredClone(sceneSelection);
 }
+function readSceneSelection(){
+  return structuredClone({...sceneSelection,...(activeSceneFieldId?{ids:[activeSceneFieldId],activeId:activeSceneFieldId}:{}),fieldId:activeSceneFieldId,memberIds:sceneSelectionMembers(),preferences:transformPreferences});
+}
 function updateSelectionFeedback(){
+  if(flameDomainGuide)styleSimulationDomainGuide(flameDomainGuide,'flame-field');
+  if(localLiquidDomainGuide)styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');
   syncSceneHelperVisibility(sceneObjects.map(entry=>entry.object),viewportDisplay,selectionCaptureSuspended);
   selectionFeedback?.setStyle({width:viewportDisplay.outlineWidth*(renderer?.getPixelRatio?.()??1),opacity:viewportDisplay.outlineOpacity});
   selectionFeedback?.suspend(selectionCaptureSuspended||!viewportDisplay.overlays||!viewportDisplay.outlines);
   const ids=new Set(sceneSelectionMembers());
   const activeIds=activeSceneGroupId?sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds||[]:[activeSceneObjectId];
-  selectionFeedback?.update(sceneObjects.filter(entry=>ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
+  selectionFeedback?.update(sceneObjects.filter(entry=>isSceneItemVisible(entry.id)&&ids.has(entry.id)&&entry.type!=='splat'&&entry.type!=='light'&&entry.type!==CAMERA_TYPE&&entry.type!==FLAME_EMITTER_TYPE&&entry.type!==LOCAL_LIQUID_EMITTER_TYPE),activeIds);
   for(const [id,box] of selectionBoxes)if(!ids.has(id)){box.removeFromParent();box.geometry.dispose();box.material.dispose();selectionBoxes.delete(id);}
   for(const id of ids){const entry=sceneObjects.find(o=>o.id===id);if(!entry)continue;
     let box=selectionBoxes.get(id);if(!box){box=new THREE.BoxHelper(entry.object);box.userData.kaminosEditorHelper=true;box.userData.kaminosEditorOnly=true;box.material.depthTest=false;box.renderOrder=1001;scene.add(box);selectionBoxes.set(id,box);}
     box.object=entry.object;box.update();box.material.color.set(id===activeSceneObjectId||activeSceneGroupId&&sceneGroups.find(g=>g.id===activeSceneGroupId)?.objectIds.includes(id)?0xffc66d:0xe78932);
     styleHelperLines(box,{width:viewportDisplay.outlineWidth,opacity:viewportDisplay.outlineOpacity});
-    box.visible=!selectionCaptureSuspended&&viewportBoundsVisible&&entry.object.visible;
+    const emitter=[FLAME_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type);
+    box.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&entry.object.visible&&(viewportBoundsVisible||emitter&&viewportHelpersVisible&&viewportDisplay.overlays&&viewportDisplay.outlines&&viewportDisplay.outlineOpacity>0);
   }
 }
+function styleSimulationDomainGuide(guide,id){
+  const selected=activeSceneFieldId===id;
+  guide.material.color.set(selected?0xffc66d:0x5bd8f5);
+  styleHelperLines(guide,{width:viewportDisplay.domainWidth+(selected?1:0),opacity:viewportDisplay.domainOpacity});
+}
+function syncWaterDomainGuide(){
+  if(localLiquidSetup&&!localLiquidDomainGuide){
+    const {boundsMin,boundsMax}=fingerFluidAnalyticalSupportGeometry();
+    localLiquidDomainGuide=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(...boundsMin),new THREE.Vector3(...boundsMax)),0x5bd8f5);
+    localLiquidDomainGuide.name='Water simulation bounds';localLiquidDomainGuide.userData.kaminosEditorHelper=true;localLiquidDomainGuide.userData.kaminosEditorOnly=true;
+    localLiquidDomainGuide.material.depthTest=false;localLiquidDomainGuide.material.depthWrite=false;localLiquidDomainGuide.renderOrder=1000;scene.add(localLiquidDomainGuide);
+  }
+  if(localLiquidDomainGuide){localLiquidDomainGuide.visible=isSceneItemVisible('water-field')&&!!localLiquidSetup&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(localLiquidDomainGuide,'water-field');}
+}
+function pickWaterDomainFromViewportPointer(event){
+  if(!localLiquidDomainGuide?.visible||selectionCaptureSuspended||!viewportHelpersVisible||!viewportDisplay.domains||viewportDisplay.domainOpacity===0||!renderer||!camera)return false;
+  return pointerHitsBoxOutline(localLiquidDomainGuide.box,camera,{x:event.clientX,y:event.clientY},renderer.domElement.getBoundingClientRect());
+}
 function syncEditorHelperVisibility(){
-  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
-  for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
-  if(flameDomainGuide){flameDomainGuide.visible= !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}
-  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
+  syncWaterDomainGuide();
+  for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
+  for(const [id,{marker,light}] of sceneSpotLights)marker.visible=isSceneItemVisible(id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
+  if(flameDomainGuide){flameDomainGuide.visible= isSceneItemVisible('flame-field') && !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleSimulationDomainGuide(flameDomainGuide,'flame-field');}
+  for(const entry of sceneObjects)if(entry.type===CAMERA_TYPE)entry.object.visible= isSceneItemVisible(entry.id)&&!selectionCaptureSuspended&&viewportHelpersVisible&&!(sceneCameras?.state().mode==='camera'&&sceneCameras.state().activeId===entry.id);
   updateSelectionFeedback();window._kaminosDirty?.();
 }
 function selectedRootIds(){return selectionTransformRoots(sceneSelection.ids,sceneGroups);}
@@ -26511,8 +26644,8 @@ function setupSelectionTransforms(){
   selectionTransforms=createSelectionTransformTarget({edits:scenePlacementTools.edits,selection:()=>sceneSelection,groups:()=>sceneGroups,preferences:()=>transformPreferences,
     read:selectionRootState,write:applyAuthoredScenePose,check:checkSelectionRoot,changed:pose=>{if(selectionProxy)applySceneObjectTransformState(selectionProxy,pose);updateSelectionFeedback();}});
   scenePlacementTools.edits.register('@selection-membership',{read:readSelectionMembership,check:checkSelectionMembership,write:writeSelectionMembership});
-  window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:()=>structuredClone({...sceneSelection,memberIds:sceneSelectionMembers(),preferences:transformPreferences}),
-    set:(ids,activeId)=>setSceneSelection(ids,activeId),all:()=>setSceneSelection([...sceneGroups.map(g=>'@group:'+g.id),...sceneObjects.map(o=>o.id)]),clear:()=>clearActiveSceneObjectSelection(),
+  window.kaminosSelection={duplicate:duplicateSelectedSceneObjects,remove:removeSelectedSceneObjects,group:groupSelectedObjects,ungroup:ungroupSelectedObjects,read:readSceneSelection,
+    set:(ids,activeId)=>setSceneSelection(ids,activeId),all:()=>setSceneSelection([...sceneGroups.filter(g=>isSceneItemVisible('@group:'+g.id)).map(g=>'@group:'+g.id),...sceneObjects.filter(o=>isSceneItemVisible(o.id)).map(o=>o.id)]),clear:()=>clearActiveSceneObjectSelection(),
     transform:patch=>selectionTransforms.apply(patch),settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(sceneSelection.ids.length)setSceneSelection(sceneSelection.ids,sceneSelection.activeId);return {...next};}};
 }
 
@@ -26661,7 +26794,7 @@ function installSelectionInput(){
   },true);
   document.addEventListener('pointerup',event=>{
     if(!box?.start)return;event.preventDefault();event.stopImmediatePropagation();
-    const ids=objectsInScreenBox(sceneObjects,camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
+    const ids=objectsInScreenBox(sceneObjects.filter(entry=>isSceneItemVisible(entry.id)),camera,{x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},renderer.domElement.getBoundingClientRect());
     const next=box.subtract?sceneSelection.ids.filter(id=>!ids.includes(id)):[...new Set([...sceneSelection.ids,...ids])];stopBox();setSceneSelection(next,next.at(-1));suppressBoxClick=true;
   },true);
   document.addEventListener('click',event=>{if(suppressBoxClick){event.preventDefault();event.stopImmediatePropagation();suppressBoxClick=false;}},true);
@@ -26677,7 +26810,8 @@ function selectedPlacementEntry() {
     : selectedSceneObjectEntry();
 }
 function frameAuthoredSelection() {
-  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameObjects([flameDomainGuide],camera,controls);
+  if(activeSceneFieldId==='flame-field'&&flameDomainGuide)return frameBox(flameDomainGuide.box,camera,controls);
+  if(activeSceneFieldId==='water-field'&&localLiquidDomainGuide)return frameBox(localLiquidDomainGuide.box,camera,controls);
   if(sceneSelection.ids.length>1)return frameObjects(sceneObjects.filter(o=>sceneSelectionMembers().includes(o.id)).map(o=>o.object),camera,controls);
   const group=selectedSceneGroupEntry();
   return group ? frameObjects(sceneObjects.filter(entry=>group.objectIds.includes(entry.id)).map(entry=>entry.object),camera,controls)
@@ -27237,7 +27371,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false } = {}) {
     location.assign(compositionRestoreUrl(restorePlan.composition, sceneFile, location.origin,authoringWorkspace?.state().mode??null,readOwnerExperimentAddress(location)));
     return;
   }
-  if(restorePlan.editorDisplay)window.kaminosViewportSettings.set(restorePlan.editorDisplay);
+  window.kaminosViewportSettings.set({...viewportDisplay,hiddenIds:[],...restorePlan.editorDisplay});
   activeSceneComposition = restorePlan.composition;
   if(restorePlan.fireDomain)writeKilnCollisionState({enabled:restorePlan.fireDomain.simulation.collision});
   else if(activeSceneComposition?.route.volume_collision!==undefined)writeKilnCollisionState({enabled:activeSceneComposition.route.volume_collision==='kiln'});

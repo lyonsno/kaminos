@@ -8,9 +8,9 @@ import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlame
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0,name);return (html.slice(start-6,start)==='async '?'async ':'')+html.slice(start,html.indexOf('\n}',start)+2);};
 function fixture(family='ring'){
- const c={THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
+ const c={isSceneItemVisible:()=>true,THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
  scene:new THREE.Scene(),sceneObjects:[],sceneGroups:[],sceneCameras:null,scenePlacementTools:null,
- activeSceneComposition:{},activeSceneFieldId:'flame-field',activeSceneObjectId:null,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},selectionCaptureSuspended:false,
+ activeSceneComposition:{},activeSceneFieldId:'flame-field',activeSceneObjectId:null,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},styleSimulationDomainGuide(){},selectionCaptureSuspended:false,
  FLAME_EMITTER_ID:'flame-emitter',flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameDomainDraft:null,flameDomainProxy:null,flameDomainGuide:null,
  transformControls:null,document:{getElementById:()=>null},window:{__kaminosVolumeEmitterReceipt:{effective:{family}}},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){throw Error('analytic source must not be invoked');},
  authoredFlamePresent:true,flameEmitterPose:{position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,

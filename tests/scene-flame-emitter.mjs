@@ -27,7 +27,7 @@ test('a rejected agent placement leaves no active transaction and preserves an e
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const start=html.indexOf('window.kaminosSetSceneObjectTransform =');
   const source=html.slice(start,html.indexOf('window.kaminosSetSplatCorrectionDebug',start));
-  const context={scenePlacementTools:{edits},sceneObjects:[],LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',window:{kaminosSceneObjectDebugState:()=>[]}};
+  const context={isSceneItemVisible:()=>true,scenePlacementTools:{edits},sceneObjects:[],LOCAL_LIQUID_EMITTER_TYPE:'local-liquid-emitter',window:{kaminosSceneObjectDebugState:()=>[]}};
   vm.runInNewContext(source,context);
   const before=edits.state();
   assert.throws(()=>context.window.kaminosSetSceneObjectTransform('flame-emitter',{position:[99,0,0]}),/bounds/);
@@ -45,7 +45,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
   let pose={position:[0,-.76,0],rotation:[0,0,0],scale:[1,1,1]};
   let suspended=false;
   const calls=[];
-  const context={authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,effectiveFlameDomainControls,volumePrototype:null, readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
+  const context={isSceneItemVisible:()=>true,authoredFlamePresent:true,normalizeFlameEmitterPose:value=>structuredClone(value), flamePoseInDomain,effectiveFlameDomainControls,volumePrototype:null, readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
     flameDomainTranslation:[0,0,0],flameDomainScale:1,
     applyFlameEmitterPose:(next,{sourceEnabled=true}={})=>{
       calls.push({x:next.position[0],sourceEnabled});
@@ -78,7 +78,7 @@ test('a legacy cluster composition reopens without placing an analytic source', 
   const end=html.indexOf("  setInfo('Loading scene...');",start);
   assert.ok(start>0 && end>start);
   let sourceWrites=0;
-  const context={restorePlan:{composition:{flame:{stationary:true},route:{}}},objectRecords:[],
+  const context={isSceneItemVisible:()=>true,restorePlan:{composition:{flame:{stationary:true},route:{}}},objectRecords:[],
     window:{__kaminosVolumeEmitterReceipt:{effective:{family:'cluster',sourceMode:'cluster'}}},
     defaultFlameEmitterPose:()=>({position:[0,0,0]}),
     writeAuthoredFlameEmitterPose:()=>{sourceWrites++;throw Error('analytic source not mounted');},
@@ -94,8 +94,8 @@ test('clearing a scene removes its old flame member before the next scene saves'
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,
-    authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],flameDomainGuide:null,
+  const context={isSceneItemVisible:()=>true,sceneCameras:null,colliderEditTargets:new Set(),sceneColliderCollection:{clear(){}},groupProxies:new Map(),meshDataTargets:new Set(),groupEditTargets:new Set(),proceduralMeshes:new Map(),compoundInsertionTargets:new Set(),compoundRetentionTargets:new Set(),sceneSpotLights:new Map(),rimLight:null,
+    authoringControlSessions:[],sceneControlHistory:null,assemblyProxies:new Map(),assemblyEditTargets:new Set(),authoredBurnerBeds:new Map(),FLAME_EMITTER_TYPE:'flame-emitter',scenePlacementTools:null,sceneMutationToken:0,sceneObjects:[flame],localLiquidDomainGuide:null,flameDomainGuide:null,
     sceneLoadRequests:{invalidate:()=>{}},sceneMembershipEditTargets:new Set(),localLiquidGeneration:0,localLiquidHost:null,
     scene:{remove:object=>removed.push(object)},disposeObjectTree:()=>{},
     greenroomPreviewState:null,currentMesh:null,sceneGroups:[],activeSceneObjectId:flame.id,
@@ -114,9 +114,9 @@ test('switching to cluster removes the analytic member from scene membership', (
   assert.ok(start>0 && end>start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   const removed=[];
-  const context={activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
+  const context={isSceneItemVisible:()=>true,activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:object=>removed.push(object)},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'cluster',sourceMode:'cluster'}}},
-    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,flameDomainGuide:null,
+    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:null,localLiquidDomainGuide:null,flameDomainGuide:null,
     scenePlacementTools:{finish:()=>{},edits:{discard:()=>{}}},
     disposeObjectTree:()=>{},renderSceneObjectList:()=>{},pruneSceneGroups:()=>{},pruneSceneSelection:()=>{}};
   vm.runInNewContext(html.slice(start,end)+'\nensureAuthoredFlameEmitter();',context);
@@ -130,9 +130,9 @@ test('a source-free analytic family retains the flame handle for editing and sav
   const end=html.indexOf('function acceptedFlameDomainPose()',start);
   const flame={id:'flame-emitter',type:'flame-emitter',object:{}};
   let removed=0,updated=0;
-  const context={activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
+  const context={isSceneItemVisible:()=>true,activeSceneComposition:{},refreshFlameDomainPreview:()=>{},authoredFlamePresent:true,scene:{remove:()=>removed++},isFireLightFieldRoute:()=>true,
     applyFlameEmitterPose:()=>{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'off'}}},
-    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',flameDomainGuide:{visible:false,box:{set:()=>{}}},
+    sceneObjects:[flame],FLAME_EMITTER_ID:'flame-emitter',activeSceneObjectId:'flame-emitter',localLiquidDomainGuide:null,flameDomainGuide:{visible:false,box:{set:()=>{}}},
     flameDomainTranslation:[0,0,0],flameDomainScale:1,viewportDisplay:{domains:true,domainOpacity:.82,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},viewportHelpersVisible:true,selectionCaptureSuspended:false,sceneSelectionMembers:()=>['flame-emitter'],activeSceneFieldId:null,
     flameEmitterPose:{position:[2,0,0],rotation:[0,0,0],scale:[1,1,1]},
     applySceneObjectTransformState:()=>updated++,updateFlameEmitterSupportOutline:()=>{},

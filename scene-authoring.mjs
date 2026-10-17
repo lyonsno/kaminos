@@ -64,9 +64,9 @@ export function forwardCompositionHash(target, sourceHash, sourceSearch = '') {
   return url.href;
 }
 
-// Both canvases are sampled synchronously in one animation callback. This is a
+// Scene canvases and optional editor drawing are sampled in one callback. This is a
 // picture of the visible composition, not a checkpoint of the fluid solver.
-export function captureComposedCanvases({ host, volume, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
+export function captureComposedCanvases({ host, volume, editorOverlay=null, document, label, simulation, crop=null, capturedAt = new Date().toISOString() }) {
   if (!host || !host.width || !host.height) throw new Error('Host canvas is unavailable');
   const bounds = host.getBoundingClientRect();
   if (!(bounds.width > 0 && bounds.height > 0)) throw new Error('Host canvas has no visible area');
@@ -85,11 +85,19 @@ export function captureComposedCanvases({ host, volume, document, label, simulat
       rect.width * canvas.width / bounds.width,
       rect.height * canvas.height / bounds.height);
   }
+  const layers=volume ? ['mesh','ordinary-emissive-volume'] : ['mesh'];
+  if(editorOverlay&&editorOverlay.style.display!=='none'&&editorOverlay.width>0&&editorOverlay.height>0){
+    const rect=editorOverlay.getBoundingClientRect();
+    if(rect.width>0&&rect.height>0){
+      context.drawImage(editorOverlay,(rect.left-bounds.left)*canvas.width/bounds.width,(rect.top-bounds.top)*canvas.height/bounds.height,rect.width*canvas.width/bounds.width,rect.height*canvas.height/bounds.height);
+      layers.push('editor-transform-gizmo');
+    }
+  }
   let output=canvas;
   if(crop){const {x,y,width,height}=crop;if(![x,y,width,height].every(Number.isInteger)||x<0||y<0||width<=0||height<=0||x+width>canvas.width||y+height>canvas.height)throw Error('Camera frame is clipped or invalid');output=document.createElement('canvas');output.width=width;output.height=height;output.getContext('2d').drawImage(canvas,x,y,width,height,0,0,width,height);}
   return normalizeSceneCapture({ label, capturedAt, width: output.width, height: output.height,
     image: output.toDataURL('image/png'), simulation: simulation || null,
-    layers: volume ? ['mesh', 'ordinary-emissive-volume'] : ['mesh'] });
+    layers });
 }
 
 // The live address keeps its renderer route; only the accepted document changes.
