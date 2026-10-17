@@ -6,7 +6,12 @@
 // warning annotation and a line in the step summary. A run that stays green
 // and says nothing must mean there was nothing to say.
 //
-//   node tools/ci-advisory-warnings.mjs <report.json> <serve outcome> <suite outcome> ["checkout=success npm=failure ..."]
+//   node tools/ci-advisory-warnings.mjs <report.json> <serve outcome> <suite outcome> ["checkout=success npm=failure ..."] [superseding sha]
+//
+// Every run also gets one verdict notice: "tests clean: ..." only when the
+// suite ran to a complete ok report with nothing to warn about; otherwise
+// "tests not clean: ..." or "tests no result: ...". A lane reads the verdict,
+// never the absence of warnings.
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -24,7 +29,10 @@ export function parseSetup(text) {
   return setup;
 }
 
-export function advisoryWarnings({ report: r, serve, suite, setup = {} }) {
+export function advisoryWarnings({ report: r, serve, suite, setup = {}, superseded = null }) {
+  // A branch run whose commit a newer push replaced checks nothing on purpose;
+  // its verdict says so and it has nothing to warn about.
+  if (superseded) return [];
   const out = [];
   for (const [step, outcome] of Object.entries(setup)) {
     if (outcome !== 'success') out.push(`setup step ${step} ${outcome === 'failure' ? 'failed' : `was ${outcome || 'not run'}`}, so the suite was not run and nothing was checked`);
@@ -61,16 +69,32 @@ export function advisoryWarnings({ report: r, serve, suite, setup = {} }) {
   return out.map(line => line.replace(/\r?\n|\r/g, ' '));
 }
 
+export function advisoryVerdict({ report: r, serve, suite, setup = {}, superseded = null }) {
+  if (superseded) return `tests no result: superseded by ${superseded}, a newer push to this branch; this commit was not checked`;
+  const failedSetup = Object.entries(setup).filter(([, outcome]) => outcome !== 'success').map(([step]) => step);
+  if (failedSetup.length) return `tests no result: setup step ${failedSetup.join(', ')} did not succeed, so nothing was checked`;
+  if (!r) return `tests no result: no suite report (suite step ${suite || 'not run'})`;
+  if (suite === 'skipped' || suite === 'cancelled') return `tests no result: the suite step was ${suite}`;
+  const problems = advisoryWarnings({ report: r, serve, suite, setup });
+  const c = r.counts || {};
+  if (!problems.length && r.ok === true && suite === 'success') return `tests clean: executed ${c.executed}, passed ${c.passed}, known failures ${c.knownFailures}, new failures ${c.newFailures}`;
+  return `tests not clean: ${problems.length} problem${problems.length === 1 ? '' : 's'} (see the warnings); executed ${c.executed ?? '?'}, new failures ${c.newFailures ?? '?'}`;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === fs.realpathSync(process.argv[1])) {
-  const [reportPath, serve, suite, setupText] = process.argv.slice(2);
+  const [reportPath, serve, suite, setupText, superseded] = process.argv.slice(2);
   let report = null;
   try { report = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch {}
-  const lines = advisoryWarnings({ report, serve, suite, setup: parseSetup(setupText) });
+  const input = { report, serve, suite, setup: parseSetup(setupText), superseded: superseded || null };
+  const lines = advisoryWarnings(input);
+  const verdict = advisoryVerdict(input);
+  console.log(`::notice title=tests::${verdict.replace(/%/g, '%25')}`);
   for (const line of lines) console.log(`::warning::${line.replace(/%/g, '%25')}`);
   const c = report?.counts;
   const head = c ? `executed ${c.executed}, passed ${c.passed}, known failures ${c.knownFailures}, new failures ${c.newFailures}, not run ${c.notRun}` : 'no report';
-  const summary = `### Tests (advisory)\n\n${head}\n\n${lines.length ? lines.map(l => `- ${l}`).join('\n') : 'No warnings.'}\n`;
+  const summary = `### Tests (advisory)\n\n**${verdict}**\n\n${head}\n\n${lines.length ? lines.map(l => `- ${l}`).join('\n') : 'No warnings.'}\n`;
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   else process.stdout.write(summary);
 }
+
 

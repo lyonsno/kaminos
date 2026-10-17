@@ -6,17 +6,14 @@ name: tests
 # toolchains, installs), which skips the suite and says nothing was checked.
 # Lane branches (cc/**) get a run too, so a lane can read the full suite's
 # result for its exact commit before landing instead of running it on the
-# shared machine (trial, 2026-10-17). On a branch only the newest push
-# matters, so an older run still going is cancelled; on main every push keeps
-# its run.
+# shared machine (trial, 2026-10-17). No run is ever cancelled: a branch run
+# whose commit a newer push has already replaced skips the suite and says so,
+# and every other run goes to the end. Each run posts one verdict notice:
+# "tests clean", "tests not clean" or "tests no result".
 on:
   push:
     branches: [main, 'cc/**']
   workflow_dispatch:
-
-concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   suite:
@@ -25,29 +22,49 @@ jobs:
     # so a hang ends its own step as a warning before the job limit is reached.
     timeout-minutes: 90
     steps:
+      # On a lane branch, a commit that is no longer the branch tip has been
+      # replaced by a newer push, whose own run checks it.
+      - id: current
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$EVENT" = push ] && [ "$REF" != refs/heads/main ]; then
+            tip=$(git ls-remote "https://github.com/$REPO" "$REF" | cut -f1)
+            if [ -n "$tip" ] && [ "$tip" != "$SHA" ]; then echo "superseded=$tip" >> "$GITHUB_OUTPUT"; fi
+          fi
       - id: checkout
+        if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 5
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: node
+        if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 5
         uses: actions/setup-node@v7
         with:
           node-version: '25'
       - id: python
+        if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 5
         uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - id: pip
+        if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 5
         run: python3 -m pip install -r requirements.txt
       - id: npm
+        if: steps.current.outputs.superseded == ''
         continue-on-error: true
         timeout-minutes: 10
         run: npm ci
@@ -81,16 +98,22 @@ jobs:
           SERVE: ${{ steps.serve.outcome }}
           SUITE: ${{ steps.suite.outcome }}
           SETUP: checkout=${{ steps.checkout.outcome }} node=${{ steps.node.outcome }} python=${{ steps.python.outcome }} pip=${{ steps.pip.outcome }} npm=${{ steps.npm.outcome }}
+          SUPERSEDED: ${{ steps.current.outputs.superseded }}
         run: |
-          if [ -f tools/ci-advisory-warnings.mjs ]; then
+          if [ -n "$SUPERSEDED" ]; then
+            echo "::notice title=tests::tests no result: superseded by $SUPERSEDED, a newer push to this branch; this commit was not checked"
+            printf '### Tests (advisory)\n\n**tests no result: superseded by %s, a newer push to this branch; this commit was not checked**\n' "$SUPERSEDED" >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f tools/ci-advisory-warnings.mjs ]; then
             node tools/ci-advisory-warnings.mjs test-results/report.json "$SERVE" "$SUITE" "$SETUP" || {
               code=$?
               echo "::warning::the advisory warning tool failed (exit $code; setup: $SETUP), so problems in this run are unknown; see the suite step and the test-results artifact"
-              printf '### Tests (advisory)\n\nThe warning tool failed (exit %s); results unknown.\n' "$code" >> "$GITHUB_STEP_SUMMARY"
+              echo "::notice title=tests::tests no result: the warning tool failed (exit $code)"
+              printf '### Tests (advisory)\n\n**tests no result: the warning tool failed (exit %s)**\n' "$code" >> "$GITHUB_STEP_SUMMARY"
             }
           else
             echo "::warning::setup failed before the repository was checked out ($SETUP); nothing was checked"
-            printf '### Tests (advisory)\n\nSetup failed before checkout (%s); nothing was checked.\n' "$SETUP" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=tests::tests no result: setup failed before checkout, so nothing was checked"
+            printf '### Tests (advisory)\n\n**tests no result: setup failed before checkout (%s); nothing was checked**\n' "$SETUP" >> "$GITHUB_STEP_SUMMARY"
           fi
       - if: always()
         continue-on-error: true
