@@ -15,7 +15,7 @@
 //   node notes-witness.mjs --out DIR --playwright /path/to/playwright-core/index.mjs \
 //     --browser /path/to/chrome-for-testing [--port N] [--headed] [--negative-no-picture]
 import {execFile, execFileSync, spawn} from 'node:child_process';
-import {copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync} from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
@@ -113,7 +113,9 @@ try {
     if (server.exitCode !== null) throw new Error(`serve.py exited: ${serverErrors}`);
   }
   report.effective.server = runtime?.source ?? null;
-  check('the served checkout identifies itself', !!runtime?.source?.commit, {source: runtime?.source ?? null});
+  // A port someone else already serves answers too: the server must be this checkout's own.
+  check('the served checkout identifies itself as this one', !!runtime?.source?.commit
+    && !!runtime.source.repoRoot && existsSync(runtime.source.repoRoot) && realpathSync(runtime.source.repoRoot) === realpathSync(repo), {source: runtime?.source ?? null, expected: repo});
   const listing = await (await fetch(`${origin}/api/notes`)).json();
   check('the server uses this run\'s own notes log', listing.root === path.resolve(notesRoot) || listing.root.endsWith(path.join(path.basename(out), 'notes')), {root: listing.root});
 
@@ -772,6 +774,8 @@ try {
     const loaded = await scenePage.waitForFunction(id => window.kaminosNotes && (window.kaminosSceneObjectDebugState?.() ?? []).some(object => object.id === id),
       red, {timeout: 90000}).then(() => true, () => false);
     const pinned = await scenePage.waitForFunction(id => !!document.querySelector(`[data-pin="point:${id}"]`), spotId, {timeout: expectPin ? 20000 : 6000}).then(() => true, () => false);
+    // The pin appears first; its geometry is checked about once a second after.
+    if (pinned) await scenePage.waitForFunction(id => document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status !== 'unknown', spotId, {timeout: 8000}).catch(() => {});
     const state = await scenePage.evaluate(id => ({status: document.querySelector(`[data-pin="point:${id}"]`)?.dataset.status ?? null,
       info: document.getElementById('info')?.textContent ?? null}), spotId);
     await scenePage.close();
@@ -779,6 +783,8 @@ try {
   };
   const reopened = await openScene(savedScene.filename, true);
   check('the saved scene, reopened in another page, shows its point note again', reopened.loaded && reopened.pinned, reopened);
+  // Its geometry was edited and put back before the save: another page finds the same counts and samples.
+  check('the reopened scene can tell its geometry is still the one noted', reopened.status === 'same', reopened);
   const copyOpened = await openScene(copy.saved ?? '', false);
   report.effective.sceneIdentity = {saved: savedScene.sceneId, reopened, copy: {saved: copy.saved ?? null, status: copy.status}, copyOpened};
   check('the same objects under another scene id do not show it', copy.status === 200 && copyOpened.loaded && !copyOpened.pinned, {copy: {status: copy.status, saved: copy.saved, error: copy.error}, copyOpened});
