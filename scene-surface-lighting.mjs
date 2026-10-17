@@ -29,7 +29,9 @@ export default class SceneSurfaceLighting {
   unbind(material){this.bindings.delete(material);this.materials.delete(material);}
   forMaterial(builder,material,raw){
     const entry=this.bindings.get(material),node=entry?.value??raw;
-    if(builder.context.sceneSurfaceLighting!==this||material.transparent||material.transmission>0)return node;
+    if(builder.context.sceneSurfaceLighting!==this||builder.camera!==this.camera||
+      builder.renderer.getRenderTarget()===this.source.renderTarget||builder.renderer.logarithmicDepthBuffer===true||
+      material.transparent||material.transmission>0)return node;
     const source=this.source,depth=source.getTextureNode('depth'),normal=source.getTextureNode('normal');
     return Fn(()=>{
       // Screen-aligned shadow derivatives must precede the divergent fallback.
