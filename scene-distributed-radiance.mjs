@@ -5,7 +5,7 @@ import {buildTriangleVisibility} from './scene-light-visibility.mjs';
 import {createVolumeGather} from './scene-volume-gather.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
 import {validateSurfaceReconstruction} from './scene-surface-reconstruction.mjs';
-import {validateSceneSourceTransform,sceneSourceLocalPoint} from './scene-volume-source.mjs';
+import {validateSceneSourceTransform,sceneSourceLocalPoint,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
@@ -20,6 +20,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   let receiverSpacing=0,builtReceiverSpacing=null,packedCache=null;
   const surfaceGain=THREE.TSL.uniform(1);
   let sourceTransform=validateSceneSourceTransform();
+  let sourceDomain=sceneSourceDomain();
   const attributeIds=new WeakMap();let nextAttributeId=0;
   const attributeId=a=>{if(!a)return null;if(!attributeIds.has(a))attributeIds.set(a,++nextAttributeId);return attributeIds.get(a);};
   const status={identity:'distributed-volume-direct-radiance-v0',status:'awaiting-source',directions,volumeGrid,
@@ -109,7 +110,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       if(receiverSpacing)clone.setAttribute('sceneReceiverWeight',new THREE.BufferAttribute(layout.weights,4));
       originals.set(mesh,{material:mesh.material,geometry,clone,layout,receiverOffset:offset,receiverAttribute:geometry.getAttribute('sceneReceiverIndex'),receiverWeightAttribute:geometry.getAttribute('sceneReceiverWeight')});mesh.geometry=clone;
     });
-    handle=createVolumeGather(device,{geometry:packed,receivers,surfaceTriangles:new Uint32Array(surfaceTriangles),volumeGrid,directions,angularPattern,angularRotation});
+    handle=createVolumeGather(device,{geometry:packed,receivers,surfaceTriangles:new Uint32Array(surfaceTriangles),volumeGrid,sourceDimensions:sourceDomain.dimensions,directions,angularPattern,angularRotation});
     handle.setRetainComparisons(retainComparisons);
     external=new THREE.ExternalTexture(handle.surface);
     external.image={width:handle.surfaceDimensions[0],height:handle.surfaceDimensions[1]};
@@ -162,11 +163,12 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       rows.push([mesh.uuid,mesh.matrixWorld.elements,g.uuid,attributeId(p),p?.version,p?.count,attributeId(n),n?.version,n?.count,
         attributeId(g.index),g.index?.version,g.groups.map(group=>[group.start,group.count,group.materialIndex]),materials.map(m=>[m.uuid,m.version,m.side])]);
     });
-    return JSON.stringify([sourceTransform,solid,rows]);
+    return JSON.stringify([sourceTransform,sourceDomain.hi,solid,rows]);
   }
   function prepare(field) {
     if(disposed)throw new Error('distributed lighting disposed');
     sourceTransform=validateSceneSourceTransform(field.source.worldTransform);
+    sourceDomain=sceneLightingDomain(field.source);
     const geometryChanged=!handle||receiverRevision()!==revision;
     const changed=geometryChanged||receiverSpacing!==builtReceiverSpacing;
     status.previewStale=changed;
@@ -187,7 +189,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       handle.setAngularPattern(angularPattern,angularRotation);
       if(angularPattern==='guided'){
         if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
-        handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform));
+        handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
       }
       frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering});
     } catch(error) {
