@@ -5,6 +5,7 @@
 import * as THREE from './lib/three.webgpu.js';
 import { attribute, positionGeometry, vec3, float, cross, normalize, select, abs, mix, smoothstep, uniform, cameraPosition, exp, max, min } from './lib/three.tsl.js';
 import { HEAT_BLOCK_FLOATS } from './proxy-snapshot.mjs';
+import {FIRE_SPLAT_STYLE} from './fire-splat-picking.mjs';
 
 function splatMesh({ name, blending, colorFor, opacityFor, sizeScale, stretch }) {
   const quad = new THREE.PlaneGeometry(2, 2);
@@ -33,7 +34,7 @@ function splatMesh({ name, blending, colorFor, opacityFor, sizeScale, stretch })
   return mesh;
 }
 
-export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeScale = 1.15, stretch = 1.5 } = {}) {
+export function createFireSplatLayer({ heatExposure = FIRE_SPLAT_STYLE.heatExposure, smokeDensity = FIRE_SPLAT_STYLE.smokeDensity, sizeScale = FIRE_SPLAT_STYLE.sizeScale, stretch = FIRE_SPLAT_STYLE.stretch } = {}) {
   // Heat is normalised by the snapshot's heatReference, the field's peak heat
   // so far (held by the publisher), so only the flame core glows and a fire
   // that dims overall still dims. Without one, the snapshot's own peak.
@@ -99,7 +100,7 @@ export function createFireSplatLayer({ heatExposure = 1, smokeDensity = 2, sizeS
     },
     state: () => ({ visible: group.visible, count: smoke.geometry.instanceCount, capacity, uploads,
       snapshotWriteTick: snapshot?.writeTick ?? null, snapshotFieldGeneration: snapshot?.fieldGeneration ?? null, summary: snapshot?.summary ?? null, heatReference: snapshot ? heatMax.value : null,
-      style: { heatExposure: exposure.value, smokeDensity: density.value, sizeScale: scale.value } }),
+      style: { heatExposure: exposure.value, smokeDensity: density.value, sizeScale: scale.value, stretch:stretchUniform.value } }),
     dispose() { group.removeFromParent(); for (const mesh of [smoke, glow]) { mesh.geometry.dispose(); mesh.material.dispose(); } },
   };
 }
