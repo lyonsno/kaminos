@@ -418,7 +418,7 @@ export function createBrowserMeshPostprocess({targetFaces,keepLargest=false,Work
     if(signal?.aborted)throw abortError(signal);
     const result=cleanupAndSimplifyPreservingSurface(mesh.vertices,mesh.triangles,{targetFaces,keepLargest,onProgress:observe,simplifier:engine??undefined});
     if(signal?.aborted)throw abortError(signal);
-    return {...result,simplifier:reason?{route,reason}:{route}};
+    return {...result,simplifier:{route,...(reason?{reason}:{}),...(engine?.fallback?{fallback:engine.fallback.reason}:{})}};
   };
   return async mesh=>{
     const started=performance.now(),inputVertices=mesh.vertices.length/3,inputFaces=mesh.triangles.length/3;
