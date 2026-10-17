@@ -304,13 +304,14 @@ function cylinderSectionSegments(sourceArrays,mask,cutter){
   for(const sgm of oriented)for(const q of sgm)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}
   const tol=1e-6*Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2],1e-12),key=q=>q.map(x=>Math.round(x/tol)).join(',');
   const starting=new Map();oriented.forEach((sgm,i)=>{const k=key(sgm[0]);if(!starting.has(k))starting.set(k,[]);starting.get(k).push(i);});
-  const used=new Uint8Array(oriented.length),loops=[];
+  const used=new Uint8Array(oriented.length),loops=[],open=[];
   for(let i=0;i<oriented.length;i++){
     if(used[i])continue;
-    const loop=[],first=key(oriented[i][0]);let j=i,closed=false;
-    while(j!==undefined&&!used[j]){used[j]=1;loop.push(oriented[j][0]);const end=key(oriented[j][1]);if(end===first){closed=true;break;}j=starting.get(end)?.find(k=>!used[k]);}
-    if(closed&&loop.length>=3)loops.push(loop);
+    const loop=[],first=key(oriented[i][0]);let j=i,closed=false,last=null;
+    while(j!==undefined&&!used[j]){used[j]=1;loop.push(oriented[j][0]);last=oriented[j][1];const end=key(oriented[j][1]);if(end===first){closed=true;break;}j=starting.get(end)?.find(k=>!used[k]);}
+    if(closed&&loop.length>=3)loops.push(loop);else open.push([...loop,last]);
   }
+  const stitched=stitchChains(open,key,{distance:(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1],p[2]-q[2]),bridge:.05*Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2])});loops.push(...stitched.loops);open.length=0;open.push(...stitched.open);
   // The exact cut point behind every chart point, so the cap's rim reuses the body's vertices
   // rather than a trigonometric round trip that can differ from them in the last bits.
   const exact=new Map(),chartKey=(x,y)=>`${Math.round(x/tol)},${Math.round(y/tol)}`,remember=(x,y,q)=>{exact.set(chartKey(x,y),q);return [x,y];};
@@ -335,7 +336,34 @@ function cylinderSectionSegments(sourceArrays,mask,cutter){
   }
   const toWorld=q=>{const known=exact.get(chartKey(q.x,q.y));if(known)return [...known];const theta=q.x/radius+middle,cs=Math.cos(theta),sn=Math.sin(theta);return [0,1,2].map(k=>c[k]+q.y*a[k]+radius*(cs*u[k]+sn*v[k]));};
   const normalAt=xyz=>{const q=radialOf(...xyz),l=Math.hypot(q[0],q[1],q[2])||1;return [q[0]/l,q[1]/l,q[2]/l];};
-  return {segments,point:c,normal:a,U:u,V:v,toWorld,normalAt};
+  return {segments,point:c,normal:a,U:u,V:v,toWorld,normalAt,openChains:open.length+wraps[1].length+wraps[-1].length,open,bridged:stitched.bridged};
+}
+
+// Join open chains whose end meets another chain's start, until loops close. Non-manifold
+// generated meshes put junctions on a section, where a first walk stops short of closing.
+function stitchChains(chains,keyOf,{distance=null,bridge=0}={}){
+  const byStart=new Map(),byEnd=new Map(),index=(map,k,i)=>{if(!map.has(k))map.set(k,[]);map.get(k).push(i);};
+  chains.forEach((chain,i)=>{index(byStart,keyOf(chain[0]),i);index(byEnd,keyOf(chain.at(-1)),i);});
+  const used=new Uint8Array(chains.length),loops=[],open=[];
+  for(let i=0;i<chains.length;i++){
+    if(used[i])continue;used[i]=1;
+    let path=[...chains[i]];
+    // Forward from the end, then backward from the start, so the order chains are met in does not matter.
+    while(keyOf(path.at(-1))!==keyOf(path[0])){const next=byStart.get(keyOf(path.at(-1)))?.find(j=>!used[j]);if(next===undefined)break;used[next]=1;path.push(...chains[next].slice(1));}
+    while(keyOf(path.at(-1))!==keyOf(path[0])){const prev=byEnd.get(keyOf(path[0]))?.find(j=>!used[j]);if(prev===undefined)break;used[prev]=1;path=[...chains[prev].slice(0,-1),...path];}
+    if(keyOf(path.at(-1))===keyOf(path[0])&&path.length>=4)loops.push(path.slice(0,-1));else open.push(path);
+  }
+  // Cracks in the mesh leave small gaps: join an end to the nearest open start (its own included)
+  // within the bridge distance, closest first, until nothing more joins.
+  let bridged=0;
+  while(bridge>0&&distance&&open.length){
+    let best=null;
+    for(let i=0;i<open.length;i++)for(let j=0;j<open.length;j++){const d=distance(open[i].at(-1),open[j][0]);if(d<=bridge&&(!best||d<best.d))best={i,j,d};}
+    if(!best)break;bridged++;
+    if(best.i===best.j){const [path]=open.splice(best.i,1);if(path.length>=3)loops.push(path);continue;}
+    const joined=[...open[best.i],...open[best.j]];open.splice(Math.max(best.i,best.j),1);open.splice(Math.min(best.i,best.j),1);open.push(joined);
+  }
+  return {loops,open,bridged};
 }
 
 // Link oriented section segments end to start into closed loops. Neighboring faces
@@ -345,18 +373,19 @@ export function sectionLoops(segments) {
   for(const s of segments)for(const q of s)for(let k=0;k<2;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}
   const tol=1e-6*Math.max(hi[0]-lo[0],hi[1]-lo[1],1e-12),key=q=>`${Math.round(q[0]/tol)},${Math.round(q[1]/tol)}`;
   const starting=new Map();segments.forEach((s,i)=>{const k=key(s[0]);if(!starting.has(k))starting.set(k,[]);starting.get(k).push(i);});
-  const used=new Uint8Array(segments.length),loops=[];let openChains=0;
+  const used=new Uint8Array(segments.length),loops=[],open=[];
   for(let i=0;i<segments.length;i++){
     if(used[i])continue;
-    const loop=[],first=key(segments[i][0]);let j=i,closed=false;
+    const loop=[],first=key(segments[i][0]);let j=i,closed=false,last=null;
     while(j!==undefined&&!used[j]){
-      used[j]=1;loop.push(segments[j][0]);const end=key(segments[j][1]);
+      used[j]=1;loop.push(segments[j][0]);last=segments[j][1];const end=key(segments[j][1]);
       if(end===first){closed=true;break;}
       j=starting.get(end)?.find(k=>!used[k]);
     }
-    if(closed&&loop.length>=3)loops.push(loop);else openChains++;
+    if(closed&&loop.length>=3)loops.push(loop);else open.push([...loop,last]);
   }
-  return {loops,openChains};
+  const stitched=stitchChains(open,key,{distance:(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]),bridge:.05*Math.hypot(hi[0]-lo[0],hi[1]-lo[1])});
+  return {loops:[...loops,...stitched.loops],openChains:stitched.open.length,bridged:stitched.bridged};
 }
 
 export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding'}={}) {
@@ -366,11 +395,11 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
   const start=arrays.indices.length/3;
   if(!segments.length)return {arrays,capFaces:0,firstFace:start,segments:0,regions:0,openChains:0};
   if(fill==='outline'){
-    const {loops,openChains}=sectionLoops(segments),rings=loops.map(loop=>loop.map(([x,y])=>new Vector2(x,y)));
+    const {loops,openChains,bridged}=sectionLoops(segments),rings=loops.map(loop=>loop.map(([x,y])=>new Vector2(x,y)));
     const inside=(ring,q)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++)if((ring[i].y>q.y)!==(ring[j].y>q.y)&&q.x<(ring[j].x-ring[i].x)*(q.y-ring[i].y)/(ring[j].y-ring[i].y)+ring[i].x)c=!c;return c;};
     const outermost=rings.filter((ring,i)=>!rings.some((other,j)=>j!==i&&Math.abs(ShapeUtils.area(other))>Math.abs(ShapeUtils.area(ring))&&inside(other,ring[0])));
     const capped=emitSectionCap(arrays,outermost.map(outer=>({outer,holes:[]})),{section,side,material,tiny:0});
-    return {...capped,firstFace:start,segments:segments.length,regions:outermost.length,openChains,loops:loops.length};
+    return {...capped,firstFace:start,segments:segments.length,regions:outermost.length,openChains:openChains+(section.openChains??0),bridged:bridged+(section.bridged??0),loops:loops.length};
   }
   const lo=[Infinity,Infinity],hi=[-Infinity,-Infinity];
   for(const s of segments)for(const q of s)for(let k=0;k<2;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}

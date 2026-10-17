@@ -68,7 +68,7 @@ export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='P
   const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',...where,selectedFaces:selected,followedFaces:followed,sourceFaces:faces,cutVertices:cut.cutVertices};
   const piece=(pieceArrays,keep,label,side,frame=null)=>{
     const cap=sectionCap(pieceArrays,arrays,cutMask,plane,{side,fill});
-    const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains},...(frame?[{op:'origin',to:'hinge',point:frame.point,axis:frame.axis}]:[])]};
+    const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains,...(cap.bridged?{bridgedGaps:cap.bridged}:{})},...(frame?[{op:'origin',to:'hinge',point:frame.point,axis:frame.axis}]:[])]};
     const node=frame?frame.node:primitive.node;
     return {bytes:derived(sourceBytes,{...primitive,node},cap.arrays,label,receipt),faces:cap.arrays.indices.length/3,capFaces:cap.capFaces,openChains:cap.openChains,receipt,...(frame?{frame:{point:frame.point,axis:frame.axis,offset:frame.offset,rotation:frame.rotation}}:{})};
   };
