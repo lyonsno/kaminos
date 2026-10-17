@@ -54,7 +54,7 @@ fn solid(p: vec3<i32>) -> bool {
   return textureDimensions(fineSolid).x == shape.fine.x && all(p >= vec3<i32>(0)) && all(p < vec3<i32>(shape.fine.xyz)) && textureLoad(fineSolid,p,0).x != 0u;
 }
 @compute @workgroup_size(4,4,4)
-fn restrict(@builtin(global_invocation_id) c: vec3<u32>) {
+fn restrictField(@builtin(global_invocation_id) c: vec3<u32>) {
   if(any(c >= shape.coarse.xyz)) { return; }
   let r=shape.fine.w; let weight=1.0/f32(r*r*r); let ci=idx(c,shape.coarse.xyz)*4u;
   var velocity=vec3<f32>(0.0); var a=vec4<f32>(0.0); var b=a; var d=a; var burn=0.0; var mask=0u;
@@ -127,7 +127,7 @@ export function createPressureTransfer(device, plan) {
   const solid=texture('restricted pressure obstacles','r32uint'), burn=texture('restricted expansion','r32float');
   const params=buffer('pressure transfer geometry',48,GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST);
   const module=device.createShaderModule({label:'material-pressure transfer',code:PRESSURE_TRANSFER_WGSL});
-  const pipelines=Object.fromEntries(['restrict','prolong'].map(entryPoint=>[entryPoint,device.createComputePipeline({label:`pressure ${entryPoint}`,layout:'auto',compute:{module,entryPoint}})]));
+  const pipelines=Object.fromEntries(['restrict','prolong'].map(kind=>[kind,device.createComputePipeline({label:`pressure ${kind}`,layout:'auto',compute:{module,entryPoint:kind==='restrict'?'restrictField':kind}})]));
   let bindings=null, prior=[];
   function prepare({fluid,solidTexture,burnTexture,openTop,nonLegacy,maxSpeed}) {
     const values=new ArrayBuffer(48);new Uint32Array(values).set([...plan.materialDims,plan.divisor,...plan.pressureDims,openTop?1:0]);
