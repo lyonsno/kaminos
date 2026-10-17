@@ -240,6 +240,23 @@ test('compact numeric presentation retains useful scale without trailing noise',
  assert.equal(module.formatAuthoringNumber('1.0000000000000002'),'1');
 });
 
+test('transform fields keep a fixed number of decimals instead of three significant figures',async()=>{
+ const {formatAuthoringNumber}=await import('../scene-control-history.mjs');
+ assert.equal(formatAuthoringNumber('12.3456789',3),'12.346');
+ assert.equal(formatAuthoringNumber('-1234.5',3),'-1234.5','large positions keep their integer digits');
+ assert.equal(formatAuthoringNumber('1.0000000000000002',3),'1');
+ assert.equal(formatAuthoringNumber('-0.0001',3),'0','rounding to zero must not show a sign');
+ assert.equal(formatAuthoringNumber('',3),'');
+ const {readFileSync}=await import('node:fs');
+ const index=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ for(const field of ['position.x','position.y','position.z','rotation.x','scale.z']){
+  const tag=index.match(new RegExp(`<input[^>]*data-transform-field="${field.replace('.','\\.')}"[^>]*>`))?.[0]||'';
+  assert.match(tag,/data-display-decimals="\d"/,`${field} declares its display decimals`);
+ }
+ const source=readFileSync(new URL('../scene-control-history.mjs',import.meta.url),'utf8');
+ assert.match(source,/formatAuthoringNumber\(value,\s*input\.dataset\??\.displayDecimals\)/,'the display overlay honours the declared decimals');
+});
+
 test('late pointer-lock acquisition is released after the gesture already ended',async()=>{
  const {beginContinuousPointer}=await import('../continuous-pointer.mjs');
  const doc=new Control(),target={ownerDocument:doc};doc.defaultView={};let complete,exits=0;

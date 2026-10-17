@@ -752,25 +752,25 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div class="transform-row">
           <div class="transform-label">Position</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.x" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.y" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="position.z" data-display-decimals="3"></label>
           </div>
         </div>
         <div class="transform-row">
           <div class="transform-label">Rotation</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.x" data-display-decimals="1"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.y" data-display-decimals="1"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.1" data-transform-field="rotation.z" data-display-decimals="1"></label>
           </div>
         </div>
         <div class="transform-row">
           <div class="transform-label">Scale</div>
           <div class="transform-axis-grid">
-            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y"></label>
-            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z"></label>
+            <label class="transform-axis-field"><span class="transform-axis">X</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.x" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Y</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.y" data-display-decimals="3"></label>
+            <label class="transform-axis-field"><span class="transform-axis">Z</span><input class="transform-input" type="number" step="0.01" data-transform-field="scale.z" data-display-decimals="3"></label>
           </div>
         </div>
         <div class="splat-correction-panel" id="splat-correction-panel" hidden>
@@ -7069,8 +7069,22 @@ window.kaminosSetCameraDebugPose = function(pose = {}) {
   return window.kaminosCameraDebugState();
 };
 
-const SCENE_OUTLINE_GLYPHS = {field:'◈', group:'▣', light:'✦', camera:'◉', [FLAME_EMITTER_TYPE]:'▲', [LOCAL_LIQUID_EMITTER_TYPE]:'▲'};
-function sceneOutlineGlyph(kind) { return `<span class="scene-outline-glyph" aria-hidden="true">${SCENE_OUTLINE_GLYPHS[kind] || '◆'}</span>`; }
+// Outliner line icons, one per kind; anything unlisted draws as a mesh cube.
+const SCENE_OUTLINE_ICONS = {
+  mesh: 'M8 1.8 14 5v6L8 14.2 2 11V5zM2 5l6 3.2L14 5M8 8.2v6',
+  'flame-field': 'M8 14.5c-2.8 0-4.5-1.9-4.5-4.4 0-2.6 2.2-3.9 2.6-6.6 1.6 1 2.4 2.6 2.4 3.9.7-.5 1.1-1.3 1.2-2.3 1.7 1.3 2.8 3 2.8 5 0 2.5-1.7 4.4-4.5 4.4z',
+  'water-field': 'M1.5 5.5c1.6-1.4 3.3-1.4 4.9 0s3.3 1.4 4.9 0c1.1-.9 2.2-1 3.2-.4M1.5 10.5c1.6-1.4 3.3-1.4 4.9 0s3.3 1.4 4.9 0c1.1-.9 2.2-1 3.2-.4',
+  group: 'M2 4h4.2l1.3 1.6H14v7.4H2z',
+  light: 'M8 5a3 3 0 1 1 0 6 3 3 0 0 1 0-6zM8 1.3v1.9M8 12.8v1.9M1.3 8h1.9M12.8 8h1.9M3.3 3.3l1.3 1.3M11.4 11.4l1.3 1.3M3.3 12.7l1.3-1.3M11.4 4.6l1.3-1.3',
+  camera: 'M1.8 4.8h8.4v6.4H1.8zM10.2 7l4-2.2v6.4l-4-2.2',
+  [FLAME_EMITTER_TYPE]: 'M8 14.5c-2.8 0-4.5-1.9-4.5-4.4 0-2.6 2.2-3.9 2.6-6.6 1.6 1 2.4 2.6 2.4 3.9.7-.5 1.1-1.3 1.2-2.3 1.7 1.3 2.8 3 2.8 5 0 2.5-1.7 4.4-4.5 4.4z',
+  [LOCAL_LIQUID_EMITTER_TYPE]: 'M8 1.8c2.6 3.3 4.4 5.7 4.4 8a4.4 4.4 0 0 1-8.8 0c0-2.3 1.8-4.7 4.4-8z',
+  'simulation-domain': 'M2.5 2.5h11v11h-11z',
+};
+function sceneOutlineGlyph(kind) {
+  const known = Object.hasOwn(SCENE_OUTLINE_ICONS, kind) ? kind : 'mesh';
+  return `<svg class="scene-outline-glyph" data-outline-icon="${escapeHtml(known)}" viewBox="0 0 16 16" aria-hidden="true"><path d="${SCENE_OUTLINE_ICONS[known]}"/></svg>`;
+}
 function sceneOutlineToggle(row) {
   if (!row?.childCount) return '<span class="scene-outline-toggle-space" aria-hidden="true"></span>';
   return `<button type="button" class="scene-outline-toggle" data-outline-toggle="${escapeHtml(row.key)}" aria-expanded="${row.collapsed ? 'false' : 'true'}" title="${row.collapsed ? 'Expand' : 'Collapse'}">${row.collapsed ? '▸' : '▾'}</button>`;
@@ -7134,7 +7148,7 @@ function renderSceneObjectList() {
   for (const row of outline) {
     if (row.kind === 'field') {
       const {id,label} = fields.find(field => field.id === row.id);
-      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph('field')}${label}</span><small>Simulation</small></div>`);
+      rows.push(`<div class="scene-object-row scene-field-row ${activeSceneFieldId===id?'active':''}" data-scene-field-id="${id}"${sceneOutlineAttributes(row)} role="button" tabindex="0" aria-pressed="${activeSceneFieldId===id}"><span>${sceneOutlineToggle(row)}${sceneOutlineGlyph(id)}${label}</span><small>Simulation</small></div>`);
     } else if (row.kind === 'group') {
       const group = sceneGroups.find(entry => entry.id === row.id);
       if (group) rows.push(renderSceneGroupRow(group, row));

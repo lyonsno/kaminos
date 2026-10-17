@@ -43,9 +43,15 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
   return {commit,cancel,state:()=>({pending:!!active(),id:active()?ownedId:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
 }
 
-export function formatAuthoringNumber(value) {
+// Three significant figures by default; a field that declares decimals (a
+// position in metres, an angle in degrees) keeps that many instead, so large
+// values keep their integer digits and small ones keep their resolution.
+export function formatAuthoringNumber(value, decimals) {
   const number=Number(value);
-  return value!=='' && Number.isFinite(number) ? String(Number(number.toPrecision(3))) : String(value);
+  if(value==='' || !Number.isFinite(number))return String(value);
+  const places=decimals===undefined || decimals===null || decimals==='' ? null : Number(decimals);
+  const shown=places===null ? Number(number.toPrecision(3)) : Number(number.toFixed(places));
+  return String(shown===0 ? 0 : shown);
 }
 
 export function authoringRangeFraction(value,min,max) {
@@ -67,7 +73,7 @@ function installNumberPresentation(input) {
   input.before(wrapper);wrapper.append(input,fill,display);
   let shownText,shownFraction;
   const update=()=>{
-    const value=descriptor.get.call(input),text=formatAuthoringNumber(value);
+    const value=descriptor.get.call(input),text=formatAuthoringNumber(value, input.dataset?.displayDecimals);
     const fraction=input.disabled?null:authoringRangeFraction(value,input.min,input.max);
     if(text!==shownText){display.textContent=text;shownText=text;}
     if(fraction!==shownFraction){
