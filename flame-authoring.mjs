@@ -118,7 +118,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readControlBounds = () => null, openWorkbench, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readPressureRuntime = () => null, readWorldRuntime = () => null, readWorldOverlay = () => ({mode:'off',summary:''}), setWorldOverlay = () => {}, readControlBounds = () => null, openWorkbench, onError }) {
   const basin = document.createElement('details'); basin.id='flame-basin-browser'; basin.open=true;
   basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   sharedHost.append(basin);
@@ -150,6 +150,11 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   const runtimeStatus=document.createElement('p');runtimeStatus.className='flame-scope';runtimeStatus.id='selected-flame-source-status';runtimeStatus.setAttribute('role','status');
   const pressureStatus=document.createElement('p');pressureStatus.className='flame-scope';pressureStatus.id='selected-pressure-resolution-status';pressureStatus.setAttribute('role','status');
   const worldStatus=document.createElement('p');worldStatus.className='flame-scope';worldStatus.id='selected-world-smoke-status';worldStatus.setAttribute('role','status');
+  const overlayRow=document.createElement('label');overlayRow.className='slider-row';overlayRow.textContent='Field overlay';
+  const overlay=document.createElement('select');overlay.id='selected-world-smoke-overlay';overlay.setAttribute('aria-label','Field overlay');
+  for(const [value,label] of [['off','Off'],['bounds','Bounds'],['contributions','Fine / coarse contribution']]){const option=document.createElement('option');option.value=value;option.textContent=label;overlay.append(option);}
+  overlay.onchange=()=>{try{setWorldOverlay(overlay.value);sync();}catch(error){onError(error);}};overlayRow.append(overlay);
+  const overlayStatus=document.createElement('p');overlayStatus.className='flame-scope';overlayStatus.id='world-smoke-overlay-legend';
   for(const group of FLAME_PROPERTY_GROUPS) {
     const section=document.createElement('details');section.open=!!group.open;
     const title=document.createElement('summary');title.textContent=group.name;section.append(title);
@@ -195,7 +200,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     }
     if(group.name==='Emission')section.append(runtimeStatus);
     if(group.name==='Quality')section.append(pressureStatus);
-    if(group.name==='World smoke')section.append(worldStatus);
+    if(group.name==='World smoke')section.append(worldStatus,overlayRow,overlayStatus);
     if(group.name==='Quality')sharedHost.insertBefore(section,sharedHost.querySelector('.flame-domain-controls')||basin);
     else (group.name==='Emission'?host:sharedHost).append(section);
   }
@@ -203,6 +208,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
     const world=readWorldRuntime();
+    const overlayState=readWorldOverlay();overlay.value=overlayState.mode;overlayStatus.textContent=overlayState.summary;
     worldStatus.textContent=world?.effective==='one-way-world-field'?`${world.flowDims.join('×')} flow · ${world.materialDims.join('×')} material · world anchored · one-way · ${world.materialLaw} · ${world.collision==='empty-fallback'?'no collision mask':'GPU collisions (unverified occupancy)'}`:world?.reason?`Not running: ${world.reason}`:'World field off or awaiting simulation step';
     const pressure=readPressureRuntime();
     pressureStatus.textContent=!pressure||pressure.requested!==byId('volume-pressure-resolution').value?'Pressure choice awaiting simulation step'

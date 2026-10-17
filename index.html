@@ -3563,6 +3563,7 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
+import { worldSmokeOverlayGeometry } from './volume-world-smoke-optics.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
 import { createLocalLiquidEmitterObject, createLocalLiquidEmitterSceneRecord, localLiquidRuntimeSourceState, mergeAndValidateLocalLiquidEmitterPose } from './local-liquid-scene-object.mjs';
 import { createGenerationBoundLocalLiquidHostMount } from './local-liquid-host-lifecycle.mjs';
@@ -3582,6 +3583,21 @@ let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
 const proceduralMeshes = new Map(), groupProxies = new Map(), groupEditTargets = new Set();
 let flameDomainGuide = null;
+let worldSmokeGuide = null, worldSmokeOverlayMode = 'off';
+function refreshWorldSmokeOverlay() {
+  const state=volumePrototype?.debugState?.(),g=worldSmokeOverlayGeometry(state?.worldSmoke);
+  if(volumePrototype?.setWorldSmokeOverlay && state.worldSmokeOverlay!==worldSmokeOverlayMode)volumePrototype.setWorldSmokeOverlay(worldSmokeOverlayMode);
+  if(g&&worldSmokeOverlayMode!=='off'&&!worldSmokeGuide&&scene){
+    worldSmokeGuide=new THREE.Box3Helper(new THREE.Box3(),0x03a6ff);worldSmokeGuide.name='World smoke diagnostic bounds';
+    worldSmokeGuide.userData.kaminosEditorHelper=true;worldSmokeGuide.userData.kaminosEditorOnly=true;
+    worldSmokeGuide.material.depthTest=false;worldSmokeGuide.renderOrder=1000;scene.add(worldSmokeGuide);
+  }
+  if(worldSmokeGuide){worldSmokeGuide.visible=!!g&&worldSmokeOverlayMode!=='off'&&!!activeSceneComposition&&!selectionCaptureSuspended&&viewportHelpersVisible;
+    if(g)worldSmokeGuide.box.set(new THREE.Vector3(...g.worldMin),new THREE.Vector3(...g.worldMax));}
+  if(flameDomainGuide)flameDomainGuide.material.color.set(worldSmokeOverlayMode==='off'?0x5bd8f5:0xff7e23);
+  const n=v=>Number(v.toPrecision(3));
+  return {mode:worldSmokeOverlayMode,summary:!g?'Awaiting active world field. Overlay is view-only; not saved with the scene.':`Orange: fine ${state.worldSmoke.fineDims.join('×')} · blue: world material ${state.worldSmoke.materialDims.join('×')} / flow ${state.worldSmoke.flowDims.join('×')}. Cell widths: fine ${n(g.finePitch)}, material ${n(g.materialPitch)} (${n(g.materialPitch/g.finePitch)}×), flow ${n(g.flowPitch)} (${n(g.flowPitch/g.finePitch)}×). World volume ${n(g.volumeRatio)}× fine. Contribution view is false-color optical support, not physical lighting or a percentage. View-only; not saved.`};
+}
 let flameDomainTranslation = [0, 0, 0];
 let flameDomainScale = 1, flameDomainFollowSource = true;
 let flameDomainDraft = null, flameDomainProxy = null;
@@ -12574,6 +12590,7 @@ function clearScene({loadRequestId = null} = {}) {
     disposeObjectTree(flameDomainGuide);
     flameDomainGuide = null;
   }
+  if(worldSmokeGuide){worldSmokeGuide.removeFromParent();disposeObjectTree(worldSmokeGuide);worldSmokeGuide=null;}
   for(const target of compoundInsertionTargets)scenePlacementTools.edits.unregister(target);compoundInsertionTargets.clear();compoundRetentionTargets.clear();
   for (const editId of sceneMembershipEditTargets) scenePlacementTools.edits.unregister(editId);
   sceneMembershipEditTargets.clear();
@@ -22449,6 +22466,8 @@ function createFlameQuickFields() {
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     readPressureRuntime:()=>volumePrototype?.debugState?.().pressureResolution,
     readWorldRuntime:()=>volumePrototype?.debugState?.().worldSmoke,
+    readWorldOverlay:refreshWorldSmokeOverlay,
+    setWorldOverlay:mode=>{if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown field overlay');worldSmokeOverlayMode=mode;refreshWorldSmokeOverlay();window._kaminosDirty?.();},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
@@ -26388,6 +26407,7 @@ function updateSelectionFeedback(){
   }
 }
 function syncEditorHelperVisibility(){
+  refreshWorldSmokeOverlay();
   for(const entry of sceneObjects){if(entry.type===FLAME_EMITTER_TYPE||entry.type===LOCAL_LIQUID_EMITTER_TYPE){entry.object.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&viewportDisplay.emitters&&viewportDisplay.emitterOpacity>0;styleHelperLines(entry.object,{width:viewportDisplay.emitterWidth,opacity:viewportDisplay.emitterOpacity});}}
   for(const {marker,light} of sceneSpotLights.values())marker.visible= !selectionCaptureSuspended&&viewportHelpersVisible&&light.visible;
   if(flameDomainGuide){flameDomainGuide.visible= !!activeSceneComposition && !selectionCaptureSuspended && viewportHelpersVisible && viewportDisplay.domains&&viewportDisplay.domainOpacity>0;styleHelperLines(flameDomainGuide,{width:viewportDisplay.domainWidth,opacity:viewportDisplay.domainOpacity});}

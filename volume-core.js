@@ -8716,7 +8716,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     if(worldActive && !worldInsideFine(p)){
       var ds=min(worldRender.loPitch.w*.5,max(.0001,endT-t));
       if(t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t+.00001;}
-      let medium=worldSmokeMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority);
+      let medium=worldSmokeDiagnostic(worldSmokeMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority),true);
       let sigma=medium.absorption+medium.scattering;
       let scatteredSource=medium.scattering * incidentAt(p);
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
@@ -12320,6 +12320,7 @@ export function createKaminosVolumePrototype({
   let sceneSolidSupportCache = null;
   let worldSmoke = null, worldSolidProducer = null, worldSmokeKey = null;
   let worldOpticalFallback = null, worldRenderUniform = null;
+  let worldSmokeOverlay = 'off';
   function encodeWorldSmoke(encoder) {
     const requested=controlsSnapshot.worldSmoke==='on';
     const admitted=requested&&uniforms[368]>1.5&&state.reactantCombustion?.effective?.admitted===true;
@@ -12350,6 +12351,7 @@ export function createKaminosVolumePrototype({
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
     state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,solids,collisionSource})};
     const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
+    Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale}});
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
   }
   let immersedWallCache = null;
@@ -15349,7 +15351,8 @@ export function createKaminosVolumePrototype({
     state.gpuInitStage = 'device';
     rayStartNoiseTexture = await createRayStartTexture(device);
     worldOpticalFallback=device.createTexture({label:'disabled world smoke',size:[1,1,1],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING});
-    worldRenderUniform=device.createBuffer({label:'world smoke render geometry',size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    worldRenderUniform=device.createBuffer({label:'world smoke render geometry',size:48,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+    device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([worldSmokeOverlay==='contributions'?1:0,0,0,0]));
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -28702,9 +28705,16 @@ export function createKaminosVolumePrototype({
       return { ...shape, admitted: admission.admitted, admissionReason: admission.reason,
         dimensions: [shape.widthCells, shape.heightCells, shape.widthCells], localMin: box.min, localMax: box.max, applied: shape.widthCells === gridSize && shape.heightCells === gridHeight };
     },
+    setWorldSmokeOverlay(mode) {
+      if(!['off','bounds','contributions'].includes(mode))throw Error('Unknown world smoke overlay');
+      worldSmokeOverlay=mode;
+      if(device&&worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,32,new Float32Array([mode==='contributions'?1:0,0,0,0]));
+      return mode;
+    },
     debugState() {
       return {
         ...state,
+        worldSmokeOverlay,
         ordinaryDomainTranslation: [...productTransform.translate],
         ordinaryDomainScale: productTransform.scale,
         coreEmitterSourceReceipt: state.coreEmitterSourceReceipt ? { ...state.coreEmitterSourceReceipt } : null,
