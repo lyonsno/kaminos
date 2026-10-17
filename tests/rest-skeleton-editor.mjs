@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
-import {createRestSkeletonEditor} from '../experiments/creature-motion/rest-skeleton.experiment.mjs';
+import {createRestSkeletonEditor,loadRestEditorInput} from '../experiments/creature-motion/rest-skeleton.experiment.mjs';
 import {createSceneEdits,axisVector} from '../scene-edit-session.mjs';
 const explicitProfile=()=>({schema:'kaminos.quadruped-correspondence.v1',id:'synthetic-partial',authority:'Test only',trunk:['root','forelimb-left-shoulder'],fore:{left:['forelimb-left-shoulder','elbowL','wristL'],right:['forelimb-right-shoulder','elbowR','wristR']},hind:{left:['hipL','kneeL','ankleL'],right:['hipR','kneeR','ankleR']}});
 const pose=()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]});
@@ -12,8 +12,9 @@ const input=()=>({plan:plan(),baseline_sha256:'a'.repeat(64),display_matrix:new 
 async function open(inputs=input()){
  const scene=new THREE.Scene(),objects=[],edits=createSceneEdits({read:()=>null,write:()=>{}});let adapter,preferences={pivot:'median',orientation:'world'};
  const session={attach:async root=>{scene.add(root);const asset={id:'object-'+objects.length,root};objects.push(asset);return asset;},setView(){},readView:()=>({position:[3,0,0],target:[0,0,0]}),redraw(){},dispose:async()=>{for(const o of objects)o.root.removeFromParent();}};
- const host={controls:{document:{defaultView:{kaminosSceneEdits:edits,kaminosSelection:{set(){}}}},transformSettings:()=>preferences,components:{register(id,value){adapter=value;return {changed(fn){fn?.();},dispose(){}};}}},scene:{open:async()=>session}};
- const editor=await createRestSkeletonEditor({host,inputs});return {editor,objects,edits,get adapter(){return adapter;},preferences};
+ let properties,opened;const element=()=>({children:[],dataset:{},style:{},append(...children){this.children.push(...children);},replaceChildren(...children){this.children=children;},setAttribute(){},querySelectorAll(){return [];}}),document={createElement:element,defaultView:{kaminosWorkbenchExperiments:{async open(id,inputs){opened=await loadRestEditorInput(inputs);}},kaminosSceneEdits:edits,kaminosSelection:{set(){}}}};
+ const host={controls:{document,mountObject:value=>{properties=value.properties;return {dispose(){}};},transformSettings:()=>preferences,components:{register(id,value){adapter=value;return {changed(fn){fn?.();},dispose(){}};}}},scene:{open:async()=>session}};
+ const editor=await createRestSkeletonEditor({host,inputs});return {editor,objects,edits,get adapter(){return adapter;},get properties(){return properties;},get opened(){return opened;},preferences,mount(){editor.mount({root:element(),document,invoke:(name,value)=>Promise.resolve(editor.operations[name](value))});}};
 }
 test('actual factory restores default/legacy side axes and explicit reference placement',async()=>{
  for(const axis of ['x','z',null]){
@@ -41,4 +42,13 @@ test('atlas follows actual edits, keeps unsupported cells visible, and survives 
  ctx.adapter.enter();const before=read.proportions.candidate.trunk.length;ctx.editor.operations.move({name:'forelimb-left-shoulder',position:[-4,2,0]});read=ctx.editor.read();assert.notEqual(read.proportions.candidate.trunk.length,before);await ctx.editor.operations.undo();assert.equal(ctx.editor.read().proportions.candidate.trunk.length,before);
  const heads=ctx.editor.read().joints.map(j=>j.head);ctx.objects[1].root.position.set(3,4,5);ctx.editor.operations.reference({id:'test-ref-2'});assert.equal(ctx.editor.read().proportions.activeReference,'test-ref-2');assert.deepEqual(ctx.editor.read().joints.map(j=>j.head),heads);assert.deepEqual(ctx.objects[1].root.position.toArray(),[3,4,5]);await ctx.editor.operations.undo();assert.equal(ctx.editor.read().proportions.activeReference,'test-ref');await ctx.editor.operations.redo();assert.equal(ctx.editor.read().proportions.activeReference,'test-ref-2');
  const saved=ctx.editor.operations.export();assert.equal(saved.rest_authoring.proportionAtlas.activeReference,'test-ref-2');const reopened=await open({plan:saved});assert.deepEqual(reopened.editor.read().proportions,ctx.editor.read().proportions);await reopened.editor.dispose();await ctx.editor.dispose();
+});
+test('mounted descriptor failure leaves readable unmeasurable anatomy with working Undo and subsequent edits',async()=>{
+ const inputs=input();inputs.plan.joints.push(joint('neck','forelimb-left-shoulder',[0,4,0]));const profile=explicitProfile();profile.trunk=['root','neck'];const reference={...inputs.reference,id:'ref',label:'Reference',source:{path:'synthetic',sha256:'a'.repeat(64)},profile};inputs.proportion_atlas={schema:'kaminos.skeleton-proportion-atlas.v1',profile,activeReference:'ref',references:[reference]};
+ const ctx=await open(inputs);ctx.mount();ctx.adapter.enter();const before=ctx.editor.operations.export();ctx.editor.operations.move({name:'root',position:[0,4,0]});assert.equal(ctx.edits.state().active,null);assert.equal(ctx.editor.read().proportions.status,'unmeasurable');await ctx.editor.operations.undo();assert.deepEqual(ctx.editor.operations.export().joints,before.joints);ctx.editor.operations.move({name:'root',position:[0,1,0]});assert.notEqual(ctx.editor.read().proportions.status,'unmeasurable');await ctx.editor.dispose();
+});
+test('Open skeleton retains current comparison for an older saved edit of the same graph',async()=>{
+ const inputs=input(),reference={...inputs.reference,id:'r',label:'r',source:{path:'synthetic',sha256:'b'.repeat(64)},profile:explicitProfile()};inputs.proportion_atlas={schema:'kaminos.skeleton-proportion-atlas.v1',profile:explicitProfile(),activeReference:'r',references:[reference]};const ctx=await open(inputs);ctx.mount();const saved=ctx.editor.operations.export();delete saved.rest_authoring.proportionAtlas;saved.joints[1].head[0]-=.2;saved.joints[1].matrix[0][3]-=.2;
+ const descendants=node=>[node,...(node.children??[]).flatMap(descendants)],file=descendants(ctx.properties).find(n=>n.type==='file');file.files=[{text:async()=>JSON.stringify(saved)}];await file.onchange();assert.equal(ctx.opened.proportionAtlas.activeReference,'r');assert.deepEqual(ctx.opened.plan.joints,saved.joints);
+ const changed=structuredClone(saved);changed.joints[1].name='different-shoulder';file.files=[{text:async()=>JSON.stringify(changed)}];await file.onchange();assert.equal(ctx.opened.proportionAtlas,null);assert.deepEqual(ctx.opened.plan.joints,changed.joints);await ctx.editor.dispose();
 });
