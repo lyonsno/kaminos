@@ -26,7 +26,7 @@ try {
   assert.equal(packed.version, '0.2.3');
   assert.equal(await fs.readFile(path.join(output, 'keep.txt'), 'utf8'), 'caller-owned output');
   const entries = execFileSync('tar', ['-tzf', packed.tarball], { encoding: 'utf8' }).trim().split('\n').sort();
-  assert.deepEqual(entries, ['GETTING_STARTED.md', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js']
+  assert.deepEqual(entries, ['GETTING_STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt', 'package.json', 'supermat-cpu-worker.js', 'supermat-inference.js']
     .map(file => `package/${file}`).sort());
 
   const app = path.join(scratch, 'app');
@@ -39,7 +39,11 @@ try {
   const worker = require.resolve('@kaminos/supermat/worker');
   const manifest = require('@kaminos/supermat/package.json');
   assert.equal(manifest.private, true, 'publication remains a separate operator decision');
-  assert.equal(manifest.license, 'UNLICENSED');
+  assert.equal(manifest.license, 'MIT');
+  assert.deepEqual(await fs.readFile(path.join(path.dirname(entry), 'LICENSE')),
+    await fs.readFile(new URL('../models/supermat/LICENSE', import.meta.url)));
+  assert.deepEqual(await fs.readFile(path.join(path.dirname(entry), 'THIRD_PARTY_NOTICES.txt')),
+    await fs.readFile(new URL('../webgpu-inference-kit/THIRD_PARTY_NOTICES.txt', import.meta.url)));
   assert.equal(manifest.version, '0.2.3');
   assert.equal(manifest.dependencies, undefined, 'the exercised standalone artifacts are self-contained');
   assert.equal(path.dirname(entry), path.dirname(worker));

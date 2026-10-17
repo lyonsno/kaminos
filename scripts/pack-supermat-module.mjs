@@ -16,12 +16,14 @@ export async function packSuperMatModule({ out, version = '0.1.0' } = {}) {
   try {
     await buildSuperMatModule(stage);
     await fs.copyFile(new URL('../models/supermat/GETTING_STARTED.md', import.meta.url), path.join(stage, 'GETTING_STARTED.md'));
+    await fs.copyFile(new URL('../models/supermat/LICENSE', import.meta.url), path.join(stage, 'LICENSE'));
+    await fs.copyFile(new URL('../webgpu-inference-kit/THIRD_PARTY_NOTICES.txt', import.meta.url), path.join(stage, 'THIRD_PARTY_NOTICES.txt'));
     const manifest = {
-      name: '@kaminos/supermat', version, private: true, type: 'module', license: 'UNLICENSED',
+      name: '@kaminos/supermat', version, private: true, type: 'module', license: 'MIT',
       description: "SuperMat turns an RGBA image into albedo, roughness, and metallic maps on your application's GPU.",
       main: './supermat-inference.js',
       exports: { '.': './supermat-inference.js', './worker': './supermat-cpu-worker.js', './package.json': './package.json' },
-      files: ['supermat-inference.js', 'supermat-cpu-worker.js', 'GETTING_STARTED.md'],
+      files: ['supermat-inference.js', 'supermat-cpu-worker.js', 'GETTING_STARTED.md', 'LICENSE', 'THIRD_PARTY_NOTICES.txt'],
       repository: { type: 'git', url: 'git+https://github.com/lyonsno/kaminos.git', directory: 'models/supermat' },
       keywords: ['webgpu', 'supermat', 'inverse-rendering', 'material-estimation', 'roughness', 'metallic'],
     };
