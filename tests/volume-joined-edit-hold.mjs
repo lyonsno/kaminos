@@ -16,7 +16,7 @@ function fixture(){
   currentFluid:0,currentFront:0,currentQuench:0,gridSize:4,gridHeight:8,preparingJoinedExterior:false,
   gpuThermalConsumer:null,encodeGpuThermalConsumer(){},
   joinedGhostSynthetic:null,joinedGhostGeometry:geometry,controlsSnapshot:{},computePipeline:{},transportPredictBindGroup:{},
-  queueMicrotask:fn=>queued.push(fn),refreshSceneCollision(){},joinedEditingHeld(){return ctx.state.joinedEditing.held;},
+  queueMicrotask:fn=>queued.push(fn),refreshSceneCollision(){},ensureAppearanceLayout(){},joinedEditingHeld(){return ctx.state.joinedEditing.held;},
   joinedProducerSnapshot:()=>({}),resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
   fluidBindGroup:()=>({}),encodeAnalyticEmitterInjection(){},updateSimCostLedger(){},
   encodePressureProjection(){calls.pressure++;return false;},syncJoinedRender(){calls.render++;},applyJoinedGhostGeometry(){throw Error('unexpected allocation');},
