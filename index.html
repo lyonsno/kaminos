@@ -1578,6 +1578,24 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-physical-soot-burnout-kelvin-val">1300</span>
       </div>
       <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
+      <div class="volume-control-section-title">Wavelet turbulence</div>
+      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved four-to-eight-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
+      <div class="slider-row">
+        <span class="slider-label" title="Fraction of the sub-grid deficit filled per reference step. 0 = off (kernel unchanged); 1 = fill it every step.">Wavelet turbulence</span>
+        <input type="range" id="volume-wavelet-turbulence" min="0" max="1" step="any" value="0">
+        <span class="slider-val" id="volume-wavelet-turbulence-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Octaves synthesized below four cells: 1 = four-cell eddies only, 2 adds two-cell.">Wavelet octaves</span>
+        <input type="range" id="volume-wavelet-octaves" min="1" max="2" step="1" value="2">
+        <span class="slider-val" id="volume-wavelet-octaves-val">2</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Multiplier on the Kolmogorov target amplitude. 1 = the cascade expectation from the resolved 8–11-cell motion; above 1 exaggerates the sub-grid detail on purpose.">Wavelet strength</span>
+        <input type="range" id="volume-wavelet-strength" min="0.25" max="4" step="any" value="1">
+        <span class="slider-val" id="volume-wavelet-strength-val">1.00</span>
+      </div>
+      <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
@@ -17249,6 +17267,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalKelvinPerHeat', id: 'volume-physical-kelvin-per-heat', param: 'volume_physical_kelvin_per_heat', min: 100, max: 6000, continuous: true, decimals: 0 },
   { key: 'physicalSootBurnoutRate', id: 'volume-physical-soot-burnout-rate', param: 'volume_physical_soot_burnout_rate', min: 0, max: 2, continuous: true, decimals: 3 },
   { key: 'physicalSootBurnoutKelvin', id: 'volume-physical-soot-burnout-kelvin', param: 'volume_physical_soot_burnout_kelvin', min: 600, max: 3000, continuous: true, decimals: 0 },
+  { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
+  { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -18842,7 +18863,7 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
-    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
+    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
@@ -19688,6 +19709,13 @@ function refreshVolumeReadout() {
       ? `admitted · gain ${heatRelease.effective.expansion.toFixed(2)} · residual measures D(v) − S`
       : `heat-release — NOT ADMITTED (${heatRelease.effective.reason}); set Pressure solver to converged open top and Projection above 0`);
   syncPhysicsAppearanceCockpit(s.physicsAppearance);
+  const waveletState = document.getElementById('volume-wavelet-turbulence-state');
+  if (waveletState) {
+    const wavelet = s.waveletTurbulence;
+    waveletState.textContent = !wavelet?.effective?.admitted
+      ? 'Wavelet turbulence: off'
+      : `Wavelet turbulence: on · gain ${wavelet.gain.toFixed(2)} · ${wavelet.octaves} octave${wavelet.octaves === 1 ? '' : 's'} below ${wavelet.baseWavelengthCells} cells · strength ${wavelet.strength.toFixed(2)}× Kolmogorov${wavelet.strength > 1.001 ? ' (exaggerated)' : ''} · coordinates reset every ${wavelet.coherencePeriodSteps} steps`;
+  }
   syncVolumeViewerPlay(s);
   const appearance = s.appearanceModel;
   document.getElementById('volume-appearance-model-state').textContent = !appearance || appearance.effective !== 'compact-3'
