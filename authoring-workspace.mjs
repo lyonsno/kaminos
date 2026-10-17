@@ -31,7 +31,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
   hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
-  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Outliner</h2><span id="authoring-object-count"></span><button type="button" id="authoring-group-selection" class="authoring-heading-action" title="Group selection" aria-label="Group selection"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4.2l1.3 1.6H14v7.4H2zM8 7.6v3.6M6.2 9.4h3.6"/></svg></button></div><div id="authoring-tree" title="Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)"></div>`;
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2 title="Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)">Outliner</h2><span id="authoring-object-count"></span><button type="button" id="authoring-group-selection" class="authoring-heading-action" title="Group selection" aria-label="Group selection"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4.2l1.3 1.6H14v7.4H2zM8 7.6v3.6M6.2 9.4h3.6"/></svg></button></div><div id="authoring-tree"></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
