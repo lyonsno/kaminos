@@ -22,19 +22,25 @@ try{
  const control=async(id,value)=>page.evaluate(({id,value})=>{const c=document.getElementById(id);if(!c)throw Error(`Missing ${id}`);c.value=value;c.dispatchEvent(new Event('input',{bubbles:true}));c.dispatchEvent(new Event('change',{bubbles:true}));if(c.value!==value)throw Error(`Rejected ${id}=${value}`);},{id,value:String(value)});
  await control('volume-render-scale',.5);await control('volume-steps',64);await control('volume-look-freeze',0);
  await control('volume-pressure-resolution','off');await control('volume-wavelet-turbulence',1);
- await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosFrameSelected();});
+ await page.evaluate(()=>{window.selectSceneField('flame-field');window.kaminosSetCameraDebugPose({position:[10,6,13],target:[0,3,0]});});
  for(const mode of ['off','on']){
   report.phase=`world-${mode}`;await save();await control('volume-world-smoke',mode);
   const step=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
-  await page.waitForFunction(({step,mode})=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.simStepCount>=step+60&&(mode==='off'||s.worldSmoke?.effective==='one-way-world-field');},{step,mode});
+  await page.waitForFunction(({step,mode})=>{const s=window.__kaminosVolumePrototype.debugState();if(s.error)throw Error(s.error);return s.simStepCount>=step+240&&(mode==='off'||s.worldSmoke?.effective==='one-way-world-field');},{step,mode});
   const state=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());report.arms.push({mode,state});await save();
   assert.ok(/^webgpu:/i.test(state.backend)&&!/swiftshader|software/i.test(state.backend));
   assert.equal(state.controls.reactionLaw,'reactant-v0');assert.equal(state.pressureResolution.effective,'off');
   if(mode==='on'){assert.deepEqual(state.worldSmoke.flowDims,[16,32,16]);assert.deepEqual(state.worldSmoke.materialDims,[32,64,32]);assert.equal(state.worldSmoke.materialLaw,'reactant-v0');}
+  await page.locator('#selected-world-smoke-status').scrollIntoViewIfNeeded();
   await page.screenshot({path:`${out}/${mode}.png`});
  }
  assert.deepEqual(report.errors,[]);report.phase='save-scene';await save();
  report.saved=await page.evaluate(()=>window.saveScene({result:true}));assert.equal(report.saved.ok,true);
+ report.phase='reopen';await save();await page.goto(report.saved.url);
+ await page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState?.().worldSmoke?.steps>60);
+ report.reopened=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());
+ assert.equal(report.reopened.worldSmoke.effective,'one-way-world-field');assert.equal(report.reopened.waveletTurbulence.effective.admitted,true);
+ await page.screenshot({path:`${out}/reopened.png`});assert.deepEqual(report.errors,[]);
  report.status='passed';report.phase='complete';
 }catch(e){report.status='failed';report.error=String(e.stack||e);process.exitCode=1;if(page)try{report.failureState=await page.evaluate(()=>window.__kaminosVolumePrototype?.debugState?.());await page.screenshot({path:`${out}/failure.png`});}catch(capture){report.captureError=String(capture);}}
 finally{await save();await browser?.close();}
