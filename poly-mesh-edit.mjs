@@ -9,6 +9,31 @@ function checkedPlane({point,normal}={}){
   const l=Math.hypot(...normal);if(!(l>0))throw Error('Cut plane normal must not be zero');
   return {p:point,n:normal.map(x=>x/l)};
 }
+// A cut surface: a plane {point, normal} or a cylinder {kind:'cylinder', point, axis, radius}.
+// Each gives a signed distance (above the plane, outside the cylinder is positive) and, for
+// the cylinder, the exact parameter where an edge crosses it. Planes keep the linear crossing.
+function checkedCutter(shape){
+  if(shape?.kind==='cylinder'){
+    const {point,axis,radius}=shape;
+    if(![point,axis].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite)))throw Error('Cut cylinder needs a finite point and axis');
+    const l=Math.hypot(...axis);if(!(l>0))throw Error('Cut cylinder axis must not be zero');
+    if(!(radius>0&&Number.isFinite(radius)))throw Error('Cut cylinder radius must be positive');
+    const c=point,a=axis.map(x=>x/l);
+    const radialOf=(x,y,z)=>{const dx=x-c[0],dy=y-c[1],dz=z-c[2],along=dx*a[0]+dy*a[1]+dz*a[2];return [dx-along*a[0],dy-along*a[1],dz-along*a[2],along];};
+    return {kind:'cylinder',c,a,radius,radialOf,
+      distance:(x,y,z)=>{const r=radialOf(x,y,z);return Math.hypot(r[0],r[1],r[2])-radius;},
+      // Where segment A->B meets the cylinder: |rA + t (rB - rA)| = radius, nearest the linear guess.
+      crossing:(A,B,dA,dB)=>{
+        const ra=radialOf(A[0],A[1],A[2]),rb=radialOf(B[0],B[1],B[2]),e=[rb[0]-ra[0],rb[1]-ra[1],rb[2]-ra[2]];
+        const qa=e[0]*e[0]+e[1]*e[1]+e[2]*e[2],qb=2*(ra[0]*e[0]+ra[1]*e[1]+ra[2]*e[2]),qc=ra[0]*ra[0]+ra[1]*ra[1]+ra[2]*ra[2]-radius*radius,guess=dA/(dA-dB);
+        if(!(qa>0))return guess;const disc=qb*qb-4*qa*qc;if(disc<0)return guess;
+        const roots=[(-qb-Math.sqrt(disc))/(2*qa),(-qb+Math.sqrt(disc))/(2*qa)].filter(t=>t>=0&&t<=1);
+        return roots.length?roots.reduce((best,t)=>Math.abs(t-guess)<Math.abs(best-guess)?t:best):guess;
+      }};
+  }
+  const {p,n}=checkedPlane(shape);
+  return {kind:'plane',p,n,distance:(x,y,z)=>n[0]*(x-p[0])+n[1]*(y-p[1])+n[2]*(z-p[2]),crossing:null};
+}
 function checkedFaceMask(arrays,mask){
   if(!mask||mask.length!==arrays.indices.length/3)throw Error('Face selection must have one entry per face');
   return mask;
@@ -18,9 +43,9 @@ function defaultEpsilon(positions){
   for(let i=0;i<positions.length;i++){const k=i%3;lo[k]=Math.min(lo[k],positions[i]);hi[k]=Math.max(hi[k],positions[i]);}
   return 1e-6*Math.max(Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2]),1e-12);
 }
-function vertexDistances(mesh,{p,n},epsilon){
-  const d=new Float64Array(mesh.vertexCount),q=mesh.vertexPositions;
-  for(let v=0;v<mesh.vertexCount;v++){const x=n[0]*(q[3*v]-p[0])+n[1]*(q[3*v+1]-p[1])+n[2]*(q[3*v+2]-p[2]);d[v]=Math.abs(x)<epsilon?0:x;}
+function vertexDistances(mesh,cutter,epsilon){
+  const d=new Float64Array(mesh.vertexCount),q=mesh.vertexPositions,distance=cutter.distance;
+  for(let v=0;v<mesh.vertexCount;v++){const x=distance(q[3*v],q[3*v+1],q[3*v+2]);d[v]=Math.abs(x)<epsilon?0:x;}
   return d;
 }
 // Growable output arrays that start as copies of the source render vertices.
@@ -74,7 +99,7 @@ function triangulateConvex(polygon,P,emit){
 // so long triangles crossing the line can fall outside it and would hold the sides together.
 export function followCut(arrays,mask,plane,{epsilon}={}) {
   checkedFaceMask(arrays,mask);
-  const cutPlane=checkedPlane(plane),mesh=buildPolyMesh(arrays),d=vertexDistances(mesh,cutPlane,epsilon??defaultEpsilon(arrays.positions));
+  const cutter=checkedCutter(plane),mesh=buildPolyMesh(arrays),d=vertexDistances(mesh,cutter,epsilon??defaultEpsilon(arrays.positions));
   const {cornerVertex:CV,vertexFaceOffsets:VO,vertexFaces:VF}=mesh,out=Uint8Array.from(mask),stack=[];
   const crosses=f=>{let above=false,below=false;for(let c=3*f;c<3*f+3;c++){const x=d[CV[c]];above||=x>0;below||=x<0;}return above&&below;};
   for(let f=0;f<mesh.faceCount;f++)if(out[f]&&crosses(f))stack.push(f);
@@ -90,12 +115,13 @@ export function followCut(arrays,mask,plane,{epsilon}={}) {
 // absorb its cut point without being split, so no T-junction opens a crack.
 export function bisectFaces(arrays,mask,plane,{epsilon}={}) {
   checkedFaceMask(arrays,mask);
-  const cutPlane=checkedPlane(plane),mesh=buildPolyMesh(arrays),eps=epsilon??defaultEpsilon(arrays.positions);
-  const d=vertexDistances(mesh,cutPlane,eps),edgeT=new Float64Array(mesh.edgeCount).fill(NaN);
+  const cutter=checkedCutter(plane),mesh=buildPolyMesh(arrays),eps=epsilon??defaultEpsilon(arrays.positions);
+  const d=vertexDistances(mesh,cutter,eps),edgeT=new Float64Array(mesh.edgeCount).fill(NaN);
   const {cornerEdge,cornerVertex,edgeVertices,vertexPositions:Q}=mesh,I=arrays.indices,N=arrays.normals,U=arrays.uvs;
   for(let f=0;f<mesh.faceCount;f++)if(mask[f])for(let c=3*f;c<3*f+3;c++){
     const e=cornerEdge[c];if(e===NO_EDGE)continue;
-    const a=edgeVertices[2*e],b=edgeVertices[2*e+1];if(d[a]*d[b]<0)edgeT[e]=d[a]/(d[a]-d[b]);
+    const a=edgeVertices[2*e],b=edgeVertices[2*e+1];
+    if(d[a]*d[b]<0)edgeT[e]=cutter.crossing?cutter.crossing(Q.subarray(3*a,3*a+3),Q.subarray(3*b,3*b+3),d[a],d[b]):d[a]/(d[a]-d[b]);
   }
   const out=builder(arrays),cuts=new Map(),side=[],sourceFace=[],material=arrays.faceMaterial;
   const lerp=(values,width,r,s,t)=>Array.from({length:width},(_,k)=>values[width*r+k]+t*(values[width*s+k]-values[width*r+k]));
@@ -149,7 +175,7 @@ export function extractFaces(arrays,mask) {
 // its faces traverse it, reversed, so caps face out of the part whatever its
 // winding; nested loops become holes, so a cut tube gets an annulus.
 export function capPlanarOpenings(arrays,plane,{side=null,epsilon,material=1}={}) {
-  const capPlane=checkedPlane(plane),mesh=buildPolyMesh(arrays),eps=epsilon??defaultEpsilon(arrays.positions),d=vertexDistances(mesh,capPlane,eps);
+  const capPlane=checkedPlane(plane),mesh=buildPolyMesh(arrays),eps=epsilon??defaultEpsilon(arrays.positions),d=vertexDistances(mesh,checkedCutter(plane),eps);
   const {edgeFaceOffsets:offsets,edgeCorners,cornerVertex,vertexPositions:Q}=mesh,outgoing=new Map();
   for(let e=0;e<mesh.edgeCount;e++){
     if(offsets[e+1]-offsets[e]!==1)continue;
@@ -223,6 +249,7 @@ export function cutBarrier(mesh,side) {
 // segments, and triangulated with its holes.
 export function sectionSegments(sourceArrays,mask,plane) {
   checkedFaceMask(sourceArrays,mask);
+  if(plane?.kind==='cylinder')return cylinderSectionSegments(sourceArrays,mask,checkedCutter(plane));
   const {p,n}=checkedPlane(plane),P=sourceArrays.positions,I=sourceArrays.indices;
   const ua=Math.abs(n[0])<.9?[0,-n[2],n[1]]:[n[2],0,-n[0]],ul=Math.hypot(...ua),U=ua.map(x=>x/ul),V=[n[1]*U[2]-n[2]*U[1],n[2]*U[0]-n[0]*U[2],n[0]*U[1]-n[1]*U[0]];
   const segments=[],dist=r=>n[0]*(P[3*r]-p[0])+n[1]*(P[3*r+1]-p[1])+n[2]*(P[3*r+2]-p[2]);
@@ -241,7 +268,74 @@ export function sectionSegments(sourceArrays,mask,plane) {
     if(s[1]*m2[0]-s[0]*m2[1]<0)[a,b]=[b,a];
     segments.push([a,b]);
   }
-  return {segments,point:p,normal:n,U,V};
+  return {segments,point:p,normal:n,U,V,toWorld:q=>[0,1,2].map(k=>p[k]+q.x*U[k]+q.y*V[k]),normalAt:()=>n};
+}
+
+// The cylinder's section in its unrolled chart: x is radius times the angle around the axis, y
+// the position along it, so (x, y, outward) is right-handed as (U, V, normal) is for a plane.
+// The unrolling seam goes in the widest angle with no section, opposite the cut geometry.
+function cylinderSectionSegments(sourceArrays,mask,cutter){
+  const {c,a,radius,radialOf}=cutter,P=sourceArrays.positions,I=sourceArrays.indices;
+  const ua=Math.abs(a[0])<.9?[0,-a[2],a[1]]:[a[2],0,-a[0]],ul=Math.hypot(...ua),u=ua.map(x=>x/ul),v=[a[1]*u[2]-a[2]*u[1],a[2]*u[0]-a[0]*u[2],a[0]*u[1]-a[1]*u[0]];
+  const dot=(x,y)=>x[0]*y[0]+x[1]*y[1]+x[2]*y[2],at=r=>[P[3*r],P[3*r+1],P[3*r+2]],raw=[];
+  for(let f=0;f<I.length/3;f++){
+    if(!mask[f])continue;
+    const r=[I[3*f],I[3*f+1],I[3*f+2]],d=r.map(i=>cutter.distance(...at(i)));
+    if(!(d.some(x=>x>0)&&d.some(x=>x<0)))continue;
+    const points=[];
+    for(let i=0;i<3;i++){const j=(i+1)%3;if(d[i]===0)points.push(at(r[i]));if(d[i]*d[j]<0){const A=at(r[i]),B=at(r[j]),t=cutter.crossing(A,B,d[i],d[j]);points.push([0,1,2].map(k=>A[k]+t*(B[k]-A[k])));}}
+    if(points.length!==2)continue;
+    const e0=[P[3*r[1]]-P[3*r[0]],P[3*r[1]+1]-P[3*r[0]+1],P[3*r[1]+2]-P[3*r[0]+2]],e1=[P[3*r[2]]-P[3*r[0]],P[3*r[2]+1]-P[3*r[0]+1],P[3*r[2]+2]-P[3*r[0]+2]];
+    raw.push([points[0],points[1],[e0[1]*e1[2]-e0[2]*e1[1],e0[2]*e1[0]-e0[0]*e1[2],e0[0]*e1[1]-e0[1]*e1[0]]]);
+  }
+  const angleOf=xyz=>{const q=radialOf(...xyz);return Math.atan2(dot(q,v),dot(q,u));};
+  const angles=raw.flatMap(([p0,p1])=>[angleOf(p0),angleOf(p1)]).sort((x,y)=>x-y);
+  let seam=Math.PI;
+  if(angles.length){let gap=angles[0]+2*Math.PI-angles.at(-1);seam=angles.at(-1)+gap/2;for(let i=1;i<angles.length;i++)if(angles[i]-angles[i-1]>gap){gap=angles[i]-angles[i-1];seam=angles[i-1]+gap/2;}}
+  const middle=seam+Math.PI,turn=x=>{let y=x;while(y<=-Math.PI)y+=2*Math.PI;while(y>Math.PI)y-=2*Math.PI;return y;};
+  // Orient each segment so the inside lies to the left of travel in the chart, as on a plane.
+  const oriented=raw.map(([p0,p1,m])=>{
+    const t0=angleOf(p0),t1=t0+turn(angleOf(p1)-t0),theta=(t0+t1)/2,tangent=[0,1,2].map(k=>-Math.sin(theta)*u[k]+Math.cos(theta)*v[k]),m2=[dot(m,tangent),dot(m,a)];
+    const dx=radius*(t1-t0),dy=radialOf(...p1)[3]-radialOf(...p0)[3];
+    return dy*m2[0]-dx*m2[1]<0?[p1,p0]:[p0,p1];
+  });
+  // Link segments into chains by their 3D end points, and unroll each closed chain continuously.
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+  for(const sgm of oriented)for(const q of sgm)for(let k=0;k<3;k++){lo[k]=Math.min(lo[k],q[k]);hi[k]=Math.max(hi[k],q[k]);}
+  const tol=1e-6*Math.max(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2],1e-12),key=q=>q.map(x=>Math.round(x/tol)).join(',');
+  const starting=new Map();oriented.forEach((sgm,i)=>{const k=key(sgm[0]);if(!starting.has(k))starting.set(k,[]);starting.get(k).push(i);});
+  const used=new Uint8Array(oriented.length),loops=[];
+  for(let i=0;i<oriented.length;i++){
+    if(used[i])continue;
+    const loop=[],first=key(oriented[i][0]);let j=i,closed=false;
+    while(j!==undefined&&!used[j]){used[j]=1;loop.push(oriented[j][0]);const end=key(oriented[j][1]);if(end===first){closed=true;break;}j=starting.get(end)?.find(k=>!used[k]);}
+    if(closed&&loop.length>=3)loops.push(loop);
+  }
+  // The exact cut point behind every chart point, so the cap's rim reuses the body's vertices
+  // rather than a trigonometric round trip that can differ from them in the last bits.
+  const exact=new Map(),chartKey=(x,y)=>`${Math.round(x/tol)},${Math.round(y/tol)}`,remember=(x,y,q)=>{exact.set(chartKey(x,y),q);return [x,y];};
+  const unroll=(loop,x0)=>{const out=[];let x=x0,prev=angleOf(loop[0]);for(const q of loop){const t=angleOf(q);x+=radius*turn(t-prev);prev=t;out.push(remember(x,radialOf(...q)[3],q));}
+    const t=angleOf(loop[0]);x+=radius*turn(t-prev);return {points:out,end:x};};
+  const start=q=>radius*turn(angleOf(q)-middle);
+  const segments=[],wraps={1:[],[-1]:[]};
+  for(const loop of loops){
+    const {points,end}=unroll(loop,start(loop[0])),winding=Math.round((end-points[0][0])/(2*Math.PI*radius));
+    if(!winding){points.forEach((q,i)=>segments.push([q,points[(i+1)%points.length]]));continue;}
+    (wraps[winding>0?1:-1]).push({loop,points});
+  }
+  // A band all the way round: two chains winding opposite ways. Join them with a seam edge
+  // between two existing cut vertices, travelled once each way, so nothing new appears on the rim.
+  while(wraps[1].length&&wraps[-1].length){
+    const up=wraps[1].pop(),down=wraps[-1].pop(),T=up.points[0];
+    let bi=0,best=Infinity;down.loop.forEach((q,i)=>{const d=Math.abs(turn(angleOf(q)-angleOf(up.loop[0])));if(d<best){best=d;bi=i;}});
+    const rotated=[...down.loop.slice(bi),...down.loop.slice(0,bi)],{points:dp}=unroll(rotated,T[0]+radius*turn(angleOf(rotated[0])-angleOf(up.loop[0]))),period=2*Math.PI*radius;
+    // up runs T to T+period; the seam goes to B+period, down runs back to B, and the seam returns to T.
+    const path=[...up.points,remember(T[0]+period,T[1],up.loop[0]),...dp.map(([x,y],i)=>remember(x+period,y,rotated[i])),dp[0]];
+    for(let i=0;i<path.length;i++){const A=path[i],B=path[(i+1)%path.length];if(A[0]!==B[0]||A[1]!==B[1])segments.push([A,B]);}
+  }
+  const toWorld=q=>{const known=exact.get(chartKey(q.x,q.y));if(known)return [...known];const theta=q.x/radius+middle,cs=Math.cos(theta),sn=Math.sin(theta);return [0,1,2].map(k=>c[k]+q.y*a[k]+radius*(cs*u[k]+sn*v[k]));};
+  const normalAt=xyz=>{const q=radialOf(...xyz),l=Math.hypot(q[0],q[1],q[2])||1;return [q[0]/l,q[1]/l,q[2]/l];};
+  return {segments,point:c,normal:a,U:u,V:v,toWorld,normalAt};
 }
 
 // Link oriented section segments end to start into closed loops. Neighboring faces
@@ -268,14 +362,14 @@ export function sectionLoops(segments) {
 export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budget=4e7,fill='winding'}={}) {
   if(side!==1&&side!==-1)throw Error('Section cap needs the side the part lies on, 1 or -1');
   if(fill!=='winding'&&fill!=='outline')throw Error("Section cap fill is 'winding' or 'outline'");
-  const {segments,point:p,normal:n,U,V}=sectionSegments(sourceArrays,mask,plane);
+  const section=sectionSegments(sourceArrays,mask,plane),{segments}=section;
   const start=arrays.indices.length/3;
   if(!segments.length)return {arrays,capFaces:0,firstFace:start,segments:0,regions:0,openChains:0};
   if(fill==='outline'){
     const {loops,openChains}=sectionLoops(segments),rings=loops.map(loop=>loop.map(([x,y])=>new Vector2(x,y)));
     const inside=(ring,q)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++)if((ring[i].y>q.y)!==(ring[j].y>q.y)&&q.x<(ring[j].x-ring[i].x)*(q.y-ring[i].y)/(ring[j].y-ring[i].y)+ring[i].x)c=!c;return c;};
     const outermost=rings.filter((ring,i)=>!rings.some((other,j)=>j!==i&&Math.abs(ShapeUtils.area(other))>Math.abs(ShapeUtils.area(ring))&&inside(other,ring[0])));
-    const capped=emitSectionCap(arrays,outermost.map(outer=>({outer,holes:[]})),{p,n,U,V,side,material,tiny:0});
+    const capped=emitSectionCap(arrays,outermost.map(outer=>({outer,holes:[]})),{section,side,material,tiny:0});
     return {...capped,firstFace:start,segments:segments.length,regions:outermost.length,openChains,loops:loops.length};
   }
   const lo=[Infinity,Infinity],hi=[-Infinity,-Infinity];
@@ -320,18 +414,18 @@ export function sectionCap(arrays,sourceArrays,mask,plane,{side,material=1,budge
   const area=ShapeUtils.area,outers=outlines.filter(o=>area(o)>0),holes=outlines.filter(o=>area(o)<0);
   const inside=(ring,q)=>{let c=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++)if((ring[i].y>q.y)!==(ring[j].y>q.y)&&q.x<(ring[j].x-ring[i].x)*(q.y-ring[i].y)/(ring[j].y-ring[i].y)+ring[i].x)c=!c;return c;};
   const shapes=outers.map(outer=>({outer,holes:holes.filter(hole=>inside(outer,hole[0])&&!outers.some(o=>o!==outer&&area(o)<area(outer)&&inside(o,hole[0])&&inside(outer,o[0])))}));
-  const capped=emitSectionCap(arrays,shapes,{p,n,U,V,side,material,tiny:1e-12*h*h});
+  const capped=emitSectionCap(arrays,shapes,{section,side,material,tiny:1e-12*h*h});
   return {...capped,firstFace:start,segments:segments.length,regions:outers.length,openChains:0,grid:[nx,ny],cell:h};
 }
 
 // Triangulate plane-space shapes into cap faces facing out of the part on the given side.
-function emitSectionCap(arrays,shapes,{p,n,U,V,side,material,tiny}){
-  const out=builder(arrays),normal=n.map(x=>-side*x);let capFaces=0;
+function emitSectionCap(arrays,shapes,{section,side,material,tiny}){
+  const out=builder(arrays),{toWorld,normalAt}=section;let capFaces=0;
   for(const {outer,holes} of shapes){
     const ring=[outer,...holes].flat(),base=out.positions.length/3;
     const bx=[Infinity,-Infinity],by=[Infinity,-Infinity];for(const q of ring){bx[0]=Math.min(bx[0],q.x);bx[1]=Math.max(bx[1],q.x);by[0]=Math.min(by[0],q.y);by[1]=Math.max(by[1],q.y);}
     const extent=Math.max(bx[1]-bx[0],by[1]-by[0])||1;
-    for(const q of ring)out.add([0,1,2].map(k=>p[k]+q.x*U[k]+q.y*V[k]),normal,[(q.x-bx[0])/extent,(q.y-by[0])/extent]);
+    for(const q of ring){const xyz=toWorld(q);out.add(xyz,normalAt(xyz).map(x=>-side*x),[(q.x-bx[0])/extent,(q.y-by[0])/extent]);}
     for(const [a,b,c] of ShapeUtils.triangulateShape(outer.map(q=>q.clone()),holes.map(hole=>hole.map(q=>q.clone())))){
       const turn=(ring[b].x-ring[a].x)*(ring[c].y-ring[a].y)-(ring[b].y-ring[a].y)*(ring[c].x-ring[a].x);
       if(Math.abs(turn)<=tiny)continue;

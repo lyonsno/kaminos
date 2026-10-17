@@ -53,7 +53,8 @@ export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='P
   const {primitive,arrays,faces,selected}=editedPrimitive(sourceBytes,faceMask,geometry);
   if(!selected)throw Error('Select the faces to slice, around where the cut goes');
   const {mask:cutMask,followed}=followCut(arrays,faceMask,plane),cut=bisectFaces(arrays,cutMask,plane);
-  if(!cut.cutVertices)throw Error('The line does not cross the selected faces');
+  const circle=plane?.kind==='cylinder';
+  if(!cut.cutVertices)throw Error(`The ${circle?'circle':'line'} does not cross the selected faces`);
   // Grow each side from its own faces along the cut. The smaller side is the part; everything
   // else, including selected debris the cut never touches, stays with the remainder.
   const mesh=buildPolyMesh(cut.arrays),barrier=cutBarrier(mesh,cut.side),seeds={1:[],[-1]:[]};
@@ -61,14 +62,38 @@ export function sliceSelection(sourceBytes,faceMask,plane,{geometry=null,name='P
   const above=selectLinkedFaces(mesh,seeds[1],{barrier}),below=selectLinkedFaces(mesh,seeds[-1],{barrier});
   let aboveFaces=0,belowFaces=0;
   for(let f=0;f<mesh.faceCount;f++){if(above[f]&&below[f])throw Error('The cut does not separate the mesh: the two sides still join elsewhere. Select the whole junction, or move the line');aboveFaces+=above[f];belowFaces+=below[f];}
-  const partAbove=aboveFaces<=belowFaces,partMask=partAbove?above:below;
-  const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',plane:{point:[...plane.point],normal:[...plane.normal]},selectedFaces:selected,followedFaces:followed,sourceFaces:faces,cutVertices:cut.cutVertices};
-  const piece=(pieceArrays,keep,label,side)=>{
+  // A circle cuts out what is inside it; a line takes the smaller side.
+  const partAbove=circle?false:aboveFaces<=belowFaces,partMask=partAbove?above:below;
+  const where=circle?{shape:{kind:'cylinder',point:[...plane.point],axis:[...plane.axis],radius:plane.radius}}:{plane:{point:[...plane.point],normal:[...plane.normal]}};
+  const pieces=extractFaces(cut.arrays,partMask),bisect={op:'bisect',...where,selectedFaces:selected,followedFaces:followed,sourceFaces:faces,cutVertices:cut.cutVertices};
+  const piece=(pieceArrays,keep,label,side,frame=null)=>{
     const cap=sectionCap(pieceArrays,arrays,cutMask,plane,{side,fill});
-    const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains}]};
-    return {bytes:derived(sourceBytes,primitive,cap.arrays,label,receipt),faces:cap.arrays.indices.length/3,capFaces:cap.capFaces,openChains:cap.openChains,receipt};
+    const receipt={schema:'kaminos.poly-derivation.v0',source,operations:[bisect,{op:'separate',keep,by:'cut'},{op:'section-cap',fill,side,capFaces:cap.capFaces,regions:cap.regions,openChains:cap.openChains},...(frame?[{op:'origin',to:'hinge',point:frame.point,axis:frame.axis}]:[])]};
+    const node=frame?frame.node:primitive.node;
+    return {bytes:derived(sourceBytes,{...primitive,node},cap.arrays,label,receipt),faces:cap.arrays.indices.length/3,capFaces:cap.capFaces,openChains:cap.openChains,receipt,...(frame?{frame:{point:frame.point,axis:frame.axis,offset:frame.offset,rotation:frame.rotation}}:{})};
   };
-  return {part:piece(pieces.part,'selection',name,partAbove?1:-1),rest:piece(pieces.rest,'remainder',restName,partAbove?-1:1),cutVertices:cut.cutVertices};
+  const frame=circle?hingeFrame(pieces.part,plane,primitive.node):null;
+  return {part:piece(pieces.part,'selection',name,partAbove?1:-1,frame),rest:piece(pieces.rest,'remainder',restName,partAbove?-1:1),cutVertices:cut.cutVertices};
+}
+
+// The hinge frame of a circle cut's part: its origin on the cylinder axis, beside the part's
+// centre, and its local X along the axis (signed towards +X), so rotating it about X turns it
+// about the hinge. The node moves back by the same frame, so nothing moves on screen.
+function hingeFrame(part,{point,axis},node){
+  const P=part.positions,l=Math.hypot(...axis),a=axis.map(x=>x/l),centre=[0,0,0];
+  for(let i=0;i<P.length;i+=3)for(let k=0;k<3;k++)centre[k]+=P[i+k]*3/P.length;
+  const along=(centre[0]-point[0])*a[0]+(centre[1]-point[1])*a[1]+(centre[2]-point[2])*a[2],onAxis=[0,1,2].map(k=>point[k]+along*a[k]);
+  const N=node??[1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  const offset=[0,1,2].map(r=>N[r]*onAxis[0]+N[4+r]*onAxis[1]+N[8+r]*onAxis[2]+N[12+r]);
+  let b=[0,1,2].map(r=>N[r]*a[0]+N[4+r]*a[1]+N[8+r]*a[2]);const bl=Math.hypot(...b);b=b.map(x=>x/bl);
+  if(b[0]<0||(b[0]===0&&(b[1]<0||(b[1]===0&&b[2]<0))))b=b.map(x=>-x);
+  // Shortest rotation from +X to b, as a quaternion [x, y, z, w].
+  let q=[0,-b[2],b[1],1+b[0]];const ql=Math.hypot(...q);q=ql>1e-12?q.map(x=>x/ql):[0,0,1,0];
+  const [x,y,z,w]=q,R=[1-2*(y*y+z*z),2*(x*y+z*w),2*(x*z-y*w),0, 2*(x*y-z*w),1-2*(x*x+z*z),2*(y*z+x*w),0, 2*(x*z+y*w),2*(y*z-x*w),1-2*(x*x+y*y),0, 0,0,0,1];
+  // node' = R^T * translate(-offset) * N
+  const moved=[...N];for(let r=0;r<3;r++)moved[12+r]-=offset[r];
+  const out=new Array(16).fill(0);for(let col=0;col<4;col++)for(let row=0;row<4;row++)for(let k=0;k<4;k++)out[4*col+row]+=R[4*row+k]*moved[4*col+k];
+  return {point:onAxis,axis:a,offset,rotation:q,node:out};
 }
 
 function checkSameTriangles(P,I,{positions:Q,indices:J}) {

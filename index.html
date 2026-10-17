@@ -26687,7 +26687,7 @@ async function replacePolyObject({id,token,verb,sha256,pieces,mark=polyTimer()})
   polyEdit.api.exit();
   const before=checkSelectionMembership(readSelectionMembership()),original=before.objects.find(o=>o.id===id),ids=pieces.map(()=>makeSceneObjectId('mesh'));
   // Derivation ancestry rides in assetOrigin; the source's own origin and generation become its parent.
-  const records=pieces.map((piece,i)=>{const {generation,...kept}=structuredClone(original);const transform=structuredClone(original.transform);if(piece.shift)transform.position=transform.position.map((v,k)=>v+piece.shift[k]);
+  const records=pieces.map((piece,i)=>{const {generation,...kept}=structuredClone(original);const transform=structuredClone(original.transform);if(piece.shift)transform.position=transform.position.map((v,k)=>v+piece.shift[k]);if(piece.rotation)transform.rotation=[...piece.rotation];
     return {...kept,id:ids[i],source:stored[i].source,fileName:`${piece.name}.glb`,label:piece.name,createdAt:new Date().toISOString(),transform,
       assetOrigin:{...piece.receipt,sha256:stored[i].sha256,parent:{objectId:id,sha256,assetOrigin:original.assetOrigin??null,generation:generation??null}}};});
   const after=structuredClone(before);
@@ -26709,9 +26709,18 @@ async function splitPolyObject(verb,split){
   const label=entry.label||'Mesh',base=label.replace(/\.\d{3}$/,''),taken=new Set(sceneObjects.map(o=>o.label));
   let n=1;while(taken.has(`${base}.${String(n).padStart(3,'0')}`))n++;const partLabel=`${base}.${String(n).padStart(3,'0')}`;
   const {part,rest}=split(sourceBytes,mask,{geometry,name:partLabel,restName:label,source:{sha256,url:entry.source}});mark('compute');
-  const {ids:[restId,partId],stored:[restStored,partStored],timings}=await replacePolyObject({id,token,verb,sha256,mark,pieces:[{bytes:rest.bytes,name:label,receipt:rest.receipt},{bytes:part.bytes,name:partLabel,receipt:part.receipt}]});
-  setInfo(`${verb==='Slice'?'Sliced':'Separated'} ${part.faces} faces into ${partLabel}${part.capFaces!==undefined?` · caps ${part.capFaces} + ${rest.capFaces} faces${part.openChains||rest.openChains?` · ${part.openChains+rest.openChains} section chains left open`:''}`:''} · Undo restores`);
-  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partCapFaces:part.capFaces??0,restCapFaces:rest.capFaces??0,openChains:(part.openChains??0)+(rest.openChains??0),partSource:partStored.source,restSource:restStored.source,timings};
+  // A circle cut's part carries a hinge frame: the object moves onto the axis and turns its local X
+  // along it, while its mesh node moves back the same way, so nothing moves on screen.
+  let hinge={};
+  if(part.frame){
+    const scale=entry.object.scale;if(Math.abs(scale.x-scale.y)>1e-6*Math.abs(scale.x)||Math.abs(scale.x-scale.z)>1e-6*Math.abs(scale.x))throw Error('A hinge needs a uniformly scaled object; reset its scale first');
+    const shift=new THREE.Vector3(...part.frame.offset).multiply(scale).applyQuaternion(entry.object.quaternion).toArray();
+    const turned=entry.object.quaternion.clone().multiply(new THREE.Quaternion(...part.frame.rotation)),euler=new THREE.Euler().setFromQuaternion(turned,entry.object.rotation.order);
+    hinge={shift,rotation:[euler.x,euler.y,euler.z]};
+  }
+  const {ids:[restId,partId],stored:[restStored,partStored],timings}=await replacePolyObject({id,token,verb,sha256,mark,pieces:[{bytes:rest.bytes,name:label,receipt:rest.receipt},{bytes:part.bytes,name:partLabel,receipt:part.receipt,...hinge}]});
+  setInfo(`${part.frame?`Cut a hinge: ${partLabel} turns about its X axis through the circle's centre ·`:''} ${verb==='Slice'?'Sliced':'Separated'} ${part.faces} faces into ${partLabel}${part.capFaces!==undefined?` · caps ${part.capFaces} + ${rest.capFaces} faces${part.openChains||rest.openChains?` · ${part.openChains+rest.openChains} section chains left open`:''}`:''} · Undo restores`);
+  return {partId,restId,partFaces:part.faces,restFaces:rest.faces,partCapFaces:part.capFaces??0,restCapFaces:rest.capFaces??0,openChains:(part.openChains??0)+(rest.openChains??0),partSource:partStored.source,restSource:restStored.source,timings,...(part.frame?{hinge:{point:part.frame.point,axis:part.frame.axis}}:{})};
 }
 // Origin to Selection (Shift+S): the selection's median becomes the object's origin, so it turns
 // about that point. The object moves by the offset, rotated and scaled by its transform, and the

@@ -35,9 +35,15 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // The cut line for Slice (K): drawn like Blender's bisect line, shown as a dashed rule.
   const line=document.createElement?.('div');
   if(line){line.hidden=true;Object.assign(line.style,{position:'absolute',height:'0',borderTop:'2px dashed #ff9a1f',transformOrigin:'0 0',pointerEvents:'none',zIndex:20});viewport.appendChild?.(line);}
-  function armCut(){cancelBox();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · the cut runs along it, into the view · Escape cancels');}
-  function cancelCut(){cutLine=null;if(line)line.hidden=true;}
-  function drawCut(x,y){if(!line||!cutLine?.start)return;const v=viewport.getBoundingClientRect(),dx=x-cutLine.start.x,dy=y-cutLine.start.y;Object.assign(line.style,{left:cutLine.start.x-v.left+'px',top:cutLine.start.y-v.top+'px',width:Math.hypot(dx,dy)+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});line.hidden=false;}
+  function armCut(){cancelBox();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
+  function cancelCut(){cutLine=null;if(line)line.hidden=true;if(ring)ring.hidden=true;}
+  const ring=document.createElement?.('div');
+  if(ring){ring.hidden=true;Object.assign(ring.style,{position:'absolute',border:'2px dashed #ff9a1f',borderRadius:'50%',pointerEvents:'none',zIndex:20});viewport.appendChild?.(ring);}
+  function drawCut(x,y){
+    if(!cutLine?.start)return;const v=viewport.getBoundingClientRect(),dx=x-cutLine.start.x,dy=y-cutLine.start.y,r=Math.hypot(dx,dy);
+    if(cutLine.circle){if(ring){Object.assign(ring.style,{left:cutLine.start.x-r-v.left+'px',top:cutLine.start.y-r-v.top+'px',width:2*r+'px',height:2*r+'px'});ring.hidden=false;}return;}
+    if(line){Object.assign(line.style,{left:cutLine.start.x-v.left+'px',top:cutLine.start.y-v.top+'px',width:r+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});line.hidden=false;}
+  }
   function armBox(){cancelCut();box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
   function cancelBox(){box=null;pointer=null;if(rect)rect.hidden=true;}
   function cancelAll(){cancelBox();cancelCut();}
@@ -84,15 +90,16 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   },true);
   document.addEventListener('pointerdown',event=>{
     if(!live()||!insideCanvas(event)||overlayHit(event))return;
-    if(cutLine){steal(event);if(event.button!==0){cancelCut();hud();return;}cutLine.start={x:event.clientX,y:event.clientY};return;}
+    // With Shift held, the drag is a circle from the joint's centre to its rim (a hinge cut).
+    if(cutLine){steal(event);if(event.button!==0){cancelCut();hud();return;}cutLine.start={x:event.clientX,y:event.clientY};cutLine.circle=event.shiftKey;return;}
     if(box){steal(event);if(event.button===2){cancelBox();hud();return;}box.start={x:event.clientX,y:event.clientY};box.mode=event.button===1?'subtract':'extend';return;}
     if(event.button===0)pointer={x:event.clientX,y:event.clientY,id:event.pointerId};
   },true);
   document.addEventListener('pointerup',event=>{
     if(!live())return;
     if(cutLine?.start){
-      steal(event);const from=cutLine.start;cancelCut();
-      const plane=attempt(()=>edit.planeFromLine(from.x,from.y,event.clientX,event.clientY));
+      steal(event);const from=cutLine.start,circle=cutLine.circle;cancelCut();
+      const plane=attempt(()=>circle?edit.circleFromDrag(from.x,from.y,event.clientX,event.clientY):edit.planeFromLine(from.x,from.y,event.clientX,event.clientY));
       if(plane)runOnce(()=>slice(plane));else hud();return;
     }
     if(box?.start){steal(event);const r={x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},mode=box.mode;cancelBox();attempt(()=>edit.box(r,{mode}));return;}
@@ -120,7 +127,7 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   const api=Object.freeze({
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
-    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),
+    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),circleFromDrag:(x0,y0,x1,y1)=>edit.circleFromDrag(x0,y0,x1,y1),
     selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),

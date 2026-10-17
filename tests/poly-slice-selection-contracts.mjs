@@ -102,3 +102,35 @@ assert.equal(separateSelection(column,someFaces).part.faces,1,'Separate works on
   assert.equal(cut.part.receipt.operations[0].followedFaces,1,'the receipt says the cut followed one unselected face');
 }
 
+
+// Circle cut: a cylinder along the view cuts the selected faces. The inside of the circle becomes
+// the part, both openings are capped on the cylinder, and the part's origin sits on the axis with
+// its local X along it, so rotating about X turns it about the hinge.
+{
+  const N=8,P=[],Q=[],vertex=(x,y,z)=>{P.push(x,y,z);return P.length/3-1;};
+  const grid=z=>{const ids=[];for(let j=0;j<=N;j++)for(let i=0;i<=N;i++)ids.push(vertex(-2+4*i/N,-2+4*j/N,z));return (i,j)=>ids[j*(N+1)+i];};
+  const top=grid(.1),bottom=grid(-.1),face=(a,b,c,d)=>Q.push(a,b,c,a,c,d);
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){face(top(i,j),top(i+1,j),top(i+1,j+1),top(i,j+1));face(bottom(i,j),bottom(i,j+1),bottom(i+1,j+1),bottom(i+1,j));}
+  for(let i=0;i<N;i++){face(bottom(i,0),bottom(i+1,0),top(i+1,0),top(i,0));face(bottom(i+1,N),bottom(i,N),top(i,N),top(i+1,N));face(bottom(0,i+1),bottom(0,i),top(0,i),top(0,i+1));face(bottom(N,i),bottom(N,i+1),top(N,i+1),top(N,i));}
+  const PP=Float32Array.from(P),QQ=Uint32Array.from(Q),pb=new Uint8Array(PP.byteLength+QQ.byteLength);pb.set(new Uint8Array(PP.buffer),0);pb.set(new Uint8Array(QQ.buffer),PP.byteLength);
+  const plate=encodeGlb({asset:{version:'2.0'},scene:0,scenes:[{nodes:[0]}],nodes:[{mesh:0}],meshes:[{primitives:[{attributes:{POSITION:0},indices:1,material:0}]}],materials:[{name:'steel'}],
+    buffers:[{byteLength:pb.length}],bufferViews:[{buffer:0,byteOffset:0,byteLength:PP.byteLength},{buffer:0,byteOffset:PP.byteLength,byteLength:QQ.byteLength}],
+    accessors:[{bufferView:0,componentType:5126,count:PP.length/3,type:'VEC3'},{bufferView:1,componentType:5125,count:QQ.length,type:'SCALAR'}]},pb);
+  const R=1.1,cylinder={kind:'cylinder',point:[0,0,0],axis:[0,0,1],radius:R};
+  const cut=sliceSelection(plate,new Uint8Array(QQ.length/3).fill(1),cylinder,{name:'Hub'});
+  const radial=bytes=>{const [p]=readTrianglePrimitives(bytes),r=[];for(let i=0;i<p.positions.length;i+=3)r.push(Math.hypot(p.positions[i],p.positions[i+1]));return r;};
+  assert.ok(radial(cut.part.bytes).every(r=>r<=R+1e-5),'the part is the inside of the circle');
+  assert.ok(radial(cut.rest.bytes).every(r=>r>=R-1e-5),'the rest is the plate around it');
+  assert.ok(closed(cut.part.bytes)&&closed(cut.rest.bytes),'both pieces are closed by caps');
+  const capOf=bytes=>{const all=readTrianglePrimitives(bytes),cap=all.find(p=>p.material===1),used=new Set(cap.indices);return [...used].map(v=>Math.hypot(cap.positions[3*v],cap.positions[3*v+1]));};
+  assert.ok(capOf(cut.part.bytes).every(r=>Math.abs(r-R)<1e-4),'the cap lies on the cylinder');
+  assert.equal(cut.part.receipt.operations[0].shape.kind,'cylinder');
+  // The hinge frame: the axis point maps to the part's origin and the axis to its local X.
+  const node=readTrianglePrimitives(cut.part.bytes)[0].worldMatrices[0],apply=(m,[x,y,z],w=1)=>[0,1,2].map(r=>m[r]*x+m[4+r]*y+m[8+r]*z+w*m[12+r]);
+  const round=v=>v.map(x=>Math.round(x*1e6)/1e6+0);
+  assert.deepEqual(round(apply(node,cut.part.frame.point)),[0,0,0],'the axis point sits on the origin');
+  assert.deepEqual(round(apply(node,[0,0,1],0)),[1,0,0],'the hinge axis is the part\'s local X');
+  assert.deepEqual(round(cut.part.frame.offset),round(cut.part.frame.point),'the object moves to the axis point');
+  assert.equal(cut.part.frame.rotation.length,4);
+  assert.throws(()=>sliceSelection(plate,new Uint8Array(QQ.length/3).fill(1),{kind:'cylinder',point:[0,0,0],axis:[0,0,0],radius:1}),/axis/);
+}

@@ -73,8 +73,12 @@ key('KeyK');drag(0,200,400,200);await new Promise(r=>setTimeout(r));
 assert.equal(slices.length,1,'K then a drag slices once');
 assert.ok(Math.abs(Math.abs(slices[0].normal[1])-1)<1e-6,'along the drawn line: horizontal');
 assert.equal(api.read().counts.vertices,8,'the drag was the cut line, not a box selection');
+// K then a Shift-drag from a centre out to a rim cuts a circle: a cylinder along the view.
+key('KeyK');drag(200,200,260,200,{shiftKey:true});await new Promise(r=>setTimeout(r));
+assert.equal(slices.length,2,'the circle slices once');assert.equal(slices[1].kind,'cylinder');
+assert.ok(slices[1].radius>0&&Math.abs(Math.abs(slices[1].axis[2])-1)<1e-9,'a cylinder along the view');
 key('KeyK');key('Escape');drag(0,200,400,200);await new Promise(r=>setTimeout(r));
-assert.equal(slices.length,1,'Escape disarms it; the next drag is a box again');
+assert.equal(slices.length,2,'Escape disarms it; the next drag is a box again');
 key('Tab');
 
 // Shift+S puts the origin on the selection, through the app.

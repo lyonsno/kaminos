@@ -186,6 +186,18 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
       const normal=p1.sub(a.origin).cross(p2.sub(a.origin)).normalize();
       return {point:a.origin.toArray(),normal:normal.toArray()};
     },
+    // Circle cut: dragged from the joint's centre to its rim. A cylinder along the view ray through
+    // the centre, at the depth of the selection (or the mesh), with the rim ray's distance as radius.
+    circleFromDrag(x0,y0,x1,y1){
+      const {kernel,selection}=need();if(Math.hypot(x1-x0,y1-y0)<6)throw Error('Drag out further: from the centre of the joint to its rim');
+      const axisRay=localRay(x0,y0),rimRay=localRay(x1,y1),d=axisRay.direction,q=kernel.vertexPositions;
+      let depthPoint=null;try{depthPoint=new Vector3(...this.selectionMedian());}catch{}
+      if(!depthPoint){const lo=new Vector3(Infinity,Infinity,Infinity),hi=new Vector3(-Infinity,-Infinity,-Infinity),v=new Vector3();for(let i=0;i<kernel.vertexCount;i++){v.set(q[3*i],q[3*i+1],q[3*i+2]);lo.min(v);hi.max(v);}depthPoint=lo.add(hi).multiplyScalar(.5);}
+      const centre=axisRay.origin.clone().addScaledVector(d,depthPoint.clone().sub(axisRay.origin).dot(d));
+      const along=rimRay.direction.dot(d),t=centre.clone().sub(rimRay.origin).dot(d)/(Math.abs(along)>1e-9?along:1);
+      const offAxis=rimRay.origin.clone().addScaledVector(rimRay.direction,t).sub(centre);offAxis.addScaledVector(d,-offAxis.dot(d));
+      return {kind:'cylinder',point:centre.toArray(),axis:d.toArray(),radius:offAxis.length()};
+    },
     // Where Origin to Selection puts the pivot: the median of the selected vertices, in the mesh frame.
     selectionMedian(){
       const {selection,kernel}=need(),q=kernel.vertexPositions,sum=[0,0,0];let n=0;

@@ -147,6 +147,16 @@ assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mes
   assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,4,'only the four front corners are visible');
   flat.setThrough(true);assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,8);flat.setThrough(false);
   // Clicks and slice lines go through the pixel in an orthographic view too.
+  // A circle dragged from a centre to a rim: a cylinder along the view, at the selection's depth.
+  {
+    const centre=flat.screenOf([0,0,0]),rim=flat.screenOf([.5,0,0]);
+    const cyl=flat.circleFromDrag(centre.x,centre.y,rim.x,rim.y);
+    assert.equal(cyl.kind,'cylinder');
+    assert.ok(Math.abs(Math.abs(cyl.axis[2])-1)<1e-9,'the axis runs along the view');
+    assert.ok(Math.hypot(cyl.point[0],cyl.point[1])<1e-6&&Math.abs(cyl.point[2])<1e-6,'through the centre, at the mesh\'s depth');
+    assert.ok(Math.abs(cyl.radius-.5)<1e-6,`radius as dragged, got ${cyl.radius}`);
+    assert.throws(()=>flat.circleFromDrag(centre.x,centre.y,centre.x+2,centre.y),/Drag out further/);
+  }
   flat.setMode('face');const front=flat.screenOf([0,0,1]);
   const hit=flat.click(front.x,front.y);assert.ok([8,9].includes(hit.active.index),`the front face under the cursor, got ${hit.active.index}`);
   const level=flat.planeFromLine(front.x-50,front.y,front.x+50,front.y);
