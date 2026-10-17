@@ -54,7 +54,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  Object.assign(reticle.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosAttentionReticle:true});
  const ringMaterial=new THREE.LineBasicMaterial({color:0xffc857,depthTest:false,transparent:true,opacity:.95});
  for(const rotate of [[0,0,0],[Math.PI/2,0,0],[0,Math.PI/2,0]]){
-  const ring=new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({length:40},(_,i)=>new THREE.Vector3(Math.cos(i/40*Math.PI*2),Math.sin(i/40*Math.PI*2),0))),ringMaterial);
+  // Closed Line, not LineLoop: the WebGPU renderer does not draw LineLoop.
+  const ring=new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({length:41},(_,i)=>new THREE.Vector3(Math.cos(i/40*Math.PI*2),Math.sin(i/40*Math.PI*2),0))),ringMaterial);
   ring.rotation.set(...rotate);ring.renderOrder=999;reticle.add(ring);
  }
  reticle.visible=false;

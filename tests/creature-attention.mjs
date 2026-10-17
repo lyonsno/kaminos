@@ -55,6 +55,7 @@ function run(attention,c,seconds,start=0,step=1/30){c.base??=new Map([...c.bones
  assert.ok(state.weight>.85,`look has blended in (${state.weight})`);
  assert.ok(alignment(c.bones,point)>before+.2,`head actually turns toward it (${before} -> ${alignment(c.bones,point)})`);
  assert.ok(attention.reticle.visible,'reticle shows the active focus');
+ attention.reticle.traverse(node=>assert.ok(!node.isLineLoop,'reticle uses primitives the WebGPU renderer draws'));
  c.placement.updateMatrixWorld(true);const marked=attention.reticle.getWorldPosition(new THREE.Vector3());
  assert.ok(marked.distanceTo(new THREE.Vector3(...point))<1e-6,'reticle sits on the focus point');
  // Record the rhythm rather than sampling one instant: a hold, a real
