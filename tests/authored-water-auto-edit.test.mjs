@@ -5,7 +5,7 @@ import {mountAuthoredWaterControls} from '../authored-water-controls.mjs';
 function fixture({sourceRoot=null,simulationRoot=null}={}){
  const nodes=new Map(),numbers=[],boundInputs=[],drags=new Map();
  const input=selector=>{if(!nodes.has(selector)){const node={value:'',checked:false,dataset:{},classList:{add(){}},listeners:{},addEventListener(k,fn){this.listeners[k]=fn;}};nodes.set(selector,node);}return nodes.get(selector);};
- for(const name of ['width','samples','rate','radius','strength','passes','spacing'])numbers.push(input('[data-'+name+']'));
+ for(const name of ['width','samples','rate','radius','strength','passes','target'])numbers.push(input('[data-'+name+']'));
  const section={querySelector:input,querySelectorAll(selector){if(selector==='label')return [];if(selector==='input[type=number]')return [...numbers,...boundInputs];if(selector==='[data-bound]')return boundInputs;const kind=selector.match(/data-bound=(min|max)/)?.[1];return boundInputs.filter(n=>n.dataset.bound===kind);},remove(){}};
  input('[data-bounds]').append=row=>boundInputs.push(...row.children);
  input('[data-simulation]').querySelectorAll=section.querySelectorAll.bind(section);
@@ -58,7 +58,7 @@ test('SWC-2 consecutive drags own separate edits and cancellation',async()=>{
  drag.onStart();f.draftWidth(1);drag.onEnd();await f.controls.flush();assert.equal(f.history.state().undoCount,2,'Completed numeric drags each own one edit');await f.history.undo();assert.equal(f.api.read().selected.settings.drop.width,.75);
 });
 function sharedFixture(container=true){
- const f=historyFixture();let settings={densityIterations:2,waterSampling:{spacing:.05,container:container?{min:[-2,-1,-2],max:[2,3,2]}:null,...(!container?{worldBounds:{min:[-2,-1,-2],max:[2,3,2]}}:{})}};
+ const f=historyFixture();let settings={densityIterations:2,waterSampling:{spacing:.05,particleTarget:1000,container:container?{min:[-2,-1,-2],max:[2,3,2]}:null,...(!container?{worldBounds:{min:[-2,-1,-2],max:[2,3,2]}}:{})}};
  const read=f.api.read;f.api.read=()=>({...read(),simulation:{present:true,settings,sampling:settings.waterSampling,proposedParticleCount:1000,relativeVolumeError:0}});
  f.history.register('@simulation',{read:()=>structuredClone(settings),check:v=>({...v,waterSampling:normalizeAuthoredWaterSampling(v.waterSampling)}),write:v=>{settings=structuredClone(v);f.controls.refresh();}});
  f.api.editSimulation=patch=>f.history.apply('@simulation',{...settings,...patch},'Water spacing');f.controls.refresh();return f;
@@ -70,13 +70,13 @@ for(const container of [true,false])test('SWC-3 blank shared bounds preserve acc
  minX.value='-1.5';minX.listeners.input();await f.settle();const accepted=f.api.read().simulation.sampling;assert.equal((accepted.container??accepted.worldBounds).min[0],-1.5);assert.equal(f.input('[data-simulation-error]').textContent,'');
 });
 test('Shared spacing previews during a drag without changing source amount or history, and cancels cleanly',async()=>{
- const f=sharedFixture(),previews=[];f.api.preview=v=>previews.push(v);const drag=f.drags.get(f.input('[data-spacing]'));
- drag.onStart();f.input('[data-spacing]').value=.04;f.input('[data-spacing]').listeners.input();await f.settle();
- assert.equal(previews.at(-1).waterSampling.spacing,.04);assert.equal(f.api.read().simulation.sampling.spacing,.05);assert.equal(f.history.state().undoCount,0);assert.equal(f.api.read().selected.settings.drop.width,.5);
+ const f=sharedFixture(),previews=[];f.api.preview=v=>{previews.push(v);return v?{draft:true,sampling:{...v.waterSampling,spacing:Math.cbrt(.125/v.waterSampling.particleTarget)}}:null;};const drag=f.drags.get(f.input('[data-target]'));
+ drag.onStart();f.input('[data-target]').value=2000;f.input('[data-target]').listeners.input();await f.settle();
+ assert.equal(previews.at(-1).waterSampling.particleTarget,2000);assert.equal(f.api.read().simulation.sampling.particleTarget,1000);assert.equal(f.history.state().undoCount,0);assert.equal(f.api.read().selected.settings.drop.width,.5);
  assert.match(f.input('[data-proposed]').textContent,/2,197 particles/);
- f.input('[data-spacing]').listeners.pointercancel();drag.onEnd();await f.settle();assert.equal(previews.at(-1),null);assert.equal(Number(f.input('[data-spacing]').value),.05);assert.equal(f.history.state().undoCount,0);
- drag.onStart();f.input('[data-spacing]').value=.04;f.input('[data-spacing]').listeners.input();drag.onEnd();await f.controls.flush();assert.equal(f.api.read().simulation.sampling.spacing,.04);assert.equal(f.history.state().undoCount,1);
- await f.history.undo();assert.equal(f.api.read().simulation.sampling.spacing,.05);await f.history.redo();assert.equal(f.api.read().simulation.sampling.spacing,.04);assert.equal(f.api.read().selected.settings.drop.width,.5);
+ f.input('[data-target]').listeners.pointercancel();drag.onEnd();await f.settle();assert.equal(previews.at(-1),null);assert.equal(Number(f.input('[data-target]').value),1000);assert.equal(f.history.state().undoCount,0);
+ drag.onStart();f.input('[data-target]').value=2000;f.input('[data-target]').listeners.input();drag.onEnd();await f.controls.flush();assert.equal(f.api.read().simulation.sampling.particleTarget,2000);assert.equal(f.history.state().undoCount,1);
+ await f.history.undo();assert.equal(f.api.read().simulation.sampling.particleTarget,1000);await f.history.redo();assert.equal(f.api.read().simulation.sampling.particleTarget,2000);assert.equal(f.api.read().selected.settings.drop.width,.5);
  f.controls.dispose();await f.settle();assert.equal(previews.at(-1),null);
 });
 

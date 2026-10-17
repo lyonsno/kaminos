@@ -16,15 +16,26 @@ export function normalizeAuthoredWaterDrop(value={}) {
 }
 export function normalizeAuthoredWaterSampling(value){
  if(!value||!Number.isFinite(value.spacing)||value.spacing<=0)throw Error('Water particle spacing must be positive and finite');
+ if(value.particleTarget!==undefined&&(!Number.isFinite(value.particleTarget)||value.particleTarget<1||value.particleTarget>Number.MAX_SAFE_INTEGER))throw Error('Water particle target must be a finite count of at least one');
  const checked=normalizeAuthoredWaterDrop({container:value.container===null?null:value.container,worldBounds:value.worldBounds});
- return {spacing:value.spacing,container:checked.container,...(checked.container===null?{worldBounds:checked.worldBounds}:{})};
+ return {spacing:value.spacing,...(value.particleTarget!==undefined?{particleTarget:value.particleTarget}:{}),container:checked.container,...(checked.container===null?{worldBounds:checked.worldBounds}:{})};
 }
 export function resolveAuthoredWaterSampling(records,setup={}){
- if(setup.waterSampling)return normalizeAuthoredWaterSampling(setup.waterSampling);
- const first=records.find(r=>r.localLiquidEmitter?.mode==='finite_drop');
- if(!first)return normalizeAuthoredWaterSampling({spacing:1/48,container:DEFAULT_BOUNDS});
- const d=describeAuthoredWaterDrop(first.localLiquidEmitter.drop,first.transform);
- return normalizeAuthoredWaterSampling({spacing:d.spacing,container:d.containerEnabled?d.bounds:null,...(!d.containerEnabled?{worldBounds:d.bounds}:{})});
+ const finite=records.filter(r=>r.localLiquidEmitter?.mode==='finite_drop');
+ let sampling;
+ if(setup.waterSampling)sampling=normalizeAuthoredWaterSampling(setup.waterSampling);
+ else if(finite.length){const d=describeAuthoredWaterDrop(finite[0].localLiquidEmitter.drop,finite[0].transform);sampling=normalizeAuthoredWaterSampling({spacing:d.spacing,container:d.containerEnabled?d.bounds:null,...(!d.containerEnabled?{worldBounds:d.bounds}:{})});}
+ else sampling=normalizeAuthoredWaterSampling({spacing:1/48,particleTarget:13824,container:DEFAULT_BOUNDS});
+ const volume=finite.reduce((sum,r)=>{
+  const drop=normalizeAuthoredWaterDrop(r.localLiquidEmitter.drop),scale=r.transform.scale[0];
+  if(!Number.isFinite(scale)||scale<=0||r.transform.scale.some(v=>v!==scale))throw Error('Drop requires positive uniform source scale');
+  return sum+(drop.width*scale)**3;
+ },0);
+ if(!Number.isFinite(volume))throw Error('Requested water volume is not representable');
+ // Legacy spacing seeds its equivalent target without changing that resolution.
+ // Once saved, spacing is a derived cache; the target and current volume govern.
+ if(sampling.particleTarget===undefined)return {...sampling,particleTarget:volume?Math.max(1,volume/sampling.spacing**3):13824};
+ return {...sampling,spacing:volume?Math.cbrt(volume/sampling.particleTarget):sampling.spacing};
 }
 export function describeAuthoredWaterDrop(drop,pose,sampling=null) {
  const settings=normalizeAuthoredWaterDrop(drop),scale=pose.scale[0],width=settings.width*scale;

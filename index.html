@@ -12701,7 +12701,8 @@ function replaceAuthoredWaterPreviewChildren(entry,replacement){
 let authoredWaterDraftPreview=null;
 function previewAuthoredWaterSetup(draft=null){
  if(!draft&&!authoredWaterDraftPreview)return {initialOnly:true,draft:false};
- const sampling=draft?.waterSampling??resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup??{});
+ const records=localLiquidEmitterRecords().map(r=>draft?.source&&draft.id===r.id?{...r,localLiquidEmitter:{...r.localLiquidEmitter,...draft.source}}:r);
+ const sampling=resolveAuthoredWaterSampling(records,{...localLiquidSetup,waterSampling:draft?.waterSampling??localLiquidSetup?.waterSampling});
  const rows=sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
  const builds=[],updates=[];
  try{for(const row of rows){
@@ -12717,14 +12718,17 @@ function previewAuthoredWaterSetup(draft=null){
  }}catch(error){for(const [,object]of builds)object.traverse(n=>{n.geometry?.dispose();for(const m of(Array.isArray(n.material)?n.material:[n.material]).filter(Boolean))m.dispose();});throw error;}
  for(const [row,object]of builds)replaceAuthoredWaterPreviewChildren(row,object);for(const update of updates)update();
  authoredWaterDraftPreview=draft;window._kaminosDirty?.();
- return {initialOnly:true,draft:!!draft};
+ const descriptions=records.filter(r=>r.localLiquidEmitter.mode==='finite_drop').map(r=>describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling));
+ const requestedVolume=descriptions.reduce((sum,d)=>sum+d.requestedVolume,0),representedVolume=descriptions.reduce((sum,d)=>sum+d.worldVolume,0);
+ return {initialOnly:true,draft:!!draft,sampling,particleCount:descriptions.reduce((sum,d)=>sum+d.particleCount,0),relativeVolumeError:requestedVolume?representedVolume/requestedVolume-1:0};
 }
 
 let refreshingWaterPreviews=false;
 function refreshAuthoredWaterSamplingPreviews(){
  if(refreshingWaterPreviews||!localLiquidSetup?.waterSampling)return;
  refreshingWaterPreviews=true;
- try{for(const row of sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')){
+ try{localLiquidSetup=normalizeLocalLiquidSetup({...localLiquidSetup,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),localLiquidSetup)});
+ for(const row of sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop')){
   const pose=sceneObjectTransformState(row.object),d=describeAuthoredWaterDrop(row.localLiquidEmitter.drop,pose,localLiquidSetup.waterSampling),p=row.object.children.find(c=>c.userData.kaminosWaterPreview);
   if(p&&p.count===d.particleCount&&Math.abs(p.userData.spacing*pose.scale[0]-d.spacing)<1e-12&&p.userData.requestedVolume===d.requestedVolume)continue;
   replaceAuthoredWaterSettings(row.id,row.localLiquidEmitter,null,{deferSync:true});
@@ -12757,7 +12761,7 @@ function editAuthoredWaterSimulation(patch){
  if(Object.keys(patch).some(key=>!['densityIterations','waterSampling'].includes(key)))throw Error('Water simulation edits require shared density or sampling settings');
  const target='@authored-water-simulation';
  if(!authoredWaterSimulationTarget){scenePlacementTools.edits.register(target,{read:()=>structuredClone(localLiquidSetup),check:normalizeLocalLiquidSetup,write:value=>{
-  const next=normalizeLocalLiquidSetup(value);
+  const next=normalizeLocalLiquidSetup({...value,waterSampling:resolveAuthoredWaterSampling(localLiquidEmitterRecords(),value)});
   // Prepare complete previews before admitting a shared-resolution edit.
   const rows=sceneObjects.filter(r=>r.type===LOCAL_LIQUID_EMITTER_TYPE&&r.localLiquidEmitter.mode==='finite_drop');
   const replacements=rows.map(row=>createLocalLiquidEmitterObject(THREE,{...serializeSceneObject(row),transform:sceneObjectTransformState(row.object)},{sampling:next.waterSampling}).object);
