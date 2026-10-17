@@ -1773,6 +1773,28 @@
   ],
   "rendererControls": [
     {
+      "key": "volume-raymarch-mode",
+      "param": "volume_raymarch_mode",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "allowedValues": ["current", "numerical", "fixed"],
+      "additiveDefault": "numerical"
+    },
+    {
+      "key": "volume-optical-tolerance",
+      "param": "volume_optical_tolerance",
+      "tagName": "INPUT",
+      "type": "number",
+      "additiveDefault": 0.001
+    },
+    {
+      "key": "volume-ray-step-telemetry",
+      "param": "volume_ray_step_telemetry",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": false
+    },
+    {
       "key": "volume-ray-start-noise",
       "param": "volume_ray_start_noise",
       "tagName": "INPUT",

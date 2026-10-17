@@ -73,6 +73,7 @@ export const FLAME_INSPECTOR_VIEWS = [
 ];
 export const FLAME_PROPERTY_GROUPS = [
   { name:'Quality', view:'quality', open:true, fields:[
+    ['volume-raymarch-mode','Ray marcher'], ['volume-optical-tolerance','Tolerance'], ['volume-ray-step-telemetry','Ray statistics'],
     ['volume-resolution','Grid width (cells)'], ['volume-grid-height-ratio','Height / width'], ['volume-pressure-solver-iterations','Solver sweeps'], ['volume-steps','Ray count'],
     ['volume-adaptive-rays','Adaptive rays'], ['volume-occupancy-skip','Empty-space acceleration'],
     ['volume-ray-start-noise','Blue-noise ray starts'], ['volume-render-scale','Screen resolution (%)'],
@@ -260,7 +261,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         field.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key==='Escape')confirm(event.key);});
       }
       field.setAttribute('aria-label',`Flame ${label}`);
-      field.dataset.authoringDragStep=source.step==='any'?'.01':source.step||'.01';
+      field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
       if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';
       function syncField(force=false) {
         const bounds=readControlBounds(id);
@@ -289,6 +290,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     }
     if(group.name==='Emission')section.append(runtimeStatus);
     if(group.name==='Material')section.append(appearanceStatus);
+    if(group.name==='Quality')section.append(byId('volume-raymarch-status'),byId('volume-ray-step-stats'));
     (group.name==='Emission'?host:panels.get(group.view)).append(section);
     sections.push({section,group,rows:sectionRows,open:!!group.open});
   }
