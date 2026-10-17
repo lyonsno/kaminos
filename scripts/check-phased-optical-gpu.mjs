@@ -53,6 +53,9 @@ export async function checkPhasedOpticalGpu(page, observed = async () => {}) {
     assert.equal(q[4],0,'ray entry is sampled, not shifted away');
     assert.equal(q[5],1,'clipped exit is sampled');assert.equal(q[8],q[9],'cursor reaches full exit');
   }
-  for(const row of rows)assert.notEqual(row.values[6],row.values[18],'phase changes interior sample placement');
+  for(const row of rows){
+    assert.notEqual(row.values[6],row.values[18],'phase changes interior sample placement');
+    assert.notEqual(row.values[66],row.values[78],'guidance retains phased interior placement');
+  }
   return rows;
 }
