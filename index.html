@@ -20621,6 +20621,7 @@ async function initKaminosVolumeRoute() {
       if (p) document.getElementById('volume-pressure-resolution-val').textContent = p.dispatched
         ? `${p.pressureDims.join('×')} pressure · ${p.materialDims.join('×')} material (live)`
         : `original${p.reason ? ` (${p.reason})` : ''}`;
+      flameInspector?.sync();
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
     transparentCanvas: fingerFluidPyroCompositionRequested() || isFireLightFieldRoute() || isAuthoredKilnCollisionRoute(),
@@ -22406,6 +22407,7 @@ function createFlameQuickFields() {
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
+    readPressureRuntime:()=>volumePrototype?.debugState?.().pressureResolution,
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     openWorkbench:()=>setActiveTab('volume'),onError:error=>setInfo(error.message)});
 }
