@@ -33,7 +33,20 @@ test('portable preset applies the same effective aperture to differently scaled 
    const state=load(.3,{},'simulation-v1',scale);
    assert.ok(Math.abs(state.domControls['volume-immersed-radius'].value*scale-.3)<1e-12);
    assert.equal(state.sourcePose.scale[0],scale);
+   assert.equal(state.source.preset.domControls['volume-immersed-radius'].value,.3,'the portable receipt must stay in simulation coordinates');
+   const projected=aperture.flamePresetForLocalControls(state.source.preset,scale);
+   assert.equal(projected.domControls['volume-immersed-radius'].value,state.domControls['volume-immersed-radius'].value);
  }
+});
+test('a recovered legacy aperture takes the raw scene snapshot path',async()=>{
+ const state=load(135.764753512356,{sourceSize:'current'}),start=html.indexOf('const basin = activeVolumeSettingsPresetReceipt',html.indexOf('async function collectSceneComposition'));
+ const choose=html.slice(start,html.indexOf('  assertUnchanged();',start));
+ const calls=[],context={activeVolumeSettingsPresetReceipt:state.source,preset:state,
+   volumeSettingsPresetControlValuesEqual,document:{getElementById:()=>({value:'Recovered'})},
+   saveVolumeSettingsPreset:async request=>{calls.push(request);return {effective:{presetId:'raw-recovered-snapshot'}};}};
+ const result=await vm.runInNewContext(`(async()=>{${choose};return basin;})()`,context);
+ assert.equal(result.presetId,'raw-recovered-snapshot');
+ assert.equal(calls.length,1);assert.equal(calls[0].sceneSnapshot,true);
 });
 test('legacy recovery keeps effective size at a tiny destination scale',()=>assert.equal(load(135.764,{sourceSize:'current'},undefined,.001).domControls['volume-immersed-radius'].value,200));
 test('portable source comparison uses local coordinates and still detects aperture edits',()=>{
