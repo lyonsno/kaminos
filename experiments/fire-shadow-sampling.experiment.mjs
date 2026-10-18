@@ -18,7 +18,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
-    const qualityControls=[],numberScrubs=[];
+    const qualityControls=[],mediumControls=[],numberScrubs=[];
     let requestedPoints=inputs.points??null;
     let requestedPointSampling=inputs.pointSampling??'all';
     validateSourceQuadrature(requestedPoints??1,requestedPointSampling);
@@ -29,6 +29,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     const sync=(force=false)=>{
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
+      const medium=win.__kaminosSceneRadiance?.debugState();
+      for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:16));
       if(surfaceSwitch)surfaceSwitch.checked=win.__kaminosSceneRadiance?.debugState().surfaceEnabled!==false;
       const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
       value(implementationSelector,comparison.implementation);
@@ -79,6 +81,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       read,sync,
       operations:{
         setSurfaceEnabled(value){source().setSurfaceEnabled(value);sync();session.redraw();record({kind:'fire-shadow.surface-enabled',effective:value});return read();},
+        setSmokeShadowQuality(value){source().setSmokeShadowQuality(value);sync();session.redraw();record({kind:'fire-shadow.smoke-quality',requested:value,effective:source().debugState().frame?.smokeShadow??null});return source().debugState();},
         async setCasterLevel(value){await source().setShadowCasterLevel(value);sync();session.redraw();const effective=source().debugState().casters;record({kind:'fire-shadow.caster-level',requested:value,effective});return effective;},
         async retryCompile(){await source().retryRebuild();sync();session.redraw();return read();},
         setShadowComparison,setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
@@ -142,6 +145,13 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           // Rebuild only on release/commit, not every intermediate drag pixel.
           number.addEventListener('change',()=>change(number.value));
           qualityControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
+        }
+        for(const [key,param,text,min] of [['smokeShadowSteps','steps','Smoke shadow steps',0],['smokeShadowResolution','resolution','Smoke shadow angular resolution',1]]){
+          const row=document.createElement('label');row.textContent=text;
+          row.title=key==='smokeShadowSteps'?'Zero disables smoke attenuation. Positive values integrate the existing medium into light-space optical-depth prefixes.':'Pixels per face in the smoke optical-depth atlas; independent of solid shadow resolution.';
+          const number=document.createElement('input');number.type='number';number.min=String(min);number.step='1';number.setAttribute('aria-label',text);
+          number.addEventListener('change',()=>invoke('setSmokeShadowQuality',{[param]:Number(number.value)}).catch(failed));
+          mediumControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
         const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
         restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(failed));
