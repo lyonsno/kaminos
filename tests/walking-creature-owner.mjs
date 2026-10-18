@@ -39,7 +39,7 @@ const observedFrame=held.read().playback.frame,observedPelvis=scene.getObjectByN
 held.operations.rate({rate:2});
 const keep=held.setup.prepare();
 held.operations.seek({frame:1});
-keep.commit({startHere:true,placement:false,behavior:true});
+keep.commit({startHere:true,placement:false,rate:true});
 const retained=held.setup.read().document;
 assert.equal(retained.rate,2);assert.equal(retained.sample,0);assert.equal(held.read().playback.frame,1,'Keeping setup changed the live pose');
 assert.equal(observedFrame,2);

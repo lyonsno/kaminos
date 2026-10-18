@@ -25,7 +25,9 @@ proposal.commit({placement: true, behavior: false});
 const saved = setup.read().document;
 ```
 
-`project({baseline, observed, choices})` returns `{document, groups, dependencies}`.
+`project({baseline, observed, choices, describeOnly})` returns `{document, groups, dependencies}`.
+With `describeOnly:true` it returns the groups before validating their selection,
+so a user can correct an invalid default combination in the dialog.
 Each group has `id`, `label`, `checked` and optional `detail`. Projection and
 validation throw on unsupported references or inconsistent combinations. The
 caller can revise choices against the same observation; changing the starting

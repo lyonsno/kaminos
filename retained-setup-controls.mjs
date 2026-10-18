@@ -20,7 +20,7 @@ export function mountRetainedSetupControls({document, root, title, read, remembe
   };
   const hasSetup = () => Boolean(read());
   button('Keep in Setup', () => {
-    const proposal = prepare(), first = proposal.preview(), choices = {};
+    const proposal = prepare(), first = proposal.describe(), choices = {};
     dialog?.remove(); dialog = el('dialog'); dialog.className = 'keep-setup-dialog';
     dialog.setAttribute('aria-label', `Keep in Setup: ${title}`);
     dialog.append(el('h3', `Keep in Setup: ${title}`));

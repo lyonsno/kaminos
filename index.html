@@ -27789,7 +27789,8 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   } else {
     setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
   }
-  retainStartingScene(data);
+  // Capture the loader's resolved owner records, including migrated fire data.
+  retainStartingScene({...data,...buildSceneData()});
 }
 
 // File input handler for Load Scene

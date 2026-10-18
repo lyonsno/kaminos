@@ -3,7 +3,7 @@ import {flamePoseInDomain, flameDomainControlsFromSettings, normalizeFlameEmitte
 
 const clone = value => structuredClone(value);
 const differs = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
-export function projectEmitterSetup({baseline, observed, choices = {}}) {
+export function projectEmitterSetup({baseline, observed, choices = {}, describeOnly = false}) {
   const source = doc => {
     const entries = doc.objects?.filter(o => o.type === 'flame-emitter');
     if (entries?.length !== 1) throw Error('Keep in Setup needs one existing emitter in the starting and live scenes');
@@ -21,6 +21,7 @@ export function projectEmitterSetup({baseline, observed, choices = {}}) {
     {id: 'emission', label: 'Emission', checked: differs(before.emission.settings, after.emission.settings), detail: Object.entries(after.emission.settings).filter(([id, v]) => differs(before.emission.settings[id], v)).map(([id, v]) => `${id.replace(/^volume-/, '').replaceAll('-', ' ')}: ${before.emission.settings[id]?.value ?? '(new)'} -> ${v.value}`).join('\n') || 'Emission unchanged'},
     {id: 'domain', label: 'Simulation domain placement', checked: domainChanged && needsDomain, detail: `Position: ${oldFire.domain.transform.position.join(', ')} -> ${liveFire.domain.transform.position.join(', ')}; follows emitter: ${liveFire.frame.followSource}`},
   ];
+  if (describeOnly) return {groups};
   const selected = id => choices[id] ?? groups.find(g => g.id === id).checked;
   const document = clone(baseline), next = document.objects.find(o => o.id === before.id);
   if (selected('placement')) next.transform = clone(after.transform);
@@ -31,7 +32,8 @@ export function projectEmitterSetup({baseline, observed, choices = {}}) {
     domain.simulation.followSource = liveFire.domain.simulation.followSource;
   }
   const fire = readFireObjects(document.objects, document.fireRendering);
-  if (!flamePoseInDomain(next.transform, fire.frame.translation, fire.frame.scale, flameDomainControlsFromSettings(fire.settings))) {
+  const outside = !flamePoseInDomain(next.transform, fire.frame.translation, fire.frame.scale, flameDomainControlsFromSettings(fire.settings));
+  if (outside && fire.frame.followSource) {
     throw Error('Emitter would be outside the starting domain. Include simulation domain placement or keep the starting emitter placement.');
   }
   if (next.emission.settings['volume-emitter-source-law']?.value === 'immersed-source') {
@@ -45,5 +47,5 @@ export function projectEmitterSetup({baseline, observed, choices = {}}) {
       descriptor.value = mapped[key]; if (Object.hasOwn(descriptor,'rawValue')) descriptor.rawValue = String(mapped[key]);
     }
   }
-  return {document, groups, dependencies: selected('domain') ? ['Simulation domain placement also changes for this setup'] : []};
+  return {document, groups, dependencies: [...(selected('domain') ? ['Simulation domain placement also changes for this setup'] : []),...(outside ? ['Source is outside the fixed domain; injection remains suspended until it enters the domain'] : [])]};
 }

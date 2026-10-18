@@ -51,3 +51,10 @@ test('pose-derived source controls follow retained placement when only emission 
   const result = projectEmitterSetup({baseline, observed, choices:{emission:true,placement:false,domain:false}});
   assert.equal(result.document.objects[0].emission.settings['volume-immersed-centre-x'].value, 0);
 });
+test('fixed-domain source outside the box preserves suspended-injection placement',()=>{
+ const baseline=make(),observed=make(0,2);
+ for(const d of [baseline,observed]){d.objects.find(o=>o.type==='simulation-domain').simulation.followSource=false;d.objects.find(o=>o.type==='flame-emitter').transform.position[0]=4;}
+ assert.doesNotThrow(()=>planSceneRestore(baseline));
+ const next=projectEmitterSetup({baseline,observed,choices:{emission:true,placement:false,domain:false}}).document;
+ assert.equal(planSceneRestore(next).fireSettings.domControls['volume-immersed-fuel'].value,2);
+});
