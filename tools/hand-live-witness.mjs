@@ -42,6 +42,8 @@ try {
     await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('| MANUAL CROP |'));
     report.manual=await read();assert.equal(report.manual.acquisition,'operator_selected_crop_no_detector');await page.screenshot({path:out+'/manual.png'});
     await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:1}));
+    assert.equal(await page.getByRole('combobox',{name:'Crop mode',exact:true}).inputValue(),'detector');
+    assert.equal(await page.getByRole('spinbutton',{name:'Detector threshold',exact:true}).inputValue(),'1');
     await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('NO DETECTION: MANUAL CROP FALLBACK'));
     report.miss=await read();assert.equal(report.miss.visible,true);assert.equal(report.miss.acquisitionDetails.fallback,true);
     await page.screenshot({path:out+'/miss.png'});
