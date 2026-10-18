@@ -33,7 +33,9 @@ export async function witness(args){
   context=await browser.newContext({viewport:{width:1920,height:1080},recordVideo:{dir:join(out,'video'),size:{width:1920,height:1080}}});page=await context.newPage();
   page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>report.console.push({type:m.type(),text:m.text(),location:m.location()}));
   phase('load');await page.goto(args.url,{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(async()=>{if(window.kaminosWorkbenchExperimentError)return true;const owner=window.kaminosWorkbenchExperiments;if(owner?.state().id!=='mushfinger/rig-cast-comparison')return false;try{return (await owner.read())?.actors?.length===2;}catch{return false;}});
+  // The observed Playwright1.63 predicate tests a returned Promise for truth,
+  // then awaits its value once; an async false predicate does not keep polling.
+  await page.waitForFunction(()=>window.kaminosWorkbenchExperimentError||window.kaminosWorkbenchExperiments?.state().id==='mushfinger/rig-cast-comparison');
   assert.equal(await page.evaluate(()=>window.kaminosWorkbenchExperimentError??null),null);
   report.effectiveUrl=page.url();report.runtime=await page.evaluate(async()=>await(await fetch('/api/runtime-config')).json());
   assert.equal(report.runtime.source.repoRoot,realpathSync(args.root));assert.equal(report.runtime.source.commit,offer.sourceCommit);assert.equal(report.runtime.source.dirty,false);
@@ -45,7 +47,7 @@ export async function witness(args){
   const capture=async name=>{await settle();const path=join(out,name+'.png');await page.screenshot({path});report.captures.push({path,sha256:hash(readFileSync(path))});return path;};
   await settle();report.initial=await read();validateRigCastState(report.initial,setup,setup.sample??0);report.registrations=await page.evaluate(()=>window.kaminosSceneObjectDebugState());await capture('initial');
   phase('native-replay');const replay=page.locator('[aria-label="Matched clip · both generated casts"] .playback-replay');await replay.scrollIntoViewIfNeeded();const box=await replay.boundingBox();assert.ok(box);assert.ok(await replay.evaluate((n,p)=>n.contains(document.elementFromPoint(p.x,p.y)),{x:box.x+box.width/2,y:box.y+box.height/2}),'Replay is occluded');await replay.click();
-  await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).actors.every(a=>a.playback.frame>1));await invoke('pause');report.afterPlay=await read();assert.ok(report.afterPlay.actors.every(a=>a.playback.frame>1));
+  await page.waitForFunction(()=>Number(document.querySelector('[aria-label="Matched clip · both generated casts"] input[aria-label="Playback position"]')?.value)>1/30);await invoke('pause');report.afterPlay=await read();assert.ok(report.afterPlay.actors.every(a=>a.playback.frame>1));
   phase('contiguous-frame-capture');await page.evaluate(()=>{window.kaminosSelection?.clear();window.kaminosViewportSettings?.set({bones:false,paths:false,gizmos:false});});
   const start=Number(args.start??10),count=Number(args.count??20);assert.ok(Number.isInteger(start)&&Number.isInteger(count)&&start>=0&&count>0&&start+count<=report.initial.actors[0].playback.frames,'Explicit capture slice is outside the retained source');
   report.gpuSamples=[];
