@@ -1279,7 +1279,7 @@ function runtimeQualityReceipt(controls = {}) {
     gpuPressure,
     knobs: {
       renderScale: normalizeRenderScale(controls.renderScale),
-      raySteps: clampFinite(controls.raySteps, 6, 160, 96),
+      raySteps: clampFinite(controls.raySteps, 1, 160, 96),
       adaptiveRays: clampFinite(controls.adaptiveRays, 0, 1, 0.65),
       occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
       pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
@@ -8357,7 +8357,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     );
   }
 
-  let steps = select(clamp(u.viewport_steps_density.z, 6.0, 192.0), f32(GRID), fullGridCapture);
+  let steps = select(clamp(u.viewport_steps_density.z, 1.0, 192.0), f32(GRID), fullGridCapture);
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
@@ -8543,7 +8543,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       }
       t = opticalStepPosition(opticalStep);
       let probeIndex = opticalStepIndex(opticalStep.mask);
-      if (u.reserved_render_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
+      if (u.reserved_render_controls.w > 0.5 && u.occupancy_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
         t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
       }
     }
@@ -16417,6 +16417,7 @@ export function createKaminosVolumePrototype({
     uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
       ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 32 : 0;
     uniforms[42] = clampFinite(controlsSnapshot.flamePriority, 0, 1, 0);
+    uniforms[43] = controlsSnapshot.quadratureJitter === false ? 0 : 1;
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
     uniforms[45] = debugOpticalStepping.tolerance;
@@ -20867,6 +20868,8 @@ export function createKaminosVolumePrototype({
       source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
       flamePriorityRequested:controlsSnapshot.flamePriority??0,
       flamePriority:optical.mode==='numerical'?uniforms[42]:0,
+      quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
+      quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
       guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
     const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {

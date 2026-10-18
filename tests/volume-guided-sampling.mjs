@@ -11,14 +11,14 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 test('Quality offers saved animation and flame guidance, preserving older basins',()=>{
  const fields=FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields;
  const schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
- for(const [id,value] of [['volume-ray-noise-animated',false],['volume-flame-priority',0]]){
+ for(const [id,value] of [['volume-ray-noise-animated',true],['volume-quadrature-jitter',true],['volume-flame-priority',0]]){
   assert.equal(fields.filter(([key])=>key===id).length,1,id);
   assert.equal(schema.rendererControls.find(c=>c.key===id)?.additiveDefault,value);
  }
 });
 test('noise stays available on every marcher; priority leaves both controls unmodified',()=>{
  const lines=html.split('\n').filter(l=>l.includes('.disabled=')&&l.includes('c.raymarchMode'));
- const ids=['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise','volume-optical-tolerance','volume-flame-priority'];
+ const ids=['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise','volume-optical-tolerance','volume-flame-priority','volume-quadrature-jitter'];
  for(const mode of ['current','fixed','numerical']){
   const nodes=Object.fromEntries(ids.map(id=>[id,{disabled:false}]));
   vm.runInNewContext(lines.join('\n'),{c:{raymarchMode:mode},document:{getElementById:id=>nodes[id]}});

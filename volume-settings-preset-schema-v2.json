@@ -1817,7 +1817,14 @@
       "param": "volume_ray_noise_animated",
       "tagName": "INPUT",
       "type": "checkbox",
-      "additiveDefault": false
+      "additiveDefault": true
+    },
+    {
+      "key": "volume-quadrature-jitter",
+      "param": "volume_quadrature_jitter",
+      "tagName": "INPUT",
+      "type": "checkbox",
+      "additiveDefault": true
     },
     {
       "key": "volume-flame-priority",

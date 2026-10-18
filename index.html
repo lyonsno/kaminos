@@ -2177,7 +2177,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="6" max="160" step="1" value="96">
+      <input type="range" id="volume-steps" min="1" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
@@ -2187,7 +2187,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <label class="slider-label" for="volume-ray-noise-animated">Animate noise</label>
-      <input type="checkbox" id="volume-ray-noise-animated" data-volume-settings-role="renderer">
+      <input type="checkbox" id="volume-ray-noise-animated" checked data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-quadrature-jitter">Interior jitter</label>
+      <input type="checkbox" id="volume-quadrature-jitter" checked data-volume-settings-role="renderer">
     </div>
     <div class="slider-row">
       <label class="slider-label" for="volume-flame-priority">Flame priority</label>
@@ -17034,7 +17038,7 @@ function routeBonfireAblationControl(params, routeName, controlName) {
 }
 
 function snapVolumeRaySteps(value) {
-  return Math.round(clampVolumeValue(value, 6, 160));
+  return Math.round(clampVolumeValue(value, 1, 160));
 }
 
 function snapVolumeAdaptiveRays(value) {
@@ -18900,7 +18904,7 @@ function rayBudgetGamutPointFromControls() {
   const steps = parseFloat(document.getElementById('volume-steps').value);
   const adaptive = parseFloat(document.getElementById('volume-adaptive-rays').value);
   return {
-    x: (snapVolumeRaySteps(steps) - 6) / (160 - 6),
+    x: (snapVolumeRaySteps(steps) - 1) / (160 - 1),
     y: 1 - snapVolumeAdaptiveRays(adaptive),
   };
 }
@@ -18924,7 +18928,7 @@ function syncRayBudgetGamutFromControls() {
 }
 
 function applyRayBudgetGamutPoint(x, y) {
-  const nextSteps = snapVolumeRaySteps(6 + clampVolumeValue(x, 0, 1) * (160 - 6));
+  const nextSteps = snapVolumeRaySteps(1 + clampVolumeValue(x, 0, 1) * (160 - 1));
   const nextAdaptive = snapVolumeAdaptiveRays(1 - clampVolumeValue(y, 0, 1));
   setVolumeControlValue('volume-steps', nextSteps);
   setVolumeControlValue('volume-adaptive-rays', nextAdaptive.toFixed(2));
@@ -19147,6 +19151,7 @@ function readVolumeControls() {
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
     rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
+    quadratureJitter: document.getElementById('volume-quadrature-jitter').checked,
     flamePriority: Number(document.getElementById('volume-flame-priority').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
@@ -19440,6 +19445,7 @@ function updateVolumeControlLabels() {
   for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])document.getElementById(id).disabled=c.raymarchMode!=='current';
   document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
   document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
+  document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
@@ -20777,7 +20783,7 @@ async function initKaminosVolumeRoute() {
   }
   const routeRaySteps = Number(params.get('volume_steps'));
   if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
-    document.getElementById('volume-steps').value = String(Math.max(6, Math.min(160, routeRaySteps)));
+    document.getElementById('volume-steps').value = String(Math.max(1, Math.min(160, routeRaySteps)));
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
   }
@@ -20911,6 +20917,7 @@ async function initKaminosVolumeRoute() {
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+    ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
     ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
@@ -21265,6 +21272,7 @@ async function initKaminosVolumeRoute() {
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
     'volume-ray-noise-animated',
+    'volume-quadrature-jitter',
     'volume-flame-priority',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',

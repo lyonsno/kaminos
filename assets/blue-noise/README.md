@@ -24,10 +24,18 @@ shifts or scalar rotations would scramble the optimized temporal sequence.
 
 Current adaptive uses this for ray starts. Standard and numerical quadrature
 also jitter their two interior quarter probes within the central half of each
-half-panel; midpoint and endpoints remain shared anchors. Integrals use actual
+half-panel; midpoint and endpoints remain shared anchors. `Interior jitter`
+selects this independently of `Animate noise`, allowing all four combinations
+with the same ray-start noise. It is inactive for Current adaptive, which has
+no nested quadrature. Both switches default on; explicit saved off values are
+preserved. Integrals use actual
 node spacing. Refinement retains each cached probe's position as well as its
 material value. Noise off retains regular quadrature and the half-step Current
 start; full-grid coefficient capture retains native cell centers.
+
+The authored ray-count range is 1..160, including the viewport, URL and shader
+paths. This is a base spacing setting, not a hard cap on optical material
+evaluations: nested quadrature and flame-priority refinement remain active.
 
 This is raw animated sampling, not image-history accumulation or a temporal
 denoiser. The texture is optimized for spatial Gaussian and temporal exponential

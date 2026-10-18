@@ -17,6 +17,7 @@ const expectedRendererControls = [
   ['volume-ray-start-noise', 'volume_ray_start_noise'],
   ['volume-tone-mapping', 'volume_tone_mapping'],
   ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+  ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
   ['volume-flame-priority', 'volume_flame_priority'],
   ['volume-flow-kernel-strength', 'volume_flow_kernel_strength'],
   ['volume-flow-kernel-radius', 'volume_flow_kernel_radius'],

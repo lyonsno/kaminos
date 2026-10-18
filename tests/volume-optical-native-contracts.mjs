@@ -14,21 +14,21 @@ test('main composition retains fresh burn and separates ray-noise binding from r
   assert.match(core, /binding: 25, resource: rayStartNoiseTexture\.createView\(\)/);
   assert.doesNotMatch(core, /constants:\s*\{GRID:/);
 });
-test('six authored ray steps survive the slider, gamut, route and GPU clamp', () => {
+test('one authored ray step survives the slider, gamut, route and GPU clamp', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const input = html.match(/<input[^>]*id="volume-steps"[^>]*>/)[0];
-  assert.equal(Number(input.match(/min="([^"]+)"/)[1]), 6, 'Ray Steps must admit six');
+  assert.equal(Number(input.match(/min="([^"]+)"/)[1]), 1, 'Ray Steps must admit one for preview');
   const snap = html.match(/function snapVolumeRaySteps\(value\) \{[\s\S]*?\n\}/)[0];
   const context = vm.createContext({clampVolumeValue:(v,min,max)=>Math.max(min,Math.min(max,v))});
   vm.runInContext(snap, context);
-  for (const value of [6,7,24,36,96,160]) assert.equal(context.snapVolumeRaySteps(value),value);
-  assert.equal(context.snapVolumeRaySteps(0),6);
+  for (const value of [1,2,6,7,24,36,96,160]) assert.equal(context.snapVolumeRaySteps(value),value);
+  assert.equal(context.snapVolumeRaySteps(0),1);
   assert.equal(context.snapVolumeRaySteps(200),160);
-  assert.match(html,/x: \(snapVolumeRaySteps\(steps\) - 6\) \/ \(160 - 6\)/);
-  assert.match(html,/snapVolumeRaySteps\(6 \+ clampVolumeValue\(x, 0, 1\) \* \(160 - 6\)\)/);
-  assert.match(html,/Math\.max\(6, Math\.min\(160, routeRaySteps\)\)/);
-  assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 6, 160, 96\)/);
-  assert.match(core,/clamp\(u\.viewport_steps_density\.z, 6\.0, 192\.0\)/);
+  assert.match(html,/x: \(snapVolumeRaySteps\(steps\) - 1\) \/ \(160 - 1\)/);
+  assert.match(html,/snapVolumeRaySteps\(1 \+ clampVolumeValue\(x, 0, 1\) \* \(160 - 1\)\)/);
+  assert.match(html,/Math\.max\(1, Math\.min\(160, routeRaySteps\)\)/);
+  assert.match(core,/raySteps: clampFinite\(controls\.raySteps, 1, 160, 96\)/);
+  assert.match(core,/clamp\(u\.viewport_steps_density\.z, 1\.0, 192\.0\)/);
 });
 test('native numerical stepping does not inherit sample-budget tail truncation', () => {
   assert.match(core, /setDebugOpticalStepping\(/, 'native camera must expose an explicit comparison switch');
