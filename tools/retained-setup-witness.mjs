@@ -21,7 +21,7 @@ try {
   const setup = JSON.parse(readFileSync(args.setup));
   report.input = setup;
   const url = new URL(args.base); url.searchParams.set('workspace', 'workbench'); url.searchParams.set('experiment', 'marionette/walking-creature'); url.searchParams.set('experiment_inputs', JSON.stringify(setup));
-  report.phase = 'load'; await page.goto(url.href, {waitUntil: 'domcontentloaded'});
+  report.phase = 'load'; await page.goto(args.entry ? new URL(args.entry,args.base).href : url.href, {waitUntil: 'domcontentloaded'});
   await page.waitForFunction(() => window.kaminosWalkingSetup && window.kaminosWalkingCreature);
   report.route = page.url(); report.runtime = await page.evaluate(async () => (await fetch('/api/runtime-config')).json());
   assert.equal(report.runtime.source.repoRoot, realpathSync(args.root));
@@ -57,6 +57,7 @@ try {
   report.retained = await page.evaluate(() => window.kaminosWalkingSetup.read());
   assert.equal(report.retained.document.rate, 2); assert.equal(report.retained.document.sample, 0);
   assert.equal((await read()).playback.frame, 40, 'Keep changed the live frame');
+  await capture('live-frame40');
   await page.locator('.creature-properties .retained-setup > details > summary').click();
   await page.getByRole('button', {name: 'Undo setup edit', exact: true}).click();
   assert.equal(await page.evaluate(() => window.kaminosWalkingSetup.read().document.rate), report.initial.rate);
@@ -75,6 +76,7 @@ try {
   for(const i of [12,13,14])assert.ok(Math.abs(beforeRoot[i]-afterRoot[i])<1e-5,'Starting location changed');
   await capture('reopened-desktop');
   report.phase = 'mobile'; await page.setViewportSize({width: 390, height: 844});
+  await capture('mobile-scene');
   await page.getByRole('button', {name: 'Keep in Setup', exact: true}).click();
   const bounds = await page.getByRole('dialog').boundingBox(); assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= 390);
   await capture('keep-mobile'); await page.getByRole('button', {name: 'Cancel', exact: true}).click();
