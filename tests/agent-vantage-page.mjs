@@ -1887,3 +1887,51 @@ test('a slow event frame does not reset the cadence: open intervals still get fr
     assert.equal(strip.missedTicks, 0);
   }
 });
+
+test('missed intervals are worked out from when frames started, on the same multiplied boundaries the cadence uses', () => {
+  const {watchMissedTicks} = vantage;
+  // A slow first readback spans two intervals before the event frame: both are missed.
+  assert.equal(watchMissedTicks({starts: [0, 1600, 2000], interval: 500, end: 2100}), 2);
+  // An owed event frame after the deadline stands for no interval.
+  assert.equal(watchMissedTicks({starts: [0, 900], interval: 500, end: 600}), 1);
+  // At 15 fps, 63 intervals multiply out to exactly 4200 ms: a frame there belongs to interval 63.
+  const interval = 1000 / 15, cadence = Array.from({length: 63}, (_, k) => k * interval);
+  assert.equal(watchMissedTicks({starts: [...cadence, 4200, 4300, 65 * interval, 66 * interval, 67 * interval], interval, end: 4490}), 0);
+  assert.equal(watchMissedTicks({starts: [...cadence, 64 * interval], interval, end: 4490}), 4, 'intervals 63, 65, 66 and 67 have no frame');
+  // A frame at the end starts in no interval; an empty last interval is missed.
+  assert.equal(watchMissedTicks({starts: [0, 1000], interval: 500, end: 1000}), 1);
+});
+
+test('the reviewed schedules count exactly the intervals that had no frame', async () => {
+  // The event comes at 100 ms during a first readback that finishes at 1600 ms.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 1500; } return 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 1600, 2000]);
+    assert.equal(strip.missedTicks, 2, '500–1000 and 1000–1500 ms had no frame');
+  }
+  // The same event with after: 0.5 puts the deadline at 600 ms; the owed event frame at 900 ms stands for no interval.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 800; } return 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 0.5, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 900]);
+    assert.equal(strip.missedTicks, 1);
+  }
+  // 15 fps: the event comes during the draw at tick 62 and its frame starts exactly at tick 63's boundary.
+  {
+    const {state, host} = await launched();
+    let clock;
+    const interval = 1000 / 15;
+    clock = watchClock(host, state, {drawMs: (index, t) => {
+      if (index === 62) { clock.advance(4190 - t); clock.emit('pulse-end', {}); return 63 * interval - host.now(); }
+      return index === 63 ? 100 : 0;
+    }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 15, until: 'pulse-end', after: 0.3, map: false});
+    assert.equal(strip.frames[63].atMs, 63 * interval, 'the event frame starts on the boundary');
+    assert.equal(strip.missedTicks, 0, 'every interval has a frame, so none is missed');
+  }
+});

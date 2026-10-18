@@ -44,6 +44,23 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * drawn outside it, and a promise of the numbers read back. `surfaceOf`
  * casts a pick's ray at the mesh a pick map named.
  */
+// The intervals of a watch that got no frame, worked out afterwards from when
+// its frames started. Interval k runs from k·interval to the next interval's
+// start or the end, whichever comes first, and is missed when no frame started
+// inside it. Boundaries are multiplied out, never found by division, so a frame
+// on a boundary belongs to the interval that starts there. `end` is the
+// window's end, or with an event, the event plus `after`.
+export function watchMissedTicks({starts, interval, end}) {
+  const sorted = [...starts].sort((a, b) => a - b);
+  let missed = 0, next = 0;
+  for (let k = 0; k * interval < end; k++) {
+    const from = k * interval, to = Math.min((k + 1) * interval, end);
+    while (next < sorted.length && sorted[next] < from) next++;
+    if (!(next < sorted.length && sorted[next] < to)) missed++;
+  }
+  return missed;
+}
+
 export function createVantagePilot(host) {
   // `released` resolves when the current picture releases the camera.
   let capturing = false, released = Promise.resolve(), markReleased = () => {};
@@ -397,7 +414,7 @@ export function createVantagePilot(host) {
       const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000, afterMs = after * 1000;
       // The deadline frames are drawn before: the window, or after an event, the event plus `after`.
       let deadlineMs = windowMs, extended = false;
-      let event = null, missedTicks = 0, wake = null;
+      let event = null, wake = null;
       const heard = until ? new Promise(resolve => { wake = resolve; }) : null;
       // An event counts only when it comes before the deadline.
       const stopListening = until ? host.listen(until, detail => {
@@ -409,15 +426,16 @@ export function createVantagePilot(host) {
       // Sleeps end early when the event comes; after it, they run their length.
       const sleep = ms => (heard && !extended ? Promise.race([host.sleep(ms), heard]) : host.sleep(ms));
       // The next tick to draw: a tick is drawn only inside its own interval and
-      // before the deadline. Ticks whose interval passed are counted as missed.
-      // Between the last tick and the deadline the watch keeps listening.
-      // Returns 'event', a tick, or null when the window is over.
+      // before the deadline; ticks whose interval passed are skipped. Between the
+      // last tick and the deadline the watch keeps listening. Returns 'event', a
+      // tick, or null when the window is over. Missed intervals are counted
+      // afterwards from the frames' start times (watchMissedTicks).
       const nextTick = async last => {
         let tick = last + 1;
         while (true) {
           if (event && !extended) return 'event';
           const elapsed = host.now() - started;
-          while (tick * interval < deadlineMs && elapsed >= Math.min((tick + 1) * interval, deadlineMs)) { missedTicks++; tick++; }
+          while (tick * interval < deadlineMs && elapsed >= Math.min((tick + 1) * interval, deadlineMs)) tick++;
           if (elapsed >= deadlineMs) return null;
           if (tick * interval >= deadlineMs) { await sleep(deadlineMs - elapsed); continue; }
           if (elapsed >= tick * interval) return tick;
@@ -437,11 +455,12 @@ export function createVantagePilot(host) {
           if (next === null) break;
           if (next === 'event') {
             // The event came: one more frame at once shows what followed, then
-            // with `after` the cadence goes on until that long after the event.
-            // The event frame stands for the interval it starts in; the cadence
-            // then carries on as before, so intervals that pass while it reads
-            // back are counted missed and one still open gets its frame.
-            const startedIn = Math.floor((host.now() - started) / interval);
+            // with `after` the cadence goes on until that long after the event,
+            // from the interval the event frame started in (boundaries multiplied
+            // out, as everywhere), so that interval is not drawn twice.
+            const startAt = host.now() - started;
+            let startedIn = tick;
+            while ((startedIn + 1) * interval <= startAt) startedIn++;
             await draw();
             extended = true;
             if (afterMs <= 0) break;
@@ -457,6 +476,7 @@ export function createVantagePilot(host) {
         if (watching === mine) watching = null;
       }
       const record = subRecord(pilot), first = shots[0];
+      const missedTicks = watchMissedTicks({starts: shots.map(item => item.atMs), interval, end: event ? event.atMs + afterMs : windowMs});
       const sheet = host.sheet(shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
       if (frames) shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
