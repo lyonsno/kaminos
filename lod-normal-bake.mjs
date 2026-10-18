@@ -98,11 +98,13 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   const world = glbNodeWorldMatrices(json).get(nodes[0][1]);
   if (!world) throw Error('mesh node is not in the scene');
   // three.js rebuilds the tangent frame from separately transformed normal and tangent; under
-  // nonuniform scale or shear that frame is not the one this bake inverts, so those are refused.
+  // nonuniform scale, shear or a mirror that frame is not the one this bake inverts, so those are refused.
   const columns = [0, 4, 8].map(c => [world[c], world[c+1], world[c+2]]), lengths = columns.map(c => Math.hypot(...c));
   const similar = lengths.every(l => Math.abs(l - lengths[0]) <= 1e-6 * lengths[0]) &&
     [[0, 1], [0, 2], [1, 2]].every(([i, j]) => Math.abs(dot(columns[i], columns[j])) <= 1e-6 * lengths[0] ** 2);
   if (!(lengths[0] > 0) || !similar) throw Error('mesh node transform must be rotation, translation and uniform scale');
+  // A mirror keeps lengths and right angles but reverses the renderer's bitangent.
+  if (dot(columns[0], cross(columns[1], columns[2])) < 0) throw Error('mesh node transform is a mirror; normal maps are baked only for rotation and uniform scale');
   const read = (index, width) => { const a = json.accessors[index], bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array}[a.componentType];
     if (!T) throw Error(`unsupported component type ${a.componentType}`);
     const start = binStart + (bv.byteOffset || 0) + (a.byteOffset || 0); return new T(glb.slice(start, start + a.count * width * T.BYTES_PER_ELEMENT)); };

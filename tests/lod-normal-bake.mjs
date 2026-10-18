@@ -111,6 +111,8 @@ test('review M2: a node transform that is not rotation and uniform scale is refu
   const opts = {textureSize: 8, source: {}, sampleWorldNormal: () => [0, 1, 0]};
   await assert.rejects(addNormalMapToGLB(squareGLB({matrix: [2,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]}), opts), /uniform scale/);
   await assert.rejects(addNormalMapToGLB(squareGLB({matrix: [1,0,0,0, 0.5,1,0,0, 0,0,1,0, 0,0,0,1]}), opts), /uniform scale/);
+  // Confirmation review: a mirror keeps lengths and right angles but reverses the frame.
+  await assert.rejects(addNormalMapToGLB(squareGLB({matrix: [-1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]}), opts), /mirror/);
   // Rotation with uniform scale and translation is fine.
   const out = await addNormalMapToGLB(squareGLB({matrix: [2,0,0,0, 0,0,-2,0, 0,2,0,0, 5,6,7,1]}), opts);
   assert.ok(parse(out).json.materials[0].normalTexture);

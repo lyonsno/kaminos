@@ -58,16 +58,33 @@ export async function launchBrowser({executable, timeoutMs = 900000}) {
   } catch (error) { await close(); throw error; }
 }
 
-const VIEWS = viewDirections().length;
-const finiteStat = v => v && ['max', 'p95', 'mean', 'count'].every(k => Number.isFinite(v[k]));
-// A complete page result for this request: identity, settings, route, and all views with their channels.
+const DIRECTIONS = viewDirections(), VIEWS = DIRECTIONS.length;
+const count = c => Number.isSafeInteger(c) && c >= 0;
+const fraction = f => Number.isFinite(f) && f >= 0 && f <= 1;
+const statOf = (v, n) => v && count(v.count) && v.count <= n && ['max', 'p95', 'mean'].every(k => Number.isFinite(v[k]) && v[k] >= 0) && (v.count > 0 || (v.max === 0 && v.mean === 0));
+// One view's sample accounting, as compareView produces it at resolution res.
+function viewAccounts(v, direction, res) {
+  const n = res * res;
+  if (!v || !Array.isArray(v.direction) || v.direction.length !== 3 || v.direction.some((x, k) => !(Math.abs(x - direction[k]) <= 1e-3))) return false;
+  if (![v.referenceCoverage, v.silhouetteMismatch, v.differentSurface].every(fraction)) return false;
+  if (!statOf(v.depth, n) || !statOf(v.normalDegrees, n) || !statOf(v.albedo, n) || !count(v.normalUndefined?.reference) || !count(v.normalUndefined?.level)) return false;
+  const reference = Math.round(v.referenceCoverage * n), both = v.depth.count, same = v.albedo.count;
+  // Shared pixels lie within the reference; same-surface pixels within the shared; normals within the same-surface.
+  if (both > reference || same > both || v.normalDegrees.count > same || v.normalUndefined.reference > same || v.normalUndefined.level > same) return false;
+  if (v.normalDegrees.count + Math.max(v.normalUndefined.reference, v.normalUndefined.level) > same || v.normalDegrees.count + v.normalUndefined.reference + v.normalUndefined.level < same) return false;
+  if (both ? Math.abs(v.differentSurface - (both - same) / both) > 1e-9 : v.differentSurface !== 0) return false;
+  // Some reference coverage with silhouettes not wholly disjoint means some pixels are shared.
+  if (reference > 0 && v.silhouetteMismatch < 1 && both === 0) return false;
+  return true;
+}
+// A complete page result for this request: identity, settings, route, and every view in order with
+// consistent accounting. A view may legitimately cover nothing; the measurement as a whole may not.
 export function describesMeasurement(r, {source, level, resolution, normals}) {
   return r?.schema === SCHEMA && r.reference?.sha256 === source && r.level?.sha256 === level &&
     r.settings?.resolution === resolution && r.settings?.normals === normals && r.settings?.views === VIEWS &&
     typeof r.route?.glRenderer === 'string' && typeof r.route?.three === 'string' && typeof r.normalMapped?.level === 'boolean' &&
-    Array.isArray(r.perView) && r.perView.length === VIEWS && r.perView.every(v => v && [v.referenceCoverage, v.silhouetteMismatch, v.differentSurface].every(Number.isFinite) &&
-      v.referenceCoverage > 0 && finiteStat(v.depth) && finiteStat(v.normalDegrees) && finiteStat(v.albedo) && Number.isFinite(v.normalUndefined?.reference) && Number.isFinite(v.normalUndefined?.level)) &&
-    r.aggregate && typeof r.aggregate === 'object';
+    Array.isArray(r.perView) && r.perView.length === VIEWS && r.perView.every((v, i) => viewAccounts(v, DIRECTIONS[i], resolution)) &&
+    r.perView.some(v => v.referenceCoverage > 0) && r.aggregate && typeof r.aggregate === 'object';
 }
 
 export async function measure(args, {browserFor = launchBrowser} = {}) {

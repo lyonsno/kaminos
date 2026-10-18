@@ -19,14 +19,20 @@ const standIn = () => new Promise(resolve => {
   });
   server.listen(0, '127.0.0.1', () => resolve({server, url: `http://127.0.0.1:${server.address().port}`}));
 });
-// What the page returns for a complete measurement: 26 views, each with its channels.
-const stat = {max: 0.1, p95: 0.05, mean: 0.01, count: 10};
-const view = {direction: [0, 0, 1], referenceCoverage: 0.3, silhouetteMismatch: 0.01, differentSurface: 0.02, depth: stat, normalDegrees: stat,
-  normalUndefined: {reference: 0, level: 0}, albedo: stat, meanAlbedo: {reference: [0.5, 0.5, 0.5], level: [0.5, 0.5, 0.5]}};
+// What the page returns for a complete measurement: the 26 view directions, each with consistent
+// sample accounting (512x512 views: 1000 reference pixels, 900 shared, 50 on another surface).
+import {viewDirections} from '../lod-image-compare.mjs';
+const stat = count => ({max: count ? 0.1 : 0, p95: count ? 0.05 : 0, mean: count ? 0.01 : 0, count});
+const n = 512 * 512;
+const viewAt = d => ({direction: d.map(x => +x.toFixed(4)), referenceCoverage: 1000 / n, silhouetteMismatch: 120 / 1020, differentSurface: 50 / 900,
+  depth: stat(900), normalDegrees: stat(845), normalUndefined: {reference: 5, level: 0}, albedo: stat(850), meanAlbedo: {reference: [0.5, 0.5, 0.5], level: [0.5, 0.5, 0.5]}});
+// A view where the reference covers nothing (a flat part seen edge-on): legitimate, with empty channels.
+const emptyAt = d => ({...viewAt(d), referenceCoverage: 0, silhouetteMismatch: 0, differentSurface: 0, depth: stat(0), normalDegrees: stat(0), normalUndefined: {reference: 0, level: 0}, albedo: stat(0)});
+const views = () => viewDirections().map(viewAt);
 const goodResult = (url, overrides = {}) => { const q = new URL(url).searchParams, mapped = q.get('normalMaps') !== '0';
   return {schema: 'kaminos.lod-image-error.v1', reference: {sha256: q.get('ref')}, level: {sha256: q.get('level')}, route: {three: '171', glRenderer: 'test'},
     normalMapped: {reference: false, level: mapped && q.get('level') === l1},
-    settings: {resolution: +q.get('res'), views: 26, normals: mapped ? 'shading+normal-map' : 'shading'}, perView: Array(26).fill(view), aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
+    settings: {resolution: +q.get('res'), views: 26, normals: mapped ? 'shading+normal-map' : 'shading'}, perView: views(), aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
 const fakeBrowser = (page, calls) => async () => ({executable: '/fake', version: 'Fake/1', closed: false,
   openPage: async url => { calls.push(url); return page(url); }, close: async () => { calls.push('closed'); }});
 const setup = async () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-image-error-')), s = await standIn();
@@ -44,6 +50,14 @@ test('measures every current level, writing each result and sheet, and never a r
     assert.equal(saved(path.join(args.out, `${l2}.image-error.json`)).level.sha256, l2);
     assert.equal(fs.readFileSync(path.join(args.out, `${l1}.image-error.png`), 'utf8'), 'png');
     assert.equal(saved(args.report).browser.version, 'Fake/1');
+  } finally { s.server.close(); }
+});
+
+test('confirmation review R1: a view where the reference covers nothing is a valid part of a measurement', async () => {
+  const {s, args} = await setup();
+  try {
+    const report = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url, {perView: viewDirections().map((d, i) => i === 4 ? emptyAt(d) : viewAt(d))}), png: Buffer.from('png')}), [])});
+    assert.equal(report.phase, 'done', report.error?.message);
   } finally { s.server.close(); }
 });
 
@@ -69,8 +83,14 @@ test('a result describing another pair or other settings is refused, and nothing
   try {
     for (const bad of [{level: {sha256: hero}}, {settings: {resolution: 256, views: 26, normals: 'shading+normal-map'}}, {settings: {resolution: 512, views: 26, normals: 'shading'}}, {perView: [{}]}, {schema: 'kaminos.lod-image-error.scratch'},
       // review M3: an empty but self-consistent result, an incomplete view, a missing route, a registered normal map not used
-      {settings: {resolution: 512, views: 0, normals: 'shading+normal-map'}, perView: []}, {perView: [...Array(25).fill(view), {...view, depth: undefined}]},
-      {perView: [...Array(25).fill(view), {...view, referenceCoverage: NaN}]}, {route: undefined}, {normalMapped: {reference: false, level: false}}]) {
+      {settings: {resolution: 512, views: 0, normals: 'shading+normal-map'}, perView: []}, {perView: views().map((v, i) => i ? v : {...v, depth: undefined})},
+      {perView: views().map((v, i) => i ? v : {...v, referenceCoverage: NaN})}, {route: undefined}, {normalMapped: {reference: false, level: false}},
+      // confirmation review: repeated or missing directions, a zero-sample "perfect" view, impossible accounting
+      {perView: views().map(v => ({...v, direction: [0, 0, 1]}))}, {perView: views().map((v, i) => i ? v : {...v, direction: [0.1, 0.2, 0.97]})},
+      {perView: views().map(v => ({...v, silhouetteMismatch: 0, differentSurface: 0, depth: stat(0), normalDegrees: stat(0), albedo: stat(0), normalUndefined: {reference: 0, level: 0}}))},
+      {perView: views().map((v, i) => i ? v : {...v, referenceCoverage: 2})}, {perView: views().map((v, i) => i ? v : {...v, depth: stat(-1)})},
+      {perView: views().map((v, i) => i ? v : {...v, normalDegrees: stat(860)})}, {perView: views().map((v, i) => i ? v : {...v, differentSurface: 0.5})},
+      {perView: viewDirections().map(emptyAt)}]) {
       const report = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url, bad), png: Buffer.from('png')}), [])});
       assert.equal(report.phase, 'measure', JSON.stringify(bad)); assert.match(report.error.message, /does not describe|normal map/, JSON.stringify(bad));
       assert.ok(!fs.existsSync(path.join(args.out, `${l1}.image-error.json`)));
