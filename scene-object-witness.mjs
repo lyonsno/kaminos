@@ -1364,6 +1364,60 @@ async function runFireDecoupledCadenceScenario(ws) {
   assert.deepEqual(failures, [], `fire decoupled cadence checks failed:\n- ${failures.join('\n- ')}`);
 }
 
+// Live GPU allocation ledger (installed with --gpu-ledger before the page's
+// scripts): every buffer and texture by kind, label (digits folded) and bytes,
+// with the running total and its peak. Textures are estimated from size,
+// format, mips and samples; canvas textures are not counted.
+const GPU_LEDGER_SOURCE = String.raw`(() => {
+  if (!window.GPUDevice || window.__kaminosGpuLedger) return;
+  const formatBytes = { r8unorm: 1, r8uint: 1, r16float: 2, rg8unorm: 2, r32float: 4, r32uint: 4, r32sint: 4, rg16float: 4, rgba8unorm: 4, 'rgba8unorm-srgb': 4, bgra8unorm: 4,
+    'bgra8unorm-srgb': 4, rgb10a2unorm: 4, rg11b10ufloat: 4, depth24plus: 4, 'depth24plus-stencil8': 4, depth32float: 4, rg32float: 8, rgba16float: 8, rgba16uint: 8, rgba32float: 16, rgba32uint: 16 };
+  const live = new Map();
+  const ledger = window.__kaminosGpuLedger = { bytes: 0, peakBytes: 0, created: 0, destroyed: 0,
+    snapshot() { const byLabel = {}; for (const r of live.values()) { const key = r.kind + ' ' + String(r.label || '(unlabelled)').replace(/[0-9]+/g, '#'); const e = byLabel[key] ??= { count: 0, bytes: 0 }; e.count++; e.bytes += r.bytes; }
+      return { bytes: this.bytes, peakBytes: this.peakBytes, live: live.size, created: this.created, destroyed: this.destroyed, byLabel }; } };
+  const track = (object, kind, label, bytes) => { live.set(object, { kind, label, bytes }); ledger.bytes += bytes; ledger.created++; ledger.peakBytes = Math.max(ledger.peakBytes, ledger.bytes);
+    const destroy = object.destroy.bind(object); object.destroy = () => { const r = live.get(object); if (r) { live.delete(object); ledger.bytes -= r.bytes; ledger.destroyed++; } return destroy(); }; };
+  const createBuffer = GPUDevice.prototype.createBuffer;
+  GPUDevice.prototype.createBuffer = function (d) { const b = createBuffer.call(this, d); track(b, 'buffer', d?.label, Number(d?.size) || 0); return b; };
+  const createTexture = GPUDevice.prototype.createTexture;
+  GPUDevice.prototype.createTexture = function (d) { const t = createTexture.call(this, d); const size = Array.isArray(d?.size) ? d.size : [d?.size?.width ?? 1, d?.size?.height ?? 1, d?.size?.depthOrArrayLayers ?? 1];
+    const texels = (size[0] || 1) * (size[1] || 1) * (size[2] || 1); const mips = (d?.mipLevelCount || 1) > 1 ? 4 / 3 : 1;
+    track(t, 'texture', d?.label, Math.round(texels * (formatBytes[d?.format] ?? 4) * mips * (d?.sampleCount || 1))); return t; };
+})();`;
+
+// Where GPU memory goes per configuration: with --gpu-ledger, the flame basin
+// as saved, Preview, a live tier (8 adaptive steps), Sim every 4 with Blend,
+// plus Frame detail, and fire Proxy. Each records the live ledger, the JS heap
+// and the browser's resident memory.
+async function runGpuLedgerScenario(ws) {
+  phase = 'scenario-gpu-ledger';
+  const evidence = lastEvidence.gpuLedger = { configs: [] };
+  if (!(await evaluate(ws, '!!window.__kaminosGpuLedger'))) throw new Error('the GPU ledger is not installed (run with --gpu-ledger 1)');
+  const rss = () => new Promise(done => { const ps = spawn('/bin/ps', ['-Ao', 'rss=,command=']); let out = ''; ps.stdout.on('data', c => { out += c; });
+    ps.on('close', () => done(out.split('\n').filter(l => l.includes(userDataDir)).reduce((a, l) => a + (Number(l.trim().split(/\s+/)[0]) || 0), 0) * 1024)); });
+  const snap = async name => { await settleViewportFrames(ws, 2500); const page = await evaluate(ws, `({ ledger: window.__kaminosGpuLedger.snapshot(), jsHeap: performance.memory?.usedJSHeapSize ?? null,
+    steps: window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null, grid: window.__kaminosVolumePrototype?.debugState?.()?.gridSize ?? null })`);
+    evidence.configs.push({ name, ...page, browserResidentBytes: await rss() }); };
+  await snap('page, no flame');
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
+  await snap('flame basin as saved (Full)');
+  await evaluate(ws, `window.kaminosViewportSettings.set({ quality: 'preview' }); true`);
+  await snap('Preview');
+  await evaluate(ws, `(() => { window.kaminosViewportSettings.set({ quality: 'full' }); const s = document.getElementById('volume-steps'); s.value = '8'; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); return s.value; })()`);
+  await snap('live tier: 8 steps');
+  await evaluate(ws, `window.kaminosFireCadence?.({ every: 4, mode: 'blend', detail: 0 }); true`);
+  await snap('Sim every 4, Blend');
+  await evaluate(ws, `window.kaminosFireCadence?.({ every: 4, mode: 'auto', detail: 1 }); true`);
+  await snap('Sim every 4, Auto, Frame detail 1');
+  await evaluate(ws, `window.kaminosFireCadence?.({ every: 1, detail: 0 }); window.kaminosViewportSettings.set({ fire: 'proxy' }); true`);
+  await snap('fire Proxy');
+  const last = evidence.configs.at(-1).ledger.byLabel;
+  evidence.largest = Object.entries(last).sort((a, b) => b[1].bytes - a[1].bytes).slice(0, 25).map(([label, e]) => ({ label, ...e }));
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -7205,6 +7259,12 @@ try {
   await wsRequest(ws, 'Runtime.enable');
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
+  // --gpu-ledger 1: track every GPU buffer and texture the page creates, by
+  // label and size, from before the page's first script runs.
+  if (args.get('--gpu-ledger')) {
+    await wsRequest(ws, 'Page.enable');
+    await wsRequest(ws, 'Page.addScriptToEvaluateOnNewDocument', { source: GPU_LEDGER_SOURCE });
+  }
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
   for (let attempt=0;attempt<240;attempt++) {
     effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
@@ -7237,6 +7297,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'gpu-ledger') {
+    await runGpuLedgerScenario(ws);
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
   } else if (scenario === 'fire-cadence-panel') {
