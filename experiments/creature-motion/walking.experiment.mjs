@@ -195,7 +195,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    // The scene's flame, when asked for, through the shared flame workbench.
    if(inputs.attention.flame)Promise.resolve(globalThis.window?.kaminosFlameWorkbench?.open?.()).then(workbench=>{if(workbench&&!disposed)flames=flameInterests({THREE,root:sceneRoot,workbench,interest:inputs.attention.flame.interest??1.5});}).catch(error=>record({kind:'attention.flame',phase:'unavailable',error:error.message}));
    attention=createCreatureAttention({THREE,rigFrame:data.frame,profile:deriveHeadProfile({skin:data,frame:data.frame}),interests:()=>[...props(),...(flames?.read()??[])],
-    options:{document,onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
+    // Each creature's idle glances replay identically but differ from its neighbours'.
+    options:{document,seed:[...(inputs.label??inputs.case??'creature')].reduce((h,c)=>Math.imul(h^c.charCodeAt(0),16777619)>>>0,2166136261),onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
    if(inputs.attention.enabled===false)attention.setEnabled(false);
    // Light sense: while moving, sample the fire's light at a ring of ground
