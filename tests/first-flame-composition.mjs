@@ -7,6 +7,17 @@ import vm from 'node:vm';
 import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 
+test('capture completion refreshes the visible reduced caster diagnostics once',()=>{
+  let statusKey='',syncs=0;
+  const state={casters:{level:'5k',targets:0,captureTriangles:0}},window={__kaminosSceneRadiance:{debugState:()=>state}},settings={sync(){syncs++;}},fireShadowSceneRoute=()=>({});
+  const start=source.indexOf('syncStatus(state){'),end=source.indexOf('\n        }};',start);
+  const syncStatus=eval('({'+source.slice(start,end)+'}}).syncStatus');
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,1);
+  state.casters.targets=1;state.casters.captureTriangles=5000;
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,2,'actual capture counts must replace pending zeros');
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,2,'unchanged frame does not resync controls');
+});
+
 test('missing saved reduced caster keeps original lighting and recovery controls mounted',async()=>{
   const elements=new Map(),casters=createFireShadowCasters({scene:new THREE.Scene(),load:async()=>{throw Error('fire caster 10k unavailable: HTTP 404');}});
   const consumer={setShadowCasterLevel:v=>casters.setLevel(v),debugState:()=>({casters:casters.debugState()}),dispose(){throw Error('usable original consumer must not be disposed');}};
