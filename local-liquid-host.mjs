@@ -1,3 +1,4 @@
+import {SCENE_LIQUID_SUPPORT_ROUTE} from './scene-liquid-support.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import { texture, vec3, vec4, float, Fn, agxToneMapping, positionView, pmremTexture, equirectDirection, uv, uniform } from './lib/three.tsl.js';
 import {
@@ -52,7 +53,7 @@ function cameraFrame(camera, width, height, generation) {
     near:camera.near, far:camera.far, viewport:{width,height}};
 }
 
-export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], isCurrent = () => true}) {
+export async function createLocalLiquidHost({renderer, scene, camera, pipeline, device, setup, emitters = [], readColliders = ()=>[], isCurrent = () => true}) {
   if (!device || renderer.backend.device !== device) throw Error('Local liquid requires the host WebGPU device');
   let authored = normalizeLocalLiquidSetup(setup), authoredEmitters = structuredClone(emitters), sourceGeneration = 1;
   const initialPacket=localLiquidInletPacket(authored,authoredEmitters,sourceGeneration);
@@ -61,13 +62,16 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     hostFramePipelineIdentity:PIPELINE, presentationMode:'local_analytic_consumer', truthScene:'live_hand_inlets',
     particleCount:authored.particleCount, densityIterations:authored.densityIterations,
     rendererMode:'screen_space_refraction', bodyTransportMode:'robust_dense_body', interfaceFrequencyMode:'macro_micro_separated',
-    liveInletPacket:initialPacket});
+    liveInletPacket:initialPacket,
+    supportContactRoute:authored.support==='scene_primitives'?SCENE_LIQUID_SUPPORT_ROUTE:SUPPORT,
+    sceneColliders:authored.support==='scene_primitives'?readColliders():[]});
   if (!isCurrent()) {
     solver.destroy?.();
     return null;
   }
   if (!solver.available) throw Error(solver.reason || 'Local liquid solver unavailable');
-  const group = supportMesh(); group.visible=authored.showSupportGeometry; scene.add(group);
+  const group=authored.support==='scene_primitives'?new THREE.Group():supportMesh();
+  group.visible=authored.support!=='scene_primitives'&&authored.showSupportGeometry;scene.add(group);
   const targetOptions = {type:THREE.HalfFloatType, depthBuffer:false, minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter};
   const colorTarget = new THREE.RenderTarget(1,1,targetOptions);
   const outputTarget = new THREE.RenderTarget(1,1,targetOptions);
@@ -127,6 +131,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       // every frame): the step is the solver's own fixed 1/60, so fewer steps
       // slow the water rather than coarsening it.
       const stepThisFrame = presentationMode!=='proxy' || proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0;
+      if(authored.support==='scene_primitives')solver.setSceneColliders(readColliders());
       if (advance && !paused && stepThisFrame) solver.step(1/60);
       if (plan.environment) renderEnvironment();
       // The host color attachment is linear HDR even if another consumer
@@ -167,7 +172,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         width:target.width,height:target.height,view:nativeTexture(target).createView(),...extra});
       const commandEncoder=device.createCommandEncoder({label:frameId});
       const hostFrame={schema:FRAME_SCHEMA,frameId,device,deviceIdentity:PIPELINE,commandEncoder,width,height,
-        camera:cameraSnapshot,pipelineIdentity:PIPELINE,remapGeneration:0,supportIdentity:SUPPORT,
+        camera:cameraSnapshot,pipelineIdentity:PIPELINE,remapGeneration:0,supportIdentity:authored.support==='scene_primitives'?SCENE_LIQUID_SUPPORT_ROUTE:SUPPORT,
         route:{requested:ROUTE,effective:ROUTE,fallback:null},
         sceneColor:attachment('host-color',colorTarget,{format:'rgba16float',colorSpace:'linear_hdr'}),
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
@@ -233,6 +238,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     setSetup(nextSetup) {
       const next=normalizeLocalLiquidSetup(nextSetup);
       if (!next) throw Error('Local liquid setup cannot be cleared while its host is mounted');
+      if(next.support!==authored.support)throw Error('Water collision mode changes require restarting the host');
       const packet=localLiquidInletPacket(next,authoredEmitters,sourceGeneration+1);
       const key=JSON.stringify(packet.emitters);
       if(key!==publishedEmitterKey) {
@@ -240,7 +246,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         publishedEmitterKey=key;
         sourceGeneration++;
       }
-      group.visible=next.showSupportGeometry;
+      group.visible=authored.support!=='scene_primitives'&&next.showSupportGeometry;
       authored=next;
     },
     setPaused(value){paused=Boolean(value);return paused;},

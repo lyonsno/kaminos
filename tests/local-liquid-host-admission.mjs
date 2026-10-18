@@ -33,3 +33,12 @@ test('authored liquid accepts the bounded retained analytical support on the hos
     device,camera,extent:{width:640,height:480},expectedPipelineIdentity:'kaminos-local-liquid',expectedRemapGeneration:0,
   }),/schema/);
 });
+
+test('authored scene support is admitted only when the solver requests that exact source',()=>{
+  const support='kaminos/fluid/authored-primitive-support-v0';
+  const options={device,camera,extent:{width:640,height:480},expectedPipelineIdentity:'kaminos-local-liquid',expectedSupportIdentity:support};
+  const frame={...localHostFrame(),supportIdentity:support};
+  assert.equal(fluid.validateFingerFluidLocalHostFrame(frame,options).supportIdentity,support);
+  assert.throws(()=>fluid.validateFingerFluidLocalHostFrame(localHostFrame(),options),/support/,'retained playground cannot masquerade as scene geometry');
+  assert.throws(()=>fluid.validateFingerFluidLocalHostFrame(frame,{...options,expectedSupportIdentity:'unknown'}),/support/);
+});
