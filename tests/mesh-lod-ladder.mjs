@@ -122,3 +122,49 @@ test('prepareLowTiers returns closed, textured GLBs for each tier through the TR
     assert.equal(tier.textureSize, tier.target >= 5000 ? 512 : 256);
   }
 });
+
+test('compactTrellisGLB merges exact duplicate corners without changing any triangle, attribute or image', async () => {
+  const {prepareLowTiers, compactTrellisGLB} = await import('../mesh-lod-ladder.mjs');
+  const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  let v = [1,0,0, -1,0,0, 0,1,0, 0,-1,0, 0,0,1, 0,0,-1], f = [0,2,4, 2,1,4, 1,3,4, 3,0,4, 2,0,5, 1,2,5, 3,1,5, 0,3,5];
+  for (let s = 0; s < 4; s++) {
+    const mid = new Map(), next = [];
+    const m = (a, b) => { const k = a < b ? `${a},${b}` : `${b},${a}`; if (!mid.has(k)) { const p = [0,1,2].map(i => (v[a*3+i] + v[b*3+i]) / 2), l = Math.hypot(...p); v.push(...p.map(t => t / l)); mid.set(k, v.length / 3 - 1); } return mid.get(k); };
+    for (let t = 0; t < f.length; t += 3) { const [a,b,c] = f.slice(t, t+3), ab = m(a,b), bc = m(b,c), ca = m(c,a); next.push(a,ab,ca, ab,b,bc, ca,bc,c, ab,bc,ca); }
+    f = next;
+  }
+  const R = 16, coords = [], feats = [];
+  for (let i = 0; i < R; i++) for (let j = 0; j < R; j++) for (let k = 0; k < R; k++) {
+    const p = [i, j, k].map(c => (c + 0.5) / R - 0.5);
+    if (Math.abs(Math.hypot(...p) - 0.4) < 1.5 / R) { coords.push(i, j, k); feats.push(p[2] * 2, 0, -p[2] * 2, 0, 0.6, 1); }
+  }
+  const [tier] = await prepareLowTiers({mesh: {vertices: Float32Array.from(v, x => x * 0.4), triangles: Uint32Array.from(f)},
+    materialFields: {coordinates: Int32Array.from(coords), features: Float32Array.from(feats), resolution: R}, targets: [300], compact: false,
+    closestPoint: (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l * 0.4, y / l * 0.4, z / l * 0.4]; },
+    finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker});
+  const read = buffer => {
+    const view = new DataView(buffer), jl = view.getUint32(12, true), json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 20, jl)));
+    const bin = 28 + jl, accessor = i => { const a = json.accessors[i], bv = json.bufferViews[a.bufferView], n = {SCALAR: 1, VEC2: 2, VEC3: 3}[a.type];
+      const T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array}[a.componentType];
+      return new T(buffer.slice(bin + (bv.byteOffset || 0) + (a.byteOffset || 0), bin + (bv.byteOffset || 0) + (a.byteOffset || 0) + a.count * n * T.BYTES_PER_ELEMENT)); };
+    const p = json.meshes[0].primitives[0];
+    const images = json.images.map(im => { const bv = json.bufferViews[im.bufferView]; return new Uint8Array(buffer, bin + (bv.byteOffset || 0), bv.byteLength).join(); });
+    return {json, pos: accessor(p.attributes.POSITION), nrm: accessor(p.attributes.NORMAL), uv: accessor(p.attributes.TEXCOORD_0), idx: accessor(p.indices), images};
+  };
+  const before = read(tier.glb), compact = compactTrellisGLB(tier.glb), after = read(compact);
+  assert.ok(compact.byteLength < tier.glb.byteLength, `${compact.byteLength} < ${tier.glb.byteLength}`);
+  assert.ok(after.pos.length < before.pos.length, 'fewer vertices');
+  assert.equal(after.idx.length, before.idx.length, 'same triangles');
+  for (let c = 0; c < before.idx.length; c++) {
+    const b = before.idx[c], a = after.idx[c];
+    assert.deepEqual([...after.pos.slice(a*3, a*3+3)], [...before.pos.slice(b*3, b*3+3)]);
+    assert.deepEqual([...after.nrm.slice(a*3, a*3+3)], [...before.nrm.slice(b*3, b*3+3)]);
+    assert.deepEqual([...after.uv.slice(a*2, a*2+2)], [...before.uv.slice(b*2, b*2+2)]);
+  }
+  assert.deepEqual(after.images, before.images, 'textures byte-identical');
+  assert.deepEqual(after.json.materials, before.json.materials);
+  assert.deepEqual(after.json.nodes, before.json.nodes, 'node transform kept');
+  assert.deepEqual(after.json.extras, before.json.extras, 'provenance kept');
+});

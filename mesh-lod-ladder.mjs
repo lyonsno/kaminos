@@ -198,7 +198,7 @@ export function dedupCorners({positions, normals, uvs}) {
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
 export async function prepareLowTiers({mesh, materialFields, closestPoint, finish, unwrapMesh, WorkerClass,
-  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}}) {
+  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}, compact = true}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
   const tiers = [];
   for (const target of targets) {
@@ -206,8 +206,49 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
     const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
     const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
       {WorkerClass, unwrapMesh, textureSize, materialFields, provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
-    tiers.push({target, glb: finished.glb, faces: level.faces.length / 3, route: level.route, textureSize,
+    tiers.push({target, glb: compact ? compactTrellisGLB(finished.glb) : finished.glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
       closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
   }
   return tiers;
+}
+
+// Rewrite a TRELLIS-finished GLB (one primitive, one vertex per corner) with exact duplicate
+// corners merged and a real index buffer. Triangles, positions, normals, UVs, images,
+// materials, nodes and extras are unchanged; only the vertex layout shrinks.
+export function compactTrellisGLB(glb) {
+  const view = new DataView(glb), jsonLength = view.getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))), bin = 28 + jsonLength;
+  if (json.meshes?.length !== 1 || json.meshes[0].primitives.length !== 1) throw Error('one mesh with one primitive required');
+  const primitive = json.meshes[0].primitives[0];
+  const viewBytes = index => { const bv = json.bufferViews[index]; return new Uint8Array(glb.slice(bin + (bv.byteOffset || 0), bin + (bv.byteOffset || 0) + bv.byteLength)); };
+  const accessor = (index, width) => { const a = json.accessors[index], bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array}[a.componentType];
+    const start = bin + (bv.byteOffset || 0) + (a.byteOffset || 0); return new T(glb.slice(start, start + a.count * width * T.BYTES_PER_ELEMENT)); };
+  const {POSITION, NORMAL, TEXCOORD_0} = primitive.attributes;
+  const corners = accessor(primitive.indices, 1), pos = accessor(POSITION, 3), nrm = NORMAL !== undefined ? accessor(NORMAL, 3) : null, uv = TEXCOORD_0 !== undefined ? accessor(TEXCOORD_0, 2) : null;
+  const gather = (src, width) => { if (!src) return undefined; const out = new Float32Array(corners.length * width);
+    for (let c = 0; c < corners.length; c++) for (let k = 0; k < width; k++) out[c*width+k] = src[corners[c]*width+k]; return out; };
+  const merged = dedupCorners({positions: gather(pos, 3), normals: gather(nrm, 3), uvs: gather(uv, 2)});
+  const parts = [], bufferViews = [], accessors = [];
+  let offset = 0;
+  const push = (bytes, target) => { const padded = new Uint8Array(Math.ceil(bytes.byteLength / 4) * 4); padded.set(bytes); parts.push(padded);
+    bufferViews.push({buffer: 0, byteOffset: offset, byteLength: bytes.byteLength, ...(target ? {target} : {})}); offset += padded.length; return bufferViews.length - 1; };
+  const bytesOf = a => new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+  const addAccessor = (array, type, componentType, target, extra = {}) => { accessors.push({bufferView: push(bytesOf(array), target), componentType, count: array.length / {VEC3: 3, VEC2: 2, SCALAR: 1}[type], type, ...extra}); return accessors.length - 1; };
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < merged.positions.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], merged.positions[i+a]); hi[a] = Math.max(hi[a], merged.positions[i+a]); }
+  const attributes = {POSITION: addAccessor(merged.positions, 'VEC3', 5126, 34962, {min: lo, max: hi})};
+  if (merged.normals) attributes.NORMAL = addAccessor(merged.normals, 'VEC3', 5126, 34962);
+  if (merged.uvs) attributes.TEXCOORD_0 = addAccessor(merged.uvs, 'VEC2', 5126, 34962);
+  const indices = addAccessor(merged.indices, 'SCALAR', merged.indices instanceof Uint16Array ? 5123 : 5125, 34963);
+  const images = (json.images || []).map(image => ({...image, bufferView: push(viewBytes(image.bufferView))}));
+  const out = {...json, accessors, bufferViews, buffers: [{byteLength: offset}], images: json.images ? images : undefined,
+    meshes: [{...json.meshes[0], primitives: [{...primitive, attributes, indices}]}]};
+  if (!json.images) delete out.images;
+  const text = new TextEncoder().encode(JSON.stringify(out)), textLength = Math.ceil(text.length / 4) * 4;
+  const result = new ArrayBuffer(28 + textLength + offset), header = new DataView(result), bytes = new Uint8Array(result);
+  header.setUint32(0, 0x46546c67, true); header.setUint32(4, 2, true); header.setUint32(8, result.byteLength, true);
+  header.setUint32(12, textLength, true); header.setUint32(16, 0x4e4f534a, true); bytes.fill(32, 20, 20 + textLength); bytes.set(text, 20);
+  header.setUint32(20 + textLength, offset, true); header.setUint32(24 + textLength, 0x004e4942, true);
+  let at = 28 + textLength; for (const part of parts) { bytes.set(part, at); at += part.length; }
+  return result;
 }
