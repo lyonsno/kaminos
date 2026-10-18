@@ -109,9 +109,9 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
     throw new Error('Immersed source centre is outside the current domain');
   }
   const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;
-  if (!Number.isFinite(radius) || radius < 0.02 - 1e-12 || radius > 0.5 + 1e-12) {
-    throw new Error('Scaled immersed source radius must be within [0.02, 0.5]');
-  }
+  // An out-of-range radius is clamped below (immersedRadiusClamp reports it);
+  // only a radius that is not a number is refused.
+  if (!Number.isFinite(radius)) throw new Error('Scaled immersed source radius is not a number');
   const [x, y, z] = frame.direction;
   const yaw = Math.hypot(x, z) < 1e-12 ? Number(controls.immersedYaw ?? 0)
     : (Math.atan2(z, x) * 180 / Math.PI + 360) % 360;
@@ -119,6 +119,14 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
     immersedCentreZ: frame.origin[2], immersedYaw: yaw,
     immersedPitch: Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI,
     immersedRadius: Math.max(0.02, Math.min(0.5, radius)), immersedSourceEnabled: sourceEnabled };
+}
+
+// The scaled radius a source would ask for and the one it gets, or null when
+// it is within [0.02, 0.5] (floating-point boundary noise included).
+export function immersedRadiusClamp(controls, value) {
+  const radius = Number(controls.immersedRadius ?? 0.2) * flameEmitterFrame(value).scale;
+  if (!Number.isFinite(radius) || (radius >= 0.02 - 1e-12 && radius <= 0.5 + 1e-12)) return null;
+  return { requested: radius, applied: Math.max(0.02, Math.min(0.5, radius)) };
 }
 
 export function flamePoseFromImmersedControls(controls, translation = [0, 0, 0], previous = defaultFlameEmitterPose(), scale = 1) {

@@ -2,7 +2,7 @@ import {
   VOLUME_EMITTER_FAMILIES,
   compileVolumeEmitterFamily,
 } from './volume-emitter-basis.mjs';
-import { flameEmitterFrame, immersedControlsForFlamePose,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
+import { flameEmitterFrame, immersedControlsForFlamePose, immersedRadiusClamp,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 
 export const VOLUME_EMITTER_RUNTIME_SCHEMA = 'kaminos.volume-emitter-runtime.v1';
 
@@ -183,7 +183,9 @@ export function applyVolumeEmitterFamilyRuntime({
         sourceMode: sourceEnabled ? 'immersed-configured' : 'off', sourceCount: sourceEnabled ? 1 : 0,
         coordinateSpace: sourceEnabled ? 'volume-local' : 'none', coreFlowRate: 0,
         emitterPose: placement.pose, inletProfile: 'inactive', effectiveInletVelocity: null,
-        admission: 'reported-by-core-per-step' },
+        admission: 'reported-by-core-per-step',
+        // An aperture the source scale takes out of range runs clamped, and says so.
+        radiusClamp: immersedRadiusClamp(controls, placement.pose) },
       compilerReceipt: null, sourceReceipt, coreSourceReceipt, carrierReceipt: null,
       fallbackUsed: false, failures: [] };
   }
