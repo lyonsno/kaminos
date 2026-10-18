@@ -34,8 +34,12 @@ test('the physics law is a third material law, requested by material law 2', () 
   assert.deepEqual(resolved.effective, { render: true, sootBurnout: false }, 'burnout is off at its default rate 0');
   assert.equal(resolved.reason, null);
   assert.equal(resolved.kelvinPerHeat, PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat);
-  assert.equal(resolvePhysicsAppearance({ physicalMaterialLaw: 1 }, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, false);
-  assert.equal(resolvePhysicsAppearance({}, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, false, 'saved basins without the field stay on their law');
+  // Physics is the one material law (the law select is retired, 2026-10-18): no saved field selects it.
+  assert.equal(resolvePhysicsAppearance({}, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, true, 'the law is not read from a retired control');
+  assert.equal(resolvePhysicsAppearance({ physicalMaterialLaw: 1 }, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, true, 'a stale saved law value cannot reinstate a retired law');
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(core, /controlsSnapshot\.physicalColorMode|controlsSnapshot\.physicalMaterialLaw/, 'the colour route and material law are not read from retired controls (a snapshot without them rendered the legacy transfer: no emission)');
+  assert.match(core, /const physicalColorMode = 2;/, 'emissive transport is the one colour route');
 });
 
 test('it needs the reactant law; the soot burnout does not depend on which view draws the frame', () => {

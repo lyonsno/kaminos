@@ -17128,7 +17128,10 @@ export function createKaminosVolumePrototype({
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
     uniforms[367] = 0;
-    const physicalColorMode = controlsSnapshot.physicalColorMode ?? 0;
+    // Emissive transport is the one colour route: the mode select is retired
+    // with the legacy material laws (operator, 2026-10-18). Reading it from the
+    // snapshot drew the legacy transfer (no emission) once the key was gone.
+    const physicalColorMode = 2;
     const physicalColorRequested = physicalColorMode > 0;
     const ordinaryEmissiveRoute = productFrameOwner !== 'caller'
       && volumePresentationModeEffective === 'beauty'

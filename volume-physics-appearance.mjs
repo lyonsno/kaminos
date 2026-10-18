@@ -33,7 +33,9 @@ const clampTo = (value, [lo, hi], fallback) => {
 };
 
 export function resolvePhysicsAppearance(controls = {}, { reactantAdmitted = false, emissiveRouteEffective = false } = {}) {
-  const requested = Number(controls.physicalMaterialLaw) === PHYSICS_MATERIAL_LAW;
+  // Physics is the material law; the law select is retired (operator,
+  // 2026-10-18), so no saved field selects or deselects it.
+  const requested = true;
   const kelvinPerHeat = clampTo(controls.physicalKelvinPerHeat, PHYSICS_APPEARANCE_RANGES.kelvinPerHeat, PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat);
   const sootBurnoutRate = clampTo(controls.physicalSootBurnoutRate, PHYSICS_APPEARANCE_RANGES.sootBurnoutRate, PHYSICS_APPEARANCE_DEFAULTS.sootBurnoutRate);
   const sootBurnoutKelvin = clampTo(controls.physicalSootBurnoutKelvin, PHYSICS_APPEARANCE_RANGES.sootBurnoutKelvin, PHYSICS_APPEARANCE_DEFAULTS.sootBurnoutKelvin);
