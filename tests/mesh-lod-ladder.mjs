@@ -197,3 +197,48 @@ test('geometric error is symmetric, deterministic and matches a known offset', a
   assert.ok(e.p95 >= e.mean && e.p95 <= e.max);
   assert.ok(e.normalDeviationDegrees.mean >= 0 && e.normalDeviationDegrees.max <= 90 + 1e-6);
 });
+
+test('review fixes: deterministic tier bytes, index width boundary, grid refusal, strict compaction', async () => {
+  const {prepareLowTiers, dedupCorners, remeshLevel, compactTrellisGLB} = await import('../mesh-lod-ladder.mjs');
+  const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  const {createHash} = await import('node:crypto');
+  // M2: same inputs, same published bytes.
+  let v = [1,0,0, -1,0,0, 0,1,0, 0,-1,0, 0,0,1, 0,0,-1], f = [0,2,4, 2,1,4, 1,3,4, 3,0,4, 2,0,5, 1,2,5, 3,1,5, 0,3,5];
+  for (let s = 0; s < 3; s++) {
+    const mid = new Map(), next = [];
+    const m = (a, b) => { const k = a < b ? `${a},${b}` : `${b},${a}`; if (!mid.has(k)) { const p = [0,1,2].map(i => (v[a*3+i] + v[b*3+i]) / 2), l = Math.hypot(...p); v.push(...p.map(t => t / l)); mid.set(k, v.length / 3 - 1); } return mid.get(k); };
+    for (let t = 0; t < f.length; t += 3) { const [a,b,c] = f.slice(t, t+3), ab = m(a,b), bc = m(b,c), ca = m(c,a); next.push(a,ab,ca, ab,b,bc, ca,bc,c, ab,bc,ca); }
+    f = next;
+  }
+  const R = 16, coords = [], feats = [];
+  for (let i = 0; i < R; i++) for (let j = 0; j < R; j++) for (let k = 0; k < R; k++) {
+    const p = [i, j, k].map(c => (c + 0.5) / R - 0.5);
+    if (Math.abs(Math.hypot(...p) - 0.4) < 1.5 / R) { coords.push(i, j, k); feats.push(0.2, 0, 0, 0, 0.6, 1); }
+  }
+  const once = async () => (await prepareLowTiers({mesh: {vertices: Float32Array.from(v, x => x * 0.4), triangles: Uint32Array.from(f)},
+    materialFields: {coordinates: Int32Array.from(coords), features: Float32Array.from(feats), resolution: R}, targets: [200],
+    closestPoint: (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l * 0.4, y / l * 0.4, z / l * 0.4]; },
+    finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker}))[0];
+  const a = await once(), b = await once(), sha = t => createHash('sha256').update(new Uint8Array(t.glb)).digest('hex');
+  assert.equal(sha(a), sha(b), 'rerun publishes identical bytes');
+  assert.ok(Number.isFinite(a.timing?.uvSeconds), 'timing kept beside the bytes, not in them');
+  // N4: 65,536 distinct vertices need 32-bit indices (65535 is primitive restart).
+  const n = 65536, positions = new Float32Array(n * 3); for (let i = 0; i < n; i++) positions[i * 3] = i;
+  assert.ok(dedupCorners({positions}).indices instanceof Uint32Array);
+  const small = new Float32Array(65535 * 3); for (let i = 0; i < 65535; i++) small[i * 3] = i;
+  assert.ok(dedupCorners({positions: small}).indices instanceof Uint16Array);
+  // N5: a grid larger than the refusal bound fails loudly before allocating.
+  const rod = {vertices: new Float32Array([0,0,0, 100,0,0, 0,0.001,0]), faces: new Uint32Array([0,1,2])};
+  assert.throws(() => remeshLevel(rod, 5000, {closestPoint: (x, y, z) => [x, y, z], maxGridNodes: 1e6}), /grid/i);
+  // N6: compaction refuses layouts it would silently drop.
+  const glb = a.glb, view = new DataView(glb), jl = view.getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jl)));
+  json.meshes[0].primitives[0].attributes.COLOR_0 = 0;
+  const text = new TextEncoder().encode(JSON.stringify(json)), padded = Math.ceil(text.length / 4) * 4, bin = new Uint8Array(glb, 20 + jl);
+  const out = new Uint8Array(20 + padded + bin.length), dv = new DataView(out.buffer);
+  out.set(new Uint8Array(glb, 0, 12)); dv.setUint32(8, out.length, true); dv.setUint32(12, padded, true); dv.setUint32(16, 0x4e4f534a, true);
+  out.fill(32, 20, 20 + padded); out.set(text, 20); out.set(bin, 20 + padded);
+  assert.throws(() => compactTrellisGLB(out.buffer), /COLOR_0/);
+});

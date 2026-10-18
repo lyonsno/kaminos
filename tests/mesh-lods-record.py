@@ -84,9 +84,9 @@ with tempfile.TemporaryDirectory() as directory:
             data = glb(name); other[name] = hashlib.sha256(data).hexdigest()
             assert request('POST', '/api/ingest-mesh', data)[0] == 200
         for name, faces, mx, mean in (('e5000', 5000, 0.004, 0.001), ('e1000', 1000, 0.012, 0.003), ('e500', 500, 0.03, 0.008)):
-            level = {'sha256': other[name], 'faces': faces, 'route': 'closed-remesh', 'textureSize': 256,
-                     'error': {'relative': {'max': mx, 'p95': mx * 0.6, 'mean': mean}}}
-            assert request('POST', '/api/mesh-lods', {'source': other['hero2'], 'level': level})[0] == 200
+            measured = {'sha256': other[name], 'faces': faces, 'route': 'closed-remesh', 'textureSize': 256,
+                        'error': {'relative': {'max': mx, 'p95': mx * 0.6, 'mean': mean}}}
+            assert request('POST', '/api/mesh-lods', {'source': other['hero2'], 'level': measured})[0] == 200
         status, body = request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01")
         assert body['choice']['sha256'] == other['e5000'] and body['withinBudget'] is True, body['choice']
         status, body = request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&stat=mean")
@@ -95,6 +95,32 @@ with tempfile.TemporaryDirectory() as directory:
         assert body['choice']['sha256'] == other['e5000'] and body['withinBudget'] is False, 'finest level, flagged'
         assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&stat=median")[0] == 400
         assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&faces=100")[0] == 400
+        # Review M1: registered levels are representations of the hero, not assets of their own.
+        catalog = serve.authoring_asset_catalog('generated-meshes')
+        listed = {Path(e['source'].split('path=')[-1]).stem for e in catalog['entries']}
+        assert hero in listed and other['hero2'] in listed
+        assert not listed & {stored['l5000'], stored['l1000'], stored['l500'], other['e5000']}, 'levels hidden from the asset list'
+        status, browse = request('GET', '/api/browse?root=generated-meshes&path=')
+        rows = {e['name']: e for e in browse['entries']}
+        assert rows[stored['l1000'] + '.glb']['lodOf'] == {'source': hero, 'faces': 1000}
+        assert 'lodOf' not in rows[hero + '.glb']
+
+        # Review M2: one level per (faces, route) for a source; a second sha for it is refused.
+        twin = glb('l1000-rerun'); twin_sha = hashlib.sha256(twin).hexdigest()
+        assert request('POST', '/api/ingest-mesh', twin)[0] == 200
+        assert request('POST', '/api/mesh-lods', {'source': hero, 'level': {**level('l1000', 1000), 'sha256': twin_sha}})[0] == 400
+
+        # Review N1: tighter validation.
+        for bad in ({'faces': True}, {'textureSize': 'big'}, {'sha256': hero}, {'route': ''}):
+            assert request('POST', '/api/mesh-lods', {'source': hero, 'level': {**level('l500', 500), **bad}})[0] == 400, bad
+
+        # Review N2: a corrupt record is a server-side fault, not a client error.
+        corrupt = glb('corrupt-hero'); corrupt_sha = hashlib.sha256(corrupt).hexdigest()
+        assert request('POST', '/api/ingest-mesh', corrupt)[0] == 200
+        (root / f'.{corrupt_sha}.glb.lods.json').write_text('{not json')
+        status, body = request('GET', f'/api/mesh-lods?source={corrupt_sha}&faces=10')
+        assert status == 500 and body['phase'] == 'mesh-lods-record', (status, body)
+
         # Levels registered without an error measurement are never chosen by error.
         status, body = request('GET', f'/api/mesh-lods?source={hero}&maxError=1')
         assert body['choice'] is None and body['unmeasured'] == 3, body

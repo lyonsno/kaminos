@@ -62,15 +62,17 @@ try {
   report.tierSeconds = (performance.now() - started) / 1000;
   report.phase = 'publish'; save();
   for (const tier of tiers) {
+    const body = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
     const ingest = await fetch(`${server}/api/ingest-mesh`, {method: 'POST', body: Buffer.from(tier.glb)});
-    const stored = await ingest.json();
-    if (!ingest.ok) throw Error(`ingest failed for ${tier.target}: ${JSON.stringify(stored)}`);
+    const stored = await body(ingest);
+    if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
     const level = {sha256: stored.sha256, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
       closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges, error: tier.error};
     const register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level})});
-    const registered = await register.json();
-    if (!register.ok) throw Error(`register failed for ${tier.target}: ${JSON.stringify(registered)}`);
-    report.tiers.push({target: tier.target, ...level, bytes: tier.glb.byteLength}); save();
+    const registered = await body(register);
+    if (!register.ok) { report.failedTier = tier.target; report.orphanedIngest = stored.sha256;
+      throw Error(`register failed for ${tier.target} (HTTP ${register.status}): ${JSON.stringify(registered)}`); }
+    report.tiers.push({target: tier.target, ...level, bytes: tier.glb.byteLength, timing: tier.timing}); save();
   }
   report.phase = 'done';
 } catch (error) {

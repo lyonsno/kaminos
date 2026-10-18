@@ -102,7 +102,7 @@ export function reduceLevel({vertices, faces}, target, {holeScale = 6, maxPasses
 
 // Lower levels: closed surface on a grid sized from the target, projected onto the source.
 // closestPoint(x, y, z) -> [x, y, z] on the source surface (for example a three-mesh-bvh query).
-export function remeshLevel({vertices: V, faces: F}, target, {closestPoint, oversample = 10, minCells = 24, smoothPasses = 2} = {}) {
+export function remeshLevel({vertices: V, faces: F}, target, {closestPoint, oversample = 10, minCells = 24, smoothPasses = 2, maxGridNodes = 2 ** 26} = {}) {
   if (typeof closestPoint !== 'function') throw TypeError('closestPoint(x, y, z) onto the source surface is required');
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < V.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], V[i+a]); hi[a] = Math.max(hi[a], V[i+a]); }
@@ -110,6 +110,8 @@ export function remeshLevel({vertices: V, faces: F}, target, {closestPoint, over
   const h = Math.min(Math.sqrt(2 * surfaceArea(V, F) / (oversample * target)), ext / minCells);
   const N = [0, 1, 2].map(a => Math.ceil((hi[a] - lo[a]) / h) + 5), o = lo.map(x => x - 2 * h);
   const idx = (i, j, k) => (k * N[1] + j) * N[0] + i, nn = N[0] * N[1] * N[2];
+  // Thin, sparse shapes in a large box can ask for enormous grids; refuse before allocating.
+  if (nn > maxGridNodes) throw RangeError(`remesh grid of ${N.join('x')} = ${nn} nodes exceeds maxGridNodes ${maxGridNodes}; lower the target or raise maxGridNodes`);
   const surface = new Uint8Array(nn);
   for (let t = 0; t < F.length; t += 3) {
     const a = F[t]*3, b = F[t+1]*3, c = F[t+2]*3;
@@ -189,7 +191,7 @@ export function dedupCorners({positions, normals, uvs}) {
   }
   const pick = (src, width) => { if (!src) return undefined; const out = new Float32Array(order.length * width);
     order.forEach((c, i) => { for (let k = 0; k < width; k++) out[i*width+k] = src[c*width+k]; }); return out; };
-  const Index = order.length <= 65536 ? Uint16Array : Uint32Array;
+  const Index = order.length <= 65535 ? Uint16Array : Uint32Array; // 65535 is reserved for primitive restart
   return {positions: pick(positions, 3), normals: pick(normals, 3), uvs: pick(uvs, 2), indices: Index.from(corner)};
 }
 
@@ -209,7 +211,9 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
     // measure: {closestSource(x,y,z) -> {point, normal}, closestFor(vertices, faces) -> same for a level, samples?}
     const error = measure ? measureGeometricError({source: {vertices: mesh.vertices, faces: mesh.triangles}, level,
       closestSource: measure.closestSource, closestLevel: measure.closestFor(level.vertices, level.faces), samples: measure.samples ?? 20000}) : null;
-    tiers.push({target, error, glb: compact ? compactTrellisGLB(finished.glb) : finished.glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
+    const glb = compact ? compactTrellisGLB(finished.glb, {dropTimings: true}) : finished.glb;
+    const timing = {uvSeconds: glb.timings?.['extras.trellis.uv.elapsedSeconds'] ?? finished.mesh?.uvMetadata?.elapsedSeconds ?? null, ...(glb.timings ? {dropped: glb.timings} : {})};
+    tiers.push({target, error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
       closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
   }
   return tiers;
@@ -218,11 +222,26 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
 // Rewrite a TRELLIS-finished GLB (one primitive, one vertex per corner) with exact duplicate
 // corners merged and a real index buffer. Triangles, positions, normals, UVs, images,
 // materials, nodes and extras are unchanged; only the vertex layout shrinks.
-export function compactTrellisGLB(glb) {
+export function compactTrellisGLB(glb, {dropTimings = false} = {}) {
   const view = new DataView(glb), jsonLength = view.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))), bin = 28 + jsonLength;
   if (json.meshes?.length !== 1 || json.meshes[0].primitives.length !== 1) throw Error('one mesh with one primitive required');
   const primitive = json.meshes[0].primitives[0];
+  // Refuse anything this rewrite would silently drop.
+  const unknown = Object.keys(primitive.attributes).filter(k => !['POSITION', 'NORMAL', 'TEXCOORD_0'].includes(k));
+  if (unknown.length) throw Error(`compaction does not carry attributes ${unknown.join(', ')}`);
+  if (primitive.targets) throw Error('compaction does not carry morph targets');
+  if (json.bufferViews.some(bv => bv.byteStride)) throw Error('compaction does not read interleaved buffer views');
+  if ((json.images || []).some(im => im.bufferView === undefined)) throw Error('compaction requires embedded images');
+  // Wall-clock fields make identical work publish different bytes; move them out of the asset.
+  const timings = {};
+  if (dropTimings) {
+    const strip = (node, path) => { if (!node || typeof node !== 'object') return;
+      for (const key of Object.keys(node)) {
+        if (/Seconds$/.test(key) || key === 'startedAt' || key === 'finishedAt') { timings[[...path, key].join('.')] = node[key]; delete node[key]; }
+        else strip(node[key], [...path, key]); } };
+    strip(json.extras, ['extras']); for (const mesh of json.meshes) strip(mesh.extras, ['mesh', 'extras']);
+  }
   const viewBytes = index => { const bv = json.bufferViews[index]; return new Uint8Array(glb.slice(bin + (bv.byteOffset || 0), bin + (bv.byteOffset || 0) + bv.byteLength)); };
   const accessor = (index, width) => { const a = json.accessors[index], bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array}[a.componentType];
     const start = bin + (bv.byteOffset || 0) + (a.byteOffset || 0); return new T(glb.slice(start, start + a.count * width * T.BYTES_PER_ELEMENT)); };
@@ -253,6 +272,7 @@ export function compactTrellisGLB(glb) {
   header.setUint32(12, textLength, true); header.setUint32(16, 0x4e4f534a, true); bytes.fill(32, 20, 20 + textLength); bytes.set(text, 20);
   header.setUint32(20 + textLength, offset, true); header.setUint32(24 + textLength, 0x004e4942, true);
   let at = 28 + textLength; for (const part of parts) { bytes.set(part, at); at += part.length; }
+  if (dropTimings) Object.defineProperty(result, 'timings', {value: timings});
   return result;
 }
 
