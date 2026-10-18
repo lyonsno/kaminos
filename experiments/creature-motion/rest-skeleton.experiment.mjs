@@ -40,12 +40,13 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
  let plan=structuredClone(baseline),selected=[plan.joints.find(j=>j.name.includes('shoulder'))?.name??plan.joints[0].name],active=selected[0],mirror=false,descendants=false,editMode=false,disposed=false;
  let refresh=()=>{},componentSeat,controlSeat,shapeControls,unsubscribe=()=>{},draft=null,error=null;
  const target='@rest-components:'+crypto.randomUUID(),root=new THREE.Group(),proxy=new THREE.Group(),markers=new Map();root.name='Creature · rest skeleton';proxy.name='Rest joint transform';proxy.userData.kaminosEditorHelper=true;
+ const markerGeometry=new THREE.SphereGeometry(.018,12,8),referenceGeometry=new THREE.SphereGeometry(.012,8,6);
  const referenceTarget=target+':reference',bodyTarget=target+':body';
  const positions=()=>plan.joints.map(j=>new THREE.Vector3(...j.head).applyMatrix4(matrix).toArray());
  let graph;
- function rebuild(){for(const child of [...root.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});root.remove(child);}markers.clear();graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
+ function rebuild(){for(const child of [...root.children]){child.traverse(o=>{if(o.geometry!==markerGeometry)o.geometry?.dispose();o.material?.dispose();});root.remove(child);}markers.clear();graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
  for(const [i,j]of plan.joints.entries()){
-  const marker=new THREE.Mesh(new THREE.SphereGeometry(.018,12,8),new THREE.MeshBasicMaterial({color:0x4ce4ed,depthTest:false}));marker.name=j.name;marker.renderOrder=10;marker.position.fromArray(positions()[i]);root.add(marker);markers.set(j.name,marker);
+  const marker=new THREE.Mesh(markerGeometry,new THREE.MeshBasicMaterial({color:0x4ce4ed,depthTest:false}));marker.name=j.name;marker.renderOrder=10;marker.position.fromArray(positions()[i]);root.add(marker);markers.set(j.name,marker);
  }}rebuild();
  let referenceRoot=null,referenceAsset=null,asset=null;
  function assertLive(){if(disposed||!root.parent)throw Error('Skeleton removed; Undo removal or reopen it');}
@@ -119,10 +120,10 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   if(loaded.startingBody)operations.startFrom({id:loaded.startingBody});
  }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget].includes(entry.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();await session.dispose();throw e;}
  function drawReference(){
-  for(const child of [...referenceRoot.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
+  for(const child of [...referenceRoot.children]){child.traverse(o=>{if(o.geometry!==referenceGeometry)o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
   referenceRoot.name=reference.label??'Reference skeleton';referenceRoot.userData.proportionReference={id:atlas?.activeReference??null,source:structuredClone(reference.source??null)};
   const p=reference.jointNames.map((_,i)=>reference.positions.slice(i*3,i*3+3));referenceRoot.add(links(reference.jointNames.map((name,i)=>({name,parent:reference.parents[i]})),p,0xdd96ff).mesh);
-  for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
+  for(const v of p){const marker=new THREE.Mesh(referenceGeometry,new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
  }
  return {read,operations,async dispose(){
   if(disposed)return;shapeControls?.dispose();componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget,asset.id,referenceAsset?.id].includes(entry.id)||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();disposed=true;await session.dispose();
