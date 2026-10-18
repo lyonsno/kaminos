@@ -39,15 +39,15 @@ try {
     assert.equal(report.live.acquisition,'wilor_yolo_detector_bbox_only');
     assert.equal(report.live.acquisitionDetails.cropPadding,1.4);
     await page.getByRole('combobox',{name:'Crop mode',exact:true}).selectOption('manual');
-    await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).acquisition==='operator_selected_crop_no_detector');
-    report.manual=await read();await page.screenshot({path:out+'/manual.png'});
+    await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('| MANUAL CROP |'));
+    report.manual=await read();assert.equal(report.manual.acquisition,'operator_selected_crop_no_detector');await page.screenshot({path:out+'/manual.png'});
     await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:1}));
     await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('NO DETECTION: MANUAL CROP FALLBACK'));
     report.miss=await read();assert.equal(report.miss.visible,true);assert.equal(report.miss.acquisitionDetails.fallback,true);
     await page.screenshot({path:out+'/miss.png'});
     await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:.18}));
-    await page.waitForFunction(async()=>(await window.kaminosWorkbenchExperiments.read()).acquisition==='wilor_yolo_detector_bbox_only');
-    report.reacquired=await read();
+    await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('YOLO / MLX crop'));
+    report.reacquired=await read();assert.equal(report.reacquired.acquisition,'wilor_yolo_detector_bbox_only');
   }
   await page.route('http://127.0.0.1:8791/frame',route=>route.fulfill({status:503,contentType:'application/json',
     headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:8498'},body:JSON.stringify({error:'witness_inference_failure'})}));
@@ -69,7 +69,7 @@ try {
   await page.waitForFunction(age=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/sample age (\d+) ms/)?.[1])>age+4000,beforeAge);
   await page.screenshot({path:out+'/failure.png'});
   await page.unroute('http://127.0.0.1:8791/frame');
-  await page.getByRole('button',{name:'Start camera',exact:true}).click();
+  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=2);
   report.restart=await read();assert.notEqual(report.restart.sessionId,report.live.sessionId);
   await page.getByRole('button',{name:'Stop camera',exact:true}).click();
