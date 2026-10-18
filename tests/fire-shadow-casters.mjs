@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.webgpu.js';
-import {createFireShadowCasters,KILN_CASTER_SOURCE} from '../fire-shadow-casters.mjs';
+import {createFireShadowCasters,KILN_CASTER_SOURCE,loadFireCaster} from '../fire-shadow-casters.mjs';
 import {renderFireShadowBatch} from '../fire-light-field-shadow.mjs';
 const scene=new THREE.Scene(),root=new THREE.Group(),hero=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial({side:THREE.DoubleSide}));
 root.userData.kaminosSceneObject={source:`/api/read?root=generated-meshes&path=${KILN_CASTER_SOURCE}.glb`};
@@ -35,4 +35,9 @@ await casters.setLevel('original');casters.dispose();assert.equal(proxy.parent,n
 const pending=createFireShadowCasters({scene,load:()=>new Promise(r=>release=r)});
 const old=pending.setLevel('10k');await Promise.resolve();await pending.setLevel('original');release(proxy);await old;
 assert.equal(pending.debugState().level,'original','late load must not reactivate retired choice');pending.dispose();
+const fetchBefore=globalThis.fetch;
+try{
+  globalThis.fetch=async()=>new Response('',{status:404});await assert.rejects(loadFireCaster('5k'),/HTTP 404/);
+  globalThis.fetch=async()=>new Response(new Uint8Array([1,2,3]));await assert.rejects(loadFireCaster('5k'),/content identity mismatch/);
+}finally{globalThis.fetch=fetchBefore;}
 console.log('PASS caster-only frame, four fresh captures, restoration, invalidation and late-load ownership');
