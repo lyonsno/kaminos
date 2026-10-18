@@ -32,14 +32,19 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
   const tellAll = message => { for (const port of tabs.keys()) tell(port, message); };
   const linked = () => source?.readyState === 1;
   // A departure is always reported, even while the stream is down, and repeated on every
-  // reconnect until the server has recorded it: the server then refuses delayed joins of it.
-  const departures = new Map();   // `${page} ${member}` -> {page, member}
+  // reconnect and every check until the server has recorded it: the server then refuses
+  // delayed joins of it. One report of a departure is in flight at a time.
+  const departures = new Map();   // `${page} ${member}` -> {page, member, sending}
   async function depart(page, member) {
-    const key = `${page} ${member}`;
-    departures.set(key, {page, member});
+    const key = `${page} ${member}`, departure = departures.get(key) ?? {page, member, sending: false};
+    departures.set(key, departure);
+    if (departure.sending) return;
+    departure.sending = true;
     const response = await post('/leave', {hub: hubId, page, member});
+    departure.sending = false;
     if (response?.ok) departures.delete(key);
   }
+  const departAgain = () => { for (const {page, member} of [...departures.values()]) depart(page, member); };
   async function join(port, tab) {
     const stream = generation, member = tab.member;
     const response = await post('/join', {hub: hubId, ...tab.facts, page: tab.page, member});
@@ -80,7 +85,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     source.addEventListener('open', () => {
       mode = 'hub';
       generation++;
-      for (const {page, member} of [...departures.values()]) depart(page, member);
+      departAgain();
       for (const [port, tab] of tabs) { tab.joined = false; join(port, tab); }
     });
     source.addEventListener('command', event => {
@@ -126,6 +131,8 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
   }
 
   setInterval(() => {
+    // A departure the server did not record is reported again while the stream is up.
+    if (linked()) departAgain();
     for (const [port, tab] of [...tabs]) {
       if (now() - tab.seen > HUB_SILENCE_MS) {
         tabs.delete(port);

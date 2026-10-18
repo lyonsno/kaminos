@@ -211,3 +211,32 @@ test('a tab that leaves while the stream is down is still reported gone, and the
   h.sources[0].readyState = 0; h.sources[0].emit('error'); await h.settle(); h.sources[0].emit('open'); await h.settle();
   assert.equal(leaves().length, 2, 'and not again once the server has it');
 });
+
+test('a departure the server did not record is retried on the hub\'s regular check while the stream stays open', async () => {
+  const answers = [503];
+  const h = await hubHarness({leaveStatus: () => answers.shift() ?? 200}), a = h.port(), b = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')});
+  b.say({type: 'join', endpoint: '/api/vantage', page: 'page-b', facts: facts('page-b')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  a.say({type: 'leave', page: 'page-a'}); await h.settle();
+  const leaves = () => h.posts.filter(post => post.url === '/api/vantage/leave' && post.body.page === 'page-a');
+  assert.equal(leaves().length, 1);
+  const check = h.intervals.find(item => item.ms === 10000).fn;
+  b.say({type: 'pong', page: 'page-b'}); h.advance(10000); check(); await h.settle();
+  assert.equal(leaves().length, 2, 'retried without waiting for the stream to reconnect');
+  assert.equal(leaves()[1].body.member, leaves()[0].body.member, 'for the same membership, so a newer one is never removed');
+  assert.equal(h.sources.length, 1, 'the stream stayed as it was');
+  assert.equal(h.sources[0].readyState, 1);
+  b.say({type: 'pong', page: 'page-b'}); h.advance(10000); check(); await h.settle();
+  assert.equal(leaves().length, 2, 'and not again once the server has it');
+  assert.deepEqual(h.hub.state().pages, ['page-b'], 'the surviving tab stays');
+});
+
+test('a departure still in flight is not sent twice by the check', async () => {
+  const h = await hubHarness({leaveStatus: () => 200}), a = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  a.say({type: 'leave', page: 'page-a'});   // its answer has not arrived when the check runs
+  h.intervals.find(item => item.ms === 10000).fn(); await h.settle();
+  assert.equal(h.posts.filter(post => post.url === '/api/vantage/leave').length, 1);
+});
