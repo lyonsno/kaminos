@@ -15,7 +15,7 @@ async function exercise({changeRevision=false,badSample=false}={}){
  let runtime={geometryRevision:revision};
  const window={
   kaminosSceneCollision:{read:()=>({runtime})},
-  kaminosSetSceneObjectTransform(){runtime={geometryRevision:++revision,validation:'gpu-resident-unread'};label.textContent='Submitted · GPU solid field unverified';},
+  kaminosSetSceneObjectTransform(){runtime={geometryRevision:++revision,validation:'gpu-resident-unread'};if(revision===1)label.textContent='Submitted · GPU solid field unverified';},
   __kaminosVolumePrototype:{debugState:()=>({sceneCollision:runtime,followingDomain:{translation:[0,0,0]}}),
    async sampleSceneCollisionMask(){
     const reason=samples++===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support';
@@ -39,7 +39,8 @@ async function exercise({changeRevision=false,badSample=false}={}){
   assert.equal(saved.at(-1).collisionNegatives[0].sampled.runtime.reason,'wrong-reason','A failed sample must remain replayable');
  }else{
   await run;assert.equal(delayed,2);assert.equal(report.collisionNegatives.length,2);
-  assert.ok(report.collisionNegatives.every(x=>x.beforeReadoutRefresh.text.startsWith('Submitted')&&x.ordinary.text.startsWith('Unavailable')));
+  assert.equal(report.collisionNegatives[0].beforeReadoutRefresh.text,'Submitted · GPU solid field unverified');
+  assert.ok(report.collisionNegatives.every(x=>x.ordinary.text==='Unavailable · '+x.sampled.runtime.reason),'Each case must observe its own rejection, not the prior label');
  }
 }
 await exercise();
