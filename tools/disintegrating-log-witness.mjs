@@ -32,7 +32,7 @@ try{
  const advance=async target=>{report.inputs.push({advanceTo:target});const r=await guarded(page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.effectiveSimStepCount,target);await invoke('pause');};
  report.effective=await page.evaluate(()=>({backend:window.__kaminosVolumePrototype.debugState().backend,grid:window.__kaminosVolumePrototype.debugState().simGrid,gi:window.kaminosSceneGIDebugState(),rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value)}));
  assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
- report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','log-consumption.mjs','log-debris-gpu.mjs','workbench-scene-host.mjs','burnable-target.mjs','burnable-selection.mjs','bear-altar.mjs','experiments/sinter/live-log-heat.experiment.mjs','experiments/sinter/disintegrating-log.experiment.mjs','experiments/sinter/bear-altar.experiment.mjs']){
+ report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','scene-resident-coverage.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','scene-light-visibility.mjs','scene-light-geometry.mjs','fire-light-field-shadow.mjs','scene-persistence-core.js','log-consumption.mjs','log-debris-gpu.mjs','workbench-scene-host.mjs','burnable-target.mjs','burnable-selection.mjs','bear-altar.mjs','experiments/sinter/live-log-heat.experiment.mjs','experiments/sinter/disintegrating-log.experiment.mjs','experiments/sinter/bear-altar.experiment.mjs']){
   const served=await(await page.request.get(origin+'/'+name)).body(),local=await fs.readFile(path.join(report.repoRoot,name));const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(served),sha(local),name);report.sources.push({name,sha256:sha(served)});
  }
  let lastSnapshot;
@@ -74,6 +74,11 @@ try{
   report.inputs.push({inspectorBurnableToggle:'off/on',objectId:cold.objectId});
  }
  const initial=await sample('cold');assert.equal(initial.detached,0);
+ if(process.env.BURN_INJECT_RUNTIME_FAILURE==='1'){
+  report.phase='negative:recorded-volume-error';report.injectedFailure='recorded-volume-error-without-console';await save();
+  await page.evaluate(()=>{const api=window.__kaminosVolumePrototype,read=api.debugState.bind(api);api.debugState=()=>({...read(),error:'witness-injected-recorded-volume-error'});});
+  await guarded(waitSceneFrame(page,Number.MAX_SAFE_INTEGER));throw Error('Recorded runtime error did not fail the witness');
+ }
  await invoke('run');report.phase='ignition';await save();await advance(600);await sample('hot');
  await invoke('burnerOff');await invoke('pause');await advance(900);await sample('burner-off');
  report.phase='consumption';await save();await invoke('move',{position:[.7,0,0]});await invoke('pause');await advance(1500);await sample('shedding');
@@ -119,6 +124,28 @@ try{
  }
  await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
  await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
+ if(process.env.BURN_COLLISION_NEGATIVES==='1'){
+  report.phase='collision-status-negatives';report.collisionNegatives=[];await save();
+  await invoke('run');await invoke('pause');
+  const blocker=await page.evaluate(async()=>{
+   const api=window.kaminosSceneAuthoring,id=(await window.kaminosWorkbenchExperiments.read()).objectId;
+   api.setCollision(id,false);const blocker=api.addMesh('box',{width:.5,height:.5,depth:.5});api.setCollision(blocker,true);return blocker;
+  });
+  for(const [name,position,scale,reason] of [['outside',[100,0,0],[1,1,1],'authored-solid-does-not-intersect-volume'],['occluded',null,[10,10,10],'authored-solid-occludes-emitter-source-support']]){
+   const before=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision);
+   await page.evaluate(({blocker,position,scale})=>{const state=window.__kaminosVolumePrototype.debugState();window.kaminosSetSceneObjectTransform(blocker,{position:position??state.followingDomain.translation,scale});}, {blocker,position,scale});
+   await guarded(page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision!==before,before));
+   const submitted=await page.evaluate(()=>window.kaminosSceneCollision.read().runtime);
+   assert.equal(submitted.validation,'gpu-resident-unread');
+   const sampled=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:Array.from(r.cells)};});
+   assert.equal(sampled.valid,false);assert.equal(sampled.runtime.reason,reason);assert.ok(sampled.cells.every(x=>x===0));
+   const ordinary=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));
+   assert.equal(ordinary.runtime.reason,reason);assert.match(ordinary.text,/Unavailable/);
+   report.collisionNegatives.push({name,submitted,sampled,ordinary});await save();
+  }
+  await page.evaluate(async blocker=>{window.removeSceneObject(blocker);window.kaminosSceneAuthoring.setCollision((await window.kaminosWorkbenchExperiments.read()).objectId,true);},blocker);
+  await invoke('burnerOff');await invoke('reset');
+ }
  if(experiment==='bear-altar'){
   report.phase='lifecycle-switch';await save();await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('checkbox',{name:'Burnable wood',exact:true}).uncheck();

@@ -262,14 +262,6 @@
       "signature": "node:test failing: every per-step decay of a transported channel goes through stepRate :: AssertionError: the transported front topology decays on the same law | review of 57b45f72: relaxation blends and the wall velocity sponge follow the step; scene selectors and floors are the only exceptions :: AssertionError: the vertical velocity floor stays a floor",
       "testLastChanged": "2026-10-13 43046b943"
     },
-    "tests/volume-transport-scheme-contracts.mjs": {
-      "class": "stale-pin",
-      "owner": "operlocutor",
-      "since": "2026-10-12",
-      "reason": "already failing at the commit that last changed it (2026-10-06 5b887704 Inflow aperture: only the transport sampler reaches the coverage texture); its assertions never matched main",
-      "signature": "node:test failing: WGSL carries the predictor buffer, the MacCormack corrector with an extremum limiter, and one velocity bound helper :: AssertionError: predictor must not be added to the shared fluid bind group layout",
-      "testLastChanged": "2026-10-06 5b887704"
-    },
     "tests/volume-transported-detail-force-periodicity-contracts.mjs": {
       "class": "regression",
       "owner": "flame-doctor",

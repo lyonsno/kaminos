@@ -278,7 +278,7 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const makeContext = () => {
     const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
     ctx.installSceneSolidTexture = (field = null) => { ctx.sceneSolidCellsCpu = field?.cells ?? null; };
-    vm.createContext(ctx);
+    ctx.sceneSolidGpu=null;vm.createContext(ctx);
     const from = source.indexOf('  function immersedBackWallForState()');
     const to = source.indexOf('  function fluidBindGroup(', from);
     vm.runInContext(source.slice(from, to), ctx);

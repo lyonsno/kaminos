@@ -71,7 +71,8 @@ test('WGSL carries the predictor buffer, the MacCormack corrector with an extrem
   const fluidLayoutStart = source.indexOf("label: 'kaminos fluid bind group layout'");
   const fluidLayout = source.slice(fluidLayoutStart, source.indexOf('});', fluidLayoutStart));
   assert.ok(fluidLayout.length > 0, 'shared fluid bind group layout must exist');
-  assert.doesNotMatch(fluidLayout, /binding: 16/, 'predictor must not be added to the shared fluid bind group layout');
+  assert.doesNotMatch(fluidLayout, /binding: 16[^\n]*buffer:/, 'predictor storage must not be added to the shared fluid bind group layout');
+  assert.match(fluidLayout,/binding: 16[^\n]*texture: \{ sampleType: 'uint'/,'binding 16 is the resident collision texture, not predictor storage');
   assert.ok(source.includes('fn csTransportPredict('), 'predictor entry point must exist');
   const predict = wgslFunction('csTransportPredict');
   assert.match(predict, /fluidPredict\[base \+ slot\] = sampleFluidSlotInflow\(backCell, slot\)/, 'predictor writes the forward semi-Lagrangian estimate for every slot (through the transport sampler, which adds the inflow ghost below the floor when the inflow law is admitted)');
@@ -187,7 +188,9 @@ test('runtime receipt, predictor dispatch, and cost ledger name the transport sc
   assert.match(encodeSim, /predictorPass[^]*?transportPredictPipeline[^]*?pass\.setPipeline\(computePipeline\)/, 'predictor pass is encoded before the main sim pass when the scheme requests it');
   assert.match(source, /uniforms\[353\] = transportConfig\.effective\.commonCharacteristic \? 1 : 0;/, 'common characteristic is packed at slot 353');
   assert.match(source, /uniforms\[360\] = transportSchemeUniformValue\(transportConfig\.effective\.scheme\);/, 'scheme is packed at slot 360');
-  assert.match(source, /transportPredictBindGroupLayout = device\.createBindGroupLayout\(\{[^]*?entries: \[\s*\{ binding: 1, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'storage' \} \},?\s*\]/, 'predictor bind group layout declares exactly one storage buffer');
+  const predictorLayout=source.slice(source.indexOf('transportPredictBindGroupLayout = device.createBindGroupLayout('),source.indexOf('    browserResidualBindGroupLayout ='));
+  assert.equal((predictorLayout.match(/buffer: \{ type: 'storage' \}/g)||[]).length,1,'predictor bind group layout declares exactly one storage buffer');
+  assert.match(predictorLayout,/binding: 2[^\n]*texture:/,'the predictor additionally reads the resident collision texture');
   assert.match(source, /transportPipelineLayout = device\.createPipelineLayout\(\{[^]*?bindGroupLayouts: \[bindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, transportPredictBindGroupLayout\]/, 'transport pipelines use a private layout with the predictor at index 3');
   assert.match(source, /\{ binding: 1, resource: \{ buffer: fluidPredictBuffer \} \}/, 'predictor bind group binds the predictor buffer');
   assert.match(encodeSim, /predictor\.setBindGroup\(3, transportPredictBindGroup\)/, 'predictor pass sets bind group 3');

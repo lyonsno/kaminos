@@ -27699,6 +27699,8 @@ export function createKaminosVolumePrototype({
       const runtime={...structuredClone(state.sceneCollision),solidCellCount,blockedFaceCount,sourceSupport,
         members:state.sceneCollision.members.map(m=>({...m,...snapshot.members.find(s=>s.id===m.id)})),
         effective:snapshot.valid?'mesh-voxel-solid':'off',reason:snapshot.valid?null:snapshot.counts[0]===0?'authored-solid-does-not-intersect-volume':'authored-solid-occludes-emitter-source-support',validation:'explicit-gpu-snapshot'};
+      state.sceneCollision=runtime;
+      emitStatus({phase:'scene-collision-sampled'});
       return {status:'sampled',...snapshot,runtime};
     },
     relocateOrdinaryDomain(translation, localPrimitives = volumePrimitives, scale = productTransform.scale) {

@@ -29,9 +29,11 @@ function normalizeSceneObjectRecord(record) {
   if (record.type === FLAME_EMITTER_TYPE && (id !== FLAME_EMITTER_ID || record.source !== FLAME_EMITTER_SOURCE)) {
     throw new Error('Unsupported flame source identity');
   }
+  if(record.type===FLAME_EMITTER_TYPE&&record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be a boolean');
   if (record.type === BURNER_BED_TYPE || record.type==='burner-bed' || record.type===PROCEDURAL_MESH_TYPE) record=checkedProceduralMesh(record);
   return {
     id,
+    ...(record.type===FLAME_EMITTER_TYPE?{emissionEnabled:record.emissionEnabled!==false}:{}),
     ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
     ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
