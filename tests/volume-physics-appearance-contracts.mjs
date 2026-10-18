@@ -145,7 +145,7 @@ test('in a saved layout the new controls join the material law; an existing plac
   const placed = structuredClone(layout); placed.groups[0].controlIds.push(...physicsIds);
   assert.deepEqual(reconcileVolumeCockpitLayoutDocument({ document: placed, authorableControlIds: ids }).document, placed);
   const emissive = { effective: 'emissive-transport-v2' };
-  const base = { fireRenderMode: 'inspect', shellInspectMode: 'boundary_fire', physicalColorMode: 2 };
-  assert.equal(volumeCockpitModeAvailability({ ...base, physicalMaterialLaw: 2 }, [], emissive)['volume-physical-kelvin-per-heat'], '');
-  assert.match(volumeCockpitModeAvailability({ ...base, physicalMaterialLaw: 1 }, [], emissive)['volume-physical-soot-burnout-rate'], /Physics only/);
+  // The Physics law is the only material law (legacy laws retired 2026-10-18); the renderer receipt decides.
+  assert.equal(volumeCockpitModeAvailability({}, [], emissive)['volume-physical-kelvin-per-heat'], '');
+  assert.match(volumeCockpitModeAvailability({}, [], { effective: 'legacy' })['volume-physical-soot-burnout-rate'], /emissive transport route/);
 });

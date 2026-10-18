@@ -18014,26 +18014,9 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const sidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView);
   const sidecarViewLabel = document.getElementById('volume-boundary-sidecar-view-val');
   if (sidecarViewLabel) sidecarViewLabel.textContent = sidecarView;
-  const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
-  if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'learned'
-    ? 'learned attributes'
-    : boundarySplatMode === 'kernel_moment_full_flame_union'
-      ? 'ridge + fire-active union'
-    : boundarySplatMode === 'kernel_moment_covariance'
-      ? 'kernel moment covariance'
-    : boundarySplatMode === 'world_covariance'
-      ? 'world covariance'
-      : boundarySplatMode === 'learned_conserved'
-        ? 'learned conserved'
-        : boundarySplatMode === 'analytic_conserved'
-          ? 'analytic conserved'
-            : boundarySplatMode === 'analytic'
-              ? 'analytic splats'
-              : 'raymarch';
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
-    if (field.key === 'physicalColorMode' || field.key === 'physicalMaterialLaw') continue; // Route-aware status owns these labels.
     if (!label || !Number.isFinite(value)) continue;
     label.textContent = value.toFixed(field.decimals);
   }
@@ -18692,7 +18675,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-puff-val').textContent = c.emitterPuff.toFixed(2);
   document.getElementById('volume-emitter-puff-period-val').textContent = c.emitterPuffPeriod.toFixed(1);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
-  const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
   document.getElementById('volume-physical-thermal-label').textContent = 'Glow gain';
   syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}×${c.resolution * 2}×${c.resolution}`;
@@ -18930,13 +18912,6 @@ function syncPhysicsAppearanceCockpit(physics) {
     row.classList.toggle('volume-physics-uncoupled', active);
     if (active) row.dataset.physicsUncoupled = reason === 'carriers-only' ? 'carriers only' : 'unused';
     else delete row.dataset.physicsUncoupled;
-  }
-  // The material-law value label carries the law in force (the layout moves
-  // control rows, so this is where the state stays visible).
-  if (law) {
-    const value = Number('2' || 0);
-    law.textContent = value !== 2 ? (value === 1 ? 'transported' : 'carriers')
-      : active ? 'physics · on' : `physics · NOT DRAWN (${String(physics?.reason || 'pending').replace(/^physics-appearance-/, '').replace(/-/g, ' ')})`;
   }
   const label = document.getElementById('volume-physics-appearance-state');
   if (label) {
@@ -20275,8 +20250,6 @@ async function initKaminosVolumeRoute() {
       renderFullSupportReceipt(failure);
       return failure;
     }
-    splatMode.value = 'kernel_moment_full_flame_union';
-    syncControls({ target: splatMode });
     volumePrototype.setFullSupportDepositionMode(FULL_SUPPORT_STAGE_A.deposition.identity);
     const derivedState = volumePrototype.debugState();
     const materialized = await volumePrototype.renderFrozenScaleToCanvas({
@@ -20424,8 +20397,6 @@ async function initKaminosVolumeRoute() {
     }
 
     sourceSelect.value = requestedSource;
-    splatMode.value = 'kernel_moment_full_flame_union';
-    syncControls({ target: splatMode });
     const requestedDeposition = 'flow-kernel-moment-gaussian-raster-v0';
     const depositionReceipt = volumePrototype.setFullSupportDepositionMode(requestedDeposition);
     const overlayReceipt = volumePrototype.clearBoundarySplatLiveUnionCoefficientOverlay({
@@ -20694,8 +20665,6 @@ async function initKaminosVolumeRoute() {
         expectedManifestSha256: requestedManifestSha256,
         stateId: requestedStateId,
       });
-      splatMode.value = 'kernel_moment_full_flame_union';
-      syncControls({ target: splatMode });
       volumePrototype.setFullSupportDepositionMode(FULL_SUPPORT_STAGE_A.deposition.identity);
       volumePrototype.setBoundarySplatPresentationMode(FULL_SUPPORT_STAGE_A.stageB.identity);
       const uploadReceipt = await volumePrototype.applyPersistentSparseCohortGpuState(loaded);

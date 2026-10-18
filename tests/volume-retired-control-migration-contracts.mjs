@@ -99,8 +99,12 @@ for (const control of additionsSinceFineBreakup) {
   legacyFineBreakupRoute.searchParams.delete(control.param);
 }
 legacyFineBreakupArtifact.preset.route = legacyFineBreakupRoute.href;
-legacyFineBreakupArtifact.controlCount = 209;
-legacyFineBreakupArtifact.preset.controlCount = 209;
+// A record saved before count 210 carried the (now retired) legacy-law controls;
+// this fixture omits them, so its inventory is simply everything older than 210.
+const legacyFineBreakupCount = Object.keys(legacyFineBreakupArtifact.preset.domControls).length;
+assert.ok(legacyFineBreakupCount < 210, 'the fixture predates the Fine Breakup localization addition');
+legacyFineBreakupArtifact.controlCount = legacyFineBreakupCount;
+legacyFineBreakupArtifact.preset.controlCount = legacyFineBreakupCount;
 const legacyFineBreakupReceipt = validateVolumeSettingsPresetDocument(
   legacyFineBreakupArtifact,
   legacyFineBreakupArtifact.presetId,
@@ -125,8 +129,10 @@ for (const control of additionsSinceCommonGas) {
   legacyTransportRoute.searchParams.delete(control.param);
 }
 legacyTransportArtifact.preset.route = legacyTransportRoute.href;
-legacyTransportArtifact.controlCount = 210;
-legacyTransportArtifact.preset.controlCount = 210;
+const legacyTransportCount = Object.keys(legacyTransportArtifact.preset.domControls).length;
+assert.ok(legacyTransportCount < 211 && legacyTransportCount > legacyFineBreakupCount, 'the fixture predates common gas transport and follows the Fine Breakup addition');
+legacyTransportArtifact.controlCount = legacyTransportCount;
+legacyTransportArtifact.preset.controlCount = legacyTransportCount;
 const legacyTransportReceipt = validateVolumeSettingsPresetDocument(legacyTransportArtifact, legacyTransportArtifact.presetId, schema);
 assert.deepEqual(legacyTransportReceipt.retirementMigration?.addedControlIds, additionsSinceCommonGas.map(control => control.key));
 assert.equal(legacyTransportReceipt.preset.domControls[commonGasTransport.key].value, false);
@@ -146,8 +152,10 @@ for (const control of schema.controls.filter(control => control.additiveSinceCon
   legacySolverRoute.searchParams.delete(control.param);
 }
 legacySolverArtifact.preset.route = legacySolverRoute.href;
-legacySolverArtifact.controlCount = 211;
-legacySolverArtifact.preset.controlCount = 211;
+const legacySolverCount = Object.keys(legacySolverArtifact.preset.domControls).length;
+assert.ok(legacySolverCount < 212 && legacySolverCount > legacyTransportCount, 'the fixture predates the pressure solver and follows common gas transport');
+legacySolverArtifact.controlCount = legacySolverCount;
+legacySolverArtifact.preset.controlCount = legacySolverCount;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
 assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');

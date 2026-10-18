@@ -7,11 +7,12 @@ import { syncVolumeCockpitModeAvailability } from '../volume-cockpit-layout.mjs'
 // only route, so the composed label is the thermal-strength label alone.
 const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const generic = page.slice(page.indexOf('function syncReactionFrontExtractorLabels('), page.indexOf('\nfunction applyCanonicalVolumeMacroPreset('));
-const updateStart = page.indexOf('  const physicalBoundaryColor =');
-const update = page.slice(updateStart, page.indexOf('  syncVolumeCockpitModeAvailability(document, c,', updateStart));
+const updateStart = page.indexOf("  document.getElementById('volume-physical-thermal-label')");
+const updateEnd = page.indexOf('  syncReactionFrontExtractorLabels(c);\n', updateStart);
+const update = page.slice(updateStart, updateEnd + '  syncReactionFrontExtractorLabels(c);\n'.length);
 const nodes = new Map();
 const context = {
-  c: new Proxy({ physicalColorMode: 2, physicalMaterialLaw: 2, fireRenderMode: 'inspect', shellInspectMode: 'boundary_fire', physicalThermalStrength: 2 }, { get: (o, k) => k in o ? o[k] : 0 }),
+  c: new Proxy({ physicalThermalStrength: 2 }, { get: (o, k) => k in o ? o[k] : 0 }),
   document: { getElementById: id => { if (id.includes('control-root')) return null; if (!nodes.has(id)) nodes.set(id, { dataset: {} }); return nodes.get(id); }, querySelectorAll: () => [] },
   volumePrototype: null,
   syncVolumeCockpitModeAvailability,

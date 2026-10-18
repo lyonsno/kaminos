@@ -407,18 +407,17 @@ function sourceGroupForControl(control, looseIndex) {
 // Presentation only: IDs, DOM nodes, values, preset schema and authored layouts
 // remain unchanged. Unknown controls keep their source grouping.
 const ORGANIZED_GROUPS = [
-  ['renderer', 'Renderer & emission model', /^volume-(physical-mode|fire-render-mode|shell-inspect-mode|reaction-live-view)$/],
-  ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(material-law|kelvin-per-heat|soot-burnout-rate|soot-burnout-kelvin|temperature|spread|thermal|clean|exposure|knee|white)|reaction-boundary-fire-(soot|clean-blue|yellow|warmth|luma|clean-color|soot-color)|reaction-boundary-(contrast|gamma|opacity)|exposure|radiance|glow)$/],
+  ['renderer', 'Renderer & emission model', /^volume-reaction-live-view$/],
+  ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(kelvin-per-heat|soot-burnout-rate|soot-burnout-kelvin|thermal|clean|exposure|knee|white))$/],
   ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
-  ['structure', 'Combustion-front structure', /^volume-(boundary-sidecar-source|boundary-sidecar-width|reaction-boundary-(gradient|cut|softness|core-reject|topology|curl|divergence)|reaction-boundary-fire-(ridge|ridge-cut|tip|erosion))$/],
-  ['support', 'Support field & baked ridge', /^volume-(reaction-boundary-support-.+|boundary-sidecar-(blur|ridge))$/],
+  ['structure', 'Combustion-front structure', /^volume-boundary-sidecar-(source|width)$/],
+  ['support', 'Support field & baked ridge', /^volume-boundary-sidecar-(blur|ridge)$/],
   ['detail', 'Flame detail', /^volume-(fire|fire-scale|detail-scale|microdetail|interface-shred|fire-licks)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
   ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|wavelet-turbulence|wavelet-octaves|wavelet-strength|common-gas-transport)$/],
-  ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|boundary-splat-.+|flow-kernel-.+|residual-.+|grid-overlay|flow-debug|oracle-.+|pyro-compare|look-freeze)$/],
-  ['shell', 'Shell renderer', /^volume-shell-.+/],
+  ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|residual-.+|grid-overlay|flow-debug|oracle-.+|look-freeze)$/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],
   ['pyro', 'Legacy pyro appearance', /^volume-pyro-.+/],
 ];
@@ -468,52 +467,28 @@ function buildSourceDefaultLayout(authorableControls) {
 // Disabled is the existing runtime's availability contract. Never remove an
 // input: preset import/export and the layout editor still own all its values.
 export function volumeCockpitModeAvailability(c, controlIds = [], physicalColor = null) {
-  const boundary = c.fireRenderMode === 'inspect' && ['boundary', 'boundary_fire'].includes(c.shellInspectMode);
-  const ordinary = (c.boundarySidecarView || 'off') === 'off'
-    && (c.boundarySplatMode || 'off') === 'off' && (c.volumeResidualMode || 'off') === 'off';
-  // Without a renderer this is only an editing preview of the request. Once
-  // available, its receipt owns every effective-route/fallback decision.
-  const previewPhysical = c.physicalColorMode > 0 && boundary && c.shellInspectMode === 'boundary_fire'
-    && (c.physicalColorMode === 1 || ordinary);
-  const physical = physicalColor
-    ? ['thermal-reaction-v1', 'emissive-transport-v2'].includes(physicalColor.effective)
-    : previewPhysical;
-  const emissive = physicalColor ? physicalColor.effective === 'emissive-transport-v2' : physical && c.physicalColorMode === 2;
+  // The Physics law (emissive transport) is the only material law since the
+  // legacy laws' controls were retired (2026-10-18). Without a renderer this is
+  // only an editing preview of the request; once available, the renderer's
+  // receipt owns every effective-route/fallback decision.
+  const emissive = physicalColor ? physicalColor.effective === 'emissive-transport-v2' : true;
   const availability = {};
   const set = (ids, active, reason) => {
     for (const id of ids) availability[`volume-${id}`] = active ? '' : reason;
   };
-  set(['reaction-boundary-contrast', 'reaction-boundary-gamma', 'reaction-boundary-opacity', 'smoke', 'absorption'],
-    !emissive, 'Legacy transfer; emissive transport uses hot soot density and smoke extinction.');
-  set(['reaction-boundary-fire-clean-color'], !emissive, 'Emissive transport uses its reaction spectrum.');
-  set(['radiance', 'glow'], c.fireRenderMode === 'stock', 'Stock renderer only.');
-  set(['reaction-boundary-fire-clean-blue', 'reaction-boundary-fire-yellow', 'reaction-boundary-fire-warmth',
-    'reaction-boundary-fire-luma', 'reaction-boundary-fire-soot-color', 'exposure'], !physical,
-  'Legacy color; use the selected emission model controls.');
-  set(['physical-temperature', 'physical-spread', 'physical-thermal', 'physical-clean', 'physical-exposure', 'physical-knee'],
-    physical, 'Requires an active thermal or emissive boundary-fire route.');
-  set(['physical-material-law', 'physical-white', 'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient'],
-    emissive, 'Emissive transport only.');
-  set(['physical-kelvin-per-heat', 'physical-soot-burnout-rate', 'physical-soot-burnout-kelvin'],
-    emissive && c.physicalMaterialLaw === 2, 'Material law = Physics only.');
-  // These uniforms are replaced by the corresponding boundary controls, not
-  // combined with them. Keep values for switching back to the shell renderer.
-  set(['shell-thermal', 'shell-reaction', 'shell-front', 'shell-edge', 'shell-core-suppress',
-    'shell-bite', 'shell-curl', 'shell-divergence', 'shell-smoke', 'shell-luma', 'shell-exposure'],
-  !boundary, 'Boundary rendering uses the combustion-front controls instead.');
-  const sidecar = (c.boundarySidecarSource || 'live') !== 'live'
-    || (c.boundarySidecarView || 'off') !== 'off' || (c.boundarySplatMode || 'off') !== 'off';
+  set(['smoke', 'absorption'], !emissive, 'Legacy transfer; emissive transport uses hot soot density and smoke extinction.');
+  set(['physical-thermal', 'physical-clean', 'physical-exposure', 'physical-knee', 'physical-white',
+    'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient',
+    'physical-kelvin-per-heat', 'physical-soot-burnout-rate', 'physical-soot-burnout-kelvin'],
+  emissive, 'Requires the emissive transport route.');
+  const sidecar = (c.boundarySidecarSource || 'live') !== 'live' || (c.boundarySidecarView || 'off') !== 'off';
   set(['boundary-sidecar-blur', 'boundary-sidecar-ridge'], sidecar && c.boundarySidecarSource !== 'override',
     'Generated baked/mixed structure only; live and imported fields do not use these bake settings.');
-  set(['boundary-sidecar-width'], (c.boundarySidecarSource || 'live') !== 'live'
-    && (c.boundarySplatMode || 'off') === 'off', 'Baked/mixed/imported raymarch structure only.');
-  set(['boundary-splat-radius', 'boundary-splat-sharpness'], (c.boundarySplatMode || 'off') !== 'off',
-    'Splat raster only.');
+  set(['boundary-sidecar-width'], (c.boundarySidecarSource || 'live') !== 'live', 'Baked/mixed/imported raymarch structure only.');
   // The emissive branch replaces the legacy pyro radiance/extinction result
-  // (volume-core raymarchVolume). Keep its detail producer and compare selector.
-  set(controlIds.filter(id => id.startsWith('volume-pyro-')
-    && !['volume-pyro-detail', 'volume-pyro-compare'].includes(id)).map(id => id.slice(7)),
-  !emissive, 'Legacy pyro transfer is replaced by emissive transport.');
+  // (volume-core raymarchVolume).
+  set(controlIds.filter(id => id.startsWith('volume-pyro-')).map(id => id.slice(7)),
+    !emissive, 'Legacy pyro transfer is replaced by emissive transport.');
   return availability;
 }
 
