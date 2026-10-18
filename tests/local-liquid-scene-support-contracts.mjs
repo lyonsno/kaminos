@@ -29,3 +29,26 @@ const {buildSceneDocument,planSceneRestore}=await import('../scene-persistence-c
 const saved=buildSceneDocument({objects:[{id:'bowl',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'bowl',parameters:{radius:.8,thickness:.1}},transform:pose,waterCollision:false}],localLiquid:defaultLocalLiquidSetup()});
 const restored=planSceneRestore(saved);
 assert.equal(restored.localLiquid.support,'scene_primitives');assert.equal(restored.objects[0].waterCollision,false);assert.equal(restored.objects[0].geometry.kind,'bowl');
+// Viewport presentation may mask an object/group around the actual host step.
+const {Object3D,Group}=await import('../lib/three.core.js');
+const {withViewportVisibility,sceneItemVisible}=await import('../scene-visibility.mjs');
+const {createSceneLiquidSupport}=await import('../scene-liquid-support.mjs');
+const priorBufferUsage=globalThis.GPUBufferUsage,priorTextureUsage=globalThis.GPUTextureUsage;
+globalThis.GPUBufferUsage={UNIFORM:1,COPY_DST:2};globalThis.GPUTextureUsage={TEXTURE_BINDING:1,COPY_DST:2};
+try{
+ const object=new Object3D(),parent=new Group();parent.add(object);
+ const record={id:'contained-bowl',type:'procedural-mesh',geometry:{kind:'bowl',parameters:{radius:1,thickness:.1}},object};
+ const scene={objects:[record],groups:[{id:'vessels',objectIds:[record.id]}]};
+ const device={limits:{maxTextureDimension2D:8192},createBuffer:()=>({destroy(){}}),createTexture:({size})=>({height:size[1],createView:()=>({}),destroy(){}}),queue:{writeTexture(){},writeBuffer(){}}};
+ const support=createSceneLiquidSupport(device,[record]);
+ for(const hidden of [[record.id],['@group:vessels']]){
+  withViewportVisibility([record],id=>sceneItemVisible(id,hidden,scene),()=>{
+   assert.equal(object.visible,false,'actual presentation wrapper must mask collider');
+   support.update([record]);assert.deepEqual(support.read().memberIds,[record.id],'viewport hiding must retain water collision');
+  });
+  assert.equal(object.visible,true);assert.equal(support.read().generation,1,'presentation alone must not republish collider membership');
+ }
+ parent.visible=false;support.update([record]);assert.deepEqual(support.read().memberIds,[record.id],'hidden ancestor is presentation, not collider enablement');
+ record.waterCollision=false;support.update([record]);assert.deepEqual(support.read().memberIds,[],'authored collision toggle removes support independently of visibility');
+ support.dispose();
+}finally{globalThis.GPUBufferUsage=priorBufferUsage;globalThis.GPUTextureUsage=priorTextureUsage;}
