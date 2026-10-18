@@ -37,8 +37,10 @@ focused tests and their existing visual consumer where relevant. When task fit
 is uncertain, ask the operator before choosing the development surface: describe
 what needs to be observed or manipulated, recommend a route, and name the
 uncertainty. Resolve ordinary API questions through source and current owners.
-An unavailable shared capability is an integration question: identify the
-concrete missing operation and coordinate a reusable extension with its owner.
+When a feature needs a shared capability that doesn't exist, add it with
+tests. Contact the owner only when you change existing behavior they rely on,
+or need something from them you can't do yourself; a tested change that
+merges cleanly speaks for itself.
 
 ## Feature Branch Ancestry
 
