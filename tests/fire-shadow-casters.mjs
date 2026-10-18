@@ -29,6 +29,14 @@ await casters.setLevel('5k');assert.equal(casters.debugState().captureTriangles,
 await casters.setLevel('original');renderFireShadowBatch({scene,casterScene:casters,shadows:[{render(p){assert.deepEqual(p.casters,[hero]);}}]});
 await assert.rejects(casters.setLevel('500'),/caster level/);
 await casters.setLevel('5k');assert.equal(loads,2);
+for(const kind of ['position','index']){
+  const original=kind==='position'?hero.geometry.attributes.position:hero.geometry.index;
+  const replacement=original.clone();
+  while(replacement.version<original.version)replacement.needsUpdate=true;
+  if(kind==='position')hero.geometry.setAttribute(kind,replacement);else hero.geometry.setIndex(replacement);
+  assert.throws(()=>casters.withCapture(()=>{}),/source geometry changed/,`${kind} replacement at equal revision invalidates`);
+  if(kind==='position')hero.geometry.setAttribute(kind,original);else hero.geometry.setIndex(original);
+}
 hero.geometry.attributes.position.needsUpdate=true;
 assert.throws(()=>casters.withCapture(()=>{}),/source geometry changed/);assert.equal(root.visible,true);
 await casters.setLevel('original');casters.dispose();assert.equal(proxy.parent,null);
