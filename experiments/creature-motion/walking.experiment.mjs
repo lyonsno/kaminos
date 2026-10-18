@@ -207,10 +207,12 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      runtime.group.updateMatrixWorld(true);
      const at=name=>new THREE.Vector3().setFromMatrixPosition(runtime.bones.get(name).matrixWorld),head=at('head'),chest=at('spine-chest');
-     let ground=Infinity;for(const [name,bone] of runtime.bones)if(/toe/.test(name))ground=Math.min(ground,bone.matrixWorld.elements[13]);
-     if(!Number.isFinite(ground))ground=chest.y;
+     // Sample in the air at chest height, snapped like the ground grid, so a
+     // point sampled again is exactly the same point (toe height bobs with the
+     // gait and dips into uneven terrain, which reads as false shadow).
+     const height=Math.round(chest.y/.25)*.25;
      const center=head.clone().add(chest).multiplyScalar(.5),radius=Math.max(.3,head.distanceTo(chest)*1.5);
-     const points=lightSamplePoints({center:center.toArray(),radius,ground:ground+.02}).map(position=>({position,normal:[0,1,0]}));
+     const points=lightSamplePoints({center:center.toArray(),radius,ground:height}).map(position=>({position,normal:[0,1,0]}));
      const result=await probe.sample(points);
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;

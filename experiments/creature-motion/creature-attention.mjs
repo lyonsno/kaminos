@@ -241,14 +241,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const slow=smooth(o.adaptSeconds,dt),fast=smooth(o.glanceSeconds,dt),seen=[];
   for(const x of samples){
    if(!Number.isFinite(x.luminance)||!Array.isArray(x.point))continue;
-   const key=`${x.point[0].toFixed(4)},${x.point[2].toFixed(4)}`;
+   const key=`${x.point[0].toFixed(4)},${x.point[1].toFixed(4)},${x.point[2].toFixed(4)}`;
    let patch=patches.get(key);
    if(!patch){patches.set(key,{now:x.luminance,usual:x.luminance,armed:true,seen:time});continue;}
    patch.now+=(x.luminance-patch.now)*fast;seen.push({point:x.point,patch,luminance:x.luminance});
   }
   // Changes in near-darkness are too faint to see: the floor follows the
   // scene's typical light here, the way eyes stop resolving deep shade.
-  const usuals=seen.map(c=>c.patch.usual).sort((p,q)=>p-q),typical=usuals.length?usuals[Math.floor(usuals.length/2)]:0;
+  const current=samples.map(x=>x.luminance).filter(Number.isFinite).sort((p,q)=>p-q),typical=current.length?current[Math.floor(current.length/2)]:0;
   const eps=Math.max(o.lightFloor,typical*o.darkFraction);
   const changes=seen.map(c=>({change:Math.log((c.patch.now+eps)/(c.patch.usual+eps)),point:c.point,patch:c.patch}));
   for(const c of seen){c.patch.usual+=(c.luminance-c.patch.usual)*slow;c.patch.seen=time;}
