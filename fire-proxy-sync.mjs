@@ -64,9 +64,11 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   // The scene light field is rebuilt only when a snapshot publishes, so the
   // lighting stays in step with the splats; the sim itself steps every
   // stepEvery frames (1 unless opted in).
-  const every = Math.max(1, Math.floor(Number(stepEvery) || 1)), pacingKey = ready ? `snapshots:${every}` : null;
+  // stepEvery 0 holds the simulation while the proxy stands in (Preferences).
+  const held = Number(stepEvery) === 0, every = held ? 1 : Math.max(1, Math.floor(Number(stepEvery) || 1));
+  const pacingKey = ready ? `snapshots:${held ? 'held' : every}` : null;
   if (prototype && fireProxy && fireProxy.pacingKey !== pacingKey) {
-   prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every} : null);
+   prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every, ...(held ? {simPaused: true} : {})} : null);
    fireProxy.pacingKey = pacingKey;
   }
   // Routes that composite the fire through the canvas-texture bridge hide that

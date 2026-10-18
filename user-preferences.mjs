@@ -47,10 +47,22 @@ export function sceneDefaultsFromDocument(document){
  if(result.sceneCamera)result.sceneCamera.activeId=null;
  return checkedSceneDefaults(result);
 }
+// How a fluid simulates while its proxy stands in: every N rendered frames, or
+// held (0). The proxy shows what the simulation publishes, so a running
+// simulation keeps the proxy tracking it; holding it freezes the proxy.
+export const PROXY_SIMULATION_CHOICES=Object.freeze([[1,'Run every frame'],[2,'Every 2 frames'],[4,'Every 4 frames'],[8,'Every 8 frames'],[0,'Paused']]);
+function checkedProxyPreferences(raw){
+ if(raw===undefined)return undefined;
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid proxy preferences');
+ const allowed=PROXY_SIMULATION_CHOICES.map(([value])=>value),value=copy(raw);
+ for(const fluid of ['fire','water'])if(value[fluid]!==undefined&&!allowed.includes(value[fluid]?.simEvery))throw Error(`Invalid ${fluid} proxy simulation: choose every 1, 2, 4 or 8 frames, or paused`);
+ return value;
+}
 export function checkedPreferences(raw){
  if(raw?.schema!==PREFERENCES_SCHEMA)throw Error('Unsupported preferences document');
  if(![null,'trackpad','mouse'].includes(raw.navigationInput??null))throw Error('Invalid navigation preference');
- return {...copy(raw),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null)};
+ const proxy=checkedProxyPreferences(raw.proxy);
+ return {...copy(raw),navigationInput:raw.navigationInput??null,sceneDefaults:checkedSceneDefaults(raw.sceneDefaults??null),...(proxy===undefined?{}:{proxy})};
 }
 export function sceneDefaultsApplyToLocation(value){
  const url=new URL(value,'http://localhost');

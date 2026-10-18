@@ -1176,6 +1176,44 @@ async function runPreviewBoundScenario(ws) {
   await evaluate(ws, base);
 }
 
+// Proxy preferences as the operator uses them: Preferences > Proxies sets how
+// the fire simulates while its proxy stands in. Paused holds the simulation
+// (the proxy freezes on its last snapshot); every N steps at that interval;
+// Full runs every frame. Serve with KAMINOS_PREFERENCES_PATH on a scratch file.
+async function runProxyPreferencesScenario(ws) {
+  phase = 'scenario-proxy-preferences';
+  const failures = [], check = (ok, message) => { if (!ok) failures.push(message); };
+  const evidence = lastEvidence.proxyPreferences = { failures, steps: [] };
+  const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  for (let i = 0; i < 480; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 40) break; await delay(250); }
+  const choose = value => evaluate(ws, `(async () => { await window.kaminosPreferences.open(); for (let i = 0; i < 80 && document.getElementById('preference-proxy-fire')?.disabled !== false; i++) await new Promise(r => setTimeout(r, 100));
+    const select = document.getElementById('preference-proxy-fire'); select.value = '${value}'; select.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('preferences-save').click(); for (let i = 0; i < 80 && !/^Saved/.test(document.getElementById('preferences-status')?.textContent || ''); i++) await new Promise(r => setTimeout(r, 100));
+    const status = document.getElementById('preferences-status')?.textContent; window.kaminosPreferences.close(); return status; })()`, { timeoutMs: 30000 });
+  const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { steps: d.simStepCount, pacing: d.proxyPacing ?? null, proxy: window.kaminosFireProxyDebugState?.()?.pacing ?? null }; })()`);
+  evidence.steps.push({ step: 'save Paused', status: await choose(0) });
+  await evaluate(ws, `window.kaminosViewportSettings.set({ fire: 'proxy' }); true`);
+  for (let i = 0; i < 120; i++) { const f = await evaluate(ws, 'window.kaminosFireProxyDebugState?.()'); if (f?.presentationSuppressed && f.layer?.count > 0) break; await delay(250); }
+  const a = await read(); await settleViewportFrames(ws, 1200); const b = await read();
+  evidence.steps.push({ step: 'proxy, paused', a, b });
+  check(b.pacing?.simPaused === true && b.steps === a.steps, `Paused should hold the simulation while proxied: ${JSON.stringify({ a, b })}`);
+  evidence.steps.push({ step: 'save every 4', status: await choose(4) });
+  await settleViewportFrames(ws, 800);
+  const c = await read(); await settleViewportFrames(ws, 1200); const d = await read();
+  evidence.steps.push({ step: 'proxy, every 4', c, d });
+  check(d.pacing?.simStepEvery === 4 && !d.pacing?.simPaused && d.steps > c.steps, `every 4 should step the simulation at that interval while proxied: ${JSON.stringify({ c, d })}`);
+  await evaluate(ws, `window.kaminosViewportSettings.set({ fire: 'full' }); true`);
+  await settleViewportFrames(ws, 800);
+  const e = await read();
+  evidence.steps.push({ step: 'full', e });
+  check(e.pacing === null, `Full should run the simulation every frame: ${JSON.stringify(e)}`);
+  evidence.saved = await evaluate(ws, '(async () => (await window.kaminosPreferences.load()).proxy ?? null)()');
+  check(evidence.saved?.fire?.simEvery === 4, `the saved document should carry the fire proxy setting: ${JSON.stringify(evidence.saved)}`);
+  evidence.shot = (await capturePngScreenshot(ws, siblingPngPath('-proxy-preferences'))).path;
+  assert.deepEqual(failures, [], `proxy preferences checks failed:\n- ${failures.join('\n- ')}`);
+}
+
 // The fixture box is orange; grey shading changes elsewhere (AO, shadows) do
 // not enter this mask.
 function orangeMask(png, bounds) {
@@ -7049,6 +7087,8 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'proxy-preferences') {
+    await runProxyPreferencesScenario(ws);
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {

@@ -4159,9 +4159,9 @@ function syncWaterProxy() {
 }
 // Fire proxy: heat-block splats on their own layer stand in for the flame in
 // Proxy display (fire-proxy-sync.mjs reconciles it each frame).
-let fireProxySync=null,fireProxyStepEvery=1;
+let fireProxySync=null,fireProxyStepEvery=1,proxyPreferences={fire:1,water:1};
 // Opt-in: while the fire proxy stands in, step the fire sim every nth frame.
-window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
+window.kaminosFireProxyStepEvery=n=>{const every=Number(n)===0?0:Math.max(1,Math.floor(Number(n))||1);fireProxyStepEvery=every;window._kaminosDirty?.();return every;};
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
@@ -4617,7 +4617,7 @@ const sceneLoadRequests = createSceneLoadRequests();
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   getGeneration: () => localLiquidGeneration,
   getHost: () => localLiquidHost,
-  setHost: host => { localLiquidHost = host; },
+  setHost: host => { localLiquidHost = host; host?.setProxyStepEvery?.(proxyPreferences.water); },
   createHost: async ({ setup, emitters, isCurrent }) => {
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
     return createLocalLiquidHost({
@@ -27780,14 +27780,23 @@ sceneInitialization.then(async () => {
     input.value=value.navigationInput??(/Mac/i.test(navigator.userAgentData?.platform||navigator.platform)?'trackpad':'mouse');
     input.dispatchEvent(new Event('change',{bubbles:true}));
   };
-  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);};
+  // Proxy preferences: how fire and water simulate while their proxies stand in.
+  const applyProxyPreference=value=>{
+    const fire=value.proxy?.fire?.simEvery??1,water=value.proxy?.water?.simEvery??1;
+    // typeof: source-extraction harnesses run this block without the page's proxy state.
+    if(typeof fireProxyStepEvery!=='undefined')fireProxyStepEvery=fire;
+    if(typeof proxyPreferences!=='undefined')proxyPreferences={fire,water};
+    if(typeof localLiquidHost!=='undefined')localLiquidHost?.setProxyStepEvery?.(water);
+    window._kaminosDirty?.();
+  };
+  const preferencesSaved=value=>{startupPreferences=value;applyNavigationPreference(value);applyProxyPreference(value);};
   preferencesUI=installUserPreferences({document,controller:userPreferences,readScene:()=>buildSceneData(),readFactory:()=>sceneDefaultsFromDocument(factorySceneDocument),onSaved:preferencesSaved});
   window.kaminosPreferences={open:()=>preferencesUI.open(),close:()=>preferencesUI.close(),
     read:()=>userPreferences.state(),load:()=>userPreferences.load(),
     save:async value=>{const saved=await userPreferences.save(value);preferencesSaved(saved);return saved;},
     capture:()=>sceneDefaultsFromDocument(buildSceneData()),
     startup:()=>({settled:preferencesStartupSettled,usesDefaults:sceneDefaultsApplied})};
-  if(startupPreferences&&userPreferences.state().receipt?.revision!=null)applyNavigationPreference(startupPreferences);
+  if(startupPreferences&&userPreferences.state().receipt?.revision!=null){applyNavigationPreference(startupPreferences);applyProxyPreference(startupPreferences);}
   const initialEnvironment = restoreSettings();
   // Load HDR environment first, then auto-load deep-linked splat if present
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {

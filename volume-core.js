@@ -21324,7 +21324,7 @@ export function createKaminosVolumePrototype({
       // typeof: source-extraction contract harnesses run this body without the
       // closure that declares the pacing.
       const pacing = typeof proxyPacing !== 'undefined' ? proxyPacing : null;
-      const stepThisFrame = !lookFreeze && !simulationPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
+      const stepThisFrame = !lookFreeze && !simulationPaused && !pacing?.simPaused && (!pacing || pacing.frame++ % pacing.simStepEvery === 0);
       // Armed for this frame's light field build only (see
       // encodeFireIrradianceLightField).
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
@@ -21335,7 +21335,7 @@ export function createKaminosVolumePrototype({
         encodeSelectiveHeadLiveFields(encoder);
       }
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
-      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, steppedThisFrame: stepThisFrame };
+      if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, simPaused: pacing.simPaused === true, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -27572,7 +27572,7 @@ export function createKaminosVolumePrototype({
     // fire. Other presentation routes (boundary splats, browser residual) keep
     // drawing; the frame's presentation receipt says which happened.
     setProxyPacing(pacing) {
-      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true, frame: 0, lightFieldStep: null } : null;
+      proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true, simPaused: pacing.simPaused === true, frame: 0, lightFieldStep: null } : null;
       state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots } : null;
       return state.proxyPacing;
     },

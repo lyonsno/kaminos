@@ -111,7 +111,8 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       // Proxy presentation may refresh the sim every Nth frame (opt-in, default
       // every frame): the step is the solver's own fixed 1/60, so fewer steps
       // slow the water rather than coarsening it.
-      const stepThisFrame = presentationMode!=='proxy' || proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0;
+      // A proxy step interval of 0 holds the simulation while the proxy stands in.
+      const stepThisFrame = presentationMode!=='proxy' || (proxyStepEvery !== 0 && (proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0));
       if (advance && !paused && stepThisFrame) solver.step(1/60);
       if (plan.environment) renderEnvironment();
       // The host color attachment is linear HDR even if another consumer
@@ -127,7 +128,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         renderer.setRenderTarget(previousTarget); presentation.render();
         frameCount++;
         lastFrame={frameId:`local-liquid-${frameCount}`,width,height,presentation:presentationMode,route:ROUTE,submittedByHost:true,presentedByHost:true,
-          displayTransform:'host-render-pipeline',simulationTimePolicy:proxyStepEvery>1?`one-fixed-1/60-step-every-${proxyStepEvery}-rendered-frames`:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
+          displayTransform:'host-render-pipeline',simulationTimePolicy:presentationMode==='proxy'&&proxyStepEvery===0?'held-while-proxied':proxyStepEvery>1?`one-fixed-1/60-step-every-${proxyStepEvery}-rendered-frames`:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
         return;
       }
       scene.overrideMaterial=depthMaterial; scene.background=null;
@@ -211,7 +212,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     // so a proxy layer in the scene stands in for the water.
     setPresentation(mode){localLiquidPresentationPlan(mode);presentationMode=mode;return presentationMode;},
     get presentation(){return presentationMode;},
-    setProxyStepEvery(n){if(!Number.isInteger(n)||n<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=n;return proxyStepEvery;},
+    setProxyStepEvery(n){if(!Number.isInteger(n)||n<0)throw Error('Proxy step interval must be a whole number (0 holds the simulation)');proxyStepEvery=n;return proxyStepEvery;},
     get proxyStepEvery(){return proxyStepEvery;},
     interfaceRecordDescriptor:()=>(disposed||failure?null:solver.getInterfaceRecordDescriptor()),
     get paused(){return paused;},

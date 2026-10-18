@@ -1,4 +1,4 @@
-import {checkedPreferences,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES} from './user-preferences.mjs';
+import {checkedPreferences,sceneDefaultsFromDocument,SCENE_DEFAULT_RANGES,PROXY_SIMULATION_CHOICES} from './user-preferences.mjs';
 const copy=value=>structuredClone(value),get=(object,path)=>path.split('.').reduce((o,k)=>o?.[k],object);
 const set=(object,path,value)=>{const keys=path.split('.');let slot=object;for(const key of keys.slice(0,-1))slot=slot[key]??={};slot[keys.at(-1)]=value;};
 // Each field edits the preference draft only. Scene controls keep owning live edits.
@@ -31,7 +31,18 @@ export function installUserPreferences({document,controller,readScene,readFactor
  const view=group('View & viewport');field(view,'camera.fov','View field of view',{});field(view,'sceneCamera.aspect.0','Output aspect width',{});field(view,'sceneCamera.aspect.1','Output aspect height',{});
  for(const [key,label] of [['overlays','Overlays'],['gizmos','Transform gizmos'],['outlines','Object outlines'],['bounds','Bounding boxes'],['domains','Simulation boundaries'],['emitters','Emitter symbols'],['helpers','Helpers'],['bones','Bones'],['paths','Motion paths'],['hints','Navigation hints']])field(view,'editorDisplay.'+key,label,{type:'checkbox'});
  for(const [key,label,options] of [['shading','Shading',[['solid','Solid'],['wireframe','Wireframe']]],['quality','Viewport quality',[['full','Full'],['preview','Preview']]],['fire','Fire display',[['full','Full'],['proxy','Proxy']]],['water','Water display',[['full','Full'],['proxy','Proxy']]]])field(view,'editorDisplay.'+key,label,{options});
- function render(){for(const {input,path} of fields){const value=get(draft.sceneDefaults,path);if(input.type==='checkbox')input.checked=value===true;else input.value=value==null?'':String(value);}dialog.querySelector('#preference-navigation').value=draft.navigationInput??'auto';}
+ // Proxies: app preferences like navigation, applied on Save; they say how each
+ // fluid simulates while its proxy stands in (a running simulation keeps the
+ // proxy tracking it).
+ const proxyFields=[];
+ {const proxies=group('Proxies');
+  for(const [fluid,label] of [['fire','Fire while proxied'],['water','Water while proxied']]){
+   const row=document.createElement('label');row.className='preference-field';const title=document.createElement('span');title.textContent=label;
+   const input=document.createElement('select');input.id=`preference-proxy-${fluid}`;input.dataset.preferencePath=`proxy.${fluid}.simEvery`;
+   for(const [value,text] of PROXY_SIMULATION_CHOICES){const option=document.createElement('option');option.value=String(value);option.textContent=text;input.append(option);}
+   input.addEventListener('change',()=>{if(!draft||busy)return;draft.proxy={...draft.proxy,[fluid]:{simEvery:Number(input.value)}};status('Unsaved preferences');});
+   proxyFields.push({input,fluid});row.append(title,input);proxies.append(row);}}
+ function render(){for(const {input,fluid} of proxyFields)input.value=String(draft.proxy?.[fluid]?.simEvery??1);for(const {input,path} of fields){const value=get(draft.sceneDefaults,path);if(input.type==='checkbox')input.checked=value===true;else input.value=value==null?'':String(value);}dialog.querySelector('#preference-navigation').value=draft.navigationInput??'auto';}
  function close(){if(busy)return;dialog.close();if(returnFocus?.isConnected)returnFocus.focus({preventScroll:true});}
  async function open(){if(dialog.open)return;draft=null;returnFocus=document.activeElement;dialog.showModal();status('Loading preferences…');for(const input of dialog.querySelectorAll('input,select,#preferences-save,[data-action=capture],[data-action=factory]'))input.disabled=true;try{const saved=await controller.load();draft={...saved,sceneDefaults:copy(saved.sceneDefaults??readFactory())};render();status(saved.sceneDefaults?'Saved defaults for new scenes':'No explicit defaults yet. Save to use these instead of the last browser-local tweaks.');for(const input of dialog.querySelectorAll('input,select,#preferences-save,[data-action=capture],[data-action=factory]'))input.disabled=false;}catch(error){status(error.message,true);}}
  trigger.onclick=open;dialog.querySelectorAll('[data-action=close]').forEach(b=>b.onclick=close);
@@ -39,7 +50,7 @@ export function installUserPreferences({document,controller,readScene,readFactor
  dialog.querySelector('[data-action=factory]').onclick=()=>{if(!draft)return;draft.sceneDefaults=copy(readFactory());draft.navigationInput=null;render();status('Factory settings selected. Save to replace your defaults.');};
  dialog.querySelector('#preference-navigation').onchange=event=>{if(draft){draft.navigationInput=event.target.value==='auto'?null:event.target.value;status('Unsaved preferences');}};
  dialog.addEventListener('cancel',event=>{if(busy)event.preventDefault();});
- dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();if(!draft||busy||!event.target.reportValidity())return;busy=true;const button=dialog.querySelector('#preferences-save');button.disabled=true;try{const value=await controller.save(checkedPreferences(draft));draft=copy(value);onSaved(value);status('Saved. New scenes will use these settings; this scene is unchanged.');}catch(error){status(error.message,true);}finally{busy=false;button.disabled=false;}};
+ dialog.querySelector('form').onsubmit=async event=>{event.preventDefault();if(!draft||busy||!event.target.reportValidity())return;busy=true;const button=dialog.querySelector('#preferences-save');button.disabled=true;try{const value=await controller.save(checkedPreferences(draft));draft=copy(value);onSaved(value);status('Saved. Proxy settings apply now; new scenes will use the scene settings, and this scene is otherwise unchanged.');}catch(error){status(error.message,true);}finally{busy=false;button.disabled=false;}};
  // Keep preference input local to this dialog; scene shortcuts must not edit behind it.
  document.defaultView.addEventListener('keydown',event=>{if(!dialog.open)return;event.stopImmediatePropagation();if(event.key==='Escape'){event.preventDefault();close();}},true);
  document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key===','&&!event.altKey&&!event.shiftKey&&!event.repeat){event.preventDefault();void open();}});
