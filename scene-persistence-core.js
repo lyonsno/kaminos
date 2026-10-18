@@ -34,7 +34,7 @@ function normalizeSceneObjectRecord(record) {
     id,
     ...(record.type===CAMERA_TYPE?{camera:cloneJson(record.camera)}:{}),
     ...(record.type==='light'?{light:cloneJson(record.light)}:{}),
-    ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface)} : {}),
+    ...(record.type === PROCEDURAL_MESH_TYPE ? {geometry:cloneJson(record.geometry),surface:cloneJson(record.surface),...(record.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(record.emission?{emission:cloneJson(record.emission)}:{}),
     ...((canCollideWithFire(record)||record.collision!=null)?{collision:checkedObjectCollision(record)}:{}),
     source: record.source ?? null,
