@@ -21,12 +21,13 @@ function prepareShadowScene(scene) {
     Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
     Math.max(Math.abs(bounds.min.y),Math.abs(bounds.max.y)),
     Math.max(Math.abs(bounds.min.z),Math.abs(bounds.max.z)));
-  return {scene,casters,extent};
+  return {scene,casters,extent,triangleCount:casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0)};
 }
 
 // Synchronous and frame-local: reuse preparation, never reuse old captures or
 // let a retained snapshot authorize a later frame's geometry.
-export function renderFireShadowBatch({scene,shadows}) {
+export function renderFireShadowBatch({scene,shadows,casterScene=null}) {
+  if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows}));
   const prepared=prepareShadowScene(scene);
   activeBatches.add(prepared);
   try {for(const shadow of shadows)shadow.render(prepared);}
@@ -140,6 +141,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation});
         effective.value=1;status.effective=true;status.reason=null;
         status.renderCount++;status.meshCount=casters.length;status.far=far;
+        status.triangleCount=casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0);
       } catch(error) {status.reason=String(error.message);throw error;}
     },
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
