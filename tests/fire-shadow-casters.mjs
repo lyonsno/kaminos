@@ -24,6 +24,8 @@ assert.equal(root.visible,true);assert.equal(proxy.parent,null);assert.deepEqual
 assert.throws(()=>casters.withCapture(()=>{throw Error('failed face');}),/failed face/);
 assert.equal(root.visible,true);assert.equal(proxy.parent,null);
 root.visible=false;casters.withCapture(()=>assert.equal(proxy.parent,null));root.visible=true;
+casters.withCapture(()=>{});assert.equal(casters.debugState().captureTriangles,4);
+await casters.setLevel('5k');assert.equal(casters.debugState().captureTriangles,0,'new choice cannot report old capture work as current');assert.equal(casters.debugState().targets,0);
 await casters.setLevel('original');renderFireShadowBatch({scene,casterScene:casters,shadows:[{render(p){assert.deepEqual(p.casters,[hero]);}}]});
 await assert.rejects(casters.setLevel('500'),/caster level/);
 await casters.setLevel('5k');assert.equal(loads,2);
