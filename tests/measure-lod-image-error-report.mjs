@@ -13,15 +13,20 @@ const standIn = () => new Promise(resolve => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname === '/api/mesh-lods' && url.searchParams.get('source') === hero) {
       res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({levels: [{sha256: l1, faces: 5000}, {sha256: l2, faces: 500}], retired: [{sha256: retired, faces: 1000}]}));
+      return res.end(JSON.stringify({levels: [{sha256: l1, faces: 5000, normalMap: {source: {kind: 'hero', sha256: hero}, textureSize: 512}}, {sha256: l2, faces: 500}], retired: [{sha256: retired, faces: 1000}]}));
     }
     res.statusCode = 404; res.end('{}');
   });
   server.listen(0, '127.0.0.1', () => resolve({server, url: `http://127.0.0.1:${server.address().port}`}));
 });
-const goodResult = (url, overrides = {}) => { const q = new URL(url).searchParams;
-  return {schema: 'kaminos.lod-image-error.v1', reference: {sha256: q.get('ref')}, level: {sha256: q.get('level')}, route: {glRenderer: 'test'},
-    settings: {resolution: +q.get('res'), views: 2, normals: q.get('normalMaps') === '0' ? 'shading' : 'shading+normal-map'}, perView: [{}, {}], aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
+// What the page returns for a complete measurement: 26 views, each with its channels.
+const stat = {max: 0.1, p95: 0.05, mean: 0.01, count: 10};
+const view = {direction: [0, 0, 1], referenceCoverage: 0.3, silhouetteMismatch: 0.01, differentSurface: 0.02, depth: stat, normalDegrees: stat,
+  normalUndefined: {reference: 0, level: 0}, albedo: stat, meanAlbedo: {reference: [0.5, 0.5, 0.5], level: [0.5, 0.5, 0.5]}};
+const goodResult = (url, overrides = {}) => { const q = new URL(url).searchParams, mapped = q.get('normalMaps') !== '0';
+  return {schema: 'kaminos.lod-image-error.v1', reference: {sha256: q.get('ref')}, level: {sha256: q.get('level')}, route: {three: '171', glRenderer: 'test'},
+    normalMapped: {reference: false, level: mapped && q.get('level') === l1},
+    settings: {resolution: +q.get('res'), views: 26, normals: mapped ? 'shading+normal-map' : 'shading'}, perView: Array(26).fill(view), aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
 const fakeBrowser = (page, calls) => async () => ({executable: '/fake', version: 'Fake/1', closed: false,
   openPage: async url => { calls.push(url); return page(url); }, close: async () => { calls.push('closed'); }});
 const setup = async () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-image-error-')), s = await standIn();
@@ -62,14 +67,26 @@ test('a page that errors ends the run with its message and the browser closed', 
 test('a result describing another pair or other settings is refused, and nothing is written for it', async () => {
   const {s, args} = await setup();
   try {
-    for (const bad of [{level: {sha256: hero}}, {settings: {resolution: 256, views: 2, normals: 'shading+normal-map'}}, {settings: {resolution: 512, views: 2, normals: 'shading'}}, {perView: [{}]}, {schema: 'kaminos.lod-image-error.scratch'}]) {
+    for (const bad of [{level: {sha256: hero}}, {settings: {resolution: 256, views: 26, normals: 'shading+normal-map'}}, {settings: {resolution: 512, views: 26, normals: 'shading'}}, {perView: [{}]}, {schema: 'kaminos.lod-image-error.scratch'},
+      // review M3: an empty but self-consistent result, an incomplete view, a missing route, a registered normal map not used
+      {settings: {resolution: 512, views: 0, normals: 'shading+normal-map'}, perView: []}, {perView: [...Array(25).fill(view), {...view, depth: undefined}]},
+      {perView: [...Array(25).fill(view), {...view, referenceCoverage: NaN}]}, {route: undefined}, {normalMapped: {reference: false, level: false}}]) {
       const report = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url, bad), png: Buffer.from('png')}), [])});
-      assert.equal(report.phase, 'measure', JSON.stringify(bad)); assert.match(report.error.message, /does not describe/);
+      assert.equal(report.phase, 'measure', JSON.stringify(bad)); assert.match(report.error.message, /does not describe|normal map/, JSON.stringify(bad));
       assert.ok(!fs.existsSync(path.join(args.out, `${l1}.image-error.json`)));
     }
     const blank = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url), png: null}), [])});
     assert.match(blank.error.message, /no sheet/);
   } finally { s.server.close(); }
+});
+
+test('review M4: a browser that cannot start ends in a terminal failure report', async () => {
+  const {s, args} = await setup(), notExecutable = fs.mkdtempSync(path.join(os.tmpdir(), 'not-a-browser-'));
+  try {
+    const report = await measure({...args, chrome: notExecutable});
+    assert.equal(report.phase, 'browser'); assert.match(report.error.message, /EACCES|spawn|browser/);
+    const written = saved(args.report); assert.ok(written.finishedAt); assert.equal(written.error.message, report.error.message);
+  } finally { s.server.close(); process.exitCode = 0; }
 });
 
 test('missing arguments still leave a failure report', async () => {

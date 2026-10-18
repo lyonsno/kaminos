@@ -39,12 +39,18 @@ test('a pixel showing another surface counts as such and stays out of normal and
   assert.ok(Number.isNaN(maps.normal[1])); assert.equal(maps.coverage[0], 1);
 });
 
-test('normals compare unoriented: a flipped normal is no error, a perpendicular one is 90 degrees', () => {
+test('normals compare by direction over 0-180 degrees: reversed is 180, perpendicular 90', () => {
   const ref = frame(2, {0: {depth: 5}, 1: {depth: 5}});
   const lvl = frame(2, {0: {depth: 5, normal: [0, 0, -1]}, 1: {depth: 5, normal: [0, 1, 0]}});
   const {view} = compareView({reference: ref, level: lvl, res: 2, diagonal: 1});
-  assert.ok(view.normalDegrees.max > 89.99 && view.normalDegrees.max <= 90);
-  assert.ok(Math.abs(view.normalDegrees.mean - 45) < 0.01);
+  assert.ok(view.normalDegrees.max > 179.99, `${view.normalDegrees.max}`);
+  assert.ok(Math.abs(view.normalDegrees.mean - 135) < 0.01);
+});
+
+test('review M1: two forward-facing normals 160 degrees apart report 160, not 20', () => {
+  const t = 80 * Math.PI / 180, ref = frame(1, {0: {depth: 5, normal: [Math.sin(t), 0, Math.cos(t)]}}), lvl = frame(1, {0: {depth: 5, normal: [-Math.sin(t), 0, Math.cos(t)]}});
+  const {view} = compareView({reference: ref, level: lvl, res: 1, diagonal: 1});
+  assert.ok(Math.abs(view.normalDegrees.max - 160) < 0.01, `${view.normalDegrees.max}`);
 });
 
 test('a pixel with no usable normal (NaN or zero) is left out of the normal channel and counted per side', () => {

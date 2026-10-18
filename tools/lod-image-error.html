@@ -16,7 +16,7 @@
 //   albedo pass:   unlit base colour texture, rendered at 2x and box-downsampled
 // lod-image-compare.mjs turns each view into separate channels. The page draws, per shown view,
 // reference | level | coverage (red reference only, blue level only) | depth error (blue 0 .. red 2%
-// of diagonal) | normal error (0 .. 45 deg; magenta where a normal is unusable) | albedo error (0 .. 0.25), white where the level shows
+// of diagonal) | normal error (0 .. 45 deg, by direction; magenta where a normal is unusable) | albedo error (0 .. 0.25), white where the level shows
 // another surface, and sets window.__result; document.title becomes 'done' or 'error'.
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';

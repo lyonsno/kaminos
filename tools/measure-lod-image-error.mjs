@@ -13,6 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {fluidBrowserLaunch} from '../finger-fluid-browser-launch.mjs';
+import {SCHEMA, viewDirections} from '../lod-image-compare.mjs';
 
 const SHA = /^[a-f0-9]{64}$/;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -23,10 +24,15 @@ export async function launchBrowser({executable, timeoutMs = 900000}) {
   const port = 9500 + Math.floor(Math.random() * 400);
   const launch = fluidBrowserLaunch({executable, debugPort: port, userDataDir: profile, width: 1200, height: 900});
   const child = spawn(launch.executable, ['--headless=new', '--hide-scrollbars', ...launch.args], {stdio: 'ignore'});
-  const close = async () => { child.kill(); if (child.exitCode === null) await new Promise(r => child.once('exit', r)); fs.rmSync(profile, {recursive: true, force: true, maxRetries: 5, retryDelay: 200}); };
+  // A browser that cannot start reports through 'error' (and may never 'exit'); turn it into a failure.
+  let spawnError = null; const exited = new Promise(r => child.once('close', r));
+  child.once('error', error => { spawnError = error; });
+  const close = async () => { if (child.pid !== undefined && child.exitCode === null && child.signalCode === null) { child.kill(); await exited; }
+    fs.rmSync(profile, {recursive: true, force: true, maxRetries: 5, retryDelay: 200}); };
   try {
     let target;
-    for (let i = 0; i < 100 && !target; i++) { await sleep(200); try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch {} }
+    for (let i = 0; i < 100 && !target; i++) { await sleep(200); if (spawnError) throw Error(`browser did not start: ${spawnError.message}`);
+      try { target = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch {} }
     if (!target) throw Error('browser exposed no debuggable page');
     const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
     const ws = new WebSocket(target.webSocketDebuggerUrl); await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
@@ -50,6 +56,18 @@ export async function launchBrowser({executable, timeoutMs = 900000}) {
     };
     return {executable: launch.executable, version: version.Browser, openPage, close: async () => { ws.close(); await close(); }};
   } catch (error) { await close(); throw error; }
+}
+
+const VIEWS = viewDirections().length;
+const finiteStat = v => v && ['max', 'p95', 'mean', 'count'].every(k => Number.isFinite(v[k]));
+// A complete page result for this request: identity, settings, route, and all views with their channels.
+export function describesMeasurement(r, {source, level, resolution, normals}) {
+  return r?.schema === SCHEMA && r.reference?.sha256 === source && r.level?.sha256 === level &&
+    r.settings?.resolution === resolution && r.settings?.normals === normals && r.settings?.views === VIEWS &&
+    typeof r.route?.glRenderer === 'string' && typeof r.route?.three === 'string' && typeof r.normalMapped?.level === 'boolean' &&
+    Array.isArray(r.perView) && r.perView.length === VIEWS && r.perView.every(v => v && [v.referenceCoverage, v.silhouetteMismatch, v.differentSurface].every(Number.isFinite) &&
+      v.referenceCoverage > 0 && finiteStat(v.depth) && finiteStat(v.normalDegrees) && finiteStat(v.albedo) && Number.isFinite(v.normalUndefined?.reference) && Number.isFinite(v.normalUndefined?.level)) &&
+    r.aggregate && typeof r.aggregate === 'object';
 }
 
 export async function measure(args, {browserFor = launchBrowser} = {}) {
@@ -80,10 +98,12 @@ export async function measure(args, {browserFor = launchBrowser} = {}) {
       const page = await browser.openPage(url), entry = {sha256: sha, faces: current.get(sha).faces, url, title: page.title};
       report.levels.push(entry);
       if (page.title !== 'done') { entry.error = page.error ?? `page did not finish (title ${JSON.stringify(page.title)})`; entry.console = page.console; throw Error(`level ${sha}: ${entry.error}`); }
-      // The page must have measured exactly this pair at the requested settings.
+      // The page must have measured exactly this pair, at the requested settings, over every view.
       const r = page.result;
-      if (r?.schema !== 'kaminos.lod-image-error.v1' || r.reference?.sha256 !== source || r.level?.sha256 !== sha || r.settings?.resolution !== +(args.res ?? 512) || r.settings?.normals !== (normalMaps ? 'shading+normal-map' : 'shading') || r.perView?.length !== r.settings?.views)
+      if (!describesMeasurement(r, {source, level: sha, resolution: +(args.res ?? 512), normals: normalMaps ? 'shading+normal-map' : 'shading'}))
         throw Error(`level ${sha}: page result does not describe the requested measurement`);
+      // A registered normal map that the render did not use would measure the level without its relief.
+      if (normalMaps && current.get(sha).normalMap && r.normalMapped?.level !== true) throw Error(`level ${sha}: registered normal map was not used by the render`);
       if (!page.png?.length) throw Error(`level ${sha}: no sheet captured`);
       entry.result = path.join(out, `${sha}.image-error.json`); entry.sheet = path.join(out, `${sha}.image-error.png`);
       fs.writeFileSync(entry.result, JSON.stringify(r, null, 2) + '\n'); fs.writeFileSync(entry.sheet, page.png);

@@ -9,7 +9,8 @@
 //   differentSurface:   of pixels both cover, the fraction whose depths differ by more than
 //                       `sameSurface` of the reference diagonal (the level shows another surface)
 //   depth:              |depth difference| / diagonal, over pixels both cover
-//   normalDegrees:      unoriented angle between shading normals, over same-surface pixels where
+//   normalDegrees:      angle between shading normals by direction (0-180; the renderer turns the
+//                       visible side's normal toward the viewer), over same-surface pixels where
 //                       both normals are usable; normalUndefined counts, per side, same-surface
 //                       pixels whose normal is NaN or zero (degenerate geometry), left out
 //   albedo:             mean |dRGB|, over same-surface pixels
@@ -59,7 +60,7 @@ export function compareView({reference: R, level: L, res, diagonal, sameSurface 
     if (!rOk) normalUndefined.reference++;
     if (!lOk) normalUndefined.level++;
     let ne = NaN;
-    if (rOk && lOk) { ne = Math.acos(Math.min(1, Math.abs(dot) / Math.sqrt(rl * ll))) * 180 / Math.PI; normal.push(ne); }
+    if (rOk && lOk) { ne = Math.acos(Math.max(-1, Math.min(1, dot / Math.sqrt(rl * ll)))) * 180 / Math.PI; normal.push(ne); }
     let ae = 0; for (let c = 0; c < 3; c++) { ae += Math.abs(R.a[p * 3 + c] - L.a[p * 3 + c]); meanR[c] += R.a[p * 3 + c]; meanL[c] += L.a[p * 3 + c]; }
     albedo.push(ae / 3);
     if (out) { out.normal[p] = ne; out.albedo[p] = ae / 3; }

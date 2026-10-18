@@ -47,7 +47,7 @@ test('a source normal facing away is turned to the level side, not baked inside 
 });
 
 // Builds a GLB: the square under a node rotated -90 deg about X, with NORMAL and TEXCOORD_0.
-function squareGLB({extraAttribute = false, withUV = true} = {}) {
+function squareGLB({extraAttribute = false, withUV = true, matrix = [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]} = {}) {
   const s = square(), parts = [s.positions, s.normals, ...(withUV ? [s.uvs] : []), new Uint16Array([0,1,2, 0,2,3])];
   let offset = 0; const bufferViews = [], accessors = [];
   for (const [i, a] of parts.entries()) {
@@ -55,7 +55,7 @@ function squareGLB({extraAttribute = false, withUV = true} = {}) {
     accessors.push(a instanceof Uint16Array ? {bufferView: i, componentType: 5123, count: 6, type: 'SCALAR'} : {bufferView: i, componentType: 5126, count: 4, type: a === s.uvs ? 'VEC2' : 'VEC3'});
   }
   const attributes = {POSITION: 0, NORMAL: 1, ...(withUV ? {TEXCOORD_0: 2} : {}), ...(extraAttribute ? {TANGENT: 1} : {})};
-  const json = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix: [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}],
+  const json = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix}],
     meshes: [{primitives: [{attributes, indices: parts.length - 1, material: 0}]}], materials: [{pbrMetallicRoughness: {}}],
     buffers: [{byteLength: offset}], bufferViews, accessors};
   const bin = new Uint8Array(offset); let at = 0; for (const a of parts) { bin.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), at); at += Math.ceil(a.byteLength / 4) * 4; }
@@ -105,6 +105,15 @@ test('a mesh without UVs, or that already has tangents, is refused', async () =>
   const opts = {textureSize: 8, source: {}, sampleWorldNormal: () => [0, 1, 0]};
   await assert.rejects(addNormalMapToGLB(squareGLB({withUV: false}), opts), /TEXCOORD_0/);
   await assert.rejects(addNormalMapToGLB(squareGLB({extraAttribute: true}), opts), /TANGENT/);
+});
+
+test('review M2: a node transform that is not rotation and uniform scale is refused, not baked wrong', async () => {
+  const opts = {textureSize: 8, source: {}, sampleWorldNormal: () => [0, 1, 0]};
+  await assert.rejects(addNormalMapToGLB(squareGLB({matrix: [2,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]}), opts), /uniform scale/);
+  await assert.rejects(addNormalMapToGLB(squareGLB({matrix: [1,0,0,0, 0.5,1,0,0, 0,0,1,0, 0,0,0,1]}), opts), /uniform scale/);
+  // Rotation with uniform scale and translation is fine.
+  const out = await addNormalMapToGLB(squareGLB({matrix: [2,0,0,0, 0,0,-2,0, 0,2,0,0, 5,6,7,1]}), opts);
+  assert.ok(parse(out).json.materials[0].normalTexture);
 });
 
 test('world normals come back with the world mesh, through the node transform', () => {
