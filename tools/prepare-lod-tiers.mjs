@@ -103,9 +103,9 @@ try {
       // Look along the level normal as far as this level is measured to stray from the hero
       // (sampled maximum, with a quarter more since sampling underestimates it).
       const reach = 1.25 * tier.error.levelToSource.max;
-      const sampleWorldNormal = createHeroNormalSampler({hero, THREE, MeshBVH, reach});
+      const sampleWorldNormal = createHeroNormalSampler({hero, THREE, MeshBVH, reach, footprint: true});
       tier.glb = await addNormalMapToGLB(tier.glb, {textureSize: tier.textureSize, source: {kind: 'hero', sha256: source}, sampleWorldNormal});
-      tier.normalMap = {source: {kind: 'hero', sha256: source}, textureSize: tier.textureSize, sampler: 'ray-along-level-normal', reach};
+      tier.normalMap = {source: {kind: 'hero', sha256: source}, textureSize: tier.textureSize, sampler: 'ray-along-level-normal+texel-footprint', reach};
     }
   }
   report.phase = 'publish'; save();

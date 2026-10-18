@@ -44,7 +44,7 @@ export function vertexTangents({positions, normals, uvs, indices}) {
   return tangents;
 }
 
-// sampleNormal(point, levelNormal) -> source normal (any length, either orientation) in the
+// sampleNormal(point, levelNormal, texelSize) -> source normal (any length, either orientation) in the
 // mesh's frame, or null where the source has nothing to offer (texel keeps the level's own normal).
 export function bakeTangentNormalMap({positions, normals, uvs, indices, textureSize, sampleNormal}) {
   const tangents = vertexTangents({positions, normals, uvs, indices});
@@ -52,6 +52,11 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   const count = textureSize * textureSize, pixels = new Uint8Array(count * 4), mask = new Uint8Array(count);
   const byte = v => Math.round((Math.max(-1, Math.min(1, v)) * 0.5 + 0.5) * 255);
   let coveredPixels = 0, unsampled = 0, maxDegrees = 0;
+  // How large one texel is on the surface: area over covered texels. Samplers can average over it.
+  let area = 0, covered = 0;
+  for (let f = 0; f < indices.length; f += 3) area += Math.hypot(...cross(sub(at(positions, indices[f+1]), at(positions, indices[f])), sub(at(positions, indices[f+2]), at(positions, indices[f])))) / 2;
+  for (let p = 0; p < count; p++) if (faces[p] >= 0) covered++;
+  const texelSize = covered ? Math.sqrt(area / covered) : 0;
   for (let p = 0; p < count; p++) {
     const face = faces[p]; if (face < 0) continue;
     mask[p] = 1; coveredPixels++;
@@ -61,7 +66,7 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
     // As the decoder does: per-vertex B = cross(N, T) * w, then T, B, N interpolated and normalized.
     const T = unit(mix(tangents, 4)) ?? [1, 0, 0];
     const B = unit(mix(tangents, 4, (t, v) => cross(unit(at(normals, v)) ?? [0, 0, 1], t).map(x => x * t[3]))) ?? cross(N, T);
-    let source = sampleNormal(point, N);
+    let source = sampleNormal(point, N, texelSize);
     source = source && unit(source);
     if (!source) { unsampled++; source = N; }
     if (dot(source, N) < 0) source = source.map(x => -x); // a normal map never turns the surface inside out
@@ -75,14 +80,16 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   if (!coveredPixels) throw Error('no covered UV texels to bake');
   const seeds = nearestCovered(mask, textureSize);
   for (let p = 0; p < count; p++) if (!mask[p]) pixels.set(pixels.subarray(seeds[p] * 4, seeds[p] * 4 + 4), p * 4);
-  return {pixels, tangents, coveredPixels, unsampled, maxDegrees};
+  return {pixels, tangents, coveredPixels, unsampled, maxDegrees, texelSize};
 }
 
 // The source's interpolated shading normal for a level point: the nearest source surface hit by a
 // ray along the level normal (both ways) within `reach`, else the closest source point. Looking
 // along the normal keeps a nearby strand or sheet beside the point (fur, fins) from standing in
 // for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
-export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach}) {
+// With `footprint`, the normal is averaged over a 3x3 grid across the texel in the surface plane,
+// so detail finer than a texel (fur) shades as its average rather than as one aliased sample.
+export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false}) {
   if (!normals) throw Error('source has no shading normals');
   if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
   const geometry = new THREE.BufferGeometry();
@@ -107,8 +114,21 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE
     bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
     return normalAt(hit.faceIndex, hit.point);
   };
-  sample.method = 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal';
-  return sample;
+  const method = 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal';
+  if (!footprint) { sample.method = method; return sample; }
+  const averaged = (p, n, texelSize) => {
+    if (!(texelSize > 0) || !n) return sample(p, n);
+    const u = unit(cross(n, Math.abs(n[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])), v = cross(n, u), sum = [0, 0, 0], step = texelSize / 3;
+    let any = false;
+    for (const i of [-1, 0, 1]) for (const j of [-1, 0, 1]) {
+      const h = sample([0, 1, 2].map(a => p[a] + (u[a] * i + v[a] * j) * step), n), hn = h && unit(h);
+      if (!hn) continue;
+      const side = dot(hn, n) < 0 ? -1 : 1; for (let a = 0; a < 3; a++) sum[a] += side * hn[a]; any = true;
+    }
+    return any ? sum : null;
+  };
+  averaged.method = method + ', averaged over the texel footprint (3x3 in the surface plane)';
+  return averaged;
 }
 
 // Adds a baked normal map and TANGENT attribute to a one-mesh, one-primitive GLB with float
@@ -149,7 +169,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   const linear = [world[0], world[1], world[2], world[4], world[5], world[6], world[8], world[9], world[10]];
   const normalToLocal = n => [0, 1, 2].map(c => linear[c*3]*n[0] + linear[c*3+1]*n[1] + linear[c*3+2]*n[2]); // transpose of the linear part
   const baked = bakeTangentNormalMap({positions, normals, uvs, indices, textureSize,
-    sampleNormal: (p, n) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n))); return s && normalToLocal(s); }});
+    sampleNormal: (p, n, texelSize) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n)), texelSize * lengths[0]); return s && normalToLocal(s); }});
   const png = new Uint8Array(await encodeTrellisTexturePNG({pixels: baked.pixels, width: textureSize, height: textureSize}));
   // Append the tangents and the image after the existing binary chunk.
   const extra = []; let offset = Math.ceil(binLength / 4) * 4;
@@ -161,7 +181,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   if (!json.samplers?.length) json.samplers = [{magFilter: 9729, minFilter: 9987, wrapS: 33071, wrapT: 33071}];
   json.textures = [...(json.textures ?? []), {source: json.images.length - 1, sampler: 0}];
   material.normalTexture = {index: json.textures.length - 1};
-  json.extras = {...json.extras, lodNormalMap: {source, textureSize, coveredPixels: baked.coveredPixels, unsampledTexels: baked.unsampled,
+  json.extras = {...json.extras, lodNormalMap: {source, textureSize, texelSize: baked.texelSize * lengths[0], coveredPixels: baked.coveredPixels, unsampledTexels: baked.unsampled,
     maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: sampleWorldNormal.method ?? 'caller-supplied sampler',
     tangentFrame: 'glTF: T along +u from UV gradients, Gram-Schmidt to N; B = cross(N, T) * w toward decreasing v'}};
   json.buffers[0].byteLength = offset;
