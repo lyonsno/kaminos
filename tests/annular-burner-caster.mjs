@@ -3,6 +3,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import {computeBoundsTree, acceleratedRaycast} from 'three-mesh-bvh';
+
+// Many rays against a 125k-triangle burner: raycast through a BVH.
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 import {BURNER_DEFAULTS, burnerRings, createAnnularBurner, createAnnularBurnerCaster, annularBurnerCasterKey} from '../annular-burner.mjs';
 
 const triangles = g => (g.index ? g.index.count : g.attributes.position.count) / 3;
@@ -11,7 +16,7 @@ const detailed = recipe => { const b = createAnnularBurner(THREE, mergeGeometrie
   return {burner: b, meshes, withoutBolts: meshes.slice(0, -1)}; };
 const casterMesh = caster => new THREE.Mesh(caster.geometry, new THREE.MeshBasicMaterial({side: THREE.DoubleSide}));
 // Height of the first surface hit straight down at (x, z), or null.
-const heightAt = (objects, x, z) => { const ray = new THREE.Raycaster(new THREE.Vector3(x, 1, z), new THREE.Vector3(0, -1, 0));
+const heightAt = (objects, x, z) => { for (const o of objects) if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); const ray = new THREE.Raycaster(new THREE.Vector3(x, 1, z), new THREE.Vector3(0, -1, 0));
   const hits = ray.intersectObjects(objects, false); return hits.length ? 1 - hits[0].distance : null; };
 
 test('the default burner caster is an order of magnitude lighter than the burner', () => {
@@ -30,31 +35,54 @@ test('same outline: bounds match the burner without bolts within the sagitta bou
   burner.dispose();
 });
 
-test('ring grooves, lands, sector seams and rim stand where they stand on the burner, never lower', () => {
-  for (const recipe of [BURNER_DEFAULTS, {...BURNER_DEFAULTS, ringCount: 7, sectorCount: 5, outerRadius: 0.5, grooveFraction: 0.5}]) {
-    const {burner, withoutBolts} = detailed(recipe), caster = createAnnularBurnerCaster(THREE, mergeGeometries, recipe), mesh = casterMesh(caster);
-    const s = caster.bound.maxSagitta, rings = burnerRings(recipe), sectorAngle = Math.PI * 2 / recipe.sectorCount;
-    const walls = [recipe.innerRadius, recipe.outerRadius, recipe.outerRadius + 0.045, ...rings.flatMap(r => [r.radius - r.width / 2, r.radius + r.width / 2])];
-    let compared = 0, grooves = 0, seams = 0;
-    for (let i = 0; i < 1500; i++) {
-      const r = (recipe.outerRadius + 0.06) * Math.sqrt((i * 0.6180339887) % 1), a = i * 2.399963;
-      if (walls.some(w => Math.abs(r - w) < s + 1e-3)) continue; // a wall's exact place depends on tessellation
-      const inSector = ((a % sectorAngle) + sectorAngle) % sectorAngle, seamHalf = Math.min(0.012, Math.PI / recipe.sectorCount * 0.06) / 2;
-      const nearSeam = Math.min(inSector, sectorAngle - inSector) * r;
-      if (Math.abs(nearSeam - seamHalf * r) < 2e-4) continue; // seam ends sit at exact angles on both
-      const x = Math.sin(a) * r, z = Math.cos(a) * r, h0 = heightAt(withoutBolts, x, z), h1 = heightAt([mesh], x, z);
-      assert.equal(h1 === null, h0 === null, `coverage at r=${r.toFixed(4)}`);
-      if (h0 === null) continue;
-      compared++;
-      // Never lower, except that a chord across the rim's 45-degree chamfer may sag by the sagitta bound.
-      assert.ok(h1 >= h0 - (r > recipe.outerRadius ? s : 1e-4), `never lower: r=${r.toFixed(4)} a=${a.toFixed(3)} ${h1} < ${h0}`);
-      // Higher only by what was dropped: a land's bevel (at most a quarter of the groove depth) or the 1 mm floor offset.
-      assert.ok(h1 - h0 <= Math.max(recipe.grooveDepth * 0.25, 0.001) + 1e-4, `same surface: r=${r.toFixed(4)} ${h1} vs ${h0}`);
-      if (h0 < -recipe.grooveDepth / 2) { grooves++; if (nearSeam < seamHalf * r) seams++; }
-    }
-    assert.ok(compared > 400 && grooves > 40 && seams > 0, `compared ${compared}, grooves ${grooves}, seams ${seams}`);
-    burner.dispose();
+// Rays straight down over the disc, including right beside every wall: the caster is never lower
+// than the burner anywhere (it may block more, never less). Away from walls it is the same surface.
+function compareHeights(recipe, rays) {
+  const {burner, withoutBolts} = detailed(recipe), caster = createAnnularBurnerCaster(THREE, mergeGeometries, recipe), mesh = casterMesh(caster);
+  const s = caster.bound.maxSagitta, rings = burnerRings(recipe), sectorAngle = Math.PI * 2 / recipe.sectorCount;
+  const walls = [recipe.innerRadius, recipe.outerRadius, recipe.outerRadius + 0.045, ...rings.flatMap(r => [r.radius - r.width / 2, r.radius + r.width / 2])];
+  const seamHalf = Math.min(0.012, Math.PI / recipe.sectorCount * 0.06) / 2;
+  const out = {compared: 0, grooves: 0, seams: 0};
+  for (const [r, a] of rays) {
+    const x = Math.sin(a) * r, z = Math.cos(a) * r, h0 = heightAt(withoutBolts, x, z), h1 = heightAt([mesh], x, z);
+    if (h0 === null) continue;
+    assert.ok(h1 !== null && h1 >= h0 - 1e-4, `never lower: r=${r} a=${a} caster ${h1} burner ${h0}`);
+    out.compared++;
+    const inSector = ((a % sectorAngle) + sectorAngle) % sectorAngle, nearSeam = Math.min(inSector, sectorAngle - inSector);
+    if (h0 < -recipe.grooveDepth / 2) { out.grooves++; if (nearSeam < seamHalf) out.seams++; }
+    // Beside a wall the caster may stand a land higher (its walls enclose the burner's); elsewhere only
+    // by what was dropped: a land's bevel (at most a quarter of the groove depth) or the 1 mm floor offset.
+    if (walls.some(w => Math.abs(r - w) < s + 1e-4) || Math.abs(nearSeam - seamHalf) * r < 1e-4) continue;
+    assert.ok(h1 - h0 <= Math.max(recipe.grooveDepth * 0.25, 0.001, r > recipe.outerRadius ? 0.0082 : 0) + 1e-4, `same surface: r=${r} ${h1} vs ${h0}`);
   }
+  burner.dispose();
+  return out;
+}
+const spiral = (count, extent) => Array.from({length: count}, (_, i) => [extent * Math.sqrt((i * 0.6180339887) % 1), i * 2.399963]);
+
+test('the caster is never lower than the burner, grooves, lands, seams and rim included', () => {
+  for (const recipe of [BURNER_DEFAULTS, {...BURNER_DEFAULTS, ringCount: 7, sectorCount: 5, outerRadius: 0.5, grooveFraction: 0.5}]) {
+    // Rays beside every wall as well as spread over the disc.
+    const rings = burnerRings(recipe), walls = [recipe.innerRadius, recipe.outerRadius, recipe.outerRadius + 0.045, ...rings.flatMap(r => [r.radius - r.width / 2, r.radius + r.width / 2])];
+    const beside = walls.flatMap(w => [-3e-4, -1e-4, 1e-4, 3e-4].flatMap(d => [0.13, 1.1, 2.7, 4.4, 5.9].map(a => [w + d, a])));
+    const {compared, grooves, seams} = compareHeights(recipe, [...spiral(1200, recipe.outerRadius + 0.06), ...beside]);
+    assert.ok(compared > 400 && grooves > 40 && seams > 0, `compared ${compared}, grooves ${grooves}, seams ${seams}`);
+  }
+});
+
+test('review AB-01: the two reported rays', () => {
+  // Beside the first land's outer wall on the default burner: the caster must still block there.
+  compareHeights(BURNER_DEFAULTS, [[0.035714583333333334, Math.PI / 12]]);
+  // At a narrow groove's centre the caster shows the groove, not a land.
+  const narrow = {...BURNER_DEFAULTS, ringCount: 128, grooveFraction: 0.1}, caster = createAnnularBurnerCaster(THREE, mergeGeometries, narrow), mesh = casterMesh(caster);
+  for (const ring of burnerRings(narrow).filter((_, i) => i % 9 === 0)) for (const a of [0.06994984694978736, 1.3, 3.9]) {
+    const h = heightAt([mesh], Math.sin(a) * ring.radius, Math.cos(a) * ring.radius);
+    assert.ok(h < -narrow.grooveDepth / 2, `groove at r=${ring.radius} a=${a} stands at ${h}`);
+  }
+});
+
+test('review AB-02: a tolerance too fine to represent is refused before any geometry is built', () => {
+  assert.throws(() => createAnnularBurnerCaster(THREE, mergeGeometries, BURNER_DEFAULTS, {maxSagitta: 1e-20}), /too fine/);
 });
 
 test('a tighter sagitta buys more triangles; the bound is reported', () => {

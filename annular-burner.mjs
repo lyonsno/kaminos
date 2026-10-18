@@ -187,12 +187,15 @@ export function createAnnularBurner(THREE, mergeGeometries, value) {
 }
 
 // Coarse stand-in of the burner for shadow casting and other consumers of its shape. It keeps
-// the bed, every ring groove and land, the sector seams and the rim where the burner has them,
-// and drops what only dresses the surface: the bolts, the separate channel floors (the bed top is
-// raised the 1 mm to where they stand) and the bevels of the bed and lands (each becomes its
-// enclosing rectangle, so the stand-in is never lower or narrower than the burner). Back-to-back
-// ribs merge into one land.
-// Arcs are tessellated so no chord falls more than maxSagitta inside its circle.
+// the bed, every ring groove and land, the sector seams and the bevelled rim where the burner has
+// them, and drops what only dresses the surface: the bolts, the separate channel floors (the bed
+// top is raised the 1 mm to where they stand) and the bevels of the bed and lands (each becomes its
+// enclosing rectangle). Back-to-back ribs merge into one land.
+// Arcs use fewer segments than the burner, placed so the stand-in encloses it: points on surfaces
+// facing away from the axis sit outside their circle (each chord touches it), points facing the
+// axis sit on it (each chord falls inside). So the stand-in is never lower than the burner and
+// blocks at least what it blocks. Each surface moves by at most maxSagitta, and by at most a
+// quarter of the groove width, so narrow grooves stay open.
 export const BURNER_CASTER_SCHEMA = 'kaminos.annular-burner-caster.v1';
 const CASTER_SHAPE_KEYS = ['innerRadius', 'outerRadius', 'ringCount', 'grooveFraction', 'grooveDepth', 'sectorCount', 'thickness', 'rimHeight'];
 const BURNER_RIM_WIDTH = 0.045;
@@ -208,29 +211,33 @@ export function annularBurnerCasterKey(value, { maxSagitta = 0.002 } = {}) {
 export function createAnnularBurnerCaster(THREE, mergeGeometries, value, { maxSagitta = 0.002 } = {}) {
   const key = annularBurnerCasterKey(value, { maxSagitta });
   const recipe = normalizeBurner(value);
-  // Segments over an arc of `length` radians at radius r so no chord sags more than maxSagitta.
+  const rings = burnerRings(recipe);
+  const sagitta = Math.min(maxSagitta, rings[0].width * 0.25);
+  // Half-angle per segment at radius r so an outer point at r/cos(h) leaves its circle by at most
+  // the sagitta: 1/cos(h) - 1 = s/r, written stably as sin(h/2) = sqrt(s / (2 (r + s))).
   const segmentsFor = (r, length) => {
-    const step = maxSagitta >= r ? Math.PI : 2 * Math.acos(1 - maxSagitta / r);
-    return Math.max(length >= Math.PI * 2 - 1e-9 ? 8 : 1, Math.ceil(length / step));
+    const half = 2 * Math.asin(Math.sqrt(sagitta / (2 * (r + sagitta))));
+    const segments = Math.max(length >= Math.PI * 2 - 1e-9 ? 8 : 1, Math.ceil(length / (2 * half)));
+    if (!Number.isSafeInteger(segments) || segments > 1 << 20) throw new Error(`Caster tolerance ${maxSagitta} is too fine to build at radius ${r}`);
+    return segments;
   };
   const parts = [];
+  // Profile points [radius, y, facesOut]: points on surfaces facing away from the axis move out.
   const lathe = (points, start = 0, length = Math.PI * 2) => {
-    const r = Math.max(...points.map(([radius]) => radius));
-    parts.push(new THREE.LatheGeometry(points.map(([radius, y]) => new THREE.Vector2(radius, y)), segmentsFor(r, length), start, length));
+    const segments = segmentsFor(Math.max(...points.map(([radius]) => radius)), length), grow = 1 / Math.cos(length / segments / 2);
+    parts.push(new THREE.LatheGeometry(points.map(([radius, y, out]) => new THREE.Vector2(out ? radius * grow : radius, y)), segments, start, length));
   };
-  // The bed's top stands at the burner's channel floors, which cover its own bed top 1 mm lower.
   const top = -recipe.grooveDepth + 0.001;
   // Bed: bottom, outer wall, top (the groove floors), inner wall.
-  lathe([[recipe.innerRadius, -recipe.thickness], [recipe.outerRadius, -recipe.thickness], [recipe.outerRadius, top], [recipe.innerRadius, top], [recipe.innerRadius, -recipe.thickness]]);
+  lathe([[recipe.innerRadius, -recipe.thickness], [recipe.outerRadius, -recipe.thickness, true], [recipe.outerRadius, top, true], [recipe.innerRadius, top], [recipe.innerRadius, -recipe.thickness]]);
   // Lands between grooves, one per sector, open ends at the seams as on the burner.
-  const rings = burnerRings(recipe);
   const lands = [[recipe.innerRadius, rings[0].radius - rings[0].width * 0.5]];
   for (let i = 0; i < rings.length; i++) lands.push([rings[i].radius + rings[i].width * 0.5, i + 1 < rings.length ? rings[i + 1].radius - rings[i + 1].width * 0.5 : recipe.outerRadius]);
   const seam = Math.min(0.012, Math.PI / recipe.sectorCount * 0.06);
   for (const [inside, outside] of lands) {
     if (!(outside > inside)) continue;
     for (let sector = 0; sector < recipe.sectorCount; sector++) {
-      lathe([[outside, top], [outside, 0], [inside, 0], [inside, top]],
+      lathe([[outside, top, true], [outside, 0, true], [inside, 0], [inside, top]],
         sector * Math.PI * 2 / recipe.sectorCount + seam * 0.5, Math.PI * 2 / recipe.sectorCount - seam);
     }
   }
@@ -238,8 +245,10 @@ export function createAnnularBurnerCaster(THREE, mergeGeometries, value, { maxSa
   // centre cap is a plain cylinder, as on the burner.
   const rimOut = recipe.outerRadius + BURNER_RIM_WIDTH, rimTop = recipe.rimHeight, rimBottom = -recipe.thickness;
   const b = Math.min(BURNER_RIM_WIDTH * 0.18, (rimTop - rimBottom) * 0.25);
-  lathe([[recipe.outerRadius, rimBottom], [rimOut, rimBottom], [rimOut, rimTop - b], [rimOut - b, rimTop], [recipe.outerRadius + b, rimTop], [recipe.outerRadius, rimTop - b], [recipe.outerRadius, rimBottom]]);
-  const cap = new THREE.CylinderGeometry(recipe.innerRadius, recipe.innerRadius, recipe.thickness, segmentsFor(recipe.innerRadius, Math.PI * 2));
+  // The outer chamfer and wall face away from the axis; the inner chamfer and wall face it.
+  lathe([[recipe.outerRadius, rimBottom], [rimOut, rimBottom, true], [rimOut, rimTop - b, true], [rimOut - b, rimTop, true], [recipe.outerRadius + b, rimTop], [recipe.outerRadius, rimTop - b], [recipe.outerRadius, rimBottom]]);
+  const capSegments = segmentsFor(recipe.innerRadius, Math.PI * 2), capRadius = recipe.innerRadius / Math.cos(Math.PI / capSegments);
+  const cap = new THREE.CylinderGeometry(capRadius, capRadius, recipe.thickness, capSegments);
   cap.translate(0, -recipe.thickness * 0.5, 0);
   parts.push(cap.index ? cap.toNonIndexed() : cap);
   cap.dispose();
@@ -247,6 +256,6 @@ export function createAnnularBurnerCaster(THREE, mergeGeometries, value, { maxSa
   const geometry = mergeGeometries(flat);
   parts.forEach(part => part.dispose()); flat.forEach(part => part.dispose());
   if (!geometry) throw new Error('Burner caster geometry could not be merged');
-  return { geometry, key, triangles: geometry.attributes.position.count / 3, bound: { maxSagitta, conservativeBevels: true },
+  return { geometry, key, triangles: geometry.attributes.position.count / 3, bound: { maxSagitta, effectiveSagitta: sagitta, encloses: true },
     omitted: ['bolts', 'channel-floors', 'bevels'] };
 }
