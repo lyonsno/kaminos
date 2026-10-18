@@ -13,7 +13,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
 import {poseLookingAt} from './agent-vantage-core.mjs';
-import {sharedTabsVerdict} from './agent-vantage-witness-checks.mjs';
+import {sharedTabsVerdict, fireStripVerdict, proxyFreePickMapVerdict} from './agent-vantage-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/vantage.mjs');
@@ -140,9 +140,9 @@ async function fireWitness(page) {
   const underProxy = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-operator-proxy');
   await page.evaluate(() => window.kaminosViewportSettings.set({fire: 'full'}));
   await page.waitForTimeout(500);
-  const proxyRows = (underProxy.result.pickMap?.objects ?? []).filter(row => row.id == null && /proxy/i.test(`${row.name ?? ''}`));
-  check('with the operator viewing the fire as Proxy, the sub\'s pick map still draws no proxy', underProxy.result.proxies?.fire === 'drawn' && proxyRows.length === 0,
-    {proxies: underProxy.result.proxies, proxyRows});
+  const mapVerdict = proxyFreePickMapVerdict({pickMap: underProxy.result.pickMap, pickMapError: underProxy.result.pickMapError ?? null, image: underProxy.result.image});
+  check('with the operator viewing the fire as Proxy, the sub\'s picture still has a pick map that draws no proxy', underProxy.result.proxies?.fire === 'drawn' && mapVerdict.ok,
+    {proxies: underProxy.result.proxies, verdict: mapVerdict});
 
   report.phase = 'fire-watch'; save();
   const watched = await vantageOk('watch', '--seconds', '3', '--fps', '3', '--frames', '--max-size', '320', '--name', 'fire-watch');
@@ -151,7 +151,10 @@ async function fireWitness(page) {
     seen: watched.result.proxySnapshotsSeen, layers: watched.result.layers, omitted: watched.result.omitted};
   check('every watch frame draws the flame proxy and says so', watched.result.frames.length >= 3 && watched.result.frames.every(frame => frame.proxies?.fire === 'drawn'),
     report.effective.fire.watch);
-  check('and the strip draws the flame moving on, not one held snapshot', (watched.result.proxySnapshotsSeen?.fire ?? 0) >= 2, report.effective.fire.watch);
+  const strip = fireStripVerdict({frames: watched.result.frames.map((frame, i) => ({...frame,
+    image: readFileSync(imageOf(watched, `frame-${i + 1}`)).toString('base64')}))});
+  report.effective.fire.watch.verdict = strip;
+  check('the strip drew more than one fire snapshot and its pictures change (plume development after a pulse is not tested here)', strip.ok, strip);
   const sheet = imageOf(watched, 'sheet');
   report.effective.fire.watchSheet = sheet;
   check('a watch lets go of the proxies when it ends', Object.keys(heldAfterWatch).length === 0, {required: heldAfterWatch});
