@@ -74,7 +74,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
         report('running', 'label', asset.name ?? 'rig');
         rig = turnRest(readRig(bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
           asset.restRotation ?? null);
-        labels = asset.labels ?? (await (labeler ??= createLabeler({ zipUrl: labelerZip, onStatus: s => report('running', 'label', s) }))).label(rig);
+        labels = asset.labels ?? await (await (labeler ??= createLabeler({ zipUrl: labelerZip, onStatus: s => report('running', 'label', s) }))).label(rig);
         report('running', 'encode', 'joint labels');
         data = await buildSkeletonBundle(rig, labels, { name: asset.name ?? 'rig', embed: text => gen.encodeText(text),
           motion: { frames: gen.bundle.skeleton.frames, outputTimes: gen.bundle.outputTimes } });
