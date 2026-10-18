@@ -21,6 +21,17 @@ export function flamePresetRadius(preset,localScale) {
   if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
   return radius/localScale;
 }
+// Compare a portable receipt with local controls without changing its saved
+// identity. Scene snapshots retain their own raw radius plus authored pose.
+export function flamePresetForLocalControls(preset,localScale) {
+  if(!preset.sourceRadiusSpace || preset.domControls?.['volume-emitter-source-law']?.value!=='immersed-source')return preset;
+  const result=structuredClone(preset),radius=flamePresetRadius(preset,localScale);
+  const d=result.domControls['volume-immersed-radius'];
+  if(Object.hasOwn(d,'value'))d.value=radius;
+  if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
+  delete result.sourceRadiusSpace;
+  return result;
+}
 
 // One whole-settings operation over the existing runtime and chronological ledger.
 // Presets contain authored coefficients, never a checkpoint of the evolving fluid.

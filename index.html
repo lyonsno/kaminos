@@ -2904,7 +2904,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
-import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius } from './flame-authoring.mjs';
+import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius, flamePresetForLocalControls } from './flame-authoring.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -17159,7 +17159,7 @@ function recordVolumeSettingsPresetApplied() {
   activeVolumeSettingsPresetApplied = Object.freeze([]);
   if (activeVolumeSettingsPresetReceipt) {
     try {
-      activeVolumeSettingsPresetApplied = volumeSettingsPresetAppliedDifferences(activeVolumeSettingsPresetReceipt.preset, buildVolumeSettingsPreset());
+      activeVolumeSettingsPresetApplied = volumeSettingsPresetAppliedDifferences(flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]), buildVolumeSettingsPreset());
     } catch (error) {
       console.error('Volume settings preset readback failed:', error);
     }
@@ -21531,7 +21531,7 @@ function createFlameQuickFields() {
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
     applyBasin:(id,options)=>window.kaminosFlameAuthoring.applyBasin(id,options),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
-      modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
+      modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]))} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
     readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
     writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
@@ -25033,6 +25033,9 @@ async function collectSceneComposition() {
   // authored before the schema grew mints a projected copy under a new id and
   // would silently repoint this scene and the basin's label alias to it.
   const basin = activeVolumeSettingsPresetReceipt
+    // Scene restoration applies the separately stored pose to raw controls;
+    // never reuse a portable standalone radius as that raw scene snapshot.
+    && !activeVolumeSettingsPresetReceipt.preset.sourceRadiusSpace
     && volumeSettingsPresetControlValuesEqual(preset, activeVolumeSettingsPresetReceipt.preset)
     ? { presetId: activeVolumeSettingsPresetReceipt.presetId,
       label: activeVolumeSettingsPresetReceipt.label || activeVolumeSettingsPresetReceipt.presetId }
