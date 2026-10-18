@@ -1,17 +1,21 @@
 import * as THREE from './lib/three.webgpu.js';
 import {staticSceneGeometryRevision} from './scene-light-geometry.mjs';
 import {buildTriangleVisibility} from './scene-light-visibility.mjs';
+import {residentLightCoverage,validateResidentLightCoverage,residentCellTriangles} from './scene-resident-coverage.mjs';
 
 // Independent local-space BVHs form a stackless forest. A root's escape
 // points at the next root, so existing closest-hit traversals visit every mesh.
 // Transforms are deliberately absent from topology identity.
-export function createLocalSceneVisibility() {
+export function createLocalSceneVisibility({readCoverage=residentLightCoverage}={}) {
   const cache=new WeakMap(),ids=new WeakMap();let serial=0,previous='',packed=null,builds=0;
   const id=value=>{if(!value)return null;if(!ids.has(value))ids.set(value,++serial);return ids.get(value);};
   return {snapshot(scene){
-    staticSceneGeometryRevision(scene); // Shared support validation + current world matrices.
-    const meshes=[];scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow)meshes.push(m);});
-    const keys=meshes.map(m=>{const g=m.geometry,p=g.attributes.position,i=g.index;return JSON.stringify([id(g),g.version,id(p),p.version,p.count,id(i),i?.version,i?.count]);});
+    staticSceneGeometryRevision(scene,{exclude:m=>!!readCoverage(m)});
+    const meshes=[],coverageByMesh=new Map();
+    scene.traverseVisible(m=>{if(m.isMesh&&m.castShadow){const binding=readCoverage(m);if(binding){const value=validateResidentLightCoverage(m,binding);if(binding.owner!==m)return;coverageByMesh.set(m,value);}meshes.push(m);}});
+    if(coverageByMesh.size>1)throw Error('The current resident-light consumer supports the single active burn target only');
+    const coverage=[...coverageByMesh.values()][0]??null;
+    const keys=meshes.map(m=>{const c=coverageByMesh.get(m);if(c)return JSON.stringify(['resident',id(c.texture),id(c.initial),c.dimensions,c.bounds.min.toArray(),c.bounds.max.toArray()]);const g=m.geometry,p=g.attributes.position,i=g.index;return JSON.stringify([id(g),g.version,id(p),p.version,p.count,id(i),i?.version,i?.count]);});
     const revision=JSON.stringify(meshes.map((m,i)=>[m.uuid,keys[i]]));
     const matrices=new Float32Array(Math.max(1,meshes.length)*16);
     if(!meshes.length)matrices.set(new THREE.Matrix4().elements);
@@ -22,6 +26,8 @@ export function createLocalSceneVisibility() {
     if(revision!==previous||!packed){
       const parts=meshes.map((mesh,i)=>{
         const g=mesh.geometry,prior=cache.get(g);if(prior?.key===keys[i])return prior.packed;
+        const coverage=coverageByMesh.get(mesh);
+        if(coverage){const records=residentCellTriangles(coverage),result=buildTriangleVisibility(records).packGpu();for(let j=0;j<result.triangleCount;j++)result.triangles[j*12+3]=records[result.triangleIndices[j]].cell+1;cache.set(g,{key:keys[i],packed:result});builds++;return result;}
         const p=g.attributes.position,index=g.index,count=index?.count??p.count,records=[];
         if(count%3)throw Error('local visibility requires complete triangles');
         const a=new THREE.Vector3(),b=new THREE.Vector3(),c=new THREE.Vector3(),cross=new THREE.Vector3(),edge=new THREE.Vector3();
@@ -41,8 +47,9 @@ export function createLocalSceneVisibility() {
         for(let j=0;j<p.nodeCount;j++){words[(n+j)*12+8]+=n;words[(n+j)*12+9]+=t;owners[n+j]=owner;}
         owners.fill(owner,nodeCount+t,nodeCount+t+p.triangleCount);n+=p.nodeCount;t+=p.triangleCount;
       });
-      packed={nodes,triangles,nodeCount,triangleCount,owners,matrices};previous=revision;
+      packed={nodes,triangles,nodeCount,triangleCount,owners,matrices,coverage};previous=revision;
     }else packed.matrices=matrices;
+    packed.coverage=coverage;
     return {geometry:packed,revision,localBuilds:builds,meshCount:meshes.length};
   }};
 }

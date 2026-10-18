@@ -100,7 +100,7 @@ export async function createLogDebrisGpu({renderer,field,ground,onFrame=null}){
   }
   reset();
   unsubscribe=onFrame?.(present);
-  return {root,particles,positions,sizes,count,
+  return {root,caps,particles,positions,sizes,count,
    encode(encoder,frame){
     if(disposed)throw Error('Debris is disposed');present();
     const values=new Float32Array(48);values.set(mesh.matrixWorld.elements);values.set(previous.elements,16);values.set([...bounds.min.toArray(),0],32);values.set([...bounds.getSize(new THREE.Vector3()).toArray(),0],36);

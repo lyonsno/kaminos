@@ -2,6 +2,7 @@ import * as THREE from './lib/three.webgpu.js';
 import {radialSoftVisibility,createShadowFilterPattern} from './fire-shadow-filter.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {validateShadowSampling} from './fire-shadow-sampling.mjs';
+import {residentLightCoverage,validateResidentLightCoverage} from './scene-resident-coverage.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
 const activeBatches=new WeakSet();
@@ -11,10 +12,12 @@ function prepareShadowScene(scene) {
   scene.traverseVisible(object=>{
     if(!object.isMesh||!object.castShadow)return;
     const materials=Array.isArray(object.material)?object.material:[object.material];
-    if(object.isSkinnedMesh||object.isInstancedMesh||materials.some(m=>m.transparent||m.alphaTest>0))
+    const coverage=residentLightCoverage(object);
+    const resident=coverage?validateResidentLightCoverage(object,coverage):null;
+    if(object.isSkinnedMesh||(!coverage&&(object.isInstancedMesh||materials.some(m=>m.transparent||m.alphaTest>0))))
       throw new Error(`fire-shadow-unsupported-caster: ${object.name||object.uuid} requires static opaque mesh`);
     if(!object.geometry.boundingBox)object.geometry.computeBoundingBox();
-    objectBounds.copy(object.geometry.boundingBox).applyMatrix4(object.matrixWorld);
+    objectBounds.copy(resident?.bounds??object.geometry.boundingBox).applyMatrix4(coverage?.owner.matrixWorld??object.matrixWorld);
     bounds.union(objectBounds);casters.push(object);
   });
   const extent=bounds.isEmpty()?new THREE.Vector3(1,1,1):new THREE.Vector3(
@@ -35,7 +38,7 @@ export function renderFireShadowBatch({scene,shadows}) {
 
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
 // temporary state even when a face fails, and keep actual material sidedness.
-export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,sharedPreparation=true,RendererUtils=THREE.RendererUtils}) {
+export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,sharedPreparation=true,RendererUtils=THREE.RendererUtils,coverageMaterials=null}) {
   const state=RendererUtils.resetRendererAndSceneState(renderer,scene);
   const culling=[],autoUpdate=scene.matrixWorldAutoUpdate;
   try {
@@ -52,8 +55,21 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
       if(!args[0].isMesh||!args[0].castShadow) return;
       const side=material.side;
       material.side=args[4].side;
-      try {renderer.renderObject(...args);}
-      finally {material.side=side;}
+      const prior=scene.overrideMaterial,source=args[4];
+      try {
+        if(coverageMaterials&&residentLightCoverage(args[0])){
+          let row=coverageMaterials.get(source);
+          if(!row||row.opacity!==source.opacityNode){
+            row?.material.dispose();
+            const replacement=material.clone(),radial=material.fragmentNode;
+            replacement.fragmentNode=THREE.TSL.Fn(()=>{THREE.TSL.If(source.opacityNode.lessThan(source.alphaTest),()=>THREE.TSL.Discard());return radial;})();
+            row={opacity:source.opacityNode,material:replacement};coverageMaterials.set(source,row);
+          }
+          row.material.side=source.side;scene.overrideMaterial=row.material;
+        }
+        renderer.renderObject(...args);
+      }
+      finally {material.side=side;scene.overrideMaterial=prior;}
     });
     cubeCamera.update(renderer,scene);
   } finally {
@@ -80,6 +96,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   target.texture.colorSpace=THREE.NoColorSpace;
   const cubeCamera=new THREE.CubeCamera(.005,100,target);
   const material=new THREE.NodeMaterial();
+  const coverageMaterials=new Map();
   material.name='Fire light radial depth from GPU centroid';
   material.blending=THREE.NoBlending;material.toneMapped=false;
   // Native WebGPU cube rotations; source translation is GPU-resident and is
@@ -137,7 +154,7 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         const radius=sourceRadius();if(!Number.isFinite(radius)||radius<0)throw new Error('finite source radius required');
         const far=extent.length()+radius+.01;
         for(const camera of cubeCamera.children)if(!sharedPreparation||camera.far!==far){camera.far=far;camera.updateProjectionMatrix();}
-        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation});
+        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation,coverageMaterials});
         effective.value=1;status.effective=true;status.reason=null;
         status.renderCount++;status.meshCount=casters.length;status.far=far;
       } catch(error) {status.reason=String(error.message);throw error;}
@@ -145,6 +162,6 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},
     setSoftness(value) {validateSoftness(value);if(sourceSizeNode===null&&value>0)throw Error('soft shadows require a source size node');softness.value=value;status.shadowSoftness=value;status.filter=value===0?'hard':'radial-pcss';return {...status};},
     debugState:()=>({...status,filterPattern:{route:filterPattern.route,reason:filterPattern.reason,bytes:filterPattern.bytes}}),
-    dispose() {target.dispose();material.dispose();},
+    dispose() {target.dispose();material.dispose();for(const row of coverageMaterials.values())row.material.dispose();coverageMaterials.clear();},
   };
 }
