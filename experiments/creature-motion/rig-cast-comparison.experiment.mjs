@@ -1,3 +1,4 @@
+import {validateNormalizationSetup} from './pose-normalization-setup.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
 import {createGpuSkinDeformer} from './gpu-skin-deformer.mjs';
@@ -6,12 +7,12 @@ import {loadRigCastSources} from './rig-cast-source.mjs';
 import {mountPlaybackControls} from '../../playback-controls.mjs';
 
 export default {
- id:'mushfinger/rig-cast-comparison',title:'Rig-generated creatures · matched motion',
+ id:'mushfinger/rig-cast-comparison',title:'Rest correction · matched source motion',
  async create({host,inputs,record=()=>{}}){
   const response=await fetch(inputs.setup,{cache:'no-store'});if(!response.ok)throw Error('Rig-cast setup HTTP '+response.status);
   const bytes=await response.arrayBuffer(),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),v=>v.toString(16).padStart(2,'0')).join('');
   if(digest!==inputs.setup_sha256)throw Error('Rig-cast setup digest mismatch');
-  const setup=JSON.parse(new TextDecoder().decode(bytes));
+  const setup=validateNormalizationSetup(JSON.parse(new TextDecoder().decode(bytes)));
   if(setup.casts?.length!==2||new Set(setup.casts.map(c=>c.slug)).size!==2)throw Error('Both selected cast inputs required');
   if(setup.casts.some(c=>c.motion_sha256!==setup.casts[0].motion_sha256||c.frame_sha256!==setup.casts[0].frame_sha256))throw Error('Comparison requires the same motion and generating frame');
   const session=await host.scene.open(),document=host.controls.document,actors=[];
@@ -21,7 +22,7 @@ export default {
   const unsubscribe=()=>{stop?.();stop=null;};
   const read=()=>({kind:'matched-rig-generated-cast-comparison',sourceRevision:setup.sourceCommit,setupSha256:digest,rate,view:session.readView(),
    actors:actors.map(a=>({slug:a.input.slug,label:a.input.label,objectId:a.asset.id,source:a.data.source,skin:a.runtime.read(),playback:a.player.read(),visible:a.placement.visible})),
-   motionDerivation:'Original base28 source unchanged; eight extra toe descendants keep local rest offsets. Not a generated36-joint motion.',registration:'Each saved source registration retained; no per-cast refit or neutralization'});
+   motionDerivation:'Original base28 source unchanged; eight extra toe descendants keep local rest offsets. Not a generated36-joint motion.',registration:'Left original saved fit; right derived known-tree pose AND rig-proportion correction. Source inputs unchanged.'});
   const refresh=()=>controls?.update();
   const start=()=>{if(stop)return;stop=session.onFrame(({deltaSeconds})=>{
    clock+=deltaSeconds*1000*rate;for(const a of actors)a.player.tick(clock);refresh();
@@ -72,10 +73,10 @@ export default {
    session.setView(view);operations.seek({frame:setup.sample??0});
    return {read,operations,dispose,
     mount({root,document,invoke}){
-     const heading=document.createElement('h3');heading.textContent='Two generated bodies · one retained clip';
-     const note=document.createElement('p');note.textContent='Left: clay, closer registration. Right: clean, worse registration. Both preserve the saved fit. Extra toe descendants follow their parents; no new gait or paint.';
+     const heading=document.createElement('h3');heading.textContent=setup.castLabel+' · original / derived correction';
+     const note=document.createElement('p');note.textContent='Left: unchanged original. Right: pose AND segment-length correction toward the generating rig, automatically rebound. Same retained clip; no paint. This is not the length-preserving candidate and not an anatomy claim.';
      const frame=document.createElement('button');frame.textContent='Frame both creatures';frame.onclick=()=>invoke('frame');
-     const rest=document.createElement('button');rest.textContent='Generating rest pose';rest.onclick=()=>invoke('rest');
+     const rest=document.createElement('button');rest.textContent='Compare rest surfaces';rest.onclick=()=>invoke('rest');
      root.append(heading,note,frame,rest);
      for(const a of actors){const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=true;toggle.onchange=()=>invoke('visible',{slug:a.input.slug,visible:toggle.checked});label.textContent='Show '+a.input.label;label.append(toggle);root.append(label);}
      const playbackRoot=document.createElement('div');root.append(playbackRoot);
