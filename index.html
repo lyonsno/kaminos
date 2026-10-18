@@ -677,8 +677,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
-        <label class="slider-row"><span class="slider-label">Show support</span><input id="local-liquid-support-visible" type="checkbox"></label>
-        <p class="hint">Water collides with the fixed analytical basin and rock. Show support reveals that geometry; hiding it keeps the same collision surface.</p>
+        <label class="slider-row"><span class="slider-label">Collisions</span><select id="local-liquid-support-mode"><option value="scene_primitives">Scene objects</option><option value="retained_analytical_basin">Legacy playground</option></select></label>
+        <label class="slider-row"><span class="slider-label">Show legacy playground</span><input id="local-liquid-support-visible" type="checkbox"></label>
+        <p class="hint">Scene objects: planes, spheres and bowls with uniform scale collide with water. Add and place them normally. Changing collision mode restarts water; the numerical world bounds remain the simulation container.</p>
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
           <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
@@ -3160,7 +3161,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <div id="viewport">
   <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
-  <button id="volume-viewer-play" type="button" hidden title="Pause / play the fire (look-lab Freeze)" aria-label="Pause the fire" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
+  <button id="volume-viewer-play" type="button" hidden title="Pause / play the scene simulations" aria-label="Pause scene" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -4613,6 +4614,7 @@ let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
 let localLiquidPaused = false;
+let sceneViewerPaused = null;
 let localLiquidGeneration = 0;
 const sceneLoadRequests = createSceneLoadRequests();
 const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
@@ -4623,7 +4625,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     const { createLocalLiquidHost } = await import('./local-liquid-host.mjs');
     return createLocalLiquidHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent,
+      setup, emitters, isCurrent, readColliders:()=>sceneObjects,
     });
   },
   onFailure: error => {
@@ -4632,6 +4634,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   },
   onMounted: host => {
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
+    if(sceneViewerPaused!==null)localLiquidPaused=sceneViewerPaused;
     host.setPaused(localLiquidPaused);
   },
 });
@@ -7460,7 +7463,7 @@ async function applyLocalLiquidPerformance(values) {
     throw Error('Finish the current scene action before restarting water');
   }
   const next = normalizeLocalLiquidSetup({...localLiquidSetup,
-    particleCount:values.particleCount, densityIterations:values.densityIterations});
+    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support});
   const capacity = measureFingerFluidParticleAllocationCapacity(sharedGpu.device.limits);
   const admission = evaluateFingerFluidParticleAllocationRequest(next.particleCount, capacity);
   if (!admission.ok) throw Error(admission.reason);
@@ -7480,6 +7483,7 @@ async function applyLocalLiquidPerformance(values) {
 }
 
 function refreshLocalLiquidPerformance() {
+  syncVolumeViewerPlay();
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
   panel.hidden = !localLiquidSetup || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
@@ -7489,6 +7493,8 @@ function refreshLocalLiquidPerformance() {
     document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
     document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
     document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
+    document.getElementById('local-liquid-support-visible').closest('label').hidden=localLiquidSetup.support==='scene_primitives';
+    document.getElementById('local-liquid-support-mode').value=localLiquidSetup.support;
     panel.dataset.setup = signature;
   }
   const loading = localLiquidHostMount.isLoading();
@@ -7506,6 +7512,9 @@ function refreshLocalLiquidPerformance() {
 }
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
+document.getElementById('local-liquid-support-mode').addEventListener('change',event=>{
+  applyLocalLiquidPerformance({...localLiquidSetup,support:event.target.value}).catch(error=>{refreshLocalLiquidPerformance();setInfo(error.message);});
+});
 window.kaminosSetLocalLiquidSupportVisible = value => {
   assertSceneConstructionAvailable();
   if(!localLiquidSetup)throw Error('Add a Water Emitter first');
@@ -7516,6 +7525,7 @@ document.getElementById('local-liquid-support-visible').addEventListener('change
   catch(error){refreshLocalLiquidPerformance();setInfo(error.message);}
 });
 window.kaminosPauseLocalLiquid = paused => {
+  sceneViewerPaused=null;
   localLiquidPaused = Boolean(paused);
   localLiquidHost?.setPaused(localLiquidPaused);
   refreshLocalLiquidPerformance();
@@ -12249,7 +12259,7 @@ async function initScene() {
       const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
       const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
       const result=[
-        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
@@ -19903,23 +19913,27 @@ function syncPhysicsAppearanceCockpit(physics) {
         : `Physics appearance: NOT DRAWN (${physics.reason})${physics.effective.sootBurnout ? ' · soot burnout still runs' : ''}`;
   }
 }
-function syncVolumeViewerPlay(s) {
-  const button = document.getElementById('volume-viewer-play');
-  if (!button) return;
-  button.hidden = !document.getElementById('kaminos-volume-canvas')?.classList.contains('active');
-  const frozen = Number(document.getElementById('volume-look-freeze')?.value) >= 0.5;
-  button.dataset.state = frozen ? 'paused' : 'playing';
-  button.setAttribute('aria-label', frozen ? 'Play the fire' : 'Pause the fire');
-  button.querySelector('.pause-glyph').style.display = frozen ? 'none' : '';
-  button.querySelector('.play-glyph').style.display = frozen ? '' : 'none';
+function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
+  const fire=!!s?.active,water=!!localLiquidHost;
+  const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
+  return {present:fire||water,paused:!(fire&&!firePaused||water&&!localLiquidPaused)};
 }
-document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
-  const freeze = document.getElementById('volume-look-freeze');
-  if (!freeze) return;
-  freeze.value = Number(freeze.value) >= 0.5 ? '0' : '1';
-  freeze.dispatchEvent(new Event('input', { bubbles: true }));
-  freeze.dispatchEvent(new Event('change', { bubbles: true }));
-  syncVolumeViewerPlay();
+function syncVolumeViewerPlay(s) {
+  const button=document.getElementById('volume-viewer-play');if(!button)return;
+  const state=sceneViewerPlaybackState(s);
+  button.hidden=!state.present;
+  button.dataset.state=state.paused?'paused':'playing';
+  button.setAttribute('aria-label',state.paused?'Play scene':'Pause scene');
+  button.querySelector('.pause-glyph').style.display=state.paused?'none':'';
+  button.querySelector('.play-glyph').style.display=state.paused?'':'none';
+}
+document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
+  const paused=!sceneViewerPlaybackState().paused;
+  const freeze=document.getElementById('volume-look-freeze');
+  if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
+  if(localLiquidHost)window.kaminosPauseLocalLiquid(paused);
+  sceneViewerPaused=paused;
+  syncVolumeViewerPlay();window._kaminosDirty?.();
 });
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
@@ -25864,7 +25878,7 @@ function serializeSceneObject(entry) {
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
 
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
-    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
+    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
   };
 }
@@ -26524,6 +26538,12 @@ function ensureObjectCollisionTarget(id) {
   }
   return target;
 }
+function setObjectWaterCollision(id,enabled){
+  assertSceneConstructionAvailable();if(typeof enabled!=='boolean')throw Error('Water collision must be Boolean');
+  const entry=sceneObjects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres and bowls');
+  const record=serializeSceneObject(entry);record.waterCollision=enabled;
+  return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
+}
 function syncSceneDataInspector() {
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -26536,6 +26556,7 @@ function syncSceneDataInspector() {
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
+    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
     for(const input of primitive.querySelectorAll('[data-geometry-param]')){const key=input.dataset.geometryParam;input.closest('label').hidden=!(key in GEOMETRY_DEFAULTS[entry.geometry.kind]);if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[key]??'';}
     for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
   }
@@ -26561,10 +26582,13 @@ function installSceneConstruction() {
     authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(activeSceneObjectId),label:`Edit ${label}`,onError:error=>setInfo(error.message)}));
     if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   }
-  for(const key of ['width','height','depth','radius'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
+  for(const key of ['width','height','depth','radius','thickness'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
   field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
   field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
   field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
+  const waterCollisionRow=document.createElement('label');waterCollisionRow.className='slider-row';waterCollisionRow.innerHTML='<span class="slider-label">Water collision</span><input type="checkbox" id="object-water-collision"><span class="flame-scope">Plane, sphere or bowl · uniform scale</span>';panel.append(waterCollisionRow);
+  const waterCollisionInput=waterCollisionRow.querySelector('input');
+  waterCollisionInput.addEventListener('change',()=>{try{setObjectWaterCollision(activeSceneObjectId,waterCollisionInput.checked);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   const lightPanel=document.createElement('section');lightPanel.id='selected-spot-properties';lightPanel.hidden=true;lightPanel.innerHTML='<h3>Light · Spot</h3>';panel.after(lightPanel);
   for(const [key,label,type,step] of [['enabled','Enabled','checkbox',0],['color','Color','color',0],['intensity','Power','number',1],['angle','Cone angle','number',.2],['penumbra','Blend','number',.01]]){
     const row=document.createElement('label');row.className='slider-row';row.innerHTML=`<span class="slider-label">${label}</span><input type="${type}" class="transform-input" ${type==='number'?'step="any"':''}>`;lightPanel.append(row);const input=row.querySelector('input');input.dataset.lightParam=key;
@@ -26585,6 +26609,7 @@ function installSceneConstruction() {
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},

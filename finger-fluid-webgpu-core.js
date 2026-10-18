@@ -1,3 +1,4 @@
+import {SCENE_LIQUID_SUPPORT_ROUTE,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL,SCENE_LIQUID_SUPPORT_WGSL,createSceneLiquidSupport} from './scene-liquid-support.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
@@ -6132,6 +6133,7 @@ fn supportContactFrame(position: vec3<f32>) -> vec4<f32> {
 `;
 
 function supportShaderSourceForRoute(route) {
+  if(route===SCENE_LIQUID_SUPPORT_ROUTE)return {bindings:SCENE_LIQUID_SUPPORT_BINDINGS_WGSL,functions:SCENE_LIQUID_SUPPORT_WGSL};
   if (route === KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) {
     return {
       bindings: ANALYTIC_SUPPORT_BINDINGS_WGSL,
@@ -11089,8 +11091,9 @@ export function validateFingerFluidMovingHillHostFrame(
 }
 
 export function validateFingerFluidLocalHostFrame(hostFrame, options = {}) {
-  if (hostFrame?.supportIdentity !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE) {
-    fingerFluidMovingHillHostFrameFailure('requires the retained analytical support', {
+  const expected=options.expectedSupportIdentity??KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE;
+  if (![KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,SCENE_LIQUID_SUPPORT_ROUTE].includes(expected)||hostFrame?.supportIdentity !== expected) {
+    fingerFluidMovingHillHostFrameFailure('requires the requested local support identity', {
       hostFrame,
       phase: 'validate-local-support',
     });
@@ -11101,7 +11104,7 @@ export function validateFingerFluidLocalHostFrame(hostFrame, options = {}) {
     expectedHostFrameSchema: KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_SCHEMA,
     expectedHostFrameRoute: KAMINOS_FINGER_FLUID_LOCAL_HOST_FRAME_ROUTE,
   });
-  return Object.freeze({...validated,supportIdentity:KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE});
+  return Object.freeze({...validated,supportIdentity:expected});
 }
 
 export function createFingerFluidPerspectiveOrbitCamera({
@@ -13042,6 +13045,7 @@ export async function createWebGPUFingerFluidSolver({
   supportContactRoute = KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,
   presentationMode = KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE,
   movingHillSupportContactProviderFactory = null,
+  sceneColliders = [],
   composedRevision = null,
 } = {}) {
   if (typeof densityCellRejection !== 'boolean') {
@@ -13079,9 +13083,9 @@ export async function createWebGPUFingerFluidSolver({
   }
   if (localAnalyticHostComposition && (
     !safeHostFrameComposition
-    || supportContactRoute !== KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE
+    || ![KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,SCENE_LIQUID_SUPPORT_ROUTE].includes(supportContactRoute)
   )) {
-    movingHillSupportFailure('local analytical presentation requires host-frame composition and retained analytical support');
+    movingHillSupportFailure('local water presentation requires host-frame composition and analytical or authored primitive support');
   }
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
@@ -13121,6 +13125,8 @@ export async function createWebGPUFingerFluidSolver({
   const device = webgpuDevice ?? await adapter.requestDevice({
       requiredLimits: { maxStorageBuffersPerShaderStage: requiredStorageBindings },
     });
+  let sceneSupport=null;
+  if(supportContactRoute===SCENE_LIQUID_SUPPORT_ROUTE){try{sceneSupport=createSceneLiquidSupport(device,sceneColliders);}catch(error){if(ownsDevice)device.destroy();throw error;}}
   let movingHillSupportProvider = null;
   if (supportContactRoute === KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE) {
     if (typeof movingHillSupportContactProviderFactory !== 'function') {
@@ -13143,6 +13149,7 @@ export async function createWebGPUFingerFluidSolver({
     }
   }
   function failFingerFluidInitialization(reason, details = {}) {
+    sceneSupport?.dispose();
     return failFingerFluidWebGPUInitialization({
       provider: movingHillSupportProvider,
       device,
@@ -13461,7 +13468,7 @@ export async function createWebGPUFingerFluidSolver({
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_BINDINGS_TOKEN, supportShaderSource.bindings)
     .replace(KAMINOS_FINGER_FLUID_SUPPORT_FUNCTIONS_TOKEN, supportShaderSource.functions);
   const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: computeShader });
-  const movingHillComputeLayoutEntries = movingHillSupportProvider
+  const movingHillComputeLayoutEntries = (movingHillSupportProvider||sceneSupport)
     ? [
       {
         binding: 12,
@@ -13533,7 +13540,7 @@ export async function createWebGPUFingerFluidSolver({
     return failFingerFluidInitialization(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
   }
   let computeBindGroup;
-  try {
+  function refreshComputeBindGroup(){
     computeBindGroup = device.createBindGroup({
       label: 'kaminos-finger-fluid-compute-bind-group',
       layout: computeLayout,
@@ -13550,13 +13557,14 @@ export async function createWebGPUFingerFluidSolver({
         { binding: 9, resource: { buffer: liquidFireContactRecordsBuffer } },
         { binding: 10, resource: { buffer: liquidFireContactHeaderBuffer } },
         { binding: 11, resource: { buffer: liveInletBuffer } },
-        ...(movingHillSupportProvider ? [
-          { binding: 12, resource: movingHillSupportProvider.sampleTextureView },
-          { binding: 13, resource: { buffer: movingHillSupportProvider.paramsBuffer } },
+        ...((movingHillSupportProvider||sceneSupport) ? [
+          { binding: 12, resource: (movingHillSupportProvider||sceneSupport).sampleTextureView },
+          { binding: 13, resource: { buffer: (movingHillSupportProvider||sceneSupport).paramsBuffer } },
         ] : []),
       ],
     });
-  } catch (error) {
+  }
+  try {refreshComputeBindGroup();} catch (error) {
     return failFingerFluidInitialization(`WebGPU compute bind group validation failed: ${error.message || String(error)}`);
   }
   const energyDiagnosticsModule = device.createShaderModule({
@@ -14617,6 +14625,12 @@ export async function createWebGPUFingerFluidSolver({
     };
   }
 
+  function setSceneColliders(records){
+    if(!sceneSupport)throw Error('Authored primitive support is not active');
+    const before=sceneSupport.sampleTextureView;sceneSupport.update(records);
+    if(before!==sceneSupport.sampleTextureView)refreshComputeBindGroup();
+    return sceneSupport.read();
+  }
   function step(dt = 1 / 60) {
     if (runtimeLifecycle.stopped) return;
     const startedAt = performance.now();
@@ -14807,6 +14821,7 @@ export async function createWebGPUFingerFluidSolver({
         extent: expectedExtent,
         camera: externalCameraSnapshot,
         expectedPipelineIdentity: safeHostFramePipelineIdentity,
+        expectedSupportIdentity:supportContactRoute,
         expectedRemapGeneration: movingHillSupportProvider?.remapEpoch,
       })
       : null;
@@ -15254,7 +15269,7 @@ export async function createWebGPUFingerFluidSolver({
         pipelineIdentity: validatedHostFrame.pipelineIdentity,
         remapGeneration: validatedHostFrame.remapGeneration,
         supportIdentity: localAnalyticHostComposition
-          ? KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE
+          ? supportContactRoute
           : KAMINOS_FINGER_FLUID_MOVING_HILL_SUPPORT_CONTACT_ROUTE,
         sceneColorAttachmentId: validatedHostFrame.sceneColor.attachmentId,
         sceneDepthAttachmentId: validatedHostFrame.sceneDepth.attachmentId,
@@ -15846,10 +15861,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function getParticleOwnershipDescriptor() {
-    const supportContact = createFingerFluidSupportContactIdentity(
-      movingHillSupportProvider,
-      { device },
-    );
+    const supportContact=sceneSupport?Object.freeze({...createFingerFluidSupportContactIdentity(null,{device}),...sceneSupport.read(),sourceId:'authored-scene-primitives',execution:'gpu_same_device_authored_primitive_signed_distance_v0'}):createFingerFluidSupportContactIdentity(movingHillSupportProvider,{device});
     return {
       contract: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_CONTRACT,
       packing: KAMINOS_FINGER_FLUID_PARTICLE_OWNERSHIP_PACKING,
@@ -15890,7 +15902,7 @@ export async function createWebGPUFingerFluidSolver({
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
       supportContactRoute,
-      supportContact: movingHillSupportProvider ? {
+      supportContact: sceneSupport?sceneSupport.read():movingHillSupportProvider ? {
         route: movingHillSupportProvider.route,
         owner: movingHillSupportProvider.owner,
         sourceId: movingHillSupportProvider.sourceId,
@@ -16685,6 +16697,7 @@ export async function createWebGPUFingerFluidSolver({
     neighborTopologyBuffer.destroy();
     materialTracerBuffer.destroy();
     movingHillSupportProvider?.release?.();
+    sceneSupport?.dispose();
     analyticCarrierParticleBuffer.destroy();
     analyticCarrierNeighborTopologyBuffer.destroy();
     analyticCarrierMaterialTracerBuffer.destroy();
@@ -16731,6 +16744,7 @@ export async function createWebGPUFingerFluidSolver({
     render,
     requestDiagnostics,
     setLiveInletPacket,
+    setSceneColliders,
     setAnalyticCarrierOpticalGeometry,
     clearAnalyticCarrierOpticalGeometry,
     getLiquidFireContactDescriptor,

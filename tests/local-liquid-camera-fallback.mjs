@@ -18,7 +18,7 @@ for(const matching of [true,false])for(const mountTransform of [true,false]) {
     dispose(){pipeline.outputColorTransform=mountTransform;}};
   const fields={'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
   runInNewContext(production,{
-    fireLightFieldPass:null,sceneGISettings:{mode:'gtao',view:'scene'},
+    fireLightFieldPass:null,sceneExposureControls:null,sceneGISettings:{mode:'gtao',view:'scene'},
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,

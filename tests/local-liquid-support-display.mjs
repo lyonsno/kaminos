@@ -7,7 +7,7 @@ import { createSceneEdits } from '../scene-edit-session.mjs';
 
 test('new water fields hide demonstration support; saved legacy fields retain it', () => {
   assert.equal(defaultLocalLiquidSetup().showSupportGeometry, false);
-  const old = { ...defaultLocalLiquidSetup() }; delete old.showSupportGeometry;
+  const old = { ...defaultLocalLiquidSetup(),support:'retained_analytical_basin' }; delete old.showSupportGeometry;
   assert.equal(normalizeLocalLiquidSetup(old).showSupportGeometry, true);
   for (const showSupportGeometry of [true, false]) {
     const setup = normalizeLocalLiquidSetup({ ...old, showSupportGeometry });
@@ -24,7 +24,7 @@ test('support visibility changes no inlet publication or source epoch', () => {
   const start = source.indexOf('    setSetup(nextSetup) {');
   const end = source.indexOf('    setPaused(', start);
   const method = source.slice(start, end).trim().replace(/^setSetup/, 'function').replace(/,$/, '');
-  let authored = defaultLocalLiquidSetup(), sourceGeneration = 7, publications = 0;
+  let authored = {...defaultLocalLiquidSetup(),support:'retained_analytical_basin'}, sourceGeneration = 7, publications = 0;
   let authoredEmitters = [], group = { visible: false };
   let publishedEmitterKey = JSON.stringify(localLiquidInletPacket(authored, []).emitters);
   const solver = { setLiveInletPacket() { publications++; } };
