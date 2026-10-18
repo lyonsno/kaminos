@@ -1430,6 +1430,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
+        <span class="slider-label" id="volume-physical-temperature-label" title="Used by the transported heat + soot material that stands in where the Physics law cannot draw (the authored reaction law). Under the reactant law the Physics law maps heat to Kelvin per heat instead.">Peak soot K</span>
+        <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
+        <span class="slider-val" id="volume-physical-temperature-val">1900</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Kelvin spread</span>
+        <input type="range" id="volume-physical-spread" min="0" max="5200" step="any" value="900">
+        <span class="slider-val" id="volume-physical-spread-val">900</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label" id="volume-physical-thermal-label">Thermal emission</span>
         <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
         <span class="slider-val" id="volume-physical-thermal-val">1</span>
@@ -16745,6 +16755,8 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
   { key: 'physicalSmokeAlbedo', id: 'volume-physical-smoke-albedo', param: 'volume_physical_smoke_albedo', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalAmbient', id: 'volume-physical-ambient', param: 'volume_physical_ambient', min: 0, max: 1, continuous: true, decimals: 3 },
+  { key: 'physicalTemperature', id: 'volume-physical-temperature', param: 'volume_physical_temperature', min: 800, max: 6000, continuous: true, decimals: 0 },
+  { key: 'physicalTemperatureSpread', id: 'volume-physical-spread', param: 'volume_physical_spread', min: 0, max: 5200, continuous: true, decimals: 0 },
   { key: 'physicalThermalStrength', id: 'volume-physical-thermal', param: 'volume_physical_thermal', min: 0, max: 20, continuous: true, decimals: 2 },
   { key: 'physicalCleanStrength', id: 'volume-physical-clean', param: 'volume_physical_clean', min: 0, max: 5, continuous: true, decimals: 3 },
   { key: 'physicalExposureEV', id: 'volume-physical-exposure', param: 'volume_physical_exposure', min: -8, max: 8, continuous: true, decimals: 2 },

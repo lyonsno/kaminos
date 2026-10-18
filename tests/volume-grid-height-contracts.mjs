@@ -195,7 +195,7 @@ test('cockpit: a width-multiplier height row with help, snapshot, debounced list
   const control = schema.controls.find(c => c.key === 'volume-grid-height-ratio');
   assert.deepEqual(control, { key: 'volume-grid-height-ratio', param: 'volume_grid_height_ratio', tagName: 'INPUT', type: 'number', additiveDefault: 2, additiveSinceControlCount: 249 });
   assert.ok(!schema.controls.some(c => c.key === 'volume-grid-height-cells'));
-  assert.equal(schema.controlCount, 143); assert.equal(schema.controls.length, 143); // 249 + the reaction law select and the two reactant controls + the three physics-appearance controls + the appearance model + the three wavelet turbulence controls
+  assert.equal(schema.controlCount, 145); assert.equal(schema.controls.length, 145); // 249 + the reaction law select and the two reactant controls + the three physics-appearance controls + the appearance model + the three wavelet turbulence controls
 });
 
 // Noah 2026-10-12, contract: editing the height previews it (the box bounds

@@ -83,6 +83,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
     ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
+    ['volume-physical-temperature','Peak soot K'], ['volume-physical-spread','Kelvin spread'],
     ] },
   { name:'Smoke', view:'look', open:true, fields:[
     ['volume-density','Density'], ['volume-physical-smoke-extinction','Extinction'],
