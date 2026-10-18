@@ -5,6 +5,12 @@ import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
 const activeBatches=new WeakSet();
+// Radial-distance cube sampled without environment rotation at the class level,
+// so copies made by .level() (and compute builds) never pull in the
+// material/scene environment rotation, which has no frame in a compute pass.
+class RadialDistanceCubeNode extends THREE.CubeTextureNode {
+  setupUV(builder,uvNode){return builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem?vec3(uvNode.x.negate(),uvNode.yz):uvNode;}
+}
 function prepareShadowScene(scene) {
   scene.updateMatrixWorld(true);
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3(),casters=[];
@@ -111,11 +117,21 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
   const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
+  // Hard visibility of the same cube from any world point (no screen
+  // derivatives), for world-point light probes such as creature senses.
+  const visibilityAt=(pointNode,pointNormalNode)=>{
+    const toSource=sourceNode.sub(pointNode),sign=mix(float(-1),float(1),step(float(0),pointNormalNode.dot(toSource)));
+    const offset=pointNormalNode.mul(sign).mul(toSource.length().mul(2/resolution).max(.001));
+    const pointDelta=pointNode.add(offset).sub(sourceNode),pointDistance=pointDelta.length();
+    const radial=THREE.TSL.nodeObject(new RadialDistanceCubeNode(target.texture,pointDelta.div(pointDistance.max(.00001)))).level(0).r;
+    const hard=step(pointDistance.sub(pointDistance.mul(2/resolution).max(.001)),radial);
+    return mix(float(1),hard,enabled.mul(effective));
+  };
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
     prepareSampling(){filterDifferential?.toStack();},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
-    visibility,
+    visibility,visibilityAt,
     resource() {
       return {texture:status.effective ? renderer.backend.get(target.texture).texture : null,
         effective:status.effective, resolution, colorTexture:target.texture};

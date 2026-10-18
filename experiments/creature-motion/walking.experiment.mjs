@@ -12,7 +12,7 @@ import {mountCreatureProperties} from './creature-properties.mjs';
 import {createWanderMotion,wanderAreaInPlacement} from './wander-motion.mjs';
 import {createLiveActorRoot} from './live-actor-root.mjs';
 import {registerSceneObjectPoseHistory} from '../../scene-object-pose-history.mjs';
-import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests} from './creature-attention.mjs';
+import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests,lightSamplePoints} from './creature-attention.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
@@ -64,7 +64,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   checkAuthoredTransform(t);
   placement.position.fromArray(t.position);placement.quaternion.fromArray(t.quaternion);placement.scale.fromArray(t.scale);
  }
- let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
+ let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,flames=null,lightTimer=null,lightBusy=false,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  const liveRoot=inputs.actor_root==='live'?createLiveActorRoot({THREE,placement,getGuide:()=>pathGuide}):null;
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
@@ -159,7 +159,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -198,6 +198,27 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     options:{document,onEvent:event=>record({...event,kind:`attention.${event.kind}`})}});
    attentionSkin=data.source.caseSha256;placement.add(attention.reticle);
    if(inputs.attention.enabled===false)attention.setEnabled(false);
+   // Light sense: while moving, sample the fire's light at a ring of ground
+   // points around the creature (world space, independent of any camera).
+   const senseLight=async()=>{
+    const probe=globalThis.window?.kaminosFireLightProbe;
+    if(disposed||lightBusy||!probe||!attention||player?.read().status!=='playing')return;
+    lightBusy=true;
+    try{
+     runtime.group.updateMatrixWorld(true);
+     const at=name=>new THREE.Vector3().setFromMatrixPosition(runtime.bones.get(name).matrixWorld),head=at('head'),chest=at('spine-chest');
+     let ground=Infinity;for(const [name,bone] of runtime.bones)if(/toe/.test(name))ground=Math.min(ground,bone.matrixWorld.elements[13]);
+     if(!Number.isFinite(ground))ground=chest.y;
+     const center=head.clone().add(chest).multiplyScalar(.5),radius=Math.max(.3,head.distanceTo(chest)*1.5);
+     const points=lightSamplePoints({center:center.toArray(),radius,ground:ground+.02}).map(position=>({position,normal:[0,1,0]}));
+     const result=await probe.sample(points);
+     if(disposed||!attention)return;
+     const flame=flames?.read()?.[0]??null;
+     attention.sense({time:clock/1000,status:result.status,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+    }catch(error){record({kind:'attention.light',phase:'failed',error:error.message});}
+    finally{lightBusy=false;}
+   };
+   lightTimer=setInterval(senseLight,250);
   }
   placement.name=inputs.label??'Creature';
   asset=await session.attach(placement,{owned:true,metadata:{fileName:placement.name,source:inputs.case,label:placement.name}});

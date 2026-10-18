@@ -2336,7 +2336,10 @@ assert.match(core, /leanStockRenderPipelineConstants = \{ \.\.\.renderPipelineCo
 // response to the fire's actual position.
 assert.match(index, /latticeGradient = vec3\(/, 'receiver recovers incident direction from the lattice luminance gradient');
 assert.match(index, /worldNormalNode = sceneCameraWorldMatrix\.mul\(vec4\(normalSampleNode, 0\.0\)\)/, 'receiver rotates the prepass view-space normal into world space for shading');
-assert.match(index, /worldNormalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
+assert.match(index, /normalNode\.dot\(lightDirection\)/, 'receiver shades with N.L against the recovered fire direction');
+assert.match(index, /fireLightAt\(worldPositionNode, worldNormalNode\)/, 'receiver pixels shade through the shared fire light function with world position and world normal');
+assert.match(index, /fireShadow\.visibilityAt\(point, normal\)/, 'world-point light probes use the same fire shadow cube as receiver pixels');
+assert.match(index, /fireLightAt\(point, normal\)\.signal/, 'world-point light probes use the same fire light function as receiver pixels');
 assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the camera-facing shading stand-in must not return');
 
 // Far-field radiance: the diffusion lattice carries light only ~4 cells from
@@ -2346,7 +2349,7 @@ assert.doesNotMatch(index, /facingResponse = normalSampleNode\.z\.abs\(\)/, 'the
 assert.match(core, /fn csIrradianceAnalytic/, 'producer reduces the lattice to far-field meta each frame');
 assert.match(core, /fire-irradiance-far-field-meta-v0/, 'far-field meta carries a stable identity');
 assert.match(core, /metaTexture: irradianceMetaTexture/, 'light field export hands consumers the far-field meta texture');
-assert.match(index, /farVector = fireCenterWorld\.sub\(worldPositionNode\)/, 'receiver builds the radial vector from the reduced fire center');
+assert.match(index, /farVector = fireCenterWorld\.sub\(positionNode\)/, 'receiver builds the radial vector from the reduced fire center');
 assert.match(index, /farDistanceSq\.mul\(2\.5\)\.add\(0\.25\)/, 'far term falls off with squared distance, softened at the flame core');
 assert.match(index, /nearSignal\.add\(farSignal\)/, 'near-field and far-field compose additively before masking');
 

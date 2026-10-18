@@ -1,7 +1,7 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
-import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests} from '../experiments/creature-motion/creature-attention.mjs';
+import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests,flameInterests,lightSamplePoints} from '../experiments/creature-motion/creature-attention.mjs';
 
 // A small quadruped spine in the retained rigs' convention: rest rotations map
 // head-local +Y to rest -Z (forward) and head-local +Z to rest +Y (up).
@@ -181,19 +181,6 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
- // A flame flaring up behind the creature is still noticed, and the head turns
- // as far as it can toward it even beyond comfortable reach.
- const c=creature(),flame={id:'flame',label:'flame',point:[1.2,.6,.5],interest:1.5,noticeRadius:12,eventFieldOfView:2*Math.PI,active:true,version:0,restless:true,forgetSeconds:8,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
- let w=watch(attention,c,3,0),t=w.t;
- assert.equal(looks(w.rows).length,0,'a steady flame behind it is not seen');
- const before=alignment(c.bones,flame.point);
- flame.version++;w=watch(attention,c,1.5,t);t=w.t;
- assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],`a flare behind it draws a look (${JSON.stringify(looks(w.rows))})`);
- assert.ok(alignment(c.bones,flame.point)>before+.15,`the head turns toward it as far as it can (${before.toFixed(3)} -> ${alignment(c.bones,flame.point).toFixed(3)})`);
-}
-
-{
  // No invisible looks: something off to the side beyond neck reach does not
  // win attention by mere presence (the head could not turn to it anyway).
  const c=creature(),side=[1,.5,-1.95];
@@ -214,6 +201,48 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // Light sense: the creature samples light around itself and notices change,
+ // not brightness. A flare behind it draws a look at the light's source; a
+ // sudden shadow on one side draws a look there; steady light does nothing.
+ const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
+ let level=ring.map(()=>.1),t=0;
+ const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,samples:ring.map((point,i)=>({point,luminance:level[i]}))});const w=watch(attention,c,.25,t);t=w.t;}};
+ step(4);assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,'steady light draws nothing');
+ const before=alignment(c.bones,fire.point);
+ level=level.map(l=>l*2.5);step(1.5);
+ let seen=attention.read().history.filter(e=>e.kind==='look');
+ assert.deepEqual(seen.map(e=>[e.id,e.cause]),[['flame-emitter','light flared']],`a flare behind it draws a look at the source (${JSON.stringify(seen)})`);
+ assert.ok(alignment(c.bones,fire.point)>before+.1,'and the head turns toward it');
+ step(12);
+ const after=attention.read().history.filter(e=>e.kind==='look').length;
+ step(8);assert.equal(attention.read().history.filter(e=>e.kind==='look').length,after,'once adapted, the brighter light draws nothing more');
+ level[2]=level[2]*.15;step(1.5);
+ seen=attention.read().history.filter(e=>e.kind==='look').slice(after);
+ assert.equal(seen.length,1,'a sudden shadow draws one look');assert.equal(seen[0].cause,'shadow');
+ const focus=attention.read().focus?.point??attention.read().aim;
+ assert.ok(Math.hypot(focus[0]-ring[2][0],focus[2]-ring[2][2])<.05,'at the place the shadow fell');
+ assert.doesNotThrow(()=>attention.sense({time:t,source:fire,samples:null,status:'unavailable'}),'an unavailable probe is not an event');
+ assert.equal(attention.read().light.status,'unavailable','and is reported as such');
+}
+
+{
+ // Walking through static light and shade is not an event: light is tracked per
+ // patch of ground, so a fixed shadow edge passing under the creature's moving
+ // sample ring draws nothing; a shadow that falls on a patch it already knows does.
+ const c=creature(),fire={id:'flame-emitter',label:'flame',point:[6,.6,-2]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const field=(x)=>x<1?.02:.3;let t=0,offset=-2;
+ const ringAt=dx=>lightSamplePoints({center:[dx,0,-1.8],radius:.7,ground:0});
+ for(let k=0;k<64;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,samples:ring.map(point=>({point,luminance:field(point[0])}))});t=watch(attention,c,.25,t).t;}
+ assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,`walking across a static shadow edge draws nothing (${JSON.stringify(attention.read().history)})`);
+ // While still walking, the flame flares: that is a change in the world and is noticed.
+ for(let k=0;k<8;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,samples:ring.map(point=>({point,luminance:field(point[0])*2.5}))});t=watch(attention,c,.25,t).t;}
+ assert.deepEqual(attention.read().history.filter(e=>e.kind==='look').map(e=>e.cause),['light flared'],'a flare while walking is noticed');
+}
+
+{
  // A flame is seen from much farther than an ordinary prop: per-source range.
  const c=creature(),far=[1.5,.9,-6];
  const prop=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'prop',point:far,interest:1}]});
@@ -230,12 +259,11 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const workbench={read:()=>{reads++;return structuredClone(state);},subscribe:fn=>{listener=fn;return ()=>{listener=null;};}};
  const flames=flameInterests({THREE,root:()=>scene,workbench,interest:1.5,now:()=>clock});
  let [row]=flames.read();
- assert.equal(row.active,false,'unlit flame is reported as not active');assert.ok(row.noticeRadius>=10,'a flame is visible from afar');assert.ok(row.eventFieldOfView>=2*Math.PI-1e-9,'its changes are noticed all around');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');
+ assert.equal(row.active,false,'unlit flame is reported as not active');assert.ok(row.noticeRadius>=10,'a flame is visible from afar');assert.deepEqual(row.point,[1,2,3]);assert.equal(row.causes.lit,'flame lit');assert.equal(row.causes.changed,undefined);
  state.active=true;clock+=100;[row]=flames.read();assert.equal(row.active,false,'not re-read within the poll interval');
  clock+=600;[row]=flames.read();assert.equal(row.active,true);assert.equal(row.restless,true,'a burning flame is restless');
- const before=row.version;listener();[row]=flames.read();assert.equal(row.version,before,'an unrelated edit notification is not a flame change');
- state.settings={domControls:{'volume-fuel':{value:2}}};listener();[row]=flames.read();assert.equal(row.version,before+1,'a change in the flame settings is a change, picked up at once');
- listener();[row]=flames.read();assert.equal(row.version,before+1,'and counted once');
+ assert.equal(row.version,undefined,'flares are not read from flame settings; they arrive as light');
+ state.paused=true;listener();[row]=flames.read();assert.equal(row.restless,false,'an edit notification re-reads the flame at once');state.paused=false;clock+=600;[row]=flames.read();
  state.paused=true;clock+=600;[row]=flames.read();assert.equal(row.restless,false,'a frozen flame does not flicker');
  const polled=reads;for(let i=0;i<10;i++)flames.read();assert.equal(reads,polled,'reads are throttled, not per call');
  emitter.removeFromParent();clock+=600;assert.deepEqual(flames.read(),[],'no flame source, no flame interest');

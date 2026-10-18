@@ -36,6 +36,19 @@ export function deriveHeadProfile({skin,frame,head='head',tip='head-end',chest='
  return {forward,up,method:'front-most head-weighted rest vertices',headWeightedVertices:rows.length,sampled:count,muzzleRest:front};
 }
 
+// Ground points around a creature for sampling light, snapped to a fixed world
+// grid so a point sampled again is the same point: static light and shade read
+// the same each time, and only real change in the world shows up.
+export function lightSamplePoints({center,radius,ground,count=8,cell=.25}) {
+ if(!Array.isArray(center)||center.length!==3||!center.every(Number.isFinite)||!Number.isFinite(radius)||radius<=0||!Number.isFinite(ground))throw Error('Light samples require a finite center, radius and ground height');
+ const snap=v=>Math.round(v/cell)*cell,seen=new Set(),points=[];
+ for(let i=0;i<count;i++){
+  const x=snap(center[0]+Math.cos(i/count*Math.PI*2)*radius),z=snap(center[2]+Math.sin(i/count*Math.PI*2)*radius),key=`${x},${z}`;
+  if(!seen.has(key)){seen.add(key);points.push([x,ground,z]);}
+ }
+ return points;
+}
+
 const smooth=(rate,dt)=>1-Math.exp(-dt/Math.max(rate,1e-6));
 // Small deterministic generator so idle looking around replays identically.
 function generator(seed){let a=seed>>>0||1;return ()=>{a=(a+0x6D2B79F5)>>>0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return ((t^t>>>14)>>>0)/4294967296;};}
@@ -47,12 +60,14 @@ function generator(seed){let a=seed>>>0||1;return ()=>{a=(a+0x6D2B79F5)>>>0;let 
 export function createCreatureAttention({THREE,rigFrame,profile,interests,options={}}) {
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
-  idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
+  adaptSeconds:2.5,flareAt:.35,shadowAt:.5,lightFloor:.002,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
  let look=lookFor(profile);
- const random=generator(o.seed),memory=new Map(),history=[];
+ const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
+ let light={status:'none',time:null,samples:0,last:null,flareArmed:true};
+ const patches=new Map();
  let weight=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -99,7 +114,16 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    candidates=[];const observations=[];
-   for(const source of interests()){
+   // Light events sensed since the last frame: alert the creature to their
+   // source wherever it is (light reaches all around).
+   for(const event of pendingLight.splice(0)){
+    const m=memo(event.id);m.familiarity*=.4;m.impulse=Math.max(m.impulse,event.strength);m.cause=event.cause;m.alerted=true;m.eventAt=time;m.inspected=false;
+    // The light already reached the creature, so its source counts however far.
+    lightSources.set(event.id,{id:event.id,label:event.label,point:event.point,interest:event.strength,noticeRadius:Infinity,until:time+o.impulseSeconds*3});
+   }
+   const listed=interests(),ids=new Set(listed.map(x=>x.id));
+   for(const [id,x] of lightSources)if(time>x.until&&focus?.id!==id)lightSources.delete(id);
+   for(const source of [...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))]){
     const m=memo(source.id),significance=source.interest,active=source.active!==false;
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
     // forgetting time: a restless source never stays familiar for long.
@@ -115,7 +139,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // than steady presence; once alerted, the creature looks until it has seen it.
     const wide=active&&source.eventFieldOfView?sight(source.point,range,source.eventFieldOfView):plain;
     if((lit||changed)&&wide.visible){m.alerted=true;m.eventAt=time;}
-    const s=m.alerted&&wide.visible?wide:plain;
+    const s=m.alerted&&active?sight(source.point,range,2*Math.PI):plain;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;
     if(s.visible){
@@ -123,7 +147,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
      else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
      else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
-     else if(!m.seen&&!m.inspected){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
+     else if(!m.seen&&!m.inspected&&m.eventAt!==time){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
      m.everSeen=true;
     }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}
     m.seen=s.visible;m.last=[...source.point];
@@ -136,7 +160,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // It waits its turn: only a fresh event interrupts an ongoing inspection.
     const inspecting=focus&&!focus.id.startsWith('look-around-');
     const pending=m.everSeen&&!m.inspected&&(!inspecting||attended)?significance*(1-m.familiarity):0;
-    if(pending>m.impulse&&!attended)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
+    if(pending>m.impulse&&!attended&&m.eventAt!==time)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
     // Only a sudden event can draw the eye beyond comfortable neck reach;
@@ -198,8 +222,42 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   }catch(failure){error=failure.message;reticle.visible=false;throw failure;}
  }
 
+ // Light around the creature, sampled elsewhere (e.g. the fire light field at
+ // world points). Change against a slowly adapting baseline is what counts:
+ // a flare draws a look at the light's source, a sudden local darkening
+ // draws a look at where the shadow fell. Steady light, bright or dim, does not.
+ function sense({time,samples,source=null,status='effective'}){
+  if(!enabled)return;
+  if(status!=='effective'||!Array.isArray(samples)){light={...light,status,time};return;}
+  if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
+  const dt=light.time===null?0:Math.max(0,time-light.time);
+  // Light is remembered per fixed patch of ground, not per sample slot, so
+  // walking through static light and shade changes nothing; a patch seen for
+  // the first time simply starts its own baseline.
+  const k=smooth(o.adaptSeconds,dt),eps=o.lightFloor;let flare=null,shadow=null,brightest=-Infinity;
+  for(const x of samples){
+   if(!Number.isFinite(x.luminance)||!Array.isArray(x.point))continue;
+   const key=`${x.point[0].toFixed(4)},${x.point[2].toFixed(4)}`;
+   let patch=patches.get(key);
+   if(!patch){patches.set(key,{value:x.luminance,armed:true,seen:time});continue;}
+   const change=Math.log((x.luminance+eps)/(patch.value+eps));
+   brightest=Math.max(brightest,change);
+   // Each change is reported once; it re-arms after the light settles.
+   if(change>o.flareAt&&light.flareArmed&&(!flare||change>flare.change))flare={change};
+   if(change<-o.shadowAt&&patch.armed&&(!shadow||change<shadow.change))shadow={change,point:x.point,patch};
+   if(change>-o.shadowAt*.5)patch.armed=true;
+   patch.value+=(x.luminance-patch.value)*k;patch.seen=time;
+  }
+  for(const [key,patch] of patches)if(time-patch.seen>o.lightForgetSeconds)patches.delete(key);
+  if(brightest<o.flareAt*.5)light.flareArmed=true;
+  if(flare)light.flareArmed=false;
+  if(shadow)shadow.patch.armed=false;
+  if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change)});
+  if(shadow)pendingLight.push({id:'shadow',label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6-shadow.change*.5)});
+  light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
+ }
  function read(){
-  return {enabled,weight,reachable,error,profile:structuredClone(profile),
+  return {enabled,weight,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
@@ -208,7 +266,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
- return Object.freeze({modify,read,setEnabled,setProfile,reticle,dispose});
+ return Object.freeze({modify,sense,read,setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that
@@ -243,24 +301,22 @@ export function sceneObjectInterests({THREE,root,specs}) {
 }
 
 // The scene's flame as an interest, read through the shared flame workbench.
-// It can be seen only while burning; edits are changes; while burning and not
-// frozen it is restless, so creatures keep glancing back at it.
+// It can be seen only while burning, and while burning and not frozen it is
+// restless, so creatures keep glancing back at it. Flares are not read from
+// its settings: they reach creatures as light, through the light sense.
 export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emitter',pollMs=500,now=()=>performance.now()}) {
  if(typeof workbench?.read!=='function')throw Error('Flame interest requires the shared flame workbench');
  if(!Number.isFinite(interest)||interest<0)throw Error('Flame interest must be finite and nonnegative');
- let version=0,state={active:false,paused:false},polled=-Infinity,cached=null,fingerprint=null,dirty=false;
- // Edit notifications cover any scene edit; only a change in the flame's own
- // settings counts as the flame changing. A notification just re-reads now.
+ let state={active:false,paused:false},polled=-Infinity,cached=null,dirty=false;
+ // Edits re-read the flame's state promptly instead of waiting for the poll.
  const unsubscribe=workbench.subscribe?.(()=>{dirty=true;})??(()=>{});
- const settingsPrint=settings=>JSON.stringify(['domControls','rendererControls'].map(axis=>Object.entries(settings?.[axis]??{}).map(([id,d])=>[id,d?.value]).sort()));
  function find(){const scene=root();if(cached&&cached.userData?.kaminosSceneObject?.id===id){let node=cached;while(node.parent)node=node.parent;if(node===scene)return cached;}
   cached=null;scene.traverse(node=>{if(!cached&&node.userData?.kaminosSceneObject?.id===id)cached=node;});return cached;}
  function read(){
   const object=find();if(!object)return [];
-  const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};
-   const print=settingsPrint(r?.settings);if(fingerprint!==null&&print!==fingerprint)version++;fingerprint=print;}catch{state={active:false,paused:false};}}
-  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,eventFieldOfView:2*Math.PI,active:state.active,version,
-   restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',changed:'flared up',again:'flickering'}}];
+  const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};}catch{state={active:false,paused:false};}}
+  return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,active:state.active,
+   restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',again:'flickering'}}];
  }
  return Object.freeze({read,dispose(){unsubscribe();}});
 }
