@@ -34,7 +34,9 @@ fn continuousDetailPosition(p: vec3<f32>) -> vec3<f32> {
   if (sceneSolidAt(vec3<i32>(floor(cell)))) { return p; }
   let a = continuousDetailNoise(waveletCoordSample(cell, 0));
   let b = continuousDetailNoise(waveletCoordSample(cell, 1));
-  let weight = waveletBlendA(u32(u.continuous_detail.z), WAVELET_COHERENCE_PERIOD_STEPS);
+  // The generation stamp stays with the consumed texture during both moving and held draws.
+  let phase = textureLoad(waveletCoordSrc, vec3<i32>(0), 0).w;
+  let weight = waveletBlendA(u32(phase), WAVELET_COHERENCE_PERIOD_STEPS);
   let n = mix(b, a, weight);
   let edge = min(cell, vec3<f32>(f32(GRID), f32(GRID_Y), f32(GRID)) - cell);
   let fade = smoothstep(0.0, 1.0, min(edge.x, min(edge.y, edge.z)));

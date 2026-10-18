@@ -4009,7 +4009,7 @@ fn waveletCoordLoad(c: vec3<i32>, setIndex: i32) -> vec3<f32> {
   return textureLoad(waveletCoordSrc, vec3<i32>(clampCell(c)) + vec3<i32>(0, 0, setIndex * i32(GRID)), 0).xyz;
 }
 fn waveletCoordStore(c: vec3<i32>, setIndex: i32, coord: vec3<f32>) {
-  textureStore(waveletCoordDst, c + vec3<i32>(0, 0, setIndex * i32(GRID)), vec4<f32>(coord, 0.0));
+  textureStore(waveletCoordDst, c + vec3<i32>(0, 0, setIndex * i32(GRID)), vec4<f32>(coord, u.wavelet_turbulence.w));
 }
 // Trilinear read of one coordinate set at a cell-space position (values live at
 // cell centres).
@@ -17093,8 +17093,7 @@ export function createKaminosVolumePrototype({
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     const continuousDetail = resolveContinuousDetail(controlsSnapshot);
     state.continuousDetail = continuousDetail;
-    // The published coordinates were last written using the preceding step's phase.
-    uniforms.set([continuousDetail.amount, continuousDetail.scale, Math.max(0, state.simStepCount - 1), 0], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
+    uniforms.set([continuousDetail.amount, continuousDetail.scale, 0, 0], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted || continuousDetail.admitted, waveletTurbulence.effective.admitted)) {
