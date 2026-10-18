@@ -66,7 +66,7 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
   const external=new THREE.ExternalTexture(gpu);external.image={width:plan.size[0],height:plan.size[1]};
   external.type=THREE.HalfFloatType;external.format=THREE.RGBAFormat;external.colorSpace=THREE.NoColorSpace;
   external.minFilter=external.magFilter=THREE.LinearFilter;external.generateMipmaps=false;external.flipY=false;
-  const {uniform,vec2,float,int,texture,Fn,If,mix}=THREE.TSL;
+  const {uniform,vec2,vec3,float,int,texture,Fn,If,mix}=THREE.TSL;
   const lo=uniform(new THREE.Vector3(-1,-1,-1)),hi=uniform(new THREE.Vector3(1,3,1));
   let bound=null,group=null,metadata=null,disposed=false;
   return {
@@ -74,7 +74,8 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
     visibility(source,receiver,index){return Fn(()=>{
       const delta=receiver.sub(source),distance=delta.length();
       const far=source.sub(lo).abs().max(source.sub(hi).abs()).length();
-      const cube=cubeCoordinates(delta.div(distance.max(1e-20)));
+      const ray=distance.greaterThan(0).select(delta.div(distance.max(1e-20)),vec3(1,0,0));
+      const cube=cubeCoordinates(ray);
       const uv=cube.xy.clamp(.5/resolution,1-.5/resolution);
       const x=distance.div(far).mul(steps).clamp(0,steps),base=x.floor();
       const read=endpoint=>{
