@@ -9,5 +9,5 @@ test('collision inspector names an unread GPU field without formatting a fabrica
  const input={},status={},resolution={};
  const context={document:{getElementById:id=>id==='kiln-collision-enabled'?input:id==='kiln-collision-status'?status:resolution},volumePrototype:{debugState:()=>({simGridDimensions:[32,32,32]})},isAuthoredKilnCollisionRoute:()=>true,sceneObjects:[{collision:{enabled:true}}],syncCollisionVoxelView(){}};
  vm.runInNewContext(fn+';syncKilnCollisionControl({requested:true,effective:"mesh-voxel-solid",backend:"gpu",solidCellCount:null})',context);
- assert.equal(status.textContent,'Active · GPU solid field');
+ assert.match(status.textContent,/unverified/i);
 });

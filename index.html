@@ -3108,7 +3108,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
   const text=!enabled?'Scene collisions off'
     : !sceneObjects.some(record=>record.collision?.enabled)?'No objects marked as obstacles'
     : !collision?.requested?'Updating collision…'
-    : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?'Active · GPU solid field':`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
+    : collision.effective==='mesh-voxel-solid'?(collision.backend==='gpu'?(collision.validation==='explicit-gpu-snapshot'?'Active · GPU solid field':'Submitted · GPU solid field unverified'):`Active · ${collision.solidCellCount.toLocaleString()} solid cells`)
     : `Unavailable · ${collision.reason||'waiting for obstacle geometry'}`;
   if(status.textContent!==text)status.textContent=text;
   const voxelResolution=document.getElementById('kiln-voxel-resolution');
@@ -3522,7 +3522,7 @@ window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n)
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
- fireProxySync.sync({prototype:volumePrototype,visible:isSceneItemVisible('flame-field'),display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),pickable:!!activeSceneComposition&&isSceneItemVisible('flame-field'),camera,layerId:FIRE_PROXY_LAYER,
+ fireProxySync.sync({prototype:volumePrototype,visible:isSceneItemVisible('flame-field')&&volumePrototype?.canvasElement?.()?.style.opacity!=='0',display:viewportDisplay.fire==='proxy',required:proxyRequirements.has('fire'),pickable:!!activeSceneComposition&&isSceneItemVisible('flame-field')&&volumePrototype?.canvasElement?.()?.style.opacity!=='0',camera,layerId:FIRE_PROXY_LAYER,
   canvas:document.getElementById('kaminos-volume-canvas'),bridge:volumeBridge,stepEvery:fireProxyStepEvery});
 }
 window.kaminosFireProxyStyle=patch=>{const style=fireProxySync?.layer()?.setStyle(patch)??null;window._kaminosDirty?.();return style;};
@@ -6673,6 +6673,7 @@ function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPoin
 
 function pickVisibleFlameFromViewportPointer(hits) {
   if(!isSceneItemVisible('flame-field')||!activeSceneComposition||selectionCaptureSuspended||!volumePrototype?.isActive?.())return null;
+  if(volumePrototype.canvasElement?.()?.style.opacity==='0')return null;
   let maxDistance=camera.far;
   for(const hit of hits){
     const record=sceneObjectRecordForDescendant(hit.object);
