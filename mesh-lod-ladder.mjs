@@ -322,3 +322,48 @@ export function measureGeometricError({source, level, closestSource, closestLeve
     levelToSource: {...stats(forward.distances), normalDeviationDegrees: stats(forward.angles)},
     sourceToLevel: {...stats(backward.distances), normalDeviationDegrees: stats(backward.angles)}};
 }
+
+// World-space triangles of a GLB: every triangle primitive in the default scene, with each
+// node's matrix or translation/rotation/scale applied down the hierarchy. Positions must be
+// float32 (quantized or compressed positions are refused rather than misread). Used to compare
+// a level with the hero a consumer would otherwise draw, in the frame both are drawn in.
+export function readGLBWorldMesh(glb) {
+  const view = new DataView(glb);
+  if (view.getUint32(0, true) !== 0x46546c67) throw Error('not a GLB');
+  const jsonLength = view.getUint32(12, true), json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)));
+  const binStart = 28 + jsonLength;
+  const mul = (a, b) => { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c*4+r] += a[k*4+r] * b[c*4+k]; return o; };
+  const local = node => {
+    if (node.matrix) return node.matrix.slice();
+    const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1], [sx, sy, sz] = node.scale ?? [1, 1, 1], [tx, ty, tz] = node.translation ?? [0, 0, 0];
+    return [(1-2*(y*y+z*z))*sx, 2*(x*y+z*w)*sx, 2*(x*z-y*w)*sx, 0, 2*(x*y-z*w)*sy, (1-2*(x*x+z*z))*sy, 2*(y*z+x*w)*sy, 0,
+            2*(x*z+y*w)*sz, 2*(y*z-x*w)*sz, (1-2*(x*x+y*y))*sz, 0, tx, ty, tz, 1];
+  };
+  const read = (index, width) => {
+    const a = json.accessors[index]; if (a.sparse) throw Error('sparse accessors are not read');
+    const bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5122: Int16Array, 5121: Uint8Array, 5120: Int8Array}[a.componentType];
+    if (!T) throw Error(`unsupported component type ${a.componentType}`);
+    const stride = bv.byteStride || width * T.BYTES_PER_ELEMENT, base = binStart + (bv.byteOffset || 0) + (a.byteOffset || 0), out = new T(a.count * width);
+    for (let i = 0; i < a.count; i++) out.set(new T(glb.slice(base + i * stride, base + i * stride + width * T.BYTES_PER_ELEMENT)), i * width);
+    return {array: out, componentType: a.componentType};
+  };
+  const vertices = [], faces = [];
+  const visit = (index, parent) => {
+    const node = json.nodes[index], world = mul(parent, local(node));
+    if (node.mesh !== undefined) for (const primitive of json.meshes[node.mesh].primitives) {
+      if ((primitive.mode ?? 4) !== 4) throw Error('only triangle primitives are read');
+      if (primitive.extensions?.KHR_draco_mesh_compression) throw Error('compressed primitives are not read');
+      const p = read(primitive.attributes.POSITION, 3);
+      if (p.componentType !== 5126) throw Error('float positions required (quantized positions are not read)');
+      const base = vertices.length / 3;
+      for (let i = 0; i < p.array.length; i += 3) { const [x, y, z] = [p.array[i], p.array[i+1], p.array[i+2]];
+        vertices.push(world[0]*x + world[4]*y + world[8]*z + world[12], world[1]*x + world[5]*y + world[9]*z + world[13], world[2]*x + world[6]*y + world[10]*z + world[14]); }
+      const ix = primitive.indices !== undefined ? read(primitive.indices, 1).array : Uint32Array.from({length: p.array.length / 3}, (_, i) => i);
+      for (const i of ix) faces.push(base + i);
+    }
+    for (const child of node.children ?? []) visit(child, world);
+  };
+  const identity = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
+  for (const root of json.scenes?.[json.scene ?? 0]?.nodes ?? json.nodes.map((_, i) => i)) visit(root, identity);
+  return {vertices: Float32Array.from(vertices), faces: Uint32Array.from(faces)};
+}

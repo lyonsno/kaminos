@@ -2742,8 +2742,11 @@ def mesh_lod_level_index():
     for path in root.glob('.*.glb.lods.json'):
         source = path.name[1:-len('.glb.lods.json')]
         try:
-            for level in read_mesh_lod_set(source)['levels']:
+            record = read_mesh_lod_set(source)
+            for level in record['levels']:
                 index[level['sha256']] = {'source': source, 'faces': level['faces']}
+            for level in record.get('retired', []):
+                index[level['sha256']] = {'source': source, 'faces': level['faces'], 'retired': True}
         except (ValueError, MeshLodRecordError, KeyError, OSError):
             continue
     return index
@@ -2778,8 +2781,17 @@ def save_mesh_lod_level(payload):
             raise ValueError('Registered level is immutable')
         same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256']
                           and l['faces'] == level['faces'] and l['route'] == level['route']), None)
+        retired_now = []
+        if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
+            raise ValueError('That level was retired from this source')
         if previous is None and same_slot is not None:
-            raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+            if payload.get('supersede') is not True:
+                raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+            # Replace with retire: the old level leaves the choice set but its record is kept.
+            data['levels'].remove(same_slot)
+            data.setdefault('retired', []).append({**same_slot, 'retiredBy': level['sha256'],
+                                                   'retiredAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            retired_now.append(same_slot['sha256'])
         if previous is None:
             data['levels'].append(level)
             data['levels'].sort(key=lambda l: -l['faces'])
@@ -2790,7 +2802,7 @@ def save_mesh_lod_level(payload):
                 os.replace(temporary, path)
             finally:
                 temporary.unlink(missing_ok=True)
-    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level}
+    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level, 'retired': retired_now}
 
 
 def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
@@ -2816,7 +2828,8 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
         if measured:
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
-    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within}
+    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within,
+              'retired': data.get('retired', [])}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
     return result
