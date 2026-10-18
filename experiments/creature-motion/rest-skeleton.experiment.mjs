@@ -1,5 +1,6 @@
 import * as THREE from '../../lib/three.core.js';
-import {validateRestPlan,restHeads,authoredRestPlan} from './rest-skeleton-edit.mjs';
+import {validateRestPlan,restHeads,authoredRestPlan,referenceRestPlan,restJointPartner,shapeRestPlan} from './rest-skeleton-edit.mjs';
+import {mountSkeletonShapeControls} from './skeleton-shape-controls.mjs';
 import {captureRestTransform,applyRestTransform} from './rest-skeleton-transform.mjs';
 import {checkedPose} from '../../scene-edit-session.mjs';
 import {validateProportionAtlas,measureProportionAtlas} from './skeleton-proportions.mjs';
@@ -32,18 +33,20 @@ function links(joints,positions,color){
 }
 
 export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{fetchImpl=globalThis.fetch}={}){
- const loaded=await loadRestEditorInput(inputs,{fetchImpl}),baseline=loaded.plan,matrix=loaded.displayMatrix,atlas=loaded.proportionAtlas;let reference=loaded.reference;
+ const loaded=await loadRestEditorInput(inputs,{fetchImpl});let baseline=loaded.plan,matrix=loaded.displayMatrix,atlas=loaded.proportionAtlas,reference=loaded.reference;
+ const openedPlan=structuredClone(baseline);
  const document=host.controls.document,win=document.defaultView,session=await host.scene.open(),edits=win?.kaminosSceneEdits;
  if(!edits||!host.controls.components){await session.dispose();throw Error('Shared component editing host unavailable');}
  let plan=structuredClone(baseline),selected=[plan.joints.find(j=>j.name.includes('shoulder'))?.name??plan.joints[0].name],active=selected[0],mirror=false,descendants=false,editMode=false,disposed=false;
- let refresh=()=>{},componentSeat,controlSeat,unsubscribe=()=>{},draft=null,error=null;
+ let refresh=()=>{},componentSeat,controlSeat,shapeControls,unsubscribe=()=>{},draft=null,error=null;
  const target='@rest-components:'+crypto.randomUUID(),root=new THREE.Group(),proxy=new THREE.Group(),markers=new Map();root.name='Creature · rest skeleton';proxy.name='Rest joint transform';proxy.userData.kaminosEditorHelper=true;
- const referenceTarget=target+':reference';
+ const referenceTarget=target+':reference',bodyTarget=target+':body';
  const positions=()=>plan.joints.map(j=>new THREE.Vector3(...j.head).applyMatrix4(matrix).toArray());
- const graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
+ let graph;
+ function rebuild(){for(const child of [...root.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});root.remove(child);}markers.clear();graph=links(plan.joints,positions(),0x4ce4ed);root.add(graph.mesh);
  for(const [i,j]of plan.joints.entries()){
   const marker=new THREE.Mesh(new THREE.SphereGeometry(.018,12,8),new THREE.MeshBasicMaterial({color:0x4ce4ed,depthTest:false}));marker.name=j.name;marker.renderOrder=10;marker.position.fromArray(positions()[i]);root.add(marker);markers.set(j.name,marker);
- }
+ }}rebuild();
  let referenceRoot=null,referenceAsset=null,asset=null;
  function assertLive(){if(disposed||!root.parent)throw Error('Skeleton removed; Undo removal or reopen it');}
  const sourceFrame=()=>{root.updateWorldMatrix(true,false);return root.matrixWorld.clone().multiply(matrix).toArray();};
@@ -62,10 +65,19 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   read,
   reference({id}={}){assertLive();if(!atlas)throw Error('No proportion atlas supplied');edits.apply(referenceTarget,{id},'Change reference skeleton');record({kind:'skeleton.reference',phase:'applied',effective:{id,source:reference.source}});return read();},
   proportions:()=>measureProportionAtlas(plan,atlas),
+  startFrom({id}={}){
+   assertLive();if(edits.state().active)throw Error('Finish or cancel the active edit first');
+   const ref=atlas?.references.find(r=>r.id===id);if(id!=='opened'&&!ref)throw Error('Choose an available source body');
+   const next=id==='opened'?structuredClone(openedPlan):authoredRestPlan(referenceRestPlan(ref),{baselineSha256:ref.source.sha256,displayMatrix:new THREE.Matrix4().toArray(),reference:ref,proportionAtlas:{...atlas,profile:ref.profile,activeReference:id}});
+   next.rest_authoring.scene={skeleton:poseOf(root),reference:referenceRoot?poseOf(referenceRoot):null,referenceVisible:referenceRoot?.visible??false};next.rest_authoring.view=session.readView();
+   edits.apply(bodyTarget,{plan:next,baseline:next},'Start from '+(ref?.label??'opened skeleton'));record({kind:'skeleton.start-from',phase:'applied',effective:{id,source:next.source_exemplar?.source??null}});return read();
+  },
+  structure({part}={}){assertLive();if(!editMode)throw Error('Press Tab to edit body structure');if(!atlas)throw Error('Explicit correspondence required');const names=part==='trunk'?atlas.profile.trunk:['fore','hind'].includes(part)?['left','right'].map(side=>atlas.profile[part][side][0]):null;if(!names||names.some(n=>!markers.has(n)))throw Error('Unsupported body structure');componentSeat.changed(()=>{selected=[...names];active=selected[0];placeProxy();repaint();});return read();},
+  shape(input){assertLive();if(!editMode)throw Error('Press Tab to edit body structure');if(!atlas)throw Error('Explicit correspondence required');const transaction=edits.state().active;if(transaction&&transaction.id!==target)throw Error('Finish the active edit first');const start=transaction?.before??snapshot(),from=applyRestTransform(baseline,start),next=shapeRestPlan(from,atlas.profile,input),value=captureRestTransform(next,start);if(transaction)edits.preview(value);else edits.apply(target,value,'Shape '+input.part);record({kind:'skeleton.shape',phase:transaction?'preview':'applied',effective:input});return read();},
   select({name,extend=false,pair=false}={}){
    assertLive();if(!markers.has(name))throw Error('Unknown joint');if(!editMode)throw Error('Press Tab to edit skeleton joints');
    componentSeat.changed(()=>{if(extend){if(selected.includes(name)&&selected.length>1)selected=selected.filter(n=>n!==name);else if(!selected.includes(name))selected.push(name);}else selected=[name];active=selected.includes(name)?name:selected.at(-1);
-    const other=name.includes('-left-')?name.replace('-left-','-right-'):name.replace('-right-','-left-');if(pair&&other!==name&&markers.has(other)&&!selected.includes(other))selected.push(other);placeProxy();repaint();});return read();
+    const other=restJointPartner(plan,name);if(pair&&other&&markers.has(other)&&!selected.includes(other))selected.push(other);placeProxy();repaint();});return read();
   },
   options(input={}){for(const key of Object.keys(input))if(!['mirror','descendants'].includes(key)||typeof input[key]!=='boolean')throw Error('Unknown editor option');componentSeat.changed(()=>{mirror=input.mirror??mirror;descendants=input.descendants??descendants;placeProxy();refresh();});return read();},
   move({name=active,position,mirror:paired=mirror,descendants:branch=descendants}={}){
@@ -83,6 +95,10 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
  try{
   putPose(root,baseline.rest_authoring.scene?.skeleton??identity());
   asset=await session.attach(root,{owned:true,metadata:{label:root.name,source:'authored-rest-skeleton:'+loaded.baselineSha256}});root.parent.add(proxy);
+  edits.register(bodyTarget,{read:()=>({plan:exported(),baseline:structuredClone(baseline)}),check:value=>{const p=validateRestPlan(value.plan),b=validateRestPlan(value.baseline);validateProportionAtlas(p.rest_authoring?.proportionAtlas??null);const m=new THREE.Matrix4().fromArray(p.rest_authoring?.displayMatrix??[]);if(!p.rest_authoring||Math.abs(m.determinant())<1e-12)throw Error('An authored source body with a valid display frame is required');return {plan:p,baseline:b};},write:value=>{
+   const next=value.plan;baseline=structuredClone(value.baseline);plan=structuredClone(next);matrix.fromArray(next.rest_authoring.displayMatrix);loaded.baselineSha256=next.rest_authoring.baselineSha256;atlas=validateProportionAtlas(next.rest_authoring.proportionAtlas??null);reference=atlas?atlas.references.find(r=>r.id===atlas.activeReference):next.rest_authoring.reference;
+   selected=selected.filter(n=>plan.joints.some(j=>j.name===n));if(!selected.length)selected=[atlas?.profile.fore.left[0]??plan.joints[0].name];active=selected.includes(active)?active:selected[0];draft=null;error=null;putPose(root,next.rest_authoring.scene?.skeleton??identity());if(referenceRoot&&reference){drawReference();putPose(referenceRoot,next.rest_authoring.scene?.reference??identity());referenceRoot.visible=next.rest_authoring.scene?.referenceVisible??true;}rebuild();placeProxy();repaint();
+  }});
   if(reference){
    referenceRoot=new THREE.Group();drawReference();
    const legacy=baseline.rest_authoring.referenceDisplay,initial=identity();initial.position[legacy?.axis==='x'?0:2]=legacy?.mode==='overlay'?0:1.6;
@@ -100,7 +116,7 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   unsubscribe=edits.subscribe(state=>{if(disposed)return;if(!state.active&&!state.replaying){draft=null;placeProxy();}refresh();});
   if(baseline.rest_authoring.view)session.setView(baseline.rest_authoring.view);else operations.frame();
   win.kaminosSelection.set([asset.id],asset.id);
- }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===referenceTarget);edits.unregister(target);edits.unregister(referenceTarget);proxy.removeFromParent();await session.dispose();throw e;}
+ }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget].includes(entry.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();await session.dispose();throw e;}
  function drawReference(){
   for(const child of [...referenceRoot.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
   referenceRoot.name=reference.label??'Reference skeleton';referenceRoot.userData.proportionReference={id:atlas?.activeReference??null,source:structuredClone(reference.source??null)};
@@ -108,10 +124,11 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   for(const v of p){const marker=new THREE.Mesh(new THREE.SphereGeometry(.012,8,6),new THREE.MeshBasicMaterial({color:0xdd96ff,depthTest:false}));marker.position.fromArray(v);referenceRoot.add(marker);}
  }
  return {read,operations,async dispose(){
-  if(disposed)return;componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>entry.id===target||entry.id===referenceTarget||entry.id===asset.id||entry.id===referenceAsset?.id||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);edits.unregister(referenceTarget);proxy.removeFromParent();disposed=true;await session.dispose();
+  if(disposed)return;shapeControls?.dispose();componentSeat?.dispose();controlSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget,asset.id,referenceAsset?.id].includes(entry.id)||Object.keys(entry.before?.roots??{}).some(id=>id===asset.id||id===referenceAsset?.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();disposed=true;await session.dispose();
  },mount({root:panel,document,invoke}){
   const properties=document.createElement('section'),playback=document.createElement('div'),title=document.createElement('h3'),hint=document.createElement('p'),selection=document.createElement('p'),options=document.createElement('div');
   title.textContent='Rest skeleton';properties.append(title,hint,selection,options);properties.style.cssText='font-size:12px;line-height:1.45';
+  shapeControls=mountSkeletonShapeControls({document,properties,invoke,edits,target,host,read:()=>({plan,atlas,editMode,selected}),onError:e=>{hint.textContent=e.message;}});
   for(const [key,label]of[['mirror','Mirror L/R'],['descendants','Move branch']]){
    const row=document.createElement('label'),input=document.createElement('input');row.style.display='block';input.type='checkbox';input.dataset.restOption=key;input.onchange=()=>{input.blur();invoke('options',{[key]:input.checked}).catch(e=>{hint.textContent=e.message;});};row.append(input,label);options.append(row);
   }
@@ -128,7 +145,7 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   proportions.open=true;proportions.dataset.proportionAtlas='';proportionTitle.textContent='Proportions · reference comparison';proportions.append(proportionTitle);referenceChoice.setAttribute('aria-label','Reference skeleton');
   if(atlas){for(const r of atlas.references){const o=document.createElement('option');o.value=r.id;o.textContent=r.label;referenceChoice.append(o);}referenceChoice.onchange=()=>{referenceChoice.blur();invoke('reference',{id:referenceChoice.value}).catch(e=>{proportionNote.textContent=e.message;});};proportions.append(referenceChoice,proportionNote,comparison);properties.append(proportions);}
   const format=(v,unit)=>v===null?'—':unit==='degrees'?v.toFixed(1)+'°':unit==='fraction'?(v*100).toFixed(3)+'%':v.toFixed(3);
-  refresh=()=>{hint.textContent=error??(editMode?'Edit Mode · click joints · Shift-click adds · G / R / S · Tab returns to Object Mode':'Object Mode · G / R / S places the whole skeleton · Tab edits its joints');selection.hidden=options.hidden=!editMode;selection.textContent=selected.length===1?active:`${selected.length} joints · ${active}`;for(const input of options.querySelectorAll('input'))input.checked=input.dataset.restOption==='mirror'?mirror:descendants;
+  refresh=()=>{shapeControls.refresh();hint.textContent=error??(editMode?'Edit Mode · click joints · Shift-click adds · G / R / S · Tab returns to Object Mode':'Object Mode · G / R / S places the whole skeleton · Tab edits its joints');selection.hidden=options.hidden=!editMode;selection.textContent=selected.length===1?active:`${selected.length} joints · ${active}`;for(const input of options.querySelectorAll('input'))input.checked=input.dataset.restOption==='mirror'?mirror:descendants;
    if(atlas){const measurement=measureProportionAtlas(plan,atlas),r=measurement.references.find(r=>r.id===atlas.activeReference);referenceChoice.value=r.id;proportionNote.textContent='Rest geometry only · not motion support. '+(measurement.status!=='measured'||r.comparison.reference.status!=='measured'?'Partial/unmeasurable; — means unmeasured. ':'')+r.label+' · '+r.source.sha256.slice(0,8);comparison.replaceChildren();
     const table=document.createElement('table');table.style.cssText='width:100%;font-size:11px;border-collapse:collapse';const head=document.createElement('tr');for(const label of ['Measure','Yours','Ref.','Δ']){const th=document.createElement('th');th.textContent=label;th.style.cssText='padding:3px 4px;text-align:'+(label==='Measure'?'left':'right');head.append(th);}table.append(head);
     const order=['shoulderWidth','hipWidth','shoulderHipRatio','foreReach','hindReach','foreHindRatio','foreProximalFraction','hindProximalFraction','foreBend','hindBend','foreFootForward','hindFootForward','foreAsymmetry','hindAsymmetry'];

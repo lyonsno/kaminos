@@ -1,10 +1,9 @@
 import {Vector3,Matrix4,Quaternion,Euler} from '../../lib/three.core.js';
 import {checkedPose} from '../../scene-edit-session.mjs';
-import {validateRestPlan,restHeads,withRestHeads} from './rest-skeleton-edit.mjs';
+import {validateRestPlan,restHeads,withRestHeads,restJointPartner} from './rest-skeleton-edit.mjs';
 
 const matrix=value=>{if(!Array.isArray(value)||value.length!==16||!value.every(Number.isFinite))throw Error('Explicit finite skeleton frame required');const m=new Matrix4().fromArray(value);if(Math.abs(m.determinant())<1e-12||m.elements[3]||m.elements[7]||m.elements[11]||m.elements[15]!==1)throw Error('Invertible affine skeleton frame required');return m;};
 const poseMatrix=p=>{p=checkedPose(p);if(p.scale.some(v=>Math.abs(v)<1e-10))throw Error('A component transform cannot collapse its axes');return new Matrix4().compose(new Vector3(...p.position),new Quaternion().setFromEuler(new Euler(...p.rotation)),new Vector3(...p.scale));};
-const partner=name=>name.includes('-left-')?name.replace('-left-','-right-'):name.includes('-right-')?name.replace('-right-','-left-'):null;
 function selection(plan,options){
  const names=new Set(plan.joints.map(j=>j.name)),chosen=options.selected;
  if(!Array.isArray(chosen)||!chosen.length||new Set(chosen).size!==chosen.length||chosen.some(name=>!names.has(name))||!chosen.includes(options.active))throw Error('Choose existing rest-joint components');
@@ -20,6 +19,7 @@ export function captureRestTransform(plan,options){
  return {...structuredClone(options),pivot,heads,anchor,...structuredClone(anchor)};
 }
 export function applyRestTransform(plan,state){
+ const partner=name=>restJointPartner(plan,name),left=name=>plan.rest_authoring?.symmetry?.pairs?plan.rest_authoring.symmetry.pairs.some(p=>p[0]===name):name.includes('-left-');
  plan=validateRestPlan(plan);const chosen=selection(plan,state),frame=matrix(state.localToWorld),inverse=frame.clone().invert(),anchor=poseMatrix(state.anchor),delta=poseMatrix(state).multiply(anchor.invert());
  const original=restHeads(withRestHeads(plan,state.heads)),heads=structuredClone(original),by=new Map(plan.joints.map(j=>[j.name,j]));
  const affected=new Set(chosen);if(state.descendants)for(const j of plan.joints){for(let p=j.parent;p;p=by.get(p).parent)if(affected.has(p)){affected.add(j.name);break;}}
@@ -33,7 +33,7 @@ export function applyRestTransform(plan,state){
  const localTranslation=translation.clone().applyMatrix4(inverse).sub(new Vector3().applyMatrix4(inverse));
  const lateral=new Vector3(localTranslation.x,0,0).applyMatrix4(frame).sub(new Vector3().applyMatrix4(frame));
  const translationOnly=linear.elements.every((v,i)=>Math.abs(v-identity.elements[i])<1e-12);
- const preferred=[state.active,...chosen].find(name=>partner(name)),side=preferred?.includes('-left-')?'left':'right';
+ const preferred=[state.active,...chosen].find(name=>partner(name)),useLeft=preferred?left(preferred):false;
  const owners=new Map();for(const name of affected){let owner=name;while(!chosen.includes(owner))owner=by.get(owner).parent;owners.set(name,owner);}
  for(const name of affected){
   const pair=partner(name),owner=owners.get(name);
@@ -41,7 +41,7 @@ export function applyRestTransform(plan,state){
    // Resolve each pair's authority locally: an explicit lateral branch wins
    // over its counterpart inherited only through a selected central ancestor.
    const lateralOwner=Boolean(partner(owner)),otherLateral=Boolean(partner(owners.get(pair)));
-   if(lateralOwner!==otherLateral?!lateralOwner:!name.includes('-'+side+'-'))continue;
+   if(lateralOwner!==otherLateral?!lateralOwner:left(name)!==useLeft)continue;
   }
   const centralOwner=state.mirror&&!partner(owner);
   const point=new Vector3(...original[name]).applyMatrix4(frame);
