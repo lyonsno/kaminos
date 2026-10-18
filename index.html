@@ -17966,6 +17966,8 @@ function describeFlameSettingsProblems() {
   const parts = [];
   if (problems.length) parts.push(`FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`);
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
+  const basin = window.__kaminosFlameBasinClampReport;
+  if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
   return { text: parts.join(' || '), warning: parts.length > 0 };
 }
 
@@ -22818,6 +22820,8 @@ function flameSettingsStateClamps(state) {
   for(const axis of ['domControls','rendererControls']) {
     for(const [id,descriptor] of Object.entries(state?.[axis]||{})) {
       if(!descriptor||typeof descriptor!=='object'||id==='volume-render-scale')continue;
+      // An immersed source's radius is reported once, below, as the scaled aperture.
+      if(id==='volume-immersed-radius'&&state.domControls?.['volume-emitter-source-law']?.value==='immersed-source')continue;
       const source=document.getElementById(id);
       if(!source||!['range','number'].includes(source.type))continue;
       const value=Number(descriptor.rawValue??descriptor.value);
@@ -22902,6 +22906,8 @@ async function loadAuthoredFlameBasin(id) {
   const state=flameSettingsState(receipt.preset,receipt);
   const clamps=flameSettingsStateClamps(state);
   window.__kaminosFlameBasinClamps=Object.freeze(clamps);
+  // Named in the flame warning until another basin replaces it.
+  window.__kaminosFlameBasinClampReport=Object.freeze({label:receipt.label||id,clamps});
   if(clamps.length){console.warn(`Basin ${receipt.label||id} clamped:`,clamps);setInfo(`Basin ${receipt.label||id}: clamped to range: ${clamps.map(clamp=>clamp.message).join('; ')}`);}
   return clamps.length?clampedFlameSettingsState(state):state;
 }
@@ -22985,7 +22991,8 @@ async function addFirstFlameField(presetId,{signal}={}) {
   await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
   setActiveSceneObject(FLAME_EMITTER_ID);
-  setInfo('Added flame from the saved basin. Move its source; Undo removes the field.');
+  const clamped=window.__kaminosFlameBasinClamps||[];
+  setInfo(clamped.length?`Added flame from the saved basin, clamped to range (${clamped.map(clamp=>clamp.message).join('; ')}). Move its source; Undo removes the field.`:'Added flame from the saved basin. Move its source; Undo removes the field.');
   return FLAME_EMITTER_ID;
 }
 async function openFirstFlameFieldDialog() {
