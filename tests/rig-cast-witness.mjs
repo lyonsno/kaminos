@@ -1,6 +1,9 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
-import {validateRigCastState} from '../tools/rig-cast-witness.mjs';
+import {validateRigCastState,servedModuleUrl} from '../tools/rig-cast-witness.mjs';
+for(const pageUrl of ['http://127.0.0.1:18491/scratch/rig-cast-1018/open.html','http://127.0.0.1:18491/index.html?experiment=mushfinger%2Frig-cast-comparison']){
+ assert.equal(servedModuleUrl('experiments/creature-motion/rig-cast-comparison.experiment.mjs',pageUrl),'http://127.0.0.1:18491/experiments/creature-motion/rig-cast-comparison.experiment.mjs');
+}
 const casts=['clay','clean'].map((slug,i)=>({slug,case_sha256:String(i+1).repeat(64),motion_sha256:'a'.repeat(64),frame_sha256:'b'.repeat(64)})),setup={casts};
 const state={actors:casts.map((c,i)=>({slug:c.slug,objectId:'actor'+i,source:{caseSha256:c.case_sha256,motionSha256:c.motion_sha256,frameSha256:c.frame_sha256,effectiveMotionRoute:'retained-source-plus-fixed-rest-descendants'},skin:{vertices:100,bones:36,deformation:{backend:'webgpu-dense-dq',dispatches:1}},playback:{status:'paused',frame:10,actualLocalPose:{bones:Array.from({length:36},(_,i)=>({name:'b'+i,matrix:[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}))}}}))};
 validateRigCastState(state,setup,10);
