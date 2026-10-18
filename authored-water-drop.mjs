@@ -54,7 +54,7 @@ export function createAuthoredWaterDrop(drop,pose,sampling=null) {
  const rotation=new Euler(...pose.rotation),position=new Vector3(),origin=new Vector3(...pose.position);
  for(let i=0;i<d.particleCount;i++){
   const o=i*16;position.set(data[o],data[o+1]-.9,data[o+2]).multiplyScalar(d.representedWidth).applyEuler(rotation).add(origin);
-  for(let k=0;k<3;k++)if(position.getComponent(k)<d.bounds.min[k]+d.collisionRadius||position.getComponent(k)>d.bounds.max[k]-d.collisionRadius)throw Error('Initial water must fit the explicit world bounds');
+  for(let k=0;k<3;k++)if(d.containerEnabled&&(position.getComponent(k)<d.bounds.min[k]+d.collisionRadius||position.getComponent(k)>d.bounds.max[k]-d.collisionRadius))throw Error('Initial water must fit the enabled container bounds');
   data.set(position.toArray(),o);data.set(position.toArray(),o+4);
  }
  const planes=[];for(let k=0;k<3;k++)for(const side of ['min','max']){const normal=[0,0,0];normal[k]=side==='min'?1:-1;planes.push({normal,offset:normal[k]*d.bounds[side][k]});}
@@ -66,11 +66,12 @@ const closeSpacing=(a,b)=>Math.abs(a-b)<=1e-9*Math.max(Math.abs(a),Math.abs(b));
 const finiteSources=records=>records.filter(r=>r.localLiquidEmitter?.mode==='finite_drop');
 const sourceName=r=>r.label??r.id;
 function checkedPlacement(record,description){
+ if(!description.containerEnabled)return;
  const {samplesAcross:n,spacing,bounds,collisionRadius}=description;
  const half=(n-1)*spacing/2,rotation=new Euler(...record.transform.rotation),origin=new Vector3(...record.transform.position);
  for(const x of [-half,half])for(const y of [-half,half])for(const z of [-half,half]){
   const p=new Vector3(x,y,z).applyEuler(rotation).add(origin);
-  for(let k=0;k<3;k++)if(p.getComponent(k)<bounds.min[k]+collisionRadius-1e-12||p.getComponent(k)>bounds.max[k]-collisionRadius+1e-12)throw Error(`${sourceName(record)}: initial particles must fit the shared world bounds. Move the drop or enlarge the bounds.`);
+  for(let k=0;k<3;k++)if(p.getComponent(k)<bounds.min[k]+collisionRadius-1e-12||p.getComponent(k)>bounds.max[k]-collisionRadius+1e-12)throw Error(`${sourceName(record)}: initial particles must fit the enabled container bounds. Move the drop, enlarge the container, or disable its walls.`);
  }
 }
 export function inspectAuthoredWaterCompatibility(records,sampling=null){
@@ -81,7 +82,7 @@ export function inspectAuthoredWaterCompatibility(records,sampling=null){
   for(const r of sources){
    const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,sampling),reasons=[];
    if(!closeSpacing(d.spacing,first.spacing))reasons.push(`particle spacing ${d.spacing.toPrecision(5)} differs from ${sourceName(sources[0])} (${first.spacing.toPrecision(5)})`);
-   if(JSON.stringify(d.bounds)!==JSON.stringify(first.bounds)||d.containerEnabled!==first.containerEnabled)reasons.push('container bounds or walls differ');
+   if(d.containerEnabled!==first.containerEnabled||(d.containerEnabled&&JSON.stringify(d.bounds)!==JSON.stringify(first.bounds)))reasons.push('container bounds or walls differ');
    if(reasons.length)conflicts.push(`${sourceName(r)}: ${reasons.join('; ')}`);
    checkedPlacement(r,d);
   }
@@ -108,10 +109,11 @@ export function planAuthoredWaterMatch(records,referenceId){
  return {referenceId,referenceLabel:sourceName(reference),spacing:d.spacing,bounds:clone(d.bounds),containerEnabled:d.containerEnabled,changes,particleCount:count};
 }
 
-/** Explicit recovery: expand the existing domain around initial water without
+/** Explicit recovery: expand the physical container around initial water without
  * changing authored poses, resolution, wall mode, or already larger extents. */
 export function planAuthoredWaterBounds(records,sampling){
  const checked=normalizeAuthoredWaterSampling(sampling),bounds=clone(checked.container??checked.worldBounds);
+ if(checked.container===null)return {changed:false,bounds,sampling:checked};
  for(const r of finiteSources(records)){
   const d=describeAuthoredWaterDrop(r.localLiquidEmitter.drop,r.transform,checked),half=(d.samplesAcross-1)*d.spacing/2,rotation=new Euler(...r.transform.rotation),origin=new Vector3(...r.transform.position);
   for(const x of [-half,half])for(const y of [-half,half])for(const z of [-half,half]){

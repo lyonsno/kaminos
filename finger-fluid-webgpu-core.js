@@ -1,3 +1,4 @@
+import {applyWorldSpaceNeighbors,WORLD_NEIGHBOR_CONTRACT} from './finger-fluid-world-neighbors.mjs';
 import {boxBoundaryDensitySource} from './finger-fluid-box-fixtures.mjs';
 import {viscosityScale} from './finger-fluid-viscosity-scale.mjs';
 import {composeFingerFluidVelocityReads} from './finger-fluid-velocity-composition.mjs';
@@ -13710,7 +13711,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const particleNextBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particleNext',
-    size: safeParticleCount * 4,
+    size: safeParticleCount * (finitePBF?16:4),
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
   const paramsBuffer = device.createBuffer({
@@ -13904,6 +13905,7 @@ export async function createWebGPUFingerFluidSolver({
   if(finitePBF)computeShader=computeShader.replace('let particleRadius = kernelRadius * 0.22;',`let particleRadius = ${safeDiagnosticBox.collisionRadius};`).replace(/fn analytic_boundary_density_support[\s\S]*?\n}\n/,boxBoundaryDensitySource(safeDiagnosticBox)+'\n');
   if(safeDiagnosticBox)computeShader=computeShader.replaceAll('params.fluid.x * 0.22',String(safeDiagnosticBox.collisionRadius));
   const effectiveAkinciRadius=akinciSupportRadius??2*Math.cbrt(ipbfParticleVolume);
+  if(finitePBF)computeShader=applyWorldSpaceNeighbors(computeShader,{cellWidth:safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale)});
   if(useAkinci)computeShader+=createAkinciSurfaceShader({volume:ipbfParticleVolume,supportRadius:effectiveAkinciRadius});
   const createSceneShaderModule = descriptor => device.createShaderModule({
     ...descriptor,
@@ -16468,7 +16470,7 @@ export async function createWebGPUFingerFluidSolver({
       render_backend: 'webgpu_direct_render',
       solverRoute: useIPBF ? 'webgpu-ipbf-cubic-spline-grid-v0' : KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE,
       shaderRoute: useIPBF ? 'webgpu-ipbf-cubic-spline-grid-shader-v0' : KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE,
-      neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
+      neighborGridContract: finitePBF?WORLD_NEIGHBOR_CONTRACT:KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: useIPBF ? 'ipbf-variational-cubic-spline-density-v0' : KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
       supportContactRoute,
       supportContact: movingHillSupportProvider ? {
@@ -16794,7 +16796,10 @@ export async function createWebGPUFingerFluidSolver({
       representedPopulationVolume,
       particleAllocationCapacity,
       particleAllocationPreflight,
-      gridDimensions: [...simulationGrid],
+      gridDimensions: finitePBF?null:[...simulationGrid],
+      neighborSearchBounds: finitePBF?null:(safeDiagnosticBox?.bounds??null),
+      neighborCellWidth: finitePBF?safeKernelRadius*Math.max(1,safeUniformParticleRadiusScale):null,
+      containerCollisionEnabled: safeDiagnosticBox?.collisions!==false,
       gridCellCount: GRID_CELL_COUNT,
       densityIterationsPerStep: effectivePressureControls?.densityIterations??safeDensityIterations,
       restDensity: 24.3,

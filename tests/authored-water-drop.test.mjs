@@ -17,7 +17,7 @@ assert.equal(a.particleCount,4096);assert.equal(a.worldVolume,1);assert.equal(a.
 let center=[0,0,0];for(let i=0;i<a.particleCount;i++){const p=Array.from(a.population.particleData.slice(i*16,i*16+3));for(let k=0;k<3;k++)center[k]+=p[k]/a.particleCount;assert.deepEqual(Array.from(a.population.particleData.slice(i*16+4,i*16+7)),p);}
 for(let k=0;k<3;k++)assert.ok(Math.abs(center[k]-pose.position[k])<1e-7,'released population is centered at actual source pose');
 const coarse=describeAuthoredWaterDrop({...settings.drop,samplesPerUnit:48},pose);assert.ok(Math.abs(coarse.worldVolume-a.worldVolume)<1e-12);assert.equal(coarse.particleCount,13824);
-assert.throws(()=>createAuthoredWaterDrop(settings.drop,{...pose,position:[50,0,0]}),/world bounds/);
+assert.throws(()=>createAuthoredWaterDrop(settings.drop,{...pose,position:[50,0,0]}),/container bounds/);
 const unclipped=createAuthoredWaterDrop({...settings.drop,container:null,worldBounds:settings.drop.container},pose);assert.equal(unclipped.box.collisions,false);
 const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
 let ticks=0,retired=0,draws=0,nextAvailable=true;
