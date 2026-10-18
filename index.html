@@ -3945,6 +3945,7 @@ import {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import {prepareSurfelAsset} from './surfel-instances.mjs';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -13041,6 +13042,14 @@ function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } =
 }
 
 function sceneObjectWorldPoints(object) {
+  let instanced = false;
+  object.traverse(child => { if (child.isInstancedMesh) instanced = true; });
+  if (instanced) {
+    const box = new THREE.Box3().setFromObject(object), points = [];
+    if (box.isEmpty()) return new Float32Array();
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) points.push(x, y, z);
+    return Float32Array.from(points);
+  }
   return sceneObjectWorldGeometry(object).points;
 }
 
@@ -13105,6 +13114,7 @@ async function showGLB(file, options = {}) {
         return;
       }
       const arrivalPlacement = applyAssetArrival(model, arrival);
+      prepareSurfelAsset(model);
       model.traverse(child => {
         if (child.isMesh) {
           child.castShadow = true;

@@ -69,6 +69,9 @@ function restoreRaycast(mesh) {
 export function prepareNavigationGeometry(root) {
   const pending = [];
   root.traverse(object => {
+    // An ordinary mesh BVH does not apply per-instance transforms. Preserve
+    // instance-aware raycast (including the surfel spatial broad phase).
+    if (object.isInstancedMesh) { restoreRaycast(object); return; }
     if (!object.isMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
@@ -147,7 +150,7 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
       if (o.isMesh && o.layers.test(camera.layers)) {
         const materials = Array.isArray(o.material) ? o.material : [o.material];
         if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
-        const state = depthIndexes.get(o.geometry)?.status;
+        const state = o.isInstancedMesh ? null : depthIndexes.get(o.geometry)?.status;
         if (state === 'building') indexing = true;
         else if (state === 'failed') failed = true;
         else meshes.add(o);
