@@ -52,6 +52,9 @@ export function installSurfelPicking(mesh, {divisions = 8} = {}) {
   // Keep instance transforms in the ray path. The ordinary mesh BVH override
   // sees only the base triangle and must never replace this method.
   mesh.raycast = function (raycaster, intersects) {
+    // Raycaster recursively visits invisible descendants. Cached comparison
+    // batches must not pick, or spend broad-phase work, while not drawn.
+    for (let node = this; node; node = node.parent) if (!node.visible) return;
     if (!this.count || !this.material) return;
     const data = spatialIndex(this, divisions);
     if (data.status !== 'indexed') {
@@ -161,7 +164,8 @@ export function prepareSurfelAsset(root, {divisions = 8} = {}) {
       return {status: data?.status ?? 'unprepared', error: data?.error ?? null, queries: data?.queries ?? 0, candidates: data?.lastCandidates ?? null,
         triangleCandidates: data?.lastIntersections ?? null, instances: mesh.count};
     })).flat()});
-  const controller = {read, ready: () => Promise.all(entries.map(({source}) => spatialIndex(source, divisions).promise)), async setChunked(value) {
+  let switches = Promise.resolve();
+  async function switchRepresentation(value) {
     value = Boolean(value);
     if (value === chunked) return read();
     if (value) {
@@ -185,7 +189,15 @@ export function prepareSurfelAsset(root, {divisions = 8} = {}) {
     }
     chunked = value;
     return read();
-  }};
+  }
+  const controller = {read, ready: () => Promise.all(entries.map(({source}) => spatialIndex(source, divisions).promise)),
+    setChunked(value) {
+      // Restoration queues behind an in-flight enable even before that enable
+      // has published its visible state. Closing cannot race a late switch.
+      const operation = switches.then(() => switchRepresentation(value));
+      switches = operation.catch(() => {});
+      return operation;
+    }};
   assets.set(root, controller);
   return controller;
 }
