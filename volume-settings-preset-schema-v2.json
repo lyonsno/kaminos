@@ -1917,6 +1917,7 @@
     "fullFieldImport"
   ],
   "allowedNativePresetFields": [
+    "sourceRadiusSpace",
     "identity",
     "kind",
     "schemaIdentity",

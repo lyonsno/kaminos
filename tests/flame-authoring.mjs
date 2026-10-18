@@ -38,6 +38,13 @@ test('concurrent basin loads cannot race and failure releases load state',async(
  await assert.rejects(flame.applyBasin('b'),/already loading/);reject(Error('network'));await assert.rejects(first,/network/);
  const retry=flame.applyBasin('c');reject(Error('again'));await assert.rejects(retry,/again/);
 });
+test('explicit preset recovery reaches the loader and remains one undoable edit',async()=>{
+ let received;const {flame,edits}=fixture({load:async(id,options)=>{received={id,options};const next=flame.read();next.domControls.flow.value=2;next.source.sourceSizeRecovery='current-emitter-size';return next;}});
+ const before=flame.read();await flame.applyBasin('legacy',{sourceSize:'current'});
+ assert.deepEqual(received,{id:'legacy',options:{sourceSize:'current'}});
+ assert.equal(edits.state().undoCount,1);edits.undo();assert.deepEqual(flame.read(),before);
+ edits.redo();assert.equal(flame.read().source.sourceSizeRecovery,'current-emitter-size');
+});
 
 test('selected-flame shape choices exclude the non-placeable cluster mode',async()=>{
  const {authoredFlameShapeOptions}=await import('../flame-authoring.mjs');

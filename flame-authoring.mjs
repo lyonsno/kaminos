@@ -1,5 +1,27 @@
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
 
+// Standalone presets do not contain the emitter pose. Store its effective
+// aperture, not a raw slider value whose meaning depends on that missing pose.
+export function portableFlamePreset(preset, localScale) {
+  const result=structuredClone(preset);
+  if(result.domControls?.['volume-emitter-source-law']?.value!=='immersed-source')return result;
+  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
+  const d=result.domControls['volume-immersed-radius'];
+  const radius=Number(d.rawValue??d.value)*localScale;
+  if(!Number.isFinite(radius)||radius<.02-1e-12||radius>.5+1e-12)throw Error('Effective preset aperture must be within [0.02, 0.5]');
+  if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
+  if(Object.hasOwn(d,'value'))d.value=radius;
+  const route=new URL(result.route);route.searchParams.set('volume_immersed_radius',String(radius));
+  result.route=route.toString();result.sourceRadiusSpace='simulation-v1';return result;
+}
+export function flamePresetRadius(preset,localScale) {
+  const d=preset.domControls['volume-immersed-radius'];const radius=Number(d.rawValue??d.value);
+  if(preset.sourceRadiusSpace===undefined)return radius;
+  if(preset.sourceRadiusSpace!=='simulation-v1')throw Error('Unknown preset source radius space');
+  if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid destination emitter scale');
+  return radius/localScale;
+}
+
 // One whole-settings operation over the existing runtime and chronological ledger.
 // Presets contain authored coefficients, never a checkpoint of the evolving fluid.
 export function createFlameAuthoring({ edits, read, write, check, load, canApply = () => {}, changed = () => {} }) {
@@ -31,14 +53,14 @@ export function createFlameAuthoring({ edits, read, write, check, load, canApply
   let loading = false;
   return {
     read: () => structuredClone(read()), apply, edit,
-    async applyBasin(presetId) {
+    async applyBasin(presetId, options = {}) {
       if (loading) throw Error('A basin is already loading');
       canApply();
       const before = JSON.stringify(read());
       const history = JSON.stringify(edits.state());
       loading = true;
       try {
-        const next = await load(presetId);
+        const next = await load(presetId, options);
         if (JSON.stringify(read()) !== before || JSON.stringify(edits.state()) !== history) {
           throw Error('The scene changed while the basin loaded; apply it again');
         }
@@ -243,7 +265,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
-  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
+  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><label class="flame-scope"><input type="checkbox" id="flame-basin-keep-size"> Keep current emitter size (legacy preset recovery)</label><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   panels.get('look').append(basin);
   const byId=id=>document.getElementById(id);
   let entries=[];
@@ -265,7 +287,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   byId('flame-basin-refresh').onclick=refresh;
   byId('flame-basin-apply').onclick=async()=>{
     const button=byId('flame-basin-apply');button.disabled=true;status('Loading basin…');
-    try {await applyBasin(byId('flame-basin-select').value);status('Applied · Undo restores the previous settings');}
+    try {const keepSize=byId('flame-basin-keep-size').checked;await applyBasin(byId('flame-basin-select').value,{sourceSize:keepSize?'current':'preset'});status(`Applied${keepSize?' · current emitter size retained':''} · Undo restores the previous settings`);}
     catch(error){status(error.message);onError(error);}
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
