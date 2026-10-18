@@ -2177,3 +2177,20 @@ test('each frame records which proxy snapshot it drew, so a strip shows whether 
   assert.deepEqual(strip.frames.map(frame => frame.proxySnapshots.fire.writeTick), [116, 132]);
   assert.equal(strip.proxySnapshotsSeen.fire, 2, 'two different flame snapshots across the strip');
 });
+
+test('a watch warms its proxies up before its window starts, so its first frame is not lost to a cold proxy', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state, {drawMs: 0});
+  let statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  host.holdProxies = () => () => {};
+  host.proxyStatuses = () => ({...statuses});
+  const sleep = host.sleep;
+  host.sleep = async ms => { await sleep(ms); if (host.now() >= 400) statuses = {...statuses, fire: 'drawn'}; };
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {...statuses}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.ok(strip.proxyWarmupMs >= 400 && strip.proxyWarmupMs < 1000, 'it waited for the snapshot, and says how long');
+  assert.deepEqual(strip.frames.map(frame => frame.proxies.fire), ['drawn', 'drawn']);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500], 'the window starts after the warm-up');
+  assert.ok(clock.renders.length === 2);
+});

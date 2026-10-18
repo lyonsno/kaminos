@@ -247,13 +247,17 @@ export function createVantagePilot(host) {
   // first waiting a little for a proxy that has no snapshot yet (a fire proxy
   // publishes one every few simulation steps); one taken by a watch or the live
   // view, which hold them throughout, does not wait.
+  // Wait, up to PROXY_WARMUP_MS, for proxies that have no snapshot yet; returns how long it waited.
+  async function warmProxies() {
+    const from = host.now();
+    for (const until = from + PROXY_WARMUP_MS; Object.values(host.proxyStatuses?.() ?? {}).includes('awaiting-snapshot') && host.now() < until;) await host.sleep(100);
+    return host.now() - from;
+  }
   // The sub is read as it is when drawn, after any wait.
   async function glanceOf(pilot, {maxSize, depth, phase, held = false}) {
     const release = held ? null : host.holdProxies?.() ?? null;
     try {
-      if (release) {
-        for (const until = host.now() + PROXY_WARMUP_MS; Object.values(host.proxyStatuses?.() ?? {}).includes('awaiting-snapshot') && host.now() < until;) await host.sleep(100);
-      }
+      if (release) await warmProxies();
       return await drawGlance(requireSub(pilot), {maxSize, depth, phase});
     } finally { release?.(); }
   }
@@ -447,6 +451,10 @@ export function createVantagePilot(host) {
       const mine = {pilot, until, frames: 0};
       watching = mine;
       const releaseProxies = host.holdProxies?.() ?? null;
+      // The proxies warm up before the window starts, so its first frame is not lost to a cold proxy.
+      let proxyWarmupMs = 0;
+      try { if (releaseProxies) proxyWarmupMs = await warmProxies(); }
+      catch (error) { releaseProxies(); if (watching === mine) watching = null; throw error; }
       const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000, afterMs = after * 1000;
       // The deadline frames are drawn before: the window, or after an event, the event plus `after`.
       let deadlineMs = windowMs, extended = false;
@@ -521,6 +529,7 @@ export function createVantagePilot(host) {
       host.shutter?.({kind: 'watch', label: record?.label ?? first.sub?.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'watch', route: 'own-camera', pilot, sub: record ? describe(record) : first.sub,
         requested: {seconds, fps, until, after}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
+        ...(releaseProxies ? {proxyWarmupMs} : {}),
         aspect: first.ratio, naming: 'effective-camera', ...describeProxies(first.proxies, first.proxies ? shots.map(item => item.proxies) : null),
         image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
         frames: shots.map(item => ({index: item.index, atMs: item.atMs, image: {width: item.shot.width, height: item.shot.height}, view: item.view, optics: item.optics,
