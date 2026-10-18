@@ -69,6 +69,91 @@ function colors(file) {
   return {width, height, red: red / total, blue: blue / total, yellow: yellow / total, varied};
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
+// Hot, flame-coloured pixels: bright, red over blue, with some green (orange to yellow).
+function hotShare(file) {
+  const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+  let hot = 0;
+  for (let i = 0; i < pixels.length; i += channels) {
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    if (r > 150 && g > 60 && r > 1.4 * b) hot++;
+  }
+  return hot / (width * height);
+}
+
+// --fire: the fire proxy in the sub's own view. A real flame from a stored
+// preset settles; the sub looks at it; a glance with the flame hidden is the
+// baseline, then glances, a watch and the live view are drawn with it shown.
+// Each must draw the flame proxy and say so, and nothing may stay held after.
+async function fireWitness(page) {
+  report.phase = 'fire-add'; save();
+  const presetId = options['flame-preset'] || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  const settleSteps = Number(options['settle-steps'] || 150);
+  await page.evaluate(() => window.kaminosViewportSettings.set({overlays: false, gizmos: false}));
+  await page.evaluate(id => window.kaminosSceneAuthoring.addFlameEmitter(id).then(() => true), presetId);
+  let steps = 0;
+  for (const until = Date.now() + 300000; steps < settleSteps && Date.now() < until; await page.waitForTimeout(250)) {
+    steps = await page.evaluate(() => window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0);
+  }
+  check('a real flame settles from its stored preset', steps >= settleSteps, {presetId, steps, settleSteps});
+  const domain = await page.evaluate(() => {
+    const d = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
+    const topY = Array.isArray(dims) && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3, t = d.translation, k = d.scale;
+    const min = [t[0] - k, t[1] - k, t[2] - k], max = [t[0] + k, t[1] + topY * k, t[2] + k];
+    return {target: min.map((v, i) => (v + max[i]) / 2), size: max.map((v, i) => v - min[i])};
+  });
+  report.effective.fire = {presetId, steps, domain};
+
+  report.phase = 'fire-aim'; save();
+  await vantageOk('launch');
+  const distance = Math.max(domain.size[1], domain.size[0]) * 1.55, [tx, ty, tz] = domain.target;
+  await vantageOk('goto', String(tx + distance * 0.35), String(ty + domain.size[1] * 0.12), String(tz + distance));
+  await vantageOk('look', String(tx), String(ty), String(tz));
+  const required = () => page.evaluate(() => window.kaminosProxyPreview.required());
+
+  report.phase = 'fire-glance'; save();
+  await page.evaluate(() => window.kaminosViewportSettings.set({hiddenIds: ['flame-field']}));
+  await page.waitForTimeout(500);
+  const hidden = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-hidden');
+  await page.evaluate(() => window.kaminosViewportSettings.set({hiddenIds: []}));
+  await page.waitForTimeout(500);
+  const shown = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-shown');
+  const heldAfterGlance = await required();
+  const hot = {hidden: hotShare(imageOf(hidden, 'glance')), shown: hotShare(imageOf(shown, 'glance'))};
+  report.effective.fire.glance = {hidden: hidden.result.proxies, shown: shown.result.proxies, layers: shown.result.layers, omitted: shown.result.omitted, hot};
+  check('with the flame hidden in the scene, a glance says so and draws no flame proxy', hidden.result.proxies?.fire === 'hidden'
+    && !hidden.result.layers.some(layer => /fire/.test(layer)), {proxies: hidden.result.proxies, layers: hidden.result.layers});
+  check('shown, a glance draws the flame as its proxy and says so', shown.result.proxies?.fire === 'drawn'
+    && shown.result.layers.some(layer => /fire.*proxy/.test(layer)) && !shown.result.omitted.some(item => /fire/.test(item)),
+    {proxies: shown.result.proxies, layers: shown.result.layers, omitted: shown.result.omitted});
+  check('and the flame is visible in its picture', hot.shown > hot.hidden + 0.002, hot);
+  check('a glance holds the proxies only while it draws', Object.keys(heldAfterGlance).length === 0, {required: heldAfterGlance});
+
+  report.phase = 'fire-pick'; save();
+  const picked = await vantageOk('pick', '320', String(Math.round(shown.result.image.height / 2)), '--picture', shown.recordPath);
+  check('a pick on that picture lists the flame proxy as what may cover the point', picked.result.unresolved.some(item => item.id === 'fire-proxy'),
+    {unresolved: picked.result.unresolved, hit: picked.result.hit});
+
+  report.phase = 'fire-watch'; save();
+  const watched = await vantageOk('watch', '--seconds', '2', '--fps', '2', '--frames', '--max-size', '320', '--name', 'fire-watch');
+  const heldAfterWatch = await required();
+  report.effective.fire.watch = {frames: watched.result.frames.map(frame => frame.proxies), layers: watched.result.layers, omitted: watched.result.omitted};
+  check('every watch frame draws the flame proxy and says so', watched.result.frames.length >= 3 && watched.result.frames.every(frame => frame.proxies?.fire === 'drawn'),
+    report.effective.fire.watch);
+  check('a watch lets go of the proxies when it ends', Object.keys(heldAfterWatch).length === 0, {required: heldAfterWatch});
+
+  report.phase = 'fire-live'; save();
+  await vantageOk('live', 'on', '--fps', '4');
+  await page.waitForTimeout(1500);
+  const heldLive = await required();
+  const panel = path.join(out, 'fire-live-panel.png');
+  await page.locator('#agent-vantage-hud').screenshot({path: panel});
+  report.artifacts.push(panel);
+  await vantageOk('live', 'off');
+  const heldOff = await required();
+  check('the live view holds each proxy once while on, and nothing once off', heldLive.fire === 1 && heldLive.water === 1 && Object.keys(heldOff).length === 0,
+    {on: heldLive, off: heldOff});
+  await vantageOk('remove');
+}
 // Where a picture's red pixels are and where its pick map says the red box was
 // drawn: how much they overlap, and how far apart their centres lie.
 function mapAgreement(file, pickMap, n) {
@@ -150,6 +235,9 @@ try {
     if (!linked) await new Promise(resolve => setTimeout(resolve, 200));
   }
   check('page links to the server', linked, {pageId: report.effective.pageId});
+
+  if (options.fire) await fireWitness(page);
+  else {
 
   report.phase = 'arrange'; save();
   const scene = await page.evaluate(() => {
@@ -624,6 +712,7 @@ try {
   const remaining = await page.evaluate(() => window.kaminosSceneObjectDebugState().some(object => object.id === 'vantage-bebop'));
   check('remove takes the sub out of the scene', !remaining);
 
+  }
   report.phase = 'complete';
   report.status = report.pageErrors.length ? 'passed-with-page-errors' : 'passed';
 } catch (error) {
