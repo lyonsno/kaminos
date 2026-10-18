@@ -15,7 +15,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[],numberScrubs=[];
@@ -29,6 +29,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     const sync=(force=false)=>{
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
+      if(surfaceSwitch)surfaceSwitch.checked=win.__kaminosSceneRadiance?.debugState().surfaceEnabled!==false;
       const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
       value(implementationSelector,comparison.implementation);
       value(grainSelector,comparison.grain);
@@ -48,6 +49,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       if(status&&!diagnostics&&state.available)status.textContent=`${state.evaluatedPoints??'?'} of ${state.points} sources per pixel · ${quality?.resolution??'?'} px/face · ${quality?.blockerSamples??'?'} blocker + ${quality?.filterSamples??'?'} shadow samples${state.effective!=='complementary'||comparison.implementation!=='shared'?` · Saved diagnostic mode: ${state.effective} / ${comparison.implementation}`:''}`;
       if(status&&state.status==='compiling-lighting')status.textContent='Compiling lighting asynchronously; holding the last image. Additional changes are queued.';
       if(status&&state.status==='lighting-compile-failed')status.textContent=`Lighting compilation failed: ${state.error}. Retry compilation below.`;
+      if(status&&win.__kaminosSceneRadiance?.debugState().surfaceEnabled===false)status.textContent='Fire surface lighting off: no point reduction, shadow captures or direct surface-light contribution. Visible flame and distributed smoke lighting unchanged.';
       if(retry)retry.hidden=state.status!=='lighting-compile-failed';
     };
     const apply=(points,mode)=>{
@@ -76,6 +78,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     return {
       read,sync,
       operations:{
+        setSurfaceEnabled(value){source().setSurfaceEnabled(value);sync();session.redraw();record({kind:'fire-shadow.surface-enabled',effective:value});return read();},
         async setCasterLevel(value){await source().setShadowCasterLevel(value);sync();session.redraw();const effective=source().debugState().casters;record({kind:'fire-shadow.caster-level',requested:value,effective});return effective;},
         async retryCompile(){await source().retryRebuild();sync();session.redraw();return read();},
         setShadowComparison,setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
@@ -97,6 +100,8 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         for(const [value,text]of [['fixed','Repeated sample pattern'],['complementary','Complementary neighboring pixels']]){const option=document.createElement('option');option.value=value;option.textContent=text;selector.append(option);}
         status=document.createElement('div');status.setAttribute('role','status');
         selector.addEventListener('change',()=>invoke('setSampling',selector.value).catch(failed));
+        const surfaceLabel=document.createElement('label');surfaceLabel.textContent='Fire surface lighting';
+        surfaceSwitch=document.createElement('input');surfaceSwitch.type='checkbox';surfaceSwitch.setAttribute('aria-label','Fire surface lighting');surfaceSwitch.addEventListener('change',()=>invoke('setSurfaceEnabled',surfaceSwitch.checked).catch(failed));surfaceLabel.append(surfaceSwitch);panel.append(surfaceLabel);
         const pointLabel=document.createElement('label');pointLabel.textContent='Flame lighting sources ';
         pointSelector=document.createElement('select');pointSelector.setAttribute('aria-label','Flame lighting sources');
         for(const [value,text]of [[1,'One source — whole flame'],[2,'Two sources — evaluate both'],[4,'Four sources — evaluate all'],['4-paired','Four sources — evaluate complementary pairs']]){const option=document.createElement('option');option.value=String(value);option.textContent=text;pointSelector.append(option);}

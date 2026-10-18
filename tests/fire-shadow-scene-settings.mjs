@@ -10,6 +10,7 @@ assert.equal(readFireShadowSceneSettings(new URLSearchParams()).shadowComparison
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowCasterLevel:'10k'}))).shadowCasterLevel,'10k','caster choice round trips through the authored lighting route');
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_caster_level=500')),/caster level/);
 assert.deepEqual(fireShadowSceneRoute(null),{});
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,surfaceEnabled:false}))).surfaceEnabled,false,'off persists through scene restore');
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowGrain:'screen-animated'}))).shadowComparison.grain,'screen-animated','animated grain survives authored scene serialization');
 for(const [key,value] of [['points','3'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
   assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({...route,['volume_light_field_hybrid_'+key]:value})));
