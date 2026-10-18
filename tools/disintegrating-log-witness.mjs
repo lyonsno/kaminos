@@ -147,12 +147,14 @@ try{
    const submitted=await page.evaluate(()=>window.kaminosSceneCollision.read().runtime);
    const evidence={name,submitted};report.collisionNegatives.push(evidence);await save();
    assert.equal(submitted.validation,'gpu-resident-unread');
+   assert.notEqual(submitted.geometryRevision,undefined);
    const sampled=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:Array.from(r.cells)};});
    evidence.sampled=sampled;await save();
    assert.equal(sampled.valid,false);assert.equal(sampled.runtime.reason,reason);assert.ok(sampled.cells.every(x=>x===0));
    evidence.beforeReadoutRefresh=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
-   await guarded(page.waitForFunction(reason=>window.kaminosSceneCollision.read().runtime.reason===reason&&document.getElementById('kiln-collision-status').textContent.startsWith('Unavailable'),reason));
+   await guarded(page.waitForFunction(revision=>window.kaminosSceneCollision.read().runtime.geometryRevision!==revision||document.getElementById('kiln-collision-status').textContent.startsWith('Unavailable'),submitted.geometryRevision));
    const ordinary=evidence.ordinary=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
+   assert.equal(ordinary.runtime.geometryRevision,submitted.geometryRevision,'Collision revision changed while awaiting ordinary inspector publication');
    assert.equal(ordinary.runtime.reason,reason);assert.match(ordinary.text,/Unavailable/);
   }
   await page.evaluate(async blocker=>{window.removeSceneObject(blocker);window.kaminosSceneAuthoring.setCollision((await window.kaminosWorkbenchExperiments.read()).objectId,true);},blocker);
