@@ -127,11 +127,20 @@ try{
  if(process.env.BURN_COLLISION_NEGATIVES==='1'){
   report.phase='collision-status-negatives';report.collisionNegatives=[];await save();
   await invoke('run');await invoke('pause');
+  report.collisionNegativeConfiguration=await page.evaluate(async()=>{
+   const api=window.kaminosFlameAuthoring,next=api.read();
+   next.domControls['volume-emitter-source-law'].value='legacy-volume';delete next.domControls['volume-emitter-source-law'].rawValue;
+   next.domControls['volume-input-radius'].value=.1;delete next.domControls['volume-input-radius'].rawValue;
+   await api.apply(next,'Collision diagnostic analytic source');
+   const origin=window.__kaminosVolumePrototype.debugState().followingDomain.translation;
+   window.kaminosSetSceneObjectTransform('flame-emitter',{position:origin});
+   return {purpose:'Analytic-support rejection diagnostic, separate from accepted immersed burn configuration',sourceLaw:'legacy-volume',inputRadius:.1,origin};
+  });
   const blocker=await page.evaluate(async()=>{
    const api=window.kaminosSceneAuthoring,id=(await window.kaminosWorkbenchExperiments.read()).objectId;
    api.setCollision(id,false);const blocker=api.addMesh('box',{width:.5,height:.5,depth:.5});api.setCollision(blocker,true);return blocker;
   });
-  for(const [name,position,scale,reason] of [['outside',[100,0,0],[1,1,1],'authored-solid-does-not-intersect-volume'],['occluded',null,[10,10,10],'authored-solid-occludes-emitter-source-support']]){
+  for(const [name,position,scale,reason] of [['outside',[100,0,0],[1,1,1],'authored-solid-does-not-intersect-volume'],['occluded',null,[2,2,2],'authored-solid-occludes-emitter-source-support']]){
    const before=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision);
    await page.evaluate(({blocker,position,scale})=>{const state=window.__kaminosVolumePrototype.debugState();window.kaminosSetSceneObjectTransform(blocker,{position:position??state.followingDomain.translation,scale});}, {blocker,position,scale});
    await guarded(page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision!==before,before));
