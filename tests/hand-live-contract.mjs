@@ -14,3 +14,5 @@ assert.throws(()=>liveMeshFrame({...frame,verticesMeters:[]},capture,identity),/
 assert.deepEqual(cameraCrop(640,480,.5,.5,1),[80,0,560,480]);
 assert.deepEqual(cameraCrop(640,480,0,0,.5),[-120,-120,120,120]);
 assert.throws(()=>cameraCrop(640,480,NaN,.5,1),/crop/);
+const autoCapture = {...capture, acquisitionMode:'detector', cropPadding:1.4, detectorThreshold:.18};
+assert.throws(()=>liveMeshFrame({...frame,acquisition:'operator_selected_crop_no_detector'},autoCapture,identity),/acquisition/);
