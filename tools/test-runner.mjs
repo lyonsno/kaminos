@@ -48,7 +48,14 @@ export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAM
 // for tools that only exist on some machines.
 export const SANDBOX_SHIMS = Object.freeze(['gpu-greenroom', 'launchctl', 'wezterm', 'osascript', 'open', 'claude', 'codex', 'gemini', 'gh']);
 // Variables an agent pane sets that point at live machine services.
-const SANDBOX_SCRUBBED = /(_PTY_BROKER_|^WEZTERM_UNIX_SOCKET$)/;
+// Variables an agent pane or a shell sets that point at live machine services,
+// redirect startup files, or steer git away from the sandbox's config.
+const SANDBOX_SCRUBBED = /(_PTY_BROKER_|^WEZTERM_|^CLAUDE_CODE_MESSAGING_|^SSH_AUTH_SOCK$|^GPU_GREENROOM_|^ZDOTDIR$|^BASH_ENV$|^ENV$|^GIT_DIR$|^GIT_WORK_TREE$|^GIT_INDEX_FILE$|^GIT_CONFIG$|^GIT_CONFIG_GLOBAL$|^GIT_CONFIG_SYSTEM$|^GIT_CONFIG_NOSYSTEM$|^GIT_CONFIG_COUNT$|^GIT_CONFIG_KEY_|^GIT_CONFIG_VALUE_|^GIT_CONFIG_PARAMETERS$)/;
+// Inherited names the report lists so a reader can see what still reaches
+// tests: store and service overrides, and sockets or tokens.
+const SANDBOX_NOTED = /(^KAMINOS_(?!TEST_RUNNER_|PYTHON$|BROWSER$|RUN_LEDGER$|TEST_SANDBOX|LATE_LAUNCH_SETTLE_MS$)|SOCK|TOKEN)/;
+const SANDBOX_OWNER_MARKER = '.kaminos-test-sandbox-owner';
+const SANDBOX_STUB_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/;
 const SANDBOX_GITCONFIG = '[user]\n\tname = Kaminos Test\n\temail = kaminos-test@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n[core]\n\thooksPath = /dev/null\n';
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const LATE_LAUNCH_SETTLE_MS = 2000;
@@ -334,7 +341,7 @@ const PYTHON_PROBE_TIMEOUT_MS = 60000;
 // Checks requirements.txt in the chosen interpreter and returns what it found
 // with the warnings to report. It never throws: whatever goes wrong is a
 // warning, and the run goes on.
-async function checkPythonDependencies(root, python) {
+async function checkPythonDependencies(root, python, env = process.env) {
   const warnings = [];
   const result = { checked: false, skipped: null, requirementsPath: null, requirementsSha256: null, executable: python.resolved, source: python.source, resolvedExecutable: null, python: null, declared: [], invalidLines: [], installed: {}, missing: [], stderrTail: null };
   if (python.skippedVenv) warnings.push(`the repo-local venv interpreter ${python.skippedVenv.interpreter} ${python.skippedVenv.reason}, so the python3 on PATH is used instead; recreate the venv: ${venvRemedy(root)}`);
@@ -356,7 +363,7 @@ async function checkPythonDependencies(root, python) {
     if (!result.declared.length) { result.skipped = 'requirements.txt declares nothing'; return { result, warnings }; }
     let probe;
     try {
-      probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS }));
+      probe = JSON.parse(execFileSync(result.executable, ['-c', PYTHON_DEPENDENCY_PROBE, ...result.declared], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: PYTHON_PROBE_TIMEOUT_MS, env }));
     } catch (error) {
       // The raised exception is the last error-shaped stderr line: after a
       // traceback it is the last line, but an interpreter that dies while
@@ -607,7 +614,8 @@ export async function runSuite({
   sandbox = true,
   sandboxStubs = (process.env.KAMINOS_TEST_SANDBOX_STUBS || '').split(/\s+/).filter(Boolean),
 } = {}) {
-  const sandboxShims = [...new Set([...SANDBOX_SHIMS, ...sandboxStubs.filter(name => /^[A-Za-z0-9._-]+$/.test(name))])];
+  const droppedStubs = sandboxStubs.filter(name => !SANDBOX_STUB_NAME.test(name) || name === '..');
+  const sandboxShims = [...new Set([...SANDBOX_SHIMS, ...sandboxStubs.filter(name => !droppedStubs.includes(name))])];
   browser = browser || null;
   const settleRequested = lateLaunchSettleMs;
   const settleUsable = /^\d+$/.test(String(settleRequested ?? ''));
@@ -628,9 +636,11 @@ export async function runSuite({
   // A per-run stub with the log path baked in, so a child that scrubs its
   // environment still records the attempt when it reaches the stub.
   const browserStub = path.join(logsDir, 'browser-launch-stub.sh');
-  const sandboxDir = path.join(logsDir, 'sandbox');
-  const sandboxHome = path.join(sandboxDir, 'home');
-  const sandboxBin = path.join(sandboxDir, 'bin');
+  // Chosen in prepareSandbox: the runner deletes only a sandbox directory
+  // that carries its owner marker.
+  let sandboxDir = path.join(logsDir, 'kaminos-test-sandbox');
+  let sandboxHome = path.join(sandboxDir, 'home');
+  let sandboxBin = path.join(sandboxDir, 'bin');
   const sandboxLog = path.join(logsDir, 'sandbox-attempts.tsv');
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
@@ -641,7 +651,7 @@ export async function runSuite({
         unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
-      sandbox: sandbox ? { enabled: true, home: sandboxHome, bin: sandboxBin, shims: sandboxShims, log: sandboxLog, scrubbed: [] } : { enabled: false },
+      sandbox: sandbox ? { enabled: true, home: sandboxHome, bin: sandboxBin, shims: sandboxShims, log: sandboxLog, scrubbed: [], inherited: [] } : { enabled: false },
       browser: browser ? { executable: browser, realpath: null, source: 'KAMINOS_BROWSER', passedAs: 'KAMINOS_CHROME', version: null } : null,
       manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
@@ -653,6 +663,36 @@ export async function runSuite({
   if (!settleUsable) report.warnings.push({ source: 'runner', test: null, message: `the late-launch settle ${JSON.stringify(settleRequested)} (KAMINOS_LATE_LAUNCH_SETTLE_MS) is not a whole number of milliseconds, so the default ${LATE_LAUNCH_SETTLE_MS} ms is used; set a whole number, or leave it unset` });
   const running = new Set();
   const track = child => { running.add(child); return () => running.delete(child); };
+  async function prepareSandbox() {
+    await fs.mkdir(logsDir, { recursive: true });
+    const preferred = path.join(logsDir, 'kaminos-test-sandbox');
+    if (existsSync(preferred) && !existsSync(path.join(preferred, SANDBOX_OWNER_MARKER))) {
+      sandboxDir = await fs.mkdtemp(path.join(logsDir, 'kaminos-test-sandbox-'));
+      report.warnings.push({ source: 'sandbox', test: null, message: `${preferred} exists and was not made by the runner, so it was left alone and the sandbox is ${sandboxDir}` });
+    } else {
+      sandboxDir = preferred;
+      await fs.rm(sandboxDir, { recursive: true, force: true });
+    }
+    sandboxHome = path.join(sandboxDir, 'home');
+    sandboxBin = path.join(sandboxDir, 'bin');
+    await fs.rm(sandboxLog, { force: true });
+    await fs.mkdir(sandboxBin, { recursive: true });
+    await fs.writeFile(path.join(sandboxDir, SANDBOX_OWNER_MARKER), 'made by tools/test-runner.mjs; removed and recreated each run\n');
+    for (const dir of ['.config', '.cache', '.local/share', '.local/state']) await fs.mkdir(path.join(sandboxHome, dir), { recursive: true });
+    await fs.writeFile(path.join(sandboxHome, '.gitconfig'), SANDBOX_GITCONFIG);
+    // macOS login shells run path_helper, which puts the system paths back in
+    // front; these startup files put the stubs first again afterwards.
+    const quotedBin = `'${sandboxBin.replace(/'/g, `'\\''`)}'`;
+    for (const file of ['.profile', '.bash_profile', '.zprofile']) await fs.writeFile(path.join(sandboxHome, file), `PATH=${quotedBin}:"$PATH"; export PATH\n`);
+    const quotedSandboxLog = `'${sandboxLog.replace(/'/g, `'\\''`)}'`;
+    for (const name of sandboxShims) {
+      await fs.writeFile(path.join(sandboxBin, name), `#!/bin/sh\n# Stands in for ${name} while tools/test-runner.mjs runs tests: a test must not\n# reach the operator's real tools. Record the call and refuse it.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" '${name}' "$(printf '%s' "$*" | tr '\\n\\t' '  ')" >> ${quotedSandboxLog}\necho "${name} blocked by the tools/test-runner.mjs sandbox" >&2\nexit 97\n`, { mode: 0o755 });
+    }
+    Object.assign(report.effective.sandbox, { home: sandboxHome, bin: sandboxBin,
+      scrubbed: Object.keys(inheritedEnv).filter(k => SANDBOX_SCRUBBED.test(k)).sort(),
+      inherited: Object.keys(inheritedEnv).filter(k => !SANDBOX_SCRUBBED.test(k) && SANDBOX_NOTED.test(k)).sort() });
+    if (droppedStubs.length) report.warnings.push({ source: 'sandbox', test: null, message: `KAMINOS_TEST_SANDBOX_STUBS names that are not plain tool names were dropped: ${droppedStubs.join(' ')}` });
+  }
   const killAll = () => { for (const child of running) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch {} } } };
   let interrupted = false;
   const onAbort = () => { interrupted = true; killAll(); };
@@ -699,8 +739,11 @@ export async function runSuite({
 
     // The Python check reports and goes on: what it finds is a warning with
     // the command that fixes it, and the tests run either way.
+    report.failurePhase = 'sandbox';
+    if (sandbox) await prepareSandbox();
+
     report.failurePhase = 'python-dependencies';
-    const { result: pythonDependencies, warnings: pythonWarnings } = await checkPythonDependencies(root, pythonExecutable);
+    const { result: pythonDependencies, warnings: pythonWarnings } = await checkPythonDependencies(root, pythonExecutable, sandbox ? { ...inheritedEnv, HOME: sandboxHome } : inheritedEnv);
     report.effective.pythonDependencies = pythonDependencies;
     for (const message of pythonWarnings) report.warnings.push({ source: 'python-dependencies', test: null, message });
 
@@ -791,20 +834,11 @@ export async function runSuite({
     let sandboxEnv = {};
     let baseEnv = inheritedEnv;
     if (sandbox) {
-      await fs.rm(sandboxDir, { recursive: true, force: true });
-      await fs.rm(sandboxLog, { force: true });
-      await fs.mkdir(sandboxBin, { recursive: true });
-      for (const dir of ['.config', '.cache', '.local/share', '.local/state']) await fs.mkdir(path.join(sandboxHome, dir), { recursive: true });
-      await fs.writeFile(path.join(sandboxHome, '.gitconfig'), SANDBOX_GITCONFIG);
-      const quotedSandboxLog = `'${sandboxLog.replace(/'/g, `'\\''`)}'`;
-      for (const name of sandboxShims) {
-        await fs.writeFile(path.join(sandboxBin, name), `#!/bin/sh\n# Stands in for ${name} while tools/test-runner.mjs runs tests: a test must not\n# reach the operator's real tools. Record the call and refuse it.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" '${name}' "$*" >> ${quotedSandboxLog}\necho "${name} blocked by the tools/test-runner.mjs sandbox" >&2\nexit 97\n`, { mode: 0o755 });
-      }
-      const scrubbed = Object.keys(inheritedEnv).filter(k => SANDBOX_SCRUBBED.test(k)).sort();
-      report.effective.sandbox.scrubbed = scrubbed;
       baseEnv = Object.fromEntries(Object.entries(inheritedEnv).filter(([k]) => !SANDBOX_SCRUBBED.test(k)));
+      const gitconfig = path.join(sandboxHome, '.gitconfig');
       sandboxEnv = { HOME: sandboxHome, XDG_CONFIG_HOME: path.join(sandboxHome, '.config'), XDG_CACHE_HOME: path.join(sandboxHome, '.cache'),
         XDG_DATA_HOME: path.join(sandboxHome, '.local/share'), XDG_STATE_HOME: path.join(sandboxHome, '.local/state'),
+        GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1', KAMINOS_BIND_HOST: '127.0.0.1',
         KAMINOS_TEST_RUNNER_SANDBOX_LOG: sandboxLog };
     }
     const childPath = [sandbox ? sandboxBin : null, pathPrefix, baseEnv.PATH].filter(Boolean).join(path.delimiter) || undefined;
@@ -984,6 +1018,7 @@ export function runLedgerEntry({ report, reportPath }, { durationMs, runId = nul
     dirty: effective.git?.dirty ?? null,
     selection: effective.only ? effective.only.map(normalizeSelector) : 'full',
     kinds: effective.kinds ?? null,
+    sandbox: effective.sandbox ? effective.sandbox.enabled : null,
     ok: report.ok,
     failurePhase: report.failurePhase,
     counts: report.counts,
