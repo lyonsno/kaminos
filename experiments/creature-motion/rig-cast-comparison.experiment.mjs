@@ -17,7 +17,7 @@ export default {
   const session=await host.scene.open(),document=host.controls.document,actors=[];
   let clock=0,rate=1,stop=null,controls=null,disposed=false,restoreGround=()=>{};
   const instruments=document.createElement('div');
-  const view=setup.view??{position:[-1,2,11],target:[-1,-.4,0]};
+  const view=setup.view??{position:[-1,2,17],target:[-1,-.4,0]};
   const unsubscribe=()=>{stop?.();stop=null;};
   const read=()=>({kind:'matched-rig-generated-cast-comparison',sourceRevision:setup.sourceCommit,setupSha256:digest,rate,view:session.readView(),
    actors:actors.map(a=>({slug:a.input.slug,label:a.input.label,objectId:a.asset.id,source:a.data.source,skin:a.runtime.read(),playback:a.player.read(),visible:a.placement.visible})),
