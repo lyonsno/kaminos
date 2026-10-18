@@ -512,6 +512,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
     if payload.get("schemaIdentity") != schema.get("identity"):
         raise ValueError("settings preset schema identity mismatch")
     allowed_fields = set(schema.get("allowedNativePresetFields") or [])
+    if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
+        raise ValueError("Unknown preset source radius space")
     unexpected_fields = sorted(set(payload) - allowed_fields)
     if unexpected_fields:
         raise skew(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
@@ -717,6 +719,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
 
 
 def validate_volume_settings_preset_payload(payload, schema=None):
+    if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
+        raise ValueError("Unknown preset source radius space")
     schema = _validate_settings_preset_schema(
         schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     )
@@ -853,6 +857,8 @@ def _volume_settings_content_hash(payload, schema):
         "schemaIdentity": schema["identity"],
         "controls": _volume_settings_control_values(payload, schema),
     }
+    if "sourceRadiusSpace" in payload:
+        canonical["sourceRadiusSpace"] = payload["sourceRadiusSpace"]
     renderer_controls = _volume_settings_renderer_control_values(payload, schema)
     if renderer_controls is not None:
         canonical["rendererControls"] = renderer_controls
