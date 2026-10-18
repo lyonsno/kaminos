@@ -20009,7 +20009,7 @@ function refreshVolumeReadout() {
   document.getElementById('volume-grid').textContent = `${simGridDimensions}${gridHeightNote}`;
   document.getElementById('volume-route-id').textContent = s.routeIdentity || 'native-3d-compute-fluid-raymarch-v0';
   document.getElementById('volume-canvas-state').textContent = s.active ? `${s.displayWidth || s.width}x${s.displayHeight || s.height} -> ${s.renderWidth || s.width}x${s.renderHeight || s.height}` : 'hidden';
-  document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafFps) ? `${timing.rafFps.toFixed(0)} route RAF` : '-- route RAF';
+  document.getElementById('volume-raf-fps').textContent = Number.isFinite(timing.rafMeanFps) ? `${timing.rafMeanFps.toFixed(0)} route RAF · ${timing.frameP95Ms.toFixed(1)}ms p95` : '-- route RAF';
   document.getElementById('volume-frame-p95').textContent = Number.isFinite(timing.frameP95Ms) ? `${timing.frameP95Ms.toFixed(1)} ms` : '-- ms';
   document.getElementById('volume-queue-ms').textContent = Number.isFinite(timing.queueDoneMs) ? `${timing.queueDoneMs.toFixed(1)} ms` : (timing.queueProbePending ? 'pending' : '-- ms');
   document.getElementById('volume-queue-p95').textContent = Number.isFinite(timing.queueDoneP95Ms) ? `${timing.queueDoneP95Ms.toFixed(1)} ms` : '-- ms';
@@ -20217,7 +20217,7 @@ async function mountSceneRadianceRoute(params) {
             const text=`Prepared: ${cache.counts.join(', ')} directions · ${(cache.bytes/1048576).toFixed(1)} MiB direction/visibility buffers. ${cache.retained?'A/B retention on.':'Only current set retained.'} Geometry edits invalidate all sets.`;
             const label=document.getElementById('rendering-angular-cache');
             const receiverLabel=document.getElementById('rendering-receiver-status');
-            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`PROTOTYPE: ${state.pointCount} live GPU point regions for surfaces; zero surface cache receivers. Distributed smoke retained. Spacing / surface reconstruction do not apply. Point surfaces omit smoke extinction; opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
+            if(receiverLabel){const r=state.receiverSampling;receiverLabel.textContent=hybrid?`${state.pointCount} live GPU point regions for surfaces. Distributed smoke retained. ${state.smokeShadowSteps?`Surface smoke attenuation: ${state.smokeShadowSteps} radial steps, ${state.smokeShadowResolution}px/face.`:'Surface smoke attenuation off.'} Opaque shadows at ${state.shadowResolution}px.`:r?`Requested spacing ${state.receiverSpacingRequested}; effective ${r.spacing}. ${r.receivers.toLocaleString()} light receivers / ${r.renderVertices.toLocaleString()} render vertices · ${r.stencilWidth}-sample reconstruction · ${state.visibilityBuilds} packed visibility builds. ${state.previewStale?'Stale preview; rebuild pending.':''}`:`Receiver layout ${state.status}; no verified current count.`;}
             if(label.textContent!==text)label.textContent=text;
           }
         }})

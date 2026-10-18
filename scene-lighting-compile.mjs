@@ -17,10 +17,15 @@ export async function compileSceneLighting(renderer, passes) {
       if(pass.contextNode!==null){
         const data={...prior.context.getFlowContextData(),...pass.contextNode.getFlowContextData()};
         const receiveOutput=data.getOutput;
+        const receiveAO=data.getAO;
         // compileAsync also builds dependent fullscreen producers under this
         // receiving context. Their MRT output structs are not surface colors:
         // a receiving hook would collapse GI/history attachments into vec4.
         if(receiveOutput)data.getOutput=function(node,...args){return node.isOutputStructNode?node:receiveOutput.call(this,node,...args);};
+        // NodeMaterial sets up AO even for an unlit fullscreen material. A
+        // producer compiled beneath the beauty context must not bind the very
+        // visibility attachment it is about to write (WebGPU read/write alias).
+        if(receiveAO)data.getAO=function(node,builder,...args){return builder.object?.isQuadMesh?node:receiveAO.call(this,node,builder,...args);};
         // Use a compilation-local context; the native pass owns its cache,
         // which may already exist from the initial successful scene draw.
         renderer.contextNode=TSL.context(data);

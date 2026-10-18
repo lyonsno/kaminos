@@ -5,6 +5,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
@@ -12555,13 +12556,20 @@ export function createKaminosVolumePrototype({
     if (lastRafNow > 0) pushTimingSample('rafDelta', now - lastRafNow);
     lastRafNow = now;
     pushTimingSample('cpuFrame', cpuFrameMs);
-    const rafP95 = percentileTiming(timingSamples.rafDelta, 0.95);
+    const cadence = frameCadenceSummary(timingSamples.rafDelta);
+    const rafP95 = cadence.p95Ms;
     const cpuP95 = percentileTiming(timingSamples.cpuFrame, 0.95);
     state.timing = {
       ...state.timing,
       timingEvidenceSource: 'raf-and-queue-proxy',
       timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
       rafFps: rafP95 ? 1000 / rafP95 : 0,
+      // Preserve rafFps for existing evidence consumers; its historical
+      // definition is inverse p95. The visible FPS uses the elapsed average.
+      rafMeanFps: cadence.meanFps,
+      frameMeanMs: cadence.meanMs,
+      frameTimingSamples: cadence.samples,
+      frameTimingIgnoredIntervals: cadence.ignoredSamples,
       frameDeltaMs: timingSamples.rafDelta.at(-1) ?? 0,
       frameP95Ms: rafP95 ?? 0,
       cpuFrameMs,

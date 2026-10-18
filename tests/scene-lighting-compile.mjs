@@ -19,6 +19,15 @@ const compilation=compileSceneLighting(renderer,[pass]);
 assert.equal(calls,1);assert.equal(renderer.target,pass.renderTarget,'matching pass context survives across async compilation');
 release();await compilation;
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
+// Live rebuild of combined GI can compile the filter under the receiving AO
+// context. A fullscreen producer must not sample the visibility it is writing.
+pass.contextNode=TSL.context({getAO:()=>TSL.float(.5)});
+renderer.compileAsync=async()=>{
+  const hook=renderer.contextNode.getFlowContextData().getAO,input=TSL.float(1);
+  assert.equal(hook(input,{object:{isQuadMesh:true},material:{}}),input,'fullscreen producer must bypass receiving AO');
+  assert.notEqual(hook(input,{object:{isMesh:true},material:{}}),input,'ordinary surface keeps receiving AO');
+};
+await compileSceneLighting(renderer,[pass]);
 assert.equal(camera.layers.mask,1);assert.equal(scene.name,'authored');assert.equal(scene.overrideMaterial,null);
 renderer.compileAsync=async()=>{throw Error('compile failed');};
 await assert.rejects(compileSceneLighting(renderer,[pass]),/compile failed/);
