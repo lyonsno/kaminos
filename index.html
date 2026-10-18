@@ -11423,16 +11423,18 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     lightProbe.count = count; lightProbe.shadow = shadow;
     lightProbe.positions = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
     lightProbe.normals = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
-    lightProbe.results = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
+    // One extra slot after the points carries the fire's own output (color, power).
+    lightProbe.results = new THREE.StorageInstancedBufferAttribute(new Float32Array((count + 1) * 4), 4);
     const positionsNode = TSL.storage(lightProbe.positions, 'vec4', count);
     const normalsNode = TSL.storage(lightProbe.normals, 'vec4', count);
-    const resultsNode = TSL.storage(lightProbe.results, 'vec4', count);
+    const resultsNode = TSL.storage(lightProbe.results, 'vec4', count + 1);
     lightProbe.node = Fn(() => {
       const point = positionsNode.element(TSL.instanceIndex).xyz;
       const normal = normalsNode.element(TSL.instanceIndex).xyz.normalize();
       const visible = shadow ? fireShadow.visibilityAt(point, normal) : float(1.0);
-      resultsNode.element(TSL.instanceIndex).assign(vec4(fireLightAt(point, normal).signal.mul(visible).mul(fireLightFieldStrength), visible));
-    })().compute(count);
+      const atPoint = vec4(fireLightAt(point, normal).signal.mul(visible).mul(fireLightFieldStrength), visible);
+      resultsNode.element(TSL.instanceIndex).assign(TSL.select(TSL.instanceIndex.equal(TSL.uint(count)), vec4(metaColor.rgb, firePower.mul(fireLightFieldStrength)), atPoint));
+    })().compute(count + 1);
   };
   const probeLight = async (points, { shadow = true } = {}) => {
     if (!Array.isArray(points) || points.some(p => !Array.isArray(p?.position) || p.position.length !== 3 || !p.position.every(Number.isFinite)))
@@ -11451,7 +11453,8 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     lightProbe.busy = run.catch(() => {});
     try {
       const raw = await run;
-      return { status: 'effective', identity: 'fire-light-field-world-point-probe-v0', values: points.map((_, i) => ({
+      const n = points.length * 4;
+      return { status: 'effective', identity: 'fire-light-field-world-point-probe-v0', source: { color: [raw[n], raw[n + 1], raw[n + 2]], power: raw[n + 3] }, values: points.map((_, i) => ({
         rgb: [raw[i * 4], raw[i * 4 + 1], raw[i * 4 + 2]], visibility: raw[i * 4 + 3],
         luminance: raw[i * 4] * 0.2126 + raw[i * 4 + 1] * 0.7152 + raw[i * 4 + 2] * 0.0722 })) };
     } finally { lightProbe.busy = null; }

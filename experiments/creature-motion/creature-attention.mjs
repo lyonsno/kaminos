@@ -60,13 +60,13 @@ function generator(seed){let a=seed>>>0||1;return ()=>{a=(a+0x6D2B79F5)>>>0;let 
 export function createCreatureAttention({THREE,rigFrame,profile,interests,options={}}) {
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
-  adaptSeconds:2.5,flareAt:.35,shadowAt:.5,lightFloor:.002,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
+  adaptSeconds:6,glanceSeconds:1,flareAt:.5,shadowAt:.5,lightFloor:.002,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
  let look=lookFor(profile);
  const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
- let light={status:'none',time:null,samples:0,last:null,flareArmed:true};
+ let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
  const patches=new Map();
  let weight=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
@@ -226,7 +226,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // world points). Change against a slowly adapting baseline is what counts:
  // a flare draws a look at the light's source, a sudden local darkening
  // draws a look at where the shadow fell. Steady light, bright or dim, does not.
- function sense({time,samples,source=null,status='effective'}){
+ function sense({time,samples,source=null,sourcePower=null,status='effective'}){
   if(!enabled)return;
   if(status!=='effective'||!Array.isArray(samples)){light={...light,status,time};return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
@@ -234,26 +234,45 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   // Light is remembered per fixed patch of ground, not per sample slot, so
   // walking through static light and shade changes nothing; a patch seen for
   // the first time simply starts its own baseline.
-  const k=smooth(o.adaptSeconds,dt),eps=o.lightFloor;let flare=null,shadow=null,brightest=-Infinity;
+  // Each patch keeps a short average (what it looks like now, with flicker
+  // smoothed out) and a slow baseline (what it usually looks like). A flare is
+  // the light rising everywhere at once; a shadow is one patch darkening
+  // against the others. Firelight's own flicker averages away.
+  const slow=smooth(o.adaptSeconds,dt),fast=smooth(o.glanceSeconds,dt),eps=o.lightFloor,changes=[];
   for(const x of samples){
    if(!Number.isFinite(x.luminance)||!Array.isArray(x.point))continue;
    const key=`${x.point[0].toFixed(4)},${x.point[2].toFixed(4)}`;
    let patch=patches.get(key);
-   if(!patch){patches.set(key,{value:x.luminance,armed:true,seen:time});continue;}
-   const change=Math.log((x.luminance+eps)/(patch.value+eps));
-   brightest=Math.max(brightest,change);
-   // Each change is reported once; it re-arms after the light settles.
-   if(change>o.flareAt&&light.flareArmed&&(!flare||change>flare.change))flare={change};
-   if(change<-o.shadowAt&&patch.armed&&(!shadow||change<shadow.change))shadow={change,point:x.point,patch};
-   if(change>-o.shadowAt*.5)patch.armed=true;
-   patch.value+=(x.luminance-patch.value)*k;patch.seen=time;
+   if(!patch){patches.set(key,{now:x.luminance,usual:x.luminance,armed:true,seen:time});continue;}
+   patch.now+=(x.luminance-patch.now)*fast;
+   changes.push({change:Math.log((patch.now+eps)/(patch.usual+eps)),point:x.point,patch});
+   patch.usual+=(x.luminance-patch.usual)*slow;patch.seen=time;
   }
+  const sorted=changes.map(c=>c.change).sort((p,q)=>p-q),overall=sorted.length?sorted[Math.floor(sorted.length/2)]:0;
+  // A flare is the light source itself brightening against its recent level,
+  // read from the source's own output so it holds wherever the creature walks.
+  let flare=null,surge=0;
+  if(Number.isFinite(sourcePower)&&sourcePower>=0){
+   if(light.powerNow===null){light.powerNow=sourcePower;light.powerUsual=sourcePower;}
+   light.powerNow+=(sourcePower-light.powerNow)*fast;
+   surge=Math.log((light.powerNow+eps)/(light.powerUsual+eps));
+   light.powerUsual+=(sourcePower-light.powerUsual)*slow;
+   if(surge>o.flareAt&&light.flareArmed)flare={change:surge};
+  }
+  let shadow=null;
+  for(const c of changes){
+   const local=c.change-Math.max(overall,0);
+   // Each change is reported once; it re-arms after the light settles.
+   if(local<-o.shadowAt&&c.patch.armed&&(!shadow||local<shadow.change))shadow={change:local,point:c.point,patch:c.patch};
+   if(local>-o.shadowAt*.5)c.patch.armed=true;
+  }
+  const brightest=surge;
   for(const [key,patch] of patches)if(time-patch.seen>o.lightForgetSeconds)patches.delete(key);
   if(brightest<o.flareAt*.5)light.flareArmed=true;
   if(flare)light.flareArmed=false;
   if(shadow)shadow.patch.armed=false;
   if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change)});
-  if(shadow)pendingLight.push({id:'shadow',label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6-shadow.change*.5)});
+  if(shadow)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6-shadow.change*.5)});
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){

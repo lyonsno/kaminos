@@ -207,11 +207,11 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
- let level=ring.map(()=>.1),t=0;
- const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,samples:ring.map((point,i)=>({point,luminance:level[i]}))});const w=watch(attention,c,.25,t);t=w.t;}};
+ let level=ring.map(()=>.1),power=1,t=0;
+ const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,sourcePower:power,samples:ring.map((point,i)=>({point,luminance:level[i]}))});const w=watch(attention,c,.25,t);t=w.t;}};
  step(4);assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,'steady light draws nothing');
  const before=alignment(c.bones,fire.point);
- level=level.map(l=>l*2.5);step(1.5);
+ level=level.map(l=>l*2.5);power*=2.5;step(1.5);
  let seen=attention.read().history.filter(e=>e.kind==='look');
  assert.deepEqual(seen.map(e=>[e.id,e.cause]),[['flame-emitter','light flared']],`a flare behind it draws a look at the source (${JSON.stringify(seen)})`);
  assert.ok(alignment(c.bones,fire.point)>before+.1,'and the head turns toward it');
@@ -235,11 +235,35 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
  const field=(x)=>x<1?.02:.3;let t=0,offset=-2;
  const ringAt=dx=>lightSamplePoints({center:[dx,0,-1.8],radius:.7,ground:0});
- for(let k=0;k<64;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,samples:ring.map(point=>({point,luminance:field(point[0])}))});t=watch(attention,c,.25,t).t;}
+ for(let k=0;k<64;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map(point=>({point,luminance:field(point[0])}))});t=watch(attention,c,.25,t).t;}
  assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,`walking across a static shadow edge draws nothing (${JSON.stringify(attention.read().history)})`);
  // While still walking, the flame flares: that is a change in the world and is noticed.
- for(let k=0;k<8;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,samples:ring.map(point=>({point,luminance:field(point[0])*2.5}))});t=watch(attention,c,.25,t).t;}
+ for(let k=0;k<8;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,sourcePower:2.5,samples:ring.map(point=>({point,luminance:field(point[0])*2.5}))});t=watch(attention,c,.25,t).t;}
  assert.deepEqual(attention.read().history.filter(e=>e.kind==='look').map(e=>e.cause),['light flared'],'a flare while walking is noticed');
+}
+
+{
+ // Firelight flickers: patches near the flame brighten and dim several times a
+ // second. That is the light's normal texture, not an event.
+ const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
+ let t=0,seed=7;const rand=()=>((seed=(seed*16807)%2147483647)/2147483647);
+ for(let k=0;k<160;k++){const flicker=.1*(1+.45*(rand()*2-1));attention.sense({time:t,source:fire,sourcePower:flicker*10,samples:ring.map((point,i)=>({point,luminance:flicker*(1+.3*(rand()*2-1))}))});t=watch(attention,c,.25,t).t;}
+ assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,`flicker draws nothing (${JSON.stringify(attention.read().history.map(e=>e.cause))})`);
+}
+
+{
+ // Two shadows in different places are two events, not one shadow that moved.
+ const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
+ let level=ring.map(()=>.1),t=0;
+ const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:level[i]}))});t=watch(attention,c,.25,t).t;}};
+ step(4);level[1]*=.15;step(8);level[1]=.1;step(6);level[5]*=.15;step(3);
+ const seen=attention.read().history.filter(e=>e.kind==='look');
+ assert.deepEqual(seen.map(e=>e.cause),['shadow','shadow'],`two separate shadows (${JSON.stringify(seen.map(e=>[e.id,e.cause]))})`);
+ assert.notEqual(seen[0].id,seen[1].id,'each shadow is its own thing');
 }
 
 {
