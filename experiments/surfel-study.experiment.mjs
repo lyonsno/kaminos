@@ -68,8 +68,8 @@ export default {
         checkbox.setAttribute('aria-label', 'Spatial batches');
         label.append(checkbox, document.createTextNode(' Spatial batches'));
         const help = document.createElement('p');
-        help.className = 'slider-help';
-        help.textContent = 'Compare one batch with spatial batches. Both draw the same patches and materials; spatial batches allow finer camera and shadow culling. Click the surface to select it, then orbit or move it normally.';
+        help.className = 'asset-help'; help.style.fontSize = '12px';
+        help.textContent = 'Both modes draw the same patches. Spatial batches allow finer culling. Click the surface to select it; orbit and move it normally.';
         status = document.createElement('p'); status.setAttribute('role', 'status');
         const error = document.createElement('p'); error.setAttribute('role', 'alert');
         checkbox.addEventListener('change', () => {
