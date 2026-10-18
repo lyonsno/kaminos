@@ -19271,6 +19271,7 @@ async function mountSceneRadianceRoute(params) {
           }
         }})
         : module.mountSceneRadiance({renderer,scene,prototype:volumePrototype});
+      if(hybrid&&params.has('volume_light_field_hybrid_caster_level'))await window.__kaminosSceneRadiance.setShadowCasterLevel(readFireShadowSceneSettings(params).shadowCasterLevel);
       if(distributed)sceneRadianceEditStop=bindSceneLightEditInteraction({document,window,getLighting:()=>window.__kaminosSceneRadiance});
       if(distributed&&!hybrid){
         const debug=await import('./scene-light-debug-view.mjs');
