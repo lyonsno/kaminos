@@ -8542,6 +8542,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         opticalStepConstrain(&opticalStep, minimum, maximum, stop);
       }
       t = opticalStepPosition(opticalStep);
+      let probeIndex = opticalStepIndex(opticalStep.mask);
+      if (u.reserved_render_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
+        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
+      }
     }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -16411,7 +16415,7 @@ export function createKaminosVolumePrototype({
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     uniforms.fill(0, 41, 47);
     uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
-      ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 4096 : 0;
+      ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 32 : 0;
     uniforms[42] = clampFinite(controlsSnapshot.flamePriority, 0, 1, 0);
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
@@ -16902,7 +16906,7 @@ export function createKaminosVolumePrototype({
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
       toneMapping: uniforms[46] > 0.5 ? 'agx' : 'custom',
       rayStartNoise: uniforms[47] > 0.5,
-      rayStartPattern: uniforms[47] > 0.5 ? (controlsSnapshot.rayNoiseAnimated ? 'animated-shifted-spatial-blue-noise-64-v1' : 'stable-spatial-blue-noise-64-v1') : 'midpoint',
+      rayStartPattern: uniforms[47] > 0.5 ? (controlsSnapshot.rayNoiseAnimated ? 'fast-spatiotemporal-128x128x32-v1' : 'fast-spatial-slice-zero-128-v1') : 'midpoint',
       rayNoisePhase: uniforms[41],
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       materialLawRequested: physicalColorMode === 2 ? (physicsAppearance.requested ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,

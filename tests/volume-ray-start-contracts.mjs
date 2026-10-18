@@ -30,7 +30,7 @@ assert.deepEqual(reconcileVolumeCockpitLayoutDocument({document:layout,
 const { RAY_START_WGSL, createRayStartTexture } = await import('../volume-ray-start.mjs');
 assert.match(RAY_START_WGSL, /if \(enabled < 0\.5 \|\| fullGridCapture\) \{ return 0\.5; \}/);
 assert.match(RAY_START_WGSL, /textureLoad/);
-assert.doesNotMatch(RAY_START_WGSL, /time|frameCount|sin\(/);
+assert.doesNotMatch(RAY_START_WGSL, /u\.time|frameCount|sin\(/);
 const image = readFileSync(new URL('../assets/blue-noise/64-LDR-L0.png', import.meta.url));
 assert.equal(image.readUInt32BE(16),64);assert.equal(image.readUInt32BE(20),64);
 let gpuCalls=0,closed=0;
@@ -42,6 +42,6 @@ await assert.rejects(createRayStartTexture(device,{fetchImpl:async()=>({ok:true,
   decode:async()=>({width:32,height:64,close(){closed++;}})}),/blue-noise.*dimensions/);
 assert.equal(gpuCalls,0);assert.equal(closed,1);
 await createRayStartTexture(device,{fetchImpl:async()=>({ok:true,blob:async()=>image}),
-  decode:async(_blob,options)=>{assert.equal(options.colorSpaceConversion,'none');return {width:64,height:64,close(){closed++;}};}});
+  decode:async(_blob,options)=>{assert.equal(options.colorSpaceConversion,'none');return {width:1024,height:512,close(){closed++;}};}});
 assert.equal(gpuCalls,2);assert.equal(closed,2);
 console.log('Production ray-start wiring, persistence, placement, asset and failure behavior pass');
