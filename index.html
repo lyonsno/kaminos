@@ -20223,7 +20223,8 @@ async function mountSceneRadianceRoute(params) {
         const invoke=async(name,value)=>{const result=await settings.operations[name](value);settings.sync();return result;};
         let statusKey='';
         window.kaminosFireLightingSettings={...settings,invoke,syncStatus(state){
-          const key=JSON.stringify([state.status,fireShadowSceneRoute(window.__kaminosSceneRadiance?.debugState()),state.error]);
+          const current=window.__kaminosSceneRadiance?.debugState();
+          const key=JSON.stringify([state.status,fireShadowSceneRoute(current),state.error,current?.casters]);
           if(key!==statusKey){statusKey=key;settings.sync();}
         }};
         settings.mount({root:document.getElementById('rendering-fire-shadow-controls'),document,invoke});
