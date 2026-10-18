@@ -25,7 +25,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster}){
     async setLevel(v){
       validateCasterLevel(v);if(disposed)throw Error('fire caster consumer disposed');const version=++generation;requested=v;error=null;
       if(v==='original'){level=v;clear();Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0});return;}
-      try{if(!assets.has(v)){const asset=await load(v);if(disposed||version!==generation){release(asset);return;}assets.set(v,asset);}if(version===generation){level=v;clear();}}
+      try{if(!assets.has(v)){const asset=await load(v);if(disposed||version!==generation){release(asset);return;}assets.set(v,asset);}if(version===generation){level=v;clear();Object.assign(state,{targets:0,originalTriangles:0,captureTriangles:0});}}
       catch(e){if(version===generation)error=String(e.message);throw e;}
     },
     withCapture(fn){
