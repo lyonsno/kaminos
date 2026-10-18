@@ -1,0 +1,44 @@
+{
+  "name": "@kaminos/unimate-webgpu",
+  "version": "0.1.0",
+  "description": "UniMate text-to-motion for any rigged skeleton, running in the browser on WebGPU: generate skeletal animation from a prompt, bring your own .glb rig, and export an animated, skinned .glb.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Noah Lyons",
+  "homepage": "https://lyonsno.github.io/kaminos/inference-kit/unimate/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyonsno/kaminos.git",
+    "directory": "models/unimate"
+  },
+  "keywords": [
+    "webgpu",
+    "motion-generation",
+    "text-to-motion",
+    "animation",
+    "skeletal-animation",
+    "rigging",
+    "gltf",
+    "unimate",
+    "browser-ai"
+  ],
+  "exports": {
+    ".": "./index.js",
+    "./demo": "./unimate-demo.js",
+    "./*.js": "./*.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "unimate-*.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@kaminos/webgpu-inference-kit": "^0.1.57"
+  }
+}

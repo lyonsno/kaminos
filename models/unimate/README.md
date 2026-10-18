@@ -114,12 +114,28 @@ The checks:
 - Blender plays them back with every joint within 10⁻⁶ of where the page put it.
 - Rendered at rest in Blender, the bound cat mesh looks the same as UniMate's own canonical bake of the asset.
 
+## Use it in your own project
+
+```sh
+npm install @kaminos/unimate-webgpu
+```
+
+The package is plain ES modules, MIT-licensed, and works with any bundler or straight from the browser. It contains:
+
+- `createUniMateGenerator`: generate on your own device and render loop.
+- `createUniMateConsumer`: one call takes a rigged `.glb` and a prompt and returns an animated, skinned `.glb`.
+- The rig import and the glTF export, as separate steps.
+
+[`package/README.md`](package/README.md) has examples. `pack-npm.mjs --out <dir>` builds the package from this directory's modules, so the page, the witnesses and the package run the same code. `tests/node-import-contracts.mjs` checks that every module imports outside a browser.
+
 ## Using it in an application
 
 - [`CooperativeUniMateDenoiser`](unimate-cooperative.js) is the network. `configure({ B, J })` allocates it for a batch and skeleton size. `writeConditioning(...)` and `encodePrepare(...)` set up a skeleton and caption once. Each evaluation is then encoded as command duties through a duty scheduler.
 - [`createCooperativeCfgDrift`](unimate-cooperative.js) is the classifier-free-guided velocity, and [`dopri5Solve`](unimate-dopri5.js) integrates it from noise to motion.
 - [`decodeUniMateMotion`](unimate-decode.js) turns the motion features into joint positions, local rotations and the root trajectory.
 - [`T5Encoder`](unimate-t5.js) encodes a prompt into UniMate's caption embedding.
+- [`createUniMateGenerator`](unimate-generator.js) holds the model, the generation skeleton and a cooperative generation, with no scene: give it a device, a kit session and a foreground service's `beginRun`.
+- [`createUniMateConsumer`](unimate-consumer.js) is the model as a host app's service (`read / run / stop`), the shape the Kaminos app GPU host uses.
 - [`createUniMateDemo`](unimate-demo.js) shows the complete wiring: an inference session on a shared device, a foreground service for the scene, a kit route per generation, and pause, resume and stop through the inference control.
 
 ## Checking the port

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>UniMate consumer witness</title>
+<style>html, body { margin: 0; background: #111; color: #ddd; font: 13px system-ui; } canvas { width: 480px; height: 270px; display: block; }</style></head>
+<body>
+<canvas id="c" width="480" height="270"></canvas>
+<pre id="log"></pre>
+<script type="module">
+// A minimal host app for the UniMate consumer: its own shared device, kit session and foreground
+// service, and a render loop that keeps submitting frames through that service (as the Kaminos app
+// host's frame owner does). run(asset, prompt) drives createUniMateConsumer and keeps the .glb.
+import { requestUniMateDevice } from './unimate-denoiser.js';
+import { createUniMateConsumer } from './unimate-consumer.js';
+import { createWebGpuForegroundService, createWebGpuInferenceSession } from '../../webgpu-inference-kit/src/core.js';
+
+const params = new URLSearchParams(location.search);
+const state = window.__consumerWitness = { phase: 'start', frames: 0, gaps: [], progress: [], result: null, error: null };
+try {
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  const device = await requestUniMateDevice(adapter);
+  const session = await createWebGpuInferenceSession({ sessionId: `host:${crypto.randomUUID()}`, device, adapterName: 'host-adapter' });
+  const foreground = createWebGpuForegroundService({ routeId: 'host.frames', device });
+  const ctx = document.getElementById('c').getContext('webgpu');
+  ctx.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
+  let last = null;
+  const frame = time => {
+    const h = foreground.request({ requestId: `f${state.frames}`, run(op) {
+      const enc = device.createCommandEncoder();
+      const v = 0.1 + 0.05 * Math.sin(time / 300);
+      enc.beginRenderPass({ colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [v, v, v + 0.05, 1] }] }).end();
+      op.submit([enc.finish()]);
+    } });
+    h.completion.then(r => { const now = performance.now(); if (r.status === 'completed') { state.frames++; if (last !== null && state.phase === 'running') state.gaps.push(now - last); last = now; } requestAnimationFrame(frame); });
+  };
+  requestAnimationFrame(frame);
+  const consumer = createUniMateConsumer({ device, queue: device.queue, session, beginRun: (id, options) => foreground.beginRun(id, options) }, {
+    ...(params.get('weights') ? { weightsBase: params.get('weights'), t5Base: params.get('t5') } : {}),
+    ...(params.get('budget') ? { memoryBudgetBytes: Number(params.get('budget')) } : {}),
+  });
+  window.__runConsumer = async (asset, prompt, seed = 1) => {
+    state.phase = 'running'; state.gaps = []; state.progress = []; state.result = null; state.error = null;
+    try {
+      const input = asset.url ? { bytes: await (await fetch(asset.url)).arrayBuffer(), name: asset.name, source: asset.url, restRotation: asset.restRotation ?? null } : asset;
+      const out = await consumer.run({ asset: input, prompt, seed, onProgress: p => state.progress.push({ stage: p.stage, detail: p.detail, progress: p.progress, at: performance.now() }) });
+      window.__consumerGlb = out.glb;
+      const s = [...state.gaps].sort((a, b) => a - b);
+      state.result = { glbBytes: out.glb.byteLength, skeleton: out.skeleton.name, joints: out.skeleton.parents.length, rig: out.rig, report: out.report,
+        frames: { count: s.length, p50: s[Math.floor(s.length / 2)] ?? null, p95: s[Math.floor(s.length * 0.95)] ?? null, max: s.at(-1) ?? null },
+        stages: [...new Set(state.progress.map(p => p.stage))], read: consumer.read() };
+      state.phase = 'done';
+    } catch (e) { state.error = String(e?.stack ?? e); state.phase = e?.name === 'MemoryRefusal' ? 'refused' : 'failed'; }
+  };
+  window.__consumerSlice = (a, b) => { const u = window.__consumerGlb.subarray(a, b); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+  state.phase = 'ready';
+} catch (e) { state.error = String(e?.stack ?? e); state.phase = 'failed'; }
+</script>
+</body>
+</html>
