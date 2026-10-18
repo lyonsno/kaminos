@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as vantage from '../agent-vantage.mjs';
-import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
+import {createVantagePilot, createCommandPump, installAgentVantage, connectVantageLink} from '../agent-vantage.mjs';
 import {poseAxes, poseLookingAt, rayThrough} from '../agent-vantage-core.mjs';
 import * as core from '../agent-vantage-core.mjs';
 import {createSceneCameras, cameraViewFromRecord} from '../scene-camera.mjs';
@@ -1934,4 +1934,71 @@ test('the reviewed schedules count exactly the intervals that had no frame', asy
     assert.equal(strip.frames[63].atMs, 63 * interval, 'the event frame starts on the boundary');
     assert.equal(strip.missedTicks, 0, 'every interval has a frame, so none is missed');
   }
+});
+
+// --- the shared link: every tab of a browser rides one hub stream ------------------------------
+
+// A fake browser for the page's link: its EventSources, posts and timers, and
+// a SharedWorker whose port the test speaks for.
+function linkHarness({visible = true, shared = true} = {}) {
+  const sources = [], posts = [], timers = [], ports = [], listeners = {document: {}, window: {}};
+  class FakeEventSource {
+    static CLOSED = 2;
+    constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
+    addEventListener(type, fn) { (this.handlers[type] ??= []).push(fn); }
+    close() { this.closed = true; this.readyState = 2; }
+    emit(type, event = {}) { for (const fn of this.handlers[type] ?? []) fn(event); }
+  }
+  class FakeSharedWorker {
+    constructor(url, options) {
+      this.url = String(url); this.options = options;
+      const sent = [];
+      this.port = {sent, onmessage: null, started: false, start() { this.started = true; }, postMessage(message) { sent.push(message); },
+        receive(message) { this.onmessage?.({data: message}); }};
+      ports.push(this.port);
+    }
+  }
+  const on = bag => (type, fn) => { (bag[type] ??= []).push(fn); };
+  const off = bag => (type, fn) => { bag[type] = (bag[type] ?? []).filter(item => item !== fn); };
+  const document = {visibilityState: visible ? 'visible' : 'hidden', title: 'Kaminos', hasFocus: () => visible,
+    addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
+  const window = {EventSource: FakeEventSource, ...(shared ? {SharedWorker: FakeSharedWorker} : {}), location: {href: 'http://127.0.0.1:8484/index.html'},
+    fetch: async (url, init) => { posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null}); return {status: 200, ok: true, json: async () => ({ok: true})}; },
+    setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
+  const fire = (bag, type) => { for (const fn of [...(listeners[bag][type] ?? [])]) fn(); };
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  return {sources, posts, timers, ports, document, window, fire, settle};
+}
+const linked = (h, run = async command => ({kind: command})) => connectVantageLink({window: h.window, document: h.document, endpoint: '/api/vantage', pageId: 'page-tab', run});
+
+test('a tab joins the shared hub instead of opening its own stream, and stays linked while hidden', async () => {
+  const h = linkHarness({visible: false}), ran = [];
+  const link = linked(h, async command => { ran.push(command); return {kind: command}; });
+  assert.equal(h.sources.length, 0, 'the tab holds no connection of its own to the server');
+  assert.equal(h.ports.length, 1);
+  assert.ok(h.ports[0].started);
+  assert.deepEqual(h.ports[0].sent[0], {type: 'join', endpoint: '/api/vantage', page: 'page-tab',
+    facts: {page: 'page-tab', visible: false, focused: false, href: 'http://127.0.0.1:8484/index.html', title: 'Kaminos'}});
+  h.ports[0].receive({type: 'command', page: 'page-tab', message: {id: 'c1', command: 'status', args: {}, expiresAt: Date.now() + 60000}});
+  await h.settle();
+  assert.deepEqual(ran, ['status'], 'a command reaches the tab though it is hidden');
+  assert.ok(h.posts.some(post => post.url === '/api/vantage/reply' && post.body.id === 'c1' && post.body.page === 'page-tab'), 'and the tab answers it');
+  h.ports[0].receive({type: 'ping'});
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'pong', page: 'page-tab'}, 'it says it is alive when the hub asks');
+  h.fire('window', 'pagehide');
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'leave', page: 'page-tab'}, 'closing the tab leaves the hub');
+  link.close();
+});
+
+test('a tab falls back to its own stream when the server has no hub, and when the browser has no shared workers', async () => {
+  const h = linkHarness();
+  linked(h);
+  h.ports[0].receive({type: 'fallback'});
+  assert.equal(h.sources.length, 1, 'an older server without the hub gets the per-tab link');
+  assert.match(h.sources[0].url, /\/api\/vantage\/link\?page=page-tab/);
+  const plain = linkHarness({shared: false});
+  linked(plain);
+  assert.equal(plain.sources.length, 1, 'a browser without SharedWorker links per tab as before');
+  assert.equal(plain.ports.length, 0);
 });

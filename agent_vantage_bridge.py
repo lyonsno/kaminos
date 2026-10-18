@@ -1,6 +1,8 @@
 """Relay between a terminal and the agent vantage in a live Kaminos page.
 
-A page holds one server-sent-events link and receives commands on it. A
+A page receives commands on a server-sent-events link: its own, or a hub
+stream that a browser's shared worker holds for every tab on this server, so
+open tabs never use up the browser's few connections to one host. A
 terminal posts a command and waits for that page's reply. The relay does not
 interpret commands: the page and the CLI validate them with the shared
 `agent-vantage-core.mjs` module.
@@ -28,8 +30,8 @@ class VantageError(Exception):
 
 
 class _Link:
-    def __init__(self, page_id, generation):
-        self.page_id, self.generation, self.closed = page_id, generation, False
+    def __init__(self, page_id, generation, hub=None):
+        self.page_id, self.generation, self.closed, self.hub = page_id, generation, False, hub
 
 
 class _Page:
@@ -58,6 +60,8 @@ class VantageBroker:
         self._wall = wall
         self._lock = threading.Condition()
         self._pages = {}
+        self._hubs = {}
+        self._order = itertools.count(1)
         self._pending = {}
         self._generations = itertools.count(1)
         self._focus = itertools.count(1)
@@ -77,33 +81,85 @@ class VantageBroker:
             self._lock.notify_all()
             return page.link
 
+    def attach_hub(self, hub_id):
+        """A browser's shared worker links once for all its tabs on this server.
+        Pages then join the hub. A hub that links again (the worker's stream
+        reconnected) starts empty: the worker joins its pages again."""
+        if not isinstance(hub_id, str) or not PAGE_ID.match(hub_id):
+            raise VantageError(400, "request", "hub id must be 8-80 letters, digits, dashes or underscores")
+        with self._lock:
+            previous = self._hubs.get(hub_id)
+            if previous is not None:
+                self._close(previous)
+            link = _Link(None, next(self._generations), hub=hub_id)
+            self._hubs[hub_id] = link
+            self._lock.notify_all()
+            return link
+
+    def join(self, hub_id, page_id, meta):
+        if not isinstance(page_id, str) or not PAGE_ID.match(page_id):
+            raise VantageError(400, "request", "page id must be 8-80 letters, digits, dashes or underscores")
+        with self._lock:
+            link = self._hubs.get(hub_id)
+            if link is None or link.closed:
+                raise VantageError(409, "hub", f"No hub \"{hub_id}\" is linked to this server; the page's worker links again")
+            page = self._pages.get(page_id) or _Page(page_id, self._clock)
+            self._pages[page_id] = page
+            if page.link is not None and page.link is not link and page.link.hub is None:
+                page.link.closed = True
+            page.link = link
+            page.connected_at = page.last_seen = self._clock()
+            self._update(page, meta, attached=True)
+            self._lock.notify_all()
+            return True
+
+    def leave(self, hub_id, page_id):
+        """A tab that closed, or stopped answering its hub, leaves: only its own
+        commands fail."""
+        with self._lock:
+            page = self._pages.get(page_id)
+            if page is None or page.link is None or page.link.hub != hub_id:
+                return False
+            self._drop(page)
+            self._lock.notify_all()
+            return True
+
     def detach(self, link):
         with self._lock:
-            link.closed = True
-            page = self._pages.get(link.page_id)
-            if page is None or page.link is not link:
-                return
-            # A closed page has no routing value; a reconnect registers again.
-            del self._pages[link.page_id]
-            for command_id, pending in list(self._pending.items()):
-                if pending.page_id == link.page_id:
-                    pending.failure = VantageError(502, "disconnected", "The Kaminos page closed its link before answering")
-                    pending.done.set()
-                    del self._pending[command_id]
+            self._close(link)
             self._lock.notify_all()
 
+    def _close(self, link):
+        link.closed = True
+        if link.hub is not None and self._hubs.get(link.hub) is link:
+            del self._hubs[link.hub]
+        for page in [page for page in self._pages.values() if page.link is link]:
+            # A closed page has no routing value; a reconnect registers again.
+            self._drop(page)
+
+    def _drop(self, page):
+        del self._pages[page.id]
+        for command_id, pending in list(self._pending.items()):
+            if pending.page_id == page.id:
+                pending.failure = VantageError(502, "disconnected", "The Kaminos page closed its link before answering")
+                pending.done.set()
+                del self._pending[command_id]
+
     def next_message(self, link, timeout):
+        """The next command for any page on this link, oldest first."""
         deadline = self._clock() + timeout
         with self._lock:
             while True:
                 if link.closed:
                     raise LinkClosed()
-                page = self._pages.get(link.page_id)
-                while page is not None and page.link is link and page.queue:
+                waiting = [page for page in self._pages.values() if page.link is link and page.queue]
+                while waiting:
+                    page = min(waiting, key=lambda item: item.queue[0]["order"])
                     message = page.queue.popleft()
                     if message["id"] in self._pending:
                         page.last_seen = self._clock()
                         return message
+                    waiting = [page for page in waiting if page.queue]
                 remaining = deadline - self._clock()
                 if remaining <= 0:
                     return None
@@ -150,8 +206,9 @@ class VantageBroker:
             target = self._select(page)
             pending = _Pending(target.id)
             self._pending[command_id] = pending
-            target.queue.append({"id": command_id, "command": command, "args": args,
-                                 "expiresAt": int((self._wall() + timeout) * 1000)})
+            # A hub carries many pages, so each command names its page.
+            target.queue.append({"id": command_id, "page": target.id, "command": command, "args": args,
+                                 "expiresAt": int((self._wall() + timeout) * 1000), "order": next(self._order)})
             self._lock.notify_all()
             described = self._describe(target, self._clock())
         started = self._clock()
@@ -227,5 +284,6 @@ class VantageBroker:
     def _describe(self, page, now):
         return {"id": page.id, "href": page.meta.get("href"), "title": page.meta.get("title"),
                 "visible": page.meta.get("visible"), "focused": page.meta.get("focused"),
-                "connected": page.link is not None, "lastSeenAgoMs": round((now - page.last_seen) * 1000),
+                "connected": page.link is not None, "hub": page.link.hub if page.link is not None else None,
+                "lastSeenAgoMs": round((now - page.last_seen) * 1000),
                 "pendingCommands": sum(1 for pending in self._pending.values() if pending.page_id == page.id)}

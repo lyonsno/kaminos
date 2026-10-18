@@ -13,6 +13,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
 import {poseLookingAt} from './agent-vantage-core.mjs';
+import {sharedTabsVerdict} from './agent-vantage-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/vantage.mjs');
@@ -578,6 +579,45 @@ try {
     {hit: liveGone.result.hit, drawn: liveGone.result.drawn});
   const recheckGone = await vantageOk('recheck', '--anchor', redAnchor);
   check('and a recheck of its anchor says it is no longer in the scene', recheckGone.result.now === 'missing' && recheckGone.result.status === null, recheckGone.result);
+
+  report.phase = 'shared-link'; save();
+  // Tabs in one browser profile share its few connections to a server (six over HTTP/1.1). Eight tabs,
+  // half of them hidden, then one more page: every one must be linked by its own id on the shared hub,
+  // and an agent must reach a hidden tab. Notes are off here, so only the vantage link is measured.
+  const shared = await browser.newContext({viewport: {width: 800, height: 600}});
+  const tabUrl = new URL('/index.html?notes=0', options.origin).href;
+  const vantageId = tab => tab.waitForFunction(() => window.kaminosAgentVantage?.pageId, null, {timeout: 30000}).then(handle => handle.jsonValue(), () => null);
+  const hide = () => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
+    Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+  };
+  try {
+    const tabIds = [], hiddenIds = [];
+    for (let i = 0; i < 8; i++) {
+      const tab = await shared.newPage();
+      if (i % 2) await tab.addInitScript(hide);
+      await tab.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 30000});
+      const id = await vantageId(tab);
+      tabIds.push(id);
+      if (i % 2) hiddenIds.push(id);
+    }
+    const fresh = await shared.newPage(), started = Date.now();
+    const loaded = await fresh.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 15000}).then(() => true, () => false);
+    const loadMs = Date.now() - started, freshId = loaded ? await vantageId(fresh) : null;
+    const pagesNow = async () => (await (await fetch(new URL('/api/vantage/pages', options.origin))).json()).pages;
+    let pages = await pagesNow(), verdict = sharedTabsVerdict({tabIds, freshId, pages});
+    for (const until = Date.now() + 20000; !verdict.ok && Date.now() < until; verdict = sharedTabsVerdict({tabIds, freshId, pages})) {
+      await new Promise(done => setTimeout(done, 250));
+      pages = await pagesNow();
+    }
+    const reach = hiddenIds[0] ? await vantage('status', '--page', hiddenIds[0]) : {code: null};
+    report.effective.sharedLink = {tabIds, hiddenIds, loaded, loadMs, freshId, verdict,
+      pages: pages.filter(page => [...tabIds, freshId].includes(page.id)).map(({id, connected, hub, visible}) => ({id, connected, hub, visible})),
+      hiddenCommand: {code: reach.code, page: reach.record?.page?.id ?? null, stderr: reach.stderr || null}};
+    check('eight tabs, half hidden, and one more page all load and link by their own ids on one shared hub',
+      loaded && verdict.ok, report.effective.sharedLink);
+    check('an agent command reaches a hidden tab and is answered', reach.code === 0 && reach.record?.page?.id === hiddenIds[0], report.effective.sharedLink.hiddenCommand);
+  } finally { await shared.close(); }
 
   report.phase = 'remove'; save();
   await vantageOk('remove');

@@ -925,8 +925,13 @@ export function createCommandPump({run, reply, now = () => Date.now()}) {
   };
 }
 
-export function connectVantageLink({window, document, endpoint, pageId, run, onStatus = () => {}}) {
-  let source = null, closed = false, retry = null;
+// A page links through the browser's shared vantage hub when it can
+// (agent-vantage-hub.mjs): one stream for all its tabs on this server, linked
+// whether shown or hidden. Without shared workers, or against a server
+// without the hub, it holds its own stream as before.
+export function connectVantageLink({window, document, endpoint, pageId, run, onStatus = () => {},
+  hubUrl = new URL('./agent-vantage-hub-worker.mjs', import.meta.url)}) {
+  let source = null, closed = false, retry = null, port = null;
   const post = (path, body) => window.fetch(endpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
   const facts = () => ({page: pageId, visible: document.visibilityState === 'visible', focused: document.hasFocus(), href: window.location.href, title: document.title});
   const presence = () => { if (!closed) post('/presence', facts()).catch(() => {}); };
@@ -953,15 +958,39 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
       }, () => { retry = window.setTimeout(open, 5000); });
     });
   }
+  const joinHub = () => port?.postMessage({type: 'join', endpoint, page: pageId, facts: facts()});
+  const leaveHub = () => port?.postMessage({type: 'leave', page: pageId});
+  function viaHub() {
+    if (!window.SharedWorker || !hubUrl) return false;
+    try { port = new window.SharedWorker(hubUrl, {type: 'module', name: 'kaminos-vantage-hub'}).port; }
+    catch { port = null; return false; }
+    port.onmessage = event => {
+      const data = event.data ?? {};
+      if (data.type === 'command' && data.page === pageId) pump.push(data.message);
+      else if (data.type === 'ping') port.postMessage({type: 'pong', page: pageId});
+      else if (data.type === 'status') onStatus({state: data.state, pageId, via: 'hub'});
+      else if (data.type === 'fallback') { leaveHub(); port = null; open(); }
+    };
+    port.start();
+    joinHub();
+    return true;
+  }
+  // A tab leaving (closed, or put in the back-forward cache) leaves the hub; one restored joins again.
+  window.addEventListener('pagehide', leaveHub);
+  window.addEventListener('pageshow', joinHub);
   document.addEventListener('visibilitychange', presence);
   window.addEventListener('focus', presence);
   window.addEventListener('blur', presence);
   const heartbeat = window.setInterval(presence, 15000);
-  open();
+  if (!viaHub()) open();
   return {
     pageId,
     close() {
       closed = true;
+      leaveHub();
+      port = null;
+      window.removeEventListener('pagehide', leaveHub);
+      window.removeEventListener('pageshow', joinHub);
       source?.close();
       window.clearTimeout(retry);
       window.clearInterval(heartbeat);

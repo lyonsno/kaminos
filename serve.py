@@ -3952,6 +3952,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_delete_scene(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/link":
             self.handle_vantage_link(parse_qs(parsed.query))
+        elif parsed.path == "/api/vantage/hub":
+            self.handle_vantage_hub(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/pages":
             self.handle_vantage_pages()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
@@ -4003,6 +4005,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_reply()
         elif parsed.path == "/api/vantage/presence":
             self.handle_vantage_presence()
+        elif parsed.path == "/api/vantage/join":
+            self.handle_vantage_join()
+        elif parsed.path == "/api/vantage/leave":
+            self.handle_vantage_leave()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
             notes_http().handle(self, "POST", self.path)
         else:
@@ -4088,7 +4094,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_vantage_pages(self):
         if self._vantage_allowed():
             bridge, broker = vantage_bridge()
-            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "pages": broker.pages()})
+            # `hub`: pages may share one stream per browser (see handle_vantage_hub).
+            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "hub": True, "pages": broker.pages()})
 
     def handle_vantage_link(self, query):
         if not self._vantage_allowed():
@@ -4103,6 +4110,44 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except bridge.VantageError as error:
             self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
             return
+        self._vantage_stream(bridge, broker, link)
+
+    # One stream for every Kaminos tab of a browser: its shared worker holds it,
+    # pages join it, and each command names its page.
+    def handle_vantage_hub(self, query):
+        if not self._vantage_allowed():
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            link = broker.attach_hub(query.get("hub", [None])[0])
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        self._vantage_stream(bridge, broker, link)
+
+    def handle_vantage_join(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is None:
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            broker.join(str(body.get("hub") or ""), body.get("page"), body)
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        self.send_json({"ok": True})
+
+    def handle_vantage_leave(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            left = vantage_bridge()[1].leave(str(body.get("hub") or ""), str(body.get("page") or ""))
+            self.send_json({"ok": left})
+
+    def _vantage_stream(self, bridge, broker, link):
         self.close_connection = True
         message = None
         try:
