@@ -34,6 +34,7 @@ export default {
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
+    const acquisitionControls = {};
     let handedness=inputs.handedness ?? 'right', cropX=.5, cropY=.5, cropSize=.85;
     const read = () => ({authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
       identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
@@ -110,6 +111,9 @@ export default {
       const padding=Number(value.padding ?? cropPadding), threshold=Number(value.threshold ?? detectorThreshold);
       if (!Number.isFinite(padding) || padding<1 || !Number.isFinite(threshold) || threshold<0 || threshold>1) throw Error('invalid acquisition config');
       acquisitionMode=value.mode;cropPadding=padding;detectorThreshold=threshold;sync();
+      if(acquisitionControls.mode) acquisitionControls.mode.value=acquisitionMode;
+      if(acquisitionControls.padding) acquisitionControls.padding.value=cropPadding;
+      if(acquisitionControls.threshold) acquisitionControls.threshold.value=detectorThreshold;
       record({kind:'hand-live.acquisition',phase:'applied',effective:read()});return read();
     };
     frame();
@@ -151,11 +155,13 @@ export default {
           option.disabled=value==='detector'&&!health.identity.detector;modeSelect.append(option);
         }
         modeSelect.value=acquisitionMode;
+        acquisitionControls.mode=modeSelect;
         modeSelect.onchange=()=>invoke('setAcquisition',{mode:modeSelect.value}).catch(cause=>{error=String(cause);sync();});
         root.append(modeSelect);
         for(const [label,key,value,min,step] of [['Auto padding','padding',cropPadding,1,.1],['Detector threshold','threshold',detectorThreshold,0,.01]]) {
           const holder=document.createElement('label');holder.textContent=label;
           const input=document.createElement('input');input.type='number';input.min=min;input.step=step;input.value=value;
+          acquisitionControls[key]=input;
           if(key==='threshold') input.max=1;
           input.setAttribute('aria-label',label);input.style.width='100%';
           input.onchange=()=>invoke('setAcquisition',{mode:acquisitionMode,[key]:Number(input.value)}).catch(cause=>{error=String(cause);sync();});
