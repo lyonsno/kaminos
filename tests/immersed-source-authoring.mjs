@@ -91,14 +91,17 @@ test('whole-settings check clamps apertures outside the scaled source contract a
   let current;const controls={'volume-emitter-source-law':{tagName:'SELECT',options:[{value:'immersed-source'}]},'volume-immersed-radius':{tagName:'INPUT',type:'range',min:'.02',max:'.5'}};
   const context=vm.createContext({document:{getElementById:id=>controls[id]},flameSettingsState:()=>current,normalizeFlameEmitterPose,immersedControlsForFlamePose,immersedRadiusClamp,flamePoseToDomain,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},authoredFlamePresent:true,VOLUME_RETIRED_APERTURE_PATTERNS:[]});
   vm.runInContext(grab('flameSettingsStateProblems')+'\n'+grab('flameSettingsStateClamps')+'\n'+grab('checkFlameSettingsState')+'\nthis.check=checkFlameSettingsState;this.clamps=flameSettingsStateClamps;',context);
-  for(const [scale,valid,outside,applied] of [[.8,.5,.02,.02],[2,.2,.3,.5]]){
+  for(const [scale,valid,outside,applied] of [[.8,.5,.02,.02],[2,.2,.3,.5],[1,.2,9,.5]]){
     current={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:valid}},rendererControls:{},presentationControls:{},sourcePose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]}};
     assert.equal(context.check(current),current);
     assert.deepEqual(JSON.parse(JSON.stringify(context.clamps(current))),[]);
     const wide=structuredClone(current);wide.domControls['volume-immersed-radius'].value=outside;
     assert.equal(context.check(wide),wide,'an out-of-range aperture is not refused');
-    const [clamp]=JSON.parse(JSON.stringify(context.clamps(wide)));
+    const listed=JSON.parse(JSON.stringify(context.clamps(wide)));
+    assert.equal(listed.length,1,'the radius is reported once, as the scaled aperture');
+    const [clamp]=listed;
     assert.equal(clamp.id,'volume-immersed-radius');
+    assert.match(clamp.message,/scaled immersed source radius/);
     assert.match(clamp.message,new RegExp(`clamped to ${applied}`));
   }
 });
