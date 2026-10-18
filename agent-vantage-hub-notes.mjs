@@ -37,11 +37,15 @@ export function createHubNotesChannel({EventSource, fetch, now, hubId, setTimeou
   // Presence: one report in flight at a time, each numbered higher than the last, so an older
   // set never lands after a newer one. The newest set is what is sent next; a failed report is
   // sent again. When the last page leaves, the empty set is reported until the server hears it.
-  let rev = 0, sending = false, wanted = null, heard = null, retryTimer = false;
+  // Nothing is reported to a server that never offered the hub: only once the hub's stream has
+  // opened may the server hold an attachment of this hub, and so need it retired.
+  let rev = 0, sending = false, wanted = null, heard = null, retryTimer = false, attached = false;
   function report(again = false) {
+    if (!attached) return;
     const set = JSON.stringify(pages());
-    if (!again && set === heard && !sending) return;
-    if (!subscribers.size && heard === set) return;
+    // Already the server's account, with nothing newer on its way: nothing to say.
+    if (!again && set === heard && !sending && wanted === null) return;
+    if (!subscribers.size && set === heard && !sending && wanted === null) return;
     wanted = set;
     flush();
   }
@@ -95,6 +99,7 @@ export function createHubNotesChannel({EventSource, fetch, now, hubId, setTimeou
     source = new EventSource(`${endpoint}/stream?hub=${encodeURIComponent(hubId)}&after=${highest}`);
     source.addEventListener('open', () => {
       mode = 'hub';
+      attached = true;
       for (const port of subscribers.keys()) acknowledge(port);
       report(true);
     });

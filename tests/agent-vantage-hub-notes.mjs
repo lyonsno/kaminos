@@ -312,3 +312,55 @@ test('the last page leaving tells the server so, and keeps telling it until it i
   h.check(); await h.settle();
   assert.equal(h.presencePosts().length, count, 'once heard, an idle hub reports nothing more');
 });
+
+// --- review round 2 ----------------------------------------------------------------------------
+
+test('a page leaving while a newer set is still being reported still retires that set', async () => {
+  for (const departure of ['unsubscribe', 'silence']) {
+    const held = [];
+    let hold = false;
+    const h = await notesHub({presenceStatus: () => (hold ? 'hold' : 200), holdPresence: request => held.push(request)});
+    const a = h.port();
+    subscribe(a, 'page-a'); await h.settle(); h.notesStreams()[0].emit('open'); await h.settle();
+    a.say({type: 'unsubscribe', channel: 'notes', page: 'page-a'}); await h.settle();
+    assert.deepEqual(h.presencePosts().at(-1).pages, [], 'first cycle retired');
+    hold = true;
+    const b = h.port();
+    subscribe(b, 'page-a'); await h.settle();   // the hub probes again and opens a fresh stream
+    assert.equal(h.notesStreams().length, 2);
+    h.notesStreams().at(-1).emit('open'); await h.settle();
+    assert.deepEqual(held.at(-1)?.body.pages, ['page-a'], 'the rejoin is being reported');
+    hold = false;
+    if (departure === 'unsubscribe') b.say({type: 'unsubscribe', channel: 'notes', page: 'page-a'});
+    else { h.advance(70000); h.check(); }
+    await h.settle();
+    held.shift().resolve(200); await h.settle();
+    assert.deepEqual(h.presencePosts().at(-1).pages, [], `after ${departure}, the empty set follows the held report`);
+  }
+});
+
+test('after falling back, the hub never reports presence to a server that has no hub', async () => {
+  const {createVantageHub} = await import('../agent-vantage-hub.mjs');
+  const {subscribeHubChannel} = await import('../agent-vantage-hub-notes.mjs');
+  const requests = [], timeouts = [];
+  const hub = createVantageHub({EventSource: class { addEventListener() {} close() {} }, now: () => 0, hubId: 'hub-test0001',
+    fetch: async (url, init) => {
+      requests.push({url: String(url), method: init?.method ?? 'GET'});
+      if (String(url).startsWith('/api/notes?after=')) return {status: 200, ok: true, json: async () => ({ok: true, lastSeq: 3})};
+      return {status: 404, ok: false, json: async () => ({ok: false})};
+    },
+    setInterval() {}, setTimeout: (fn, ms) => timeouts.push({fn, ms})});
+  // A real MessageChannel joins the page helper to the hub, as the shared worker does.
+  const {port1, port2} = new MessageChannel();
+  hub.connect(port2);
+  let fellBack = 0;
+  const window = {SharedWorker: class { constructor() { this.port = port1; } }, fetch: async () => ({ok: true, json: async () => ({events: []})}),
+    addEventListener() {}, removeEventListener() {}, setInterval: () => 0, clearInterval() {}, setTimeout: () => 0, clearTimeout() {}};
+  subscribeHubChannel({window, channel: 'notes', endpoint: '/api/notes', page: 'page-a', after: 0, onEvent() {}, onFallback: () => fellBack++});
+  for (let i = 0; i < 20 && !fellBack; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  await new Promise(resolve => setTimeout(resolve, 20));
+  port1.close(); port2.close();
+  assert.equal(fellBack, 1);
+  assert.ok(!requests.some(request => request.url === '/api/notes/presence'), 'no presence report');
+  assert.equal(timeouts.length, 0, 'and no presence retry');
+});
