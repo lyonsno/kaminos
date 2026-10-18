@@ -181,3 +181,30 @@ test('an unusable extra stub name is dropped with a warning, never crashing the 
   assert.ok(report.effective.sandbox.shims.includes('shoptool'));
   assert.ok(report.warnings.some(w => w.source === 'sandbox' && /KAMINOS_TEST_SANDBOX_STUBS/.test(w.message) && /\.\./.test(w.message)), JSON.stringify(report.warnings));
 });
+
+test("a test that gives its children their own HOME and .gitconfig gets that config, and the sandbox's is untouched", async t => {
+  await realMachine(t);
+  const body = "import { execFileSync } from 'node:child_process'; import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';\n"
+    + "const home = fs.mkdtempSync(path.join(os.tmpdir(), 'h-')); fs.writeFileSync(path.join(home, '.gitconfig'), '[user]\\n\\tname = Fixture Person\\n');\n"
+    + "const env = { ...process.env, HOME: home };\n"
+    + "const name = execFileSync('git', ['config', '--global', 'user.name'], { env, encoding: 'utf8' }).trim();\n"
+    + "execFileSync('git', ['config', '--global', 'fixture.touched', 'yes'], { env });\n"
+    + "fs.rmSync(home, { recursive: true, force: true }); process.exit(name === 'Fixture Person' ? 0 : 1);\n";
+  const f = await fixture(t, node('rh.mjs', body));
+  await run(f);
+  const report = await readReport(f);
+  assert.equal(report.ok, true);
+  assert.doesNotMatch(await fs.readFile(path.join(report.effective.sandbox.home, '.gitconfig'), 'utf8'), /touched/);
+});
+
+test('runs beside a directory the runner does not own reuse one runner-made sibling instead of piling them up', async t => {
+  await realMachine(t);
+  const f = await fixture(t, node('a.mjs', 'process.exit(0);\n'));
+  const logs = path.join(f.root, 'out', 'logs');
+  await fs.mkdir(path.join(logs, 'kaminos-test-sandbox'), { recursive: true });
+  await fs.writeFile(path.join(logs, 'kaminos-test-sandbox', 'keep.txt'), 'mine');
+  for (let i = 0; i < 3; i++) await run(f);
+  const siblings = (await fs.readdir(logs)).filter(n => n.startsWith('kaminos-test-sandbox-'));
+  assert.equal(siblings.length, 1, siblings.join(', '));
+  assert.equal(await fs.readFile(path.join(logs, 'kaminos-test-sandbox', 'keep.txt'), 'utf8'), 'mine');
+});

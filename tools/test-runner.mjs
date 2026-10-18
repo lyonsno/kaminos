@@ -666,18 +666,24 @@ export async function runSuite({
   async function prepareSandbox() {
     await fs.mkdir(logsDir, { recursive: true });
     const preferred = path.join(logsDir, 'kaminos-test-sandbox');
-    if (existsSync(preferred) && !existsSync(path.join(preferred, SANDBOX_OWNER_MARKER))) {
-      sandboxDir = await fs.mkdtemp(path.join(logsDir, 'kaminos-test-sandbox-'));
+    const owned = dir => existsSync(path.join(dir, SANDBOX_OWNER_MARKER));
+    if (existsSync(preferred) && !owned(preferred)) {
+      // Reuse a runner-made sibling from an earlier run rather than adding one.
+      const sibling = (await fs.readdir(logsDir)).filter(n => n.startsWith('kaminos-test-sandbox-')).map(n => path.join(logsDir, n)).find(owned);
+      sandboxDir = sibling || await fs.mkdtemp(path.join(logsDir, 'kaminos-test-sandbox-'));
       report.warnings.push({ source: 'sandbox', test: null, message: `${preferred} exists and was not made by the runner, so it was left alone and the sandbox is ${sandboxDir}` });
     } else {
       sandboxDir = preferred;
-      await fs.rm(sandboxDir, { recursive: true, force: true });
     }
+    await fs.rm(sandboxDir, { recursive: true, force: true });
+    await fs.mkdir(sandboxDir, { recursive: true });
+    // The marker goes in first, so a run stopped part-way still leaves a
+    // directory later runs recognise as the runner's.
+    await fs.writeFile(path.join(sandboxDir, SANDBOX_OWNER_MARKER), 'made by tools/test-runner.mjs; removed and recreated each run\n');
     sandboxHome = path.join(sandboxDir, 'home');
     sandboxBin = path.join(sandboxDir, 'bin');
     await fs.rm(sandboxLog, { force: true });
     await fs.mkdir(sandboxBin, { recursive: true });
-    await fs.writeFile(path.join(sandboxDir, SANDBOX_OWNER_MARKER), 'made by tools/test-runner.mjs; removed and recreated each run\n');
     for (const dir of ['.config', '.cache', '.local/share', '.local/state']) await fs.mkdir(path.join(sandboxHome, dir), { recursive: true });
     await fs.writeFile(path.join(sandboxHome, '.gitconfig'), SANDBOX_GITCONFIG);
     // macOS login shells run path_helper, which puts the system paths back in
@@ -737,11 +743,12 @@ export async function runSuite({
       throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). ${npmRemedy(report.effective.nodeModules)}`), { phase: 'dependencies' });
     }
 
-    // The Python check reports and goes on: what it finds is a warning with
-    // the command that fixes it, and the tests run either way.
+    // The sandbox is prepared before the Python check, which runs with its HOME.
     report.failurePhase = 'sandbox';
     if (sandbox) await prepareSandbox();
 
+    // The Python check reports and goes on: what it finds is a warning with
+    // the command that fixes it, and the tests run either way.
     report.failurePhase = 'python-dependencies';
     const { result: pythonDependencies, warnings: pythonWarnings } = await checkPythonDependencies(root, pythonExecutable, sandbox ? { ...inheritedEnv, HOME: sandboxHome } : inheritedEnv);
     report.effective.pythonDependencies = pythonDependencies;
@@ -835,10 +842,11 @@ export async function runSuite({
     let baseEnv = inheritedEnv;
     if (sandbox) {
       baseEnv = Object.fromEntries(Object.entries(inheritedEnv).filter(([k]) => !SANDBOX_SCRUBBED.test(k)));
-      const gitconfig = path.join(sandboxHome, '.gitconfig');
       sandboxEnv = { HOME: sandboxHome, XDG_CONFIG_HOME: path.join(sandboxHome, '.config'), XDG_CACHE_HOME: path.join(sandboxHome, '.cache'),
         XDG_DATA_HOME: path.join(sandboxHome, '.local/share'), XDG_STATE_HOME: path.join(sandboxHome, '.local/state'),
-        GIT_CONFIG_GLOBAL: gitconfig, GIT_CONFIG_NOSYSTEM: '1', KAMINOS_BIND_HOST: '127.0.0.1',
+        // HOME is the sandbox home, so git reads its .gitconfig; a test that
+        // re-homes its own children gets theirs (no forced GIT_CONFIG_GLOBAL).
+        GIT_CONFIG_NOSYSTEM: '1', KAMINOS_BIND_HOST: '127.0.0.1',
         KAMINOS_TEST_RUNNER_SANDBOX_LOG: sandboxLog };
     }
     const childPath = [sandbox ? sandboxBin : null, pathPrefix, baseEnv.PATH].filter(Boolean).join(path.delimiter) || undefined;
