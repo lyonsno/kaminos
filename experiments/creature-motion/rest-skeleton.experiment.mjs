@@ -116,6 +116,7 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   unsubscribe=edits.subscribe(state=>{if(disposed)return;if(!state.active&&!state.replaying){draft=null;placeProxy();}refresh();});
   if(baseline.rest_authoring.view)session.setView(baseline.rest_authoring.view);else operations.frame();
   win.kaminosSelection.set([asset.id],asset.id);
+  if(inputs.starting_body)operations.startFrom({id:inputs.starting_body});
  }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget].includes(entry.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();await session.dispose();throw e;}
  function drawReference(){
   for(const child of [...referenceRoot.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
