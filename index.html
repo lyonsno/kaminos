@@ -3593,6 +3593,9 @@ import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
 import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
+import { createRetainedSetup } from './retained-setup.mjs';
+import { projectEmitterSetup } from './scene-setup-projection.mjs';
+import { mountRetainedSetupControls, downloadSetup } from './retained-setup-controls.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -22694,6 +22697,34 @@ function updateAuthoringPropertySelection() {
   });
 }
 let flameInspector = null;
+let startingSceneSetup = null, startingSceneControls = null;
+function retainStartingScene(data) {
+  if (startingSceneSetup) startingSceneSetup.replace(data);
+  else startingSceneSetup = createRetainedSetup({document:data,validate:value=>planSceneRestore(value,{allowEmpty:true})});
+  startingSceneControls?.update();
+  return startingSceneSetup.read();
+}
+window.kaminosStartingSetup = {
+  read:()=>startingSceneSetup?.read()??null,
+  async remember() {
+    if(sceneSaveIsBlocked()||authoringBusy)throw Error('Finish the current scene action before retaining a setup');
+    await collectSceneComposition();
+    return retainStartingScene(buildSceneData());
+  },
+  prepare() {
+    if(sceneSaveIsBlocked()||authoringBusy)throw Error('Finish the current scene action before keeping changes');
+    if(!startingSceneSetup)throw Error('Choose Use current as setup before editing a new scene');
+    if(activeSceneObjectId!==FLAME_EMITTER_ID)throw Error('Select the emitter to keep its changes');
+    return startingSceneSetup.prepare({observe:()=>buildSceneData(),project:projectEmitterSetup});
+  },
+  undo:()=>startingSceneSetup?.undo(),redo:()=>startingSceneSetup?.redo(),
+  async begin(data=startingSceneSetup?.read().document) {
+    if(!data)throw Error('Starting setup is unset');
+    if(sceneSaveIsBlocked()||authoringBusy)throw Error('Finish the current scene action before beginning again');
+    // The ordinary authored-fire loader opens a fresh runtime from these bytes.
+    await loadSceneFile(new File([JSON.stringify(data)],'Starting setup.kaminos.json',{type:'application/json'}));
+  },
+};
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
   panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
@@ -22725,6 +22756,9 @@ function createFlameQuickFields() {
     writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,
     onError:error=>setInfo(error.message)});
+  startingSceneControls?.dispose();
+  startingSceneControls=mountRetainedSetupControls({document,root:document.getElementById('selected-flame-properties'),title:'Scene',
+    ...window.kaminosStartingSetup,save:data=>downloadSetup(document,data,'starting-setup.kaminos.json')});
 }
 
 function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt) {
@@ -27755,6 +27789,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   } else {
     setInfo(localLiquidFailure ? `Scene loaded; water host unavailable: ${localLiquidFailure}` : 'Volume scene loaded');
   }
+  retainStartingScene(data);
 }
 
 // File input handler for Load Scene

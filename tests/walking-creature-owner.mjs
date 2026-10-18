@@ -34,5 +34,17 @@ held.operations.mode({mode:'path'});held.operations.seek({frame:2});matchesHeld(
 let count=refreshes;held.operations.replay();assert.ok(refreshes>count,'restart refreshes the reset pose');matchesHeld('restart pose');
 frameCallback({deltaSeconds:1/30});count=refreshes;held.operations.pause();assert.ok(refreshes>count,'pause refreshes the held pose');matchesHeld('pause pose');
 held.operations.mode({mode:'source'});held.operations.play();frameCallback({deltaSeconds:1/30});count=refreshes;frameCallback({deltaSeconds:1/30});assert.ok(refreshes>count,'source endpoint refreshes the final held pose');matchesHeld('source endpoint pose');
+assert.equal(typeof held.setup?.prepare,'function','creature lacks the common retained starting-setup transaction');
+const observedFrame=held.read().playback.frame,observedPelvis=scene.getObjectByName('pelvis').getWorldPosition(new THREE.Vector3()).toArray();
+held.operations.rate({rate:2});
+const keep=held.setup.prepare();
+held.operations.seek({frame:1});
+keep.commit({startHere:true,placement:false,behavior:true});
+const retained=held.setup.read().document;
+assert.equal(retained.rate,2);assert.equal(retained.sample,0);assert.equal(held.read().playback.frame,1,'Keeping setup changed the live pose');
+assert.equal(observedFrame,2);
 await held.dispose();
+const restarted=await module.createWalkingCreature({host:{controls:{document},scene:{open:async()=>session}},inputs:retained},{loadSources:async()=>data});
+assert.deepEqual(scene.getObjectByName('pelvis').getWorldPosition(new THREE.Vector3()).toArray(),observedPelvis,'Fresh source start did not land at the captured pelvis location');
+assert.equal(restarted.read().playback.frame,0);await restarted.dispose();
 console.log('Full-body walking consumes one actual shared scene attachment/clock and releases its own instance');

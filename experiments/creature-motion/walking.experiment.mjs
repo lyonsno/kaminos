@@ -10,6 +10,9 @@ import {createSkinCaseSelection,validateSkinCaseChoices} from './skin-case-selec
 import {loadFullBodySkin} from './full-body-source.mjs';
 import {mountCreatureProperties} from './creature-properties.mjs';
 import {createCreatureAttention,deriveHeadProfile,sceneObjectInterests} from './creature-attention.mjs';
+import {createRetainedSetup} from '../../retained-setup.mjs';
+import {mountRetainedSetupControls,downloadSetup} from '../../retained-setup-controls.mjs';
+import {projectCreatureSetup} from './setup-projection.mjs';
 
 function checkAuthoredTransform(t){
  if(t!==undefined&&(t?.position?.length!==3||t?.quaternion?.length!==4||t?.scale?.length!==3||![...t.position,...t.quaternion,...t.scale].every(Number.isFinite)||t.scale.some(v=>v<=0)||Math.abs(Math.hypot(...t.quaternion)-1)>1e-5))throw Error('Invalid authored creature transform or scale');
@@ -56,6 +59,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  let session,runtime,asset,floor,floorAsset,pathGuide,player,attention=null,attentionSkin=null,skinSelection,presentation,seating,stop=null,clock=0,cycle=0,mode='source',rate=inputs.rate??1,disposed=false,disposal,motionRequest=0,restoreGround=()=>{},restoreGizmos=()=>{},refresh=()=>{};
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
+ let setup=null,setupControls=null;
  const instruments=document.createElement('div');
  const unsubscribe=()=>{const previous=stop;stop=null;previous?.();};
  function read(){const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
@@ -91,9 +95,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>attention?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(unsubscribe);refresh=()=>{};attempt(()=>setupControls?.dispose());attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>attention?.dispose());attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
+   if(globalThis.window?.kaminosWalkingSetup===setup)delete globalThis.window.kaminosWalkingSetup;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
   });return disposal;
  }
@@ -197,23 +202,44 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(inputs.play!==undefined&&typeof inputs.play!=='boolean')throw Error('Initial playback must be boolean');
   if(inputs.play===true)operations.play();
   host.scene.refreshPresentation?.(asset);
+  const retained=createRetainedSetup({document:read().recipe,validate:checkRecipeInputs});
+  setup={read:retained.read,undo:retained.undo,redo:retained.redo,
+   remember(){active();return retained.replace(read().recipe);},
+   prepare(){active();return retained.prepare({project:projectCreatureSetup,observe(){
+    placement.updateMatrixWorld(true);
+    const pelvis=[...runtime.bones.values()].find(b=>!b.parent?.isBone);
+    const point=pelvis.getWorldPosition(new THREE.Vector3());placement.parent.worldToLocal(point);
+    const startLocalPositions={};
+    for(const mode of ['source','cycle','path']){
+     const frame=walking.frame(0,{mode,cycle:0}),root=frame.bones.find(b=>b.parent===null);
+     const matrix=new THREE.Matrix4().fromArray(frame.actorMatrix).multiply(new THREE.Matrix4().fromArray(root.localMatrix));
+     startLocalPositions[mode]=new THREE.Vector3().setFromMatrixPosition(matrix).toArray();
+    }
+    return {recipe:read().recipe,currentPosition:point.toArray(),startLocalPositions};
+   }});},
+  };
   if(globalThis.window)window.kaminosWalkingCreature=inspect;
-  return {read,operations,dispose,mount({root,invoke,reopen=recipe=>{
+  if(globalThis.window)window.kaminosWalkingSetup=setup;
+  return {read,operations,dispose,setup,mount({root,invoke,reopen=recipe=>{
    const entry=globalThis.window?.kaminosWorkbenchExperiments;if(typeof entry?.open!=='function')throw Error('Shared creature setup entry is unavailable');return entry.open('marionette/walking-creature',recipe);
   }}){
-   seating?.dispose();presentation?.dispose();
+   setupControls?.dispose();seating?.dispose();presentation?.dispose();
+   async function openRecipe(recipe){
+    checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
+    const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
+    createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
+    active();await reopen(recipe);
+   }
    presentation=mountCreatureProperties({document,read,invoke,
     save(recipe){const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
-    async open(recipe){
-     checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
-     const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
-     createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
-     active();await reopen(recipe);
-    }});
+    open:openRecipe});
+   setupControls=mountRetainedSetupControls({document,root:presentation.properties,title:'Creature',...setup,
+    save:recipe=>downloadSetup(document,recipe,'creature.starting-setup.json'),
+    begin:openRecipe});
    refresh=presentation.update;
    if(host.controls.mountObject)seating=host.controls.mountObject({asset,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
    else root.append(presentation.properties,presentation.playback);
-   refresh();return {dispose(){seating?.dispose();presentation?.dispose();refresh=()=>{};}};
+   refresh();return {dispose(){setupControls?.dispose();seating?.dispose();presentation?.dispose();refresh=()=>{};}};
   }};
  }catch(error){await dispose();throw error;}
 }
