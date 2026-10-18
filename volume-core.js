@@ -17151,11 +17151,15 @@ export function createKaminosVolumePrototype({
       emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
       emissiveWhiteKelvin = whiteKelvin;
     }
-    const transportedEmissiveMaterial = (controlsSnapshot.physicalMaterialLaw ?? 0) === 1;
     const physicsAppearance = resolvePhysicsAppearance(controlsSnapshot, {
       reactantAdmitted: reactantCombustionConfig.effective.admitted === true,
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
+    // Physics (soot x blackbody) is the material law (operator, 2026-10-18; the
+    // legacy laws' controls are retired). Where it cannot draw, because the
+    // authored reaction law carries no soot and temperature fields it trusts,
+    // the transported heat + soot material stands in, never the mixed carriers.
+    const transportedEmissiveMaterial = !physicsAppearance.effective.render;
     state.physicsAppearance = physicsAppearance;
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,

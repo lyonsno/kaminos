@@ -110,44 +110,13 @@ fn sootBurnoutSurvival(heat: f32, oxidizerFraction: f32, timeStep: f32) -> f32 {
 `;
 
 // Cockpit controls that do not reach the frame under physics appearance.
-// unused: no path to the pixels (they shape the carrier-built coverage, the
-// boundary-fire, shell and pyro paintings, or the replaced Kelvin mapping).
-// carriers-only: they drive the appearance carriers, which are not drawn; they
-// can still move the flow when a carrier force toggle is on.
-const unused = [
-  'volume-physical-temperature', 'volume-physical-spread',
-  'volume-radiance', 'volume-glow', 'volume-exposure',
-  'volume-reaction-boundary-gradient', 'volume-reaction-boundary-support-thermal', 'volume-reaction-boundary-support-reaction',
-  'volume-reaction-boundary-support-front', 'volume-reaction-boundary-support-interface', 'volume-reaction-boundary-cut',
-  'volume-reaction-boundary-softness', 'volume-reaction-boundary-core-reject', 'volume-reaction-boundary-topology',
-  'volume-reaction-boundary-curl', 'volume-reaction-boundary-divergence', 'volume-reaction-boundary-contrast',
-  'volume-reaction-boundary-gamma', 'volume-reaction-boundary-opacity', 'volume-reaction-boundary-fire-ridge',
-  'volume-reaction-boundary-fire-ridge-cut', 'volume-reaction-boundary-fire-tip', 'volume-reaction-boundary-fire-erosion',
-  'volume-reaction-boundary-fire-clean-blue', 'volume-reaction-boundary-fire-soot', 'volume-reaction-boundary-fire-yellow',
-  'volume-reaction-boundary-fire-warmth', 'volume-reaction-boundary-fire-luma', 'volume-reaction-boundary-fire-clean-color',
-  'volume-reaction-boundary-fire-soot-color', 'volume-reaction-shell-gamma', 'volume-reaction-shell-contrast',
-  'volume-shell-amount', 'volume-shell-width', 'volume-shell-thermal', 'volume-shell-reaction', 'volume-shell-front',
-  'volume-shell-edge', 'volume-shell-curl', 'volume-shell-core-suppress', 'volume-shell-bite', 'volume-shell-heat',
-  'volume-shell-divergence', 'volume-shell-luma', 'volume-shell-exposure', 'volume-shell-soft-clip', 'volume-shell-smoke',
-  'volume-pyro-detail', 'volume-pyro-material-gain', 'volume-pyro-interface-focus', 'volume-pyro-edge-bite',
-  'volume-pyro-bite-border', 'volume-pyro-bite-teeth', 'volume-pyro-bite-wake', 'volume-pyro-bite-height',
-  'volume-pyro-bite-fire-lock', 'volume-pyro-bite-core', 'volume-pyro-bite-core-cut', 'volume-pyro-bite-rim',
-  'volume-pyro-bite-rim-cut', 'volume-pyro-bite-after', 'volume-pyro-bite-after-cut', 'volume-pyro-fire-mode',
-  'volume-pyro-flame-paint', 'volume-pyro-stock-mix', 'volume-pyro-flame-luma', 'volume-pyro-flame-core-color',
-  'volume-pyro-flame-edge-color', 'volume-pyro-bite-heat', 'volume-pyro-bite-chroma', 'volume-pyro-bite-luma',
-  'volume-pyro-bite-ember-color', 'volume-pyro-bite-hot-color', 'volume-pyro-smoke-fold', 'volume-pyro-fold-border',
-  'volume-pyro-fold-wake', 'volume-pyro-wake-lift', 'volume-pyro-wake-warmth', 'volume-pyro-wake-luma',
-  'volume-pyro-wake-shadow-color', 'volume-pyro-wake-ember-color', 'volume-pyro-radiance', 'volume-pyro-radiance-gate',
-  'volume-pyro-radiance-spill', 'volume-pyro-radiance-warmth', 'volume-pyro-radiance-hue', 'volume-pyro-radiance-chroma',
-  'volume-pyro-radiance-luma', 'volume-pyro-radiance-cool-color', 'volume-pyro-radiance-warm-color', 'volume-pyro-radiance-source',
-  'volume-pyro-radiance-height', 'volume-pyro-radiance-border', 'volume-pyro-radiance-teeth', 'volume-pyro-radiance-rise',
-  'volume-pyro-radiance-fire-lock', 'volume-pyro-flow-bite', 'volume-pyro-flow-border', 'volume-pyro-flow-teeth',
-  'volume-pyro-flow-rise', 'volume-pyro-flow-fire-lock', 'volume-pyro-flow-luma', 'volume-pyro-flow-radiance',
-  'volume-pyro-flow-spikes', 'volume-pyro-flow-cool-color', 'volume-pyro-flow-hot-color', 'volume-pyro-diagnostic-paint',
-  'volume-pyro-overdrive',
-];
+// The paintings that used to be listed here (boundary-fire, shell and pyro
+// controls, the replaced Kelvin mapping) were retired on 2026-10-18 with the
+// legacy material laws; what remains are the appearance carriers' drivers,
+// which are not drawn but can still move the flow when a carrier force
+// toggle is on.
 const carriersOnly = ['volume-fire-licks', 'volume-interface-shred', 'volume-microdetail', 'volume-detail-scale'];
-export const PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS = Object.freeze([
-  ...unused.map(id => Object.freeze({ id, reason: 'unused' })),
-  ...carriersOnly.map(id => Object.freeze({ id, reason: 'carriers-only' })),
-]);
+export const PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS = Object.freeze(
+  carriersOnly.map(id => Object.freeze({ id, reason: 'carriers-only' })),
+);
+
