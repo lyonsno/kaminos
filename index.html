@@ -27805,7 +27805,8 @@ sceneInitialization.then(async () => {
   // Load HDR environment first, then auto-load deep-linked splat if present
   const environmentLoaded = loadEnvironment(initialEnvironment || 'studio').then(async () => {
     if(startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation(location.href)&&!sceneObjects.length&&!scenePlacementTools.state().undoCount&&!scenePlacementTools.state().active) {
-      const blank=newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults);
+      // A new scene from defaults is a new scene: its own id, not one named by the shared template's bytes.
+      const blank={...newSceneDocument(factorySceneDocument,startupPreferences.sceneDefaults),sceneId:mintSceneId()};
       await loadSceneFile(new File([JSON.stringify(blank)],'Untitled.kaminos.json'),{mounted:true,emptySettings:true});
       if(sceneSaveBlockedByFailedRestore)throw Error('Default scene settings did not finish loading');
       sceneDefaultsApplied=true;setInfo('New scene · your saved defaults');

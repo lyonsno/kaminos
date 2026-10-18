@@ -51,4 +51,8 @@ assert.match(load, /const documentSceneId = restorePlan\.sceneId \|\| await scen
 assert.match(load, /claimLoadedSceneFile\(file, sceneFile\);\n  currentSceneId = documentSceneId;/, "the document's id is taken where the load settles");
 const clear = html.slice(html.indexOf('function clearScene('), html.indexOf('function clearScene(') + 400);
 assert.match(clear, /sceneLoadRequests\.invalidate\(\); currentSceneId = mintSceneId\(\);/, 'clearing outside a load starts a new scene');
+// A new scene started from saved defaults is a new scene each time, never one
+// shared by every page that starts from the same defaults.
+const startup = html.slice(html.indexOf('startupPreferences?.sceneDefaults&&sceneDefaultsApplyToLocation('), html.indexOf("setInfo('New scene · your saved defaults')"));
+assert.match(startup, /const blank=\{\.\.\.newSceneDocument\(factorySceneDocument,startupPreferences\.sceneDefaults\),sceneId:mintSceneId\(\)\};/, 'a new scene from defaults gets its own fresh id');
 console.log('scene identity contracts passed');
