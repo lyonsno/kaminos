@@ -2761,6 +2761,11 @@ def save_mesh_lod_level(payload):
         raise ValueError('Level textureSize must be a positive integer')
     if level['sha256'] == source:
         raise ValueError('A mesh cannot be its own level')
+    if 'error' in level:
+        relative = (level['error'] or {}).get('relative') if isinstance(level['error'], dict) else None
+        if not isinstance(relative, dict) or any(type(relative.get(k)) not in (int, float) or not math.isfinite(relative[k]) or relative[k] < 0
+                                                 for k in ('max', 'p95', 'mean')):
+            raise ValueError('Level error needs finite non-negative relative max, p95 and mean')
     root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
     for sha in (source, level['sha256']):
         if not (root / (sha + '.glb')).is_file():
@@ -2797,6 +2802,8 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
         raise ValueError('Choose by faces or by maxError, not both')
     if stat not in ('max', 'p95', 'mean'):
         raise ValueError('stat must be max, p95 or mean')
+    if max_error is not None and not (math.isfinite(max_error) and max_error >= 0):
+        raise ValueError('maxError must be a finite, non-negative relative error')
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
     choice, within, unmeasured = None, None, None

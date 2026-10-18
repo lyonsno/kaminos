@@ -95,6 +95,12 @@ with tempfile.TemporaryDirectory() as directory:
         assert body['choice']['sha256'] == other['e5000'] and body['withinBudget'] is False, 'finest level, flagged'
         assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&stat=median")[0] == 400
         assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&faces=100")[0] == 400
+        for bad in ('nan', 'inf', '-0.1'):
+            assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError={bad}")[0] == 400, bad
+        for bad_error in ({'relative': {'max': True, 'p95': 0, 'mean': 0}}, {'relative': {'max': 0.1}}, {'relative': {'max': -1, 'p95': 0, 'mean': 0}}, 'x'):
+            junk = glb('junk-' + str(bad_error)); junk_sha = hashlib.sha256(junk).hexdigest()
+            assert request('POST', '/api/ingest-mesh', junk)[0] == 200
+            assert request('POST', '/api/mesh-lods', {'source': other['hero2'], 'level': {'sha256': junk_sha, 'faces': 77, 'route': 'x', 'error': bad_error}})[0] == 400, bad_error
         # Review M1: registered levels are representations of the hero, not assets of their own.
         catalog = serve.authoring_asset_catalog('generated-meshes')
         listed = {Path(e['source'].split('path=')[-1]).stem for e in catalog['entries']}

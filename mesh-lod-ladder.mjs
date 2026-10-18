@@ -210,7 +210,8 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
       {WorkerClass, unwrapMesh, textureSize, materialFields, provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
     // measure: {closestSource(x,y,z) -> {point, normal}, closestFor(vertices, faces) -> same for a level, samples?}
     const error = measure ? measureGeometricError({source: {vertices: mesh.vertices, faces: mesh.triangles}, level,
-      closestSource: measure.closestSource, closestLevel: measure.closestFor(level.vertices, level.faces), samples: measure.samples ?? 20000}) : null;
+      closestSource: measure.closestSource, closestLevel: measure.closestFor(level.vertices, level.faces), samples: measure.samples ?? 20000,
+      reference: measure.reference ?? null}) : null;
     const glb = compact ? compactTrellisGLB(finished.glb, {dropTimings: true}) : finished.glb;
     const timing = {uvSeconds: glb.timings?.['extras.trellis.uv.elapsedSeconds'] ?? finished.mesh?.uvMetadata?.elapsedSeconds ?? null, ...(glb.timings ? {dropped: glb.timings} : {})};
     tiers.push({target, error, timing, glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
@@ -284,7 +285,9 @@ export function compactTrellisGLB(glb, {dropTimings = false} = {}) {
 // `max` is a sampled maximum: it approaches the true Hausdorff distance from below, because
 // worst points such as sharp corners have no area. Raise `samples` for a tighter bound.
 // Channels stay separate so each consumer can read the one it cares about.
-export function measureGeometricError({source, level, closestSource, closestLevel, samples = 20000, seed = 1}) {
+// Normal angles are unoriented (0-90 degrees): opposite normals read as agreeing, so inverted
+// winding does not show here. Every channel is reported per direction, never pooled.
+export function measureGeometricError({source, level, closestSource, closestLevel, samples = 20000, seed = 1, reference = null}) {
   let state = seed >>> 0 || 1;
   const random = () => { state ^= state << 13; state >>>= 0; state ^= state >>> 17; state ^= state << 5; state >>>= 0; return state / 4294967296; };
   const faceNormal = (V, F, t) => { const a = F[t*3]*3, b = F[t*3+1]*3, c = F[t*3+2]*3;
@@ -311,11 +314,11 @@ export function measureGeometricError({source, level, closestSource, closestLeve
     return {max: sorted[sorted.length - 1], p95: sorted[Math.min(sorted.length - 1, Math.floor(0.95 * sorted.length))], mean: sum / sorted.length}; };
   const forward = direction(level, closestSource), backward = direction(source, closestLevel);
   const both = new Float64Array(samples * 2); both.set(forward.distances); both.set(backward.distances, samples);
-  const angles = new Float64Array(samples * 2); angles.set(forward.angles); angles.set(backward.angles, samples);
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], V = source.vertices;
   for (let i = 0; i < V.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], V[i+a]); hi[a] = Math.max(hi[a], V[i+a]); }
   const diagonal = Math.hypot(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]), all = stats(both);
-  return {schema: 'kaminos.lod-geometric-error.v0', samplesPerSide: samples, seed, diagonal, ...all,
+  return {schema: 'kaminos.lod-geometric-error.v1', reference, samplesPerSide: samples, seed, diagonal, normalAngle: 'unoriented-0-90', ...all,
     relative: {max: all.max / diagonal, p95: all.p95 / diagonal, mean: all.mean / diagonal},
-    levelToSource: stats(forward.distances), sourceToLevel: stats(backward.distances), normalDeviationDegrees: stats(angles)};
+    levelToSource: {...stats(forward.distances), normalDeviationDegrees: stats(forward.angles)},
+    sourceToLevel: {...stats(backward.distances), normalDeviationDegrees: stats(backward.angles)}};
 }

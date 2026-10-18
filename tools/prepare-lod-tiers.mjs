@@ -39,6 +39,14 @@ try {
   const sourceCheck = await fetch(`${server}/api/read?root=generated-meshes&path=${source}.glb`);
   await sourceCheck.body?.cancel();
   if (!sourceCheck.ok) throw Error(`source mesh ${source} is not stored on ${server} (HTTP ${sourceCheck.status})`);
+  // Refuse taken slots before storing anything: the server keeps one level per (faces, route),
+  // and a tier stored but then refused would linger in the store as an unregistered mesh.
+  report.phase = 'preflight'; save();
+  const ROUTE = 'closed-remesh+projection+trellis-simplify';
+  const existing = await fetch(`${server}/api/mesh-lods?source=${source}`);
+  if (!existing.ok) throw Error(`cannot read existing levels (HTTP ${existing.status})`);
+  const taken = (await existing.json()).levels.filter(l => l.route === ROUTE && targets.includes(l.faces));
+  if (taken.length) throw Error(taken.map(l => `a ${l.faces}-face ${l.route} level is already registered: ${l.sha256}`).join('; '));
   report.phase = 'bvh'; save();
   // Closest point plus that face's normal on a surface, through a BVH over it.
   const closestFor = (V, F) => {
@@ -58,9 +66,11 @@ try {
   report.phase = 'tiers'; save();
   const started = performance.now();
   const tiers = await prepareLowTiers({mesh: {vertices, triangles}, materialFields, targets, closestPoint, finish: finishTrellisMesh,
-    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, measure: {closestSource, closestFor}, provenance: {input: meta.source ?? input, route: meta.route}});
+    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, measure: {closestSource, closestFor, reference: {kind: 'raw-decode', input: meta.source ?? input, digests: meta.sourceDigests ?? null, faces: triangles.length / 3}}, provenance: {input: meta.source ?? input, route: meta.route}});
   report.tierSeconds = (performance.now() - started) / 1000;
   report.phase = 'publish'; save();
+  const off = tiers.filter(t => t.faces !== t.target || t.route !== ROUTE);
+  if (off.length) throw Error(`tiers did not land on their preflighted slots: ${off.map(t => `${t.target}->${t.faces} ${t.route}`).join(', ')}`);
   for (const tier of tiers) {
     const body = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
     const ingest = await fetch(`${server}/api/ingest-mesh`, {method: 'POST', body: Buffer.from(tier.glb)});

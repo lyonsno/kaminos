@@ -184,7 +184,8 @@ test('geometric error is symmetric, deterministic and matches a known offset', a
     const options = c.flatMap((t, i) => [[t - lo, i, lo, -1], [hi - t, i, hi, 1]]).sort((a, b) => a[0] - b[0])[0];
     c[options[1]] = options[2]; const n = [0, 0, 0]; n[options[1]] = options[3]; return {point: c, normal: n}; };
   const source = box(0, 1), level = box(0.05, 0.95);
-  const run = () => measureGeometricError({source, level, closestSource: closestOnBox(0, 1), closestLevel: closestOnBox(0.05, 0.95), samples: 4000, seed: 7});
+  const run = () => measureGeometricError({source, level, closestSource: closestOnBox(0, 1), closestLevel: closestOnBox(0.05, 0.95), samples: 4000, seed: 7,
+    reference: {kind: 'test-box', id: 'unit'}});
   const e = run();
   assert.deepEqual(e, run(), 'same seed, same numbers');
   assert.ok(Math.abs(e.levelToSource.max - 0.05) < 1e-6, `level->source max ${e.levelToSource.max}`);
@@ -195,7 +196,26 @@ test('geometric error is symmetric, deterministic and matches a known offset', a
   assert.ok(Math.abs(e.diagonal - Math.sqrt(3)) < 1e-6);
   assert.ok(Math.abs(e.relative.max - e.max / Math.sqrt(3)) < 1e-12);
   assert.ok(e.p95 >= e.mean && e.p95 <= e.max);
-  assert.ok(e.normalDeviationDegrees.mean >= 0 && e.normalDeviationDegrees.max <= 90 + 1e-6);
+  // Angles stay per direction (no pooling), unoriented 0-90 degrees, and name their reference.
+  assert.equal(e.normalDeviationDegrees, undefined);
+  for (const side of [e.levelToSource, e.sourceToLevel]) assert.ok(side.normalDeviationDegrees.mean >= 0 && side.normalDeviationDegrees.max <= 90 + 1e-6);
+  assert.deepEqual(e.reference, {kind: 'test-box', id: 'unit'});
+  assert.equal(e.normalAngle, 'unoriented-0-90');
+});
+
+test('a level missing a patch of the source raises only the source-to-level channels', async () => {
+  const {measureGeometricError} = await import('../mesh-lod-ladder.mjs');
+  // Source: two unit squares, z=0 (normal +z) and x=0 wall (normal -x). Level: only the floor.
+  const source = {vertices: new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 0,1,1]), faces: new Uint32Array([0,1,2, 0,2,3, 0,3,5, 0,5,4])};
+  const level = {vertices: new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0]), faces: new Uint32Array([0,1,2, 0,2,3])};
+  const clamp = t => Math.min(1, Math.max(0, t));
+  const onFloor = (x, y) => ({point: [clamp(x), clamp(y), 0], normal: [0, 0, 1]});
+  const onSource = (x, y, z) => { const floor = onFloor(x, y), wall = {point: [0, clamp(y), clamp(z)], normal: [-1, 0, 0]};
+    const d = q => Math.hypot(q.point[0]-x, q.point[1]-y, q.point[2]-z); return d(floor) <= d(wall) ? floor : wall; };
+  const e = measureGeometricError({source, level, closestSource: onSource, closestLevel: (x, y) => onFloor(x, y), samples: 2000, seed: 3});
+  assert.equal(e.levelToSource.max, 0);
+  assert.equal(e.levelToSource.normalDeviationDegrees.max, 0);
+  assert.ok(e.sourceToLevel.max > 0.5 && e.sourceToLevel.normalDeviationDegrees.max > 89);
 });
 
 test('review fixes: deterministic tier bytes, index width boundary, grid refusal, strict compaction', async () => {
