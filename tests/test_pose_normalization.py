@@ -15,6 +15,17 @@ build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
 
 
 class PoseNormalizationTests(unittest.TestCase):
+    def test_failure_report_cannot_create_missing_source_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source.json';source.write_text('{}')
+            missing=root/'missing-case.json';plan=root/'plan.json'
+            plan.write_text(json.dumps({'schema':'kaminos.pose-normalization-inputs.v1','frame':build.record(source),
+                'radii':build.record(source),'binderFiles':[],
+                'casts':[{'slug':'a','case':{'path':str(missing),'sha256':'0'*64}},{'slug':'b','case':build.record(source)}]}))
+            args=argparse.Namespace(plan=str(plan),out=str(root/'derived'),report=str(missing),stage='fit',voxel_size=.1,fit_report=None)
+            with self.assertRaises(FileNotFoundError):build.run(args)
+            self.assertFalse(missing.exists(),'failure report created a missing retained input')
+
     def test_missing_plan_still_writes_independent_failure_report(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)

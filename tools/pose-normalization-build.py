@@ -127,16 +127,22 @@ def run(args):
             if not args.fit_report:raise ValueError('explicit fit report required for correction')
             records.append(record(args.fit_report))
         protected=[plan_path,*[Path(r['path']).resolve() for r in records]]
+        safe_report=safe_report and report_path.resolve() not in protected
         if args.stage=='correct':
             fit_report=json.loads(Path(args.fit_report).read_text())
             protected.extend(Path(r['path']).resolve() for r in referenced_records(fit_report))
+            safe_report=safe_report and report_path.resolve() not in protected
         for case in plan['casts']:
             manifest_path=Path(case['case']['path']).resolve()
             manifest=json.loads(manifest_path.read_text())
             for name in manifest.get('assets',{}):
                 protected.append((manifest_path.parent/name).resolve())
+            safe_report=safe_report and report_path.resolve() not in protected
         # Validate the report independently, even when the output path is bad.
-        safe_report=not report_path.is_symlink() and not (report_path.exists() and report_path.stat().st_nlink>1) and report_path.resolve() not in protected
+        safe_report=(not report_path.is_symlink() and not report_path.is_dir()
+                     and not (report_path.exists() and report_path.stat().st_nlink>1)
+                     and report_path.resolve() not in protected
+                     and report_path.resolve()!=out_path and out_path not in report_path.resolve().parents)
         out,report_path=protected_destination(args.out,args.report,protected)
         if plan['schema']!='kaminos.pose-normalization-inputs.v1': raise ValueError('unknown plan schema')
         if len(plan['casts'])!=2 or len({c['slug'] for c in plan['casts']})!=2: raise ValueError('both retained casts required')
