@@ -23143,7 +23143,8 @@ async function loadKaminosMeshAssetRoute(route = kaminosMeshAssetRouteFromSearch
       registeredAt: new Date().toISOString(),
       error: null,
     };
-    setInfo(`Mesh asset loaded: ${route.label}`);
+    let surfelAsset=false;model?.traverse?.(o=>{if(o.isTrellisSurfelRoot)surfelAsset=true;});
+    setInfo(`${surfelAsset?'Surfel asset':'Mesh asset'} loaded: ${route.label}`);
     window._kaminosDirty?.();
     return true;
   } catch (error) {
