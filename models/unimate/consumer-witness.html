@@ -22,7 +22,7 @@ try {
   const foreground = createWebGpuForegroundService({ routeId: 'host.frames', device });
   const ctx = document.getElementById('c').getContext('webgpu');
   ctx.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
-  let last = null;
+  let last = null, consumer = null;
   const frame = time => {
     const h = foreground.request({ requestId: `f${state.frames}`, run(op) {
       const enc = device.createCommandEncoder();
@@ -30,10 +30,10 @@ try {
       enc.beginRenderPass({ colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: 'clear', storeOp: 'store', clearValue: [v, v, v + 0.05, 1] }] }).end();
       op.submit([enc.finish()]);
     } });
-    h.completion.then(r => { const now = performance.now(); if (r.status === 'completed') { state.frames++; if (last !== null && state.phase === 'running') state.gaps.push(now - last); last = now; } requestAnimationFrame(frame); });
+    h.completion.then(r => { const now = performance.now(); if (r.status === 'completed') { state.frames++; if (last !== null && state.phase === 'running') { const r = consumer?.read(); state.gaps.push({ ms: now - last, stage: r?.stage ?? null, detail: r?.stage === 'label' ? r.detail : null }); } last = now; } requestAnimationFrame(frame); });
   };
   requestAnimationFrame(frame);
-  const consumer = createUniMateConsumer({ device, queue: device.queue, session, beginRun: (id, options) => foreground.beginRun(id, options) }, {
+  consumer = createUniMateConsumer({ device, queue: device.queue, session, beginRun: (id, options) => foreground.beginRun(id, options) }, {
     ...(params.get('weights') ? { weightsBase: params.get('weights'), t5Base: params.get('t5') } : {}),
     ...(params.get('budget') ? { memoryBudgetBytes: Number(params.get('budget')) } : {}),
   });
@@ -43,9 +43,13 @@ try {
       const input = asset.url ? { bytes: await (await fetch(asset.url)).arrayBuffer(), name: asset.name, source: asset.url, restRotation: asset.restRotation ?? null } : asset;
       const out = await consumer.run({ asset: input, prompt, seed, onProgress: p => state.progress.push({ stage: p.stage, detail: p.detail, progress: p.progress, at: performance.now() }) });
       window.__consumerGlb = out.glb;
-      const s = [...state.gaps].sort((a, b) => a - b);
+      // Frame gaps overall and by the consumer stage active when each frame landed.
+      const stats = gaps => { const s = gaps.map(g => g.ms).sort((a, b) => a - b);
+        return { count: s.length, p50: s[Math.floor(s.length / 2)] ?? null, p95: s[Math.floor(s.length * 0.95)] ?? null, max: s.at(-1) ?? null, over100: s.filter(x => x > 100).length }; };
+      const byStage = {};
+      for (const g of state.gaps) (byStage[g.detail ? `${g.stage}: ${g.detail}` : g.stage ?? 'none'] ??= []).push(g);
       state.result = { glbBytes: out.glb.byteLength, skeleton: out.skeleton.name, joints: out.skeleton.parents.length, rig: out.rig, report: out.report,
-        frames: { count: s.length, p50: s[Math.floor(s.length / 2)] ?? null, p95: s[Math.floor(s.length * 0.95)] ?? null, max: s.at(-1) ?? null },
+        frames: stats(state.gaps), framesByStage: Object.fromEntries(Object.entries(byStage).map(([k, v]) => [k, stats(v)])),
         stages: [...new Set(state.progress.map(p => p.stage))], read: consumer.read() };
       state.phase = 'done';
     } catch (e) { state.error = String(e?.stack ?? e); state.phase = e?.name === 'MemoryRefusal' ? 'refused' : 'failed'; }
