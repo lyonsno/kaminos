@@ -60,7 +60,7 @@ function generator(seed){let a=seed>>>0||1;return ()=>{a=(a+0x6D2B79F5)>>>0;let 
 export function createCreatureAttention({THREE,rigFrame,profile,interests,options={}}) {
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
-  adaptSeconds:6,glanceSeconds:1,flareAt:.5,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
+  adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
@@ -283,7 +283,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(shadow)for(const c of shadow.area)c.patch.armed=false;
   if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change),evidence:{power:sourcePower,powerNow:light.powerNow,powerUsual:light.powerUsual,surge:flare.change}});
   // Each light event carries what was sensed, so a look's why can be checked.
-  if(shadow)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6+shadow.depth),evidence:{overall,typical,patches:shadow.area.map(c=>({point:c.point,now:c.patch.now,usual:c.patch.usual,depth:c.depth}))}});
+  // Off by default: the fire's own light flickers locally as much as a real
+  // shadow darkens, so luminance alone cannot tell them apart yet.
+  if(shadow&&o.lightShadows)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6+shadow.depth),evidence:{overall,typical,patches:shadow.area.map(c=>({point:c.point,now:c.patch.now,usual:c.patch.usual,depth:c.depth}))}});
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){

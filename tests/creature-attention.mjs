@@ -205,7 +205,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // not brightness. A flare behind it draws a look at the light's source; a
  // sudden shadow on one side draws a look there; steady light does nothing.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let level=ring.map(()=>.1),power=1,t=0;
  const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,sourcePower:power,samples:ring.map((point,i)=>({point,luminance:level[i]}))});const w=watch(attention,c,.25,t);t=w.t;}};
@@ -232,7 +232,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // patch of ground, so a fixed shadow edge passing under the creature's moving
  // sample ring draws nothing; a shadow that falls on a patch it already knows does.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[6,.6,-2]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const field=(x)=>x<1?.02:.3;let t=0,offset=-2;
  const ringAt=dx=>lightSamplePoints({center:[dx,0,-1.8],radius:.7,ground:0});
  for(let k=0;k<64;k++){offset+=.08;const ring=ringAt(offset);attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map(point=>({point,luminance:field(point[0])}))});t=watch(attention,c,.25,t).t;}
@@ -246,7 +246,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // Firelight flickers: patches near the flame brighten and dim several times a
  // second. That is the light's normal texture, not an event.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let t=0,seed=7;const rand=()=>((seed=(seed*16807)%2147483647)/2147483647);
  for(let k=0;k<160;k++){const flicker=.1*(1+.45*(rand()*2-1));attention.sense({time:t,source:fire,sourcePower:flicker*10,samples:ring.map((point,i)=>({point,luminance:flicker*(1+.3*(rand()*2-1))}))});t=watch(attention,c,.25,t).t;}
@@ -257,7 +257,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // The light field is computed from a live simulation, so single ground points
  // jitter on their own. One point dipping is noise; a shadow darkens an area.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let t=0;
  for(let k=0;k<120;k++){const dip=Math.floor(k/12)%8;attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:i===dip?.01:.1}))});t=watch(attention,c,.25,t).t;}
@@ -268,7 +268,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // Firelight shadows sway as the flame's center wanders. A creature by a fire
  // gets used to that: patches that keep swaying stop drawing looks.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let t=0;
  for(let k=0;k<160;k++){const sway=Math.sin(k/4*Math.PI)>0?.1:.012;attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:i===1||i===2?sway:.1}))});t=watch(attention,c,.25,t).t;}
@@ -281,7 +281,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  // a patch that brightens less than the rest is not a shadow; (b) changes in
  // near-black patches are too faint to see, however large as a ratio.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let t=0;
  for(let k=0;k<16;k++){const up=Math.min(1,k/8);attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:i<2?.06:.004+.08*up}))});t=watch(attention,c,.25,t).t;}
@@ -292,7 +292,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 {
  // Two shadows in different places are two events, not one shadow that moved.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
- const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false,lightShadows:true},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let level=ring.map(()=>.1),t=0;
  const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:level[i]}))});t=watch(attention,c,.25,t).t;}};
@@ -328,6 +328,14 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const polled=reads;for(let i=0;i<10;i++)flames.read();assert.equal(reads,polled,'reads are throttled, not per call');
  emitter.removeFromParent();clock+=600;assert.deepEqual(flames.read(),[],'no flame source, no flame interest');
  flames.dispose();assert.equal(listener,null,'dispose unsubscribes');
+}
+
+{
+ // Shadow events are off unless asked for.
+ const c=creature(),a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);let lv=ring.map(()=>.1),t=0;
+ for(let k=0;k<40;k++){if(k===16){lv[2]*=.1;lv[3]*=.1;}a.sense({time:t,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:lv[i]}))});t=watch(a,c,.25,t).t;}
+ assert.equal(a.read().history.filter(e=>e.cause==='shadow').length,0,'no shadow looks by default');
 }
 
 console.log('Creatures look for reasons: first sight, change, renewed sight after forgetting, and idle looking around, each recorded');
