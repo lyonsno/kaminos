@@ -20,6 +20,7 @@ import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, 
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
 import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
+import { CONTINUOUS_DETAIL_WGSL, resolveContinuousDetail } from './volume-continuous-detail.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -2152,7 +2153,8 @@ export const JOINED_BOUNDARY_UNIFORM_FLOATS = 12;
 export const WAVELET_TURBULENCE_UNIFORM_OFFSET = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
 export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 4;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
-export const VOLUME_UNIFORM_FLOATS = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
+export const CONTINUOUS_DETAIL_UNIFORM_OFFSET = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
+export const VOLUME_UNIFORM_FLOATS = CONTINUOUS_DETAIL_UNIFORM_OFFSET + 4;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
 // bound plus the trilinear stencil and a margin.
 export const JOINED_GHOST_MARGIN_CELLS = 10;
@@ -3794,6 +3796,7 @@ struct Uniforms {
   joined_ghost_geometry: vec4<f32>,
   joined_ghost_dims: vec4<f32>,
   wavelet_turbulence: vec4<f32>,
+  continuous_detail: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -3999,6 +4002,9 @@ fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
 fn waveletOn() -> bool {
   return u.wavelet_turbulence.x > 0.0;
 }
+fn waveletCoordinatesOn() -> bool {
+  return waveletOn() || u.continuous_detail.x > 0.0;
+}
 fn waveletCoordLoad(c: vec3<i32>, setIndex: i32) -> vec3<f32> {
   return textureLoad(waveletCoordSrc, vec3<i32>(clampCell(c)) + vec3<i32>(0, 0, setIndex * i32(GRID)), 0).xyz;
 }
@@ -4017,6 +4023,7 @@ fn waveletCoordSample(p: vec3<f32>, setIndex: i32) -> vec3<f32> {
   let c11 = mix(waveletCoordLoad(i0 + vec3<i32>(0, 1, 1), setIndex), waveletCoordLoad(i0 + vec3<i32>(1, 1, 1), setIndex), f.x);
   return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
 }
+${CONTINUOUS_DETAIL_WGSL}
 // Low-passed velocity planes written before the step (volume-wavelet-turbulence.mjs):
 // L1 = 3x3x3 box mean of the stored velocity (solids excluded) in forceDelta
 // planes 3–5, L2 = box mean of L1 in planes 6–8. Two pre-passes, so every cell
@@ -6871,7 +6878,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let cellI = vec3<i32>(gid);
   if (sceneSolidAt(cellI)) {
     forceDeltaStore(cellI, vec3<f32>(0.0));
-    if (waveletOn()) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
+    if (waveletCoordinatesOn()) { waveletCoordStore(cellI, 0, cell); waveletCoordStore(cellI, 1, cell); }
     quenchDst[idx] = 0u;
     frontDst[idx] = 0.0;
     if (reactantLawOn()) { textureStore(reactantDst, vec3<i32>(gid), vec4<f32>(0.0)); }
@@ -6956,7 +6963,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   var waveletCoordA = cell;
   var waveletCoordB = cell;
-  if (waveletOn()) {
+  if (waveletCoordinatesOn()) {
     // The noise coordinates ride the same characteristic as the gas.
     let wPhase = u32(u.wavelet_turbulence.w) % WAVELET_COHERENCE_PERIOD_STEPS;
     waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
@@ -8714,7 +8721,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
         let remaining = opticalStep.end - opticalStep.cursor;
         let horizon = min(remaining, dtBase * 8.0);
-        let guide = flameGuideSegment(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon);
+        let guide = flameGuideSegmentPadded(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon, select(0, 1, u.continuous_detail.x > 0.0));
         let cellWidth = 2.0 / f32(GRID);
         let nearby = guide.x <= cellWidth;
         let support = select(0.0, guide.y, nearby);
@@ -8739,17 +8746,19 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
+    var materialP = p;
+    if (!fullGridCapture && !opticalTrace) { materialP = continuousDetailPosition(p); }
     let flowKernelReconstructionActive = u.reconstruction_kernel_controls.x > 0.0001;
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     var neighborhood: RaymarchNeighborhood;
     var directSupport: f32;
     if (LEAN_EMISSIVE_RAYMARCH) {
-      neighborhood = sampleRaymarchNeighborhood(p);
+      neighborhood = sampleRaymarchNeighborhood(materialP);
       directSupport = raymarchNeighborhoodSupport(neighborhood);
     } else {
-      directSupport = directCellOpticalSupport(p);
+      directSupport = directCellOpticalSupport(materialP);
     }
-    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001) {
+    if (!opticalStepping && !fullGridCapture && !opticalTrace && directSupport <= 0.0001 && u.continuous_detail.x <= 0.0) {
       let cellExit = directCellExitDistance(p, rd);
       let emptyCellAdvance = mix(
         dtBase,
@@ -8761,11 +8770,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     }
     var reconstructed: FlowReconstructionSample;
     if (flowKernelReconstructionActive) {
-      reconstructed = sampleWorldFlowReconstruction(p);
+      reconstructed = sampleWorldFlowReconstruction(materialP);
     } else if (LEAN_EMISSIVE_RAYMARCH) {
       reconstructed = reconstructRaymarchNeighborhood(neighborhood);
     } else {
-      reconstructed = sampleWorldFlowReconstructionRaw(p);
+      reconstructed = sampleWorldFlowReconstructionRaw(materialP);
     }
     expensiveSamples = expensiveSamples + 1u;
     rayMaterialSamples++;
@@ -8792,7 +8801,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let absorptionGain = max(0.0, u.radiance_controls.y);
     let glowGain = max(0.0, u.radiance_controls.z);
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
-    let sampleCell = vec3<i32>(floor(clamp(worldToCell(p), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
+    let sampleCell = vec3<i32>(floor(clamp(worldToCell(materialP), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0, f32(GRID_Y) - 1.0, f32(GRID) - 1.0))));
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
@@ -8992,14 +9001,14 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       let boundarySidecarView = clamp(u.boundary_sidecar_display.x, 0.0, 5.0);
       var boundarySidecarDebugSample = vec4<f32>(0.0);
       if (boundarySidecarView > 0.5) {
-        boundarySidecarDebugSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
+        boundarySidecarDebugSample = sampleWorldFlowReconstructedSidecar(materialP, reconstructed);
       }
       var boundarySupportEffective = 0.0;
       var boundaryGradientEffective = 0.0;
       var boundaryFireRidgeEffective = 0.0;
       var boundarySidecarStepFootprintWidth = 0.0;
       if (boundarySidecarSource > 0.5 && boundarySidecarSource <= 1.5) {
-        let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
+        let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(materialP, reconstructed);
         boundarySidecarDebugSample = boundarySidecarSample;
         let boundarySidecarCoverage = boundarySidecarSample.y;
         let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -9009,13 +9018,13 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         boundaryFireRidgeEffective = boundarySidecarSample.z;
         boundarySidecarStepFootprintWidth = clamp(u.boundary_sidecar_controls.z, 0.0, 2.0) * max(dtBase * f32(GRID) * 0.046, boundarySidecarFootprintWidth * 0.036);
       } else {
-        let boundarySupport = liveBoundarySupportAt(p, boundarySupportWeights);
-        let boundarySupportPx = liveBoundarySupportAt(p + boundaryDx, boundarySupportWeights);
-        let boundarySupportNx = liveBoundarySupportAt(p - boundaryDx, boundarySupportWeights);
-        let boundarySupportPy = liveBoundarySupportAt(p + boundaryDy, boundarySupportWeights);
-        let boundarySupportNy = liveBoundarySupportAt(p - boundaryDy, boundarySupportWeights);
-        let boundarySupportPz = liveBoundarySupportAt(p + boundaryDz, boundarySupportWeights);
-        let boundarySupportNz = liveBoundarySupportAt(p - boundaryDz, boundarySupportWeights);
+        let boundarySupport = liveBoundarySupportAt(materialP, boundarySupportWeights);
+        let boundarySupportPx = liveBoundarySupportAt(materialP + boundaryDx, boundarySupportWeights);
+        let boundarySupportNx = liveBoundarySupportAt(materialP - boundaryDx, boundarySupportWeights);
+        let boundarySupportPy = liveBoundarySupportAt(materialP + boundaryDy, boundarySupportWeights);
+        let boundarySupportNy = liveBoundarySupportAt(materialP - boundaryDy, boundarySupportWeights);
+        let boundarySupportPz = liveBoundarySupportAt(materialP + boundaryDz, boundarySupportWeights);
+        let boundarySupportNz = liveBoundarySupportAt(materialP - boundaryDz, boundarySupportWeights);
         let boundaryGradient = length(vec3<f32>(
           boundarySupportPx - boundarySupportNx,
           boundarySupportPy - boundarySupportNy,
@@ -9027,7 +9036,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
         boundaryGradientEffective = boundaryGradient;
         boundaryFireRidgeEffective = boundaryFireRidge;
         if (boundarySidecarSource > 1.5) {
-          let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(p, reconstructed);
+          let boundarySidecarSample = sampleWorldFlowReconstructedSidecar(materialP, reconstructed);
           boundarySidecarDebugSample = boundarySidecarSample;
           let boundarySidecarCoverage = boundarySidecarSample.y;
           let boundarySidecarProximity = clamp(max(boundarySidecarSample.x, max(boundarySidecarCoverage * 0.74, boundarySidecarSample.z * 0.58)), 0.0, 1.8);
@@ -12649,7 +12658,7 @@ export function createKaminosVolumePrototype({
   // velocity levels L1 and L2 (volume-wavelet-turbulence.mjs).
   function allocateForceDeltaTexture() {
     forceDeltaTexture?.destroy();
-    const planes = waveletSidecarFull ? 9 : 3;
+    const planes = waveletForcePlanes ? 9 : 3;
     forceDeltaTexture = device.createTexture({
       label: `kaminos force increment ${gridSize}x${gridHeight}x${gridSize}x${planes}`,
       size: [gridSize, gridHeight, gridSize * planes],
@@ -12717,6 +12726,7 @@ export function createKaminosVolumePrototype({
   // the lattice itself, so a later switch-on starts from undistorted noise.
   let waveletTextures = [];
   let waveletSidecarFull = false;
+  let waveletForcePlanes = false;
   function writeWaveletLattice(texture) {
     const texels = new Float32Array(gridSize * gridHeight * gridSize * 2 * 4);
     let i = 0;
@@ -12725,9 +12735,14 @@ export function createKaminosVolumePrototype({
     }
     device.queue.writeTexture({ texture }, texels, { bytesPerRow: gridSize * 16, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * 2]);
   }
-  function ensureWaveletCoordinates(admitted) {
+  function ensureWaveletCoordinates(admitted, closureAdmitted = admitted) {
     if (!device) return false;
-    if (waveletTextures.length === 2 && waveletSidecarFull === admitted) return false;
+    const forceChanged = waveletForcePlanes !== closureAdmitted;
+    waveletForcePlanes = closureAdmitted;
+    if (waveletTextures.length === 2 && waveletSidecarFull === admitted) {
+      if (forceChanged && forceDeltaTexture) allocateForceDeltaTexture();
+      return forceChanged;
+    }
     for (const texture of waveletTextures) texture.destroy();
     const size = admitted ? [gridSize, gridHeight, gridSize * 2] : [1, 1, 1];
     waveletTextures = [0, 1].map(i => {
@@ -14564,7 +14579,7 @@ export function createKaminosVolumePrototype({
       return buffer;
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
-    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted));
+    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted || state.continuousDetail?.admitted), Boolean(state.waveletTurbulence?.effective?.admitted));
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
       size: [gridSize, gridSize, 1],
@@ -15543,7 +15558,7 @@ export function createKaminosVolumePrototype({
         { binding: 30, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         // Wavelet turbulence coordinates: sampled read, storage write (the fourth
         // compute storage texture: 19, 22, 24 and this one sit at the default limit).
-        { binding: 31, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
+        { binding: 31, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float', viewDimension: '3d' } },
         { binding: 32, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rgba32float', viewDimension: '3d' } },
         { binding: 22, visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE, storageTexture: { access: 'read-write', format: 'r32float', viewDimension: '3d' } },
         // Reactant sidecar: read as a sampled texture, written as a storage
@@ -17076,9 +17091,13 @@ export function createKaminosVolumePrototype({
     };
     uniforms.set(joinedBoundaryUniformValues(state.joinedBoundary, state.joinedGhosts.bound ? { bound: true, ...joinedGhostGeometry, generation: state.joinedGhosts.generation } : null), JOINED_BOUNDARY_UNIFORM_OFFSET);
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
+    const continuousDetail = resolveContinuousDetail(controlsSnapshot);
+    state.continuousDetail = continuousDetail;
+    // The published coordinates were last written using the preceding step's phase.
+    uniforms.set([continuousDetail.amount, continuousDetail.scale, Math.max(0, state.simStepCount - 1), 0], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
-    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
+    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted || continuousDetail.admitted, waveletTurbulence.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();

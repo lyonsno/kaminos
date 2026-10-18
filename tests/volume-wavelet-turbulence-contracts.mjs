@@ -179,7 +179,7 @@ test('kernel: the closure fills the deficit of the transported sub band at the f
   assert.match(pre, /for \(var dz = -1; dz <= 1; dz = dz \+ 1\)/); assert.match(pre, /if \(!sceneSolidAt\(nc\)\)/); assert.match(pre, /waveletPlaneStore\(c, 3,/);
   const pre2 = core.slice(core.indexOf('fn csWaveletLowPass2('), core.indexOf('\n}\n', core.indexOf('fn csWaveletLowPass2(')));
   assert.match(pre2, /waveletLowPassLoad\(c \+ vec3<i32>\(dx, dy, dz\)\)/); assert.match(pre2, /waveletPlaneStore\(c, 6,/);
-  assert.match(core, /const planes = waveletSidecarFull \? 9 : 3;/);
+  assert.match(core, /const planes = waveletForcePlanes \? 9 : 3;/);
 });
 
 test('estimator calibration: the pinned gains match the filters on unit curl fields (band 0.40 at eight cells, 0.13 at four; detail high-pass 0.50 / 0.65)', () => {

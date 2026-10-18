@@ -1603,6 +1603,16 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
+        <span class="slider-label" title="Rendering-only displacement carried by the flow, in cells. Zero preserves the original reconstruction.">Flow detail</span>
+        <input type="range" id="volume-render-detail" min="0" max="1" step="any" value="0">
+        <span class="slider-val" id="volume-render-detail-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Base wavelength of continuous rendering detail, in simulation cells.">Flow detail scale</span>
+        <input type="range" id="volume-render-detail-scale" min="0.5" max="4" step="any" value="2">
+        <span class="slider-val" id="volume-render-detail-scale-val">2.00</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
         <input type="range" id="volume-physical-temperature" min="800" max="6000" step="any" value="1900">
         <span class="slider-val" id="volume-physical-temperature-val">1900</span>
@@ -17502,6 +17512,8 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
   { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
+  { key: 'renderDetail', id: 'volume-render-detail', param: 'volume_render_detail', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'renderDetailScale', id: 'volume-render-detail-scale', param: 'volume_render_detail_scale', min: 0.5, max: 4, continuous: true, decimals: 2 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },

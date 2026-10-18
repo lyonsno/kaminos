@@ -116,6 +116,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
   { name:'Detail', view:'shape', fields:[
+    ['volume-render-detail','Flow detail'], ['volume-render-detail-scale','Flow detail scale (cells)'],
     ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'], ['volume-detail-scale','Detail scale'],
   ] },

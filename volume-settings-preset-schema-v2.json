@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 259,
+  "controlCount": 261,
   "controls": [
     {
       "key": "volume-physical-material-law",
@@ -1723,6 +1723,22 @@
       "type": "range",
       "additiveDefault": 1,
       "additiveSinceControlCount": 259
+    },
+    {
+      "key": "volume-render-detail",
+      "param": "volume_render_detail",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0,
+      "additiveSinceControlCount": 260
+    },
+    {
+      "key": "volume-render-detail-scale",
+      "param": "volume_render_detail_scale",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 261
     }
   ],
   "retiredControls": [
