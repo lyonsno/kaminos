@@ -1829,3 +1829,38 @@ test('a page reader can see a watch in progress and how many frames it has drawn
   assert.equal(pilot.watching(), null, 'and that it has ended');
   assert.match(readFileSync(new URL('../index.html', import.meta.url), 'utf8'), /watching:agentVantage\.watching/, 'window.kaminosAgentVantage.watching() is offered to page readers');
 });
+
+
+test('a second watch while one runs is refused as busy, from the page or the terminal, and the first keeps its own status', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state, {drawMs: 0});
+  const draw = host.renderView;
+  let release;
+  host.renderView = options => { const drawn = draw(options); return {ready: new Promise(done => { release = () => done(drawn.ready); })}; };
+  const pilot = createVantagePilot(host);
+  const first = pilot.run('watch', {seconds: 1, fps: 2, map: false});
+  await new Promise(done => setImmediate(done));
+  const refusedWithin = promise => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('not refused')), 200))]);
+  await assert.rejects(() => refusedWithin(pilot.run('watch', {seconds: 1, fps: 2, map: false})), error => error.phase === 'busy', 'from the page');
+  const replies = [];
+  const pump = createCommandPump({run: pilot.run, reply: async answer => { replies.push(answer); }});
+  await refusedWithin(pump.push({id: 'b1', command: 'watch', args: {seconds: 1, fps: 2, map: false}, expiresAt: Date.now() + 60000}));
+  assert.equal(replies[0]?.phase, 'busy', 'from the terminal');
+  assert.deepEqual(pilot.watching(), {pilot: 'bebop', until: null, frames: 0}, 'the running watch still reports itself');
+  host.renderView = draw;
+  release();
+  const strip = await first;
+  assert.equal(strip.kind, 'watch');
+  assert.equal(pilot.watching(), null, 'and clears its own status when it ends');
+});
+
+test('after an event, after keeps watching on the cadence for that many seconds', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {drawMs: 0, onSleep: t => { if (t >= 1000) clock.emit('pulse-end', {}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'pulse-end', after: 1.5, map: false});
+  assert.equal(strip.ended, 'event');
+  assert.equal(strip.event.atMs, 1000);
+  assert.equal(strip.requested.after, 1.5);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500, 2000], 'the frame at the event, then the cadence until 1.5 s after it');
+});

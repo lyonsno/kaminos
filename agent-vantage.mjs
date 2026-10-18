@@ -386,11 +386,17 @@ export function createVantagePilot(host) {
     // operator's view is never borrowed. With `until`, the page event
     // `kaminos:<until>` ends the strip at once with one more frame. Draws never
     // stack, and no frame is drawn outside its own interval or after the deadline.
-    async watch({pilot, seconds, fps, until, maxSize, cell, frames, map, depth}) {
+    async watch({pilot, seconds, fps, until, after = 0, maxSize, cell, frames, map, depth}) {
       requireSub(pilot);
       if (!host.renderView) fail('watch', 'This page cannot draw a second view of its scene');
       if (until && !host.listen) fail('watch', 'This page cannot listen for events, so it cannot watch until one');
-      const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000;
+      // One watch at a time, however it was asked for: the terminal's queue and the page API both reach here.
+      if (watching) fail('busy', 'Another watch is running; ask again when it ends');
+      const mine = {pilot, until, frames: 0};
+      watching = mine;
+      const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000, afterMs = after * 1000;
+      // The deadline frames are drawn before: the window, or after an event, the event plus `after`.
+      let deadlineMs = windowMs, extended = false;
       let event = null, missedTicks = 0, wake = null;
       const heard = until ? new Promise(resolve => { wake = resolve; }) : null;
       // An event counts only when it comes before the deadline.
@@ -400,20 +406,20 @@ export function createVantagePilot(host) {
         event = {name: until, atMs, ...eventDetail(detail)};
         wake();
       }) : null;
-      // Sleeps end early when the event comes.
-      const sleep = ms => (heard ? Promise.race([host.sleep(ms), heard]) : host.sleep(ms));
+      // Sleeps end early when the event comes; after it, they run their length.
+      const sleep = ms => (heard && !extended ? Promise.race([host.sleep(ms), heard]) : host.sleep(ms));
       // The next tick to draw: a tick is drawn only inside its own interval and
       // before the deadline. Ticks whose interval passed are counted as missed.
       // Between the last tick and the deadline the watch keeps listening.
       // Returns 'event', a tick, or null when the window is over.
-      const nextTick = async after => {
-        let tick = after + 1;
+      const nextTick = async last => {
+        let tick = last + 1;
         while (true) {
-          if (event) return 'event';
+          if (event && !extended) return 'event';
           const elapsed = host.now() - started;
-          while (tick * interval < windowMs && elapsed >= Math.min((tick + 1) * interval, windowMs)) { missedTicks++; tick++; }
-          if (elapsed >= windowMs) return null;
-          if (tick * interval >= windowMs) { await sleep(windowMs - elapsed); continue; }
+          while (tick * interval < deadlineMs && elapsed >= Math.min((tick + 1) * interval, deadlineMs)) { missedTicks++; tick++; }
+          if (elapsed >= deadlineMs) return null;
+          if (tick * interval >= deadlineMs) { await sleep(deadlineMs - elapsed); continue; }
           if (elapsed >= tick * interval) return tick;
           await sleep(tick * interval - elapsed);
         }
@@ -421,21 +427,31 @@ export function createVantagePilot(host) {
       const shots = [];
       const draw = async () => {
         shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
-        watching.frames = shots.length;
+        mine.frames = shots.length;
       };
-      watching = {pilot, until, frames: 0};
       try {
         await draw();
         let tick = 0;
         while (true) {
-          const next = event ? 'event' : await nextTick(tick);
+          const next = event && !extended ? 'event' : await nextTick(tick);
           if (next === null) break;
-          // The event came: one more frame shows what followed.
-          if (next === 'event') { await draw(); break; }
+          if (next === 'event') {
+            // The event came: one more frame at once shows what followed, then
+            // with `after` the cadence goes on until that long after the event.
+            await draw();
+            extended = true;
+            if (afterMs <= 0) break;
+            deadlineMs = event.atMs + afterMs;
+            tick = Math.floor((host.now() - started) / interval);
+            continue;
+          }
           await draw();
           tick = next;
         }
-      } finally { stopListening?.(); watching = null; }
+      } finally {
+        stopListening?.();
+        if (watching === mine) watching = null;
+      }
       const record = subRecord(pilot), first = shots[0];
       const sheet = host.sheet(shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
       const images = [{name: 'sheet', ...host.encode(sheet)}];
@@ -443,7 +459,7 @@ export function createVantagePilot(host) {
       if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
       host.shutter?.({kind: 'watch', label: record?.label ?? first.sub?.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'watch', route: 'own-camera', pilot, sub: record ? describe(record) : first.sub,
-        requested: {seconds, fps, until}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
+        requested: {seconds, fps, until, after}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
         aspect: first.ratio, naming: 'effective-camera', layers: ['scene'], omitted: [...GLANCE_OMITS],
         image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
         frames: shots.map(item => ({index: item.index, atMs: item.atMs, image: {width: item.shot.width, height: item.shot.height}, view: item.view, optics: item.optics,

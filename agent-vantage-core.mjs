@@ -536,7 +536,12 @@ const COMMANDS = {
     if (!(Number.isFinite(seconds) && seconds > 0 && seconds <= 3600)) throw new Error('Watch seconds is more than 0 and at most 3600');
     if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Watch fps is between 0.5 and 15');
     if (until !== null && !(typeof until === 'string' && /^[a-z0-9][a-z0-9._:-]{0,63}$/i.test(until))) throw new Error('Watch --until names an event: letters, digits, . _ : -');
-    return {pilot: pilotArg(args), seconds, fps, until, maxSize: count(args.maxSize, 'maxSize', 320, 64), cell: count(args.cell, 'cell', 240, 64),
+    // How long to keep watching after the event: a drive pulse ending is not the plume it drove finishing.
+    const after = args.after ?? 0;
+    if (!(Number.isFinite(after) && after >= 0)) throw new Error('Watch after is a number of seconds, 0 or more');
+    if (after > 0 && until === null) throw new Error('Watch after needs an event to wait for (until)');
+    if (seconds + after > 3600) throw new Error('Watch seconds plus after is at most 3600');
+    return {pilot: pilotArg(args), seconds, fps, until, after, maxSize: count(args.maxSize, 'maxSize', 320, 64), cell: count(args.cell, 'cell', 240, 64),
       frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)};
   },
   sketch: () => ({}),

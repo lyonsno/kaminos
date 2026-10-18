@@ -318,7 +318,7 @@ test('watch asks for a strip over its window and waits that long beyond the usua
   const result = await run(['--server', url, '--out', out, 'watch', '--seconds', '12', '--fps', '3', '--until', 'cut-complete', '--frames']);
   assert.equal(result.code, 0, result.stderr);
   assert.equal(received[0].body.command, 'watch');
-  assert.deepEqual(received[0].body.args, {pilot: 'bebop', seconds: 12, fps: 3, until: 'cut-complete', maxSize: 320, cell: 240, frames: true, map: true, depth: false});
+  assert.deepEqual(received[0].body.args, {pilot: 'bebop', seconds: 12, fps: 3, until: 'cut-complete', after: 0, maxSize: 320, cell: 240, frames: true, map: true, depth: false});
   assert.equal(received[0].body.timeoutMs, 42000);
 });
 
@@ -350,4 +350,16 @@ test('a watch longer than the server will hold a command is refused before it is
   const fits = await run(['--server', url, 'watch', '--seconds', '3590', '--timeout', '10']);
   assert.equal(fits.code, 0, fits.stderr);
   assert.equal(received[0].body.timeoutMs, 3600000);
+});
+
+test('watch --after keeps watching past the event and waits that much longer for the page', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, snapReply(body.command, body.args)]);
+  t.after(() => server.close());
+  const result = await run(['--server', url, 'watch', '--seconds', '12', '--until', 'pulse-end', '--after', '4']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(received[0].body.args.after, 4);
+  assert.equal(received[0].body.timeoutMs, 46000, 'the window, the time after the event, and the usual allowance');
+  const tooLong = await run(['--server', url, 'watch', '--seconds', '3500', '--until', 'pulse-end', '--after', '80']);
+  assert.equal(tooLong.code, 2);
+  assert.equal(received.length, 1);
 });

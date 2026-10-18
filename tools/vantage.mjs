@@ -27,9 +27,10 @@ Commands
   glance [--annotate] [--max-size PX] [--no-map] [--name NAME]   the sub's view from its own camera: your view is never
                              borrowed; the scene's meshes, lights and background, without the fire volume, local water or AO
   burst [--count N] [--interval MS] [--frames] [--annotate] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
-  watch [--seconds S] [--fps N] [--until EVENT] [--frames] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
+  watch [--seconds S] [--fps N] [--until EVENT [--after S]] [--frames] [--cell PX] [--max-size PX] [--no-map] [--depth] [--name NAME]
                              a film strip from the sub's own camera over S seconds (default 5, 2 fps, 320 px); your view
-                             is never borrowed. --until ends it one frame after the page event kaminos:EVENT
+                             is never borrowed. --until ends it one frame after the page event kaminos:EVENT;
+                             --after S keeps watching S seconds past that event
   live on|off [--fps N]      a small live view from the sub's own camera in the operator's sub panel (default 4 fps)
   map [--size PX]            three-quarter map of the scene with your view cone and each sub's; renders no scene
   sketch                     the scene as named boxes, fields and cameras; renders no scene
@@ -57,7 +58,7 @@ Options
 const BOOLEAN = new Set(['annotate', 'helpers', 'clean', 'frames', 'json', 'help', 'no-map', 'now', 'depth']);
 const VALUED = new Set(['server', 'page', 'pilot', 'out', 'timeout', 'name', 'label', 'at', 'lens', 'look', 'forward', 'right', 'up',
   'yaw', 'pitch', 'radius', 'azimuth', 'elevation', 'margin', 'settle', 'max-size', 'count', 'interval', 'cell', 'size',
-  'from', 'picture', 'frame', 'fps', 'anchor', 'seconds', 'until']);
+  'from', 'picture', 'frame', 'fps', 'anchor', 'seconds', 'until', 'after']);
 
 class Exit extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -105,7 +106,7 @@ function commandArgs(command, rest, options, pilot) {
     case 'burst': return defined({pilot, count: number(options.count), interval: number(options.interval), settle: number(options.settle),
       maxSize: number(options['max-size']), cell: number(options.cell), annotate: options.annotate, frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
-    case 'watch': return defined({pilot, seconds: number(options.seconds), fps: number(options.fps), until: options.until,
+    case 'watch': return defined({pilot, seconds: number(options.seconds), fps: number(options.fps), until: options.until, after: number(options.after),
       maxSize: number(options['max-size']), cell: number(options.cell), frames: options.frames, map: options['no-map'] ? false : undefined,
       depth: options.depth === true});
     case 'map': return defined({size: number(options.size)});
@@ -351,7 +352,7 @@ async function main(argv) {
   catch (error) { throw new Exit(2, error.message); }
   const timeout = Number(options.timeout ?? 30);
   if (!(timeout > 0)) throw new Exit(2, '--timeout must be a positive number of seconds');
-  const extra = checked.command === 'burst' ? checked.args.count * checked.args.interval / 1000 : checked.command === 'watch' ? checked.args.seconds : 0;
+  const extra = checked.command === 'burst' ? checked.args.count * checked.args.interval / 1000 : checked.command === 'watch' ? checked.args.seconds + checked.args.after : 0;
   // The server holds a command for at most an hour.
   if (timeout + extra > 3600) throw new Exit(2, `${checked.command === 'watch' ? '--seconds' : 'The command\'s duration'} plus --timeout (${timeout} s) is ${timeout + extra} s; the server holds a command for at most 3600 s`);
   const body = {command: checked.command, args: checked.args, timeoutMs: Math.round((timeout + extra) * 1000), ...(options.page ? {page: options.page} : {})};

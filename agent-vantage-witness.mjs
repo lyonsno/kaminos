@@ -323,7 +323,7 @@ try {
     }
     return n ? {x: sx / n / width, y: sy / n / height, share: n / (width * height)} : null;
   };
-  const watching = vantage('watch', '--seconds', '10', '--fps', '4', '--until', 'witness-fell', '--frames', '--name', 'watch');
+  const watching = vantage('watch', '--seconds', '10', '--fps', '4', '--until', 'witness-fell', '--after', '0.75', '--frames', '--name', 'watch');
   const during = await page.evaluate(async id => {
     // Begin moving the box once the watch has drawn its first frame, however long the command took to arrive.
     const begun = performance.now() + 30000;
@@ -356,8 +356,10 @@ try {
   const firstRed = centres[0], lastRed = centres.at(-1);
   report.effective.watch = {ended: strip.ended, event: strip.event, missedTicks: strip.missedTicks, frames: strip.frames.map(frame => frame.atMs),
     centres, fpsDuring: during.fps, fpsOff, image: strip.image};
-  check('watch ends one frame after the page event, carrying what the event said', strip.ended === 'event' && strip.event?.name === 'witness-fell'
-    && strip.event.detail?.box === scene.red && strip.frames.at(-1).atMs >= strip.event.atMs && strip.frames.at(-2).atMs <= strip.event.atMs, report.effective.watch);
+  const afterEvent = strip.frames.filter(frame => frame.atMs >= strip.event?.atMs);
+  check('watch ends on the page event, carrying what it said, and keeps watching for --after past it', strip.ended === 'event' && strip.event?.name === 'witness-fell'
+    && strip.event.detail?.box === scene.red && afterEvent.length >= 3 && afterEvent.at(-1).atMs >= strip.event.atMs + 400
+    && afterEvent.every(frame => frame.atMs < strip.event.atMs + 750 + 250), {...report.effective.watch, afterEvent: afterEvent.map(frame => frame.atMs)});
   check('its frames come from the sub\'s own camera and each keeps a pick map', strip.route === 'own-camera' && strip.frames.length >= 6
     && strip.frames.every(frame => frame.pickMap && frame.optics), {frames: strip.frames.length});
   check('the strip shows the red box moving', !!firstRed && !!lastRed && Math.hypot(lastRed.x - firstRed.x, lastRed.y - firstRed.y) > 0.05, {firstRed, lastRed});
