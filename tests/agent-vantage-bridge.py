@@ -249,6 +249,15 @@ def hub_contracts(bridge):
     broker.attach_hub("hub-aaaaaaaa")
     assert broker.join("hub-aaaaaaaa", "page-mmmmmmm3", {}, member=2) is False, "a reconnected hub still knows what left"
     hub = broker._hubs["hub-aaaaaaaa"]
+    # A newer membership leaving before its own join arrived retires the older registration too.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm4", {}, member=1) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm4", member=2) is True
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm4", {}, member=2) is False
+    assert not any(page["id"] == "page-mmmmmmm4" for page in broker.pages()), "a departed tab is not advertised"
+    # A newer responsive membership survives an older departure.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm5", {}, member=5) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm5", member=4) is False
+    assert any(page["id"] == "page-mmmmmmm5" for page in broker.pages())
 
     broker.join("hub-aaaaaaaa", "page-hhhhhhh4", {})
     replaced = broker.attach_hub("hub-aaaaaaaa")

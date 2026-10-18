@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 // The hub runs in a shared worker; here it gets a fake environment: one
 // EventSource it may open, fetch, timers and a clock the test drives.
-async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pagesBody = null, joinStatus = () => 200, pagesAnswers = null, joinAnswer = null} = {}) {
+async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pagesBody = null, joinStatus = () => 200, pagesAnswers = null, joinAnswer = null, leaveStatus = () => 200} = {}) {
   const {createVantageHub} = await import('../agent-vantage-hub.mjs');
   const sources = [], posts = [], intervals = [], timeouts = [];
   let t = 0;
@@ -24,6 +24,11 @@ async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pag
         return {status: pagesStatus, ok: pagesStatus === 200, json: pagesBody ?? (async () => pages)};
       }
       if (String(url).endsWith('/join') && joinAnswer) return joinAnswer();
+      if (String(url).endsWith('/leave')) {
+        const status = leaveStatus();
+        if (status === 'reject') throw new Error('network');
+        return {status, ok: status === 200, json: async () => ({ok: status === 200})};
+      }
       if (String(url).endsWith('/join')) {
         const status = joinStatus();
         if (status === 'reject') throw new Error('network');
@@ -188,4 +193,21 @@ test('a capability probe that failed is retried, and only a readable answer with
     h.timeouts.at(-1).fn(); await h.settle();
     assert.equal(h.sources.length, 1, 'and the hub links once the server answers');
   }
+});
+
+test('a tab that leaves while the stream is down is still reported gone, and the report is repeated until the server has it', async () => {
+  const answers = ['reject'];
+  const h = await hubHarness({leaveStatus: () => answers.shift() ?? 200}), a = h.port(), b = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')});
+  b.say({type: 'join', endpoint: '/api/vantage', page: 'page-b', facts: facts('page-b')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  h.sources[0].readyState = 0; h.sources[0].emit('error'); await h.settle();   // reconnecting
+  a.say({type: 'leave', page: 'page-a'}); await h.settle();
+  const leaves = () => h.posts.filter(post => post.url === '/api/vantage/leave' && post.body.page === 'page-a');
+  assert.equal(leaves().length, 1, 'the departure is reported though the stream is down');
+  assert.ok(Number.isInteger(leaves()[0].body.member));
+  h.sources[0].emit('open'); await h.settle();
+  assert.equal(leaves().length, 2, 'the failed report is repeated when the stream is back');
+  h.sources[0].readyState = 0; h.sources[0].emit('error'); await h.settle(); h.sources[0].emit('open'); await h.settle();
+  assert.equal(leaves().length, 2, 'and not again once the server has it');
 });

@@ -131,7 +131,8 @@ class VantageBroker:
     def leave(self, hub_id, page_id, member=None):
         """A tab that closed, or stopped answering its hub, leaves: only its own
         commands fail. A leave naming an older membership than the page's
-        current one is stale and changes nothing."""
+        current one is stale and changes nothing; one naming the current or a
+        newer membership (whose join may still be on its way) retires the page."""
         member = member if isinstance(member, int) and not isinstance(member, bool) else None
         with self._lock:
             if member is not None:
@@ -140,7 +141,7 @@ class VantageBroker:
             page = self._pages.get(page_id)
             if page is None or page.link is None or page.link.hub != hub_id:
                 return False
-            if member is not None and page.member is not None and member != page.member:
+            if member is not None and page.member is not None and member < page.member:
                 return False
             self._drop(page)
             self._lock.notify_all()

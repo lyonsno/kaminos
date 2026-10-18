@@ -31,7 +31,15 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
   const tell = (port, message) => { try { port.postMessage(message); } catch { /* the tab is gone */ } };
   const tellAll = message => { for (const port of tabs.keys()) tell(port, message); };
   const linked = () => source?.readyState === 1;
-  const leave = (page, member = null) => post('/leave', {hub: hubId, page, member});
+  // A departure is always reported, even while the stream is down, and repeated on every
+  // reconnect until the server has recorded it: the server then refuses delayed joins of it.
+  const departures = new Map();   // `${page} ${member}` -> {page, member}
+  async function depart(page, member) {
+    const key = `${page} ${member}`;
+    departures.set(key, {page, member});
+    const response = await post('/leave', {hub: hubId, page, member});
+    if (response?.ok) departures.delete(key);
+  }
   async function join(port, tab) {
     const stream = generation, member = tab.member;
     const response = await post('/join', {hub: hubId, ...tab.facts, page: tab.page, member});
@@ -72,6 +80,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     source.addEventListener('open', () => {
       mode = 'hub';
       generation++;
+      for (const {page, member} of [...departures.values()]) depart(page, member);
       for (const [port, tab] of tabs) { tab.joined = false; join(port, tab); }
     });
     source.addEventListener('command', event => {
@@ -112,7 +121,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
       const tab = tabs.get(port);
       if (!tab) return;
       tabs.delete(port);
-      if (linked()) leave(tab.page, tab.member);
+      if (mode === 'hub') depart(tab.page, tab.member);
     }
   }
 
@@ -120,7 +129,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     for (const [port, tab] of [...tabs]) {
       if (now() - tab.seen > HUB_SILENCE_MS) {
         tabs.delete(port);
-        if (linked()) leave(tab.page, tab.member);
+        if (mode === 'hub') depart(tab.page, tab.member);
       } else if (linked() && !tab.joined) join(port, tab);
       // Asked even when dropped: a tab that was only paused answers, and joins again.
       tell(port, {type: 'ping'});
