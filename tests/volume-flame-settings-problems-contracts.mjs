@@ -85,6 +85,13 @@ assert.deepEqual(JSON.parse(JSON.stringify(describe())), {
   text: 'FLAME EDITS REFUSED: 2 invalid controls (volume-shell-inspect-mode, volume-density); Unsupported volume-shell-inspect-mode: ; Out of range volume-density',
   warning: true,
 }, 'the warning names every invalid control');
+// A basin clamped on load stays named in the warning until another basin replaces it.
+const describeClamped = vm.runInNewContext(`${describeSource}; describeFlameSettingsProblems`, { flameSettingsProblemLabel: problem => problem.id, window: {
+  __kaminosFlameBasinClampReport: { label: 'itsthefuckingfireball', clamps: [{ id: 'volume-immersed-radius', message: 'scaled immersed source radius 135.7648 is outside 0.02 to 0.5; clamped to 0.5' }] } } });
+assert.deepEqual(JSON.parse(JSON.stringify(describeClamped())), {
+  text: 'Basin itsthefuckingfireball was clamped to range: scaled immersed source radius 135.7648 is outside 0.02 to 0.5; clamped to 0.5',
+  warning: true,
+}, 'the clamped basin is named, without refusing edits');
 assert.deepEqual(JSON.parse(JSON.stringify(vm.runInNewContext(`${describeSource}; describeFlameSettingsProblems()`, { flameSettingsProblemLabel: problem => problem.id, window: {} }))), { text: '', warning: false });
 // The status line sits far down the panel and the info bar is under the
 // volume canvas, so the warning also shows at the top of the Basins card and
