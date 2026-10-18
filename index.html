@@ -3606,7 +3606,7 @@ import { FLAME_EMITTER_ID, FLAME_EMITTER_TYPE, FLAME_EMITTER_SOURCE,
   defaultFlameEmitterPose, normalizeFlameEmitterPose, createFlameEmitterHandle,
   updateFlameEmitterSupportOutline, flameDomainTranslationForAcceptedPose,
   flamePoseInDomain, flamePoseToDomain, normalizeFlameDomainTranslation, normalizeFlameDomainScale,
-  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
+  flamePoseFromImmersedControls, immersedControlsForFlamePose, immersedRadiusBounds, immersedRadiusClamp,effectiveFlameDomainControls } from './scene-flame-emitter.mjs';
 let flameEmitterPose = defaultFlameEmitterPose(), applyFlameEmitterPose = null;
 let flameEmitterInjectionSuspended = false;
 let authoredFlamePresent = true;
@@ -17944,11 +17944,11 @@ function showVolumeSettingsPresetStatus() {
 // exists, every flame-control press is refused.
 function describeFlameSettingsProblems() {
   const problems = window.__kaminosFlameSettingsProblems || [];
-  if (!problems.length) return { text: '', warning: false };
-  return {
-    text: `FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`,
-    warning: true,
-  };
+  const clamps = window.__kaminosFlameSettingsClamps || [];
+  const parts = [];
+  if (problems.length) parts.push(`FLAME EDITS REFUSED: ${problems.length} invalid control${problems.length === 1 ? '' : 's'} (${problems.map(flameSettingsProblemLabel).join(', ')}); ${problems.map(problem => problem.message).join('; ')}`);
+  if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
+  return { text: parts.join(' || '), warning: parts.length > 0 };
 }
 
 // Show the problems at the top of the Basins card and outline each invalid
@@ -18008,10 +18008,14 @@ function showFlameEditRefused(error) {
 // mouse.
 function recordFlameSettingsProblems() {
   try {
-    window.__kaminosFlameSettingsProblems = Object.freeze(flameSettingsStateProblems(flameSettingsState()));
+    const state = flameSettingsState();
+    window.__kaminosFlameSettingsProblems = Object.freeze(flameSettingsStateProblems(state));
+    window.__kaminosFlameSettingsClamps = Object.freeze(flameSettingsStateClamps(state));
   } catch (error) {
     window.__kaminosFlameSettingsProblems = Object.freeze([{ id: 'flame-settings', message: `flame settings check failed: ${error.message}` }]);
+    window.__kaminosFlameSettingsClamps = Object.freeze([]);
   }
+  if (window.__kaminosFlameSettingsClamps.length) console.warn('Flame settings clamped:', window.__kaminosFlameSettingsClamps);
   if (window.__kaminosFlameSettingsProblems.length) console.warn('Flame settings problems:', window.__kaminosFlameSettingsProblems);
   showVolumeSettingsPresetStatus();
   showFlameSettingsProblems();
@@ -22769,8 +22773,7 @@ function flameSettingsStateProblems(state) {
       else if(source.type==='checkbox') {if(typeof value!=='boolean'&&!['0','1','true','false'].includes(String(value)))problem(`Invalid ${id}`);}
       else if(['range','number'].includes(source.type)) {
         if(!Number.isFinite(Number(value))){problem(`Nonfinite ${id}`);continue;}
-        // The render-scale control has an explicit Full/legacy value contract.
-        if(id!=='volume-render-scale'&&((source.min!==''&&Number(value)<Number(source.min))||(source.max!==''&&Number(value)>Number(source.max))))problem(`Out of range ${id}`);
+        // Out-of-range values are clamped, not refused: flameSettingsStateClamps.
       } else if(source.type==='color'&&!/^#[0-9a-f]{6}$/i.test(value))problem(`Invalid color ${id}`);
     }
   }
@@ -22787,6 +22790,53 @@ function flameSettingsStateProblems(state) {
     catch(error){problems.push({id:'volume-optical-tolerance',message:error.message});}
   }
   return problems;
+}
+// Values outside a control's range, and an immersed radius the source scale
+// takes outside [0.02, 0.5]. Operator, 2026-10-18: an out-of-range basin value
+// is not a reason to ban the basin; it is clamped where it is applied (range
+// inputs clamp on write, the source clamps its radius) and the page says so.
+function flameSettingsStateClamps(state) {
+  const clamps=[];
+  for(const axis of ['domControls','rendererControls']) {
+    for(const [id,descriptor] of Object.entries(state?.[axis]||{})) {
+      if(!descriptor||typeof descriptor!=='object'||id==='volume-render-scale')continue;
+      const source=document.getElementById(id);
+      if(!source||!['range','number'].includes(source.type))continue;
+      const value=Number(descriptor.rawValue??descriptor.value);
+      if(!Number.isFinite(value))continue;
+      const min=source.min===''?-Infinity:Number(source.min),max=source.max===''?Infinity:Number(source.max);
+      if(value<min||value>max)clamps.push({id,message:`${id} ${value} is outside ${source.min} to ${source.max}; clamped to ${value<min?source.min:source.max}`});
+    }
+  }
+  if(state?.domControls?.['volume-emitter-source-law']?.value==='immersed-source') {
+    const radius=state.domControls['volume-immersed-radius'];
+    const clamp=immersedRadiusClamp({immersedRadius:Number(radius?.rawValue??radius?.value)},
+      flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale));
+    if(clamp)clamps.push({id:'volume-immersed-radius',message:`scaled immersed source radius ${+clamp.requested.toFixed(4)} is outside 0.02 to 0.5; clamped to ${clamp.applied}`});
+  }
+  return clamps;
+}
+// A copy of state with out-of-range values set to the nearest bound, in the
+// control's own representation, so a basin is written already clamped and the
+// readback after the write matches it. The radius control's bounds follow the
+// source scale (syncFlameRangeBounds), so this clamps the scaled aperture too.
+function clampedFlameSettingsState(state) {
+  const next=structuredClone(state);
+  for(const axis of ['domControls','rendererControls']) {
+    for(const [id,descriptor] of Object.entries(next?.[axis]||{})) {
+      if(!descriptor||typeof descriptor!=='object'||id==='volume-render-scale')continue;
+      const source=document.getElementById(id);
+      if(!source||!['range','number'].includes(source.type))continue;
+      const value=Number(descriptor.rawValue??descriptor.value);
+      if(!Number.isFinite(value))continue;
+      const min=source.min===''?-Infinity:Number(source.min),max=source.max===''?Infinity:Number(source.max);
+      if(value>=min&&value<=max)continue;
+      let raw=String(value<min?source.min:source.max);
+      if(typeof source.cloneNode==='function'){const probe=source.cloneNode();probe.step='any';probe.value=raw;raw=probe.value;}
+      descriptor.value=Number(raw);if('rawValue' in descriptor||source.type==='range')descriptor.rawValue=raw;
+    }
+  }
+  return next;
 }
 function checkFlameSettingsState(state) {
   const problems=flameSettingsStateProblems(state);
@@ -22813,6 +22863,7 @@ function writeFlameSettingsState(state) {
   activeVolumeSettingsPresetReceipt=state.source;
   window.__kaminosVolumeSettingsPresetReceipt=state.source;
   syncBurnerControls();refreshVolumeReadout();flameInspector?.sync(true);
+  recordFlameSettingsProblems();
 }
 function installFlameAuthoring() {
   window.kaminosFlameAuthoring=createFlameAuthoring({edits:scenePlacementTools.edits,
@@ -22828,7 +22879,13 @@ async function loadAuthoredFlameBasin(id) {
   if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
   const receipt=validateVolumeSettingsPresetDocument(artifact,id,schema);
   if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
-  return flameSettingsState(receipt.preset,receipt);
+  // Operator, 2026-10-18: values outside a control's range do not ban a basin;
+  // they are clamped before the write and the page says which.
+  const state=flameSettingsState(receipt.preset,receipt);
+  const clamps=flameSettingsStateClamps(state);
+  window.__kaminosFlameBasinClamps=Object.freeze(clamps);
+  if(clamps.length){console.warn(`Basin ${receipt.label||id} clamped:`,clamps);setInfo(`Basin ${receipt.label||id}: clamped to range: ${clamps.map(clamp=>clamp.message).join('; ')}`);}
+  return clamps.length?clampedFlameSettingsState(state):state;
 }
 
 function firstFlameFieldState() {

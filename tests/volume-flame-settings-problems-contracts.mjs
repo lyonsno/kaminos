@@ -10,6 +10,10 @@ const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const grab = head => index.match(new RegExp(`${head.replace(/[()]/g, '\\$&')}[^]*?\\n\\}`))?.[0];
 const problemsSource = grab('function flameSettingsStateProblems(');
 const checkSource = grab('function checkFlameSettingsState(');
+const clampsSource = grab('function flameSettingsStateClamps(');
+const clampSource = grab('function clampedFlameSettingsState(');
+assert.ok(clampSource, 'a clamping copy exists');
+assert.ok(clampsSource, 'a clamp lister exists');
 assert.ok(problemsSource, 'a problem lister exists');
 assert.ok(checkSource, 'the edit check exists');
 
@@ -29,9 +33,9 @@ const context = vm.createContext({
   document: { getElementById: id => controls[id] || null },
   flameSettingsState: () => current,
   VOLUME_RETIRED_APERTURE_PATTERNS: ['concentric', 'spiral'],
-  Object, Number, String, Error,
+  Object, Number, String, Error, structuredClone,
 });
-vm.runInContext(`${problemsSource}\n${checkSource}\nthis.problems = flameSettingsStateProblems; this.check = checkFlameSettingsState;`, context);
+vm.runInContext(`${problemsSource}\n${clampsSource}\n${clampSource}\n${checkSource}\nthis.problems = flameSettingsStateProblems; this.check = checkFlameSettingsState; this.clamps = flameSettingsStateClamps; this.clamped = clampedFlameSettingsState;`, context);
 
 const good = current;
 assert.deepEqual(JSON.parse(JSON.stringify(context.problems(good))), [], 'a valid state has no problems');
@@ -40,9 +44,19 @@ assert.equal(context.check(good), good, 'the edit check passes a valid state thr
 current = state({ 'volume-shell-inspect-mode': '', 'volume-emitter-aperture-pattern': 'spiral', 'volume-density': 3, 'volume-render-scale': 1 }, 'maybe');
 assert.deepEqual(JSON.parse(JSON.stringify(context.problems(current))), [
   { id: 'volume-shell-inspect-mode', message: 'Unsupported volume-shell-inspect-mode: ' },
-  { id: 'volume-density', message: 'Out of range volume-density' },
   { id: 'raymarch-smoke-presentation', message: 'Invalid smoke presentation' },
 ], 'every invalid control is listed with the message the edit check gives; a kept retired pattern and Full render scale are valid');
+// Operator, 2026-10-18: an out-of-range value is clamped and warned about, never a refusal.
+assert.deepEqual(JSON.parse(JSON.stringify(context.clamps(current))), [
+  { id: 'volume-density', message: 'volume-density 3 is outside 0 to 2; clamped to 2' },
+], 'an out-of-range value is a clamp, not a problem');
+// A basin is clamped before it is written, so the page's readback after the
+// write matches what was applied instead of failing as a substitution.
+const clamped = context.clamped(current);
+assert.equal(Number(clamped.domControls['volume-density'].value), 2);
+assert.equal(String(clamped.domControls['volume-density'].rawValue), '2');
+assert.equal(current.domControls['volume-density'].value, 3, 'the original state is not modified');
+assert.deepEqual(JSON.parse(JSON.stringify(context.clamps(clamped))), [], 'a clamped state has nothing left to clamp');
 assert.throws(() => context.check(current), /^Error: Unsupported volume-shell-inspect-mode: $/, 'the edit check still refuses with the first problem');
 
 current = { domControls: { 'volume-density': null }, rendererControls: {}, presentationControls: { 'raymarch-smoke-presentation': null } };
@@ -58,7 +72,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(context.problems(state({ 'volume-dens
 const routeInit = index.slice(index.indexOf('async function initKaminosVolumeRoute('));
 assert.match(routeInit, /recordVolumeSettingsPresetApplied\(\);\n\s*recordFlameSettingsProblems\(\);/, 'the route records flame problems after the readback');
 const recorder = grab('function recordFlameSettingsProblems(');
-assert.match(recorder, /flameSettingsStateProblems\(flameSettingsState\(\)\)/, 'the recorder runs the edit check on the loaded state');
+assert.match(recorder, /const state = flameSettingsState\(\);[\s\S]*flameSettingsStateProblems\(state\)[\s\S]*flameSettingsStateClamps\(state\)/, 'the recorder runs the edit check and the clamp list on the loaded state');
 assert.match(recorder, /window\.__kaminosFlameSettingsProblems = /, 'the problems are exposed for witnesses');
 const show = grab('function showVolumeSettingsPresetStatus(');
 assert.match(show, /describeFlameSettingsProblems\(\)/, 'the status line includes the problems');
