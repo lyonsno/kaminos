@@ -15,13 +15,19 @@ function load(radius,options={},space,scale=1){
  const current=structuredClone(preset);current.domControls['volume-immersed-radius']={value:.2/scale,rawValue:String(.2/scale)};
  const context={structuredClone,readVolumeSettingsValues:()=>current,activeVolumeSettingsPresetReceipt:null,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},flameDomainTranslation:[0,0,0],flameDomainScale:1,
  flamePoseToDomain,immersedControlsForFlamePose,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:()=>({cloneNode:()=>({value:0})})}};
- vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);return context.run(preset,null,options);
+ vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);return context.run(preset,{presetId:'legacy-test',label:'Original',preset},options);
 }
 test('explicit legacy recovery retains current aperture rather than clamping saved radius',()=>{
  const state=load(135.764753512356,{sourceSize:'current'});
  assert.equal(state.domControls['volume-immersed-radius'].value,.2);
 });
 test('ordinary apply still refuses an unrecoverable legacy aperture',()=>assert.throws(()=>load(135.764753512356),/radius/));
+test('legacy recovery preserves the source receipt instead of aliasing it to applied controls',()=>{
+ const original=135.764753512356,state=load(original,{sourceSize:'current'});
+ assert.equal(state.domControls['volume-immersed-radius'].value,.2);
+ assert.equal(state.source.preset.domControls['volume-immersed-radius'].value,original,'the original preset receipt must retain its saved aperture');
+ assert.notStrictEqual(state.source.preset.domControls,state.domControls);
+});
 test('portable preset applies the same effective aperture to differently scaled emitters',()=>{
  for(const scale of [.001,.1,1,8]){
    const state=load(.3,{},'simulation-v1',scale);
