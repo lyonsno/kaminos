@@ -122,7 +122,7 @@ assert.throws(
 
 const older = structuredClone(baseLayout);
 // A control with no placement rule of its own (the fire cadence controls join Speed).
-const newlyAddedControlId = older.groups[0].controlIds.filter(id => !['volume-sim-every', 'volume-sim-between'].includes(id)).at(-1);
+const newlyAddedControlId = older.groups[0].controlIds.filter(id => !['volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail'].includes(id)).at(-1);
 older.groups[0].controlIds = older.groups[0].controlIds.filter(id => id !== newlyAddedControlId);
 const reconciled = layoutModule.reconcileVolumeCockpitLayoutDocument({
   document: older,
@@ -141,7 +141,7 @@ olderWithHiddenCatchBasin.groups.push({
   collapsed: true,
   controlIds: [newlyAddedControlId],
 });
-const secondNewControlId = olderWithHiddenCatchBasin.groups[0].controlIds.filter(id => !['volume-sim-every', 'volume-sim-between'].includes(id)).at(-1);
+const secondNewControlId = olderWithHiddenCatchBasin.groups[0].controlIds.filter(id => !['volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail'].includes(id)).at(-1);
 olderWithHiddenCatchBasin.groups[0].controlIds = olderWithHiddenCatchBasin.groups[0].controlIds.filter(id => id !== secondNewControlId);
 const reconciledAgain = layoutModule.reconcileVolumeCockpitLayoutDocument({
   document: olderWithHiddenCatchBasin,

@@ -6,7 +6,7 @@ import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOptica
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
-import { presentationPhase, presentationBlendPhase } from './fire-presentation-cadence.mjs';
+import { presentationPhase, presentationBlendPhase, presentationBlendUniforms } from './fire-presentation-cadence.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
 import { InletPerturbationField, StochasticSignalSet, resolveInletDynamicsConfig, inletDynamicsTauSteps, INLET_TURBULENCE_CORRELATION_SECONDS } from './volume-inlet-perturbation.mjs';
@@ -3649,18 +3649,139 @@ fn passiveHeatToSmokeRate(heat: f32, yFine: f32) -> f32 {
 `;
 })();
 
-// Decoupled fire cadence, blend mode: the raymarch reads mix(previous real
-// state, current real state, t) from its own buffer, so no sim kernel sees it.
+// Decoupled fire cadence, blend pass: the raymarch reads this pass's output
+// instead of the live fluid state, so no sim kernel sees it. Per cell, with t
+// the fraction of a step shown:
+// - plain blend: mix(previous, current, t) in place;
+// - following the motion: the previous state carried forward by t and the
+//   current state carried back by 1 - t along their own velocities, meeting
+//   at the in-between (two-sided; no jump at real steps);
+// - Auto weighs the two per cell: follow where the aligned pair agrees better
+//   than the states do standing still (autoFollowWeight), blend elsewhere
+//   (standing shapes, sources, new burns); Blend uses Follow motion as one
+//   global weight, and Auto caps its per-cell weight by it;
+// - frame detail: every sample is displaced by Flame Doctor's sub-grid curl
+//   noise, on his coordinate sets carried along the flow and read at this
+//   instant (the current set carried back by 1 - t), cross-faded on
+//   continuous time, at the amplitude the resolved velocity band predicts
+//   (a presentation estimate from the current velocity) times Frame detail.
+// Presentation only; nothing is written back.
 const PRESENTATION_BLEND_WGSL = /* wgsl */`
+${WAVELET_TURBULENCE_WGSL}
+struct PresentationBlend {
+  // t, auto (1) or blend (0), follow, frame detail
+  a: vec4<f32>,
+  // grid width, grid height, one step's displacement per unit velocity (cells), octaves
+  b: vec4<f32>,
+  // coordinate set A's weight now, coordinates ride the flow (1), spare, spare
+  c: vec4<f32>,
+};
 @group(0) @binding(0) var<storage, read> previous: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read> current: array<vec4<f32>>;
 @group(0) @binding(2) var<storage, read_write> presented: array<vec4<f32>>;
-@group(0) @binding(3) var<uniform> blend: vec4<f32>;
-@compute @workgroup_size(256)
+@group(0) @binding(3) var<uniform> blend: PresentationBlend;
+@group(0) @binding(4) var coords: texture_3d<f32>;
+const SLOTS: u32 = 4u;
+
+fn dims() -> vec3<i32> { return vec3<i32>(i32(blend.b.x), i32(blend.b.y), i32(blend.b.x)); }
+fn slotAt(c: vec3<i32>, slot: u32) -> u32 {
+  let d = dims();
+  let q = clamp(c, vec3<i32>(0), d - vec3<i32>(1));
+  return (u32(q.x) + u32(q.y) * u32(d.x) + u32(q.z) * u32(d.x) * u32(d.y)) * SLOTS + slot;
+}
+fn samplePrevious(p: vec3<f32>, slot: u32) -> vec4<f32> {
+  let q = p - vec3<f32>(0.5);
+  let i = vec3<i32>(floor(q));
+  let f = q - floor(q);
+  let x00 = mix(previous[slotAt(i, slot)], previous[slotAt(i + vec3<i32>(1, 0, 0), slot)], f.x);
+  let x10 = mix(previous[slotAt(i + vec3<i32>(0, 1, 0), slot)], previous[slotAt(i + vec3<i32>(1, 1, 0), slot)], f.x);
+  let x01 = mix(previous[slotAt(i + vec3<i32>(0, 0, 1), slot)], previous[slotAt(i + vec3<i32>(1, 0, 1), slot)], f.x);
+  let x11 = mix(previous[slotAt(i + vec3<i32>(0, 1, 1), slot)], previous[slotAt(i + vec3<i32>(1, 1, 1), slot)], f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+fn sampleCurrent(p: vec3<f32>, slot: u32) -> vec4<f32> {
+  let q = p - vec3<f32>(0.5);
+  let i = vec3<i32>(floor(q));
+  let f = q - floor(q);
+  let x00 = mix(current[slotAt(i, slot)], current[slotAt(i + vec3<i32>(1, 0, 0), slot)], f.x);
+  let x10 = mix(current[slotAt(i + vec3<i32>(0, 1, 0), slot)], current[slotAt(i + vec3<i32>(1, 1, 0), slot)], f.x);
+  let x01 = mix(current[slotAt(i + vec3<i32>(0, 0, 1), slot)], current[slotAt(i + vec3<i32>(1, 0, 1), slot)], f.x);
+  let x11 = mix(current[slotAt(i + vec3<i32>(0, 1, 1), slot)], current[slotAt(i + vec3<i32>(1, 1, 1), slot)], f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+fn coordLoad(c: vec3<i32>, setIndex: i32) -> vec3<f32> {
+  let d = dims();
+  let q = clamp(c, vec3<i32>(0), d - vec3<i32>(1));
+  return textureLoad(coords, vec3<i32>(q.x, q.y, q.z + setIndex * d.z), 0).xyz;
+}
+fn coordSample(p: vec3<f32>, setIndex: i32) -> vec3<f32> {
+  let q = p - vec3<f32>(0.5);
+  let i = vec3<i32>(floor(q));
+  let f = q - floor(q);
+  let x00 = mix(coordLoad(i, setIndex), coordLoad(i + vec3<i32>(1, 0, 0), setIndex), f.x);
+  let x10 = mix(coordLoad(i + vec3<i32>(0, 1, 0), setIndex), coordLoad(i + vec3<i32>(1, 1, 0), setIndex), f.x);
+  let x01 = mix(coordLoad(i + vec3<i32>(0, 0, 1), setIndex), coordLoad(i + vec3<i32>(1, 0, 1), setIndex), f.x);
+  let x11 = mix(coordLoad(i + vec3<i32>(0, 1, 1), setIndex), coordLoad(i + vec3<i32>(1, 1, 1), setIndex), f.x);
+  return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+// Mean current velocity r cells away along the three axes.
+fn axisMean(c: vec3<i32>, r: i32) -> vec3<f32> {
+  var acc = vec3<f32>(0.0);
+  for (var axis = 0; axis < 3; axis = axis + 1) {
+    var o = vec3<i32>(0);
+    o[axis] = r;
+    acc = acc + current[slotAt(c + o, 0u)].xyz + current[slotAt(c - o, 0u)].xyz;
+  }
+  return acc / 6.0;
+}
+fn sumAbs(v: vec4<f32>) -> f32 { return abs(v.x) + abs(v.y) + abs(v.z) + abs(v.w); }
+// Same law as autoFollowWeight in fire-presentation-cadence.mjs.
+fn autoFollowWeight(plainDifference: f32, alignedDifference: f32) -> f32 {
+  if (!(plainDifference > 0.0)) { return 0.0; }
+  return clamp((plainDifference - alignedDifference) / max(plainDifference, 1e-6), 0.0, 1.0);
+}
+
+@compute @workgroup_size(4, 4, 4)
 fn csPresentationBlend(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let i = gid.x;
-  if (i >= arrayLength(&presented)) { return; }
-  presented[i] = mix(previous[i], current[i], blend.x);
+  let d = dims();
+  if (any(vec3<i32>(gid) >= d)) { return; }
+  let ci = vec3<i32>(gid);
+  let c = vec3<f32>(ci) + vec3<f32>(0.5);
+  let t = clamp(blend.a.x, 0.0, 1.0);
+  let scale = blend.b.z;
+  let prevVelocity = previous[slotAt(ci, 0u)].xyz;
+  let currVelocity = current[slotAt(ci, 0u)].xyz;
+  var detailShift = vec3<f32>(0.0);
+  if (blend.a.w > 0.0 && blend.c.y > 0.5) {
+    let band = axisMean(ci, 2) - axisMean(ci, 4);
+    let amplitude = waveletTargetAmplitude(0.5 * dot(band, band));
+    if (amplitude > 0.0) {
+      let foot = c + (1.0 - t) * scale * currVelocity;
+      let octaves = clamp(u32(blend.b.w), 1u, 2u);
+      let wa = clamp(blend.c.x, 0.0, 1.0);
+      var detail = vec3<f32>(0.0);
+      if (wa > 0.0) { detail = detail + wa * waveletDetail(coordSample(foot, 0), octaves); }
+      if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(coordSample(foot, 1), octaves); }
+      detailShift = blend.a.w * amplitude * scale * detail;
+    }
+  }
+  let carriedPrev = c - t * scale * prevVelocity;
+  let carriedCurr = c + (1.0 - t) * scale * currVelocity;
+  var weight = clamp(blend.a.z, 0.0, 1.0);
+  if (blend.a.y > 0.5) {
+    let aligned = sumAbs(sampleCurrent(carriedCurr, 1u) - samplePrevious(carriedPrev, 1u));
+    let plainDifference = sumAbs(current[slotAt(ci, 1u)] - previous[slotAt(ci, 1u)]);
+    weight = weight * autoFollowWeight(plainDifference, aligned);
+  }
+  let plainAt = c - detailShift;
+  for (var slot = 0u; slot < SLOTS; slot = slot + 1u) {
+    let plain = mix(samplePrevious(plainAt, slot), sampleCurrent(plainAt, slot), t);
+    var followed = plain;
+    if (weight > 0.0) {
+      followed = mix(samplePrevious(carriedPrev - detailShift, slot), sampleCurrent(carriedCurr - detailShift, slot), t);
+    }
+    presented[slotAt(ci, slot)] = mix(plain, followed, weight);
+  }
 }
 `;
 
@@ -4007,6 +4128,12 @@ fn forceDeltaLoad(c: vec3<i32>, component: i32) -> f32 {
 // on noise coordinates that travel with the gas. Each set of coordinates is
 // reset to the lattice once per coherence period, half a period apart, and
 // the two syntheses are cross-faded so the reset never shows.
+// Frame detail (decoupled fire cadence) reads these coordinates; it asks for
+// them to ride the flow on occupancy_controls.w even while the closure is off.
+fn waveletCoordinatesCarried() -> bool {
+  return u.occupancy_controls.w > 0.5;
+}
+
 fn waveletOn() -> bool {
   return u.wavelet_turbulence.x > 0.0;
 }
@@ -6980,7 +7107,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let backCell = sceneClipCharacteristic(cell, cell - advectVelocity * backtraceScale);
   var waveletCoordA = cell;
   var waveletCoordB = cell;
-  if (waveletOn()) {
+  if (waveletOn() || waveletCoordinatesCarried()) {
     // The noise coordinates ride the same characteristic as the gas.
     let wPhase = u32(u.wavelet_turbulence.w) % WAVELET_COHERENCE_PERIOD_STEPS;
     waveletCoordA = select(waveletCoordSample(backCell, 0), cell, wPhase == 0u);
@@ -13563,7 +13690,7 @@ export function createKaminosVolumePrototype({
     if (!presentationBlendPipeline) {
       presentationBlendPipeline = device.createComputePipeline({ label: 'kaminos fluid presentation blend', layout: 'auto',
         compute: { module: device.createShaderModule({ label: 'kaminos fluid presentation blend wgsl', code: PRESENTATION_BLEND_WGSL }), entryPoint: 'csPresentationBlend' } });
-      presentationBlendUniform = device.createBuffer({ label: 'kaminos fluid presentation blend phase', size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      presentationBlendUniform = device.createBuffer({ label: 'kaminos fluid presentation blend uniforms', size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     }
     if (presentationRenderBindGroups.length !== 4) {
       for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
@@ -13572,9 +13699,17 @@ export function createKaminosVolumePrototype({
             label: `kaminos fluid presentation bind group fluid ${fluidIndex} quench ${quenchIndex}`, fluidRead: fluidPresentBuffer });
         }
       }
-      presentationBlendBindGroups = fluidBuffers.map(buffer => device.createBindGroup({ layout: presentationBlendPipeline.getBindGroupLayout(0), entries: [
-        { binding: 0, resource: { buffer: fluidPrevBuffer } }, { binding: 1, resource: { buffer } },
-        { binding: 2, resource: { buffer: fluidPresentBuffer } }, { binding: 3, resource: { buffer: presentationBlendUniform } }] }));
+      // Indexed like the fluid groups: fluid parity x quench parity (the wavelet
+      // coordinates the step just wrote follow the quench parity).
+      presentationBlendBindGroups = [];
+      for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+        for (let quenchIndex = 0; quenchIndex < 2; quenchIndex += 1) {
+          presentationBlendBindGroups[fluidIndex * 2 + quenchIndex] = device.createBindGroup({ layout: presentationBlendPipeline.getBindGroupLayout(0), entries: [
+            { binding: 0, resource: { buffer: fluidPrevBuffer } }, { binding: 1, resource: { buffer: fluidBuffers[fluidIndex] } },
+            { binding: 2, resource: { buffer: fluidPresentBuffer } }, { binding: 3, resource: { buffer: presentationBlendUniform } },
+            { binding: 4, resource: waveletTextures[quenchIndex].createView({ dimension: '3d' }) }] });
+        }
+      }
     }
     return true;
   }
@@ -14607,7 +14742,7 @@ export function createKaminosVolumePrototype({
       return buffer;
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
-    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted));
+    ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted) || (typeof proxyPacing !== 'undefined' && proxyPacing?.presentationDetail > 0));
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
       size: [gridSize, gridSize, 1],
@@ -17124,7 +17259,10 @@ export function createKaminosVolumePrototype({
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
-    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
+    // Frame detail needs the coordinate sets carried along the flow even with the closure off.
+    const frameDetailRequested = (typeof proxyPacing !== 'undefined' ? proxyPacing : null)?.presentationDetail > 0;
+    uniforms[43] = frameDetailRequested ? 1 : 0;
+    if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted || frameDetailRequested)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
       rebuildSelectiveHeadLiveBindGroups();
@@ -21684,7 +21822,7 @@ export function createKaminosVolumePrototype({
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = pacing?.lightFieldWithSnapshots ? pacing : null;
       // Blend mode keeps the real state the step replaces; typeof as above.
       if (typeof presentationBlendActive !== 'undefined') {
-        presentationBlendActive = pacing?.presentationBlend === true && pacing.simStepEvery > 1 && ensurePresentationBlend();
+        presentationBlendActive = pacing?.presentationBlend === true && ensurePresentationBlend();
         if (stepThisFrame && presentationBlendActive) encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidPrevBuffer, 0, fluidPrevBuffer.size);
       }
       if (stepThisFrame) {
@@ -21696,7 +21834,8 @@ export function createKaminosVolumePrototype({
       if (typeof lightFieldPacing !== 'undefined') lightFieldPacing = null;
       if (pacing) state.proxyPacing = { simStepEvery: pacing.simStepEvery, lightFieldWithSnapshots: pacing.lightFieldWithSnapshots, presentationAdvect: pacing.presentationAdvect === true,
         presentationPhase: uniforms[42], presentationBlend: pacing.presentationBlend === true, presentationBlendPhase: uniforms[41],
-        presentationBlendActive: typeof presentationBlendActive !== 'undefined' && presentationBlendActive, steppedThisFrame: stepThisFrame };
+        presentationBlendActive: typeof presentationBlendActive !== 'undefined' && presentationBlendActive, presentationMode: pacing.presentationMode ?? null,
+        presentationFollow: pacing.presentationFollow ?? null, presentationDetail: pacing.presentationDetail ?? null, steppedThisFrame: stepThisFrame };
       if (liveCompleteFlameOpticalCoefficientsEnabled) {
         liveCoefficientEncoded = encodeLiveCompleteFlameOpticalCoefficients(encoder);
         if (!liveCoefficientEncoded
@@ -21707,11 +21846,16 @@ export function createKaminosVolumePrototype({
         }
       }
       if (typeof presentationBlendActive !== 'undefined' && presentationBlendActive) {
-        device.queue.writeBuffer(presentationBlendUniform, 0, new Float32Array([uniforms[41], 0, 0, 0]));
+        const blendPacing = typeof proxyPacing !== 'undefined' ? proxyPacing : null;
+        device.queue.writeBuffer(presentationBlendUniform, 0, presentationBlendUniforms({
+          phase: uniforms[41], mode: blendPacing?.presentationMode, follow: blendPacing?.presentationFollow ?? 1, detail: blendPacing?.presentationDetail ?? 0,
+          grid: gridSize, gridY: gridHeight, backtraceScale: resolveTimeStepConfig(controlsSnapshot).effective.backtraceScale,
+          octaves: state.waveletTurbulence?.octaves ?? 2, simStep: state.simStepCount, coordinatesCarried: waveletSidecarFull,
+        }));
         const blendPass = encoder.beginComputePass({ label: 'kaminos fluid presentation blend' });
         blendPass.setPipeline(presentationBlendPipeline);
-        blendPass.setBindGroup(0, presentationBlendBindGroups[currentFluid]);
-        blendPass.dispatchWorkgroups(Math.ceil(fluidPresentBuffer.size / 16 / 256));
+        blendPass.setBindGroup(0, presentationBlendBindGroups[currentFluid * 2 + currentQuench]);
+        blendPass.dispatchWorkgroups(Math.ceil(gridSize / 4), Math.ceil(gridHeight / 4), Math.ceil(gridSize / 4));
         blendPass.end();
       }
       encoder = prepareSharedSceneConsumers(encoder, foregroundService);
@@ -27942,8 +28086,11 @@ export function createKaminosVolumePrototype({
     // drawing; the frame's presentation receipt says which happened.
     setProxyPacing(pacing) {
       proxyPacing = pacing ? { simStepEvery: Math.max(1, Math.floor(pacing.simStepEvery) || 1), lightFieldWithSnapshots: pacing.lightFieldWithSnapshots === true,
-        presentationAdvect: pacing.presentationAdvect === true, presentationBlend: pacing.presentationBlend === true, frame: 0, lightFieldStep: null } : null;
-      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots, presentationAdvect: proxyPacing.presentationAdvect, presentationBlend: proxyPacing.presentationBlend } : null;
+        presentationAdvect: pacing.presentationAdvect === true, presentationBlend: pacing.presentationBlend === true,
+        presentationMode: pacing.presentationMode ?? null, presentationFollow: Number.isFinite(pacing.presentationFollow) ? pacing.presentationFollow : 1,
+        presentationDetail: Number.isFinite(pacing.presentationDetail) ? pacing.presentationDetail : 0, frame: 0, lightFieldStep: null } : null;
+      state.proxyPacing = proxyPacing ? { simStepEvery: proxyPacing.simStepEvery, lightFieldWithSnapshots: proxyPacing.lightFieldWithSnapshots, presentationAdvect: proxyPacing.presentationAdvect,
+        presentationBlend: proxyPacing.presentationBlend, presentationMode: proxyPacing.presentationMode, presentationFollow: proxyPacing.presentationFollow, presentationDetail: proxyPacing.presentationDetail } : null;
       return state.proxyPacing;
     },
     setCanvasPresentationSuppressed(suppressed) {

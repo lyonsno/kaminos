@@ -19,7 +19,7 @@ const VOLUME_CONTROL_SELECTOR = [
 ].join(', ');
 
 const LAYOUT_API = '/api/volume-cockpit-layouts';
-const FIRE_CADENCE_CONTROL_IDS = Object.freeze(['volume-sim-every', 'volume-sim-between']);
+const FIRE_CADENCE_CONTROL_IDS = Object.freeze(['volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail']);
 const PHYSICS_APPEARANCE_CONTROL_IDS = Object.freeze(['volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin']);
 const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);

@@ -1210,6 +1210,18 @@ async function runFireCadencePanelScenario(ws) {
   const four = await read();
   evidence.steps.push({ step: 'agent every 4 blend', agent, ...four });
   check(four.pacing?.simStepEvery === 4 && four.pacing?.presentationBlend === true && four.between === 'blend' && Math.abs(four.simSpeed - 4.8) < 1e-6, `the agent call did not set the panel and the fire: ${JSON.stringify(four)}`);
+  await evaluate(ws, `window.kaminosFireCadence({ every: 4, mode: 'auto', follow: 1, detail: 1 })`);
+  await settleViewportFrames(ws, 900);
+  const detail = await read();
+  evidence.steps.push({ step: 'auto + frame detail', ...detail });
+  check(detail.pacing?.presentationMode === 'auto' && detail.pacing?.presentationDetail === 1 && detail.pacing?.presentationBlendActive === true, `Auto with frame detail did not engage the blend pass: ${JSON.stringify(detail.pacing)}`);
+  await evaluate(ws, `window.kaminosFireCadence({ every: 1, detail: 1 })`);
+  await settleViewportFrames(ws, 600);
+  const detailOnly = await read();
+  evidence.steps.push({ step: 'frame detail at every frame', ...detailOnly });
+  check(detailOnly.pacing?.simStepEvery === 1 && detailOnly.pacing?.presentationBlendActive === true && detailOnly.pacing?.presentationBlendPhase === 1, `frame detail alone did not run the blend pass at every frame: ${JSON.stringify(detailOnly.pacing)}`);
+  await evaluate(ws, `window.kaminosFireCadence({ every: 4, mode: 'blend', detail: 0 })`);
+  await settleViewportFrames(ws, 400);
   await evaluate(ws, 'window.__kaminosVolumePrototype.setSimulationPaused(true)');
   await settleViewportFrames(ws, 600);
   const paused = await read();
@@ -1276,9 +1288,12 @@ async function runFireDecoupledCadenceScenario(ws) {
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.display = await displayIdentity(ws);
   const outDir = dirname(out);
-  for (const name of ['held', 'carry', 'blend']) {
-    const advect = name === 'carry', blend = name === 'blend';
-    await evaluate(ws, `window.kaminosFireCadence({ every: ${every}, mode: '${name}' }); true`);
+  const armConfigs = { held: { mode: 'held', detail: 0 }, carry: { mode: 'carry', detail: 0 }, blend: { mode: 'blend', follow: 0, detail: 0 }, auto: { mode: 'auto', follow: 1, detail: 0 },
+    'auto-detail': { mode: 'auto', follow: 1, detail: Number(args.get('--detail') || 1) } };
+  for (const name of Object.keys(armConfigs)) {
+    const config = armConfigs[name];
+    const advect = config.mode === 'carry', blend = config.mode === 'blend' || config.mode === 'auto';
+    await evaluate(ws, `window.kaminosFireCadence(${JSON.stringify({ every, follow: 1, ...config })}); true`);
     await settleViewportFrames(ws, 800);
     const captured = await evaluate(ws, `(async () => {
       const v = window.__kaminosVolumePrototype, canvas = document.getElementById('kaminos-volume-canvas');
@@ -1299,12 +1314,16 @@ async function runFireDecoupledCadenceScenario(ws) {
       return { frame: decodeScreenshotPngRgb(png), file };
     });
     const mean = d => { let sum = 0; for (let i = 0; i < d.pixels.length; i++) sum += d.pixels[i]; return sum / d.pixels.length; };
+    // Mean luminance gradient: a fine-detail measure (blending averages detail away).
+    const sharpness = d => { const lum = (x, y) => { const o = (y * d.width + x) * d.channels; return d.pixels[o] * 0.299 + d.pixels[o + 1] * 0.587 + d.pixels[o + 2] * 0.114; };
+      let sum = 0, n = 0; for (let y = 0; y < d.height - 1; y++) for (let x = 0; x < d.width - 1; x++) { const v = lum(x, y); sum += Math.abs(lum(x + 1, y) - v) + Math.abs(lum(x, y + 1) - v); n++; } return sum / Math.max(1, n); };
     const steps = decoded.map((_, k) => k === 0 ? null : meanAbsolutePixelDifference(decoded[k - 1].frame, decoded[k].frame));
-    const arm = { name, advect, blend, canvas: captured.canvas,
+    const arm = { name, config, advect, blend, canvas: captured.canvas,
       frames: captured.frames.map((f, k) => ({ file: decoded[k].file, simStepDelta: f.simStepDelta, frameDelta: f.frameDelta, simStepCount: f.simStepCount,
         presentationPhase: (blend ? f.pacing?.presentationBlendPhase : f.pacing?.presentationPhase) ?? null,
-        pacing: f.pacing ? { simStepEvery: f.pacing.simStepEvery, presentationAdvect: f.pacing.presentationAdvect, presentationBlend: f.pacing.presentationBlend, presentationBlendActive: f.pacing.presentationBlendActive } : null,
-        meanLevel: mean(decoded[k].frame) })),
+        pacing: f.pacing ? { simStepEvery: f.pacing.simStepEvery, presentationAdvect: f.pacing.presentationAdvect, presentationBlend: f.pacing.presentationBlend, presentationBlendActive: f.pacing.presentationBlendActive,
+          presentationMode: f.pacing.presentationMode ?? null, presentationFollow: f.pacing.presentationFollow ?? null, presentationDetail: f.pacing.presentationDetail ?? null } : null,
+        meanLevel: mean(decoded[k].frame), sharpness: sharpness(decoded[k].frame) })),
       consecutiveDifferences: steps.slice(1),
       popFromLastShown: meanAbsolutePixelDifference(decoded[name === 'held' ? 0 : every - 1].frame, decoded[every].frame),
       heldPopSameRun: meanAbsolutePixelDifference(decoded[0].frame, decoded[every].frame) };
@@ -1312,7 +1331,7 @@ async function runFireDecoupledCadenceScenario(ws) {
     const expectedDeltas = [1, ...Array(every - 1).fill(0), 1];
     check(arm.frames.every(f => f.frameDelta === 1), `${name}: a capture step did not present exactly one frame: ${JSON.stringify(arm.frames.map(f => f.frameDelta))}`);
     check(JSON.stringify(arm.frames.map(f => f.simStepDelta)) === JSON.stringify(expectedDeltas), `${name}: sim steps per frame ${JSON.stringify(arm.frames.map(f => f.simStepDelta))} instead of ${JSON.stringify(expectedDeltas)}`);
-    check(arm.frames.every(f => f.pacing?.simStepEvery === every && f.pacing?.presentationAdvect === advect && f.pacing?.presentationBlend === blend && (!blend || f.pacing?.presentationBlendActive === true)),
+    check(arm.frames.every(f => f.pacing?.simStepEvery === every && f.pacing?.presentationAdvect === advect && f.pacing?.presentationBlend === (blend || config.detail > 0) && (!blend || f.pacing?.presentationBlendActive === true)),
       `${name}: effective pacing differs from the request: ${JSON.stringify(arm.frames.map(f => f.pacing))}`);
     const expectedPhases = name !== 'held' ? expectedDeltas.map((_, k) => (k % every) / every) : expectedDeltas.map(() => 0);
     check(arm.frames.every((f, k) => Math.abs((f.presentationPhase ?? -1) - expectedPhases[k]) < 1e-6), `${name}: phases ${JSON.stringify(arm.frames.map(f => f.presentationPhase))} instead of ${JSON.stringify(expectedPhases)}`);
@@ -1326,7 +1345,9 @@ async function runFireDecoupledCadenceScenario(ws) {
     evidence.byMode = {};
     for (const arm of evidence.arms.filter(a => a.name !== 'held')) {
       const motion = arm.consecutiveDifferences.slice(0, every - 1);
-      evidence.byMode[arm.name] = { inBetweenMotion: motion, popRatio: arm.popFromLastShown / Math.max(arm.heldPopSameRun, 1e-9), meanLevels: arm.frames.map(f => f.meanLevel) };
+      evidence.byMode[arm.name] = { inBetweenMotion: motion, popRatio: arm.popFromLastShown / Math.max(arm.heldPopSameRun, 1e-9), meanLevels: arm.frames.map(f => f.meanLevel),
+        // In-between sharpness relative to the real step frames on either side.
+        sharpnessRatio: arm.frames.slice(1, every).reduce((a, f) => a + f.sharpness, 0) / (every - 1) / Math.max(1e-9, (arm.frames[0].sharpness + arm.frames[every].sharpness) / 2) };
       check(Math.min(...motion) > noiseFloor * 2 + 0.01, `${arm.name}: the in-between frames do not move beyond the capture noise floor: ${JSON.stringify({ noiseFloor, motion })}`);
     }
   }

@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {presentationPhase, presentationBlendPhase, cadenceSimSpeed} from '../fire-presentation-cadence.mjs';
+import {presentationPhase, presentationBlendPhase, cadenceSimSpeed, autoFollowWeight, waveletCoherenceBlendA, presentationBlendUniforms} from '../fire-presentation-cadence.mjs';
 
 test('between real steps the phase is the fraction of a step that has elapsed', () => {
  const phases = [0, 1, 2, 3, 4, 5].map(frame => presentationPhase({frame, simStepEvery: 3, presentationAdvect: true}));
@@ -32,13 +32,12 @@ test('blend shows the previous real state on a step frame and moves toward the n
  assert.deepEqual([0, 1, 2, 3, 4].map(frame => presentationBlendPhase(pacing(frame))), [0, 0.25, 0.5, 0.75, 0]);
  assert.equal(presentationPhase(pacing(1)), 0, 'blend is not a carry');
  assert.equal(presentationBlendPhase({frame: 1, simStepEvery: 4, presentationAdvect: true}), 0, 'carry is not a blend');
- assert.equal(presentationBlendPhase({frame: 1, simStepEvery: 1, presentationBlend: true}), 0);
+ assert.equal(presentationBlendPhase({frame: 1, simStepEvery: 1, presentationBlend: true}), 1, 'stepping every frame (frame detail only) shows the current state');
 });
 
 test('the frame blends the previous and current fluid state into the buffer the raymarch reads', () => {
  const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
  assert.match(source, /uniforms\[41\] = presentationBlendPhase\(/);
- assert.match(source, /presented\[i\] = mix\(previous\[i\], current\[i\], blend\.x\)/);
  assert.match(source, /copyBufferToBuffer\(fluidBuffers\[currentFluid\], 0, fluidPrevBuffer, 0/);
  assert.match(source, /pass\.setBindGroup\(0, options\.bindGroup \|\| presentationBindGroup\(\)\)/);
 });
@@ -62,7 +61,7 @@ test('the flame panel carries the cadence as renderer controls under Speed', () 
  const every = schema.rendererControls.find(control => control.key === 'volume-sim-every');
  const between = schema.rendererControls.find(control => control.key === 'volume-sim-between');
  assert.deepEqual(every, {key: 'volume-sim-every', param: 'volume_sim_every', tagName: 'INPUT', type: 'range', additiveDefault: 1});
- assert.deepEqual(between, {key: 'volume-sim-between', param: 'volume_sim_between', tagName: 'SELECT', type: 'select-one', allowedValues: ['held', 'carry', 'blend'], additiveDefault: 'blend'});
+ assert.deepEqual(between, {key: 'volume-sim-between', param: 'volume_sim_between', tagName: 'SELECT', type: 'select-one', allowedValues: ['held', 'carry', 'blend', 'auto'], additiveDefault: 'auto'});
  const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
  assert.match(index, /id="volume-speed"[\s\S]*?<\/div>\s*<div class="slider-row"[^>]*>\s*<span class="slider-label">Sim every \(frames\)<\/span>\s*<input type="range" id="volume-sim-every"/, 'Sim every sits directly under Speed');
 });
@@ -72,9 +71,9 @@ test('a saved cockpit layout gains the cadence controls directly under Speed, no
  const saved = {identity: VOLUME_COCKPIT_LAYOUT_IDENTITY, layoutId: 'operator-layout', label: 'Operator', groups: [
   {id: 'organized-simulation', label: 'Simulation dynamics', surface: 'primary', collapsed: false, controlIds: ['volume-projection', 'volume-speed', 'volume-fire-scale']}]};
  const result = reconcileVolumeCockpitLayoutDocument({document: saved,
-  authorableControlIds: ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-fire-scale']});
+  authorableControlIds: ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail', 'volume-fire-scale']});
  assert.deepEqual(result.document.groups.map(group => [group.id, group.controlIds]),
-  [['organized-simulation', ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-fire-scale']]]);
+  [['organized-simulation', ['volume-projection', 'volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail', 'volume-fire-scale']]]);
 });
 
 test('the Flame inspector shows the cadence directly under Speed in Motion', async () => {
@@ -83,4 +82,48 @@ test('the Flame inspector shows the cadence directly under Speed in Motion', asy
  const ids = motion.fields.map(([id]) => id);
  assert.deepEqual(ids.slice(ids.indexOf('volume-speed'), ids.indexOf('volume-speed') + 3), ['volume-speed', 'volume-sim-every', 'volume-sim-between']);
  assert.equal(motion.fields.find(([id]) => id === 'volume-speed')[1], 'Speed (× world)');
+});
+
+test('Auto follows the motion where the aligned pair explains the change better than standing still', () => {
+ assert.equal(autoFollowWeight(1, 0), 1, 'aligned samples agree exactly: the motion is real');
+ assert.equal(autoFollowWeight(1, 1), 0, 'aligning explains nothing: plain blend');
+ assert.equal(autoFollowWeight(1, 2), 0, 'aligning makes it worse (a standing shape): plain blend');
+ assert.ok(Math.abs(autoFollowWeight(1, 0.25) - 0.75) < 1e-3);
+ assert.equal(autoFollowWeight(0, 0), 0, 'nothing changed: nothing to follow');
+});
+
+test('the wavelet coordinate sets cross-fade over continuous time, so detail never pops between steps', () => {
+ assert.equal(waveletCoherenceBlendA(0), 0, 'set A is fully faded out when it resets');
+ assert.equal(waveletCoherenceBlendA(24), 1);
+ assert.ok(Math.abs(waveletCoherenceBlendA(12.5) - 12.5 / 24) < 1e-9, 'fractional steps between real steps');
+ assert.equal(waveletCoherenceBlendA(48), 0);
+});
+
+test('the blend pass uniforms carry the phase, mode, follow, detail, grid, step scale, octaves and coordinate state', () => {
+ const u = presentationBlendUniforms({phase: 0.25, mode: 'auto', follow: 0.8, detail: 1.5, grid: 32, gridY: 64, backtraceScale: 4.96, octaves: 2, simStep: 101, coordinatesCarried: true});
+ assert.equal(u.length, 12);
+ assert.deepEqual([...u].map(v => Number(v.toFixed(4))), [0.25, 1, 0.8, 1.5, 32, 64, 4.96, 2, Number(waveletCoherenceBlendA(101.25).toFixed(4)), 1, 0, 0]);
+ assert.equal(presentationBlendUniforms({phase: 0.5, mode: 'blend', follow: 0.3, detail: 0, grid: 32, gridY: 64, backtraceScale: 3.1, octaves: 1, simStep: 0, coordinatesCarried: false})[1], 0, 'blend: follow is a global crossfade');
+});
+
+test('the flame panel and inspector offer Auto, Follow motion and Frame detail', async () => {
+ const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
+ const byKey = key => schema.rendererControls.find(control => control.key === key);
+ assert.deepEqual(byKey('volume-sim-between').allowedValues, ['held', 'carry', 'blend', 'auto']);
+ assert.equal(byKey('volume-sim-between').additiveDefault, 'auto');
+ assert.deepEqual(byKey('volume-sim-follow'), {key: 'volume-sim-follow', param: 'volume_sim_follow', tagName: 'INPUT', type: 'range', additiveDefault: 1});
+ assert.deepEqual(byKey('volume-sim-detail'), {key: 'volume-sim-detail', param: 'volume_sim_detail', tagName: 'INPUT', type: 'range', additiveDefault: 0});
+ const {FLAME_PROPERTY_GROUPS} = await import('../flame-authoring.mjs');
+ const ids = FLAME_PROPERTY_GROUPS.find(group => group.name === 'Motion').fields.map(([id]) => id);
+ assert.deepEqual(ids.slice(ids.indexOf('volume-speed'), ids.indexOf('volume-speed') + 5), ['volume-speed', 'volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail']);
+});
+
+test('the blend kernel follows the motion two-sidedly, weighs Auto per cell, and displaces by frame detail', () => {
+ const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+ const kernel = /const PRESENTATION_BLEND_WGSL = [\s\S]*?`;\n/.exec(source)?.[0] ?? '';
+ assert.match(kernel, /fn autoFollowWeight\(/);
+ assert.match(kernel, /waveletDetail\(/, 'frame detail uses Flame Doctor\'s noise');
+ assert.match(kernel, /c - t \* scale \* prevVelocity/, 'previous state carried forward by t');
+ assert.match(kernel, /c \+ \(1\.0 - t\) \* scale \* currVelocity/, 'current state carried backward by 1 - t');
+ assert.match(source, /if \(waveletOn\(\) \|\| waveletCoordinatesCarried\(\)\)/, 'coordinates ride the flow while frame detail needs them');
 });

@@ -21,6 +21,8 @@ const expectedRendererControls = [
   ['volume-flow-kernel-coherence', 'volume_flow_kernel_coherence'],
   ['volume-sim-every', 'volume_sim_every'],
   ['volume-sim-between', 'volume_sim_between'],
+  ['volume-sim-follow', 'volume_sim_follow'],
+  ['volume-sim-detail', 'volume_sim_detail'],
 ];
 
 assert.deepEqual(

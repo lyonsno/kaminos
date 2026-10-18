@@ -1801,7 +1801,11 @@
       "param": "volume_raymarch_mode",
       "tagName": "SELECT",
       "type": "select-one",
-      "allowedValues": ["current", "numerical", "fixed"],
+      "allowedValues": [
+        "current",
+        "numerical",
+        "fixed"
+      ],
       "additiveDefault": "numerical"
     },
     {
@@ -1872,9 +1876,24 @@
       "allowedValues": [
         "held",
         "carry",
-        "blend"
+        "blend",
+        "auto"
       ],
-      "additiveDefault": "blend"
+      "additiveDefault": "auto"
+    },
+    {
+      "key": "volume-sim-follow",
+      "param": "volume_sim_follow",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 1
+    },
+    {
+      "key": "volume-sim-detail",
+      "param": "volume_sim_detail",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 0
     }
   ],
   "presentationControls": [

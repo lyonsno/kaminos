@@ -143,15 +143,15 @@ test('while the splats stand in, the light field rebuilds only with snapshots an
 test('in Full the opted-in fire cadence reaches the sim with presentation advection, and Proxy keeps its own pacing', () => {
  const h = harness(), cadence = {every: 3, advect: true};
  h.frame(false, false, 1, cadence);
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false, presentationMode: 'carry', presentationFollow: 1, presentationDetail: 0});
  h.frame(false, false, 1, {every: 3, advect: false});
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: false, presentationBlend: false}, 'held stepping is the comparison arm');
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: false, presentationBlend: false, presentationMode: 'held', presentationFollow: 1, presentationDetail: 0}, 'held stepping is the comparison arm');
  h.frame(true, false, 1, cadence);
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false}, 'until a snapshot exists the full fire shows, at its cadence');
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false, presentationMode: 'carry', presentationFollow: 1, presentationDetail: 0}, 'until a snapshot exists the full fire shows, at its cadence');
  h.prototype.readback(0.8); h.frame(true, false, 1, cadence);
  assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: true, simStepEvery: 1}, 'Proxy keeps its snapshot pacing');
  h.frame(false, false, 1, cadence);
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false}, 'back in Full the cadence returns');
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: true, presentationBlend: false, presentationMode: 'carry', presentationFollow: 1, presentationDetail: 0}, 'back in Full the cadence returns');
  h.frame(false, false, 1, {every: 1, advect: true});
  assert.equal(h.prototype.pacing, null, 'stepping every frame needs no pacing');
 });
@@ -159,9 +159,19 @@ test('in Full the opted-in fire cadence reaches the sim with presentation advect
 test('the cadence mode reaches the sim: hold, carry forward, or blend between real steps', () => {
  const h = harness();
  h.frame(false, false, 1, {every: 4, mode: 'blend'});
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: false, presentationBlend: true});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: false, presentationBlend: true, presentationMode: 'blend', presentationFollow: 1, presentationDetail: 0});
  h.frame(false, false, 1, {every: 4, mode: 'carry'});
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: true, presentationBlend: false});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: true, presentationBlend: false, presentationMode: 'carry', presentationFollow: 1, presentationDetail: 0});
  h.frame(false, false, 1, {every: 4, mode: 'held'});
- assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: false, presentationBlend: false});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 4, presentationAdvect: false, presentationBlend: false, presentationMode: 'held', presentationFollow: 1, presentationDetail: 0});
+});
+
+test('Auto with follow and frame detail reaches the sim, and frame detail alone works at every frame', () => {
+ const h = harness();
+ h.frame(false, false, 1, {every: 3, mode: 'auto', follow: 0.7, detail: 1.2});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 3, presentationAdvect: false, presentationBlend: true, presentationMode: 'auto', presentationFollow: 0.7, presentationDetail: 1.2});
+ h.frame(false, false, 1, {every: 1, mode: 'auto', follow: 1, detail: 1});
+ assert.deepEqual(h.prototype.pacing, {lightFieldWithSnapshots: false, simStepEvery: 1, presentationAdvect: false, presentationBlend: true, presentationMode: 'auto', presentationFollow: 1, presentationDetail: 1});
+ h.frame(false, false, 1, {every: 1, mode: 'auto', follow: 1, detail: 0});
+ assert.equal(h.prototype.pacing, null, 'every frame and no detail: no pacing');
 });

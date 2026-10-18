@@ -69,10 +69,15 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   const every = Math.max(1, Math.floor(Number(stepEvery) || 1));
   const cadenceEvery = present ? Math.max(1, Math.floor(Number(cadence?.every) || 1)) : 1;
   const cadenceMode = cadence?.mode ?? (cadence?.advect === true ? 'carry' : 'held');
-  const pacingKey = ready ? `snapshots:${every}` : cadenceEvery > 1 ? `cadence:${cadenceEvery}:${cadenceMode}` : null;
+  const follow = Number.isFinite(Number(cadence?.follow)) ? Number(cadence.follow) : 1, detail = present && Number(cadence?.detail) > 0 ? Number(cadence.detail) : 0;
+  // Frame detail runs in the blend pass, so it also engages it at every frame.
+  const blendPass = (cadenceEvery > 1 && (cadenceMode === 'blend' || cadenceMode === 'auto')) || detail > 0;
+  const cadenced = cadenceEvery > 1 || detail > 0;
+  const pacingKey = ready ? `snapshots:${every}` : cadenced ? `cadence:${cadenceEvery}:${cadenceMode}:${follow}:${detail}` : null;
   if (prototype && fireProxy && fireProxy.pacingKey !== pacingKey) {
    prototype.setProxyPacing?.(ready ? {lightFieldWithSnapshots: true, simStepEvery: every}
-    : cadenceEvery > 1 ? {lightFieldWithSnapshots: false, simStepEvery: cadenceEvery, presentationAdvect: cadenceMode === 'carry', presentationBlend: cadenceMode === 'blend'} : null);
+    : cadenced ? {lightFieldWithSnapshots: false, simStepEvery: cadenceEvery, presentationAdvect: cadenceEvery > 1 && cadenceMode === 'carry', presentationBlend: blendPass,
+      presentationMode: cadenceMode, presentationFollow: follow, presentationDetail: detail} : null);
    fireProxy.pacingKey = pacingKey;
   }
   // Routes that composite the fire through the canvas-texture bridge hide that

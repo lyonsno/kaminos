@@ -2105,11 +2105,22 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="sim-cadence">
       <span class="slider-label">Between steps</span>
-      <select id="volume-sim-between" data-volume-settings-role="renderer" class="select-input" title="What the viewport shows between fire simulation steps. Blend mixes the previous and current steps and runs one step behind the sim; Carry forward moves the latest step along its flow; Hold repeats it.">
-        <option value="blend" selected>Blend</option>
+      <select id="volume-sim-between" data-volume-settings-role="renderer" class="select-input" title="What the viewport shows between fire simulation steps. Auto follows the motion where the previous and current steps line up along the flow and blends elsewhere; Blend mixes them, following the motion by Follow motion; both run one step behind the sim. Carry forward moves the latest step along its flow; Hold repeats it.">
+        <option value="auto" selected>Auto</option>
+        <option value="blend">Blend</option>
         <option value="carry">Carry forward</option>
         <option value="held">Hold</option>
       </select>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="sim-cadence">
+      <span class="slider-label" title="How far Blend and Auto follow the flow between steps: 0 blends in place, 1 carries both steps along the flow and meets in the middle.">Follow motion</span>
+      <input type="range" id="volume-sim-follow" data-volume-settings-role="renderer" min="0" max="1" step="0.05" value="1">
+      <span class="slider-val" id="volume-sim-follow-val">1.00</span>
+    </div>
+    <div class="slider-row" data-volume-visual-cost-knob="sim-cadence">
+      <span class="slider-label" title="Sub-grid wavelet detail drawn every frame on noise coordinates that ride the flow (Flame Doctor's closure), at the amplitude the resolved velocity predicts times this strength. Works at any Sim every.">Frame detail</span>
+      <input type="range" id="volume-sim-detail" data-volume-settings-role="renderer" min="0" max="2" step="0.05" value="0">
+      <span class="slider-val" id="volume-sim-detail-val">0.00</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Emitter Scale</span>
@@ -4182,12 +4193,16 @@ window.kaminosFireProxyStepEvery=n=>{const every=Math.max(1,Math.floor(Number(n)
 // or blend the previous and current states (prototype; fire-presentation-cadence.mjs).
 // The flame panel's Sim every and Between steps controls hold the cadence;
 // the agent call writes the same controls.
-function readFireCadence(){return {every:Math.max(1,Math.floor(Number(document.getElementById('volume-sim-every')?.value))||1),mode:document.getElementById('volume-sim-between')?.value||'blend'};}
+function readFireCadence(){const number=(id,fallback)=>{const value=Number(document.getElementById(id)?.value);return Number.isFinite(value)?value:fallback;};
+ return {every:Math.max(1,Math.floor(number('volume-sim-every',1))||1),mode:document.getElementById('volume-sim-between')?.value||'auto',follow:number('volume-sim-follow',1),detail:number('volume-sim-detail',0)};}
 window.kaminosFireCadence=(next={})=>{const every=document.getElementById('volume-sim-every'),between=document.getElementById('volume-sim-between');
  if(!every||!between)throw Error('the flame panel cadence controls are missing');
  if(next.every!==undefined)every.value=String(Math.max(1,Math.min(8,Math.floor(Number(next.every))||1)));
- const mode=['held','carry','blend'].includes(next.mode)?next.mode:next.advect===true?'carry':next.advect===false?'held':null;if(mode)between.value=mode;
- for(const control of [every,between])control.dispatchEvent(new Event('change',{bubbles:true}));window._kaminosDirty?.();return readFireCadence();};
+ const mode=['held','carry','blend','auto'].includes(next.mode)?next.mode:next.advect===true?'carry':next.advect===false?'held':null;if(mode)between.value=mode;
+ const follow=document.getElementById('volume-sim-follow'),detail=document.getElementById('volume-sim-detail');
+ if(next.follow!==undefined&&follow)follow.value=String(Math.max(0,Math.min(1,Number(next.follow)||0)));
+ if(next.detail!==undefined&&detail)detail.value=String(Math.max(0,Math.min(2,Number(next.detail)||0)));
+ for(const control of [every,between,follow,detail])control?.dispatchEvent(new Event('change',{bubbles:true}));window._kaminosDirty?.();return readFireCadence();};
 function syncFireProxy() {
  fireProxySync??=createFireProxySync({registry:proxySnapshots,readDomain:()=>window.kaminosFlameDomain?.read(),onDirty:()=>window._kaminosDirty?.(),
   createLayer:()=>{const layer=createFireSplatLayer();layer.group.traverse(object=>object.layers.set(FIRE_PROXY_LAYER));scene.add(layer.group);return layer;}});
@@ -19475,7 +19490,8 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-fire-licks-val').textContent = c.fireLicks.toFixed(2);
   document.getElementById('volume-projection-val').textContent = c.projection.toFixed(2);
   document.getElementById('volume-speed-val').textContent = `${(c.worldSpeed ?? c.speed).toFixed(2)}× world`;
-  { const every = readFireCadence().every; document.getElementById('volume-sim-every-val').textContent = every === 1 ? '1 frame' : `${every} frames`; }
+  { const cadence = readFireCadence(); document.getElementById('volume-sim-every-val').textContent = cadence.every === 1 ? '1 frame' : `${cadence.every} frames`;
+    document.getElementById('volume-sim-follow-val').textContent = cadence.follow.toFixed(2); document.getElementById('volume-sim-detail-val').textContent = cadence.detail.toFixed(2); }
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-ray-start-noise-val').textContent = c.rayStartNoise ? 'on' : 'off';
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
@@ -21327,7 +21343,7 @@ async function initKaminosVolumeRoute() {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
-  for (const id of ['volume-sim-every', 'volume-sim-between']) {
+  for (const id of ['volume-sim-every', 'volume-sim-between', 'volume-sim-follow', 'volume-sim-detail']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }

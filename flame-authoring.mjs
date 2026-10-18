@@ -138,6 +138,7 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Motion', view:'motion', open:true, fields:[
     ['volume-speed','Speed (× world)'], ['volume-sim-every','Sim every (frames)'], ['volume-sim-between','Between steps'],
+    ['volume-sim-follow','Follow motion'], ['volume-sim-detail','Frame detail'],
     ['volume-plume-height','Plume height'],
     ['volume-curl','Vorticity'], ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Phased sway'],
     ['volume-canonical-spread','Spread'], ['volume-canonical-centerline','Centerline'], ['volume-canonical-body-balance','Body balance'],
