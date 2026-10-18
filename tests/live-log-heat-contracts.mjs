@@ -26,11 +26,12 @@ test('GPU source identity rejects fallback device, absent generation and invalid
 });
 async function fixture({fire,inspection}={}){
   const device={},model=new THREE.Group(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial());model.add(mesh);
-  let registry=[{id:'log-1',object:model}],consumer,active=false,paused=false,steps=0,burner=true,reset=0,disposed=0;
+  let registry=[{id:'log-1',object:model}],consumer,active=false,paused=false,steps=0,burner=true,reset=0,disposed=0,error=null;
+  const frames=new Set();
   const events=[],fields=[],canvas={style:{opacity:'.85'}};
   const runtime={canvasElement:()=>canvas,setSimulationPaused(value){paused=value;return {paused};},borrowThermalGpuContext:async()=>({device,dimensions:[48,48,48]}),
     bindGpuThermalConsumer(value){consumer=value;return ()=>{consumer=null;};},resetThermalExperimentFluid(){reset++;steps=0;return {simStepCount:0};},
-    async setActive(value){active=value;},debugState:()=>({backend:'WebGPU:test',active,simStepCount:steps,simGrid:48})};
+    async setActive(value){active=value;},debugState:()=>({backend:'WebGPU:test',active,error,simStepCount:steps,simGrid:48})};
   const field=()=>{let ticks=0;const f={stateNode:THREE.TSL.vec4(0),encode(){ticks++;},encodeGasSource(){},reset(){ticks=0;},read:()=>({steps:ticks}),dispose(){disposed++;}};fields.push(f);return f;};
   const context={THREE,BURN_TABLE_ASSET,LIVE_LOG_HEAT_IDENTITY,crypto:globalThis.crypto,console,
     createLogGasSourceGpu:async()=>{let enabled=true;return {descriptor:{},read:()=>({enabled}),reset(){},dispose(){},setEnabled(value){if(typeof value!=='boolean')throw Error('Wood fuel feed requires a boolean');enabled=value;}};},
@@ -38,8 +39,8 @@ async function fixture({fire,inspection}={}){
   vm.createContext(context);
   const source=fs.readFileSync(new URL('../live-log-experiment.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'').replace('export async function','async function');
   vm.runInContext(source+'\nglobalThis.create=createLiveLogExperiment;',context);
-  const experiment=await context.create({record:e=>events.push(e),host:{fire,inspection,scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
-  return {experiment,events,canvas,read:()=>({active,paused,burner,reset,disposed,consumer}),remove:()=>{registry=[];},step(){steps++;consumer?.encode({}, {dt:1/60});}};
+  const experiment=await context.create({record:e=>events.push(e),host:{fire,inspection,scene:{ready:Promise.resolve(),renderer:()=>({backend:{device}}),load:async()=>model,objects:()=>registry,dirty(){},onFrame(fn){frames.add(fn);return ()=>frames.delete(fn);},enterWorkbench(){},frame(){},select(){}},volume:{ready:Promise.resolve(),get:()=>runtime,burner(value){burner=value;}}}});
+  return {experiment,events,canvas,fail(message){error=message;active=false;for(const frame of frames)frame();},read:()=>({active,paused,burner,reset,disposed,consumer,subscriptions:frames.size}),remove:()=>{registry=[];},step(){steps++;consumer?.encode({}, {dt:1/60});}};
 }
 test('cold start, shared operation reset and removal do not advance or leave GPU work running',async()=>{
   const f=await fixture();assert.equal(f.experiment.read().status,'cold');assert.equal(f.read().paused,true);assert.equal(f.read().burner,false);
@@ -104,7 +105,13 @@ test('agent and human view changes keep the mounted surface selection in sync',a
   assert.deepEqual(inputs.map(input=>input.checked),[false,true,false]);
   f.experiment.operations.view({mode:'heat'});
   assert.deepEqual(inputs.map(input=>input.checked),[false,false,true]);
+  f.fail('lighting preparation failed');
+  assert.equal(f.experiment.read().status,'unavailable');
+  assert.equal(f.experiment.read().unavailableReason,'runtime');
+  assert.match(elements.get('[role=status]').textContent,/lighting preparation failed/);
+  assert.equal(elements.get('[data-action=run]').disabled,true);
   await f.experiment.dispose();
+  assert.equal(f.read().subscriptions,0);
 });
 
 test('diagnostic views suppress received scene lighting and disposal restores beauty lighting',async()=>{
