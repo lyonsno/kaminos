@@ -15,6 +15,11 @@
 // server accepted it; until then the hub retries on every check. A tab dropped
 // for silence is still asked, and its answer, or its own heartbeat pong, joins
 // it again.
+//
+// The hub also carries channels other tabs subscribe to (agent-vantage-hub-notes.mjs):
+// a message naming a `channel` goes to that channel, never to the vantage link.
+
+import {createHubNotesChannel} from './agent-vantage-hub-notes.mjs';
 
 // A tab that has not answered the hub for this long has gone (closed without
 // saying so, or frozen); its page leaves, and it joins again if it answers later.
@@ -60,6 +65,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     return tab;
   }
   const portOf = page => [...tabs].find(([, tab]) => tab.page === page)?.[0];
+  const notes = createHubNotesChannel({EventSource, fetch, now, hubId, setTimeout, silenceMs: HUB_SILENCE_MS, tell});
 
   // One probe at a time, held until the stream is installed or the probe failed.
   function probe() {
@@ -109,6 +115,10 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
 
   function receive(port, data) {
     if (!data || typeof data !== 'object') return;
+    if (data.channel !== undefined) {
+      if (data.channel === 'notes') notes.receive(port, data);
+      return;
+    }
     // A join, or an answer from a tab the hub dropped, (re)joins it as a new membership.
     if (data.type === 'join' || (data.type === 'pong' && !tabs.has(port))) {
       if (typeof data.page !== 'string') return;
@@ -131,6 +141,7 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
   }
 
   setInterval(() => {
+    notes.check();
     // A departure the server did not record is reported again while the stream is up.
     if (linked()) departAgain();
     for (const [port, tab] of [...tabs]) {
@@ -148,6 +159,6 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
       port.onmessage = event => receive(port, event.data);
       port.start?.();
     },
-    state: () => ({hubId, mode, linked: linked(), pages: [...tabs.values()].map(tab => tab.page)}),
+    state: () => ({hubId, mode, linked: linked(), pages: [...tabs.values()].map(tab => tab.page), notes: notes.state()}),
   };
 }
