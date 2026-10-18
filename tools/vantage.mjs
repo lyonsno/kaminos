@@ -162,7 +162,7 @@ function pickArgs(rest, options, pilot) {
   const {instances, ...pictured} = map.objects?.find(row => row.n === found.n) ?? {n: found.n};
   const instanceMatrix = instances?.[found.instance];
   return {pilot, from: 'sub', at, optics, pictured: {...pictured, instance: found.instance, pixel: found.pixel, ...(instanceMatrix ? {instanceMatrix} : {}),
-    ...(depth ? {depth} : {})}, scene: {clouds: map.clouds ?? [], fields: map.fields ?? [], water: map.water === true}};
+    ...(depth ? {depth} : {})}, scene: {clouds: map.clouds ?? [], fields: map.fields ?? [], water: map.water === true, ...(map.proxies?.length ? {proxies: map.proxies} : {})}};
 }
 
 // An anchor is a note anchor ({id, path, geometry: identity}) or a pick: a

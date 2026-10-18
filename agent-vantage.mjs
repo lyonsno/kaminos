@@ -12,10 +12,23 @@ import {
   finishPickMap, NOTHING_DRAWN, UNIDENTIFIED, pixelAt, pointAtViewDepth,
 } from './agent-vantage-core.mjs';
 import {CAMERA_TYPE, CAMERA_SOURCE, checkedCameraRecord, cameraViewFromRecord} from './scene-camera.mjs';
-import {GLANCE_OMITS} from './agent-vantage-glance.mjs';
+import {describeProxies} from './agent-vantage-glance.mjs';
 
 export const VANTAGE_GLYPH_NAME = 'kaminos-vantage-glyph';
 const SUB_PREFIX = 'vantage-';
+// How long a glance on its own waits for a proxy's first snapshot before
+// drawing without it (and saying so). A fire proxy publishes one every few
+// simulation steps; a hidden tab steps nothing, so the wait has an end.
+export const PROXY_WARMUP_MS = 2000;
+
+// A proxy source at a draw: 'absent' (no fire or water in the scene), 'hidden'
+// (hidden in the scene), 'awaiting-snapshot' (its proxy holds nothing yet) or
+// 'drawn' (its proxy layer is visible and holds a snapshot).
+export function proxyStatus(state) {
+  if (!state?.present) return 'absent';
+  if (!state.visible) return 'hidden';
+  return state.layer?.visible && state.layer.count > 0 ? 'drawn' : 'awaiting-snapshot';
+}
 const HIDDEN = 'The Kaminos tab is hidden, and browsers stop drawing hidden tabs. Bring it to the front; it can sit in its own window.';
 
 export class VantageCommandError extends Error {
@@ -226,15 +239,30 @@ export function createVantagePilot(host) {
   // One view from the sub's own camera, with its pick map drawn in the same
   // task with the same matrices. Everything the record says about the view is
   // taken as it is drawn: a later edit or resize changes none of it.
-  async function glanceOf(record, {maxSize, depth, phase}) {
+  // A glance on its own holds the page's fire and water proxies for its draw,
+  // first waiting a little for a proxy that has no snapshot yet (a fire proxy
+  // publishes one every few simulation steps); one taken by a watch or the live
+  // view, which hold them throughout, does not wait.
+  async function glanceOf(record, {maxSize, depth, phase, held = false}) {
+    const release = held ? null : host.holdProxies?.() ?? null;
+    try {
+      if (release) {
+        for (const until = host.now() + PROXY_WARMUP_MS; Object.values(host.proxyStatuses?.() ?? {}).includes('awaiting-snapshot') && host.now() < until;) await host.sleep(100);
+      }
+      return await drawGlance(record, {maxSize, depth, phase});
+    } finally { release?.(); }
+  }
+  async function drawGlance(record, {maxSize, depth, phase}) {
     const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
     const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
     const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
     let drawn, drawing = null, drawError = null;
     try { drawn = host.renderView({optics, width, height, hide}); }
     catch (error) { fail(phase, `The sub's view could not be drawn: ${error?.message || error}`); }
+    // What each proxy source was at the draw, and so which are drawn outside the pick map.
+    const proxies = drawn.proxies ?? null, outside = Object.entries(proxies ?? {}).filter(([, status]) => status === 'drawn').map(([source]) => source);
     if (host.drawIds) {
-      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true}); }
+      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true, proxies: outside}); }
       catch (error) { drawError = error?.message || String(error); }
     }
     let shot;
@@ -242,7 +270,7 @@ export function createVantagePilot(host) {
     catch (error) { fail(phase, `The sub's view could not be read back: ${error?.message || error}`); }
     const item = {drawing, drawError};
     await withPickMaps({shots: [item]});
-    return {view, sub, ratio, optics, seen, shot, item};
+    return {view, sub, ratio, optics, seen, shot, item, proxies};
   }
 
   // An event's detail is carried only when it is plain data that copies as
@@ -383,11 +411,11 @@ export function createVantagePilot(host) {
     async glance({pilot, maxSize, annotate, map}) {
       const record = requireSub(pilot);
       if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
-      const {view, sub, ratio, optics, seen, shot, item} = await glanceOf(record, {maxSize, depth: true, phase: 'glance'});
+      const {view, sub, ratio, optics, seen, shot, item, proxies} = await glanceOf(record, {maxSize, depth: true, phase: 'glance'});
       const images = withMap(picture('glance', shot, annotate, seen), map);
       host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub, view,
-        aspect: ratio, naming: 'effective-camera', optics, layers: ['scene'], omitted: [...GLANCE_OMITS],
+        aspect: ratio, naming: 'effective-camera', optics, ...describeProxies(proxies), ...(proxies ? {proxies} : {}),
         image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },
 
@@ -411,6 +439,7 @@ export function createVantagePilot(host) {
       if (watching) fail('busy', 'Another watch is running; ask again when it ends');
       const mine = {pilot, until, frames: 0};
       watching = mine;
+      const releaseProxies = host.holdProxies?.() ?? null;
       const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000, afterMs = after * 1000;
       // The deadline frames are drawn before: the window, or after an event, the event plus `after`.
       let deadlineMs = windowMs, extended = false;
@@ -444,7 +473,7 @@ export function createVantagePilot(host) {
       };
       const shots = [];
       const draw = async () => {
-        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
+        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch', held: true})});
         mine.frames = shots.length;
       };
       try {
@@ -473,6 +502,7 @@ export function createVantagePilot(host) {
         }
       } finally {
         stopListening?.();
+        releaseProxies?.();
         if (watching === mine) watching = null;
       }
       const record = subRecord(pilot), first = shots[0];
@@ -484,10 +514,10 @@ export function createVantagePilot(host) {
       host.shutter?.({kind: 'watch', label: record?.label ?? first.sub?.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'watch', route: 'own-camera', pilot, sub: record ? describe(record) : first.sub,
         requested: {seconds, fps, until, after}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
-        aspect: first.ratio, naming: 'effective-camera', layers: ['scene'], omitted: [...GLANCE_OMITS],
+        aspect: first.ratio, naming: 'effective-camera', ...describeProxies(first.proxies, first.proxies ? shots.map(item => item.proxies) : null),
         image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
         frames: shots.map(item => ({index: item.index, atMs: item.atMs, image: {width: item.shot.width, height: item.shot.height}, view: item.view, optics: item.optics,
-          ...pickMapOf(item.item), objects: item.seen})),
+          ...pickMapOf(item.item), objects: item.seen, ...(item.proxies ? {proxies: item.proxies, ...describeProxies(item.proxies)} : {})})),
         capturedAt: new Date(started).toISOString()};
     },
 
@@ -591,6 +621,12 @@ export function createVantagePilot(host) {
           .map(field => ({id: field.id, label: field.label, type: field.type, distance: field.enter, reason: 'simulation fields are drawn outside the pick map'})),
       ].sort((a, b) => a.distance - b.distance);
       if (context.water) unresolved.push({id: 'local-water', label: 'Water', type: 'local-water', distance: null, reason: 'the local water host draws water outside the pick map'});
+      // A proxy the picture drew stands where its fire or water is, outside the pick map.
+      for (const source of context.proxies ?? []) {
+        if (source === 'water' && context.water) continue;
+        unresolved.push({id: `${source}-proxy`, label: source === 'fire' ? 'Fire and smoke (proxy)' : 'Water (proxy)', type: 'proxy', distance: null,
+          reason: `the ${source} proxy is drawn outside the pick map`});
+      }
       if (hit && (unresolved.length || hit.coverage)) hit.authority = 'approximate';
       return {schema: VANTAGE_SCHEMA, kind: 'pick', from: source, at, ...(pixel ? {pixel} : {}), pixelCentre: centre, ray,
         referent: pictured ? 'pictured' : 'rendered', hit, ...(drawn ? {drawn} : {}), fields, unresolved, pickedAt: new Date(host.now()).toISOString()};
@@ -1217,8 +1253,31 @@ export function surfaceOf(THREE, entries, {row, instanceMatrix = null, ray, opti
  */
 export function installAgentVantage({THREE, document, window, edits, cameras, entries, selection, readView, writeView,
   viewport, hostCanvas, busy, hold, cameraMatrices, suspendEditorDrawing, redraw, frameState, extraTargets = () => [],
-  idPass = null, glance = null, water = () => false, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
+  idPass = null, glance = null, water = () => false, proxies = null, coordinateSystem = THREE.WebGLCoordinateSystem, endpoint = '/api/vantage', link = true}) {
   const hud = installVantageHud({document, viewport});
+  // The page's fire and water proxies (Proxy Preview): held once, for as long as
+  // any sub view (the live view, a watch, a glance) needs them, so they cost
+  // nothing while no sub is looking.
+  let proxyHolds = 0, proxyReleases = null;
+  const holdProxies = proxies ? () => {
+    if (proxyHolds++ === 0) proxyReleases = ['fire', 'water'].map(source => proxies.require(source));
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (--proxyHolds === 0) { for (const release of proxyReleases) release(); proxyReleases = null; }
+    };
+  } : null;
+  const proxyStatuses = proxies ? () => {
+    const states = proxies.states();
+    return {fire: proxyStatus(states.fire), water: proxyStatus(states.water)};
+  } : null;
+  // A view from a sub's camera sees the proxy layers of the sources drawn now.
+  const drawView = options => {
+    const statuses = proxyStatuses?.() ?? null;
+    const layers = statuses ? Object.entries(statuses).filter(([, status]) => status === 'drawn').map(([source]) => proxies.layers[source]) : [];
+    return {view: glance.draw({...options, layers}), statuses};
+  };
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
     const box = new THREE.Box3().setFromObject(object);
@@ -1255,16 +1314,18 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     paintMap: layout => paintSceneMap(document, layout),
     drawingSize: () => (hostCanvas.width > 0 && hostCanvas.height > 0 ? {width: hostCanvas.width, height: hostCanvas.height} : null),
     // The rows are written down in the same task as the map is drawn, so they hold the matrices it was drawn with.
-    drawIds: idPass ? options => {
+    drawIds: idPass ? ({proxies: outside = [], ...options}) => {
       const pass = idPass.draw(options), list = entries();
-      return {rows: drawnRows(list, pass.drawn, pageId), context: sceneOutsideMap(THREE, list, extraTargets(), water()), ready: pass.ready};
+      return {rows: drawnRows(list, pass.drawn, pageId), context: {...sceneOutsideMap(THREE, list, extraTargets(), water()), proxies: outside}, ready: pass.ready};
     } : null,
     surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
     recheck: anchor => recheckAnchor(entries(), anchor, pageId),
     // A glance's pixels become a canvas like any other picture.
+    holdProxies,
+    proxyStatuses,
     renderView: glance ? options => {
-      const view = glance.draw(options);
-      return {ready: view.ready.then(({width, height, pixels}) => {
+      const {view, statuses} = drawView(options);
+      return {...(statuses ? {proxies: statuses} : {}), ready: view.ready.then(({width, height, pixels}) => {
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
         canvas.getContext('2d').putImageData(new window.ImageData(pixels, width, height), 0, 0);
@@ -1292,7 +1353,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     const optics = opticsOfView(cameraViewFromRecord(record, ratio, 3), ratio, {coordinateSystem});
     const started = clock(), current = live;
     let view;
-    try { view = glance.draw({optics, width, height, hide: [record.id]}); }
+    try { view = drawView({optics, width, height, hide: [record.id]}).view; }
     catch { current.skipped++; return; }
     liveInFlight = true;
     current.drawMs = clock() - started;
@@ -1301,12 +1362,12 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   };
   function startLive({pilot: name, fps}) {
     stopLive();
-    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
+    live = {pilot: name, fps, frames: 0, skipped: 0, drawMs: null, release: holdProxies?.() ?? null, timer: window.setInterval(liveTick, Math.round(1000 / fps))};
     return liveState();
   }
   function stopLive() {
     const state = liveState();
-    if (live) { window.clearInterval(live.timer); live = null; hud.live(null); }
+    if (live) { window.clearInterval(live.timer); live.release?.(); live = null; hud.live(null); }
     return {...state, on: false};
   }
   glyph();

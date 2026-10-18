@@ -366,6 +366,7 @@ export function finishPickMap(ids, rows, context = {}) {
   const unknown = [...shown.keys()].filter(n => !rows.some(row => row.n === n));
   return {schema: PICK_MAP_SCHEMA, width: ids.width, height: ids.height, runs: encodePickRuns(ids), objects,
     ...(unknown.length ? {unnumbered: unknown} : {}), clouds: context.clouds ?? [], fields: context.fields ?? [], water: !!context.water,
+    ...(context.proxies?.length ? {proxies: [...context.proxies]} : {}),
     ...(ids.depths ? {depth: {encoding: 'float32le-base64', unit: 'view-depth', width: ids.width, height: ids.height,
       data: bytesToBase64(littleEndianFloats(ids.depths))}} : {})};
 }
@@ -488,7 +489,9 @@ const sceneContextArg = context => {
   const boxes = list => Array.isArray(list) && list.every(item => item && typeof item.id === 'string' && item.bounds
     && Array.isArray(item.bounds.min) && Array.isArray(item.bounds.max));
   if (!context || !boxes(context.clouds ?? []) || !boxes(context.fields ?? [])) throw new Error('A picture pick needs the clouds and fields its picture recorded');
-  return {clouds: structuredClone(context.clouds ?? []), fields: structuredClone(context.fields ?? []), water: context.water === true};
+  const proxies = context.proxies ?? [];
+  if (!Array.isArray(proxies) || !proxies.every(source => source === 'fire' || source === 'water')) throw new Error('A picture pick\'s proxies are "fire" and "water"');
+  return {clouds: structuredClone(context.clouds ?? []), fields: structuredClone(context.fields ?? []), water: context.water === true, ...(proxies.length ? {proxies: [...new Set(proxies)]} : {})};
 };
 
 const COMMANDS = {

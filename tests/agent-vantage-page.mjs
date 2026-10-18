@@ -652,7 +652,7 @@ test('a default picture of a very large scene still returns its picture and map'
 });
 
 // installAgentVantage over a fake page: the panel map refresh runs on a timer.
-function installedPage({subs = [], drawnAt = null, water = false, glance = null} = {}) {
+function installedPage({subs = [], drawnAt = null, water = false, glance = null, proxies = null} = {}) {
   const intervals = [], painted = [], classes = [];
   const element = tag => {
     const node = new FakeElement(tag), parts = {};
@@ -684,7 +684,7 @@ function installedPage({subs = [], drawnAt = null, water = false, glance = null}
     entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
     writeView() {}, viewport, hostCanvas, busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
-    idPass, glance, water: () => water});
+    idPass, glance, water: () => water, ...(proxies ? {proxies} : {})});
   const refresh = intervals.find(item => item.ms === 400).fn;
   return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'), title: viewport.children[0].querySelector('.vantage-title'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
@@ -2005,4 +2005,108 @@ test('a tab falls back to its own stream when the server has no hub, and when th
   linked(plain);
   assert.equal(plain.sources.length, 1, 'a browser without SharedWorker links per tab as before');
   assert.equal(plain.ports.length, 0);
+});
+
+
+// --- fire and water proxies in the sub's own view ------------------------------------------
+
+test('a proxy source is drawn only when it is in the scene, shown, and its proxy holds a snapshot', () => {
+  const {proxyStatus} = vantage;
+  assert.equal(proxyStatus({present: false, visible: true, layer: {visible: true, count: 5}}), 'absent');
+  assert.equal(proxyStatus({present: true, visible: false, layer: {visible: true, count: 5}}), 'hidden');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: false}}), 'awaiting-snapshot', 'no proxy layer yet');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: true, count: 0}}), 'awaiting-snapshot', 'a layer with nothing in it');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: true, count: 12}}), 'drawn');
+  assert.equal(proxyStatus(null), 'absent');
+});
+
+test('what a glance drew and left out follows its proxies, never assumed', async () => {
+  const {describeProxies, GLANCE_OMITS} = await import('../agent-vantage-glance.mjs');
+  const drawn = describeProxies({fire: 'drawn', water: 'absent'});
+  assert.ok(drawn.layers.some(layer => /fire.*proxy.*heat-block splats/.test(layer)), 'fire drawn as its proxy');
+  assert.ok(!drawn.omitted.some(item => /fire/.test(item)), 'and not listed as left out');
+  assert.ok(!drawn.omitted.some(item => /water/.test(item)), 'water absent from the scene is not something the glance left out');
+  assert.ok(drawn.omitted.some(item => /ambient occlusion/.test(item)));
+  const waiting = describeProxies({fire: 'awaiting-snapshot', water: 'drawn'});
+  assert.ok(waiting.omitted.some(item => /fire/.test(item) && /snapshot/.test(item)), 'a proxy with no snapshot yet is said to be missing for that reason');
+  assert.ok(waiting.layers.some(layer => /water.*proxy/.test(layer)));
+  assert.deepEqual(describeProxies(null).omitted, [...GLANCE_OMITS], 'a page without proxies leaves out what it always did');
+});
+
+test('a single glance holds the proxies while it draws, waits briefly for a first snapshot, and lets go', async () => {
+  const {state, host} = await launched();
+  let t = 0, holds = 0, releases = 0, statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  const idProxies = [];
+  host.now = () => t;
+  host.sleep = async ms => { t += ms; if (t >= 300) statuses = {...statuses, fire: 'drawn'}; };
+  host.holdProxies = () => { holds++; return () => { releases++; }; };
+  host.proxyStatuses = () => ({...statuses});
+  host.renderView = options => ({proxies: {...statuses}, ready: Promise.resolve({canvas: {}, width: options.width, height: options.height})});
+  const drawIds = host.drawIds;
+  host.drawIds = options => { idProxies.push(options.proxies); return drawIds(options); };
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(shot.proxies.fire, 'drawn', 'the flame proxy had its snapshot by the time it was drawn');
+  assert.ok(t >= 300 && t < 2000, 'it waited for the snapshot, not for the whole allowance');
+  assert.ok(shot.layers.some(layer => /fire/.test(layer)));
+  assert.deepEqual(idProxies.at(-1), ['fire'], 'its pick map is told the proxy drawn outside it');
+  assert.deepEqual([holds, releases], [1, 1], 'held for the draw and let go');
+
+  statuses = {fire: 'awaiting-snapshot', water: 'absent'}; t = 0;
+  host.sleep = async ms => { t += ms; };
+  const late = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(late.proxies.fire, 'awaiting-snapshot', 'a proxy that never got a snapshot is reported so');
+  assert.ok(t >= 2000 && t < 2500, 'after a bounded wait, not forever');
+  assert.ok(late.omitted.some(item => /fire/.test(item)));
+  assert.deepEqual([holds, releases], [2, 2]);
+});
+
+test('a glance whose draw fails still lets go of the proxies', async () => {
+  const {host} = await launched();
+  let releases = 0;
+  host.holdProxies = () => () => { releases++; };
+  host.proxyStatuses = () => ({fire: 'absent', water: 'absent'});
+  host.renderView = () => { throw new Error('device lost'); };
+  await assert.rejects(() => createVantagePilot(host).run('glance', {map: false}), error => error.phase === 'glance');
+  assert.equal(releases, 1);
+});
+
+test('a watch holds the proxies once for its whole window, and every frame says what it drew', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  let holds = 0, releases = 0, n = 0;
+  host.holdProxies = () => { holds++; return () => { releases++; }; };
+  host.proxyStatuses = () => ({fire: 'awaiting-snapshot', water: 'absent'});
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {fire: n++ === 0 ? 'awaiting-snapshot' : 'drawn', water: 'absent'}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual([holds, releases], [1, 1]);
+  assert.deepEqual(strip.frames.map(frame => frame.proxies.fire), ['awaiting-snapshot', 'drawn'], 'a watch does not wait; each frame is honest');
+  assert.ok(strip.omitted.some(item => /fire/.test(item) && /1 of 2/.test(item)), 'the strip says how many frames showed the flame');
+});
+
+test('a picture pick through a drawn fire proxy is approximate, the proxy listed as what may cover it', async () => {
+  const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])};
+  const picked = await page.vantage.run('pick', {optics, at, pictured, scene: {clouds: [], fields: [], water: false, proxies: ['fire']}});
+  assert.equal(picked.hit.authority, 'approximate');
+  assert.ok(picked.unresolved.some(item => item.id === 'fire-proxy' && /outside the pick map/.test(item.reason)));
+});
+
+test('the page holds each proxy once while any sub view needs it, draws the drawn ones, and lets go when none does', async () => {
+  const required = [], released = [];
+  const states = {fire: {present: true, visible: true, layer: {visible: true, count: 40}}, water: {present: false, visible: true, layer: {visible: false}}};
+  const proxies = {layers: {fire: 4, water: 3}, require: source => { required.push(source); return () => released.push(source); }, states: () => structuredClone(states)};
+  const drawn = [];
+  const glance = {draw(options) { drawn.push(options); return {ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})}; }};
+  const page = installedPage({subs: [BEBOP], glance, proxies});
+  await page.vantage.run('live', {on: true, fps: 4});
+  assert.deepEqual(required.sort(), ['fire', 'water']);
+  const shot = await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.deepEqual(required.sort(), ['fire', 'water'], 'a glance during live adds no second hold');
+  assert.deepEqual(drawn.at(-1).layers, [4], 'the glance camera sees the fire proxy layer, and not water, which is absent');
+  assert.equal(shot.proxies.fire, 'drawn');
+  assert.equal(shot.proxies.water, 'absent');
+  assert.deepEqual(shot.pickMap.proxies, ['fire'], 'and its pick map records the proxy drawn outside it');
+  await page.vantage.run('live', {on: false});
+  assert.deepEqual(released.sort(), ['fire', 'water'], 'no sub looking: nothing held');
 });
