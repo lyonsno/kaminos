@@ -20,7 +20,7 @@ export async function loadRestEditorInput(inputs,{fetchImpl=globalThis.fetch}={}
  const m=new THREE.Matrix4().fromArray(result.rest_authoring.displayMatrix);
  if(Math.abs(m.determinant())<1e-12||m.elements[3]!==0||m.elements[7]!==0||m.elements[11]!==0||m.elements[15]!==1)throw Error('Invertible affine display frame required');
  if(reference){const J=reference.jointNames?.length;if(!J||reference.parents?.length!==J||reference.positions?.length!==J*3||!reference.positions.every(Number.isFinite)||reference.parents.some((p,j)=>!Number.isInteger(p)||p< -1||p>=j))throw Error('Invalid reference skeleton');}
- return {plan:result,baselineSha256:sha,displayMatrix:m,reference,proportionAtlas};
+ return {plan:result,baselineSha256:sha,displayMatrix:m,reference,proportionAtlas,startingBody:inputs.starting_body??null};
 }
 
 function links(joints,positions,color){
@@ -116,7 +116,7 @@ export async function createRestSkeletonEditor({host,inputs={},record=()=>{}},{f
   unsubscribe=edits.subscribe(state=>{if(disposed)return;if(!state.active&&!state.replaying){draft=null;placeProxy();}refresh();});
   if(baseline.rest_authoring.view)session.setView(baseline.rest_authoring.view);else operations.frame();
   win.kaminosSelection.set([asset.id],asset.id);
-  if(inputs.starting_body)operations.startFrom({id:inputs.starting_body});
+  if(loaded.startingBody)operations.startFrom({id:loaded.startingBody});
  }catch(e){componentSeat?.dispose();unsubscribe();edits.discard(entry=>[target,referenceTarget,bodyTarget].includes(entry.id));edits.unregister(target);edits.unregister(referenceTarget);edits.unregister(bodyTarget);proxy.removeFromParent();await session.dispose();throw e;}
  function drawReference(){
   for(const child of [...referenceRoot.children]){child.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});referenceRoot.remove(child);}
