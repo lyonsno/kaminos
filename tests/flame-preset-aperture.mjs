@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as aperture from '../flame-authoring.mjs';
+import {volumeSettingsPresetControlValuesEqual,volumeSettingsPresetAppliedDifferences} from '../volume-settings-preset-contract.mjs';
 import {flamePoseToDomain,immersedControlsForFlamePose} from '../scene-flame-emitter.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 // Exercise the actual authored consumer, with only DOM representation mocked.
@@ -29,6 +30,24 @@ test('portable preset applies the same effective aperture to differently scaled 
  }
 });
 test('legacy recovery keeps effective size at a tiny destination scale',()=>assert.equal(load(135.764,{sourceSize:'current'},undefined,.001).domControls['volume-immersed-radius'].value,200));
+test('portable source comparison uses local coordinates and still detects aperture edits',()=>{
+ const saved={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:.2,rawValue:'.2'}},rendererControls:{},presentationControls:{},sourceRadiusSpace:'simulation-v1'};
+ const applied=structuredClone(saved);applied.domControls['volume-immersed-radius']={value:2,rawValue:'2'};
+ const callback=html.slice(html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'),html.indexOf('    readSourceRuntime:',html.indexOf('readSource:()=>activeVolumeSettingsPresetReceipt'))).trim().replace(/^readSource:/,'').replace(/,$/,'');
+ const context={activeVolumeSettingsPresetReceipt:{preset:saved,label:'Test'},readVolumeSettingsValues:()=>applied,volumeSettingsPresetControlValuesEqual,flamePresetForLocalControls:aperture.flamePresetForLocalControls,flamePoseToDomain:()=>({scale:[.1,.1,.1]}),flameEmitterPose:{},flameDomainTranslation:[],flameDomainScale:1};
+ assert.equal(vm.runInNewContext(`(${callback})()`,context).modified,false,'successful scaled apply must not report Modified');
+ assert.equal(typeof aperture.flamePresetForLocalControls,'function','local comparison projection is missing');
+ const expected=aperture.flamePresetForLocalControls(saved,.1);
+ const live=structuredClone(expected);delete live.sourceRadiusSpace;
+ assert.equal(live.domControls['volume-immersed-radius'].value,2);
+ assert.ok(volumeSettingsPresetControlValuesEqual(live,expected));
+ assert.deepEqual(volumeSettingsPresetAppliedDifferences(expected,live),[]);
+ live.domControls['volume-immersed-radius']={value:3,rawValue:'3'};
+ assert.equal(volumeSettingsPresetControlValuesEqual(live,expected),false);
+ assert.equal(saved.domControls['volume-immersed-radius'].value,.2);
+ const raw=structuredClone(saved);delete raw.sourceRadiusSpace;
+ assert.deepEqual(aperture.flamePresetForLocalControls(raw,.1),raw);
+});
 test('portable preset records simulation-space aperture and updates its launch route',()=>{
  const original={route:'http://localhost/?volume_immersed_radius=135.764',domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:135.764}}};
  assert.equal(typeof aperture.portableFlamePreset,'function','portable save conversion is missing');
