@@ -58,35 +58,40 @@ test('a taken level slot is refused before anything is stored', async () => {
 });
 
 // A GLB holding the input triangle, with the TRELLIS encoder's node matrix (-90 deg about X) so its
-// world frame matches the levels', optionally offset to make the frames disagree.
-function triangleGLB(offset = 0) {
+// world frame matches the levels', optionally offset to make the frames disagree, and with shading
+// normals unless `normals` is false.
+function triangleGLB(offset = 0, {normals = true} = {}) {
   const pos = new Float32Array([0,0,0, 1,0,0, 0,1,0].map((v, i) => v + (i % 3 === 0 ? offset : 0))), idx = new Uint32Array([0,1,2]);
-  const bin = new Uint8Array(pos.byteLength + idx.byteLength); bin.set(new Uint8Array(pos.buffer)); bin.set(new Uint8Array(idx.buffer), pos.byteLength);
-  const json = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix: [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}], meshes: [{primitives: [{attributes: {POSITION: 0}, indices: 1}]}],
-    buffers: [{byteLength: bin.length}], bufferViews: [{buffer: 0, byteOffset: 0, byteLength: 36}, {buffer: 0, byteOffset: 36, byteLength: 12}],
-    accessors: [{bufferView: 0, componentType: 5126, count: 3, type: 'VEC3'}, {bufferView: 1, componentType: 5125, count: 3, type: 'SCALAR'}]};
+  const nrm = new Float32Array([0,0,1, 0,0,1, 0,0,1]), arrays = [pos, idx, ...(normals ? [nrm] : [])];
+  const bin = new Uint8Array(arrays.reduce((n, a) => n + a.byteLength, 0)); let at = 0; const bufferViews = [];
+  for (const a of arrays) { bin.set(new Uint8Array(a.buffer), at); bufferViews.push({buffer: 0, byteOffset: at, byteLength: a.byteLength}); at += a.byteLength; }
+  const json = {asset: {version: '2.0'}, scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0, matrix: [1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]}],
+    meshes: [{primitives: [{attributes: {POSITION: 0, ...(normals ? {NORMAL: 2} : {})}, indices: 1}]}], buffers: [{byteLength: bin.length}], bufferViews,
+    accessors: [{bufferView: 0, componentType: 5126, count: 3, type: 'VEC3'}, {bufferView: 1, componentType: 5125, count: 3, type: 'SCALAR'},
+      ...(normals ? [{bufferView: 2, componentType: 5126, count: 3, type: 'VEC3'}] : [])]};
   const text = new TextEncoder().encode(JSON.stringify(json)), tl = Math.ceil(text.length / 4) * 4, out = new Uint8Array(28 + tl + bin.length), dv = new DataView(out.buffer);
   dv.setUint32(0, 0x46546c67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true); dv.setUint32(12, tl, true); dv.setUint32(16, 0x4e4f534a, true);
   out.fill(32, 20, 20 + tl); out.set(text, 20); dv.setUint32(20 + tl, bin.length, true); dv.setUint32(24 + tl, 0x004e4942, true); out.set(bin, 28 + tl);
   return Buffer.from(out);
 }
+const glbJSON = bytes => JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
 
 // Stand-in Kaminos server: serves the hero, lists `levels`, stores and registers, recording calls.
 async function standIn({hero, levels = []}) {
   const {createServer} = await import('node:http'), {createHash} = await import('node:crypto');
-  const calls = [], registered = [];
+  const calls = [], registered = [], stored = [];
   const server = createServer(async (req, res) => {
     const chunks = []; for await (const c of req) chunks.push(c); const body = Buffer.concat(chunks);
     calls.push(`${req.method} ${req.url.split('?')[0]}`);
     const json = value => { res.writeHead(200, {'Content-Type': 'application/json'}); res.end(JSON.stringify(value)); };
     if (req.url.startsWith('/api/read')) { res.writeHead(200); res.end(hero); return; }
     if (req.method === 'GET' && req.url.startsWith('/api/mesh-lods')) return json({levels});
-    if (req.url.startsWith('/api/ingest-mesh')) return json({sha256: createHash('sha256').update(body).digest('hex')});
+    if (req.url.startsWith('/api/ingest-mesh')) { stored.push(body); return json({sha256: createHash('sha256').update(body).digest('hex')}); }
     if (req.method === 'POST' && req.url.startsWith('/api/mesh-lods')) { registered.push(JSON.parse(body)); return json({retired: []}); }
     res.writeHead(500); res.end('unexpected');
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  return {url: `http://127.0.0.1:${server.address().port}`, calls, registered, close: () => server.close()};
+  return {url: `http://127.0.0.1:${server.address().port}`, calls, registered, stored, close: () => server.close()};
 }
 function triangleInput() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-tool-'));
@@ -118,6 +123,31 @@ test('error is measured against the hero; an off-target tier publishes under its
   assert.equal(level.errorAgainstRawDecode.reference.kind, 'raw-decode');
   assert.match(level.errorAgainstRawDecode.reference.digests['vertices.f32'], /^[a-f0-9]{64}$/);
   assert.equal(server.registered[0].supersede, false);
+  // By default every tier carries a normal map baked from the hero, and the record says so.
+  assert.deepEqual(level.normalMap, {source: {kind: 'hero', sha256: 'a'.repeat(64)}, textureSize: level.textureSize});
+  const published = glbJSON(server.stored[0]);
+  assert.ok(published.materials[0].normalTexture, 'published GLB has a normal map');
+  assert.ok(published.meshes[0].primitives[0].attributes.TANGENT !== undefined);
+  assert.equal(published.extras.lodNormalMap.source.kind, 'hero');
+});
+
+test('a hero without shading normals is refused before anything is stored, unless normal maps are off', async () => {
+  for (const off of [false, true]) {
+    const server = await standIn({hero: triangleGLB(0, {normals: false})}), dir = triangleInput(), report = path.join(dir, 'report.json');
+    const status = await runTool(['--input', dir, '--source', 'a'.repeat(64), '--server', server.url, '--targets', '200', '--report', report, ...(off ? ['--normal-maps', 'false'] : [])]);
+    server.close();
+    const r = JSON.parse(fs.readFileSync(report, 'utf8'));
+    if (off) {
+      assert.equal(status, 0, JSON.stringify(r.error));
+      assert.equal(server.registered[0].level.normalMap, undefined);
+      assert.equal(glbJSON(server.stored[0]).materials[0].normalTexture, undefined);
+    } else {
+      assert.notEqual(status, 0);
+      assert.equal(r.phase, 'normal-map');
+      assert.match(r.error.message, /hero has no shading normals/);
+      assert.ok(!server.calls.some(c => c.startsWith('POST')), `nothing stored: ${server.calls}`);
+    }
+  }
 });
 
 test('a hero in another frame is refused before anything is stored', async () => {

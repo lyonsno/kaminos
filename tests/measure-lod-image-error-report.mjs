@@ -21,7 +21,7 @@ const standIn = () => new Promise(resolve => {
 });
 const goodResult = (url, overrides = {}) => { const q = new URL(url).searchParams;
   return {schema: 'kaminos.lod-image-error.v1', reference: {sha256: q.get('ref')}, level: {sha256: q.get('level')}, route: {glRenderer: 'test'},
-    settings: {resolution: +q.get('res'), views: 2}, perView: [{}, {}], aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
+    settings: {resolution: +q.get('res'), views: 2, normals: q.get('normalMaps') === '0' ? 'shading' : 'shading+normal-map'}, perView: [{}, {}], aggregate: {normalP95Degrees: {mean: 10}}, ...overrides}; };
 const fakeBrowser = (page, calls) => async () => ({executable: '/fake', version: 'Fake/1', closed: false,
   openPage: async url => { calls.push(url); return page(url); }, close: async () => { calls.push('closed'); }});
 const setup = async () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lod-image-error-')), s = await standIn();
@@ -62,7 +62,7 @@ test('a page that errors ends the run with its message and the browser closed', 
 test('a result describing another pair or other settings is refused, and nothing is written for it', async () => {
   const {s, args} = await setup();
   try {
-    for (const bad of [{level: {sha256: hero}}, {settings: {resolution: 256, views: 2}}, {perView: [{}]}, {schema: 'kaminos.lod-image-error.scratch'}]) {
+    for (const bad of [{level: {sha256: hero}}, {settings: {resolution: 256, views: 2, normals: 'shading+normal-map'}}, {settings: {resolution: 512, views: 2, normals: 'shading'}}, {perView: [{}]}, {schema: 'kaminos.lod-image-error.scratch'}]) {
       const report = await measure(args, {browserFor: fakeBrowser(url => ({title: 'done', result: goodResult(url, bad), png: Buffer.from('png')}), [])});
       assert.equal(report.phase, 'measure', JSON.stringify(bad)); assert.match(report.error.message, /does not describe/);
       assert.ok(!fs.existsSync(path.join(args.out, `${l1}.image-error.json`)));

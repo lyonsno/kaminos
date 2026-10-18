@@ -1,12 +1,13 @@
 // Prepare low LOD tiers for one TRELLIS generation and publish them to a Kaminos server.
 //
 //   node tools/prepare-lod-tiers.mjs --input <dir> --source <sha256> --server http://127.0.0.1:8484 \
-//     [--targets 5000,1000,500] [--replace true] --report <path>
+//     [--targets 5000,1000,500] [--replace true] [--normal-maps false] --report <path>
 //
 // <dir> holds the generation's raw mesh and material field: vertices.f32, triangles.u32,
 // material.features.f32, material.coordinates.i32 and meta.json {materialResolution}.
 // <sha256> is the stored mesh the levels belong to (normally the generation's hero GLB).
-// Each tier is ingested through /api/ingest-mesh and registered through /api/mesh-lods.
+// Each tier gets a tangent-space normal map baked from the hero's shading normals (unless
+// --normal-maps false), then is ingested through /api/ingest-mesh and registered through /api/mesh-lods.
 // The report is written at every phase, including on failure.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +15,7 @@ import path from 'node:path';
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const input = args.get('--input'), source = args.get('--source'), server = args.get('--server'), reportPath = args.get('--report');
-const targets = (args.get('--targets') || '5000,1000,500').split(',').map(Number), replace = args.get('--replace') === 'true';
+const targets = (args.get('--targets') || '5000,1000,500').split(',').map(Number), replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false';
 const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, server, targets, startedAt: new Date().toISOString(), tiers: []};
 const save = () => reportPath && fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
 try {
@@ -27,6 +28,7 @@ try {
   const {MeshBVH} = await import('three-mesh-bvh');
   const {prepareLowTiers, readGLBWorldMesh, measureGeometricError} = await import('../mesh-lod-ladder.mjs');
   const {createHash} = await import('node:crypto');
+  const {addNormalMapToGLB} = await import('../lod-normal-bake.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
   const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
   const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
@@ -93,6 +95,28 @@ try {
     const slot = slotTaken(tier.faces);
     if (slot && !replace && !targets.includes(tier.faces)) throw Error(`level ${tier.target} landed at ${tier.faces} faces, a slot already registered: ${slot.sha256}`);
   }
+  // Normal maps from the hero, in the same world frame, before anything is stored.
+  if (normalMaps) {
+    report.phase = 'normal-map'; save();
+    if (!hero.normals) throw Error('hero has no shading normals to bake from (use --normal-maps false to publish without normal maps)');
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(hero.vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(hero.faces, 1));
+    const bvh = new MeshBVH(geometry), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
+    const corner = i => new THREE.Vector3(hero.vertices[i*3], hero.vertices[i*3+1], hero.vertices[i*3+2]);
+    // The hero's interpolated shading normal at its closest point to p.
+    const heroNormalAt = p => {
+      bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
+      const v = [0, 1, 2].map(k => hero.faces[hit.faceIndex * 3 + k]);
+      tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(hit.point, weights);
+      const w = [weights.x, weights.y, weights.z];
+      if (!w.every(Number.isFinite)) return null;
+      return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * hero.normals[vi * 3 + a], 0));
+    };
+    for (const tier of tiers) {
+      tier.glb = await addNormalMapToGLB(tier.glb, {textureSize: tier.textureSize, source: {kind: 'hero', sha256: source}, sampleWorldNormal: heroNormalAt});
+      tier.normalMap = {source: {kind: 'hero', sha256: source}, textureSize: tier.textureSize};
+    }
+  }
   report.phase = 'publish'; save();
   for (const tier of tiers) {
     const body = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
@@ -101,7 +125,7 @@ try {
     if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
     const level = {sha256: stored.sha256, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
       closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges, frameDrift: tier.frameDrift,
-      error: tier.error, errorAgainstRawDecode: tier.errorAgainstRawDecode};
+      error: tier.error, errorAgainstRawDecode: tier.errorAgainstRawDecode, ...(tier.normalMap ? {normalMap: tier.normalMap} : {})};
     const register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})});
     const registered = await body(register);
     if (!register.ok) { report.failedTier = tier.target; report.orphanedIngest = stored.sha256;

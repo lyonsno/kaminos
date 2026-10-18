@@ -7,11 +7,12 @@
 <script type="module">
 // Image-space error of a stored LOD level against its reference (normally the hero).
 //   ?ref=<sha256>&level=<sha256>   meshes in generated-meshes, checked against their sha256
-//   [&res=512] [&same=0.01] [&show=all|0,4,13] [&panel=192]
+//   [&res=512] [&same=0.01] [&show=all|0,4,13] [&panel=192] [&normalMaps=0]
 // Both are rendered identically from 26 directions (cube faces, edges, corners) with a 30 degree
 // perspective camera framed on the reference bounds, no anti-aliasing:
-//   geometry pass: float target, linear view depth + view-space shading normal (the mesh's own
-//                  normals, as lighting uses them)
+//   depth pass:    float target, linear view depth
+//   normal pass:   three's MeshNormalMaterial: view-space shading normal from the mesh's normals,
+//                  perturbed by its normal map and tangents when it has them (as lighting sees it)
 //   albedo pass:   unlit base colour texture, rendered at 2x and box-downsampled
 // lod-image-compare.mjs turns each view into separate channels. The page draws, per shown view,
 // reference | level | coverage (red reference only, blue level only) | depth error (blue 0 .. red 2%
@@ -37,21 +38,31 @@ const load = async sha => {
 };
 const [ref, lvl] = await Promise.all([load(refSha), load(levelSha)]);
 const box = new THREE.Box3().setFromObject(ref), center = box.getCenter(new THREE.Vector3()), diagonal = box.getSize(new THREE.Vector3()).length(), r = diagonal / 2;
-const geomMat = new THREE.ShaderMaterial({side: THREE.DoubleSide,
-  vertexShader: `varying vec3 vView; varying vec3 vNormal; void main(){ vec4 v = modelViewMatrix * vec4(position,1.0); vView = v.xyz; vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * v; }`,
-  fragmentShader: `varying vec3 vView; varying vec3 vNormal; void main(){ gl_FragColor = vec4(-vView.z, normalize(vNormal) * 0.5 + 0.5); }`});
-const normalsComputed = [];
-const geomOf = (root, name) => { const s = new THREE.Scene(), c = root.clone(true); s.overrideMaterial = geomMat;
-  c.traverse(m => { if (m.isMesh && !m.geometry.attributes.normal) { m.geometry.computeVertexNormals(); normalsComputed.push(name); } }); s.add(c); return s; };
+// Depth pass: linear view depth in r (0 where nothing is drawn).
+const depthMat = new THREE.ShaderMaterial({side: THREE.DoubleSide,
+  vertexShader: `varying vec3 vView; void main(){ vec4 v = modelViewMatrix * vec4(position,1.0); vView = v.xyz; gl_Position = projectionMatrix * v; }`,
+  fragmentShader: `varying vec3 vView; void main(){ gl_FragColor = vec4(-vView.z, 0.0, 0.0, 1.0); }`});
+const depthOf = root => { const s = new THREE.Scene(); s.overrideMaterial = depthMat; s.add(root.clone(true)); return s; };
+// Normal pass: three's own MeshNormalMaterial, so a level's normal map and tangents are decoded
+// exactly as the renderer decodes them (view-space normal packed n*0.5+0.5). ?normalMaps=0 ignores them.
+const useNormalMaps = q.get('normalMaps') !== '0', normalMapped = {reference: false, level: false}, normalsComputed = [];
+const normalOf = (root, name) => { const s = new THREE.Scene(), c = root.clone(true);
+  c.traverse(m => { if (!m.isMesh) return;
+    if (!m.geometry.attributes.normal) { m.geometry = m.geometry.clone(); m.geometry.computeVertexNormals(); normalsComputed.push(name); }
+    const map = useNormalMaps ? m.material.normalMap ?? null : null; if (map) normalMapped[name] = true;
+    m.material = new THREE.MeshNormalMaterial({side: THREE.DoubleSide, normalMap: map, ...(map ? {normalScale: m.material.normalScale.clone()} : {})}); });
+  s.add(c); return s; };
 const albedoOf = root => { const s = new THREE.Scene(), c = root.clone(true);
   c.traverse(m => { if (m.isMesh) m.material = new THREE.MeshBasicMaterial({map: m.material.map ?? null, color: m.material.color ?? new THREE.Color(1, 1, 1), side: THREE.DoubleSide}); });
   s.add(c); return s; };
-const scenes = {reference: {geom: geomOf(ref, 'reference'), albedo: albedoOf(ref)}, level: {geom: geomOf(lvl, 'level'), albedo: albedoOf(lvl)}};
+const scenes = {reference: {depth: depthOf(ref), normal: normalOf(ref, 'reference'), albedo: albedoOf(ref)}, level: {depth: depthOf(lvl), normal: normalOf(lvl, 'level'), albedo: albedoOf(lvl)}};
 const geomTarget = new THREE.WebGLRenderTarget(res, res, {type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
 const albedoTarget = new THREE.WebGLRenderTarget(res * 2, res * 2, {type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace});
 function render(set, cam) {
-  const g = new Float32Array(res * res * 4), a2 = new Uint8Array(res * res * 16), a = new Float32Array(res * res * 3);
-  renderer.setRenderTarget(geomTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(set.geom, cam); renderer.readRenderTargetPixels(geomTarget, 0, 0, res, res, g);
+  const g = new Float32Array(res * res * 4), d = new Float32Array(res * res * 4), a2 = new Uint8Array(res * res * 16), a = new Float32Array(res * res * 3);
+  renderer.setRenderTarget(geomTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(set.depth, cam); renderer.readRenderTargetPixels(geomTarget, 0, 0, res, res, d);
+  renderer.clear(); renderer.render(set.normal, cam); renderer.readRenderTargetPixels(geomTarget, 0, 0, res, res, g);
+  for (let p = res * res - 1; p >= 0; p--) { g[p*4+3] = g[p*4+2]; g[p*4+2] = g[p*4+1]; g[p*4+1] = g[p*4]; g[p*4] = d[p*4]; } // depth, then packed normal
   renderer.setRenderTarget(albedoTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(set.albedo, cam); renderer.readRenderTargetPixels(albedoTarget, 0, 0, res * 2, res * 2, a2);
   for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) for (let c = 0; c < 3; c++) { let s = 0;
     for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) s += a2[((y * 2 + dy) * res * 2 + (x * 2 + dx)) * 4 + c]; a[(y * res + x) * 3 + c] = s / 4 / 255; }
@@ -86,8 +97,8 @@ for (let v = 0; v < dirs.length; v++) {
 }
 // A reference that never reaches the image means a broken render, not a perfect level.
 if (!perView.some(v => v.referenceCoverage > 0)) throw Error('reference covers no pixel in any view');
-window.__result = {schema: SCHEMA, reference: {sha256: refSha}, level: {sha256: levelSha}, route, normalsComputed,
-  settings: {resolution: res, views: dirs.length, fovDegrees: 30, albedoSupersample: 2, antialias: false, sameSurface, normals: 'shading'},
+window.__result = {schema: SCHEMA, reference: {sha256: refSha}, level: {sha256: levelSha}, route, normalsComputed, normalMapped,
+  settings: {resolution: res, views: dirs.length, fovDegrees: 30, albedoSupersample: 2, antialias: false, sameSurface, normals: useNormalMaps ? 'shading+normal-map' : 'shading'},
   diagonal, aggregate: aggregate(perView), perView, shownViews: show};
 document.title = 'done';
 </script></body></html>

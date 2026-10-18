@@ -1,7 +1,7 @@
 // Measure image-space error for the LOD levels of one stored mesh, in an isolated headless browser.
 //
 //   KAMINOS_CHROME=<Chrome for Testing> node tools/measure-lod-image-error.mjs --server http://127.0.0.1:8484 \
-//     --source <sha256> --out <dir> --report <path> [--levels <sha>,<sha>] [--res 512] [--show all]
+//     --source <sha256> --out <dir> --report <path> [--levels <sha>,<sha>] [--res 512] [--show all] [--normal-maps false]
 //
 // Without --levels, every current (not retired) level registered for the source is measured.
 // For each level the tool writes <out>/<level>.image-error.json (tools/lod-image-error.html's
@@ -75,18 +75,19 @@ export async function measure(args, {browserFor = launchBrowser} = {}) {
     report.browser = {executable: browser.executable, version: browser.version};
     report.phase = 'measure'; save();
     for (const sha of levels) {
-      const url = `${server}/tools/lod-image-error.html?ref=${source}&level=${sha}&res=${args.res ?? 512}&show=${args.show ?? 'all'}`;
+      const normalMaps = args['normal-maps'] !== 'false';
+      const url = `${server}/tools/lod-image-error.html?ref=${source}&level=${sha}&res=${args.res ?? 512}&show=${args.show ?? 'all'}&normalMaps=${normalMaps ? 1 : 0}`;
       const page = await browser.openPage(url), entry = {sha256: sha, faces: current.get(sha).faces, url, title: page.title};
       report.levels.push(entry);
       if (page.title !== 'done') { entry.error = page.error ?? `page did not finish (title ${JSON.stringify(page.title)})`; entry.console = page.console; throw Error(`level ${sha}: ${entry.error}`); }
       // The page must have measured exactly this pair at the requested settings.
       const r = page.result;
-      if (r?.schema !== 'kaminos.lod-image-error.v1' || r.reference?.sha256 !== source || r.level?.sha256 !== sha || r.settings?.resolution !== +(args.res ?? 512) || r.perView?.length !== r.settings?.views)
+      if (r?.schema !== 'kaminos.lod-image-error.v1' || r.reference?.sha256 !== source || r.level?.sha256 !== sha || r.settings?.resolution !== +(args.res ?? 512) || r.settings?.normals !== (normalMaps ? 'shading+normal-map' : 'shading') || r.perView?.length !== r.settings?.views)
         throw Error(`level ${sha}: page result does not describe the requested measurement`);
       if (!page.png?.length) throw Error(`level ${sha}: no sheet captured`);
       entry.result = path.join(out, `${sha}.image-error.json`); entry.sheet = path.join(out, `${sha}.image-error.png`);
       fs.writeFileSync(entry.result, JSON.stringify(r, null, 2) + '\n'); fs.writeFileSync(entry.sheet, page.png);
-      entry.route = r.route; entry.aggregate = r.aggregate; save();
+      entry.route = r.route; entry.normalMapped = r.normalMapped; entry.aggregate = r.aggregate; save();
     }
     report.phase = 'done';
   } catch (error) {
