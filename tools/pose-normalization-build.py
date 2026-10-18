@@ -117,16 +117,23 @@ def run(args):
     report_path=Path(args.report).absolute(); plan_path=Path(args.plan).resolve();out_path=Path(args.out).resolve()
     # A new, independent file cannot alias an existing retained input. Existing
     # destinations are not writable until source discovery establishes that.
+    explicit_fit=Path(args.fit_report).resolve() if getattr(args,'fit_report',None) else None
     safe_report=(not report_path.exists() and not report_path.is_symlink()
                  and report_path.resolve()!=plan_path and report_path.resolve()!=out_path
+                 and report_path.resolve()!=explicit_fit
                  and out_path not in report_path.resolve().parents)
     try:
         plan=json.loads(plan_path.read_text())
+        # Exclude every direct plan reference before any later key lookup,
+        # hashing or nested discovery can fail. The explicit fit-report path
+        # was already excluded before even opening the plan.
+        direct_paths=[plan_path,*[Path(r['path']).resolve() for r in referenced_records(plan)]]
+        safe_report=safe_report and report_path.resolve() not in direct_paths
         records=[plan['frame'],plan['radii'],*plan['binderFiles'],*[c['case'] for c in plan['casts']]]
         if args.stage=='correct':
             if not args.fit_report:raise ValueError('explicit fit report required for correction')
             records.append(record(args.fit_report))
-        protected=[plan_path,*[Path(r['path']).resolve() for r in records]]
+        protected=[*direct_paths,*[Path(r['path']).resolve() for r in records]]
         safe_report=safe_report and report_path.resolve() not in protected
         if args.stage=='correct':
             fit_report=json.loads(Path(args.fit_report).read_text())

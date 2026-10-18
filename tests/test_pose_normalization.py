@@ -15,6 +15,19 @@ build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
 
 
 class PoseNormalizationTests(unittest.TestCase):
+    def test_missing_fit_discovery_cannot_create_either_missing_input(self):
+        for alias in ['fit','case']:
+            with self.subTest(alias=alias),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);source=root/'source.json';source.write_text('{}')
+                missing_case=root/'missing-case.json';missing_fit=root/'missing-fit.json';plan=root/'plan.json'
+                plan.write_text(json.dumps({'schema':'kaminos.pose-normalization-inputs.v1','frame':build.record(source),
+                    'radii':build.record(source),'binderFiles':[],
+                    'casts':[{'slug':'a','case':{'path':str(missing_case),'sha256':'0'*64}},{'slug':'b','case':build.record(source)}]}))
+                args=argparse.Namespace(plan=str(plan),out=str(root/'derived'),report=str(missing_fit if alias=='fit' else missing_case),stage='correct',voxel_size=.1,fit_report=str(missing_fit))
+                with self.assertRaises(FileNotFoundError):build.run(args)
+                self.assertFalse(missing_fit.exists(),'failure report manufactured fit-report input')
+                self.assertFalse(missing_case.exists(),'failure report manufactured source-case input')
+
     def test_failure_report_cannot_create_missing_source_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'source.json';source.write_text('{}')
