@@ -52,14 +52,21 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       error.name=completed.failure?.name??'Error';throw error;
     }
     const out=completed.output;
+    // The raw dual-grid mesh, kept for the surfel asset (trellis-surfels.mjs) built after the mesh.
+    let rawMesh=null;
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
-      postprocessMesh:mesh=>run.withForeground('trellis-mesh-cleanup',()=>finishing.postprocessMesh(mesh)),
+      postprocessMesh:mesh=>{rawMesh=mesh?.vertices instanceof Float32Array&&mesh?.triangles instanceof Uint32Array?{vertices:mesh.vertices.slice(),triangles:mesh.triangles.slice()}:null;
+        return run.withForeground('trellis-mesh-cleanup',()=>finishing.postprocessMesh(mesh));},
       unwrapMesh:mesh=>run.withForeground('trellis-uv-unwrap',()=>finishing.unwrapMesh(mesh)),
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
     const finished=await asset.run();
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
     result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
+    // Surfels from the same decoded field, read while the run still holds its tensors. A surfel
+    // failure is recorded on the result; it never costs the mesh.
+    Object.assign(result,await buildRunSurfels({runtime:run.route.runtime,out,rawMesh,withForeground:(p,w)=>run.withForeground(p,w),
+      provenance:{...provenance,route:run.route.routeId,runId:run.runId}}));
   }catch(error){
     // While the run still holds its tensors: what a decoder-only replay needs.
     if(run&&generation&&error&&typeof error==='object')
@@ -146,7 +153,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
   const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
   async function storePending(){
     set({status:'saving',stage:'Saving mesh',progress:'Saving generated mesh…'});
-    const {glb,generation,label}=state.pending;const saved=await persist(glb,generation,label);
+    const {glb,generation,label,surfelGlb,surfels}=state.pending;const saved=await persist(glb,generation,label,{surfelGlb,surfels});
     state.results.push(saved);state.pending=null;set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
     return saved;
   }
@@ -177,7 +184,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
-        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label};
+        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null};
         phase='persistence';return await storePending();
       }catch(error){
         // A clean stop is the cancellation itself; a release or settlement failure met while
@@ -243,4 +250,18 @@ export async function describeTrellisInput({image,cutout,label,fetch=globalThis.
     if(!response.ok||!saved?.entry?.source)throw Error(saved?.error||`cutout storage HTTP ${response.status}`);
     return {kind:'cutout',source:saved.entry.source};
   }catch(error){return {kind:'cutout-unsaved',source:null,error:error?.message||String(error)};}
+}
+
+async function buildRunSurfels({runtime,out,rawMesh,withForeground,provenance}){
+  try{
+    if(!rawMesh)throw Error('the asset consumer did not hand over the raw mesh');
+    const [gc,mc,mf]=await Promise.all([out.geometry.coordinates,out.material.coordinates,out.material.features].map(t=>runtime.readTensor(t)));
+    const {buildSurfelField,encodeSurfelGLB}=await import('./trellis-surfels.mjs');
+    return await withForeground('trellis-surfels',()=>{
+      const field=buildSurfelField({...rawMesh,geometryCoordinates:new Int32Array(gc),
+        material:{coordinates:new Int32Array(mc),features:new Float32Array(mf),resolution:out.material.resolution}});
+      const surfelGlb=encodeSurfelGLB(field,{provenance});
+      return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution}};
+    });
+  }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)}};}
 }

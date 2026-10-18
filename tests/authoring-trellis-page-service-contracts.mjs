@@ -108,3 +108,11 @@ test('the used-input description says what the page actually used, including a c
   assert.deepEqual({kind:thrown.kind,source:thrown.source,error:thrown.error},{kind:'cutout-unsaved',source:null,error:'encode failed'});
   assert.deepEqual(await describeTrellisInput({image:{source:'/alpha.png'},cutout:null,label:'a'}),{kind:'original-alpha',source:'/alpha.png'});
 });
+
+test('the run surfel asset travels with the mesh to persistence',async()=>{
+  const surfelGlb=new ArrayBuffer(16);let got;
+  const {s}=service({runPage:async()=>({glb,generation:{runId:'r'},label:'a',surfelGlb,surfels:{status:'built',count:7}}),
+    persist:async(g,gen,label,extra)=>{got=extra;return {name:'a · TRELLIS.glb'};}});
+  await s.run(input);
+  assert.equal(got?.surfelGlb,surfelGlb);assert.deepEqual(got?.surfels,{status:'built',count:7});
+});

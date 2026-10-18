@@ -3274,8 +3274,10 @@ import {
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin } from './trellis-surfels.mjs';
+// Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
+class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -12428,8 +12430,6 @@ async function showGLB(file, options = {}) {
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
-  // TRELLIS surfel GLBs (trellis-surfels.mjs) become chunked surfel objects; other GLBs are unaffected.
-  loader.register(trellisSurfelsGLTFPlugin(THREE));
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
@@ -26937,6 +26937,18 @@ function setupAuthoringAssets(){
     if(!originResponse.ok||origin.result?.sha256!==sha256||origin.result?.generation?.runId!==generation.runId)throw Error(origin.error||'Generation origin storage returned a different result');
     return result;
   };
+  // A TRELLIS run's surfel asset (trellis-surfels.mjs) is stored beside its mesh: each origin record names
+  // the other. Storing the surfels never fails the mesh; the outcome is kept in the mesh's generation record.
+  const sha256Of=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+  const persistTrellisPageRun=async out=>{
+    let surfels=out.surfels??{status:'not built'};
+    if(out.surfelGlb){
+      try{const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',meshSha256:await sha256Of(out.glb),surfels:undefined},out.label,'TRELLIS surfels');
+        surfels={...surfels,sha256:saved.sha256,source:saved.source};}
+      catch(error){surfels={...surfels,status:'not stored',error:String(error?.message||error)};}
+    }
+    return {...await persistGeneratedMesh(out.glb,{...out.generation,surfels},out.label,'TRELLIS'),surfels};
+  };
   // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
   // server's mounted checkpoint package. pixels:'package' uses the package's own prepared
   // image as the caller input until browser image preparation exists.
@@ -26989,7 +27001,7 @@ function setupAuthoringAssets(){
       const generation={schema:'kaminos.asset-generation.v1',runId,route:result.route,target:'this-page',
         receiptValidation:result.receiptValidation,input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},decoderActivationStorage:'f16',
         uv:result.uv,material:result.material};
-      return {glb:result.glb,generation,label,timing:result.timing};
+      return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null};
     }catch(error){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
       if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
@@ -27005,7 +27017,7 @@ function setupAuthoringAssets(){
     try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
   };
   // Witness hook: run in the page and save the GLB.
-  window.kaminosTrellisPage=async options=>{const out=await trellisPageRun(options);return {...await persistGeneratedMesh(out.glb,out.generation,out.label,'TRELLIS'),timing:out.timing};};
+  window.kaminosTrellisPage=async options=>{const out=await trellisPageRun(options);return {...await persistTrellisPageRun(out),timing:out.timing};};
   // The Generate drawer's "TRELLIS 2 · this page" target: the prepared cutout, on this page's GPU.
   let trellisPageAvailability=null,authoringTrellisPageGenerator=null;
   const trellisPage=()=>{
@@ -27016,7 +27028,7 @@ function setupAuthoringAssets(){
       }).catch(error=>{trellisPageAvailability={status:'unavailable',message:`TRELLIS availability: ${error.message}`};redraw();});
       authoringTrellisPageGenerator=createTrellisPageAuthoringGeneration({availability:()=>trellisPageAvailability,changed:()=>redraw(),
         blocked:()=>authoringImageGenerator?.busy()?'An image is generating. Generate the mesh when it is saved.':meshBusy('sf3d')?'Stable Fast 3D is generating.':meshBusy('trellis')?'TRELLIS is generating.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
-        runPage:trellisPageRun,persist:(glb,generation,label)=>persistGeneratedMesh(glb,generation,label,'TRELLIS')});
+        runPage:trellisPageRun,persist:(glb,generation,label,extra)=>persistTrellisPageRun({glb,generation,label,...extra})});
     }
     return authoringTrellisPageGenerator;
   };

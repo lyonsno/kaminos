@@ -185,3 +185,33 @@ test('scene frames are served while checkpoints load and while the mesh is clean
   await running;
   assert.deepEqual(seen,{loading:1,cleaning:2,unwrapping:3},'a frame is served inside each CPU span, not only at route finish');
 });
+
+// A run whose asset consumer cleans a real (tiny) raw dual-grid mesh, with readable geometry and material tensors.
+function surfelRun({failMaterial=false}={}){
+  const f=fixture(),res=8,coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
+  const vertices=new Float32Array(coords.flatMap(c=>c.map(v=>(v+.5)/res-.5))),triangles=new Uint32Array([0,1,3,0,3,2]);
+  const tensors={gc:new Int32Array(coords.flat()).buffer,mc:new Int32Array(coords.flat()).buffer,
+    mf:new Float32Array(coords.flatMap(()=>[1,-1,-1,-1,.8,1])).buffer};
+  const outputs={geometry:{coordinates:{id:'gc'},resolution:res},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:res}};
+  const runtime={async readTensor(t){if(failMaterial&&t.id==='mf')throw Error('material readback lost');return tensors[t.id].slice(0);}};
+  const host=f.deps.createTrellisSharedHost;
+  f.deps.createTrellisSharedHost=async args=>{const h=await host(args);const begin=h.beginRun;h.beginRun=async o=>{const r=await begin(o);r.route={...r.route,runtime};return r;};return h;};
+  f.deps.createTrellisImageGenerationAdapter=()=>({outputs,async run(){return outputs;},dispose(){}});
+  f.deps.createTrellisAssetAdapter=options=>({async run(){await options.postprocessMesh({vertices,triangles});return {glb};},dispose(){}});
+  return f;
+}
+
+test('every page run also yields a surfel asset from the decoded field, read before the route is released',async()=>{
+  const {readSurfelGLBExtension}=await import('../trellis-surfels.mjs');
+  const result=await call(surfelRun());
+  assert.equal(result.glb,glb,'the mesh is unchanged');
+  assert.equal(result.surfels.count,5);assert.equal(result.surfels.status,'built');
+  const {field}=readSurfelGLBExtension(result.surfelGlb);
+  assert.equal(field.count,5);assert.deepEqual([...field.color.subarray(0,3)],[255,0,0]);
+});
+
+test('a surfel failure is recorded but never costs the mesh',async()=>{
+  const result=await call(surfelRun({failMaterial:true}));
+  assert.equal(result.glb,glb);assert.equal(result.surfelGlb,null);
+  assert.equal(result.surfels.status,'failed');assert.match(result.surfels.error,/material readback lost/);
+});
