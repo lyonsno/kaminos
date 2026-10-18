@@ -1941,7 +1941,7 @@ test('the reviewed schedules count exactly the intervals that had no frame', asy
 // A fake browser for the page's link: its EventSources, posts and timers, and
 // a SharedWorker whose port the test speaks for.
 function linkHarness({visible = true, shared = true} = {}) {
-  const sources = [], posts = [], timers = [], ports = [], listeners = {document: {}, window: {}};
+  const sources = [], posts = [], timers = [], intervals = [], ports = [], listeners = {document: {}, window: {}};
   class FakeEventSource {
     static CLOSED = 2;
     constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
@@ -1964,11 +1964,11 @@ function linkHarness({visible = true, shared = true} = {}) {
     addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
   const window = {EventSource: FakeEventSource, ...(shared ? {SharedWorker: FakeSharedWorker} : {}), location: {href: 'http://127.0.0.1:8484/index.html'},
     fetch: async (url, init) => { posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null}); return {status: 200, ok: true, json: async () => ({ok: true})}; },
-    setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: () => 0, clearInterval() {},
+    setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: (fn, ms) => intervals.push({fn, ms}), clearInterval() {},
     addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
   const fire = (bag, type) => { for (const fn of [...(listeners[bag][type] ?? [])]) fn(); };
   const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
-  return {sources, posts, timers, ports, document, window, fire, settle};
+  return {sources, posts, timers, intervals, ports, document, window, fire, settle};
 }
 const linked = (h, run = async command => ({kind: command})) => connectVantageLink({window: h.window, document: h.document, endpoint: '/api/vantage', pageId: 'page-tab', run});
 
@@ -1986,6 +1986,10 @@ test('a tab joins the shared hub instead of opening its own stream, and stays li
   assert.ok(h.posts.some(post => post.url === '/api/vantage/reply' && post.body.id === 'c1' && post.body.page === 'page-tab'), 'and the tab answers it');
   h.ports[0].receive({type: 'ping'});
   assert.deepEqual(h.ports[0].sent.at(-1), {type: 'pong', page: 'page-tab'}, 'it says it is alive when the hub asks');
+  const heartbeat = h.intervals.find(item => item.ms === 15000);
+  heartbeat.fn();
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'pong', page: 'page-tab', facts: {page: 'page-tab', visible: false, focused: false, href: 'http://127.0.0.1:8484/index.html', title: 'Kaminos'}},
+    'the tab also speaks up on its own heartbeat, so a hub that dropped it after a pause hears it again');
   h.fire('window', 'pagehide');
   assert.deepEqual(h.ports[0].sent.at(-1), {type: 'leave', page: 'page-tab'}, 'closing the tab leaves the hub');
   link.close();

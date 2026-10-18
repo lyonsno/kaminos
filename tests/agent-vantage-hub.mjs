@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 // The hub runs in a shared worker; here it gets a fake environment: one
 // EventSource it may open, fetch, timers and a clock the test drives.
-async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200} = {}) {
+async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pagesBody = null, joinStatus = () => 200} = {}) {
   const {createVantageHub} = await import('../agent-vantage-hub.mjs');
   const sources = [], posts = [], intervals = [], timeouts = [];
   let t = 0;
@@ -18,7 +18,12 @@ async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200} = {
   const env = {EventSource: FakeEventSource, now: () => t, hubId: 'hub-test0001',
     fetch: async (url, init) => {
       posts.push({url: String(url), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body) : null});
-      if (String(url).endsWith('/pages')) return {status: pagesStatus, ok: pagesStatus === 200, json: async () => pages};
+      if (String(url).endsWith('/pages')) return {status: pagesStatus, ok: pagesStatus === 200, json: pagesBody ?? (async () => pages)};
+      if (String(url).endsWith('/join')) {
+        const status = joinStatus();
+        if (status === 'reject') throw new Error('network');
+        return {status, ok: status === 200, json: async () => ({ok: status === 200})};
+      }
       return {status: 200, ok: true, json: async () => ({ok: true})};
     },
     setInterval: (fn, ms) => intervals.push({fn, ms}), setTimeout: (fn, ms) => timeouts.push({fn, ms})};
@@ -99,4 +104,54 @@ test('the witness credits only tabs linked by their own ids on one shared hub', 
   assert.equal(sharedTabsVerdict({tabIds: ['p1', 'p2'], freshId: 'p3', pages: [on('p1'), on('p3'), on('other')]}).ok, false, 'another page cannot stand in for a tab');
   assert.equal(sharedTabsVerdict({tabIds: ['p1', 'p2'], freshId: 'p3', pages: [on('p1'), on('p2', null), on('p3')]}).ok, false, 'a tab on its own stream is not the hub');
   assert.equal(sharedTabsVerdict({tabIds: ['p1'], freshId: null, pages: [on('p1')]}).ok, false);
+});
+
+test('tabs joining while the server is still being asked share the one stream that results', async () => {
+  const waiting = [], release = () => waiting.splice(0).forEach(resolve => resolve({ok: true, hub: true}));
+  const h = await hubHarness({pagesBody: () => new Promise(resolve => waiting.push(resolve))});
+  const a = h.port(), b = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  b.say({type: 'join', endpoint: '/api/vantage', page: 'page-b', facts: facts('page-b')}); await h.settle();
+  release(); await h.settle();
+  assert.equal(h.sources.length, 1, 'one stream, never two for the same hub');
+});
+
+test('a join the server did not accept is retried, and the tab is told it is linked only once it is', async () => {
+  const answers = ['reject', 503, 200];
+  const h = await hubHarness({joinStatus: () => answers.shift() ?? 200}), a = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  assert.ok(!a.sent.some(message => message.type === 'status' && message.state === 'linked'), 'not linked while the server has not got it');
+  const check = h.intervals.find(item => item.ms <= 10000);
+  for (let i = 0; i < 2; i++) { h.advance(10000); check.fn(); await h.settle(); a.say({type: 'pong', page: 'page-a'}); }
+  assert.equal(h.posts.filter(post => post.url === '/api/vantage/join').length, 3, 'the hub keeps trying while the tab is with it');
+  assert.deepEqual(a.sent.filter(message => message.type === 'status').at(-1), {type: 'status', state: 'linked', via: 'hub'});
+});
+
+test('a tab dropped after a long pause rejoins as soon as it is heard from again', async () => {
+  const h = await hubHarness(), a = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  const check = h.intervals.find(item => item.ms <= 10000);
+  h.advance(10000); check.fn(); a.say({type: 'pong', page: 'page-a'});
+  a.sent.length = 0;
+  h.advance(70000); check.fn(); await h.settle();
+  assert.ok(h.posts.some(post => post.url === '/api/vantage/leave' && post.body.page === 'page-a'), 'silent past the limit: it leaves');
+  assert.deepEqual(a.sent.at(-1), {type: 'ping'}, 'but the hub still asks it, so a paused tab can answer');
+  h.posts.length = 0;
+  a.say({type: 'pong', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  assert.deepEqual(h.posts.filter(post => post.url === '/api/vantage/join').map(post => post.body.page), ['page-a'], 'and its answer joins it again');
+});
+
+test('each membership is numbered, so a late leave cannot remove a page that joined again', async () => {
+  const h = await hubHarness(), a = h.port();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  h.sources[0].emit('open'); await h.settle();
+  a.say({type: 'leave', page: 'page-a'}); await h.settle();
+  a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+  const joins = h.posts.filter(post => post.url === '/api/vantage/join').map(post => post.body.member);
+  const leaves = h.posts.filter(post => post.url === '/api/vantage/leave').map(post => post.body.member);
+  assert.equal(leaves.length, 1);
+  assert.ok(Number.isInteger(joins[0]) && joins[1] > joins[0], 'a rejoin is a newer membership');
+  assert.equal(leaves[0], joins[0], 'the leave names the membership it ends');
 });

@@ -232,6 +232,15 @@ def hub_contracts(bridge):
     assert [page["id"] for page in broker.pages()] == ["page-hhhhhhh1"], "and only it is forgotten"
     assert broker.leave("hub-aaaaaaaa", "page-hhhhhhh1") is True and broker.leave("hub-aaaaaaaa", "page-hhhhhhh1") is False
 
+    # Memberships are numbered: a late leave, or a late older join, cannot undo a newer join.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is True
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=2) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm1", member=1) is False, "a leave for an older membership changes nothing"
+    assert any(page["id"] == "page-mmmmmmm1" for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is False, "nor does a late older join"
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm1", member=2) is True
+    assert not any(page["id"] == "page-mmmmmmm1" for page in broker.pages())
+
     broker.join("hub-aaaaaaaa", "page-hhhhhhh4", {})
     replaced = broker.attach_hub("hub-aaaaaaaa")
     assert broker.pages() == [], "a hub that links again starts empty: its pages join it again"

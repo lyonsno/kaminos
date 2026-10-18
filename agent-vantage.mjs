@@ -981,7 +981,8 @@ export function connectVantageLink({window, document, endpoint, pageId, run, onS
   document.addEventListener('visibilitychange', presence);
   window.addEventListener('focus', presence);
   window.addEventListener('blur', presence);
-  const heartbeat = window.setInterval(presence, 15000);
+  // The heartbeat also speaks to the hub unasked, so a hub that dropped this tab after a pause hears it again.
+  const heartbeat = window.setInterval(() => { presence(); port?.postMessage({type: 'pong', page: pageId, facts: facts()}); }, 15000);
   if (!viaHub()) open();
   return {
     pageId,

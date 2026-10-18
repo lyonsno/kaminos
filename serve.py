@@ -4133,18 +4133,19 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             return
         bridge, broker = vantage_bridge()
         try:
-            broker.join(str(body.get("hub") or ""), body.get("page"), body)
+            joined = broker.join(str(body.get("hub") or ""), body.get("page"), body, member=body.get("member"))
         except bridge.VantageError as error:
             self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
             return
-        self.send_json({"ok": True})
+        # ok false: an older membership than the page already has; nothing changed.
+        self.send_json({"ok": joined})
 
     def handle_vantage_leave(self):
         if not self._vantage_allowed():
             return
         body = self._vantage_body()
         if body is not None:
-            left = vantage_bridge()[1].leave(str(body.get("hub") or ""), str(body.get("page") or ""))
+            left = vantage_bridge()[1].leave(str(body.get("hub") or ""), str(body.get("page") or ""), member=body.get("member"))
             self.send_json({"ok": left})
 
     def _vantage_stream(self, bridge, broker, link):

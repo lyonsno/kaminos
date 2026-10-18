@@ -5,10 +5,16 @@
 // linked whether shown or hidden.
 //
 // Tabs speak to the hub over MessagePorts:
-//   tab -> hub  {type: 'join', endpoint, page, facts}  {type: 'leave', page}  {type: 'pong', page}
+//   tab -> hub  {type: 'join', endpoint, page, facts}  {type: 'leave', page}  {type: 'pong', page, facts?}
 //   hub -> tab  {type: 'command', page, message}  {type: 'status', state, via}  {type: 'fallback'}  {type: 'ping'}
 // Commands arrive on the hub stream naming their page and go to that tab only.
 // Tabs answer the server themselves (POST /reply).
+//
+// Each join is a numbered membership: the server keeps a page's newest, so a
+// late leave or older join cannot undo it. A tab counts as joined only once the
+// server accepted it; until then the hub retries on every check. A tab dropped
+// for silence is still asked, and its answer, or its own heartbeat pong, joins
+// it again.
 
 // A tab that has not answered the hub for this long has gone (closed without
 // saying so, or frozen); its page leaves, and it joins again if it answers later.
@@ -18,37 +24,52 @@ export const HUB_CHECK_MS = 10000;
 const RETRY_MS = 5000;
 
 export function createVantageHub({EventSource, fetch, now, hubId, setInterval, setTimeout}) {
-  const tabs = new Map();   // port -> {page, facts, seen}
+  const tabs = new Map();   // port -> {page, facts, seen, member, joined}
   let endpoint = null, source = null, probing = false, mode = null;   // mode: null | 'hub' | 'fallback' | 'unavailable'
+  let generation = 0, members = 0;   // generation: which stream connection; members: membership numbers
   const post = (path, body) => fetch(endpoint + path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)}).catch(() => null);
   const tell = (port, message) => { try { port.postMessage(message); } catch { /* the tab is gone */ } };
   const tellAll = message => { for (const port of tabs.keys()) tell(port, message); };
   const linked = () => source?.readyState === 1;
-  const join = tab => post('/join', {hub: hubId, ...tab.facts, page: tab.page});
-  const leave = page => post('/leave', {hub: hubId, page});
+  const leave = (page, member = null) => post('/leave', {hub: hubId, page, member});
+  async function join(port, tab) {
+    const stream = generation, member = tab.member;
+    const response = await post('/join', {hub: hubId, ...tab.facts, page: tab.page, member});
+    const accepted = !!response?.ok && (await response.json().catch(() => null))?.ok === true;
+    // Left, joined again or the stream reconnected meanwhile: this answer is about an older membership.
+    if (tabs.get(port) !== tab || tab.member !== member || stream !== generation) return;
+    tab.joined = accepted;
+    if (accepted) tell(port, {type: 'status', state: 'linked', via: 'hub'});
+  }
+  function register(port, data) {
+    const tab = {page: data.page, facts: data.facts ?? {page: data.page}, seen: now(), member: ++members, joined: false};
+    tabs.set(port, tab);
+    return tab;
+  }
   const portOf = page => [...tabs].find(([, tab]) => tab.page === page)?.[0];
 
+  // One probe at a time, held until the stream is installed or the probe failed.
   function probe() {
     if (probing || source || !endpoint || mode === 'fallback' || mode === 'unavailable') return;
     probing = true;
     fetch(`${endpoint}/pages`).then(async response => {
-      probing = false;
       // A server without the vantage bridge: nothing to link to.
       if (response.status === 404) { mode = 'unavailable'; tellAll({type: 'status', state: 'unavailable', via: 'hub'}); return; }
       const body = await response.json().catch(() => null);
       // An older server without the hub: each tab links on its own.
       if (body?.hub !== true) { mode = 'fallback'; tellAll({type: 'fallback'}); return; }
       open();
-    }, () => { probing = false; setTimeout(probe, RETRY_MS); });
+    }).catch(() => setTimeout(probe, RETRY_MS)).finally(() => { probing = false; });
   }
 
   function open() {
+    if (source) return;
     source = new EventSource(`${endpoint}/hub?hub=${encodeURIComponent(hubId)}`);
     // On every (re)connection the server's hub starts empty: every tab joins again.
     source.addEventListener('open', () => {
       mode = 'hub';
-      for (const tab of tabs.values()) join(tab);
-      tellAll({type: 'status', state: 'linked', via: 'hub'});
+      generation++;
+      for (const [port, tab] of tabs) { tab.joined = false; join(port, tab); }
     });
     source.addEventListener('command', event => {
       let message;
@@ -67,22 +88,24 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
 
   function receive(port, data) {
     if (!data || typeof data !== 'object') return;
+    // A join, or an answer from a tab the hub dropped, (re)joins it as a new membership.
     if (data.type === 'join' || (data.type === 'pong' && !tabs.has(port))) {
       if (typeof data.page !== 'string') return;
       endpoint ??= data.endpoint ?? null;
-      const tab = {page: data.page, facts: data.facts ?? {page: data.page}, seen: now()};
-      tabs.set(port, tab);
+      const tab = register(port, data);
       if (mode === 'fallback') return tell(port, {type: 'fallback'});
       if (mode === 'unavailable') return tell(port, {type: 'status', state: 'unavailable', via: 'hub'});
-      if (linked()) { join(tab); tell(port, {type: 'status', state: 'linked', via: 'hub'}); }
+      if (linked()) join(port, tab);
       else probe();
     } else if (data.type === 'pong') {
-      tabs.get(port).seen = now();
+      const tab = tabs.get(port);
+      tab.seen = now();
+      if (data.facts) tab.facts = data.facts;
     } else if (data.type === 'leave') {
       const tab = tabs.get(port);
       if (!tab) return;
       tabs.delete(port);
-      if (linked()) leave(tab.page);
+      if (linked()) leave(tab.page, tab.member);
     }
   }
 
@@ -90,8 +113,10 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     for (const [port, tab] of [...tabs]) {
       if (now() - tab.seen > HUB_SILENCE_MS) {
         tabs.delete(port);
-        if (linked()) leave(tab.page);
-      } else tell(port, {type: 'ping'});
+        if (linked()) leave(tab.page, tab.member);
+      } else if (linked() && !tab.joined) join(port, tab);
+      // Asked even when dropped: a tab that was only paused answers, and joins again.
+      tell(port, {type: 'ping'});
     }
   }, HUB_CHECK_MS);
 

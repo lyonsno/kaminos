@@ -43,6 +43,8 @@ class _Page:
         self.connected_at = clock()
         self.last_seen = clock()
         self.focus_order = 0
+        # On a hub, the page's newest membership number: older joins and leaves are stale.
+        self.member = None
 
 
 class _Pending:
@@ -96,29 +98,40 @@ class VantageBroker:
             self._lock.notify_all()
             return link
 
-    def join(self, hub_id, page_id, meta):
+    def join(self, hub_id, page_id, meta, member=None):
+        """A page joins a hub as a numbered membership; a join older than the
+        page's current membership on that hub is stale and changes nothing."""
         if not isinstance(page_id, str) or not PAGE_ID.match(page_id):
             raise VantageError(400, "request", "page id must be 8-80 letters, digits, dashes or underscores")
+        member = member if isinstance(member, int) and not isinstance(member, bool) else None
         with self._lock:
             link = self._hubs.get(hub_id)
             if link is None or link.closed:
                 raise VantageError(409, "hub", f"No hub \"{hub_id}\" is linked to this server; the page's worker links again")
-            page = self._pages.get(page_id) or _Page(page_id, self._clock)
+            current = self._pages.get(page_id)
+            if current is not None and current.link is link and None not in (member, current.member) and member < current.member:
+                return False
+            page = current or _Page(page_id, self._clock)
             self._pages[page_id] = page
             if page.link is not None and page.link is not link and page.link.hub is None:
                 page.link.closed = True
             page.link = link
+            page.member = member
             page.connected_at = page.last_seen = self._clock()
             self._update(page, meta, attached=True)
             self._lock.notify_all()
             return True
 
-    def leave(self, hub_id, page_id):
+    def leave(self, hub_id, page_id, member=None):
         """A tab that closed, or stopped answering its hub, leaves: only its own
-        commands fail."""
+        commands fail. A leave naming an older membership than the page's
+        current one is stale and changes nothing."""
+        member = member if isinstance(member, int) and not isinstance(member, bool) else None
         with self._lock:
             page = self._pages.get(page_id)
             if page is None or page.link is None or page.link.hub != hub_id:
+                return False
+            if member is not None and page.member is not None and member != page.member:
                 return False
             self._drop(page)
             self._lock.notify_all()
