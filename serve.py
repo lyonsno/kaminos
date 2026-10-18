@@ -2760,15 +2760,31 @@ def save_mesh_lod_level(payload):
     return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level}
 
 
-def mesh_lod_choice(source, faces=None):
-    """All levels plus the largest one within a face budget (else the smallest, flagged)."""
+def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
+    """All levels plus a choice: by face budget, the largest level within it (else the
+    smallest, flagged); by relative geometric error, the coarsest level whose `stat`
+    (max, p95 or mean) fits (else the finest measured level, flagged). Levels without a
+    measurement are never chosen by error."""
+    if faces is not None and max_error is not None:
+        raise ValueError('Choose by faces or by maxError, not both')
+    if stat not in ('max', 'p95', 'mean'):
+        raise ValueError('stat must be max, p95 or mean')
     data = read_mesh_lod_set(source)
     levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
-    choice, within = None, None
+    choice, within, unmeasured = None, None, None
     if faces is not None and levels:
         fitting = [l for l in levels if l['faces'] <= faces]
         choice, within = (fitting[0], True) if fitting else (levels[-1], False)
-    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within}
+    if max_error is not None:
+        measured = [l for l in levels if isinstance(((l.get('error') or {}).get('relative') or {}).get(stat), (int, float))]
+        unmeasured = len(levels) - len(measured)
+        if measured:
+            fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
+            choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
+    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within}
+    if unmeasured is not None:
+        result['unmeasured'] = unmeasured
+    return result
 
 
 def pipeline_manifest_payload():
@@ -3847,8 +3863,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed.path == "/api/mesh-lods":
             query = parse_qs(parsed.query)
             try:
-                faces = query.get("faces", [None])[0]
-                self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None))
+                faces, max_error = query.get("faces", [None])[0], query.get("maxError", [None])[0]
+                self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
+                                               float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0]))
             except ValueError as error:
                 self.send_json({"error": str(error), "phase": "mesh-lods"}, 400)
         elif parsed.path == "/api/authoring-assets":

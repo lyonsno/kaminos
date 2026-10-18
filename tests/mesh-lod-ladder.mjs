@@ -168,3 +168,32 @@ test('compactTrellisGLB merges exact duplicate corners without changing any tria
   assert.deepEqual(after.json.nodes, before.json.nodes, 'node transform kept');
   assert.deepEqual(after.json.extras, before.json.extras, 'provenance kept');
 });
+
+test('geometric error is symmetric, deterministic and matches a known offset', async () => {
+  const {measureGeometricError} = await import('../mesh-lod-ladder.mjs');
+  const box = (lo, hi) => { const v = [], f = [];
+    for (let i = 0; i < 8; i++) v.push(i & 1 ? hi : lo, (i >> 1) & 1 ? hi : lo, (i >> 2) & 1 ? hi : lo);
+    for (const [a,b,c,d] of [[0,2,3,1],[4,5,7,6],[0,1,5,4],[2,6,7,3],[0,4,6,2],[1,3,7,5]]) f.push(a,b,c, a,c,d);
+    return {vertices: new Float32Array(v), faces: new Uint32Array(f)}; };
+  // Closest point and outward normal on the surface of the axis-aligned cube [lo, hi]^3.
+  const closestOnBox = (lo, hi) => (x, y, z) => {
+    const p = [x, y, z], c = p.map(t => Math.min(hi, Math.max(lo, t)));
+    if (c.some((t, i) => t !== p[i])) { // outside: clamp; normal along the largest excursion
+      const d = p.map((t, i) => t - c[i]), axis = d.map(Math.abs).indexOf(Math.max(...d.map(Math.abs)));
+      const n = [0, 0, 0]; n[axis] = Math.sign(d[axis]); return {point: c, normal: n}; }
+    const options = c.flatMap((t, i) => [[t - lo, i, lo, -1], [hi - t, i, hi, 1]]).sort((a, b) => a[0] - b[0])[0];
+    c[options[1]] = options[2]; const n = [0, 0, 0]; n[options[1]] = options[3]; return {point: c, normal: n}; };
+  const source = box(0, 1), level = box(0.05, 0.95);
+  const run = () => measureGeometricError({source, level, closestSource: closestOnBox(0, 1), closestLevel: closestOnBox(0.05, 0.95), samples: 4000, seed: 7});
+  const e = run();
+  assert.deepEqual(e, run(), 'same seed, same numbers');
+  assert.ok(Math.abs(e.levelToSource.max - 0.05) < 1e-6, `level->source max ${e.levelToSource.max}`);
+  assert.ok(Math.abs(e.levelToSource.mean - 0.05) < 1e-6);
+  // Sampled max approaches the true corner distance (sqrt(3)*0.05) from below: corners have no area.
+  assert.ok(e.sourceToLevel.max > Math.sqrt(2) * 0.05 && e.sourceToLevel.max <= Math.sqrt(3) * 0.05 + 1e-6, `source->level max ${e.sourceToLevel.max}`);
+  assert.equal(e.max, Math.max(e.levelToSource.max, e.sourceToLevel.max));
+  assert.ok(Math.abs(e.diagonal - Math.sqrt(3)) < 1e-6);
+  assert.ok(Math.abs(e.relative.max - e.max / Math.sqrt(3)) < 1e-12);
+  assert.ok(e.p95 >= e.mean && e.p95 <= e.max);
+  assert.ok(e.normalDeviationDegrees.mean >= 0 && e.normalDeviationDegrees.max <= 90 + 1e-6);
+});

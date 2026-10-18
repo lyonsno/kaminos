@@ -77,6 +77,27 @@ with tempfile.TemporaryDirectory() as directory:
         status, body = request('GET', f'/api/mesh-lods?source={hero}')
         assert body['choice'] is None and len(body['levels']) == 3
         assert request('GET', '/api/mesh-lods?source=nothex')[0] == 400
+
+        # Choosing by measured error: the coarsest level whose chosen statistic fits.
+        other = {}
+        for name in ('hero2', 'e5000', 'e1000', 'e500'):
+            data = glb(name); other[name] = hashlib.sha256(data).hexdigest()
+            assert request('POST', '/api/ingest-mesh', data)[0] == 200
+        for name, faces, mx, mean in (('e5000', 5000, 0.004, 0.001), ('e1000', 1000, 0.012, 0.003), ('e500', 500, 0.03, 0.008)):
+            level = {'sha256': other[name], 'faces': faces, 'route': 'closed-remesh', 'textureSize': 256,
+                     'error': {'relative': {'max': mx, 'p95': mx * 0.6, 'mean': mean}}}
+            assert request('POST', '/api/mesh-lods', {'source': other['hero2'], 'level': level})[0] == 200
+        status, body = request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01")
+        assert body['choice']['sha256'] == other['e5000'] and body['withinBudget'] is True, body['choice']
+        status, body = request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&stat=mean")
+        assert body['choice']['sha256'] == other['e500'] and body['withinBudget'] is True
+        status, body = request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.001")
+        assert body['choice']['sha256'] == other['e5000'] and body['withinBudget'] is False, 'finest level, flagged'
+        assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&stat=median")[0] == 400
+        assert request('GET', f"/api/mesh-lods?source={other['hero2']}&maxError=0.01&faces=100")[0] == 400
+        # Levels registered without an error measurement are never chosen by error.
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&maxError=1')
+        assert body['choice'] is None and body['unmeasured'] == 3, body
     finally:
         server.shutdown()
         server.server_close()

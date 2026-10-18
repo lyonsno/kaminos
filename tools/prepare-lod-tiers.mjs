@@ -10,12 +10,6 @@
 // The report is written at every phase, including on failure.
 import fs from 'node:fs';
 import path from 'node:path';
-import * as THREE from 'three';
-import {MeshBVH} from 'three-mesh-bvh';
-import {prepareLowTiers} from '../mesh-lod-ladder.mjs';
-import {finishTrellisMesh} from '../models/trellis2/trellis-material.js';
-import {createWasmXatlasUnwrapper} from '../models/trellis2/wasm-xatlas.js';
-import {NodeTrellisUVWorker} from '../models/trellis2/node-uv-worker.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
@@ -27,6 +21,15 @@ try {
   if (!input || !server || !reportPath || !/^[a-f0-9]{64}$/.test(source || '')) throw Error('--input, --source <sha256>, --server and --report are required');
   if (!targets.every(t => Number.isSafeInteger(t) && t > 0)) throw Error('--targets must be positive integers');
   save();
+  // Loaded here so a missing dependency still ends in a written failure report.
+  report.phase = 'load-modules'; save();
+  const THREE = await import(process.env.KAMINOS_LOD_THREE_MODULE || 'three');
+  const {MeshBVH} = await import('three-mesh-bvh');
+  const {prepareLowTiers} = await import('../mesh-lod-ladder.mjs');
+  const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  report.phase = 'read-input'; save();
   const read = (n, T) => { const b = fs.readFileSync(path.join(input, n)); return new T(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
   const meta = JSON.parse(fs.readFileSync(path.join(input, 'meta.json'), 'utf8'));
   report.inputMeta = meta;
@@ -37,14 +40,25 @@ try {
   await sourceCheck.body?.cancel();
   if (!sourceCheck.ok) throw Error(`source mesh ${source} is not stored on ${server} (HTTP ${sourceCheck.status})`);
   report.phase = 'bvh'; save();
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(triangles, 1));
-  const bvh = new MeshBVH(geometry), point = new THREE.Vector3(), hit = {};
-  const closestPoint = (x, y, z) => { bvh.closestPointToPoint(point.set(x, y, z), hit); return [hit.point.x, hit.point.y, hit.point.z]; };
+  // Closest point plus that face's normal on a surface, through a BVH over it.
+  const closestFor = (V, F) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(V, 3)); geometry.setIndex(new THREE.BufferAttribute(F, 1));
+    const bvh = new MeshBVH(geometry), point = new THREE.Vector3(), hit = {};
+    return (x, y, z) => {
+      bvh.closestPointToPoint(point.set(x, y, z), hit);
+      const t = hit.faceIndex * 3, a = F[t]*3, b = F[t+1]*3, c = F[t+2]*3;
+      const ux = V[b]-V[a], uy = V[b+1]-V[a+1], uz = V[b+2]-V[a+2], wx = V[c]-V[a], wy = V[c+1]-V[a+1], wz = V[c+2]-V[a+2];
+      const nx = uy*wz-uz*wy, ny = uz*wx-ux*wz, nz = ux*wy-uy*wx, l = Math.hypot(nx, ny, nz) || 1;
+      return {point: [hit.point.x, hit.point.y, hit.point.z], normal: [nx/l, ny/l, nz/l]};
+    };
+  };
+  const closestSource = closestFor(vertices, triangles);
+  const closestPoint = (x, y, z) => closestSource(x, y, z).point;
   report.phase = 'tiers'; save();
   const started = performance.now();
   const tiers = await prepareLowTiers({mesh: {vertices, triangles}, materialFields, targets, closestPoint, finish: finishTrellisMesh,
-    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, provenance: {input: meta.source ?? input, route: meta.route}});
+    unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, measure: {closestSource, closestFor}, provenance: {input: meta.source ?? input, route: meta.route}});
   report.tierSeconds = (performance.now() - started) / 1000;
   report.phase = 'publish'; save();
   for (const tier of tiers) {
@@ -52,7 +66,7 @@ try {
     const stored = await ingest.json();
     if (!ingest.ok) throw Error(`ingest failed for ${tier.target}: ${JSON.stringify(stored)}`);
     const level = {sha256: stored.sha256, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
-      closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges};
+      closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges, error: tier.error};
     const register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level})});
     const registered = await register.json();
     if (!register.ok) throw Error(`register failed for ${tier.target}: ${JSON.stringify(registered)}`);

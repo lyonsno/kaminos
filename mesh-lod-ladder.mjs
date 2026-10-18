@@ -198,7 +198,7 @@ export function dedupCorners({positions, normals, uvs}) {
 // (finishTrellisMesh) unwraps it and bakes PBR textures from the same material field.
 // closestPoint projects onto the raw surface (for example a three-mesh-bvh query over it).
 export async function prepareLowTiers({mesh, materialFields, closestPoint, finish, unwrapMesh, WorkerClass,
-  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}, compact = true}) {
+  targets = [5000, 1000, 500], textureSizeFor = target => target >= 5000 ? 512 : 256, provenance = {}, compact = true, measure = null}) {
   if (typeof finish !== 'function') throw TypeError('TRELLIS finisher (finishTrellisMesh) required');
   const tiers = [];
   for (const target of targets) {
@@ -206,7 +206,10 @@ export async function prepareLowTiers({mesh, materialFields, closestPoint, finis
     const census = edgeCensus(level.vertices, level.faces), textureSize = textureSizeFor(target);
     const finished = await finish({vertices: level.vertices.slice(), triangles: level.faces.slice(), metadata: {lod: {target, route: level.route}}},
       {WorkerClass, unwrapMesh, textureSize, materialFields, provenance: {...provenance, lod: {target, route: level.route, grid: level.grid, cell: level.cell}}});
-    tiers.push({target, glb: compact ? compactTrellisGLB(finished.glb) : finished.glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
+    // measure: {closestSource(x,y,z) -> {point, normal}, closestFor(vertices, faces) -> same for a level, samples?}
+    const error = measure ? measureGeometricError({source: {vertices: mesh.vertices, faces: mesh.triangles}, level,
+      closestSource: measure.closestSource, closestLevel: measure.closestFor(level.vertices, level.faces), samples: measure.samples ?? 20000}) : null;
+    tiers.push({target, error, glb: compact ? compactTrellisGLB(finished.glb) : finished.glb, compacted: compact, faces: level.faces.length / 3, route: level.route, textureSize,
       closed: census.boundaryEdges === 0, boundaryEdges: census.boundaryEdges, nonManifoldEdges: census.nonManifoldEdges, grid: level.grid});
   }
   return tiers;
@@ -251,4 +254,48 @@ export function compactTrellisGLB(glb) {
   header.setUint32(20 + textLength, offset, true); header.setUint32(24 + textLength, 0x004e4942, true);
   let at = 28 + textLength; for (const part of parts) { bytes.set(part, at); at += part.length; }
   return result;
+}
+
+// Symmetric object-space error between a source surface and one of its levels: area-weighted
+// samples on each surface (fixed seed), nearest distance to the other surface, and the angle
+// between the two surfaces' normals at each matched pair. closestSource / closestLevel map
+// (x, y, z) to {point, normal} on that surface (for example a three-mesh-bvh query).
+// Distances are in source units; `relative` divides them by the source bounding diagonal.
+// `max` is a sampled maximum: it approaches the true Hausdorff distance from below, because
+// worst points such as sharp corners have no area. Raise `samples` for a tighter bound.
+// Channels stay separate so each consumer can read the one it cares about.
+export function measureGeometricError({source, level, closestSource, closestLevel, samples = 20000, seed = 1}) {
+  let state = seed >>> 0 || 1;
+  const random = () => { state ^= state << 13; state >>>= 0; state ^= state >>> 17; state ^= state << 5; state >>>= 0; return state / 4294967296; };
+  const faceNormal = (V, F, t) => { const a = F[t*3]*3, b = F[t*3+1]*3, c = F[t*3+2]*3;
+    const ux = V[b]-V[a], uy = V[b+1]-V[a+1], uz = V[b+2]-V[a+2], wx = V[c]-V[a], wy = V[c+1]-V[a+1], wz = V[c+2]-V[a+2];
+    const x = uy*wz-uz*wy, y = uz*wx-ux*wz, z = ux*wy-uy*wx, l = Math.hypot(x, y, z); return {area: l / 2, n: l ? [x/l, y/l, z/l] : [0, 0, 0]}; };
+  function direction(from, to) {
+    const {vertices: V, faces: F} = from, n = F.length / 3, cumulative = new Float64Array(n), normals = [];
+    let total = 0;
+    for (let t = 0; t < n; t++) { const fn = faceNormal(V, F, t); total += fn.area; cumulative[t] = total; normals.push(fn.n); }
+    const distances = new Float64Array(samples), angles = new Float64Array(samples);
+    for (let s = 0; s < samples; s++) {
+      const target = random() * total; let lo = 0, hi = n - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cumulative[mid] < target) lo = mid + 1; else hi = mid; }
+      let u = random(), v = random(); if (u + v > 1) { u = 1 - u; v = 1 - v; }
+      const a = F[lo*3]*3, b = F[lo*3+1]*3, c = F[lo*3+2]*3, w = 1 - u - v;
+      const p = [0, 1, 2].map(k => w*V[a+k] + u*V[b+k] + v*V[c+k]), hit = to(p[0], p[1], p[2]);
+      distances[s] = Math.hypot(hit.point[0]-p[0], hit.point[1]-p[1], hit.point[2]-p[2]);
+      const m = normals[lo], d = Math.min(1, Math.abs(m[0]*hit.normal[0] + m[1]*hit.normal[1] + m[2]*hit.normal[2]));
+      angles[s] = Math.acos(d) * 180 / Math.PI;
+    }
+    return {distances, angles};
+  }
+  const stats = values => { const sorted = Float64Array.from(values).sort(); let sum = 0; for (const x of sorted) sum += x;
+    return {max: sorted[sorted.length - 1], p95: sorted[Math.min(sorted.length - 1, Math.floor(0.95 * sorted.length))], mean: sum / sorted.length}; };
+  const forward = direction(level, closestSource), backward = direction(source, closestLevel);
+  const both = new Float64Array(samples * 2); both.set(forward.distances); both.set(backward.distances, samples);
+  const angles = new Float64Array(samples * 2); angles.set(forward.angles); angles.set(backward.angles, samples);
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], V = source.vertices;
+  for (let i = 0; i < V.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], V[i+a]); hi[a] = Math.max(hi[a], V[i+a]); }
+  const diagonal = Math.hypot(hi[0]-lo[0], hi[1]-lo[1], hi[2]-lo[2]), all = stats(both);
+  return {schema: 'kaminos.lod-geometric-error.v0', samplesPerSide: samples, seed, diagonal, ...all,
+    relative: {max: all.max / diagonal, p95: all.p95 / diagonal, mean: all.mean / diagonal},
+    levelToSource: stats(forward.distances), sourceToLevel: stats(backward.distances), normalDeviationDegrees: stats(angles)};
 }
