@@ -27,6 +27,14 @@ def write(path,value):
 def record(path): return {'path':str(Path(path).resolve()),'sha256':sha(path)}
 
 
+def referenced_records(value):
+    if isinstance(value,dict):
+        if isinstance(value.get('path'),str) and isinstance(value.get('sha256'),str):yield value
+        for child in value.values():yield from referenced_records(child)
+    elif isinstance(value,list):
+        for child in value:yield from referenced_records(child)
+
+
 def authenticate(value):
     path=Path(value['path']).resolve()
     if sha(path)!=value['sha256']: raise ValueError('source digest mismatch: '+str(path))
@@ -106,14 +114,22 @@ def protected_destination(out,report,protected):
 
 def run(args):
     report={'status':'running','phase':'input-discovery','requested':vars(args),'casts':[]}
-    report_path=Path(args.report).absolute(); safe_report=False
+    report_path=Path(args.report).absolute(); plan_path=Path(args.plan).resolve();out_path=Path(args.out).resolve()
+    # A new, independent file cannot alias an existing retained input. Existing
+    # destinations are not writable until source discovery establishes that.
+    safe_report=(not report_path.exists() and not report_path.is_symlink()
+                 and report_path.resolve()!=plan_path and report_path.resolve()!=out_path
+                 and out_path not in report_path.resolve().parents)
     try:
-        plan_path=Path(args.plan).resolve(); plan=json.loads(plan_path.read_text())
+        plan=json.loads(plan_path.read_text())
         records=[plan['frame'],plan['radii'],*plan['binderFiles'],*[c['case'] for c in plan['casts']]]
         if args.stage=='correct':
             if not args.fit_report:raise ValueError('explicit fit report required for correction')
             records.append(record(args.fit_report))
         protected=[plan_path,*[Path(r['path']).resolve() for r in records]]
+        if args.stage=='correct':
+            fit_report=json.loads(Path(args.fit_report).read_text())
+            protected.extend(Path(r['path']).resolve() for r in referenced_records(fit_report))
         for case in plan['casts']:
             manifest_path=Path(case['case']['path']).resolve()
             manifest=json.loads(manifest_path.read_text())

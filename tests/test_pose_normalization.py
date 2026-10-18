@@ -15,6 +15,30 @@ build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
 
 
 class PoseNormalizationTests(unittest.TestCase):
+    def test_missing_plan_still_writes_independent_failure_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            args=argparse.Namespace(plan=str(root/'missing.json'),out=str(root/'derived'),report=str(root/'report.json'),stage='fit',voxel_size=.1,fit_report=None)
+            with self.assertRaises(FileNotFoundError):build.run(args)
+            self.assertTrue((root/'report.json').is_file(),'input discovery omitted independent report')
+            report=json.loads((root/'report.json').read_text())
+            self.assertEqual(report['status'],'failed');self.assertEqual(report['phase'],'input-discovery')
+            self.assertIn('FileNotFoundError',report['error'])
+
+    def test_correction_report_cannot_overwrite_referenced_fit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source.json';source.write_text('{}')
+            fit=root/'fit.json';fit.write_text('{"original":"fit evidence"}')
+            plan=root/'plan.json';plan.write_text(json.dumps({'schema':'kaminos.pose-normalization-inputs.v1',
+                'frame':build.record(source),'radii':build.record(source),'binderFiles':[],
+                'casts':[{'slug':'a','case':build.record(source)},{'slug':'b','case':build.record(source)}]}))
+            fit_report=root/'fit-report.json';fit_report.write_text(json.dumps({'status':'completed','phase':'complete',
+                'casts':[{'slug':'a','fit':build.record(fit)},{'slug':'b','fit':build.record(fit)}]}))
+            before=fit.read_bytes()
+            args=argparse.Namespace(plan=str(plan),out=str(root/'derived'),report=str(fit),stage='correct',voxel_size=.1,fit_report=str(fit_report))
+            with self.assertRaises(Exception):build.run(args)
+            self.assertEqual(fit.read_bytes(),before,'correction overwrote consumed correspondence')
+
     def test_failure_report_cannot_overwrite_retained_case_asset(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);case=root/'source';case.mkdir()
