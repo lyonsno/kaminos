@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createSceneEdits} from '../scene-edit-session.mjs';
-import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls} from '../scene-flame-emitter.mjs';
+import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,immersedControlsForFlamePose,flamePoseToDomain} from '../scene-flame-emitter.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 const engine={translate:[0,0,0],scale:1};let rebuilds=0,sourceWrites=0,reject=false;
@@ -26,7 +26,16 @@ edits.redo();assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSour
 assert.throws(()=>edits.apply('@flame-domain',{rotation:[0,.1,0]}),/world axes/);
 assert.throws(()=>edits.apply('@flame-domain',{scale:[1,2,1]}),/uniform/);
 assert.equal(edits.state().active,null);
-// Tight boxes are physical world extents, not a reduction in cell count.
+// Exercise the real live source guard, not merely the numeric scale path.
+ctx.immersedControlsForFlamePose=immersedControlsForFlamePose;ctx.flamePoseToDomain=flamePoseToDomain;
+ctx.window.__kaminosVolumeEmitterReceipt={requested:{sourceLaw:'immersed-source',immersedRadius:.5},effective:{family:'ring'}};
+const beforeRejected=rebuilds;
+assert.throws(()=>edits.apply('@flame-domain',{scale:[.125,.125,.125]}),/Scaled immersed source radius/);
+edits.cancel(); // The inspector's history owner performs this rollback on refusal.
+assert.equal(engine.scale,2);assert.equal(rebuilds,beforeRejected,'source admission precedes engine mutation');
+assert.deepEqual(ctx.flameEmitterPose,original,'refusal never silently shrinks the authored emitter');
+ctx.window.__kaminosVolumeEmitterReceipt.requested.immersedRadius=.04;
+// Tight boxes with a fitting source are physical extents, not fewer cells.
 edits.apply('@flame-domain',{scale:[.125,.125,.125]});
 assert.equal(engine.scale,.125);
 assert.ok(Math.abs(ctx.flameDomainGuide.box.max.x-ctx.flameDomainGuide.box.min.x-.25)<1e-10);

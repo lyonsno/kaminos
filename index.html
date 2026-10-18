@@ -22724,7 +22724,7 @@ function updateAuthoringPropertySelection() {
 let flameInspector = null;
 function installFlameDomainControls(host) {
   const panel=document.createElement('section');panel.className='flame-domain-controls';
-  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p>';
+  panel.innerHTML='<h4>Simulation box</h4>'+['x','y','z','scale'].map(key=>`<div class="slider-row"><label class="slider-label" for="flame-domain-${key}">${key==='scale'?'World scale':'Center '+key.toUpperCase()}</label><input class="transform-input" id="flame-domain-${key}" type="number" step="any" aria-label="Simulation box ${key}" /></div>`).join('')+'<p id="flame-domain-size" class="flame-scope"></p><p class="flame-scope">Subunit scales are supported. The emitter keeps its world size: reduce its Radius or source Scale first if a tighter box exceeds the source radius range.</p>';
   host.append(panel);
   const inputs=[...panel.querySelectorAll('input')];
   for(const input of inputs)input.addEventListener('input',()=>{
@@ -22735,6 +22735,9 @@ function installFlameDomainControls(host) {
     try{scenePlacementTools.edits.preview(pose);}catch(error){setInfo(error.message);}
   });
   authoringControlSessions.push(installSceneControlHistory({controls:inputs,edits:scenePlacementTools.edits,id:'@flame-domain',label:'Edit simulation box',onError:error=>setInfo(error.message)}));
+  // Settlement can reject a source that no longer fits its admitted radius
+  // range. Once typing ends, display the accepted box, not the refused draft.
+  for(const input of inputs)input.addEventListener('blur',()=>refreshFlameDomainPreview());
   for(const input of inputs){const scrub=installRelativeNumberDrag({input,grip:input,step:.01,onStart:()=>authoringControlSessions.forEach(session=>session.commit())});scenePlacementTools.edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   refreshFlameDomainPreview();
 }

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {worldSmokePlan,worldSmokeMapping} from '../volume-world-smoke.mjs';
+import {pressureResolutionPlan} from '../volume-pressure-resolution.mjs';
 const source=fs.readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
 function grab(name){const start=source.indexOf(`  function ${name}(`);return start<0?'':source.slice(start,source.indexOf('\n  }',start)+4);}
 test('world resize never destroys a texture referenced by the pending fine frame',()=>{
@@ -29,4 +30,22 @@ test('world resize never destroys a texture referenced by the pending fine frame
   assert.ok(bound.length>0,'actual fine pass binds the world texture');
   assert.ok(bound.every(texture=>!texture.destroyed),'pending command buffer must not reference destroyed world optical state');
   ctx.encodeSim(encoder);assert.equal(textures.length,2,'unchanged next frame reuses allocation');
+});
+test('separated pressure rebinds the current world optical allocation',()=>{
+  let optical={destroyed:false};const bound=[];
+  const owner={key:'32:64:32:2',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
+  const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
+    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,device:{queue:{writeBuffer(){}}},
+    sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},
+    nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,
+    createFluidRenderBindGroup:()=>({texture:ctx.worldSmoke.optical}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
+    beginPressureResidualProbe:()=>null,pressureDivergenceWarmPipeline:{},pressureRedBlackEvenPipeline:{},pressureRedBlackOddPipeline:{},updateSimCostLedger(){}};
+  vm.createContext(ctx);vm.runInContext(grab('encodeSeparatedPressure'),ctx);
+  const encoder={beginComputePass:()=>({setPipeline(){},setBindGroup(i,g){if(i===0)bound.push(g.texture);},dispatchWorkgroups(){},end(){}})};
+  const solver={effective:{solver:'converged',iterations:1,openTop:true}};
+  ctx.encodeSeparatedPressure(encoder,solver,{});bound.length=0;
+  optical.destroyed=true;ctx.worldSmoke={optical:{destroyed:false}};
+  ctx.encodeSeparatedPressure(encoder,solver,{});
+  assert.equal(bound.length,4);
+  assert.ok(bound.every(texture=>texture===ctx.worldSmoke.optical&&!texture.destroyed),'pressure passes must not retain the replaced optical allocation');
 });

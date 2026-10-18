@@ -18154,7 +18154,7 @@ export function createKaminosVolumePrototype({
     coarseUniforms[GRID_SHAPE_UNIFORM_OFFSET + 1] = plan.pressureDims[1];
     device.queue.writeBuffer(owner.uniform, 0, coarseUniforms);
     const solidEnabled = sceneSolidTexture.width === gridSize;
-    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture];
+    const groupResources = [solidEnabled,sceneSolidTexture,reactantTextures[0],reactantTextures[1],frontBuffers[0],frontBuffers[1],burnRateTexture,worldSmoke?.optical??worldOpticalFallback];
     if (!owner.group || !groupResources.every((value,i)=>value===owner.groupResources?.[i])) {
       owner.groupResources = groupResources;
       owner.solidEnabled = solidEnabled;
