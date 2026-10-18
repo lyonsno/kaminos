@@ -158,6 +158,12 @@ def run(args):
         report['inputs']=[record(plan_path),*records]
         frame=json.loads(Path(plan['frame']['path']).read_text())
         bones=frame['bones']; names=[b['name'] for b in bones]
+        fixed_names=getattr(args,'fixed_joint',[])
+        if fixed_names and args.stage!='fit':
+            raise ValueError('fixed-joint is a fit option; correction consumes the recorded fit')
+        if any(name not in names for name in fixed_names):
+            raise ValueError('fixed joint name absent from source frame')
+        fixed_ids=[names.index(name) for name in fixed_names]
         parents=np.array([-1 if b['parent'] is None else names.index(b['parent']) for b in bones])
         rest=np.array([np.array(b['restMatrix'])[:3,3] for b in bones]);tree(rest,parents)
         radii=source_radii(names,json.loads(Path(plan['radii']['path']).read_text()),np.linalg.norm(np.array(frame['sourceArmatureLocalToNormalized'])[:3,0]))
@@ -183,7 +189,8 @@ def run(args):
             if args.stage=='fit':
                 mass=surface_area(points,triangles)
                 anchors=quadruped_foot_targets(points,mass,rest,names)
-                fit=fit_skeleton(points,mass,rest,parents,radii,voxel_size=args.voxel_size,anchors=anchors)
+                fit=fit_skeleton(points,mass,rest,parents,radii,voxel_size=args.voxel_size,anchors=anchors,
+                                 fixed_joints=fixed_ids)
                 fitted=fit['joints']
                 fit['names']=names;fit['parents']=parents
                 fit['segmentLengthRatios']= (np.linalg.norm(fitted[1:]-fitted[parents[1:]],axis=1)/np.linalg.norm(rest[1:]-rest[parents[1:]],axis=1)).tolist()
@@ -257,4 +264,6 @@ if __name__=='__main__':
     parser.add_argument('--stage',choices=['fit','correct'],required=True)
     parser.add_argument('--fit-report')
     parser.add_argument('--voxel-size',type=float,default=.08)
+    parser.add_argument('--fixed-joint',action='append',default=[],
+                        help='source joint name held exactly at its original position; repeatable, fit stage only')
     run(parser.parse_args())

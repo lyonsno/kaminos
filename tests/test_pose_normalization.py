@@ -15,6 +15,26 @@ build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
 
 
 class PoseNormalizationTests(unittest.TestCase):
+    def test_fixed_axial_joints_are_exact_while_free_limb_fits(self):
+        theta=np.arange(16)*2*np.pi/16
+        points=np.array([[.3+.12*np.cos(t),y,.12*np.sin(t)] for y in np.linspace(0,2,13) for t in theta])
+        joints=np.array([[0.,0,0],[0,1,0],[0,2,0]])
+        result=fit_skeleton(points,np.ones(len(points)),joints,[-1,0,1],[.12]*3,
+            voxel_size=.08,fixed_joints=[0,1],
+            anchors=[{'joint':2,'target':[.3,2,0]}])
+        np.testing.assert_array_equal(result['joints'][:2],joints[:2])
+        self.assertGreater(result['joints'][2,0],.2)
+        self.assertEqual(result['fixedJointIndices'],[0,1])
+
+    def test_fixed_joint_request_is_validated_not_silently_dropped(self):
+        for fixed in [[-1],[2],[.5],[True]]:
+            with self.subTest(fixed=fixed),self.assertRaisesRegex(ValueError,'fixed joint'):
+                fit_skeleton([[.1,0,0],[.1,1,0]],[1,1],[[0,0,0],[0,1,0]],[-1,0],[.1,.1],
+                    voxel_size=.1,fixed_joints=fixed)
+        with self.assertRaisesRegex(ValueError,'fixed joint.*anchor'):
+            fit_skeleton([[.1,0,0],[.1,1,0]],[1,1],[[0,0,0],[0,1,0]],[-1,0],[.1,.1],
+                voxel_size=.1,fixed_joints=[0],anchors=[{'joint':0,'target':[1,0,0]}])
+
     def test_missing_fit_discovery_cannot_create_either_missing_input(self):
         for alias in ['fit','case']:
             with self.subTest(alias=alias),tempfile.TemporaryDirectory() as directory:

@@ -132,7 +132,7 @@ def quadruped_foot_targets(points,area,joints,names):
     return result
 
 
-def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None):
+def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None,fixed_joints=None):
     """Regularized capsule-union fit; every positive-area cell contributes.
 
     SciPy is an offline-only optional tool dependency. No tighter evaluation
@@ -148,6 +148,11 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None):
     if radii.shape!=(len(joints),) or not np.isfinite(radii).all() or (radii<=0).any():
         raise ValueError('positive per-joint proxy radii required')
     n=len(joints); e=n-1; m=len(coarse)
+    fixed=np.asarray([] if fixed_joints is None else fixed_joints)
+    if (fixed.ndim!=1 or (fixed.size and fixed.dtype.kind not in 'iu')
+            or (fixed<0).any() or (fixed>=n).any()):
+        raise ValueError('fixed joint indices must be integers within the named tree')
+    fixed=np.unique(fixed.astype(int))
     initial_radius=(radii[1:]+radii[parents[1:]])/2
     initial_length=np.linalg.norm(joints[1:]-joints[parents[1:]],axis=1)
     scale=np.median(initial_length)
@@ -168,6 +173,9 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None):
     anchor_targets=np.array([a['target'] for a in anchors],dtype=float).reshape(-1,3)
     if ((anchor_ids<0).any() or (anchor_ids>=n).any() or not np.isfinite(anchor_targets).all()):
         raise ValueError('invalid derived anchors')
+    for joint,target in zip(anchor_ids,anchor_targets):
+        if joint in fixed and not np.array_equal(joints[joint],target):
+            raise ValueError('fixed joint conflicts with derived anchor')
     anchor_weight=np.sqrt(1.5/max(len(anchors),1))
 
     def evaluate(x,jac=False):
@@ -216,12 +224,21 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None):
         return {'surfaceRms':float(np.sqrt(np.sum(mass*sdf*sdf)/mass.sum())),
                 'surfaceMax':float(np.max(np.abs(sdf))),
                 'surfaceCellsPerSegment':np.bincount(edge,minlength=e).tolist()}
-    result=least_squares(evaluate,initial,jac=lambda x:evaluate(x,True),
-        bounds=(np.r_[np.full(3*n,-np.inf),initial_radius*.35],
-                np.r_[np.full(3*n,np.inf),initial_radius*2.5]),
+    # Remove fixed positions from the optimization, rather than approximating
+    # a pin with a large penalty. Proxy radii remain free and explicitly so.
+    free=np.ones(len(initial),dtype=bool)
+    free[(3*fixed[:,None]+np.arange(3)).ravel()]=False
+    def expand(x):
+        full=initial.copy();full[free]=x;return full
+    lower=np.r_[np.full(3*n,-np.inf),initial_radius*.35]
+    upper=np.r_[np.full(3*n,np.inf),initial_radius*2.5]
+    result=least_squares(lambda x:evaluate(expand(x)),initial[free],
+        jac=lambda x:evaluate(expand(x),True)[:,free],
+        bounds=(lower[free],upper[free]),
         method='trf',x_scale='jac')
-    fitted=result.x[:3*n].reshape(n,3); tree(fitted,parents)
-    return {'joints':fitted,'radii':result.x[3*n:],'before':metrics(initial),'after':metrics(result.x),
+    full=expand(result.x);fitted=full[:3*n].reshape(n,3); tree(fitted,parents)
+    return {'joints':fitted,'radii':full[3*n:],'before':metrics(initial),'after':metrics(full),
+            'fixedJointIndices':fixed.tolist(),
             'inputPoints':len(points),'coarsePoints':m,'voxelSize':voxel_size,
             'solver':{'success':bool(result.success),'status':int(result.status),'message':result.message,
                       'evaluations':int(result.nfev),'cost':float(result.cost),'optimality':float(result.optimality)},

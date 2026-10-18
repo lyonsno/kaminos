@@ -24,6 +24,16 @@ outside this feature's established evidence. Radius tables are rough source
 proxy choices, not measurements of bone or muscle anatomy. A lower objective
 does not prove correct joint placement; inspect the three diagnostic views.
 
+For a fit-only protected-region diagnostic, repeat `--fixed-joint <source-name>`.
+These joint positions are removed from the optimization and remain exactly at
+the registered source positions; proxy radii and all other joint positions stay
+free. Unknown names and contradictory anchors fail visibly. Requested names
+and effective `fixedJointIndices` are recorded. Holding the axial joints fixed
+prevents invented backbone bends by construction, not by recovering anatomy:
+it deliberately leaves any source torso mismatch unresolved. This is an
+explicit diagnostic option, not the new default fit or a successful correction.
+Correction consumes the recorded fit and rejects this fit-only CLI option.
+
 `--stage correct --fit-report <completed-fit-report>` reuses that exact fit
 without editing the plan. It derives a surface-geodesic segment partition with
 the authenticated retained binder. Segment-local rigid transport preserves
