@@ -41,7 +41,15 @@ export const REPORT_SCHEMA = 'kaminos.test-run-report.v1';
 export const KNOWN_KINDS = new Set(['node', 'python', 'browser', 'helper', 'manual']);
 export const EXECUTED_KINDS = new Set(['node', 'python']);
 export const QUARANTINE_CLASSES = new Set(['untriaged', 'regression', 'stale-pin', 'environment', 'harness-defect']);
-export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME'];
+export const BROWSER_OVERRIDES = ['KAMINOS_CHROME', 'CHROME_BIN', 'CHROME', 'KAMINOS_SHARP_WEBGPU_CHROME', 'KAMINOS_HEADLESS_BROWSER'];
+// Tools that act on the operator's machine, which a test must never reach:
+// in the sandbox each is a stub first on PATH that records the call and
+// refuses it. KAMINOS_TEST_SANDBOX_STUBS adds more names (space-separated),
+// for tools that only exist on some machines.
+export const SANDBOX_SHIMS = Object.freeze(['gpu-greenroom', 'launchctl', 'wezterm', 'osascript', 'open', 'claude', 'codex', 'gemini', 'gh']);
+// Variables an agent pane sets that point at live machine services.
+const SANDBOX_SCRUBBED = /(_PTY_BROKER_|^WEZTERM_UNIX_SOCKET$)/;
+const SANDBOX_GITCONFIG = '[user]\n\tname = Kaminos Test\n\temail = kaminos-test@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n[core]\n\thooksPath = /dev/null\n';
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 const LATE_LAUNCH_SETTLE_MS = 2000;
 const EXIT_MARKER = /\n?kaminos-test-exit pid=(\d+) tid=(\d+) framework=(yes|no) tests=(started|not-started) code=(-?\d+)\n?/g;
@@ -594,7 +602,12 @@ export async function runSuite({
   // to a detached process. The CLI takes it from KAMINOS_LATE_LAUNCH_SETTLE_MS;
   // the runner's own contracts set 0 except where they test late launches.
   lateLaunchSettleMs = LATE_LAUNCH_SETTLE_MS,
+  // Child tests get a private HOME and stubs for the shop's tools; false
+  // gives them the real HOME and PATH. The CLI reads KAMINOS_TEST_SANDBOX=off.
+  sandbox = true,
+  sandboxStubs = (process.env.KAMINOS_TEST_SANDBOX_STUBS || '').split(/\s+/).filter(Boolean),
 } = {}) {
+  const sandboxShims = [...new Set([...SANDBOX_SHIMS, ...sandboxStubs.filter(name => /^[A-Za-z0-9._-]+$/.test(name))])];
   browser = browser || null;
   const settleRequested = lateLaunchSettleMs;
   const settleUsable = /^\d+$/.test(String(settleRequested ?? ''));
@@ -615,6 +628,10 @@ export async function runSuite({
   // A per-run stub with the log path baked in, so a child that scrubs its
   // environment still records the attempt when it reaches the stub.
   const browserStub = path.join(logsDir, 'browser-launch-stub.sh');
+  const sandboxDir = path.join(logsDir, 'sandbox');
+  const sandboxHome = path.join(sandboxDir, 'home');
+  const sandboxBin = path.join(sandboxDir, 'bin');
+  const sandboxLog = path.join(logsDir, 'sandbox-attempts.tsv');
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
@@ -624,12 +641,13 @@ export async function runSuite({
         unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
       platform: `${process.platform}-${process.arch}`, git: gitIdentity(root),
       browserStub: { path: browserStub, overrides: BROWSER_OVERRIDES, log: browserLog },
+      sandbox: sandbox ? { enabled: true, home: sandboxHome, bin: sandboxBin, shims: sandboxShims, log: sandboxLog, scrubbed: [] } : { enabled: false },
       browser: browser ? { executable: browser, realpath: null, source: 'KAMINOS_BROWSER', passedAs: 'KAMINOS_CHROME', version: null } : null,
       manifestSha256: null, quarantineSha256: null, dependencies: null, pythonDependencies: null },
     counts: { discovered: 0, executed: 0, passed: 0, knownFailures: 0, newFailures: 0, notRun: 0 },
     newFailures: [], knownFailures: [], signatureChanged: [], staleQuarantine: [],
     unclassified: [], invalid: [], invalidQuarantine: [], unmatchedSelectors: [],
-    uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [],
+    uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [], sandboxAttempts: [],
     orphans: { manifest: [], quarantine: [] }, notRun: [], results: [], warnings: [],
   };
   if (!settleUsable) report.warnings.push({ source: 'runner', test: null, message: `the late-launch settle ${JSON.stringify(settleRequested)} (KAMINOS_LATE_LAUNCH_SETTLE_MS) is not a whole number of milliseconds, so the default ${LATE_LAUNCH_SETTLE_MS} ms is used; set a whole number, or leave it unset` });
@@ -770,8 +788,27 @@ export async function runSuite({
       }
     }
     Object.assign(report.effective.pythonExecutable, { pathPrefixed: Boolean(pathPrefix), pathPrefix });
-    const childPath = pathPrefix ? [pathPrefix, inheritedEnv.PATH].filter(Boolean).join(path.delimiter) : inheritedEnv.PATH;
-    const childEnv = { ...inheritedEnv, ...(childPath === undefined ? {} : { PATH: childPath }), ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
+    let sandboxEnv = {};
+    let baseEnv = inheritedEnv;
+    if (sandbox) {
+      await fs.rm(sandboxDir, { recursive: true, force: true });
+      await fs.rm(sandboxLog, { force: true });
+      await fs.mkdir(sandboxBin, { recursive: true });
+      for (const dir of ['.config', '.cache', '.local/share', '.local/state']) await fs.mkdir(path.join(sandboxHome, dir), { recursive: true });
+      await fs.writeFile(path.join(sandboxHome, '.gitconfig'), SANDBOX_GITCONFIG);
+      const quotedSandboxLog = `'${sandboxLog.replace(/'/g, `'\\''`)}'`;
+      for (const name of sandboxShims) {
+        await fs.writeFile(path.join(sandboxBin, name), `#!/bin/sh\n# Stands in for ${name} while tools/test-runner.mjs runs tests: a test must not\n# reach the operator's real tools. Record the call and refuse it.\nprintf '%s\\t%s\\t%s\\n' "\${KAMINOS_TEST_RUNNER_TEST:-unknown}" '${name}' "$*" >> ${quotedSandboxLog}\necho "${name} blocked by the tools/test-runner.mjs sandbox" >&2\nexit 97\n`, { mode: 0o755 });
+      }
+      const scrubbed = Object.keys(inheritedEnv).filter(k => SANDBOX_SCRUBBED.test(k)).sort();
+      report.effective.sandbox.scrubbed = scrubbed;
+      baseEnv = Object.fromEntries(Object.entries(inheritedEnv).filter(([k]) => !SANDBOX_SCRUBBED.test(k)));
+      sandboxEnv = { HOME: sandboxHome, XDG_CONFIG_HOME: path.join(sandboxHome, '.config'), XDG_CACHE_HOME: path.join(sandboxHome, '.cache'),
+        XDG_DATA_HOME: path.join(sandboxHome, '.local/share'), XDG_STATE_HOME: path.join(sandboxHome, '.local/state'),
+        KAMINOS_TEST_RUNNER_SANDBOX_LOG: sandboxLog };
+    }
+    const childPath = [sandbox ? sandboxBin : null, pathPrefix, baseEnv.PATH].filter(Boolean).join(path.delimiter) || undefined;
+    const childEnv = { ...baseEnv, ...sandboxEnv, ...(childPath === undefined ? {} : { PATH: childPath }), ...Object.fromEntries(BROWSER_OVERRIDES.map(k => [k, browserStub])), KAMINOS_TEST_RUNNER_BROWSER_LOG: browserLog };
     // Browser-kind tests get the browser's real path, so a link cannot stand
     // in for the executable the report records.
     const browserEnv = browser ? { ...childEnv, KAMINOS_CHROME: report.effective.browser.realpath } : null;
@@ -788,6 +825,13 @@ export async function runSuite({
     if (existsSync(browserLog)) {
       report.browserLaunchAttempts = (await fs.readFile(browserLog, 'utf8')).trim().split('\n').filter(Boolean)
         .map(line => { const [file, pid, args] = line.split('\t'); return { file, pid: Number(pid), args }; });
+    }
+    // A sandbox attempt is a warning: the stub already refused the call, and
+    // under the gate rule a new check reports before it ever fails a run.
+    if (sandbox && existsSync(sandboxLog)) {
+      report.sandboxAttempts = (await fs.readFile(sandboxLog, 'utf8')).trim().split('\n').filter(Boolean)
+        .map(line => { const [file, tool, ...rest] = line.split('\t'); return { file, tool, args: rest.join('\t') }; });
+      for (const a of report.sandboxAttempts) report.warnings.push({ source: 'sandbox', test: a.file, message: `${a.file} tried to run ${a.tool}${a.args ? ` ${a.args}` : ''}; the sandbox refused it: a test must not reach the operator's real tools, so give the test its own fake` });
     }
     const invalidQuarantine = new Set(report.invalidQuarantine);
     for (const result of report.results) {
@@ -874,6 +918,7 @@ function summarize({ report, reportPath }) {
   // The browser line follows the counts line and any warnings.
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
   const shared = report.effective?.nodeModules?.linkTarget;
+  if (report.effective?.sandbox && report.effective.sandbox.enabled === false) lines.push("sandbox: off (KAMINOS_TEST_SANDBOX=off); tests see the real HOME and the shop's tools");
   if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}; unlink it first, then npm ci here` : `shared install at ${shared}; do not run npm ci or npm install here`}`);
   const settle = report.effective?.lateLaunchSettleMs;
   if (typeof settle === 'number' && settle < LATE_LAUNCH_SETTLE_MS) lines.push(`late-launch settle: ${settle} ms (KAMINOS_LATE_LAUNCH_SETTLE_MS; default ${LATE_LAUNCH_SETTLE_MS} ms); browser launches a test hands to a detached process after it exits may not be caught`);
@@ -991,7 +1036,7 @@ if (invokedAsMain) {
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const started = Date.now();
-  const result = await runSuite({ ...args, abortSignal: controller.signal, lateLaunchSettleMs: process.env.KAMINOS_LATE_LAUNCH_SETTLE_MS ?? LATE_LAUNCH_SETTLE_MS });
+  const result = await runSuite({ ...args, abortSignal: controller.signal, lateLaunchSettleMs: process.env.KAMINOS_LATE_LAUNCH_SETTLE_MS ?? LATE_LAUNCH_SETTLE_MS, sandbox: process.env.KAMINOS_TEST_SANDBOX !== 'off' });
   await appendRunLedger(result, { durationMs: Date.now() - started, runId, startWarning });
   console.log(summarize(result));
   process.exit(result.report.failurePhase === 'interrupted' ? 130 : result.ok ? 0 : 1);
