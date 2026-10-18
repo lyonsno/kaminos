@@ -19,7 +19,9 @@ const release=root=>root.traverse(m=>{if(m.isMesh){m.geometry.dispose();for(cons
 const matches=root=>{const s=root.userData?.kaminosSceneObject?.source;if(typeof s!=='string')return false;const u=new URL(s,'http://kaminos.local');return u.pathname==='/api/read'&&u.searchParams.get('root')==='generated-meshes'&&u.searchParams.get('path')===`${KILN_CASTER_SOURCE}.glb`;};
 export function createFireShadowCasters({scene,load=loadFireCaster}){
   let level='original',requested='original',generation=0,disposed=false,error=null,active=false;
-  const assets=new Map(),instances=new Map(),fingerprints=new WeakMap(),state={targets:0,originalTriangles:0,captureTriangles:0};
+  const assets=new Map(),instances=new Map(),fingerprints=new WeakMap(),bufferIds=new WeakMap(),state={targets:0,originalTriangles:0,captureTriangles:0};
+  let nextBufferId=0;
+  const bufferKey=a=>{if(!a)return null;if(!bufferIds.has(a))bufferIds.set(a,++nextBufferId);return [bufferIds.get(a),a.version,a.count];};
   const clear=()=>{for(const {wrapper}of instances.values()){wrapper.removeFromParent();wrapper.traverse(m=>{if(m.isMesh)m.material.dispose();});}instances.clear();};
   return {
     async setLevel(v){
@@ -37,7 +39,7 @@ export function createFireShadowCasters({scene,load=loadFireCaster}){
         if(meshes.some(m=>m.isSkinnedMesh||m.isInstancedMesh||m.morphTargetInfluences?.length))throw Error('fire caster substitution requires static geometry');
         if(!root.matrixWorld.elements.every(Number.isFinite)||root.matrixWorld.determinant()===0)throw Error('fire caster requires a finite invertible source transform');
         if(meshes.some(m=>(Array.isArray(m.material)?m.material:[m.material]).some(a=>a.transparent||a.opacity<1||a.alphaTest>0||a.displacementMap)))throw Error('fire-shadow-unsupported-caster: reduced source must remain opaque and undisplaced');
-        const key=JSON.stringify(meshes.map(m=>[m.uuid,m.geometry.uuid,m.geometry.attributes.position.version,m.geometry.index?.version,m.matrix.elements]));
+        const key=JSON.stringify(meshes.map(m=>[m.uuid,m.geometry.uuid,bufferKey(m.geometry.attributes.position),bufferKey(m.geometry.index),m.matrix.elements]));
         if(!fingerprints.has(root))fingerprints.set(root,key);if(fingerprints.get(root)!==key)throw Error('fire caster source geometry changed; choose original');
         const sides=new Set(meshes.flatMap(m=>(Array.isArray(m.material)?m.material:[m.material]).map(m=>m.side)));if(sides.size!==1)throw Error('fire caster source has mixed sidedness');
         let instance=instances.get(root);if(!instance){const wrapper=new THREE.Group(),proxy=assets.get(level).clone(true);proxy.traverse(m=>{if(m.isMesh)m.material=m.material.clone();});wrapper.matrixAutoUpdate=false;wrapper.add(proxy);instance={wrapper,proxy};instances.set(root,instance);}

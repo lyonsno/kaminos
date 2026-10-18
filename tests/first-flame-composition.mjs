@@ -4,7 +4,25 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from '../lib/three.core.js';
 import vm from 'node:vm';
+import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+
+test('missing saved reduced caster keeps original lighting and recovery controls mounted',async()=>{
+  const elements=new Map(),casters=createFireShadowCasters({scene:new THREE.Scene(),load:async()=>{throw Error('fire caster 10k unavailable: HTTP 404');}});
+  const consumer={setShadowCasterLevel:v=>casters.setLevel(v),debugState:()=>({casters:casters.debugState()}),dispose(){throw Error('usable original consumer must not be disposed');}};
+  const document={getElementById(id){if(!elements.has(id))elements.set(id,{hidden:true,value:'1',replaceChildren(){},parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
+  let mounted=false;
+  const context={URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
+    isFireLightFieldRoute:()=>true,renderingMode:'',readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
+    importedModule:{mountDistributedSceneRadiance(){return consumer;}},bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
+    createFireShadowSettings:()=>({operations:{},sync(){},mount(){mounted=true;}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
+  const start=source.indexOf('let sceneRadianceRouteTask='),end=source.indexOf('async function initKaminosVolumeRoute()',start);
+  vm.createContext(context);vm.runInContext(source.slice(start,end).replace(/await import\([^;]+\);/,'importedModule;'),context);
+  await context.syncSceneRadianceRoute(new URLSearchParams('volume_light_field_shared_source=1&volume_light_field_distributed=1&volume_light_field_hybrid=1&volume_light_field_hybrid_caster_level=10k'));
+  assert.equal(context.window.__kaminosSceneRadiance,consumer);assert.equal(mounted,true);assert.equal(elements.get('rendering-fire-shadows').hidden,false);
+  assert.equal(casters.debugState().requested,'10k');assert.equal(casters.debugState().level,'original');assert.match(casters.debugState().error,/HTTP 404/);
+  await consumer.setShadowCasterLevel('original');assert.equal(casters.debugState().error,null);casters.dispose();
+});
 
 test('late Add Flame passes the mounted opaque surface cache to the hybrid consumer',async()=>{
   const cache={},elements=new Map();let options;
