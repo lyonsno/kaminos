@@ -91,7 +91,48 @@ def capsule_values(points,joints,parents,radii):
     return sdf[rows,chosen],chosen,t[rows,chosen],offset[rows,chosen]/np.maximum(distance[rows,chosen,None],1e-12)
 
 
-def fit_skeleton(points,area,joints,parents,radii,*,voxel_size):
+def quadruped_foot_targets(points,area,joints,names):
+    """Provisional Y-up/X-lateral/-Z-front assay correspondence.
+
+    Four separated, lower-surface patches supply distal position evidence.
+    This is deliberately not admitted for crossed/fused limbs or another axis
+    convention. Quantiles choose geometric features, not a data retention cap:
+    all surface cells still contribute to the independent capsule objective.
+    """
+    points=np.asarray(points,float);area=np.asarray(area,float);joints=np.asarray(joints,float)
+    index={n:i for i,n in enumerate(names)}
+    hips=[index['hindlimb-'+s+'-hip'] for s in ['left','right']]
+    shoulders=[index['forelimb-'+s+'-shoulder'] for s in ['left','right']]
+    center_x=np.mean(joints[hips,0]);center_z=np.mean(joints[hips+shoulders,2])
+    result=[]
+    for limb,roots in [('forelimb',shoulders),('hindlimb',hips)]:
+        for side,root in zip(['left','right'],roots):
+            on_side=(points[:,0]-center_x)*(joints[root,0]-center_x)>0
+            front=points[:,2]<center_z
+            selected=on_side & (front if limb=='forelimb' else ~front) & (area>0)
+            if not selected.any(): raise ValueError('missing separated foot region '+limb+'-'+side)
+            region=points[selected];mass=area[selected]
+            lower=region[:,1]<(joints[root,1]+region[:,1].min())/2
+            region=region[lower];mass=mass[lower]
+            if not len(region):raise ValueError('missing lower limb surface')
+            order=np.argsort(region[:,1]); cumulative=np.cumsum(mass[order])/mass.sum()
+            threshold=region[order[np.searchsorted(cumulative,.08)],1]
+            patch=region[region[:,1]<=threshold];pmass=mass[region[:,1]<=threshold]
+            centroid=np.average(patch,axis=0,weights=pmass)
+            # Both endpoints stay on this measured paw patch. Source toe lengths
+            # remain priors, not grounds for putting toes below the real paw.
+            for end in ['mtp','toe-tip']:
+                name=f'{limb}-{side}-{end}'
+                if name not in index:raise ValueError('missing semantic distal joint '+name)
+                target=centroid.copy()
+                if end=='toe-tip':target[2]=patch[:,2].min()
+                result.append({'joint':index[name],'name':name,'target':target.tolist(),
+                    'surfaceSupport':len(patch),'surfaceArea':float(pmass.sum()),
+                    'authority':'derived quadrant/lower-surface patch; provisional foot correspondence'})
+    return result
+
+
+def fit_skeleton(points,area,joints,parents,radii,*,voxel_size,anchors=None):
     """Regularized capsule-union fit; every positive-area cell contributes.
 
     SciPy is an offline-only optional tool dependency. No tighter evaluation
@@ -122,6 +163,12 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size):
     radius_weight=np.sqrt(.02/e)
     prior_weight=np.sqrt(.004/n)/scale
     initial=np.r_[joints.ravel(),initial_radius]
+    anchors=anchors or []
+    anchor_ids=np.array([a['joint'] for a in anchors],dtype=int)
+    anchor_targets=np.array([a['target'] for a in anchors],dtype=float).reshape(-1,3)
+    if ((anchor_ids<0).any() or (anchor_ids>=n).any() or not np.isfinite(anchor_targets).all()):
+        raise ValueError('invalid derived anchors')
+    anchor_weight=np.sqrt(1.5/max(len(anchors),1))
 
     def evaluate(x,jac=False):
         q=x[:3*n].reshape(n,3); r=x[3*n:]
@@ -135,7 +182,7 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size):
         residual=np.r_[sdf*sw,excess*coverage_weight,
             (length-initial_length)*length_weight,
             (r-initial_radius)*radius_weight,
-            ((q-joints)*prior_weight).ravel()]
+            ((q-joints)*prior_weight).ravel(),((q[anchor_ids]-anchor_targets)*anchor_weight).ravel()]
         if not jac: return residual
         rr=[]; cc=[]; vv=[]
         def add(rows,cols,values):
@@ -159,6 +206,8 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size):
         add(offset+np.arange(e),3*n+np.arange(e),np.full(e,radius_weight))
         offset+=e
         add(offset+np.arange(3*n),np.arange(3*n),np.full(3*n,prior_weight))
+        offset+=3*n
+        add(offset+np.arange(3*len(anchors)),(3*anchor_ids[:,None]+np.arange(3)).ravel(),np.full(3*len(anchors),anchor_weight))
         return coo_array((vv,(rr,cc)),shape=(len(residual),len(x))).tocsr()
 
     def metrics(x):
@@ -177,5 +226,6 @@ def fit_skeleton(points,area,joints,parents,radii,*,voxel_size):
             'solver':{'success':bool(result.success),'status':int(result.status),'message':result.message,
                       'evaluations':int(result.nfev),'cost':float(result.cost),'optimality':float(result.optimality)},
             'authority':'provisional geometric correspondence; no authored joint or containment claim',
+            'anchors':anchors,
             'regularization':{'coverage':.35,'length':.08,'radius':.02,'position':.004,
                               'radiusRatios':[.35,2.5]}}

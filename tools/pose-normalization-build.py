@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 import numpy as np
 from PIL import Image,ImageDraw
-from pose_normalization import tree,fit_skeleton,canonical_joints,deform_points
+from pose_normalization import tree,fit_skeleton,canonical_joints,deform_points,quadruped_foot_targets
 
 
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -112,6 +112,11 @@ def run(args):
         records=[plan['frame'],plan['radii'],*plan['binderFiles'],*[c['case'] for c in plan['casts']]]
         if args.stage=='correct': records.append(plan['fitReport'])
         protected=[plan_path,*[Path(r['path']).resolve() for r in records]]
+        for case in plan['casts']:
+            manifest_path=Path(case['case']['path']).resolve()
+            manifest=json.loads(manifest_path.read_text())
+            for name in manifest.get('assets',{}):
+                protected.append((manifest_path.parent/name).resolve())
         # Validate the report independently, even when the output path is bad.
         safe_report=not report_path.is_symlink() and not (report_path.exists() and report_path.stat().st_nlink>1) and report_path.resolve() not in protected
         out,report_path=protected_destination(args.out,args.report,protected)
@@ -149,8 +154,9 @@ def run(args):
             if manifest['bones']!=bones: raise ValueError('case/frame identity differs')
             leaf=out/slug;leaf.mkdir()
             if args.stage=='fit':
-                fit=fit_skeleton(points,surface_area(points,triangles),rest,parents,radii,voxel_size=args.voxel_size)
-                if not fit['solver']['success']: raise ValueError('fit did not converge: '+str(fit['solver']))
+                mass=surface_area(points,triangles)
+                anchors=quadruped_foot_targets(points,mass,rest,names)
+                fit=fit_skeleton(points,mass,rest,parents,radii,voxel_size=args.voxel_size,anchors=anchors)
                 fitted=fit['joints']
                 fit['names']=names;fit['parents']=parents
                 fit['segmentLengthRatios']= (np.linalg.norm(fitted[1:]-fitted[parents[1:]],axis=1)/np.linalg.norm(rest[1:]-rest[parents[1:]],axis=1)).tolist()
@@ -158,6 +164,7 @@ def run(args):
                 diagnostic(leaf/'fit-projections.png',points,rest,fitted,parents)
                 report['casts'].append({'slug':slug,'fit':record(leaf/'fit.json'),'diagnostic':record(leaf/'fit-projections.png'),
                     'before':fit['before'],'after':fit['after'],'solver':fit['solver']})
+                if not fit['solver']['success']: raise ValueError('fit did not converge: '+str(fit['solver']))
             else:
                 fit_row=next(r for r in fit_report['casts'] if r['slug']==slug)
                 fit=json.loads(authenticate(fit_row['fit']).read_text());fitted=np.array(fit['joints'])

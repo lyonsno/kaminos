@@ -1,13 +1,56 @@
 # kaminos-test: python
 import sys
 import unittest
+import argparse
+import hashlib
+import importlib.util
+import json
+import tempfile
 from pathlib import Path
 import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'tools'))
-from pose_normalization import rotation_between, canonical_joints, deform_points, fit_skeleton
+from pose_normalization import rotation_between, canonical_joints, deform_points, fit_skeleton, quadruped_foot_targets
+spec=importlib.util.spec_from_file_location('pose_build',Path(__file__).resolve().parents[1]/'tools/pose-normalization-build.py')
+build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
 
 
 class PoseNormalizationTests(unittest.TestCase):
+    def test_failure_report_cannot_overwrite_retained_case_asset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);case=root/'source';case.mkdir()
+            asset=case/'rest.bin';asset.write_bytes(b'preserve-original')
+            manifest=case/'manifest.json';manifest.write_text(json.dumps({'assets':{'rest.bin':{'sha256':build.sha(asset)}}}))
+            frame=root/'frame.json';frame.write_text('{}')
+            plan=root/'plan.json';plan.write_text(json.dumps({'schema':'kaminos.pose-normalization-inputs.v1',
+                'frame':build.record(frame),'radii':build.record(frame),'binderFiles':[],
+                'casts':[{'slug':'a','case':build.record(manifest)},{'slug':'b','case':build.record(manifest)}]}))
+            args=argparse.Namespace(plan=str(plan),out=str(root/'derived'),report=str(asset),stage='fit',voxel_size=.1)
+            with self.assertRaises(Exception):build.run(args)
+            self.assertEqual(asset.read_bytes(),b'preserve-original','failure publication overwrote retained source bytes')
+
+    def test_failed_input_authentication_leaves_durable_failure_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);source=root/'source.json';source.write_text('{}')
+            bad={'path':str(source),'sha256':'0'*64}
+            plan=root/'plan.json';plan.write_text(json.dumps({'schema':'kaminos.pose-normalization-inputs.v1',
+                'frame':bad,'radii':bad,'binderFiles':[], 'casts':[{'slug':'a','case':bad},{'slug':'b','case':bad}]}))
+            args=argparse.Namespace(plan=str(plan),out=str(root/'derived'),report=str(root/'report.json'),stage='fit',voxel_size=.1)
+            with self.assertRaisesRegex(ValueError,'digest mismatch'):build.run(args)
+            report=json.loads((root/'report.json').read_text())
+            self.assertEqual(report['status'],'failed');self.assertEqual(report['phase'],'authentication')
+    def test_foot_correspondences_follow_four_surface_patches(self):
+        names=['pelvis','hindlimb-left-hip','hindlimb-right-hip','forelimb-left-shoulder','forelimb-right-shoulder']
+        q=[[0,1,0],[-.4,1,0],[.4,1,0],[-.4,1,-2],[.4,1,-2]]
+        for limb in ['forelimb','hindlimb']:
+            for side in ['left','right']:
+                for end in ['mtp','toe-tip']:names.append(f'{limb}-{side}-{end}');q.append([0,-2,0])
+        points=np.array([[x+dx,y,z+dz] for x in [-.4,.4] for z in [-2,0] for y in np.linspace(0,.6,13) for dx,dz in [(-.05,0),(.05,0),(0,-.05),(0,.05)]])
+        anchors=quadruped_foot_targets(points,np.ones(len(points)),np.array(q),names)
+        self.assertEqual(len(anchors),8)
+        for a in anchors:
+            self.assertLess(abs(a['target'][1]),.1)
+            self.assertLess(abs(abs(a['target'][0])-.4),.02)
+            self.assertGreater(a['surfaceSupport'],0)
     def test_rotation_including_opposite_and_zero_rejection(self):
         for a, b in [([0,1,0],[1,0,0]), ([0,1,0],[0,-1,0])]:
             r = rotation_between(a,b)
