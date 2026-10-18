@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>loading</title>
+<style>html,body{margin:0;background:#202020;font:12px monospace;color:#eee}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js","three/addons/":"/node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script>addEventListener("error",e=>{document.title="error";window.__error=String(e.message);document.body.insertAdjacentHTML("beforeend","<pre style=color:red>"+e.message+"</pre>")});addEventListener("unhandledrejection",e=>{document.title="error";window.__error=String(e.reason&&e.reason.stack||e.reason);document.body.insertAdjacentHTML("beforeend","<pre style=color:red>"+window.__error+"</pre>")});</script>
+<script type="module">
+// Image-space error of a stored LOD level against its reference (normally the hero).
+//   ?ref=<sha256>&level=<sha256>   meshes in generated-meshes, checked against their sha256
+//   [&res=512] [&same=0.01] [&show=all|0,4,13] [&panel=192]
+// Both are rendered identically from 26 directions (cube faces, edges, corners) with a 30 degree
+// perspective camera framed on the reference bounds, no anti-aliasing:
+//   geometry pass: float target, linear view depth + view-space shading normal (the mesh's own
+//                  normals, as lighting uses them)
+//   albedo pass:   unlit base colour texture, rendered at 2x and box-downsampled
+// lod-image-compare.mjs turns each view into separate channels. The page draws, per shown view,
+// reference | level | coverage (red reference only, blue level only) | depth error (blue 0 .. red 2%
+// of diagonal) | normal error (0 .. 45 deg; magenta where a normal is unusable) | albedo error (0 .. 0.25), white where the level shows
+// another surface, and sets window.__result; document.title becomes 'done' or 'error'.
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {SCHEMA, compareView, aggregate, viewDirections} from '/lod-image-compare.mjs';
+const q = new URLSearchParams(location.search), res = +(q.get('res') || 512), sameSurface = +(q.get('same') || 0.01), panel = +(q.get('panel') || 192);
+const refSha = q.get('ref'), levelSha = q.get('level');
+if (!/^[a-f0-9]{64}$/.test(refSha || '') || !/^[a-f0-9]{64}$/.test(levelSha || '')) throw Error('ref and level must be sha256 of meshes in generated-meshes');
+const renderer = new THREE.WebGLRenderer({antialias: false, preserveDrawingBuffer: true}); renderer.setPixelRatio(1);
+const gl = renderer.getContext(), info = gl.getExtension('WEBGL_debug_renderer_info');
+const route = {three: THREE.REVISION, glVersion: gl.getParameter(gl.VERSION), glRenderer: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), userAgent: navigator.userAgent};
+if (!gl.getExtension('EXT_color_buffer_float')) throw Error('float render targets unavailable');
+const load = async sha => {
+  const response = await fetch(`/api/read?root=generated-meshes&path=${sha}.glb`);
+  if (!response.ok) throw Error(`mesh ${sha} not readable (HTTP ${response.status})`);
+  const bytes = await response.arrayBuffer();
+  const got = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+  if (got !== sha) throw Error(`mesh ${sha} read back with sha256 ${got}`);
+  return (await new GLTFLoader().parseAsync(bytes, '')).scene;
+};
+const [ref, lvl] = await Promise.all([load(refSha), load(levelSha)]);
+const box = new THREE.Box3().setFromObject(ref), center = box.getCenter(new THREE.Vector3()), diagonal = box.getSize(new THREE.Vector3()).length(), r = diagonal / 2;
+const geomMat = new THREE.ShaderMaterial({side: THREE.DoubleSide,
+  vertexShader: `varying vec3 vView; varying vec3 vNormal; void main(){ vec4 v = modelViewMatrix * vec4(position,1.0); vView = v.xyz; vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * v; }`,
+  fragmentShader: `varying vec3 vView; varying vec3 vNormal; void main(){ gl_FragColor = vec4(-vView.z, normalize(vNormal) * 0.5 + 0.5); }`});
+const normalsComputed = [];
+const geomOf = (root, name) => { const s = new THREE.Scene(), c = root.clone(true); s.overrideMaterial = geomMat;
+  c.traverse(m => { if (m.isMesh && !m.geometry.attributes.normal) { m.geometry.computeVertexNormals(); normalsComputed.push(name); } }); s.add(c); return s; };
+const albedoOf = root => { const s = new THREE.Scene(), c = root.clone(true);
+  c.traverse(m => { if (m.isMesh) m.material = new THREE.MeshBasicMaterial({map: m.material.map ?? null, color: m.material.color ?? new THREE.Color(1, 1, 1), side: THREE.DoubleSide}); });
+  s.add(c); return s; };
+const scenes = {reference: {geom: geomOf(ref, 'reference'), albedo: albedoOf(ref)}, level: {geom: geomOf(lvl, 'level'), albedo: albedoOf(lvl)}};
+const geomTarget = new THREE.WebGLRenderTarget(res, res, {type: THREE.FloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
+const albedoTarget = new THREE.WebGLRenderTarget(res * 2, res * 2, {type: THREE.UnsignedByteType, colorSpace: THREE.SRGBColorSpace});
+function render(set, cam) {
+  const g = new Float32Array(res * res * 4), a2 = new Uint8Array(res * res * 16), a = new Float32Array(res * res * 3);
+  renderer.setRenderTarget(geomTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(set.geom, cam); renderer.readRenderTargetPixels(geomTarget, 0, 0, res, res, g);
+  renderer.setRenderTarget(albedoTarget); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(set.albedo, cam); renderer.readRenderTargetPixels(albedoTarget, 0, 0, res * 2, res * 2, a2);
+  for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) for (let c = 0; c < 3; c++) { let s = 0;
+    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) s += a2[((y * 2 + dy) * res * 2 + (x * 2 + dx)) * 4 + c]; a[(y * res + x) * 3 + c] = s / 4 / 255; }
+  renderer.setRenderTarget(null); return {g, a};
+}
+const dirs = viewDirections(), show = (q.get('show') || 'all') === 'all' ? dirs.map((_, i) => i) : q.get('show').split(',').map(Number);
+const canvas = document.createElement('canvas'); canvas.width = panel * 6; canvas.height = panel * show.length; document.body.appendChild(canvas);
+const ctx = canvas.getContext('2d'), perView = [];
+const heat = t => { const c = new THREE.Color().setHSL(0.66 * (1 - Math.min(1, t)), 1, 0.5); return [c.r * 255, c.g * 255, c.b * 255]; };
+for (let v = 0; v < dirs.length; v++) {
+  const dir = new THREE.Vector3(...dirs[v]), cam = new THREE.PerspectiveCamera(30, 1, r / 20, r * 20);
+  cam.position.copy(center).addScaledVector(dir, r / Math.sin(THREE.MathUtils.degToRad(15)) * 1.05);
+  cam.up.set(0, Math.abs(dir.y) > 0.9 ? 0 : 1, Math.abs(dir.y) > 0.9 ? 1 : 0); cam.lookAt(center); cam.updateMatrixWorld();
+  const R = render(scenes.reference, cam), L = render(scenes.level, cam), row = show.indexOf(v);
+  const {view, maps} = compareView({reference: R, level: L, res, diagonal, sameSurface, maps: row >= 0});
+  perView.push({direction: dirs[v].map(x => +x.toFixed(4)), ...view});
+  if (row < 0) continue;
+  const imgs = Array.from({length: 6}, () => new ImageData(res, res));
+  for (let p = 0; p < res * res; p++) {
+    const o = ((res - 1 - Math.floor(p / res)) * res + p % res) * 4, cov = maps.coverage[p], put = (k, rgb) => imgs[k].data.set([...rgb, 255], o);
+    put(0, cov === 1 || cov === 2 ? [R.a[p * 3] * 255, R.a[p * 3 + 1] * 255, R.a[p * 3 + 2] * 255] : [32, 32, 32]);
+    put(1, cov === 1 || cov === 3 ? [L.a[p * 3] * 255, L.a[p * 3 + 1] * 255, L.a[p * 3 + 2] * 255] : [32, 32, 32]);
+    put(2, [[32, 32, 32], [80, 80, 80], [255, 60, 60], [60, 140, 255]][cov]);
+    put(3, cov === 1 ? heat(maps.depth[p] / 0.02) : [12, 12, 30]);
+    const otherSurface = cov === 1 && maps.depth[p] > sameSurface;
+    put(4, otherSurface ? [255, 255, 255] : cov !== 1 ? [12, 12, 30] : Number.isNaN(maps.normal[p]) ? [255, 0, 255] : heat(maps.normal[p] / 45));
+    put(5, otherSurface ? [255, 255, 255] : cov === 1 ? heat(maps.albedo[p] / 0.25) : [12, 12, 30]);
+  }
+  for (let k = 0; k < 6; k++) { const tmp = document.createElement('canvas'); tmp.width = tmp.height = res; tmp.getContext('2d').putImageData(imgs[k], 0, 0); ctx.drawImage(tmp, k * panel, row * panel, panel, panel); }
+  ctx.fillStyle = '#fff'; ctx.font = '11px monospace';
+  ctx.fillText(`view ${v} [${perView[v].direction.map(x => x.toFixed(2))}]  sil ${(view.silhouetteMismatch * 100).toFixed(1)}%  other-surface ${(view.differentSurface * 100).toFixed(1)}%  depth p95 ${(view.depth.p95 * 100).toFixed(2)}%  normal p95 ${view.normalDegrees.p95.toFixed(0)}deg mean ${view.normalDegrees.mean.toFixed(0)}deg  albedo p95 ${view.albedo.p95.toFixed(3)}`, 4, row * panel + 13);
+}
+// A reference that never reaches the image means a broken render, not a perfect level.
+if (!perView.some(v => v.referenceCoverage > 0)) throw Error('reference covers no pixel in any view');
+window.__result = {schema: SCHEMA, reference: {sha256: refSha}, level: {sha256: levelSha}, route, normalsComputed,
+  settings: {resolution: res, views: dirs.length, fovDegrees: 30, albedoSupersample: 2, antialias: false, sameSurface, normals: 'shading'},
+  diagonal, aggregate: aggregate(perView), perView, shownViews: show};
+document.title = 'done';
+</script></body></html>
