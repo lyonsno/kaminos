@@ -12550,7 +12550,7 @@ async function initScene() {
       idPass,glance,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
       // The fire and water proxies (Proxy Preview) a sub's own camera can draw: held while a sub looks, read from their own state.
       proxies:window.kaminosProxyPreview?{layers:window.kaminosProxyPreview.layers,require:source=>window.kaminosProxyPreview.require(source),
-       states:()=>({fire:{present:!!volumePrototype&&(volumePrototype.isActive?.()??true),visible:isSceneItemVisible('flame-field'),layer:window.kaminosFireProxyDebugState?.().layer??null},
+       states:()=>({fire:{present:!!volumePrototype&&(volumePrototype.isActive?.()??true),visible:isSceneItemVisible('flame-field'),fieldGeneration:volumePrototype?.getResidualFieldGeneration?.()??null,layer:window.kaminosFireProxyDebugState?.().layer??null},
         water:{present:!!localLiquidHost,visible:isSceneItemVisible('water-field'),layer:window.kaminosWaterProxyDebugState?.().layer??null}})}:null,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera; watching() reports a watch in progress.

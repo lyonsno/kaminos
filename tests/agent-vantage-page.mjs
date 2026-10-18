@@ -845,8 +845,8 @@ function fakeIdPass(entries, {drawnAt = null} = {}) {
   const numberOf = object => { if (!numbers.has(object)) { objects.push(object); numbers.set(object, objects.length); } return numbers.get(object); };
   return {
     calls,
-    draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false}) {
-      calls.push({optics, width, height, hide, region, depth});
+    draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false, withoutLayers = []}) {
+      calls.push({optics, width, height, hide, region, depth, withoutLayers});
       const [x0, y0, w, h] = region, ids = new Uint16Array(w * h), instances = new Uint16Array(w * h), depths = new Float32Array(w * h), drawn = new Set();
       const view = new THREE.Matrix4().fromArray(optics.viewInverse);
       const shown = entries().filter(entry => !hide.includes(entry.id)).map(entry => entry.object);
@@ -2109,4 +2109,71 @@ test('the page holds each proxy once while any sub view needs it, draws the draw
   assert.deepEqual(shot.pickMap.proxies, ['fire'], 'and its pick map records the proxy drawn outside it');
   await page.vantage.run('live', {on: false});
   assert.deepEqual(released.sort(), ['fire', 'water'], 'no sub looking: nothing held');
+});
+
+
+test('a proxy source whose snapshot belongs to an earlier fire field is not drawn, but waits for a current one', () => {
+  const {proxyStatus} = vantage;
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: 2, layer: {visible: true, count: 30, snapshotFieldGeneration: 1}}), 'awaiting-snapshot');
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: 2, layer: {visible: true, count: 30, snapshotFieldGeneration: 2}}), 'drawn');
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: null, layer: {visible: true, count: 30, snapshotFieldGeneration: 1}}), 'drawn', 'a field without generations is not compared');
+});
+
+test('the sub\'s pictures set every proxy layer bit themselves, and its pick maps draw no proxy at all', async () => {
+  const states = {fire: {present: true, visible: false, layer: {visible: true, count: 40}}, water: {present: true, visible: true, layer: {visible: true, count: 9}}};
+  const proxies = {layers: {fire: 4, water: 3}, require: () => () => {}, states: () => structuredClone(states)};
+  const drawn = [];
+  const glance = {draw(options) { drawn.push(options); return {ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})}; }};
+  const page = installedPage({subs: [BEBOP], glance, proxies});
+  const shot = await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.deepEqual(drawn.at(-1).layers, [3], 'water shown and drawn');
+  assert.deepEqual([...drawn.at(-1).withoutLayers].sort(), [3, 4], 'every proxy bit cleared first, so a hidden fire stays out whatever the operator\'s view shows');
+  assert.deepEqual([...page.idPass.calls.at(-1).withoutLayers].sort(), [3, 4], 'the sub\'s pick map draws no proxy');
+  assert.equal(shot.proxies.fire, 'hidden');
+  await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.5]});
+  assert.deepEqual(page.idPass.calls.at(-1).withoutLayers, [], 'an operator pick keeps the operator\'s own view, proxies included');
+});
+
+test('a glance clears inherited proxy bits before enabling the ones it draws', async () => {
+  const {createGlance} = await import('../agent-vantage-glance.mjs');
+  const W = await import('../lib/three.webgpu.js');
+  let seenMask = null;
+  const renderer = {coordinateSystem: W.WebGPUCoordinateSystem, toneMapping: 0, outputColorSpace: 'srgb', reversedDepthBuffer: false,
+    getRenderTarget: () => null, getMRT: () => null, autoClear: true, setMRT() {}, setRenderTarget() {},
+    render(scene, camera) { seenMask ??= camera.layers.mask; }, readRenderTargetPixelsAsync: async () => new Uint8Array(256 * 4)};
+  const glance = createGlance({THREE: W, TSL: W.TSL, renderer, scene: new W.Scene(), cameraLayers: () => (1 | (1 << 3) | (1 << 4))});
+  const optics = {projection: new W.Matrix4().toArray(), viewInverse: new W.Matrix4().toArray(), near: 0.1, far: 10, coordinateSystem: W.WebGPUCoordinateSystem};
+  try { glance.draw({optics, width: 4, height: 4, layers: [3], withoutLayers: [3, 4]}); } catch { /* the stand-in renderer stops at the output stage */ }
+  assert.equal(seenMask, 1 | (1 << 3), 'the scene is drawn with layer 4 cleared and layer 3 enabled');
+});
+
+test('a glance that waits for a proxy draws from where the sub is after the wait, and stops if the sub is gone', async () => {
+  const {state, host} = await launched();
+  let t = 0, statuses = {fire: 'awaiting-snapshot', water: 'absent'}, releases = 0;
+  const renders = [];
+  host.now = () => t;
+  host.holdProxies = () => () => { releases++; };
+  host.proxyStatuses = () => ({...statuses});
+  host.renderView = options => { renders.push(options); return {proxies: {...statuses}, ready: Promise.resolve({canvas: {}, width: options.width, height: options.height})}; };
+  host.sleep = async ms => { t += ms; state.cameras[0].transform.position[0] = 10; statuses = {...statuses, fire: 'drawn'}; };
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(shot.view.position[0], 10, 'the view is the sub\'s pose when it was drawn');
+  assert.equal(shot.sub.pose.position[0], 10);
+  statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  host.sleep = async ms => { t += ms; state.cameras.length = 0; };
+  await assert.rejects(() => createVantagePilot(host).run('glance', {map: false, maxSize: 64}), error => error.phase === 'no-sub');
+  assert.equal(releases, 2, 'the hold is let go either way');
+});
+
+test('each frame records which proxy snapshot it drew, so a strip shows whether the flame moved on', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  let tick = 100;
+  host.holdProxies = () => () => {};
+  host.proxyStatuses = () => ({fire: 'drawn', water: 'absent'});
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {fire: 'drawn', water: 'absent'}, proxySnapshots: {fire: {writeTick: (tick += 16), fieldGeneration: 1}}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.proxySnapshots.fire.writeTick), [116, 132]);
+  assert.equal(strip.proxySnapshotsSeen.fire, 2, 'two different flame snapshots across the strip');
 });

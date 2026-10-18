@@ -24,9 +24,13 @@ export const PROXY_WARMUP_MS = 2000;
 // A proxy source at a draw: 'absent' (no fire or water in the scene), 'hidden'
 // (hidden in the scene), 'awaiting-snapshot' (its proxy holds nothing yet) or
 // 'drawn' (its proxy layer is visible and holds a snapshot).
+// A layer still holding a snapshot of an earlier fire field (the field was
+// rebuilt and the viewport has not yet reconciled) is awaiting a current one.
 export function proxyStatus(state) {
   if (!state?.present) return 'absent';
   if (!state.visible) return 'hidden';
+  const field = state.fieldGeneration ?? null, held = state.layer?.snapshotFieldGeneration ?? null;
+  if (field != null && held != null && field !== held) return 'awaiting-snapshot';
   return state.layer?.visible && state.layer.count > 0 ? 'drawn' : 'awaiting-snapshot';
 }
 const HIDDEN = 'The Kaminos tab is hidden, and browsers stop drawing hidden tabs. Bring it to the front; it can sit in its own window.';
@@ -243,13 +247,14 @@ export function createVantagePilot(host) {
   // first waiting a little for a proxy that has no snapshot yet (a fire proxy
   // publishes one every few simulation steps); one taken by a watch or the live
   // view, which hold them throughout, does not wait.
-  async function glanceOf(record, {maxSize, depth, phase, held = false}) {
+  // The sub is read as it is when drawn, after any wait.
+  async function glanceOf(pilot, {maxSize, depth, phase, held = false}) {
     const release = held ? null : host.holdProxies?.() ?? null;
     try {
       if (release) {
         for (const until = host.now() + PROXY_WARMUP_MS; Object.values(host.proxyStatuses?.() ?? {}).includes('awaiting-snapshot') && host.now() < until;) await host.sleep(100);
       }
-      return await drawGlance(record, {maxSize, depth, phase});
+      return await drawGlance(requireSub(pilot), {maxSize, depth, phase});
     } finally { release?.(); }
   }
   async function drawGlance(record, {maxSize, depth, phase}) {
@@ -260,9 +265,10 @@ export function createVantagePilot(host) {
     try { drawn = host.renderView({optics, width, height, hide}); }
     catch (error) { fail(phase, `The sub's view could not be drawn: ${error?.message || error}`); }
     // What each proxy source was at the draw, and so which are drawn outside the pick map.
-    const proxies = drawn.proxies ?? null, outside = Object.entries(proxies ?? {}).filter(([, status]) => status === 'drawn').map(([source]) => source);
+    const proxies = drawn.proxies ?? null, proxySnapshots = drawn.proxySnapshots ?? null;
+    const outside = Object.entries(proxies ?? {}).filter(([, status]) => status === 'drawn').map(([source]) => source);
     if (host.drawIds) {
-      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true, proxies: outside}); }
+      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true, proxies: outside, withoutProxies: true}); }
       catch (error) { drawError = error?.message || String(error); }
     }
     let shot;
@@ -270,7 +276,7 @@ export function createVantagePilot(host) {
     catch (error) { fail(phase, `The sub's view could not be read back: ${error?.message || error}`); }
     const item = {drawing, drawError};
     await withPickMaps({shots: [item]});
-    return {view, sub, ratio, optics, seen, shot, item, proxies};
+    return {view, sub, ratio, optics, seen, shot, item, proxies, proxySnapshots};
   }
 
   // An event's detail is carried only when it is plain data that copies as
@@ -409,13 +415,14 @@ export function createVantagePilot(host) {
     // same task with the same matrices. It shows what the scene renderer draws
     // and says what it leaves out.
     async glance({pilot, maxSize, annotate, map}) {
-      const record = requireSub(pilot);
+      requireSub(pilot);
       if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
-      const {view, sub, ratio, optics, seen, shot, item, proxies} = await glanceOf(record, {maxSize, depth: true, phase: 'glance'});
+      const {view, sub, ratio, optics, seen, shot, item, proxies, proxySnapshots} = await glanceOf(pilot, {maxSize, depth: true, phase: 'glance'});
+      const record = subRecord(pilot) ?? {label: sub.label, id: sub.id};
       const images = withMap(picture('glance', shot, annotate, seen), map);
       host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub, view,
-        aspect: ratio, naming: 'effective-camera', optics, ...describeProxies(proxies), ...(proxies ? {proxies} : {}),
+        aspect: ratio, naming: 'effective-camera', optics, ...describeProxies(proxies), ...(proxies ? {proxies} : {}), ...(proxySnapshots ? {proxySnapshots} : {}),
         image: {width: shot.width, height: shot.height}, images, objects: seen, ...pickMapOf(item), capturedAt: new Date(host.now()).toISOString()};
     },
 
@@ -473,7 +480,7 @@ export function createVantagePilot(host) {
       };
       const shots = [];
       const draw = async () => {
-        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch', held: true})});
+        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(pilot, {maxSize, depth, phase: 'watch', held: true})});
         mine.frames = shots.length;
       };
       try {
@@ -517,7 +524,11 @@ export function createVantagePilot(host) {
         aspect: first.ratio, naming: 'effective-camera', ...describeProxies(first.proxies, first.proxies ? shots.map(item => item.proxies) : null),
         image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
         frames: shots.map(item => ({index: item.index, atMs: item.atMs, image: {width: item.shot.width, height: item.shot.height}, view: item.view, optics: item.optics,
-          ...pickMapOf(item.item), objects: item.seen, ...(item.proxies ? {proxies: item.proxies, ...describeProxies(item.proxies)} : {})})),
+          ...pickMapOf(item.item), objects: item.seen, ...(item.proxies ? {proxies: item.proxies, ...describeProxies(item.proxies)} : {}),
+          ...(item.proxySnapshots ? {proxySnapshots: item.proxySnapshots} : {})})),
+        // How many different snapshots of each proxy the strip drew: one means the flame or water held still in it.
+        ...(first.proxies ? {proxySnapshotsSeen: Object.fromEntries(['fire', 'water'].map(source => [source,
+          new Set(shots.map(item => item.proxySnapshots?.[source]).filter(Boolean).map(snapshot => `${snapshot.fieldGeneration ?? ''}:${snapshot.writeTick}`)).size]))} : {}),
         capturedAt: new Date(started).toISOString()};
     },
 
@@ -1272,11 +1283,17 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     const states = proxies.states();
     return {fire: proxyStatus(states.fire), water: proxyStatus(states.water)};
   } : null;
-  // A view from a sub's camera sees the proxy layers of the sources drawn now.
+  // A view from a sub's camera sets every proxy layer bit itself: it sees the
+  // proxies drawn now and no other, whatever the operator's own view shows.
+  // It records which snapshot of each drawn proxy it drew.
+  const allProxyLayers = proxies ? Object.values(proxies.layers) : [];
   const drawView = options => {
-    const statuses = proxyStatuses?.() ?? null;
-    const layers = statuses ? Object.entries(statuses).filter(([, status]) => status === 'drawn').map(([source]) => proxies.layers[source]) : [];
-    return {view: glance.draw({...options, layers}), statuses};
+    const states = proxies?.states() ?? null;
+    const statuses = states ? {fire: proxyStatus(states.fire), water: proxyStatus(states.water)} : null;
+    const drawnSources = statuses ? Object.entries(statuses).filter(([, status]) => status === 'drawn').map(([source]) => source) : [];
+    const snapshots = drawnSources.length ? Object.fromEntries(drawnSources.map(source => [source,
+      {writeTick: states[source].layer?.snapshotWriteTick ?? null, fieldGeneration: states[source].layer?.snapshotFieldGeneration ?? null}])) : null;
+    return {view: glance.draw({...options, layers: drawnSources.map(source => proxies.layers[source]), withoutLayers: allProxyLayers}), statuses, snapshots};
   };
   const boundsOf = object => {
     object.updateWorldMatrix(true, true);
@@ -1314,8 +1331,8 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     paintMap: layout => paintSceneMap(document, layout),
     drawingSize: () => (hostCanvas.width > 0 && hostCanvas.height > 0 ? {width: hostCanvas.width, height: hostCanvas.height} : null),
     // The rows are written down in the same task as the map is drawn, so they hold the matrices it was drawn with.
-    drawIds: idPass ? ({proxies: outside = [], ...options}) => {
-      const pass = idPass.draw(options), list = entries();
+    drawIds: idPass ? ({proxies: outside = [], withoutProxies = false, ...options}) => {
+      const pass = idPass.draw({...options, withoutLayers: withoutProxies ? allProxyLayers : []}), list = entries();
       return {rows: drawnRows(list, pass.drawn, pageId), context: {...sceneOutsideMap(THREE, list, extraTargets(), water()), proxies: outside}, ready: pass.ready};
     } : null,
     surfaceOf: options => surfaceOf(THREE, entries(), options, pageId),
@@ -1324,8 +1341,8 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     holdProxies,
     proxyStatuses,
     renderView: glance ? options => {
-      const {view, statuses} = drawView(options);
-      return {...(statuses ? {proxies: statuses} : {}), ready: view.ready.then(({width, height, pixels}) => {
+      const {view, statuses, snapshots} = drawView(options);
+      return {...(statuses ? {proxies: statuses} : {}), ...(snapshots ? {proxySnapshots: snapshots} : {}), ready: view.ready.then(({width, height, pixels}) => {
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
         canvas.getContext('2d').putImageData(new window.ImageData(pixels, width, height), 0, 0);

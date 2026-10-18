@@ -133,12 +133,27 @@ async function fireWitness(page) {
   check('a pick on that picture lists the flame proxy as what may cover the point', picked.result.unresolved.some(item => item.id === 'fire-proxy'),
     {unresolved: picked.result.unresolved, hit: picked.result.hit});
 
+  report.phase = 'fire-proxy-display'; save();
+  // The operator's own view showing the fire as Proxy must change nothing in the sub's picture or its pick map.
+  await page.evaluate(() => window.kaminosViewportSettings.set({fire: 'proxy'}));
+  await page.waitForTimeout(800);
+  const underProxy = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-operator-proxy');
+  await page.evaluate(() => window.kaminosViewportSettings.set({fire: 'full'}));
+  await page.waitForTimeout(500);
+  const proxyRows = (underProxy.result.pickMap?.objects ?? []).filter(row => row.id == null && /proxy/i.test(`${row.name ?? ''}`));
+  check('with the operator viewing the fire as Proxy, the sub\'s pick map still draws no proxy', underProxy.result.proxies?.fire === 'drawn' && proxyRows.length === 0,
+    {proxies: underProxy.result.proxies, proxyRows});
+
   report.phase = 'fire-watch'; save();
-  const watched = await vantageOk('watch', '--seconds', '2', '--fps', '2', '--frames', '--max-size', '320', '--name', 'fire-watch');
+  const watched = await vantageOk('watch', '--seconds', '3', '--fps', '3', '--frames', '--max-size', '320', '--name', 'fire-watch');
   const heldAfterWatch = await required();
-  report.effective.fire.watch = {frames: watched.result.frames.map(frame => frame.proxies), layers: watched.result.layers, omitted: watched.result.omitted};
+  report.effective.fire.watch = {frames: watched.result.frames.map(frame => ({proxies: frame.proxies, snapshots: frame.proxySnapshots})),
+    seen: watched.result.proxySnapshotsSeen, layers: watched.result.layers, omitted: watched.result.omitted};
   check('every watch frame draws the flame proxy and says so', watched.result.frames.length >= 3 && watched.result.frames.every(frame => frame.proxies?.fire === 'drawn'),
     report.effective.fire.watch);
+  check('and the strip draws the flame moving on, not one held snapshot', (watched.result.proxySnapshotsSeen?.fire ?? 0) >= 2, report.effective.fire.watch);
+  const sheet = imageOf(watched, 'sheet');
+  report.effective.fire.watchSheet = sheet;
   check('a watch lets go of the proxies when it ends', Object.keys(heldAfterWatch).length === 0, {required: heldAfterWatch});
 
   report.phase = 'fire-live'; save();

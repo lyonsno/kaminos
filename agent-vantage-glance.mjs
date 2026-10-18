@@ -53,11 +53,14 @@ export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = (
   };
 
   // Draw the view from `optics` at width×height, with editor drawing and the
-  // `hide` entries left out, and the three.js `layers` (proxy layers) seen as
-  // well. The drawing happens in this call; `ready` resolves to the picture's
-  // RGBA bytes, rows from the top.
-  function draw({optics, width, height, hide = [], layers = []}) {
+  // `hide` entries left out. The camera sees the page's layers, minus
+  // `withoutLayers` (every proxy layer), plus `layers` (the proxies drawn now),
+  // so what the operator's own view shows changes nothing here. The drawing
+  // happens in this call; `ready` resolves to the picture's RGBA bytes, rows
+  // from the top.
+  function draw({optics, width, height, hide = [], layers = [], withoutLayers = []}) {
     const camera = cameraFromOptics({THREE, renderer, optics, layers: cameraLayers()});
+    for (const layer of withoutLayers) camera.layers.disable(layer);
     for (const layer of layers) camera.layers.enable(layer);
     const hdr = new THREE.RenderTarget(width, height, {type: THREE.HalfFloatType, depthBuffer: true});
     const picture = new THREE.RenderTarget(width, height, {type: THREE.UnsignedByteType, colorSpace: THREE.NoColorSpace, depthBuffer: false});
