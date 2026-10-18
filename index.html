@@ -21543,8 +21543,10 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
   if(options.sourceSize && !['preset','current'].includes(options.sourceSize))throw Error('Unknown preset source-size choice');
   const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
-    sourcePose:flameEmitterPose,
-    source:source ? {presetId:source.presetId,label:source.label,preset:structuredClone(source.preset),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})} : null});
+    sourcePose:flameEmitterPose});
+  // The applied controls may be remapped below; the immutable source receipt
+  // must remain separate even when its preset shares the input control graph.
+  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
