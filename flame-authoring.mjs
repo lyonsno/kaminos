@@ -82,36 +82,18 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Appearance', view:'look', open:true, fields:[
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
     ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-temperature','Temperature (K)'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
-    ['volume-reaction-boundary-fire-clean-color','Clean color'], ['volume-reaction-boundary-fire-soot-color','Soot color'],
-    ['volume-reaction-boundary-fire-luma','Flame brightness'], ['volume-reaction-boundary-fire-clean-blue','Clean blue'],
-    ['volume-reaction-boundary-fire-soot','Soot yield'], ['volume-reaction-boundary-fire-yellow','Soot yellowing'],
-    ['volume-reaction-boundary-fire-warmth','Thermal warmth'],
-  ] },
+    ] },
   { name:'Smoke', view:'look', open:true, fields:[
     ['volume-density','Density'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Albedo'], ['volume-physical-ambient','Ambient light'],
     ['volume-smoke','Smoke amount'],
   ] },
   { name:'Material', view:'look', fields:[
-    ['volume-physical-mode','Color model'], ['volume-physical-material-law','Material law'],
     ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-physical-soot-burnout-rate','Soot burnout rate'],
     ['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
-    ['volume-reaction-boundary-contrast','Contrast'], ['volume-reaction-boundary-gamma','Gamma'],
-    ['volume-reaction-boundary-opacity','Opacity'],
-  ] },
-  { name:'Front structure', view:'shape', open:true, fields:[
-    ['volume-reaction-boundary-fire-ridge','Ridge strength'], ['volume-reaction-boundary-fire-ridge-cut','Ridge threshold'],
-    ['volume-reaction-boundary-fire-tip','Tip breakup'], ['volume-reaction-boundary-fire-erosion','Erosion'],
-    ['volume-reaction-boundary-gradient','Gradient'], ['volume-reaction-boundary-cut','Cut'],
-    ['volume-reaction-boundary-softness','Softness'], ['volume-reaction-boundary-core-reject','Core rejection'],
-    ['volume-reaction-boundary-topology','Topology'], ['volume-reaction-boundary-curl','Curl'],
-    ['volume-reaction-boundary-divergence','Divergence'],
-  ] },
+    ] },
   { name:'Support & reconstruction', view:'shape', fields:[
-    ['volume-reaction-boundary-support-thermal','Thermal support'], ['volume-reaction-boundary-support-reaction','Reaction support'],
-    ['volume-reaction-boundary-support-front','Front support'], ['volume-reaction-boundary-support-interface','Interface support'],
     ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
@@ -162,19 +144,18 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-grid-overlay','Grid overlay'], ['volume-flow-debug','Flow display'],
   ] },
   { name:'Legacy appearance', view:'look', fields:[
-    ['volume-exposure','Legacy exposure'], ['volume-radiance','Radiance'],
-    ['volume-absorption','Absorption'], ['volume-glow','Glow'],
-  ] },
+    ['volume-absorption','Absorption'], ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
-export function flamePropertyApplies(id,{toneMapping,materialLaw,physicsActive=false}) {
+// Physics (soot x blackbody) is the material law (2026-10-18; the law select
+// is retired), so its calibration controls always apply.
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false}) {
   if(id==='volume-physical-knee')return toneMapping==='custom';
-  if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return Number(materialLaw)===2;
+  if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
   return !physicsActive||!physicsUnused.has(id);
 }
-export function flameAppearanceStatus(materialLaw,physics) {
-  if(Number(materialLaw)!==2)return {state:'off',text:''};
+export function flameAppearanceStatus(physics) {
   if(physics?.requested!==true)return {state:'pending',text:'Physics material: awaiting runtime'};
   if(physics.effective?.render===true)return {state:'active',text:'Physics material active'};
   return {state:'inactive',text:'Physics material inactive: '+String(physics.reason||'unavailable').replace(/^physics-appearance-/,'').replaceAll('-',' ')};
@@ -298,11 +279,11 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   panels.get('look').append(basin);
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
-  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,materialLaw:byId('volume-physical-material-law').value,
+  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
-    const status=flameAppearanceStatus(currentMode.materialLaw,readAppearanceRuntime());
+    const status=flameAppearanceStatus(readAppearanceRuntime());
     appearanceStatus.hidden=status.state==='off';appearanceStatus.dataset.state=status.state;appearanceStatus.textContent=status.text;
     const law=byId('volume-emitter-source-law').value;
     if(isSearching&&!searching)for(const item of sections)item.open=item.section.open;

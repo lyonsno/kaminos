@@ -6,10 +6,9 @@ import * as flame from '../flame-authoring.mjs';
 
 test('the contextual inspector includes current appearance, structure, motion and raymarch controls once',()=>{
   const ids=flame.FLAME_PROPERTY_GROUPS.flatMap(group=>group.fields.map(([id])=>id));
-  for(const id of ['volume-tone-mapping','volume-physical-material-law','volume-physical-kelvin-per-heat',
+  for(const id of ['volume-tone-mapping','volume-physical-kelvin-per-heat',
     'volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-physical-ambient',
-    'volume-reaction-boundary-fire-ridge','volume-reaction-boundary-fire-clean-color','volume-reaction-boundary-support-interface',
-    'volume-reaction-boundary-softness','volume-boundary-sidecar-ridge','volume-microdetail','volume-fire-licks',
+    'volume-boundary-sidecar-ridge','volume-microdetail','volume-fire-licks',
     'volume-wind-model','volume-wind-gust-period','volume-reactant-mixing-time','volume-reactant-cooling-time',
     'volume-heat-release-expansion','volume-ray-start-noise','volume-occupancy-skip',
     'volume-emitter-fuel-fraction','volume-emitter-aperture-pattern','volume-emitter-inlet-turbulence']){
@@ -33,17 +32,15 @@ test('field views partition controls while keeping source supply on the selected
 
 test('applicability respects source law, AgX and effective physics without changing stored values',()=>{
   assert.equal(typeof flame.flamePropertyApplies,'function');
-  const mode={sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false,materialLaw:'1'};
+  const mode={sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false};
   assert.equal(flame.flamePropertyApplies('volume-physical-knee',mode),false);
   assert.equal(flame.flamePropertyApplies('volume-physical-knee',{...mode,toneMapping:'custom'}),true);
-  assert.equal(flame.flamePropertyApplies('volume-physical-temperature',mode),true);
-  assert.equal(flame.flamePropertyApplies('volume-reaction-boundary-fire-ridge',mode),true);
-  assert.equal(flame.flamePropertyApplies('volume-reaction-boundary-fire-ridge',{...mode,physicsActive:true,materialLaw:'2'}),false);
-  assert.equal(flame.flamePropertyApplies('volume-physical-kelvin-per-heat',{...mode,materialLaw:'2'}),true);
-  assert.equal(flame.flamePropertyApplies('volume-physical-kelvin-per-heat',mode),false);
+  // Physics is the material law: its calibration applies without a law select.
+  assert.equal(flame.flamePropertyApplies('volume-physical-kelvin-per-heat',mode),true);
+  assert.equal(flame.flamePropertyApplies('volume-physical-kelvin-per-heat',{...mode,physicsActive:true}),true);
   assert.equal(flame.flamePropertyApplies('volume-density',{...mode,physicsActive:true}),true);
   assert.equal(flame.flamePropertyApplies('volume-wind-gust-period',mode),true);
-  assert.deepEqual(mode,{sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false,materialLaw:'1'});
+  assert.deepEqual(mode,{sourceLaw:'immersed-source',toneMapping:'agx',physicsActive:false});
 });
 
 test('binary numerical sources become checkboxes without converting continuous amounts into switches',()=>{
@@ -56,10 +53,10 @@ test('binary numerical sources become checkboxes without converting continuous a
 
 test('physics material status cannot promote a requested or stale mode into effective rendering',()=>{
   assert.equal(typeof flame.flameAppearanceStatus,'function');
-  assert.equal(flame.flameAppearanceStatus('1',null).state,'off');
-  assert.equal(flame.flameAppearanceStatus('2',null).state,'pending');
-  assert.equal(flame.flameAppearanceStatus('2',{requested:false,effective:{render:true}}).state,'pending');
-  const refused=flame.flameAppearanceStatus('2',{requested:true,effective:{render:false},reason:'physics-appearance-requires-the-reactant-law'});
+  assert.equal(flame.flameAppearanceStatus(null).state,'pending');
+  assert.equal(flame.flameAppearanceStatus(null).state,'pending');
+  assert.equal(flame.flameAppearanceStatus({requested:false,effective:{render:true}}).state,'pending');
+  const refused=flame.flameAppearanceStatus({requested:true,effective:{render:false},reason:'physics-appearance-requires-the-reactant-law'});
   assert.equal(refused.state,'inactive');assert.match(refused.text,/requires the reactant law/);
-  assert.equal(flame.flameAppearanceStatus('2',{requested:true,effective:{render:true}}).state,'active');
+  assert.equal(flame.flameAppearanceStatus({requested:true,effective:{render:true}}).state,'active');
 });

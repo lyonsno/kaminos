@@ -5,9 +5,10 @@ export const VOLUME_COCKPIT_CONTROL_ROOT_IDS = Object.freeze([
   'volume-authored-mix-control-root',
 ]);
 
-export const VOLUME_AUTHORED_MIX_CONTROL_IDS = Object.freeze([
-  'volume-reaction-boundary-support-thermal',
-]);
+// The authored-mix panel's only occupant, the boundary support thermal
+// control, was retired with the legacy material laws (2026-10-18); the panel
+// stays as a surface with no resident control.
+export const VOLUME_AUTHORED_MIX_CONTROL_IDS = Object.freeze([]);
 
 export const VOLUME_COCKPIT_LAYOUT_IDENTITY = 'kaminos.volume.cockpit-layout.v1';
 

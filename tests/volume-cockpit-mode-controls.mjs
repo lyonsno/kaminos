@@ -13,8 +13,8 @@ const budgetTool = { id: 'volume-ray-budget-section' };
 assert.deepEqual(layout.controlCluster({ id: 'volume-steps', closest: () => budgetRow,
   ownerDocument: { getElementById: id => id === budgetTool.id ? budgetTool : null },
 }), [budgetRow, budgetTool], 'ray budget companion must move with its step control on every layout apply');
-const ids = ['volume-density', 'volume-flow-rate', 'volume-physical-mode',
-  'volume-physical-thermal', 'volume-reaction-boundary-fire-soot', 'volume-steps', 'future-control'];
+const ids = ['volume-density', 'volume-flow-rate', 'volume-physical-kelvin-per-heat',
+  'volume-physical-thermal', 'volume-wavelet-strength', 'volume-steps', 'future-control'];
 const controls = ids.map(id => ({ id, closest() { return null; } }));
 const defaults = layout.buildSourceDefaultLayout(controls);
 const groupOf = id => defaults.groups.find(group => group.controlIds.includes(id));

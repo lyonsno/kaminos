@@ -299,7 +299,7 @@ test('cockpit: the law is selectable, the two inflow controls exist and recompil
   assert.ok(keys.includes('volume-emitter-inlet-temperature'));
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-fuel-fraction').additiveDefault, 0.56);
   assert.equal(schema.controls.find(control => control.key === 'volume-emitter-inlet-temperature').additiveDefault, 1.2);
-  assert.equal(schema.controlCount, 259);
+  assert.equal(schema.controlCount, 143);
   assert.match(source, /state\.inflowBoundary = inflowBoundaryConfig;/, 'the receipt carries the resolved inflow');
   assert.match(index, /id="volume-inflow-boundary-state"/, 'the cockpit shows the inflow admission');
   assert.match(index, /NOT admitted: \$\{inflow\.effective\.reason\}/, 'a requested but refused inflow looks refused');

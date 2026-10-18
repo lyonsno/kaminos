@@ -1334,8 +1334,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-reaction-live-view-val">off</span>
       </div>
       <span class="slider-help">reaction-live-view-shader-inspect-v0: full-size primary viewer of live shader-side support fields; atlas threshold sliders remain CPU-capture controls until parity uniforms land.</span>
-      <div class="volume-control-section-title">Boundary live</div>
-      <span class="slider-help">reaction-boundary-live-controls-v0: derived primary-view candidate = support mix * local support gradient * core rejection * topology breakup. It is inspect-only; it does not emit fire.</span>
       <div class="volume-control-section-title">Boundary fire</div>
       <span class="slider-help">reaction-boundary-fire-controls-v0: shades the boundary sheet as clean-to-sooty hydrocarbon radiance. Smoke tint/extinction still comes from the raymarch.</span>
       <div class="slider-row">
@@ -1395,8 +1393,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <input type="range" id="volume-boundary-sidecar-ridge" min="0" max="2" step="0.02" value="1.00">
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
-      <div class="volume-control-section-title">Boundary Fire color</div>
-      <span class="slider-help">Emissive transport: temperature sets Planck spectrum and power; soot density sets emitting/absorbing material; fresh reaction fronts add spectral blue. Smoke scatters a coarse same-frame light field. Camera white balance and EV resolve linear HDR once. Render-only Kelvin, not a combustion solver. Legacy and Thermal + reaction remain replayable. Radiance, Glow, palette swatches and legacy exposure do not grade the new model.</span>
       <div class="volume-control-section-title">Physics appearance</div>
       <span class="slider-help">Material law = Physics (reactant law, Emissive transport): soot glows as a blackbody at the temperature the heat field implies (300 K + Kelvin per heat &times; heat), absorbs and scatters with Smoke extinction and Smoke albedo, and fresh burning adds the reaction spectrum (Clean emission). No appearance carrier is drawn. Thermal emission scales the glow; Exposure EV, Highlight knee, Camera white K and Tone mapping grade it; Density scales the soot. Dimmed controls do nothing under this law.</span>
       <div class="slider-row">
@@ -1813,6 +1809,11 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-phased-sway" checked>
       <span class="slider-val" id="volume-phased-sway-val">on</span>
     </div>
+    <div class="slider-row">
+      <span class="slider-label">Common gas transport</span>
+      <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
+      <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
+    </div>
     <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
       <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
@@ -2092,10 +2093,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Flow Debug</span>
       <input type="range" id="volume-flow-debug" min="0" max="1" step="0.05" value="0">
       <span class="slider-val" id="volume-flow-debug-val">0.00</span>
-    </div>
-    <div class="volume-control-section" data-volume-control-section="topology-shell" data-volume-retired-control-state="topology-shell" hidden>
-      <div class="volume-control-section-title">Topology Lab Shell</div>
-      <span class="slider-help">Shell mode bypasses stock fire emission. Carrier sliders add raw support; shape sliders cut or thicken the resulting mask.</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Oracle Cue</span>
@@ -18696,7 +18693,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-emitter-puff-period-val').textContent = c.emitterPuffPeriod.toFixed(1);
   document.getElementById('volume-fixed-source-dephase-val').textContent = c.fixedSourceDephase ? 'on' : 'off';
   const physicalBoundaryColor = c.physicalColorMode > 0 && c.fireRenderMode === 'inspect' && c.shellInspectMode === 'boundary_fire';
-  document.getElementById('volume-physical-thermal-label').textContent = c.physicalColorMode === 2 ? (c.physicalMaterialLaw === 2 ? 'Glow gain' : 'Hot soot density') : 'Thermal emission';
+  document.getElementById('volume-physical-thermal-label').textContent = 'Glow gain';
   syncVolumeCockpitModeAvailability(document, c, volumePrototype?.debugState?.()?.physicalColor);
   document.getElementById('volume-resolution-val').textContent = `${c.resolution}×${c.resolution * 2}×${c.resolution}`;
   document.getElementById('volume-grid-overlay-val').textContent = c.gridOverlay.toFixed(2);

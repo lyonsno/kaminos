@@ -39,10 +39,8 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
   assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'12');
   assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'screen-animated');
   assert.equal(applied.settings,settings,'do not replace or recolor the saved flame to light the scene');
-  context.activeSceneComposition=null;settings.domControls['volume-physical-mode'].value='0';
-  await context.addFirstFlameField('saved-basin');
-  assert.equal(applied.route.volume_light_field_shared_source,undefined,'a replay basin must not mount an unsupported emissive export');
-  assert.equal(applied.settings.domControls['volume-physical-mode'].value,'0');
+  // The physical mode select is retired (2026-10-18): every basin renders on
+  // the emissive route, so every Add Flame mounts the shared emissive export.
 });
 
 test('first-field writes await lighting synchronization before resuming, including undo',async()=>{

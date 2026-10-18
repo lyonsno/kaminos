@@ -11,11 +11,7 @@ const holdoutOracle = readFileSync(new URL('../boundary-splat-camera-holdout-ora
 assert.match(core, /BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY\s*=\s*'live-boundary-sidecar-flow-kernel-moment-covariance-splats-v0'/);
 assert.match(core, /BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY\s*=\s*'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0'/);
 assert.match(core, /normalizeBoundarySplatMode[\s\S]*'kernel_moment_covariance'/, 'the analytical treatment is explicitly requestable');
-assert.match(page, /<option value="kernel_moment_covariance">kernel moment covariance<\/option>/, 'the live route can request the treatment without a fallback value');
-assert.match(page, /normalizeBoundarySplatMode[\s\S]*'kernel_moment_covariance'/, 'URL and DOM normalization retain the treatment');
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*140[^\]]*\]/, 'the broad-manifold screen must execute the requested 140^3 state instead of falling back');
-assert.match(page, /<option value="140">140<\/option>/, 'the cockpit exposes the exact 140-cell width independently of height');
-assert.match(page, /\[32, 48, 64, 96, 128, 136, 140, 160\]\.includes\(routeResolution\)/, 'the URL route must retain the requested 140^3 state');
 assert.match(witness, /\[32, 48, 64, 96, 128, 136, 140, 160\]\.includes\(requestedGrid\)/, 'the witness must reject any 140^3 fallback');
 assert.match(core, /kernel_moment_covariance[\s\S]*BOUNDARY_SPLAT_KERNEL_MOMENT_RENDERER_IDENTITY/, 'the effective renderer identity cannot impersonate world covariance');
 assert.match(core, /kernel_moment_covariance[\s\S]*BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY/, 'the effective footprint authority names the representational ceiling');

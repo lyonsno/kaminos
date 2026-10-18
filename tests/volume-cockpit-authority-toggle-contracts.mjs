@@ -93,12 +93,6 @@ assert.match(
   'initialization preserves an explicitly routed diagnostic while operator Smoke actions return to ordinary composition derivation',
 );
 
-assert.match(
-  page,
-  /<option value="kernel_moment_full_flame_union">ridge \+ fire-active union<\/option>/,
-  'the current union label describes candidate admission without claiming complete optical support',
-);
-assert.doesNotMatch(page, />kernel moment full flame union<|\? 'full flame union'/, 'the misleading Full Flame union display label is gone');
 
 const presetReceipt = {
   presetId: `vsp-${'a'.repeat(64)}`,

@@ -86,6 +86,12 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   const addedControlIds = [];
   const addedRouteParams = [];
   const changedAxes = new Set();
+  // Additive history is numbered by the inventory size at the time each control
+  // was introduced. A retired control still counts toward that history: a
+  // document saved with it keeps its place in the sequence after the control is
+  // stripped, so a large retirement (2026-10-18: the legacy material laws'
+  // controls) does not break the bridge to later additive controls.
+  let retiredDomControlsPresent = 0;
   for (const retired of retiredControls) {
     const axis = preset[retired.axis];
     const entry = axis && typeof axis === 'object' && !Array.isArray(axis) ? axis[retired.key] : undefined;
@@ -100,6 +106,7 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     }
     delete axis[retired.key];
     route.searchParams.delete(retired.param);
+    if (retired.axis === 'domControls') retiredDomControlsPresent += 1;
     removedControlIds.push(retired.key);
     removedRouteParams.push(retired.param);
     changedAxes.add(retired.axis);
@@ -111,19 +118,19 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   if (changedAxes.has('domControls') && migrated.controlCount !== undefined) {
     migrated.controlCount = preset.controlCount;
   }
+  const savedDomControlCount = Object.keys(preset.domControls || {}).length + retiredDomControlsPresent;
   for (const control of schema.controls || []) {
     const introducedAt = Number(control.additiveSinceControlCount);
     if (!Number.isSafeInteger(introducedAt)) continue;
     if (!Object.hasOwn(control, 'additiveDefault')) {
       throw new Error(`additive control is missing its default: ${control.key}`);
     }
-    const activeCount = Object.keys(preset.domControls || {}).length;
-    if (activeCount >= introducedAt) continue;
-    if (activeCount !== introducedAt - 1) {
+    // The inventory size the record was saved with, retired controls included:
+    // every additive control introduced after it takes its declared default;
+    // one introduced before it and still missing is a hole, not history.
+    if (Object.hasOwn(preset.domControls, control.key)) continue;
+    if (savedDomControlCount >= introducedAt) {
       throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);
-    }
-    if (Object.hasOwn(preset.domControls, control.key)) {
-      throw new Error(`settings preset carries additive control before its declared schema count: ${control.key}`);
     }
     if (route.searchParams.has(control.param)) {
       throw new Error(`settings preset routes additive control without its descriptor: ${control.param}`);

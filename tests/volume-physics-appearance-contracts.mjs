@@ -111,18 +111,20 @@ test('the kernel and the renderer carry the same laws as these references', () =
 
 test('the uncoupled-control list names real cockpit controls and the switch lives in the Emissive transport group', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length > 50);
+  // The paintings were retired with the legacy material laws (2026-10-18); only the carrier drivers remain uncoupled.
+  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 4);
+  assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.every(c => c.reason === 'carriers-only'));
   for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
     assert.ok(index.includes(`id="${id}"`), `${id} exists in the cockpit`);
     assert.ok(['unused', 'carriers-only'].includes(reason), `${id}: ${reason}`);
   }
-  for (const id of ['volume-physical-temperature', 'volume-physical-spread', 'volume-fire-licks', 'volume-reaction-boundary-support-thermal']) {
+  for (const id of ['volume-fire-licks', 'volume-interface-shred', 'volume-microdetail', 'volume-detail-scale']) {
     assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.some(c => c.id === id), `${id} is marked`);
   }
   for (const id of ['volume-physical-exposure', 'volume-physical-white', 'volume-physical-smoke-extinction', 'volume-density', 'volume-reactant-mixing-time']) {
     assert.ok(!PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.some(c => c.id === id), `${id} still couples`);
   }
-  assert.match(index, /<option value="2">Physics: soot × blackbody \(no carriers\)<\/option>/);
+  assert.doesNotMatch(index, /id="volume-physical-material-law"/, 'the material law select is retired: Physics is the law');
   for (const id of ['volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin']) {
     assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
   }

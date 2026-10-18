@@ -27,9 +27,6 @@ assert.deepEqual(schema.presentationControls, [{
 
 for (const [key, expectedDefault] of Object.entries({
   'emitter-assay-family': 'cluster',
-  'volume-exposure': 1,
-  'volume-reaction-boundary-fire-clean-color': '#4a86ff',
-  'volume-reaction-boundary-fire-soot-color': '#ffc460',
   'volume-artistic-swirl': true,
   'volume-phased-sway': true,
 })) {
