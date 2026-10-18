@@ -3275,6 +3275,7 @@ import {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { trellisSurfelsGLTFPlugin } from './trellis-surfels.mjs';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -12427,6 +12428,8 @@ async function showGLB(file, options = {}) {
   modelSourceUrl = isBlob ? file.name : file;
   modelSourceType = 'glb';
   const loader = new GLTFLoader();
+  // TRELLIS surfel GLBs (trellis-surfels.mjs) become chunked surfel objects; other GLBs are unaffected.
+  loader.register(trellisSurfelsGLTFPlugin(THREE));
 	return new Promise((resolve, reject) => {
 	  loader.load(url, gltf => {
 	    if (isBlob) URL.revokeObjectURL(url);
