@@ -36,8 +36,8 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     const stream = generation, member = tab.member;
     const response = await post('/join', {hub: hubId, ...tab.facts, page: tab.page, member});
     const accepted = !!response?.ok && (await response.json().catch(() => null))?.ok === true;
-    // Left, joined again or the stream reconnected meanwhile: this answer is about an older membership.
-    if (tabs.get(port) !== tab || tab.member !== member || stream !== generation) return;
+    // Left, joined again, or the stream dropped or reconnected meanwhile: this answer is about an older membership.
+    if (tabs.get(port) !== tab || tab.member !== member || stream !== generation || !linked()) return;
     tab.joined = accepted;
     if (accepted) tell(port, {type: 'status', state: 'linked', via: 'hub'});
   }
@@ -55,9 +55,12 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
     fetch(`${endpoint}/pages`).then(async response => {
       // A server without the vantage bridge: nothing to link to.
       if (response.status === 404) { mode = 'unavailable'; tellAll({type: 'status', state: 'unavailable', via: 'hub'}); return; }
-      const body = await response.json().catch(() => null);
-      // An older server without the hub: each tab links on its own.
-      if (body?.hub !== true) { mode = 'fallback'; tellAll({type: 'fallback'}); return; }
+      // Any other failure, or an unreadable answer, says nothing about the server: ask again.
+      if (!response.ok) throw new Error(`vantage pages answered ${response.status}`);
+      const body = await response.json();
+      if (!body || typeof body !== 'object') throw new Error('vantage pages answered without an object');
+      // A readable answer without the hub: an older server, where each tab links on its own.
+      if (body.hub !== true) { mode = 'fallback'; tellAll({type: 'fallback'}); return; }
       open();
     }).catch(() => setTimeout(probe, RETRY_MS)).finally(() => { probing = false; });
   }
@@ -75,10 +78,14 @@ export function createVantageHub({EventSource, fetch, now, hubId, setInterval, s
       let message;
       try { message = JSON.parse(event.data); } catch { return; }
       const port = portOf(message.page);
-      if (port) tell(port, {type: 'command', page: message.page, message});
-      else leave(message.page);
+      if (port) return tell(port, {type: 'command', page: message.page, message});
+      // The tab has gone from this hub: fail just this command. A leave here could remove a newer membership of the page.
+      post('/reply', {page: message.page, id: message.id, ok: false, phase: 'disconnected', error: 'The Kaminos tab was no longer with its browser\'s hub, so the command did not run'});
     });
     source.addEventListener('error', () => {
+      // Whatever was acknowledged on the lost connection no longer counts.
+      generation++;
+      for (const tab of tabs.values()) tab.joined = false;
       if (source.readyState !== EventSource.CLOSED) { tellAll({type: 'status', state: 'reconnecting', via: 'hub'}); return; }
       source = null;
       tellAll({type: 'status', state: 'offline', via: 'hub'});

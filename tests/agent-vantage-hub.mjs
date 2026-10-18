@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 // The hub runs in a shared worker; here it gets a fake environment: one
 // EventSource it may open, fetch, timers and a clock the test drives.
-async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pagesBody = null, joinStatus = () => 200} = {}) {
+async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pagesBody = null, joinStatus = () => 200, pagesAnswers = null, joinAnswer = null} = {}) {
   const {createVantageHub} = await import('../agent-vantage-hub.mjs');
   const sources = [], posts = [], intervals = [], timeouts = [];
   let t = 0;
@@ -18,7 +18,12 @@ async function hubHarness({pages = {ok: true, hub: true}, pagesStatus = 200, pag
   const env = {EventSource: FakeEventSource, now: () => t, hubId: 'hub-test0001',
     fetch: async (url, init) => {
       posts.push({url: String(url), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(init.body) : null});
-      if (String(url).endsWith('/pages')) return {status: pagesStatus, ok: pagesStatus === 200, json: pagesBody ?? (async () => pages)};
+      if (String(url).endsWith('/pages')) {
+        const next = pagesAnswers?.shift();
+        if (next) return {status: next.status, ok: next.status === 200, json: next.unreadable ? async () => { throw new SyntaxError('not JSON'); } : async () => next.body};
+        return {status: pagesStatus, ok: pagesStatus === 200, json: pagesBody ?? (async () => pages)};
+      }
+      if (String(url).endsWith('/join') && joinAnswer) return joinAnswer();
       if (String(url).endsWith('/join')) {
         const status = joinStatus();
         if (status === 'reject') throw new Error('network');
@@ -55,7 +60,9 @@ test('every tab shares one hub stream, joins it, and receives only its own comma
   assert.ok(!a.sent.some(message => message.type === 'command'), 'page a gets nothing meant for b');
   h.sources[0].emit('command', {data: JSON.stringify({id: 'c2', page: 'page-gone', command: 'status', args: {}})});
   await h.settle();
-  assert.ok(h.posts.some(post => post.url === '/api/vantage/leave' && post.body.page === 'page-gone'), 'a command for a tab the hub no longer has: that page leaves');
+  assert.ok(h.posts.some(post => post.url === '/api/vantage/reply' && post.body.page === 'page-gone' && post.body.id === 'c2' && post.body.ok === false && post.body.phase === 'disconnected'),
+    'a command for a tab the hub no longer has fails, saying so');
+  assert.ok(!h.posts.some(post => post.url === '/api/vantage/leave' && post.body.page === 'page-gone'), 'without a leave that could remove a newer membership of that page');
 });
 
 test('a tab that closes, or stops answering, leaves the hub; a reconnected stream joins every tab again', async () => {
@@ -154,4 +161,31 @@ test('each membership is numbered, so a late leave cannot remove a page that joi
   assert.equal(leaves.length, 1);
   assert.ok(Number.isInteger(joins[0]) && joins[1] > joins[0], 'a rejoin is a newer membership');
   assert.equal(leaves[0], joins[0], 'the leave names the membership it ends');
+});
+
+test('a join answered after the stream dropped does not report the tab linked', async () => {
+  for (const terminal of [false, true]) {
+    let release;
+    const h = await hubHarness({joinAnswer: () => new Promise(resolve => { release = () => resolve({status: 200, ok: true, json: async () => ({ok: true})}); })});
+    const a = h.port();
+    a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+    h.sources[0].emit('open'); await h.settle();
+    if (terminal) h.sources[0].readyState = 2;
+    h.sources[0].emit('error'); await h.settle();
+    release(); await h.settle();
+    const statuses = a.sent.filter(message => message.type === 'status').map(message => message.state);
+    assert.equal(statuses.at(-1), terminal ? 'offline' : 'reconnecting', `the acknowledgement belonged to the lost connection (${terminal ? 'closed' : 'reconnecting'})`);
+  }
+});
+
+test('a capability probe that failed is retried, and only a readable answer without the hub means an older server', async () => {
+  for (const failed of [{status: 503, body: {error: 'temporary'}}, {status: 200, unreadable: true}]) {
+    const h = await hubHarness({pagesAnswers: [failed, {status: 200, body: {hub: true, pages: []}}]}), a = h.port();
+    a.say({type: 'join', endpoint: '/api/vantage', page: 'page-a', facts: facts('page-a')}); await h.settle();
+    assert.ok(!a.sent.some(message => message.type === 'fallback'), `${failed.status} ${failed.unreadable ? 'unreadable' : ''}: not taken for an older server`);
+    assert.equal(h.sources.length, 0);
+    assert.ok(h.timeouts.length >= 1, 'the probe is retried');
+    h.timeouts.at(-1).fn(); await h.settle();
+    assert.equal(h.sources.length, 1, 'and the hub links once the server answers');
+  }
 });

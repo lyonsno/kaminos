@@ -240,6 +240,15 @@ def hub_contracts(bridge):
     assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is False, "nor does a late older join"
     assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm1", member=2) is True
     assert not any(page["id"] == "page-mmmmmmm1" for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is False, "a join older than the membership that left cannot bring the page back"
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm2", member=1) is False
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm2", {}, member=1) is False, "nor can a join that arrives after its own leave"
+    assert not any(page["id"] in ("page-mmmmmmm1", "page-mmmmmmm2") for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm3", {}, member=3) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm3", member=3) is True
+    broker.attach_hub("hub-aaaaaaaa")
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm3", {}, member=2) is False, "a reconnected hub still knows what left"
+    hub = broker._hubs["hub-aaaaaaaa"]
 
     broker.join("hub-aaaaaaaa", "page-hhhhhhh4", {})
     replaced = broker.attach_hub("hub-aaaaaaaa")

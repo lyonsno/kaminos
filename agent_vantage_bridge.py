@@ -64,6 +64,10 @@ class VantageBroker:
         self._pages = {}
         self._hubs = {}
         self._order = itertools.count(1)
+        # The newest membership each (hub, page) has left with: a join at or below it is a
+        # delayed join from before that leave, and cannot bring the page back. Kept across
+        # hub reconnects; one small entry per page that ever left a hub.
+        self._departed = {}
         self._pending = {}
         self._generations = itertools.count(1)
         self._focus = itertools.count(1)
@@ -111,6 +115,8 @@ class VantageBroker:
             current = self._pages.get(page_id)
             if current is not None and current.link is link and None not in (member, current.member) and member < current.member:
                 return False
+            if member is not None and member <= self._departed.get((hub_id, page_id), 0):
+                return False
             page = current or _Page(page_id, self._clock)
             self._pages[page_id] = page
             if page.link is not None and page.link is not link and page.link.hub is None:
@@ -128,6 +134,9 @@ class VantageBroker:
         current one is stale and changes nothing."""
         member = member if isinstance(member, int) and not isinstance(member, bool) else None
         with self._lock:
+            if member is not None:
+                key = (hub_id, page_id)
+                self._departed[key] = max(self._departed.get(key, 0), member)
             page = self._pages.get(page_id)
             if page is None or page.link is None or page.link.hub != hub_id:
                 return False
