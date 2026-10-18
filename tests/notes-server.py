@@ -198,6 +198,34 @@ def participant_contracts(notes):
 
 # --- HTTP, through a real serve.py ------------------------------------------
 
+def written_json(path, seconds=10):
+    """What a child process wrote to `path`, once it is all there: the file can
+    exist, empty, before the child finishes writing it."""
+    deadline, seen = time.monotonic() + seconds, None
+    while time.monotonic() < deadline:
+        try:
+            seen = path.read_text()
+            return json.loads(seen)
+        except (OSError, ValueError):
+            time.sleep(0.05)
+    raise AssertionError(f"{path} was not written in {seconds} s (last read: {seen!r})")
+
+
+def written_json_contracts():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "out.json"
+        path.write_text("")  # created by the shell's redirect, not yet written
+        threading.Timer(0.3, lambda: path.write_text(json.dumps({"done": True}))).start()
+        assert written_json(path) == {"done": True}
+        missing = Path(tmp) / "never.json"
+        try:
+            written_json(missing, seconds=0.3)
+        except AssertionError as error:
+            assert "never.json" in str(error), error
+        else:
+            raise AssertionError("a file never written was read as written")
+
+
 def free_port():
     with socket.socket() as server:
         server.bind(("127.0.0.1", 0))
@@ -490,20 +518,11 @@ def directory_and_notify_contracts():
             assert status == 200, note
             listener.join(30)
             assert [item["id"] for item in waiting.get("notes", [])] == [note["id"]], waiting
-            far = tmp / "notified-far-agent.json"
-            for _ in range(200):
-                if far.exists():
-                    break
-                time.sleep(0.05)
-            told = json.loads(far.read_text())
+            told = written_json(tmp / "notified-far-agent.json")
             assert told == {"recipient": "far-agent", "note": note["id"], "text": "both of you, look", "server": f"http://127.0.0.1:{port}",
                             "listening": False, "listeningEnv": "0"}, told
-            near = tmp / "notified-near-agent.json"
-            for _ in range(200):
-                if near.exists():
-                    break
-                time.sleep(0.05)
-            assert json.loads(near.read_text())["listening"] is True and json.loads(near.read_text())["listeningEnv"] == "1"
+            near = written_json(tmp / "notified-near-agent.json")
+            assert near["listening"] is True and near["listeningEnv"] == "1", near
 
             status, note2 = call(port, "POST", "/api/notes", {"kind": "note", "text": "late one", "to": ["late-agent"],
                                                               "anchor": {"kind": "scene"}, "author": "writer-agent"})
@@ -577,6 +596,7 @@ def notify_timing_contracts(notes):
 
 if __name__ == "__main__":
     notes = load_notes()
+    written_json_contracts()
     heartbeat_contracts(notes)
     log_contracts(notes)
     follow_up_contracts(notes)
