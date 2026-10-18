@@ -18,45 +18,57 @@ export function buildPolyMesh({positions,indices=null,normals=null,uvs=null}={})
   const p=checkedArray(positions,'positions',3),renderVertexCount=p.length/3;
   const index=indices??Uint32Array.from({length:renderVertexCount},(_,i)=>i);
   if(index.length%3)throw Error('Polygon mesh index must list whole triangles');
-  for(let i=0;i<index.length;i++){const v=index[i];if(!Number.isInteger(v)||v<0||v>=renderVertexCount)throw Error(`Polygon mesh index ${v} is outside ${renderVertexCount} vertices`);}
+  const integral=index instanceof Uint32Array||index instanceof Uint16Array||index instanceof Uint8Array;
+  for(let i=0;i<index.length;i++){const v=index[i];if(!(integral||Number.isInteger(v))||v<0||v>=renderVertexCount)throw Error(`Polygon mesh index ${v} is outside ${renderVertexCount} vertices`);}
   const n=checkedArray(normals,'normals',3,renderVertexCount),uv=checkedArray(uvs,'UVs',2,renderVertexCount);
   const bits=new Uint32Array(p.buffer,p.byteOffset,p.length),bit=i=>bits[i]===0x80000000?0:bits[i];
   let capacity=1;while(capacity<renderVertexCount*2)capacity<<=1;
-  const table=new Int32Array(capacity).fill(-1),renderVertexToVertex=new Uint32Array(renderVertexCount),firstRender=[];
+  const table=new Int32Array(capacity).fill(-1),renderVertexToVertex=new Uint32Array(renderVertexCount),firstRender=new Uint32Array(renderVertexCount);let welded=0;
   for(let r=0;r<renderVertexCount;r++){
     const x=bit(3*r),y=bit(3*r+1),z=bit(3*r+2);
     for(let h=hash3(x,y,z)&capacity-1;;h=h+1&capacity-1){
       const s=table[h];
-      if(s<0){table[h]=r;renderVertexToVertex[r]=firstRender.length;firstRender.push(r);break;}
+      if(s<0){table[h]=r;renderVertexToVertex[r]=welded;firstRender[welded++]=r;break;}
       if(bit(3*s)===x&&bit(3*s+1)===y&&bit(3*s+2)===z){renderVertexToVertex[r]=renderVertexToVertex[s];break;}
     }
   }
-  const vertexCount=firstRender.length,vertexPositions=new Float32Array(vertexCount*3);
-  firstRender.forEach((r,v)=>vertexPositions.set(p.subarray(3*r,3*r+3),3*v));
+  const vertexCount=welded,vertexPositions=new Float32Array(vertexCount*3);
+  for(let v=0;v<vertexCount;v++){const r=3*firstRender[v];vertexPositions[3*v]=p[r];vertexPositions[3*v+1]=p[r+1];vertexPositions[3*v+2]=p[r+2];}
   const faceCount=index.length/3,cornerRenderVertex=Uint32Array.from(index),cornerVertex=new Uint32Array(index.length);
   for(let c=0;c<index.length;c++)cornerVertex[c]=renderVertexToVertex[index[c]];
-  const faceDegenerate=new Uint8Array(faceCount),cornerEdge=new Uint32Array(index.length).fill(NO_EDGE),edgeIds=new Map(),edgePairs=[],incidence=[];
+  // Edges are numbered in order of first appearance, found through an open-addressed table of
+  // (low, high) vertex pairs; typed arrays throughout, since this runs on every edit.
+  const faceDegenerate=new Uint8Array(faceCount),cornerEdge=new Uint32Array(index.length).fill(NO_EDGE);
+  let edgeCapacity=1;while(edgeCapacity<index.length*2)edgeCapacity<<=1;
+  const edgeTable=new Int32Array(edgeCapacity).fill(-1),edgeLo=new Uint32Array(index.length),edgeHi=new Uint32Array(index.length),incidence=new Uint32Array(index.length);
+  let edgeCount=0;
   for(let f=0;f<faceCount;f++){
     const a=cornerVertex[3*f],b=cornerVertex[3*f+1],c=cornerVertex[3*f+2];
     if(a===b||b===c||c===a){faceDegenerate[f]=1;continue;}
     for(let i=0;i<3;i++){
-      const u=cornerVertex[3*f+i],v=cornerVertex[3*f+(i+1)%3],lo=Math.min(u,v),hi=Math.max(u,v),key=lo*vertexCount+hi;
-      let e=edgeIds.get(key);
-      if(e===undefined){e=edgePairs.length/2;edgeIds.set(key,e);edgePairs.push(lo,hi);incidence.push(0);}
+      const u=cornerVertex[3*f+i],v=cornerVertex[3*f+(i+1)%3],lo=u<v?u:v,hi=u<v?v:u;
+      let e=-1;
+      for(let h=hash3(lo,hi,0x51ed)&edgeCapacity-1;;h=h+1&edgeCapacity-1){
+        const s=edgeTable[h];
+        if(s<0){e=edgeCount++;edgeTable[h]=e;edgeLo[e]=lo;edgeHi[e]=hi;break;}
+        if(edgeLo[s]===lo&&edgeHi[s]===hi){e=s;break;}
+      }
       cornerEdge[3*f+i]=e;incidence[e]++;
     }
   }
-  const edgeCount=incidence.length,edgeFaceOffsets=new Uint32Array(edgeCount+1);
+  const edgeFaceOffsets=new Uint32Array(edgeCount+1);
   for(let e=0;e<edgeCount;e++)edgeFaceOffsets[e+1]=edgeFaceOffsets[e]+incidence[e];
   const edgeCorners=new Uint32Array(edgeFaceOffsets[edgeCount]),fill=edgeFaceOffsets.slice(0,edgeCount);
   for(let c=0;c<cornerEdge.length;c++)if(cornerEdge[c]!==NO_EDGE)edgeCorners[fill[cornerEdge[c]]++]=c;
-  const vertexFaceOffsets=new Uint32Array(vertexCount+1),distinct=f=>{const a=cornerVertex[3*f],b=cornerVertex[3*f+1],c=cornerVertex[3*f+2];return [a,...(b!==a?[b]:[]),...(c!==a&&c!==b?[c]:[])];};
-  for(let f=0;f<faceCount;f++)for(const v of distinct(f))vertexFaceOffsets[v+1]++;
+  const edgePairs=new Uint32Array(edgeCount*2);for(let e=0;e<edgeCount;e++){edgePairs[2*e]=edgeLo[e];edgePairs[2*e+1]=edgeHi[e];}
+  // Faces around each vertex: each distinct corner vertex of a face once.
+  const vertexFaceOffsets=new Uint32Array(vertexCount+1);
+  for(let f=0;f<faceCount;f++){const a=cornerVertex[3*f],b=cornerVertex[3*f+1],c=cornerVertex[3*f+2];vertexFaceOffsets[a+1]++;if(b!==a)vertexFaceOffsets[b+1]++;if(c!==a&&c!==b)vertexFaceOffsets[c+1]++;}
   for(let v=0;v<vertexCount;v++)vertexFaceOffsets[v+1]+=vertexFaceOffsets[v];
   const vertexFaces=new Uint32Array(vertexFaceOffsets[vertexCount]),vertexFill=vertexFaceOffsets.slice(0,vertexCount);
-  for(let f=0;f<faceCount;f++)for(const v of distinct(f))vertexFaces[vertexFill[v]++]=f;
+  for(let f=0;f<faceCount;f++){const a=cornerVertex[3*f],b=cornerVertex[3*f+1],c=cornerVertex[3*f+2];vertexFaces[vertexFill[a]++]=f;if(b!==a)vertexFaces[vertexFill[b]++]=f;if(c!==a&&c!==b)vertexFaces[vertexFill[c]++]=f;}
   return {renderVertexCount,faceCount,vertexCount,edgeCount,positions:p,normals:n,uvs:uv,renderVertexToVertex,vertexPositions,
-    cornerRenderVertex,cornerVertex,cornerEdge,faceDegenerate,edgeVertices:Uint32Array.from(edgePairs),edgeFaceOffsets,edgeCorners,vertexFaceOffsets,vertexFaces};
+    cornerRenderVertex,cornerVertex,cornerEdge,faceDegenerate,edgeVertices:edgePairs,edgeFaceOffsets,edgeCorners,vertexFaceOffsets,vertexFaces};
 }
 
 export function faceNormals(mesh) {
@@ -144,7 +156,8 @@ function components(count,find,members){
 export function faceComponents(mesh,{delimit=0,flags=null}={}) {
   flags=checkedDelimit(mesh,delimit,flags);
   const {find,union}=unionFind(mesh.faceCount),{edgeFaceOffsets:offsets,edgeCorners}=mesh;
-  for(let e=0;e<mesh.edgeCount;e++)for(let i=0;i<offsets[e+1]-offsets[e];i++)
+  if(!flags)for(let e=0;e<mesh.edgeCount;e++)for(let i=offsets[e]+1;i<offsets[e+1];i++)union(edgeCorners[offsets[e]]/3|0,edgeCorners[i]/3|0);
+  else for(let e=0;e<mesh.edgeCount;e++)for(let i=0;i<offsets[e+1]-offsets[e];i++)
     forEachLinkedPair(mesh,e,delimit,flags,i,(a,b)=>union(edgeCorners[a]/3|0,edgeCorners[b]/3|0));
   return components(mesh.faceCount,find,Array.from({length:mesh.faceCount},(_,f)=>f));
 }
@@ -155,6 +168,17 @@ export function selectLinkedFaces(mesh,seeds,{delimit=0,flags=null,barrier=null}
   const mask=new Uint8Array(mesh.faceCount),stack=[];
   for(const f of seeds){if(!Number.isInteger(f)||f<0||f>=mesh.faceCount)throw Error(`Face ${f} is not in this mesh`);if(!mask[f]){mask[f]=1;stack.push(f);}}
   const {edgeFaceOffsets:offsets,edgeCorners,cornerEdge}=mesh;
+  if(!flags){
+    // No delimit: every face on a crossed edge links, so walk the incidences directly.
+    while(stack.length){
+      const f=stack.pop();
+      for(let c=3*f;c<3*f+3;c++){
+        const e=cornerEdge[c];if(e===NO_EDGE||barrier&&barrier[e])continue;
+        for(let i=offsets[e],end=offsets[e+1];i<end;i++){const g=edgeCorners[i]/3|0;if(!mask[g]){mask[g]=1;stack.push(g);}}
+      }
+    }
+    return mask;
+  }
   while(stack.length){
     const f=stack.pop();
     for(let c=3*f;c<3*f+3;c++){

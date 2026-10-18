@@ -16,11 +16,11 @@ function environmentContext({ storage = new Map(), startup = false } = {}) {
     return elements.get(id);
   } };
   const scene = { environmentRotation: { y: 0 }, environmentIntensity: 1 };
-  const context = vm.createContext({ checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
+  const context = vm.createContext({ createUserPreferences:()=>({load:async()=>null}),checkedRimRecipe,document, scene, sceneObjects: [], currentEnvName: null,
     envCache: { studio: { name: 'studio' }, warehouse: { name: 'warehouse' } },
     HDR_ENVS: { studio: { exposure: 1.5, intensity: 1 }, warehouse: { exposure: 0.7, intensity: 0.5 } },
     environmentRecipes: {}, environmentLoadToken: 0, currentEnvMap: null, showEnvBg: false,
-    renderer: { toneMappingExposure: 1 }, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },
+    renderer: { toneMappingExposure: 1 }, sceneExposureControls: null, THREE: { Euler: class { constructor(x,y,z) { Object.assign(this,{x,y,z}); } } },
     updateBackground() {}, window: {}, console,
     Event: class { constructor(type) { this.type = type; } }, rimLight: null, controls: {},
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key,value) => storage.set(key,value) },
@@ -39,6 +39,33 @@ const tune = (c, recipe) => {
   c.renderer.toneMappingExposure = recipe.exposure;
 };
 const snapshot = c => Object.fromEntries(Object.entries(values).map(([key,id]) => [key, Number(c.document.getElementById(id).value)]));
+
+test('environment intensity permits zero through the real control and recipe path', async () => {
+  const control=source.match(/<input\b[^>]*id="env-intensity-slider"[^>]*>/)?.[0];
+  assert.ok(control,'environment intensity control exists');
+  assert.equal(Number(control.match(/\bmin="([^"]+)"/)?.[1]),0,'environment intensity must not retain a positive floor');
+  const c=environmentContext();
+  await c.loadEnvironment('studio');
+  const recipe={...c.readEnvironmentRecipe(),intensity:0};
+  c.applyEnvironmentRecipe(recipe);
+  assert.equal(c.scene.environmentIntensity,0);
+  assert.equal(Number(c.document.getElementById('env-intensity-slider').value),0);
+  assert.equal(c.readEnvironmentRecipe().intensity,0);
+});
+
+test('environment recipes retain independent exposure while the matched editor displays flame EV', async () => {
+  const c=environmentContext();let syncs=0;
+  c.sceneExposureControls={read:()=>({independent:c.renderer.toneMappingExposure}),sync(){syncs++;c.document.getElementById('exposure-slider').value='4.96';}};
+  await c.loadEnvironment('studio');
+  assert.equal(c.readEnvironmentRecipe().exposure,1.5);
+  assert.equal(c.document.getElementById('exposure-slider').value,'4.96');
+  await c.loadEnvironment('warehouse');
+  assert.equal(c.environmentRecipes.studio.exposure,1.5,'flame EV must not replace the environment multiplier');
+  assert.equal(c.renderer.toneMappingExposure,.7);
+  assert.equal(c.readEnvironmentRecipe().exposure,.7);
+  assert.equal(c.document.getElementById('exposure-slider').value,'4.96');
+  assert.ok(syncs>=2,'environment selection resynchronizes the matched editor');
+});
 
 test('environment A/B/A recalls each lighting recipe, including exposure', async () => {
   const c = environmentContext();
@@ -125,7 +152,8 @@ test('AO is attached to material indirect lighting, not multiplied over lit outp
     const c=vm.createContext({localLiquidHost:null,scenePass:pass,aoIntensity:float(3),float,
       mix:(a,b,t)=>float(a).mul(float(1).sub(t)).add(float(b).mul(t)),
       builtinAOContext:ao=>({ao}),texture:()=>({r:float(.2)}),denoiseResolved:{value:{}},screenUV:{},
-      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{},document:{body:{dataset:{}}},prePassDepth:{},
+      sceneGISettings:{mode:'gtao',view:'scene'},sceneGI:{debugState:()=>({filterImplementation:'shared'})},document:{body:{dataset:{}}},prePassDepth:{},
+      URLSearchParams,location:{search:''},
       giOutputGraphs:new Map(),renderPipeline:pipeline,isFireLightFieldRoute:()=>false,
       fireLightFieldRouteParams:()=>new URLSearchParams(),selectionFeedback:{output:value=>value},refreshRenderingControls(){}});
     vm.runInContext(part('  const aoVisibility =','  const sceneGI =')

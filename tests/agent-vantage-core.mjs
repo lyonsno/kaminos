@@ -411,3 +411,21 @@ test('recheck takes an entry id, a mesh path and an identity object', () => {
   assert.throws(() => checkedCommand({command: 'recheck', args: {id: 'beam', path: [-1], identity: null}}), /path/);
   assert.throws(() => checkedCommand({command: 'recheck', args: {id: 'beam', path: [0], identity: [1]}}), /identity/);
 });
+
+test('watch takes a window, a frame rate and an optional event name', () => {
+  const plain = checkedCommand({command: 'watch', args: {}});
+  assert.deepEqual([plain.args.seconds, plain.args.fps, plain.args.maxSize, plain.args.until], [5, 2, 320, null]);
+  assert.equal(checkedCommand({command: 'watch', args: {until: 'cut-complete', seconds: 30}}).args.until, 'cut-complete');
+  assert.throws(() => checkedCommand({command: 'watch', args: {fps: 20}}), /fps/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {seconds: 0}}), /seconds/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {seconds: 3601}}), /seconds/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {until: 'cut complete!'}}), /event/);
+});
+
+test('watch after is seconds past the event, only with an event to wait for', () => {
+  assert.equal(checkedCommand({command: 'watch', args: {}}).args.after, 0);
+  assert.equal(checkedCommand({command: 'watch', args: {until: 'pulse-end', after: 2.5}}).args.after, 2.5);
+  assert.throws(() => checkedCommand({command: 'watch', args: {after: 2}}), /until/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {until: 'pulse-end', after: -1}}), /after/);
+  assert.throws(() => checkedCommand({command: 'watch', args: {until: 'pulse-end', seconds: 3000, after: 700}}), /3600/);
+});

@@ -24,3 +24,20 @@ renderer.compileAsync=async()=>{throw Error('compile failed');};
 await assert.rejects(compileSceneLighting(renderer,[pass]),/compile failed/);
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'failure restores renderer state');
 console.log('PASS async compile matches MRT, draw flags, AO context and restores state on failure');
+
+// Native GI repro: the receiving getOutput hook must not flatten producer MRTs
+// while compileAsync builds their dependencies under the receiving context.
+let receivingCalls=0;
+pass.version++;
+pass.contextNode=TSL.context({getOutput(node){receivingCalls++;return {received:node};}});
+const nativeCache={version:pass.version,context:TSL.context({...initial.contextNode.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
+pass._contextNodeCache=nativeCache;
+renderer.compileAsync=async()=>{
+  const hook=renderer.contextNode.getFlowContextData().getOutput;
+  const producer=TSL.outputStruct(TSL.vec4(1),TSL.vec4(2));
+  assert.equal(hook(producer,{}),producer,'preserve producer output attachments during lighting compilation');
+  const surface=TSL.vec4(1);assert.deepEqual(hook(surface,{}),{received:surface});
+};
+await compileSceneLighting(renderer,[pass]);assert.equal(receivingCalls,1);
+assert.equal(pass._contextNodeCache,nativeCache,'compilation must not take custody of the native pass context cache');
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);

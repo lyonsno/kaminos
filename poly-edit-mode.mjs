@@ -3,7 +3,7 @@
 // occlusion (or x-ray through), and an overlay that rides on the edited mesh.
 // Keys and pointer wiring belong to the host; every operation here is callable
 // the same way by a hand-driven handler or an agent.
-import {BufferGeometry,DoubleSide,Float32BufferAttribute,Group,LineBasicMaterial,LineSegments,Matrix4,Mesh,MeshBasicMaterial,Points,PointsMaterial,Ray,Vector3} from './lib/three.core.js';
+import {BufferGeometry,DoubleSide,Float32BufferAttribute,Uint32BufferAttribute,Group,LineBasicMaterial,LineSegments,Matrix4,Mesh,MeshBasicMaterial,Points,PointsMaterial,Ray,Vector3} from './lib/three.core.js';
 import {MeshBVH} from './node_modules/three-mesh-bvh/build/index.module.js';
 import {buildPolyMesh,NO_EDGE} from './poly-mesh-core.mjs';
 import {createComponentSelection,setSelectMode,clickComponent,selectAll,boxSelect,selectLinkedComponents,selectionCounts} from './poly-selection.mjs';
@@ -12,11 +12,48 @@ import {createComponentSelection,setSelectMode,clickComponent,selectAll,boxSelec
 const SELECTED=0xff9a1f,WIRE=0xb8c2d6;
 function compact(attribute,width){
   if(!attribute)return null;
+  // Plain float attributes copy as they lie; interleaved or normalized ones go through the accessors.
+  if(!attribute.isInterleavedBufferAttribute&&!attribute.normalized&&attribute.itemSize===width&&attribute.array instanceof Float32Array)return attribute.array.slice(0,attribute.count*width);
   const out=new Float32Array(attribute.count*width),get=['getX','getY','getZ'];
   for(let i=0;i<attribute.count;i++)for(let k=0;k<width;k++)out[i*width+k]=attribute[get[k]](i);
   return out;
 }
-function triangleMesh(root){let found=null;root.traverse(o=>{if(!found&&o.isMesh&&o.geometry?.attributes?.position)found=o;});return found;}
+// Edges where the material changes: Select Linked stops there, so a cut cap selects on its own.
+function materialBarrier(kernel,faceMaterial){
+  const barrier=new Uint8Array(kernel.edgeCount);
+  for(let e=0;e<kernel.edgeCount;e++){
+    const first=faceMaterial[kernel.edgeCorners[kernel.edgeFaceOffsets[e]]/3|0];
+    for(let i=kernel.edgeFaceOffsets[e]+1;i<kernel.edgeFaceOffsets[e+1];i++)if(faceMaterial[kernel.edgeCorners[i]/3|0]!==first){barrier[e]=1;break;}
+  }
+  return barrier;
+}
+function triangleMeshes(root){const found=[];root.traverse(o=>{if(o.isMesh&&o.geometry?.attributes?.position)found.push(o);});return found;}
+// Every primitive of the object edits as one face set, in order, each with its own block of
+// vertices: the same order the GLB side merges primitives in, so face indices agree.
+function mergedArrays(meshes){
+  const materials=[...new Set(meshes.map(m=>m.material))];
+  const parts=meshes.map(m=>{const g=m.geometry,count=g.attributes.position.count;return {positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):Uint32Array.from({length:count},(_,i)=>i),count};});
+  const join=key=>{if(!parts.every(p=>p[key]))return null;if(parts.length===1)return parts[0][key];const out=new Float32Array(parts.reduce((n,p)=>n+p[key].length,0));let at=0;for(const p of parts){out.set(p[key],at);at+=p[key].length;}return out;};
+  const indices=new Uint32Array(parts.reduce((n,p)=>n+p.indices.length,0)),faceMaterial=new Uint8Array(indices.length/3);
+  for(let i=0,at=0,base=0;i<parts.length;i++){const p=parts[i];for(let k=0;k<p.indices.length;k++)indices[at+k]=p.indices[k]+base;faceMaterial.fill(materials.indexOf(meshes[i].material),at/3,(at+p.indices.length)/3);at+=p.indices.length;base+=p.count;}
+  return {positions:join('positions'),normals:join('normals'),uvs:join('uvs'),indices,faceMaterial,materialCount:materials.length};
+}
+
+// Prepared editing data per geometry, so Tab back into an object is immediate. Keyed by the
+// first primitive's geometry and checked against every primitive's attribute versions, so an
+// in-place geometry change (winding, normals, debris tools) prepares it afresh.
+const prepared=new WeakMap();
+const geometryVersions=meshes=>meshes.map(m=>{const g=m.geometry;return [g.id,...Object.values(g.attributes).map(a=>a.version),g.index?.version??-1].join(':');}).join('|')+'|'+meshes.map(m=>[m.material].flat().map(x=>x.id).join(',')).join('|');
+function prepare(meshes){
+  const key=meshes[0].geometry,versions=geometryVersions(meshes),cached=prepared.get(key);
+  if(cached?.versions===versions)return cached;
+  const arrays=mergedArrays(meshes),kernel=buildPolyMesh(arrays),q=kernel.vertexPositions,wirePositions=new Float32Array(kernel.edgeCount*6);
+  for(let e=0;e<kernel.edgeCount;e++){const a=3*kernel.edgeVertices[2*e],b=3*kernel.edgeVertices[2*e+1];wirePositions[6*e]=q[a];wirePositions[6*e+1]=q[a+1];wirePositions[6*e+2]=q[a+2];wirePositions[6*e+3]=q[b];wirePositions[6*e+4]=q[b+1];wirePositions[6*e+5]=q[b+2];}
+  const entry={versions,arrays,kernel,wirePositions,barrier:arrays.materialCount>1?materialBarrier(kernel,arrays.faceMaterial):null,bvh:null};
+  // Picking structure on first use, not on Tab: the first click, box or L pays for it once.
+  entry.picking=()=>{if(!entry.bvh){const picking=new BufferGeometry();picking.setAttribute('position',new Float32BufferAttribute(arrays.positions,3));picking.setIndex(new Uint32BufferAttribute(arrays.indices,1));entry.bvh=new MeshBVH(picking,{indirect:true});}return entry.bvh;};
+  prepared.set(key,entry);return entry;
+}
 
 export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   let edit=null;
@@ -29,23 +66,33 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     const {mesh,overlay,selection,kernel}=edit,q=kernel.vertexPositions;
     for(const child of [...overlay.children])if(child.userData.polySelection){overlay.remove(child);child.geometry.dispose();child.material.dispose();}
     const add=object=>{object.userData.polySelection=true;object.renderOrder=3;overlay.add(object);};
-    const faces=[];for(let f=0;f<kernel.faceCount;f++)if(selection.faces[f])for(let c=3*f;c<3*f+3;c++)faces.push(...q.subarray(3*kernel.cornerVertex[c],3*kernel.cornerVertex[c]+3));
+    // Typed arrays sized by count: this runs on every selection change.
+    const count=flags=>{let n=0;for(let i=0;i<flags.length;i++)if(flags[i])n++;return n;};
+    const put=(out,at,v)=>{out[at]=q[3*v];out[at+1]=q[3*v+1];out[at+2]=q[3*v+2];};
+    const faces=new Float32Array(count(selection.faces)*9);
+    for(let f=0,at=0;f<kernel.faceCount;f++)if(selection.faces[f])for(let c=3*f;c<3*f+3;c++,at+=3)put(faces,at,kernel.cornerVertex[c]);
     if(faces.length){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(faces,3));add(new Mesh(g,new MeshBasicMaterial({color:SELECTED,transparent:true,opacity:.35,side:DoubleSide,depthTest:!edit.through,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})));}
-    const edges=[];for(let e=0;e<kernel.edgeCount;e++)if(selection.edges[e])edges.push(...q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),...q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3));
+    const edges=new Float32Array(count(selection.edges)*6);
+    for(let e=0,at=0;e<kernel.edgeCount;e++)if(selection.edges[e]){put(edges,at,kernel.edgeVertices[2*e]);put(edges,at+3,kernel.edgeVertices[2*e+1]);at+=6;}
     if(edges.length){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(edges,3));add(new LineSegments(g,new LineBasicMaterial({color:SELECTED,depthTest:!edit.through})));}
-    const points=[];for(let v=0;v<kernel.vertexCount;v++)if(selection.vertices[v])points.push(...q.subarray(3*v,3*v+3));
+    const points=new Float32Array(count(selection.vertices)*3);
+    for(let v=0,at=0;v<kernel.vertexCount;v++)if(selection.vertices[v]){put(points,at,v);at+=3;}
     if(points.length&&selection.mode==='vertex'){const g=new BufferGeometry();g.setAttribute('position',new Float32BufferAttribute(points,3));add(new Points(g,new PointsMaterial({color:SELECTED,size:5,sizeAttenuation:false,depthTest:!edit.through})));}
     edit.wire.material.depthTest=!edit.through;edit.wire.material.needsUpdate=true;
-    mesh.material.transparent=edit.through||edit.materialState.transparent;mesh.material.opacity=edit.through?.3:edit.materialState.opacity;mesh.material.depthWrite=edit.through?false:edit.materialState.depthWrite;mesh.material.needsUpdate=true;
+    // X-ray draws the wire and selection through the mesh; the object's own materials are left
+    // alone, since renderers such as the fire-light shadow pass reject transparent casters.
     onChange(state());
   }
   const commit=selection=>{edit.selection=selection;rebuildOverlay();return result();};
 
   // A world-space ray from a client point, expressed in the mesh's own frame.
   function localRay(x,y){
-    const rect=canvas.getBoundingClientRect(),ndc=new Vector3((x-rect.left)/rect.width*2-1,-((y-rect.top)/rect.height)*2+1,.5);
-    const origin=new Vector3().setFromMatrixPosition(camera.matrixWorld),toward=ndc.unproject(camera),direction=toward.sub(origin).normalize();
-    if(camera.isOrthographicCamera){origin.set(ndc.x,ndc.y,-1).unproject(camera);direction.set(0,0,-1).transformDirection(camera.matrixWorld);}
+    const rect=canvas.getBoundingClientRect(),nx=(x-rect.left)/rect.width*2-1,ny=-((y-rect.top)/rect.height)*2+1;
+    // Orthographic rays are parallel, each starting at its own pixel; perspective rays leave the eye.
+    // (unproject changes the vector it is called on, so each ray gets a fresh one.)
+    const origin=new Vector3(),direction=new Vector3();
+    if(camera.isOrthographicCamera){origin.set(nx,ny,-1).unproject(camera);direction.set(0,0,-1).transformDirection(camera.matrixWorld);}
+    else{origin.setFromMatrixPosition(camera.matrixWorld);direction.set(nx,ny,.5).unproject(camera).sub(origin).normalize();}
     const inverse=new Matrix4().copy(edit.mesh.matrixWorld).invert();
     return new Ray(origin,direction).applyMatrix4(inverse);
   }
@@ -72,11 +119,15 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
   function visibility(projected,rect){
     const {kernel,mesh}=edit,q=kernel.vertexPositions,visible=new Uint8Array(kernel.vertexCount);
     const inverse=new Matrix4().copy(mesh.matrixWorld).invert(),eye=new Vector3().setFromMatrixPosition(camera.matrixWorld).applyMatrix4(inverse);
+    // Orthographic views look along one direction: each vertex is tested from straight in front of it.
+    const parallel=camera.isOrthographicCamera,view=new Vector3(0,0,-1).transformDirection(camera.matrixWorld).transformDirection(inverse);
+    let span=1;if(parallel){let lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];for(let i=0;i<q.length;i++){lo[i%3]=Math.min(lo[i%3],q[i]);hi[i%3]=Math.max(hi[i%3],q[i]);}span=2*Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2])+1e-6;}
     const x0=Math.min(rect.x0,rect.x1),x1=Math.max(rect.x0,rect.x1),y0=Math.min(rect.y0,rect.y1),y1=Math.max(rect.y0,rect.y1);
     for(let i=0;i<kernel.vertexCount;i++){
       const x=projected[2*i],y=projected[2*i+1];if(!(x>=x0&&x<=x1&&y>=y0&&y<=y1))continue;
-      const target=new Vector3(q[3*i],q[3*i+1],q[3*i+2]),direction=target.clone().sub(eye),distance=direction.length();direction.normalize();
-      const hit=edit.bvh.raycastFirst(new Ray(eye.clone(),direction),DoubleSide);
+      const target=new Vector3(q[3*i],q[3*i+1],q[3*i+2]),origin=parallel?target.clone().addScaledVector(view,-span):eye;
+      const direction=target.clone().sub(origin),distance=direction.length();direction.normalize();
+      const hit=edit.bvh.raycastFirst(new Ray(origin.clone(),direction),DoubleSide);
       visible[i]=!hit||hit.distance>=distance*(1-1e-4)?1:0;
     }
     return visible;
@@ -87,22 +138,19 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
     read:()=>result(),
     enter(object,{objectId=null}={}){
       if(edit)this.exit();
-      const mesh=triangleMesh(object);if(!mesh)throw Error('Edit Mode needs an object with a triangle mesh');
-      const g=mesh.geometry,arrays={positions:compact(g.attributes.position,3),normals:compact(g.attributes.normal,3),uvs:compact(g.attributes.uv,2),indices:g.index?Uint32Array.from(g.index.array):null},kernel=buildPolyMesh(arrays);
-      const bvh=new MeshBVH(g,{indirect:true}),overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
-      const wirePositions=new Float32Array(kernel.edgeCount*6),q=kernel.vertexPositions;
-      for(let e=0;e<kernel.edgeCount;e++){wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e],3*kernel.edgeVertices[2*e]+3),6*e);wirePositions.set(q.subarray(3*kernel.edgeVertices[2*e+1],3*kernel.edgeVertices[2*e+1]+3),6*e+3);}
+      const meshes=triangleMeshes(object);if(!meshes.length)throw Error('Edit Mode needs an object with a triangle mesh');
+      const mesh=meshes[0];object.updateMatrixWorld(true);
+      if(meshes.some(m=>!m.matrixWorld.equals(mesh.matrixWorld)))throw Error('Edit Mode needs every primitive of the mesh to share one placement');
+      const ready=prepare(meshes),{arrays,kernel,wirePositions}=ready,overlay=new Group();overlay.name='Edit Mode';overlay.userData.kaminosEditorHelper=true;
       const wireGeometry=new BufferGeometry();wireGeometry.setAttribute('position',new Float32BufferAttribute(wirePositions,3));
       const wire=new LineSegments(wireGeometry,new LineBasicMaterial({color:WIRE,transparent:true,opacity:.28}));wire.renderOrder=2;overlay.add(wire);mesh.add(overlay);
-      const m=mesh.material;
-      edit={object,mesh,objectId,arrays,kernel,bvh,overlay,wire,through:false,selection:createComponentSelection(kernel),materialState:{transparent:m.transparent,opacity:m.opacity,depthWrite:m.depthWrite}};
+      edit={object,mesh,objectId,arrays,kernel,barrier:ready.barrier,get bvh(){return ready.picking();},overlay,wire,through:false,selection:createComponentSelection(kernel)};
       rebuildOverlay();return result();
     },
     exit(){
       if(!edit)return {editing:false};
-      const {mesh,overlay,materialState}=edit;mesh.remove(overlay);
+      const {mesh,overlay}=edit;mesh.remove(overlay);
       overlay.traverse(o=>{o.geometry?.dispose();o.material?.dispose();});
-      Object.assign(mesh.material,materialState);mesh.material.needsUpdate=true;
       edit=null;onChange({editing:false});return {editing:false};
     },
     setMode(mode){need();return commit(setSelectMode(edit.selection,edit.kernel,mode));},
@@ -124,13 +172,39 @@ export function createPolyEditMode({camera,canvas,onChange=()=>{}}) {
         const component=componentAt(at.x,at.y);if(!component)return result();
         const field={vertex:'vertices',edge:'edges',face:'faces'}[component.kind];
         const seed=edit.selection[field][component.index]?edit.selection:clickComponent(edit.selection,edit.kernel,component,{extend:true});
-        return commit(selectLinkedComponents(seed,edit.kernel));
+        return commit(selectLinkedComponents(seed,edit.kernel,{barrier:edit.barrier}));
       }
-      return commit(selectLinkedComponents(edit.selection,edit.kernel));
+      return commit(selectLinkedComponents(edit.selection,edit.kernel,{barrier:edit.barrier}));
     },
     setThrough(on){need();if(typeof on!=='boolean')throw Error('X-ray must be true or false');edit.through=on;rebuildOverlay();return result();},
     selection:()=>need().selection,
     kernel:()=>need().kernel,
+    // Slice's plane: through the drawn line and along the view, in the mesh's own frame.
+    planeFromLine(x0,y0,x1,y1){
+      need();if(Math.hypot(x1-x0,y1-y0)<8)throw Error('Draw a longer line to slice along');
+      const a=localRay(x0,y0),b=localRay(x1,y1),p1=a.origin.clone().add(a.direction),p2=b.origin.clone().add(b.direction);
+      const normal=p1.sub(a.origin).cross(p2.sub(a.origin)).normalize();
+      return {point:a.origin.toArray(),normal:normal.toArray()};
+    },
+    // Circle cut: dragged from the joint's centre to its rim. A cylinder along the view ray through
+    // the centre, at the depth of the selection (or the mesh), with the rim ray's distance as radius.
+    circleFromDrag(x0,y0,x1,y1){
+      const {kernel,selection}=need();if(Math.hypot(x1-x0,y1-y0)<6)throw Error('Drag out further: from the centre of the joint to its rim');
+      const axisRay=localRay(x0,y0),rimRay=localRay(x1,y1),d=axisRay.direction,q=kernel.vertexPositions;
+      let depthPoint=null;try{depthPoint=new Vector3(...this.selectionMedian());}catch{}
+      if(!depthPoint){const lo=new Vector3(Infinity,Infinity,Infinity),hi=new Vector3(-Infinity,-Infinity,-Infinity),v=new Vector3();for(let i=0;i<kernel.vertexCount;i++){v.set(q[3*i],q[3*i+1],q[3*i+2]);lo.min(v);hi.max(v);}depthPoint=lo.add(hi).multiplyScalar(.5);}
+      const centre=axisRay.origin.clone().addScaledVector(d,depthPoint.clone().sub(axisRay.origin).dot(d));
+      const along=rimRay.direction.dot(d),t=centre.clone().sub(rimRay.origin).dot(d)/(Math.abs(along)>1e-9?along:1);
+      const offAxis=rimRay.origin.clone().addScaledVector(rimRay.direction,t).sub(centre);offAxis.addScaledVector(d,-offAxis.dot(d));
+      return {kind:'cylinder',point:centre.toArray(),axis:d.toArray(),radius:offAxis.length()};
+    },
+    // Where Origin to Selection puts the pivot: the median of the selected vertices, in the mesh frame.
+    selectionMedian(){
+      const {selection,kernel}=need(),q=kernel.vertexPositions,sum=[0,0,0];let n=0;
+      for(let v=0;v<kernel.vertexCount;v++)if(selection.vertices[v]){for(let k=0;k<3;k++)sum[k]+=q[3*v+k];n++;}
+      if(!n)throw Error('Select something to put the origin on');
+      return sum.map(x=>x/n);
+    },
     // What Separate needs: the selected faces, and the triangles they were selected on.
     selectedFaceMask:()=>Uint8Array.from(need().selection.faces),
     geometry(){const {positions,indices}=need().arrays;return {positions,indices};},

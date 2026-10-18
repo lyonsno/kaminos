@@ -15,7 +15,7 @@ test('visible emitter helper can be picked through nearer kiln geometry; hidden 
  const ctx={scenePointerNdc:{set(){}},renderer:{domElement:{getBoundingClientRect:()=>({left:0,top:0,right:100,bottom:100,width:100,height:100})}},camera:{},sceneObjects:[mesh,emitter],SCENE_OBJECT_POINT_PICK_THRESHOLD:.1,
  sceneRaycaster:{params:{Points:{}},setFromCamera(){},intersectObjects:()=>hits},sceneObjectRecordForDescendant:o=>o==='kiln'?mesh:emitter,
  FLAME_EMITTER_TYPE:'flame-emitter',LOCAL_LIQUID_EMITTER_TYPE:'water-emitter'};
- mesh.type='glb';emitter.type='flame-emitter';vm.createContext(ctx);vm.runInContext(grab('pickSceneObjectFromViewportPointer'),ctx);
+ ctx.isSceneItemVisible=()=>true;mesh.type='glb';emitter.type='flame-emitter';vm.createContext(ctx);vm.runInContext(grab('sceneHitsFromViewportPointer')+'\n'+grab('pickSceneObjectFromViewportPointer'),ctx);
  assert.equal(ctx.pickSceneObjectFromViewportPointer({clientX:50,clientY:50}),emitter);
  emitter.object.visible=false;ctx.sceneRaycaster.intersectObjects=()=>[{object:'kiln'}];assert.equal(ctx.pickSceneObjectFromViewportPointer({clientX:50,clientY:50}),mesh);
 });

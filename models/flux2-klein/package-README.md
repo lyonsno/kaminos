@@ -50,3 +50,7 @@ By default the pipeline loads the hosted weights (`KLEIN_HOSTED_WEIGHTS`, about 
 ## Releasing
 
 `destroy()` waits for submitted work, then releases every buffer the pipeline owns: both models' weights and working memory, the decoder, the live-preview resources and the prompt cache. It does not destroy the device. A destroyed pipeline refuses further calls; create a new one to load again.
+
+## License
+
+The code is MIT (see `LICENSE`). The weights it downloads are FLUX.2 [klein] 4B by Black Forest Labs and its Qwen3-4B text encoder by the Qwen team, both released under the Apache License 2.0, as are the converted weights.

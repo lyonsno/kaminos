@@ -6,9 +6,9 @@ import {normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlame
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const grab=name=>{const start=html.indexOf(`function ${name}(`);assert.ok(start>=0);return html.slice(start,html.indexOf('\n}',start)+2);};
 const engine={translate:[0,0,0],scale:1};let rebuilds=0,sourceWrites=0,reject=false;
-const ctx={activeSceneComposition:{},THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
+const ctx={isSceneItemVisible:()=>true,activeSceneComposition:{},THREE,structuredClone,normalizeFlameEmitterPose,normalizeFlameDomainTranslation,normalizeFlameDomainScale,effectiveFlameDomainControls,readVolumeControls:()=>({resolution:64,gridHeightRatio:2}),
  flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameDomainDraft:null,flameDomainProxy:null,flameDomainGuide:{box:new THREE.Box3()},
- selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:'flame-field',transformControls:null,document:{getElementById:()=>null},window:{},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){},
+ selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{domains:true,domainOpacity:.82,domainWidth:1,emitters:true,emitterWidth:1,emitterOpacity:.82},styleHelperLines(){},styleSimulationDomainGuide(){},sceneSelectionMembers:()=>[],FLAME_EMITTER_ID:'flame-emitter',activeSceneFieldId:'flame-field',transformControls:null,document:{getElementById:()=>null},window:{},setInfo(){},volumePrimitivesInFlameDomain:()=>[],applyFlameEmitterPose(){},
  authoredFlamePresent:true,flameEmitterPose:{position:[.2,-.76,0],rotation:[0,0,0],scale:[1,1,1]},flameEmitterInjectionSuspended:false,
  writeAuthoredFlameEmitterPose(){sourceWrites++;},volumePrototype:{relocateOrdinaryDomain(t,p,s){if(reject)throw Error('admission failed');engine.translate=[...t];engine.scale=s;rebuilds++;}}};
 vm.createContext(ctx);vm.runInContext(['flameDomainTopY','acceptedFlameDomainPose','checkedFlameDomainPose','domainTransformForPose','refreshFlameDomainPreview','writeFlameDomainPreview','setFlameDomainTranslation','settleAuthoredFlameDomain'].map(grab).join('\n'),ctx);
@@ -26,4 +26,10 @@ edits.redo();assert.equal(engine.scale,2);assert.equal(ctx.flameDomainFollowSour
 assert.throws(()=>edits.apply('@flame-domain',{rotation:[0,.1,0]}),/world axes/);
 assert.throws(()=>edits.apply('@flame-domain',{scale:[1,2,1]}),/uniform/);
 assert.equal(edits.state().active,null);
+// Tight boxes are physical world extents, not a reduction in cell count.
+edits.apply('@flame-domain',{scale:[.125,.125,.125]});
+assert.equal(engine.scale,.125);
+assert.ok(Math.abs(ctx.flameDomainGuide.box.max.x-ctx.flameDomainGuide.box.min.x-.25)<1e-10);
+assert.ok(Math.abs(ctx.flameDomainGuide.box.max.y-ctx.flameDomainGuide.box.min.y-.5)<1e-10);
+edits.undo();assert.equal(engine.scale,2);
 console.log('Actual editor preview/cancel, one restart, history and source preservation pass');

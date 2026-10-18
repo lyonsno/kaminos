@@ -30,6 +30,7 @@ const resources = {
   oracleActivityCueBuffer: buffer('oracle'), boundarySidecarBuffer: buffer('sidecar'),
   nonRidgeOpticalCaptureHeaderBuffer: buffer('capture header'),
   emissiveLightField: { incident: buffer('incident') }, quenchBuffers,
+  rayStepTelemetry: {counterBuffer:buffer('ray statistics')},
   sceneSolidTextureView: { label: 'scene solid view' },
   // The inflow aperture coverage map (binding 17) is a texture in the same closure.
   inflowCoverageTexture: { createView: () => ({ label: 'inflow coverage view' }) },
@@ -63,6 +64,7 @@ for (let q = 0; q < 2; q++) {
     resources.rayStartNoiseTexture.createView(), 'the production group binds the spatial ray-start texture');
   assert.equal(new Set(group.entries.map(e => e.binding)).size, group.entries.length,
     'all fluid render resources have distinct bindings');
+  assert.equal(group.entries.find(e=>e.binding===26)?.resource.buffer,resources.rayStepTelemetry.counterBuffer);
   assert.equal(group.entries.find(e => e.binding === 28)?.resource.label, 'joined lower planes view');
   for (let g = 0; g < 2; g++) assert.equal(group.entries.find(e => e.binding === 29 + g)?.resource.label, `joined ghost view ${g}`);
 }

@@ -44,9 +44,27 @@ const formatNumber = value => String(Math.round(value * 1000) / 1000);
  * drawn outside it, and a promise of the numbers read back. `surfaceOf`
  * casts a pick's ray at the mesh a pick map named.
  */
+// The intervals of a watch that got no frame, worked out afterwards from when
+// its frames started. Interval k runs from k·interval to the next interval's
+// start or the end, whichever comes first, and is missed when no frame started
+// inside it. Boundaries are multiplied out, never found by division, so a frame
+// on a boundary belongs to the interval that starts there. `end` is the
+// window's end, or with an event, the event plus `after`.
+export function watchMissedTicks({starts, interval, end}) {
+  const sorted = [...starts].sort((a, b) => a - b);
+  let missed = 0, next = 0;
+  for (let k = 0; k * interval < end; k++) {
+    const from = k * interval, to = Math.min((k + 1) * interval, end);
+    while (next < sorted.length && sorted[next] < from) next++;
+    if (!(next < sorted.length && sorted[next] < to)) missed++;
+  }
+  return missed;
+}
+
 export function createVantagePilot(host) {
   // `released` resolves when the current picture releases the camera.
   let capturing = false, released = Promise.resolve(), markReleased = () => {};
+  let watching = null;   // a watch in progress, for page readers
   const aspect = () => {
     const {width, height} = host.viewportSize();
     if (!(width > 0 && height > 0)) fail('viewport', 'The Kaminos viewport has no visible area');
@@ -205,6 +223,67 @@ export function createVantagePilot(host) {
   };
   const withMap = (images, wanted) => wanted && host.paintMap ? [...images, mapOf(sketch(), 480).image] : images;
 
+  // One view from the sub's own camera, with its pick map drawn in the same
+  // task with the same matrices. Everything the record says about the view is
+  // taken as it is drawn: a later edit or resize changes none of it.
+  async function glanceOf(record, {maxSize, depth, phase}) {
+    const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
+    const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
+    const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
+    let drawn, drawing = null, drawError = null;
+    try { drawn = host.renderView({optics, width, height, hide}); }
+    catch (error) { fail(phase, `The sub's view could not be drawn: ${error?.message || error}`); }
+    if (host.drawIds) {
+      try { drawing = host.drawIds({optics, width, height, hide, depth, bridges: true}); }
+      catch (error) { drawError = error?.message || String(error); }
+    }
+    let shot;
+    try { shot = await drawn.ready; }
+    catch (error) { fail(phase, `The sub's view could not be read back: ${error?.message || error}`); }
+    const item = {drawing, drawError};
+    await withPickMaps({shots: [item]});
+    return {view, sub, ratio, optics, seen, shot, item};
+  }
+
+  // An event's detail is carried only when it is plain data that copies as
+  // sent: null, booleans, finite numbers, strings, arrays and plain objects,
+  // read once from their own data properties. Anything else (getters, symbol
+  // keys, extra array properties, cycles, other objects) is reported by path,
+  // and the event itself is kept.
+  const plainCopy = (value, path, stack) => {
+    if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value)) throw new Error(`${path} is ${value}`);
+      if (Object.is(value, -0)) throw new Error(`${path} is -0, which JSON carries as 0`);
+      return value;
+    }
+    if (typeof value !== 'object') throw new Error(`${path} is a ${typeof value}`);
+    if (stack.includes(value)) throw new Error(`${path} refers back to itself`);
+    const array = Array.isArray(value), proto = Object.getPrototypeOf(value);
+    if (array ? proto !== Array.prototype : proto !== Object.prototype && proto !== null) throw new Error(`${path} is a ${value.constructor?.name ?? 'non-plain object'}`);
+    const keys = Reflect.ownKeys(value), copy = array ? [] : {};
+    for (const key of keys) {
+      if (typeof key === 'symbol') throw new Error(`${path} has a symbol key ${String(key)}`);
+      if (array && key === 'length') continue;
+      const where = array ? `${path}[${key}]` : `${path}.${key}`;
+      // An array index is a canonical integer from 0 to 2^32 - 2; JSON drops any other key.
+      if (array && !(String(Number(key)) === key && Number.isInteger(Number(key)) && Number(key) >= 0 && Number(key) < 2 ** 32 - 1)) throw new Error(`${where} is not an array entry`);
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+      if (!('value' in descriptor)) throw new Error(`${where} is a getter`);
+      if (!descriptor.enumerable) throw new Error(`${where} is not enumerable`);
+      // Defined, not assigned, so a key such as __proto__ stays an own data property.
+      Object.defineProperty(copy, key, {value: plainCopy(descriptor.value, where, [...stack, value]), enumerable: true, writable: true, configurable: true});
+    }
+    if (array && copy.length !== value.length) throw new Error(`${path} has missing entries`);
+    if (array) for (let i = 0; i < copy.length; i++) if (!(i in copy)) throw new Error(`${path}[${i}] is missing`);
+    return copy;
+  };
+  const eventDetail = detail => {
+    if (detail === undefined || detail === null) return {detail: null};
+    try { return {detail: plainCopy(detail, 'detail', [])}; }
+    catch (error) { return {detail: null, detailError: `${error?.message || String(error)}; only plain data is carried`}; }
+  };
+
   const handlers = {
     sketch: () => sketch(),
     map({size}) {
@@ -304,22 +383,7 @@ export function createVantagePilot(host) {
     async glance({pilot, maxSize, annotate, map}) {
       const record = requireSub(pilot);
       if (!host.renderView) fail('glance', 'This page cannot draw a second view of its scene');
-      const ratio = aspect(), width = ratio >= 1 ? maxSize : Math.max(1, Math.round(maxSize * ratio)), height = ratio >= 1 ? Math.max(1, Math.round(maxSize / ratio)) : maxSize;
-      // Everything the record says about the view is taken now, as it is drawn: a later edit or resize changes none of it.
-      const view = viewOf(record), sub = describe(record), optics = opticsOfView(view, ratio, {coordinateSystem: host.coordinateSystem}), hide = [record.id];
-      const seen = objectsInProjection(optics, targets().filter(object => object.type !== CAMERA_TYPE), {excludeIds: subIds()});
-      let drawn, drawing = null, drawError = null;
-      try { drawn = host.renderView({optics, width, height, hide}); }
-      catch (error) { fail('glance', `The sub's view could not be drawn: ${error?.message || error}`); }
-      if (host.drawIds) {
-        try { drawing = host.drawIds({optics, width, height, hide, depth: true, bridges: true}); }
-        catch (error) { drawError = error?.message || String(error); }
-      }
-      let shot;
-      try { shot = await drawn.ready; }
-      catch (error) { fail('glance', `The sub's view could not be read back: ${error?.message || error}`); }
-      const item = {drawing, drawError};
-      await withPickMaps({shots: [item]});
+      const {view, sub, ratio, optics, seen, shot, item} = await glanceOf(record, {maxSize, depth: true, phase: 'glance'});
       const images = withMap(picture('glance', shot, annotate, seen), map);
       host.shutter?.({kind: 'glance', label: record.label, image: images[0]});
       return {schema: VANTAGE_SCHEMA, kind: 'glance', route: 'own-camera', pilot: pilotOf(record), sub, view,
@@ -332,6 +396,99 @@ export function createVantagePilot(host) {
       if (on) requireSub(pilot);
       if (!host.live) fail('live', 'This page cannot draw a second view of its scene');
       return {schema: VANTAGE_SCHEMA, kind: 'live', live: on ? host.live.start({pilot, fps}) : host.live.stop()};
+    },
+
+    // A film strip from the sub's own camera: a glance at the start of each
+    // frame interval of the window, from wherever the sub is then. The
+    // operator's view is never borrowed. With `until`, the page event
+    // `kaminos:<until>` ends the strip at once with one more frame. Draws never
+    // stack, and no frame is drawn outside its own interval or after the deadline.
+    async watch({pilot, seconds, fps, until, after = 0, maxSize, cell, frames, map, depth}) {
+      requireSub(pilot);
+      if (!host.renderView) fail('watch', 'This page cannot draw a second view of its scene');
+      if (until && !host.listen) fail('watch', 'This page cannot listen for events, so it cannot watch until one');
+      // One watch at a time, however it was asked for: the terminal's queue and the page API both reach here.
+      if (watching) fail('busy', 'Another watch is running; ask again when it ends');
+      const mine = {pilot, until, frames: 0};
+      watching = mine;
+      const started = host.now(), interval = 1000 / fps, windowMs = seconds * 1000, afterMs = after * 1000;
+      // The deadline frames are drawn before: the window, or after an event, the event plus `after`.
+      let deadlineMs = windowMs, extended = false;
+      let event = null, wake = null;
+      const heard = until ? new Promise(resolve => { wake = resolve; }) : null;
+      // An event counts only when it comes before the deadline.
+      const stopListening = until ? host.listen(until, detail => {
+        const atMs = host.now() - started;
+        if (event || atMs >= windowMs) return;
+        event = {name: until, atMs, ...eventDetail(detail)};
+        wake();
+      }) : null;
+      // Sleeps end early when the event comes; after it, they run their length.
+      const sleep = ms => (heard && !extended ? Promise.race([host.sleep(ms), heard]) : host.sleep(ms));
+      // The next tick to draw: a tick is drawn only inside its own interval and
+      // before the deadline; ticks whose interval passed are skipped. Between the
+      // last tick and the deadline the watch keeps listening. Returns 'event', a
+      // tick, or null when the window is over. Missed intervals are counted
+      // afterwards from the frames' start times (watchMissedTicks).
+      const nextTick = async last => {
+        let tick = last + 1;
+        while (true) {
+          if (event && !extended) return 'event';
+          const elapsed = host.now() - started;
+          while (tick * interval < deadlineMs && elapsed >= Math.min((tick + 1) * interval, deadlineMs)) tick++;
+          if (elapsed >= deadlineMs) return null;
+          if (tick * interval >= deadlineMs) { await sleep(deadlineMs - elapsed); continue; }
+          if (elapsed >= tick * interval) return tick;
+          await sleep(tick * interval - elapsed);
+        }
+      };
+      const shots = [];
+      const draw = async () => {
+        shots.push({index: shots.length, atMs: host.now() - started, ...await glanceOf(requireSub(pilot), {maxSize, depth, phase: 'watch'})});
+        mine.frames = shots.length;
+      };
+      try {
+        await draw();
+        let tick = 0;
+        while (true) {
+          const next = event && !extended ? 'event' : await nextTick(tick);
+          if (next === null) break;
+          if (next === 'event') {
+            // The event came: one more frame at once shows what followed, then
+            // with `after` the cadence goes on until that long after the event,
+            // from the interval the event frame started in (boundaries multiplied
+            // out, as everywhere), so that interval is not drawn twice.
+            const startAt = host.now() - started;
+            let startedIn = tick;
+            while ((startedIn + 1) * interval <= startAt) startedIn++;
+            await draw();
+            extended = true;
+            if (afterMs <= 0) break;
+            deadlineMs = event.atMs + afterMs;
+            tick = Math.max(tick, startedIn);
+            continue;
+          }
+          await draw();
+          tick = next;
+        }
+      } finally {
+        stopListening?.();
+        if (watching === mine) watching = null;
+      }
+      const record = subRecord(pilot), first = shots[0];
+      const missedTicks = watchMissedTicks({starts: shots.map(item => item.atMs), interval, end: event ? event.atMs + afterMs : windowMs});
+      const sheet = host.sheet(shots.map(item => ({canvas: item.shot.canvas, label: `#${item.index + 1}  +${Math.round(item.atMs)} ms`})), {cell});
+      const images = [{name: 'sheet', ...host.encode(sheet)}];
+      if (frames) shots.forEach(item => images.push({name: `frame-${item.index + 1}`, ...host.encode(item.shot.canvas)}));
+      if (map && host.paintMap) images.push(mapOf(sketch(), 480).image);
+      host.shutter?.({kind: 'watch', label: record?.label ?? first.sub?.label, image: images[0]});
+      return {schema: VANTAGE_SCHEMA, kind: 'watch', route: 'own-camera', pilot, sub: record ? describe(record) : first.sub,
+        requested: {seconds, fps, until, after}, ended: event ? 'event' : 'window', ...(event ? {event} : {}), missedTicks,
+        aspect: first.ratio, naming: 'effective-camera', layers: ['scene'], omitted: [...GLANCE_OMITS],
+        image: {width: first.shot.width, height: first.shot.height}, images, view: first.view, optics: first.optics, objects: first.seen,
+        frames: shots.map(item => ({index: item.index, atMs: item.atMs, image: {width: item.shot.width, height: item.shot.height}, view: item.view, optics: item.optics,
+          ...pickMapOf(item.item), objects: item.seen})),
+        capturedAt: new Date(started).toISOString()};
     },
 
     async burst({pilot, count, interval, settle, maxSize, cell, annotate, frames, map, depth}) {
@@ -454,7 +611,7 @@ export function createVantagePilot(host) {
   }
   // idle() waits until no picture holds the camera, through back-to-back pictures.
   const idle = async () => { while (capturing) await released; };
-  return {run, isCapturing: () => capturing, idle, sketch};
+  return {run, isCapturing: () => capturing, watching: () => (watching ? {...watching} : null), idle, sketch};
 }
 
 // --- pixels ---------------------------------------------------------------
@@ -1054,6 +1211,12 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
     suspendHelpers: options => suspendEditorDrawing(options),
     frames: count => animationFrames(window, count),
     sleep: ms => new Promise(resolve => window.setTimeout(resolve, ms)),
+    // Tools announce what happened with window.dispatchEvent(new CustomEvent(`kaminos:<name>`, {detail})).
+    listen: (name, handler) => {
+      const heard = event => handler(event.detail);
+      window.addEventListener(`kaminos:${name}`, heard);
+      return () => window.removeEventListener(`kaminos:${name}`, heard);
+    },
     compose: ({maxSize}) => composeViewport({document, window, viewport, hostCanvas, maxSize}),
     encode: encodeCanvas,
     blank: isBlankCanvas,
@@ -1142,7 +1305,7 @@ export function installAgentVantage({THREE, document, window, edits, cameras, en
   const pageId = `page-${window.crypto.randomUUID()}`;
   const connection = link ? connectVantageLink({window, document, endpoint, pageId, run: pilot.run, onStatus: status => hud.link(status)}) : null;
   return {
-    pageId, run: pilot.run, capturing: pilot.isCapturing, idle: pilot.idle,
+    pageId, run: pilot.run, capturing: pilot.isCapturing, watching: pilot.watching, idle: pilot.idle,
     dispose() { stopLive(); window.clearInterval(glyphTimer); window.clearInterval(mapTimer); connection?.close(); hud.dispose(); },
   };
 }

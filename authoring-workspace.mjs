@@ -27,11 +27,12 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     <nav class="workspace-switch" aria-label="Workspace"><button type="button" data-workspace-mode="authoring">Authoring</button><button type="button" data-workspace-mode="workbench">Workbench</button></nav>
     <div id="authoring-document-actions" aria-label="Document commands"></div>
     <div class="authoring-header-spacer"></div>
+    <button type="button" id="authoring-search" title="Search commands (Space over viewport or F3)">Search · F3</button>
     <button type="button" data-workbench-tab="assets" title="Import assets and browse the full workbench">Assets</button>
     <button type="button" data-workbench-tab="generate">Generate</button>`;
   const hierarchy = document.createElement('aside');
   hierarchy.id = 'authoring-hierarchy'; hierarchy.setAttribute('aria-label', 'Scene hierarchy');
-  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2>Outliner</h2><span id="authoring-object-count"></span></div><div id="authoring-tree"></div><div class="authoring-hierarchy-bottom"><p>Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)</p></div>`;
+  hierarchy.innerHTML = `<div class="authoring-panel-heading"><h2 title="Click to select · Double-click to rename · Arrow folds children · × removes (Undo restores)">Outliner</h2><span id="authoring-object-count"></span><button type="button" id="authoring-group-selection" class="authoring-heading-action" title="Group selection" aria-label="Group selection"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h4.2l1.3 1.6H14v7.4H2zM8 7.6v3.6M6.2 9.4h3.6"/></svg></button></div><div id="authoring-tree"></div>`;
   const inspector = document.createElement('aside');
   inspector.id = 'authoring-inspector'; inspector.setAttribute('aria-label', 'Properties');
   inspector.innerHTML = `<nav class="inspector-switch" aria-label="Properties context"><button type="button" data-inspector-context="object" aria-pressed="true">Selection</button><button type="button" data-inspector-context="scene" aria-pressed="false">Scene</button></nav>
@@ -73,9 +74,28 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   byId('viewport').addEventListener('pointerleave',()=>viewportPointerInside=false);
   document.addEventListener('keydown',event=>{const key=viewportShortcut(event);if(!key||!viewportPointerInside||event.target.closest?.('input,textarea,select,[contenteditable="true"]')||document.querySelector('.file-name-prompt'))return;event.preventDefault();event.stopImmediatePropagation();const api=document.defaultView.kaminosViewportSettings,current=api.read();api.set({[key]:key==='shading'?(current.shading==='wireframe'?'solid':'wireframe'):!current[key]});},true);
 
+  // Selection and history actions draw as icons; the name and shortcut live in the tooltip.
+  const TOOLBAR_ICONS = {
+    'authoring-box': ['Box select (B)', 'M2.5 2.5h11v11h-11z', '2 1.6'],
+    'authoring-duplicate': ['Duplicate (Shift D)', 'M5.5 5.5h8v8h-8zM10.5 5.5v-3h-8v8h3'],
+    'authoring-delete': ['Delete (Delete / Backspace)', 'M3 4.5h10M6.2 4.5V3h3.6v1.5M4.4 4.5l.7 9h5.8l.7-9'],
+    'authoring-camera': ['Camera & output', 'M1.8 4.8h8.4v6.4H1.8zM10.2 7l4-2.2v6.4l-4-2.2'],
+    'authoring-frame': ['Frame selected (F)', 'M2 5.5V2h3.5M10.5 2H14v3.5M14 10.5V14h-3.5M5.5 14H2v-3.5'],
+    'authoring-undo': ['Undo (Cmd/Ctrl Z)', 'M5.5 3 2.5 6l3 3M2.5 6h7a4 4 0 0 1 0 8H7'],
+    'authoring-redo': ['Redo (Cmd/Ctrl Shift Z)', 'M10.5 3l3 3-3 3M13.5 6h-7a4 4 0 0 0 0 8H9'],
+  };
+  for (const [id, [label, path, dash]] of Object.entries(TOOLBAR_ICONS)) {
+    const button = byId(id); if (!button) continue;
+    button.classList.add('authoring-icon-button'); button.title = label; button.setAttribute('aria-label', label);
+    button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${path}"${dash ? ` stroke-dasharray="${dash}"` : ''}/></svg>`;
+  }
+  // Keep the icon actions together so a narrow viewport wraps them as one group.
+  const actions = document.createElement('div'); actions.id = 'authoring-actions'; actions.setAttribute('role', 'group'); actions.setAttribute('aria-label', 'Selection and history');
+  byId('authoring-box').before(actions); actions.append(...Object.keys(TOOLBAR_ICONS).map(byId).filter(Boolean));
   for(const [id,key] of [['selection-orientation','orientation'],['selection-pivot','pivot']])byId(id).onchange=event=>{document.defaultView.kaminosSelection.settings({[key]:event.target.value});event.target.blur();};
   for(const [id,action] of [['authoring-box','box'],['authoring-duplicate','duplicate'],['authoring-delete','remove']])byId(id).onclick=()=>{try{document.defaultView.kaminosSelection[action]();}catch(error){byId('info-bar').textContent=error.message;}byId(id).blur();};
   document.querySelector('[data-scene-group-create]').textContent='Group selection';
+  byId('authoring-group-selection').onclick=()=>{document.querySelector('[data-scene-group-create]')?.click();byId('authoring-group-selection').blur();};
   byId('apply-burner-preset').onclick=()=>{try{document.defaultView.kaminosApplyBurnerPreset();byId('authoring-presets').open=false;}catch(error){byId('info-bar').textContent=error.message;}};
   byId('scene-fire-data').onclick=()=>document.defaultView.selectSceneField('flame-field');
   byId('scene-water-data').onclick=()=>document.defaultView.selectSceneField('water-field');
@@ -140,7 +160,11 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
     if (mode !== 'workbench') return;
     document.activeElement?.blur?.();
     setInspectorActive(active); sceneTreeSlots.setActive(active);
-    if (active && byId('transform-inspector').hidden) setContext('scene');
+    if (active) {
+      const selection=byId('transform-inspector').dataset;
+      if(selection.selectedObjectId||selection.selectedGroupId||selection.selectedFieldId)setContext('object');
+      else if(byId('transform-inspector').hidden)setContext('scene');
+    }
     byId('authoring-inspector-scene-tree').hidden=true;
     document.body.classList.toggle('has-workbench-inspector',active);
   }

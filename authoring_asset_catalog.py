@@ -18,7 +18,7 @@ def generator_receipt(receipt):
     return bool(re.match(r'^(mflux|flux|ideogram|trellis|pixal|sf3d)(?:[\d_.-]|$)',kind,re.I)
                 or re.match(r'^(trellis|pixal|sf3d|flux|ideogram)(?:[\d_.-]|$)',route,re.I))
 
-def read_catalog(collection, *, roots, image_entries, origins, output_resolver, label):
+def read_catalog(collection, *, roots, image_entries, origins, output_resolver, label, levels=dict):
     if collection not in COLLECTIONS:raise ValueError('Unknown authoring asset collection')
     root=roots.get(collection)
     if root is None or not Path(root).is_dir():raise FileNotFoundError('Asset collection is not mounted')
@@ -72,8 +72,11 @@ def read_catalog(collection, *, roots, image_entries, origins, output_resolver, 
                     append(path,source,title=f'{name} · {label(filename)}' if title and Path(filename).stem not in ('output','asset') else name,job=receipt)
             except (OSError,ValueError,TypeError,KeyError) as error:warn(directory.name,error)
     else:
+        # Registered LOD levels are coarse stand-ins of another stored mesh, not assets of their own.
+        level_shas=set(levels()) if collection=='generated-meshes' else set()
         for path in sorted(root.rglob('*')):
             if not path.is_file() or not asset_kind(path) or any(p.startswith('.') for p in path.relative_to(root).parts):continue
+            if path.stem in level_shas:continue
             resolved=path.resolve()
             if not resolved.is_relative_to(root):warn(path,'Asset symlink leaves its mounted collection');continue
             rel=path.relative_to(root).as_posix();source='/api/read?'+urlencode({'root':collection,'path':rel})

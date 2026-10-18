@@ -72,7 +72,7 @@ assert.match(index, /window\.__kaminosSetActiveTab\s*=\s*setActiveTab/, 'the vie
 assert.match(index, /window\.__kaminosActiveTab\s*=\s*\(\)\s*=>/, 'the viewer exposes effective tab identity for volume-only overlay gating');
 const volumeTabAdmission = "if (isKaminosVolumeSmokeRoute(initialViewerParams)) setActiveTab('volume');";
 const sceneInitializationCall = 'const sceneInitialization = initScene();';
-const sceneInitializationContinuation = 'sceneInitialization.then(() => {';
+const sceneInitializationContinuation = 'sceneInitialization.then(async () => {';
 const volumeAdmissionPrecedesSceneInitialization = source => {
   const admissionIndex = source.indexOf(volumeTabAdmission);
   const initializationIndex = source.indexOf(sceneInitializationCall);

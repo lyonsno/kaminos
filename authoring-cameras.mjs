@@ -1,6 +1,6 @@
 import {installSceneControlHistory,installRelativeNumberDrag,formatAuthoringNumber} from './scene-control-history.mjs';
 import {checkedCameraRecord,cameraLensValue,cameraLensPatch} from './scene-camera.mjs';
-export function installCameraAuthoring({document,service,bookmarks,edits,selected,select,onError}){
+export function installCameraAuthoring({document,service,bookmarks,edits,selected,select,selectCreated=select,onError}){
  const host=document.getElementById('authoring-camera-properties'),legacy=document.createElement('details');legacy.id='camera-view-bookmarks';legacy.innerHTML='<summary>View bookmarks</summary><div class="camera-note">Saved navigation angles from the earlier view tool. Convert an angle into a camera object to use it as an authored shot.</div><button class="btn" id="camera-bookmark-convert">Create camera from bookmark</button>';
  const old=document.createElement('div');while(host.firstChild)old.append(host.firstChild);legacy.append(old);
  host.innerHTML='<h2>Scene camera</h2><select id="scene-active-camera" aria-label="Active scene camera"></select><div class="camera-actions"><button class="btn" id="scene-add-camera">Add camera</button><button class="btn" id="scene-camera-view">View camera · Num 0</button><button class="btn" id="scene-camera-align">Align camera to view</button><button class="btn" id="scene-camera-capture">Capture active camera</button></div><label class="camera-lock"><input id="scene-camera-lock" type="checkbox"> Lock Camera to View</label><p id="scene-camera-status" class="camera-note" aria-live="polite"></p><h2>Output frame</h2><label class="camera-lens-row"><span>Aspect</span><input class="transform-input" id="scene-frame-x" type="number" step="any" min="0.001" aria-label="Frame width ratio"><span>:</span><input class="transform-input" id="scene-frame-y" type="number" step="any" min="0.001" aria-label="Frame height ratio"></label><p class="camera-note">Camera capture samples the framed image at viewport resolution. It preserves the shot aspect when panels or the window resize.</p>';
@@ -30,7 +30,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
   if(state.frame){Object.assign(frameEl.style,{left:state.frame.x+'px',top:state.frame.y+'px',width:state.frame.width+'px',height:state.frame.height+'px'});frameEl.dataset.cameraId=state.activeId;frameEl.querySelector('span').textContent=data.cameras.find(o=>o.id===state.activeId)?.label||'Camera';}
  }
  const frameEl=document.createElement('div');frameEl.id='scene-camera-frame';frameEl.hidden=true;frameEl.innerHTML='<span></span>';document.getElementById('viewport').append(frameEl);
- byId('scene-add-camera').onclick=()=>run(()=>{const id=service.create();select(id);});
+ byId('scene-add-camera').onclick=()=>run(()=>{const id=service.create();selectCreated(id);});
  byId('scene-camera-view').onclick=()=>{run(()=>service.toggle());byId('scene-camera-view').blur();};
  byId('scene-active-camera').onchange=event=>{run(()=>service.setActive(event.target.value||null));event.target.blur();};
  byId('scene-camera-align').onclick=()=>run(()=>service.align());
@@ -39,7 +39,7 @@ export function installCameraAuthoring({document,service,bookmarks,edits,selecte
  byId('selected-camera-lens-unit').onchange=event=>{run(()=>service.updateData(selectedCamera().id,{lensUnit:event.target.value}));refresh();event.target.blur();};
  byId('selected-camera-active').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});
  byId('selected-camera-view').onclick=()=>run(()=>{service.setActive(selectedCamera().id);service.enter();});
- byId('camera-bookmark-convert').onclick=()=>run(()=>{const data=bookmarks.read(),view=data.items.find(item=>item.id===data.selectedId);if(!view)throw Error('Select a view bookmark first');const id=service.createFromView(view.label,view.view);select(id);});
+ byId('camera-bookmark-convert').onclick=()=>run(()=>{const data=bookmarks.read(),view=data.items.find(item=>item.id===data.selectedId);if(!view)throw Error('Select a view bookmark first');const id=service.createFromView(view.label,view.view);selectCreated(id);});
  const aspectControls=[byId('scene-frame-x'),byId('scene-frame-y')];
  const sessions=[],drags=[];
  function attach(inputs,label,readPatch){

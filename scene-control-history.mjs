@@ -43,9 +43,15 @@ export function installSceneControlHistory({controls, edits, id, label='Edit con
   return {commit,cancel,state:()=>({pending:!!active(),id:active()?ownedId:null}),dispose(){cancel();listeners.splice(0).forEach(remove=>remove());}};
 }
 
-export function formatAuthoringNumber(value) {
+// Three significant figures by default; a field that declares decimals (a
+// position in metres, an angle in degrees) keeps that many instead, so large
+// values keep their integer digits and small ones keep their resolution.
+export function formatAuthoringNumber(value, decimals) {
   const number=Number(value);
-  return value!=='' && Number.isFinite(number) ? String(Number(number.toPrecision(3))) : String(value);
+  if(value==='' || !Number.isFinite(number))return String(value);
+  const places=decimals===undefined || decimals===null || decimals==='' ? null : Number(decimals);
+  const shown=places===null ? Number(number.toPrecision(3)) : Number(number.toFixed(places));
+  return String(shown===0 ? 0 : shown);
 }
 
 export function authoringRangeFraction(value,min,max) {
@@ -67,7 +73,7 @@ function installNumberPresentation(input) {
   input.before(wrapper);wrapper.append(input,fill,display);
   let shownText,shownFraction;
   const update=()=>{
-    const value=descriptor.get.call(input),text=formatAuthoringNumber(value);
+    const value=descriptor.get.call(input),text=formatAuthoringNumber(value, input.dataset?.displayDecimals);
     const fraction=input.disabled?null:authoringRangeFraction(value,input.min,input.max);
     if(text!==shownText){display.textContent=text;shownText=text;}
     if(fraction!==shownFraction){
@@ -85,14 +91,21 @@ function installNumberPresentation(input) {
 
 /** One field: relative dragging while idle, ordinary text editing after a click. */
 export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=()=>{}}) {
-  let gesture=null, suppressClick=false;
+  let gesture=null, suppressClick=false, disposed=false;
   const doc=input.ownerDocument || document;
   const targets=[...new Set([grip,input].filter(Boolean))];
   input.readOnly=true;
   input.classList?.add('authoring-number');
   installNumberPresentation(input);
   input.title='Drag to adjust · Click to type · Shift for fine · Esc to cancel';
-  input.addEventListener('focus',()=>{if(!gesture)input.readOnly=false;}); // Tab preserves normal keyboard editing.
+  // Typing starts from the value at float precision (seven significant
+  // digits), not its binary noise; untouched, the stored value is unchanged.
+  const beginTyping=()=>{
+    input.readOnly=false;
+    const number=Number(input.value);
+    if(input.value!=='' && Number.isFinite(number)){const tidy=String(Number(number.toPrecision(7)));if(tidy!==input.value)input.value=tidy;}
+  };
+  input.addEventListener('focus',()=>{if(!gesture)beginTyping();}); // Tab preserves normal keyboard editing.
   input.addEventListener('blur',()=>{if(gesture)finish(true);input.readOnly=true;});
   function releaseGesture() {
     if(!gesture)return null;
@@ -105,7 +118,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     const ended=releaseGesture();if(!ended)return;
     if(cancel) {input.dispatchEvent(new Event('pointercancel'));suppressClick=true;}
     else if(ended.moved) {input.dispatchEvent(new Event('change',{bubbles:true}));suppressClick=true;input.readOnly=true;input.blur?.();}
-    else {input.readOnly=false;input.focus?.();input.select?.();}
+    else {beginTyping();input.focus?.();input.select?.();}
     onEnd();
   }
   function adjust(dx,fine) {
@@ -122,7 +135,8 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     input.classList?.add('scrubbing');input.value=String(value);
     input.dispatchEvent(new Event('input',{bubbles:true}));
   }
-  doc.addEventListener('mouseup',event=>{if(gesture?.continuous?.locked && event.button===0)finish();});
+  const mouseup=event=>{if(gesture?.continuous?.locked && event.button===0)finish();};
+  doc.addEventListener('mouseup',mouseup);
   for(const target of targets) {
     target.style.cursor='ew-resize';target.style.touchAction='none';
     target.addEventListener('click',event=>{
@@ -130,7 +144,7 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
       if(target!==input){event.preventDefault();input.readOnly=false;input.focus?.();input.select?.();}
     });
     target.addEventListener('pointerdown',event=>{
-      if(event.button!==0 || gesture || input.disabled)return;
+      if(disposed || event.button!==0 || gesture || input.disabled)return;
       if(target===input && doc.activeElement===input && !input.readOnly)return;
       event.preventDefault();onStart();suppressClick=false;
       input.dispatchEvent(new Event('focusin'));
@@ -154,10 +168,15 @@ export function installRelativeNumberDrag({grip,input,step,onStart=()=>{},onEnd=
     target.addEventListener('pointercancel',()=>{if(gesture?.target===target)finish(true);});
     target.addEventListener('lostpointercapture',()=>{if(gesture?.target===target && !gesture.continuous?.locked)finish(true);});
   }
-  window.addEventListener('blur',()=>finish(true));
-  document.addEventListener('keydown',event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){event.preventDefault();input.dispatchEvent(new Event('pointercancel'));input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}},true);
+  const blur=()=>finish(true);
+  const keydown=event=>{if(!gesture && doc.activeElement===input && event.key==='Escape'){event.preventDefault();input.dispatchEvent(new Event('pointercancel'));input.blur?.();return;}if(gesture&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();finish(true);}};
+  const win=doc.defaultView||window;
+  win.addEventListener('blur',blur);doc.addEventListener('keydown',keydown,true);
   // The transaction owner can finish via Escape/Enter/selection before our
   // document listener runs. Release pointer ownership without emitting a second
   // transaction-ending event back into that owner.
-  return {stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}}};
+  return {
+    stop(){if(releaseGesture()){suppressClick=true;input.readOnly=true;onEnd();}},
+    dispose(){if(disposed)return;disposed=true;finish(true);doc.removeEventListener('mouseup',mouseup);doc.removeEventListener('keydown',keydown,{capture:true});win.removeEventListener('blur',blur);},
+  };
 }

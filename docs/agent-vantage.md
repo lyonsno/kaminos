@@ -21,6 +21,9 @@ node tools/vantage.mjs orbit "Flame source" --azimuth 35 --elevation 18
 node tools/vantage.mjs snap --annotate         # picture plus a labeled copy
 node tools/vantage.mjs burst --count 6 --interval 250   # contact sheet of motion
 node tools/vantage.mjs peek                    # the person's own view, as displayed
+node tools/vantage.mjs glance                  # the sub's view from its own camera; your view is never borrowed
+node tools/vantage.mjs watch --seconds 8 --until cut-complete   # a film strip until a tool says it is done
+node tools/vantage.mjs live on                 # a small live view from the sub in its panel
 ```
 
 `node tools/vantage.mjs --help` lists every command. A target is an object id, a label or a unique part of one, `selection` for whatever is selected in the page, or `X Y Z`. Pictures go to `--out` (default `~/.local/state/kaminos/vantage/<pilot>`), one PNG per image beside one JSON record. `--pilot NAME` gives each agent its own sub. When several tabs on the same server are linked, the most recently focused visible tab answers; `--page ID` (or a unique prefix, from `pages`) chooses one.
@@ -49,6 +52,22 @@ A capture refuses instead of returning the wrong picture when:
 A pictured canvas without a frame counter is listed under `unverifiedLayers`.
 
 A command waits for the page for `--timeout` seconds. If the page never took it, it is withdrawn and will not run later. If the page took it but did not answer, the CLI says its outcome is unknown.
+
+## The sub's own view
+
+`glance`, `watch` and `live` draw the scene from the sub's own camera into their own targets, with the exact matrices of the sub's view, through the page's tone mapping and colour space. The person's view is never borrowed or held, so these can run while someone works. A glance draws the scene's meshes, lights and background. It leaves out the fire volume, local water and ambient occlusion, and says so in `omitted`; `snap` draws every layer. Each glance keeps a pick map with depth, drawn in the same task with the same matrices.
+
+`watch` is a film strip: a glance at the start of each frame interval of a window (`--seconds`, default 5; `--fps`, default 2; 320 pixels on the long side), so a 2-second watch at 2 fps draws at 0, 500, 1000 and 1500 ms. Each frame is drawn from wherever the sub is at that moment and keeps its own view, size, camera, pick map and named objects, so `pick X Y --picture RECORD.json --frame N` works on any frame, even after the viewport was resized. Depth is kept only with `--depth`. `--frames` keeps each frame as its own picture beside the contact sheet. A frame of the cadence is drawn only within its own interval and never after the deadline; the one exception is the frame owed to an event that came before the deadline, which is drawn as soon as any draw in progress finishes. Draws never stack: when a draw or a late timer passes a frame's interval, that frame is skipped. `missedTicks` is counted afterwards from the frames' start times: interval k runs from k × the frame interval to the next interval's start or the end of the watch (the window, or with an event, the event plus `--after`), whichever comes first, and is missed when no frame started inside it. The watch lasts its whole window. Other vantage commands wait until it ends, and a second watch, from the terminal or the page, is refused with phase `busy`. `--seconds` plus `--timeout` may not exceed 3600, the longest the server holds a command.
+
+`--until EVENT` ends the strip as soon as the page announces `kaminos:EVENT`, with one more frame drawn at once, so the last frame shows what followed. The event counts when it comes before the deadline; one at or after the deadline is ignored. `--after S` keeps watching on the same cadence for S seconds past the event, because what an event starts (a flame's plume after its drive pulse ends, a body still falling after a cut) often unfolds after it. The window plus `--after` plus `--timeout` may not exceed 3600 s. A tool announces something that happened with:
+
+```js
+window.dispatchEvent(new CustomEvent('kaminos:cut-complete', {detail: {pieces: 2}}));
+```
+
+The record gives the event's name, when it came (`atMs` from the start of the watch) and its `detail` when that is plain data: null, booleans, finite numbers, strings, arrays and plain objects. Detail is copied once from its own data properties. Any other detail (a Map, a Date, a function, NaN or -0, a getter, a symbol key, a missing array entry or a property on an array that is not an entry) is not altered into something else: the event still counts, `detail` is null and `detailError` says what could not be carried. Without the event, the strip ends with its window (`ended: "window"`).
+
+`live on` draws a small glance into the sub's panel on a timer (`--fps`, default 4) in place of the last picture, until `live off`. A tick is skipped while the tab is hidden, while a picture holds the camera, or while the previous frame is still being read back. `live off` reports the frames drawn, the ticks skipped and the last draw time.
 
 ## Map and sketch
 
@@ -99,11 +118,11 @@ Pictures kept without a pick map are refused. `--now` casts their camera into th
 
 To anchor something to a pick (a note's pin, for example), keep the hit's `id`, `surface.path`, `local`, `localNormal` and `geometry.identity`. `recheck --anchor FILE` (a note anchor or a saved pick) or `run('recheck', {id, path, identity})` says, without drawing, whether that mesh is still the geometry that was picked: `now` is `present`, `missing` or `mesh-missing`, and `status` is `same`, `edited` or `replaced` within the page load that picked it, `likely-same` or `replaced` from another load (vertex and index counts and sampled content decide), or `unverified` when the kept identity lacks a field the comparison reads or holds the wrong type there (a pick saved before identities were kept has none). A pictured pick keeps its map's identity even when the entry or mesh is gone, with a null status, so a later recheck can compare it if undo brings the entry back. The identity's uuid, attribute numbers and edit counts mean something only in the page load that recorded them; its counts and content samples survive a reload.
 
-A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera.
+A pick never borrows your view. In the page, `window.kaminosAgentVantage.run('pick', {from: 'operator', at: [x, y]})` does the same. `window.kaminosAgentVantage.capturing()` and `idle()` tell a page reader when a picture holds the camera; `watching()` gives the pilot, the awaited event and the frames drawn while a watch runs, and null otherwise.
 
 ## Limits
 
-- A picture borrows the viewport, so the person's view switches to the sub for a couple of frames per snap and for the whole duration of a burst.
+- `snap` and `burst` borrow the viewport, so the person's view switches to the sub for a couple of frames per snap and for the whole duration of a burst. `glance`, `watch` and `live` never do, but they leave out the fire volume, local water and ambient occlusion.
 - Pictures use the viewport's resolution and aspect, downscaled to `--max-size` (default 1280 pixels on the long side).
 - "In view" is decided from bounding boxes. Something nearer may hide an object, and helper glyphs such as emitters report their glyph bounds.
 - DOM overlays such as labels and panels are not pictured; canvases are.

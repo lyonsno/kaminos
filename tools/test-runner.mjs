@@ -29,7 +29,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, lstatSync, mkdtempSync, readlinkSync, realpathSync, rmSync, statSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -150,6 +150,57 @@ function browserVersion(executable, timeoutMs) {
   } finally {
     rmSync(profile, { recursive: true, force: true });
   }
+}
+
+// A node_modules that links to another worktree's install is shared with every
+// worktree that links to the same place, and npm ci run through the link
+// empties it for all of them.
+function nodeModulesLink(root) {
+  const dir = path.join(root, 'node_modules');
+  let stat;
+  try { stat = lstatSync(dir); } catch { return { path: dir, linkTarget: null, dangling: false }; }
+  if (!stat.isSymbolicLink()) return { path: dir, linkTarget: null, dangling: false, linkedFrom: linkedFrom(root, dir) };
+  try { return { path: dir, linkTarget: realpathSync.native(dir), dangling: false }; }
+  catch { return { path: dir, linkTarget: path.resolve(root, readlinkSync(dir)), dangling: true }; }
+}
+
+// Other worktrees of this repository whose node_modules links to this one's.
+// A worktree they link to owns a shared install. A directory with no .git
+// entry is not a repository and has none; null means git could not answer
+// (missing, timed out, or a .git that git cannot read, such as a worktree
+// whose admin directory was removed).
+function linkedFrom(root, dir) {
+  let listing;
+  try { listing = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 }); }
+  catch (error) { return typeof error.status === 'number' && !error.signal && !existsSync(path.join(root, '.git')) ? [] : null; }
+  let own;
+  try { own = realpathSync.native(dir); } catch { return []; }
+  const self = (() => { try { return realpathSync.native(root); } catch { return root; } })();
+  const found = [];
+  for (const line of listing.split('\n')) {
+    if (!line.startsWith('worktree ')) continue;
+    let tree;
+    try { tree = realpathSync.native(line.slice('worktree '.length)); } catch { continue; }
+    if (tree === self) continue;
+    const other = path.join(tree, 'node_modules');
+    try { if (lstatSync(other).isSymbolicLink() && realpathSync.native(other) === own) found.push(tree); } catch {}
+  }
+  return found.sort();
+}
+
+// npm ci or npm install, run here or where the link points, rewrites the shared
+// directory for every worktree linked to it; the only safe remedy is an install
+// of this worktree's own. unlink removes the link and never what it points at.
+function npmRemedy(link) {
+  if (!link.linkTarget) {
+    if (link.linkedFrom === null) return 'The runner could not check whether other worktrees link to node_modules here (git worktree list did not answer). If they do, npm ci or npm install here empties and rewrites it for them; check `git worktree list` before running npm ci.';
+    const others = link.linkedFrom || [];
+    if (!others.length) return 'Run npm ci.';
+    const named = others.slice(0, 3).join(', ') + (others.length > 3 ? `, and ${others.length - 3} more` : '');
+    return `node_modules here is used by ${others.length} other worktree${others.length === 1 ? '' : 's'} through a link (${named}); npm ci or npm install here empties and rewrites it for all of them, with this branch's lockfile. Before running it, make sure those worktrees can take that, or tell their owners.`;
+  }
+  if (link.dangling) return `node_modules here is a link to ${link.linkTarget}, which no longer exists. Install your own: unlink node_modules, then npm ci here.`;
+  return `node_modules here is a link to a shared install at ${link.linkTarget} that other worktrees also use; npm ci or npm install, here or there, empties or changes it for all of them. Install your own instead: unlink node_modules (this removes only the link), then npm ci here.`;
 }
 
 async function checkDependencies(root) {
@@ -539,8 +590,15 @@ export async function runSuite({
   // not run. Defaults to KAMINOS_BROWSER.
   browser = process.env.KAMINOS_BROWSER,
   browserVersionTimeoutMs = 10000,
+  // How long to wait after the last test for browser launches a test handed
+  // to a detached process. The CLI takes it from KAMINOS_LATE_LAUNCH_SETTLE_MS;
+  // the runner's own contracts set 0 except where they test late launches.
+  lateLaunchSettleMs = LATE_LAUNCH_SETTLE_MS,
 } = {}) {
   browser = browser || null;
+  const settleRequested = lateLaunchSettleMs;
+  const settleUsable = /^\d+$/.test(String(settleRequested ?? ''));
+  lateLaunchSettleMs = settleUsable ? Number(settleRequested) : LATE_LAUNCH_SETTLE_MS;
   root = path.resolve(root);
   manifestPath ||= path.join(root, 'tests', 'suite.json');
   quarantinePath ||= path.join(root, 'tests', 'quarantine.json');
@@ -560,7 +618,7 @@ export async function runSuite({
   const report = {
     schema: REPORT_SCHEMA, ok: false, failurePhase: null, error: null,
     startedAt: new Date().toISOString(), finishedAt: null,
-    effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, kinds, only,
+    effective: { root, manifestPath, quarantinePath, parallel, timeoutMs, lateLaunchSettleMs, kinds, only,
       executables: resolvedExecutables, nodeFlags: [...nodeFlags], node: process.version, python: null,
       pythonExecutable: { requested: pythonExecutable.requested, resolved: pythonExecutable.resolved, source: pythonExecutable.source, located: pythonExecutable.located,
         unusable: pythonExecutable.unusable, skippedVenv: pythonExecutable.skippedVenv, pathPrefixed: false, pathPrefix: null },
@@ -574,6 +632,7 @@ export async function runSuite({
     uncoveredTestRoots: [], excludedRoots: [], browserLaunchAttempts: [],
     orphans: { manifest: [], quarantine: [] }, notRun: [], results: [], warnings: [],
   };
+  if (!settleUsable) report.warnings.push({ source: 'runner', test: null, message: `the late-launch settle ${JSON.stringify(settleRequested)} (KAMINOS_LATE_LAUNCH_SETTLE_MS) is not a whole number of milliseconds, so the default ${LATE_LAUNCH_SETTLE_MS} ms is used; set a whole number, or leave it unset` });
   const running = new Set();
   const track = child => { running.add(child); return () => running.delete(child); };
   const killAll = () => { for (const child of running) { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch {} } } };
@@ -613,10 +672,11 @@ export async function runSuite({
     report.effective.quarantineSha256 = quarantine.sha256;
 
     report.failurePhase = 'dependencies';
+    report.effective.nodeModules = nodeModulesLink(root);
     report.effective.dependencies = await checkDependencies(root);
     const { missing, mismatched } = report.effective.dependencies;
     if (missing.length || mismatched.length) {
-      throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). Run npm ci.`), { phase: 'dependencies' });
+      throw Object.assign(new Error(`installed dependencies do not match package-lock.json (missing: ${missing.join(', ') || 'none'}; mismatched: ${mismatched.map(m => m.name).join(', ') || 'none'}). ${npmRemedy(report.effective.nodeModules)}`), { phase: 'dependencies' });
     }
 
     // The Python check reports and goes on: what it finds is a warning with
@@ -724,7 +784,7 @@ export async function runSuite({
     if (report.results.length !== planned.length) throw Object.assign(new Error(`planned ${planned.length} tests but ran ${report.results.length}`), { phase: 'execute' });
     // A test can hand off a browser launch to a detached process that fires
     // after the test exits; give such launches a moment to reach the stub.
-    await new Promise(r => setTimeout(r, LATE_LAUNCH_SETTLE_MS));
+    if (lateLaunchSettleMs > 0) await new Promise(r => setTimeout(r, lateLaunchSettleMs));
     if (existsSync(browserLog)) {
       report.browserLaunchAttempts = (await fs.readFile(browserLog, 'utf8')).trim().split('\n').filter(Boolean)
         .map(line => { const [file, pid, args] = line.split('\t'); return { file, pid: Number(pid), args }; });
@@ -813,6 +873,12 @@ function summarize({ report, reportPath }) {
   if (warned.length) lines.push(`warnings:\n  ${warned.join('\n  ')}`);
   // The browser line follows the counts line and any warnings.
   lines.push(`browser: ${report.effective?.browser ? `${report.effective.browser.executable}${report.effective.browser.version ? ` (${report.effective.browser.version})` : ''}` : 'none; browser-kind tests not run (set KAMINOS_BROWSER to a Chrome for Testing executable)'}`);
+  const shared = report.effective?.nodeModules?.linkTarget;
+  if (shared) lines.push(`node_modules: ${report.effective.nodeModules.dangling ? `link to missing ${shared}; unlink it first, then npm ci here` : `shared install at ${shared}; do not run npm ci or npm install here`}`);
+  const settle = report.effective?.lateLaunchSettleMs;
+  if (typeof settle === 'number' && settle < LATE_LAUNCH_SETTLE_MS) lines.push(`late-launch settle: ${settle} ms (KAMINOS_LATE_LAUNCH_SETTLE_MS; default ${LATE_LAUNCH_SETTLE_MS} ms); browser launches a test hands to a detached process after it exits may not be caught`);
+  const dependents = report.effective?.nodeModules?.linkedFrom?.length || 0;
+  if (dependents) lines.push(`node_modules: used by ${dependents} other worktree${dependents === 1 ? '' : 's'} through a link; npm ci or npm install here changes it for them too`);
   if (report.failurePhase) lines.push(`failure phase: ${report.failurePhase}\n${String(report.error).split('\n').filter(line => !/^\s+at\s/.test(line)).join('\n')}`);
   const list = (label, items, hint) => { if (items.length) lines.push(`${label}${hint ? ` (${hint})` : ''}:\n  ${items.join('\n  ')}`); };
   list('new failures', report.newFailures, 'fix them, or quarantine with a class, reason, owner and signature');
@@ -925,7 +991,7 @@ if (invokedAsMain) {
   const controller = new AbortController();
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => controller.abort());
   const started = Date.now();
-  const result = await runSuite({ ...args, abortSignal: controller.signal });
+  const result = await runSuite({ ...args, abortSignal: controller.signal, lateLaunchSettleMs: process.env.KAMINOS_LATE_LAUNCH_SETTLE_MS ?? LATE_LAUNCH_SETTLE_MS });
   await appendRunLedger(result, { durationMs: Date.now() - started, runId, startWarning });
   console.log(summarize(result));
   process.exit(result.report.failurePhase === 'interrupted' ? 130 : result.ok ? 0 : 1);

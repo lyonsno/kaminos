@@ -223,7 +223,7 @@ test('cockpit: the height previews while edited and applies on confirm (the page
   element('volume-grid-height-ratio', '2');
   const document = { getElementById: id => elements[id] };
   const previews = [];
-  const window = { dispatchEvent: event => previews.push(event.detail) };
+  const window = { dispatchEvent: event => {if(event.type==='kaminos-volume-grid-preview')previews.push(event.detail);} };
   class CustomEvent { constructor(type, init) { this.type = type; this.detail = init?.detail ?? null; } }
   const volumePrototype = { previewGridShape: request => ({ request: { ...request }, heightCells: Math.round(Number(request.gridHeightRatio) * 48) }) };
   const applied = [];
