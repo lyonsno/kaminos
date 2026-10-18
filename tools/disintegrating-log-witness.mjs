@@ -145,12 +145,15 @@ try{
    await page.evaluate(({blocker,position,scale})=>{const state=window.__kaminosVolumePrototype.debugState();window.kaminosSetSceneObjectTransform(blocker,{position:position??state.followingDomain.translation,scale});}, {blocker,position,scale});
    await guarded(page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision!==before,before));
    const submitted=await page.evaluate(()=>window.kaminosSceneCollision.read().runtime);
+   const evidence={name,submitted};report.collisionNegatives.push(evidence);await save();
    assert.equal(submitted.validation,'gpu-resident-unread');
    const sampled=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:Array.from(r.cells)};});
+   evidence.sampled=sampled;await save();
    assert.equal(sampled.valid,false);assert.equal(sampled.runtime.reason,reason);assert.ok(sampled.cells.every(x=>x===0));
-   const ordinary=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));
+   evidence.beforeReadoutRefresh=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
+   await guarded(page.waitForFunction(reason=>window.kaminosSceneCollision.read().runtime.reason===reason&&document.getElementById('kiln-collision-status').textContent.startsWith('Unavailable'),reason));
+   const ordinary=evidence.ordinary=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
    assert.equal(ordinary.runtime.reason,reason);assert.match(ordinary.text,/Unavailable/);
-   report.collisionNegatives.push({name,submitted,sampled,ordinary});await save();
   }
   await page.evaluate(async blocker=>{window.removeSceneObject(blocker);window.kaminosSceneAuthoring.setCollision((await window.kaminosWorkbenchExperiments.read()).objectId,true);},blocker);
   await invoke('burnerOff');await invoke('reset');
