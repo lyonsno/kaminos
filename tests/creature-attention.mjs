@@ -113,7 +113,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['flame lit'],`lighting it draws a look (${JSON.stringify(looks(w.rows))})`);
  flame.version++;w=watch(attention,c,4,t);t=w.t;
  assert.deepEqual(looks(w.rows).map(l=>l.cause),['flared up'],'turning it up draws a look');
- w=watch(attention,c,60,t);t=w.t;const again=looks(w.rows);
+ const windowStart=t;w=watch(attention,c,60,t);t=w.t;const again=looks(w.rows).filter(l=>l.t>windowStart+.05);
  assert.ok(again.length>=2&&again.every(l=>l.cause==='flickering'),`a burning flame keeps drawing glances (${JSON.stringify(again)})`);
  const busy=w.rows.filter(r=>r.focus).length/w.rows.length;
  assert.ok(busy<.6,`but not a fixed stare (${busy.toFixed(2)} of the time)`);
@@ -336,6 +336,36 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);let lv=ring.map(()=>.1),t=0;
  for(let k=0;k<40;k++){if(k===16){lv[2]*=.1;lv[3]*=.1;}a.sense({time:t,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:lv[i]}))});t=watch(a,c,.25,t).t;}
  assert.equal(a.read().history.filter(e=>e.cause==='shadow').length,0,'no shadow looks by default');
+}
+
+{
+ // Bigger, faster changes draw faster looks that linger; small ones, gentle
+ // looks that let go sooner. Measured on a flare of two sizes behind the creature.
+ const flareLook=size=>{
+  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
+  const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
+  let t=0,power=1,turnedAt=null,since=null,until=null;
+  for(let k=0;k<160;k++){if(k===16)power=size;a.sense({time:t,sourcePower:power,source:fire,samples:ring.map(point=>({point,luminance:.1*power}))});
+   for(let f=0;f<8;f++){t=run(a,c,1/32,t);const st=a.read();if(st.focus&&since===null)since=t;if(since!==null&&turnedAt===null&&st.weight>.8)turnedAt=t;if(since!==null&&until===null&&!st.focus)until=t;}}
+  assert.ok(since!==null&&turnedAt!==null,`a ${size}x flare draws a look`);
+  return {turn:turnedAt-since,held:(until??t)-since};
+ };
+ const big=flareLook(8),small=flareLook(2.5);
+ assert.ok(big.turn<small.turn*.7,`a bigger flare turns the head faster (${big.turn.toFixed(2)} s vs ${small.turn.toFixed(2)} s)`);
+ assert.ok(big.held>small.held+1,`and the look lingers longer (${big.held.toFixed(2)} s vs ${small.held.toFixed(2)} s)`);
+ assert.ok(big.held>=3,`a big flare holds attention for a while (${big.held.toFixed(2)} s)`);
+}
+
+{
+ // Hysteresis: a thing whose pull hovers around the threshold does not flicker
+ // attention on and off; catching the eye takes more than keeping it.
+ const c=creature();let interest=1;
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{id:'p',point:[1,.5,-2.6],interest}]});
+ let t=0;const rows=[];
+ for(let k=0;k<20*30;k++){interest=1+.6*Math.sin(k/30*Math.PI*1.5);t=run(a,c,1/30,t);rows.push(a.read().focus?.id??null);}
+ const changes=rows.filter((r,i)=>i&&(r===null)!==(rows[i-1]===null)).length;
+ assert.ok(changes<=4,`no on/off flicker (${changes} changes in 20 s)`);
 }
 
 console.log('Creatures look for reasons: first sight, change, renewed sight after forgetting, and idle looking around, each recorded');

@@ -61,14 +61,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
   adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
-  minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
+  lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
  let look=lookFor(profile);
  const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
  let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
  const patches=new Map();
- let weight=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
+ let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
  Object.assign(reticle.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true,kaminosAttentionReticle:true});
@@ -117,7 +117,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    // Light events sensed since the last frame: alert the creature to their
    // source wherever it is (light reaches all around).
    for(const event of pendingLight.splice(0)){
-    const m=memo(event.id);m.evidence=event.evidence??null;m.familiarity*=.4;m.impulse=Math.max(m.impulse,event.strength);m.cause=event.cause;m.alerted=true;m.eventAt=time;m.inspected=false;
+    const m=memo(event.id);m.evidence=event.evidence??null;m.urgency=Math.max(m.urgency??0,event.urgency??event.strength);m.familiarity*=.4;m.impulse=Math.max(m.impulse,event.strength);m.cause=event.cause;m.alerted=true;m.eventAt=time;m.inspected=false;
     // The light already reached the creature, so its source counts however far.
     lightSources.set(event.id,{id:event.id,label:event.label,point:event.point,interest:event.strength,noticeRadius:Infinity,transient:true,until:time+o.impulseSeconds*3});
    }
@@ -141,20 +141,23 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if((lit||changed)&&wide.visible){m.alerted=true;m.eventAt=time;}
     const s=m.alerted&&active?sight(source.point,range,2*Math.PI):plain;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
-    m.impulse*=decay;
+    m.impulse*=decay;m.urgency=(m.urgency??0)*Math.exp(-dt/o.lingerSeconds);
     if(s.visible){
      // Causes fire on transitions and changes, not on mere presence.
-     if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
-     else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
-     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.cause='moved';m.movedUnseen=false;}
+     if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
+     else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
+     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.cause='moved';m.movedUnseen=false;}
      else if(!m.seen&&!m.inspected&&m.eventAt!==time&&!source.transient){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
      m.everSeen=true;
     }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}
     m.seen=s.visible;m.last=[...source.point];
     const attended=focus?.id===source.id;
     // Inspected once familiar enough; forgotten only after it fades well below.
-    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;m.alerted=false;}}
+    if(attended){m.started=true;m.familiarity+=(1-m.familiarity)*smooth(o.inspectSeconds,dt);if(m.familiarity>=o.inspectedAt){m.inspected=true;m.forgotten=false;}}
     else{m.familiarity*=forgetThis;if(m.inspected&&m.familiarity<o.forgottenAt){m.inspected=false;m.forgotten=true;m.started=false;}}
+    // An alert lasts while its urgency does, so an urgent look can linger on
+    // something outside the usual field of view.
+    if(m.alerted&&m.inspected&&(m.urgency??0)<.15)m.alerted=false;
     // A thing seen but not yet inspected keeps its pull while in view; an
     // inspected (familiar) thing pulls only through a fresh cause.
     // It waits its turn: only a fresh event interrupts an ongoing inspection.
@@ -162,11 +165,13 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const pending=!source.transient&&m.everSeen&&!m.inspected&&(!inspecting||attended)?significance*(1-m.familiarity):0;
     if(pending>m.impulse&&!attended&&m.eventAt!==time)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
-    const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0):Math.max(m.impulse,pending);
+    // An urgent look lingers: its urgency fades over seconds and holds the look.
+    const drive=attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0,m.urgency>.15?m.urgency:0):Math.max(m.impulse,pending);
     // Only a sudden event can draw the eye beyond comfortable neck reach;
     // presence alone there would be an invisible look.
     const withinReach=s.angle<=o.reach||m.alerted;
-    const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold):0;
+    // Hysteresis: catching the eye takes the full threshold, keeping it less.
+    const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
@@ -200,9 +205,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // Beyond comfortable reach the head stays put, unless the creature was
     // alerted by a sudden change: then it turns as far as it can.
     reachable=flat.lengthSq()<1e-12||body.angleTo(flat)<=o.reach;want=reachable||memory.get(focus.id)?.alerted?1:0;
-    aim=aim?aim.lerp(target,smooth(o.aimSeconds,dt)):target;
+    const u=memory.get(focus.id)?.urgency??0,quick=1+o.urgencyGain*u;
+    aim=aim?aim.lerp(target,smooth(o.aimSeconds/quick,dt)):target;
    }else reachable=false;
-   weight+=(want-weight)*smooth(want>weight?o.acquireSeconds:o.releaseSeconds,dt);
+   // Bigger, faster changes turn the head faster and let it go more slowly.
+   const urgency=focus?memory.get(focus.id)?.urgency??0:lastUrgency;if(focus)lastUrgency=urgency;
+   weight+=(want-weight)*smooth(want>weight?o.acquireSeconds/(1+o.urgencyGain*urgency):o.releaseSeconds*(1+urgency),dt);
    if(weight<1e-3&&!focus){weight=0;aim=null;}
    if(aim&&weight>0){
     const out=look.apply(poseOf(bones,group),{target:aim.toArray(),strength:Math.min(1,weight)});
@@ -260,8 +268,10 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    if(light.powerNow===null){light.powerNow=sourcePower;light.powerUsual=sourcePower;}
    light.powerNow+=(sourcePower-light.powerNow)*fast;
    surge=Math.log((light.powerNow+1e-6)/(light.powerUsual+1e-6));
+   // How fast the light is rising, per second: a sudden jump is more urgent.
+   light.rise=dt>0?Math.max(0,(surge-(light.lastSurge??surge))/dt):0;light.lastSurge=surge;
    light.powerUsual+=(sourcePower-light.powerUsual)*slow;
-   if(surge>o.flareAt&&light.flareArmed)flare={change:surge};
+   if(surge>o.flareAt&&light.flareArmed)flare={change:surge,rise:light.rise};
   }
   // A shadow from an object darkens an area: at least two neighbouring
   // patches together. One patch dipping on its own is the field's own noise.
@@ -281,11 +291,11 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(brightest<o.flareAt*.5)light.flareArmed=true;
   if(flare)light.flareArmed=false;
   if(shadow)for(const c of shadow.area)c.patch.armed=false;
-  if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change),evidence:{power:sourcePower,powerNow:light.powerNow,powerUsual:light.powerUsual,surge:flare.change}});
+  if(flare&&source)pendingLight.push({id:source.id,label:source.label??source.id,point:[...source.point],cause:'light flared',strength:Math.min(2,.6+flare.change),urgency:flare.change*(1+flare.rise/2),evidence:{power:sourcePower,powerNow:light.powerNow,powerUsual:light.powerUsual,surge:flare.change}});
   // Each light event carries what was sensed, so a look's why can be checked.
   // Off by default: the fire's own light flickers locally as much as a real
   // shadow darkens, so luminance alone cannot tell them apart yet.
-  if(shadow&&o.lightShadows)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6+shadow.depth),evidence:{overall,typical,patches:shadow.area.map(c=>({point:c.point,now:c.patch.now,usual:c.patch.usual,depth:c.depth}))}});
+  if(shadow&&o.lightShadows)pendingLight.push({id:`shadow-${++shadows}`,label:'shadow',point:[...shadow.point],cause:'shadow',strength:Math.min(2,.6+shadow.depth),urgency:shadow.depth,evidence:{overall,typical,patches:shadow.area.map(c=>({point:c.point,now:c.patch.now,usual:c.patch.usual,depth:c.depth}))}});
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
