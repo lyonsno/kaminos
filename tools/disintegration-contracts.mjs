@@ -10,6 +10,8 @@ export function checkDisintegrationEvidence(r){
  assert.ok(final.solidCells<cold.solidCells);assert.equal(final.state.burner,false);
  assert.equal(reset.detached,0);assert.equal(reset.attached,cold.attached);assert.equal(reset.gas,0);
  for(const frame of r.frames){
+  assert.equal(frame.state.fluid?.error??null,null,'Recorded volume runtime error');
+  assert.equal(frame.state.fluid?.active,true,'Volume must remain active during burn evidence');
   assert.ok([frame.attached,frame.detached,frame.gas,frame.attachedFuel,frame.residue,frame.solidCells].every(Number.isFinite));
   assert.ok(Math.abs(frame.gas+frame.attachedFuel+frame.residue-cold.attached)<.002);
  }
