@@ -4,6 +4,15 @@ export function liveMeshFrame(result, capture, identity) {
     if (!identity[key] || result.identity?.[key] !== identity[key]) throw Error('route identity mismatch');
   }
   if (result.interactionAuthority !== false || result.authority !== 'live_native_diagnostic_not_interaction') throw Error('diagnostic authority mismatch');
+  if (capture.acquisitionMode === 'detector') {
+    const a = result.acquisitionDetails;
+    if (!identity.detector || JSON.stringify(result.identity?.detector) !== JSON.stringify(identity.detector) ||
+        a?.mode !== 'detector' || a.captureId !== capture.captureId || a.captureEpochMs !== capture.captureEpochMs ||
+        a.cropPadding !== capture.cropPadding || a.detectorThreshold !== capture.detectorThreshold ||
+        !Array.isArray(a.detections) || typeof a.fallback !== 'boolean' ||
+        result.acquisition !== (a.fallback ? 'manual_crop_fallback_no_detection' : 'wilor_yolo_detector_bbox_only') ||
+        a.fallback !== (a.detections.length === 0)) throw Error('acquisition route mismatch');
+  }
   if (!result.available || !['left','right'].includes(result.handedness) || result.verticesMeters?.length !== 778 ||
       result.verticesMeters.some(v => !Array.isArray(v) || v.length !== 3 || !v.every(Number.isFinite))) throw Error('invalid mesh');
   return new Float32Array(result.verticesMeters.flat());

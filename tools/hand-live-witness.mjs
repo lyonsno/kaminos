@@ -25,7 +25,7 @@ try {
   const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   report.initial=await read();assert.equal(report.initial.running,false);
   await page.getByRole('button',{name:'Start camera',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('5 meshes'));
+  await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=5);
   report.phase='visible_mesh';report.live=await read();save();
   assert.equal(report.live.visible,true);assert.equal(report.live.interactionAuthority,false);
   await page.screenshot({path:out+'/desktop.png'});
@@ -34,6 +34,21 @@ try {
   const second=await page.locator('#kaminos-host-renderer-canvas').screenshot();
   assert.notDeepEqual(first,second,'live mesh pixels did not change');
   writeFileSync(out+'/mesh.png',second);
+  if(report.initial.acquisitionMode==='detector') {
+    assert.equal(report.live.identity.detector.poseModelLoaded,false);
+    assert.equal(report.live.acquisition,'wilor_yolo_detector_bbox_only');
+    assert.equal(report.live.acquisitionDetails.cropPadding,1.4);
+    await page.getByRole('combobox',{name:'Crop mode',exact:true}).selectOption('manual');
+    await page.waitForFunction(()=>window.kaminosWorkbenchExperiments.read().acquisition==='operator_selected_crop_no_detector');
+    report.manual=await read();await page.screenshot({path:out+'/manual.png'});
+    await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:1}));
+    await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('NO DETECTION: MANUAL CROP FALLBACK'));
+    report.miss=await read();assert.equal(report.miss.visible,true);assert.equal(report.miss.acquisitionDetails.fallback,true);
+    await page.screenshot({path:out+'/miss.png'});
+    await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:.18}));
+    await page.waitForFunction(()=>window.kaminosWorkbenchExperiments.read().acquisition==='wilor_yolo_detector_bbox_only');
+    report.reacquired=await read();
+  }
   await page.route('http://127.0.0.1:8791/frame',route=>route.fulfill({status:503,contentType:'application/json',
     headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:8498'},body:JSON.stringify({error:'witness_inference_failure'})}));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('witness_inference_failure'));
@@ -55,7 +70,7 @@ try {
   await page.screenshot({path:out+'/failure.png'});
   await page.unroute('http://127.0.0.1:8791/frame');
   await page.getByRole('button',{name:'Start camera',exact:true}).click();
-  await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('2 meshes'));
+  await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=2);
   report.restart=await read();assert.notEqual(report.restart.sessionId,report.live.sessionId);
   await page.getByRole('button',{name:'Stop camera',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('STOPPED'));

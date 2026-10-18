@@ -18,6 +18,8 @@ export default {
     const health = await api('/health');
     if (health.status !== 'loaded' || health.identity?.model !== 'mobrecon_densestack_spiralconv' ||
         health.interactionAuthority !== false || health.faces?.length !== 1538) throw Error('unexpected native route');
+    let acquisitionMode=inputs.acquisitionMode ?? 'manual', cropPadding=Number(inputs.cropPadding ?? 1.4), detectorThreshold=Number(inputs.detectorThreshold ?? .18);
+    if (!['manual','detector'].includes(acquisitionMode) || (acquisitionMode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
     const scene = await host.scene.open();
     const captures = await openCaptureStore();
     const geometry = new BufferGeometry();
@@ -37,13 +39,15 @@ export default {
       identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
-      acquisition:'operator_selected_crop_no_detector',camera:stream?.getVideoTracks()[0]?.getSettings() ?? null});
+      acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
+      acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null});
     const sync = () => {
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
-        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | diagnostic, no interaction`;
+        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | diagnostic, no interaction`;
       if (overlay && video.videoWidth) {
-        const [x0,y0,x1,y1]=cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
+        const [x0,y0,x1,y1]=acquisitionMode==='detector' && last ? last.cropBox : cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
+        overlay.style.borderColor=last?.acquisitionDetails?.fallback?'#ff725e':acquisitionMode==='detector'?'#60e1a1':'#ffd75a';
         Object.assign(overlay.style,{left:`${x0/video.videoWidth*100}%`,top:`${y0/video.videoHeight*100}%`,
           width:`${(x1-x0)/video.videoWidth*100}%`,height:`${(y1-y0)/video.videoHeight*100}%`});
       }
@@ -68,7 +72,7 @@ export default {
     };
     const infer = async (ticket,metadata) => {
       canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-      const capture={captureId:crypto.randomUUID(),captureEpochMs:Date.now()};
+      const capture={captureId:crypto.randomUUID(),captureEpochMs:Date.now(),acquisitionMode,cropPadding,detectorThreshold};
       context.drawImage(video,0,0);
       const request={...capture,sessionId,handedness,pixelBasis:'unmirrored_camera',
         clock:'browser_sample_not_sensor_exposure',videoFrameMetadata:metadata,
@@ -101,6 +105,13 @@ export default {
         displayTransform:{center,scale:5,invertY:true}});
     };
     const frame = () => scene.setView({position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
+    const setAcquisition = value => {
+      if (!['manual','detector'].includes(value.mode) || (value.mode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
+      const padding=Number(value.padding ?? cropPadding), threshold=Number(value.threshold ?? detectorThreshold);
+      if (!Number.isFinite(padding) || padding<1 || !Number.isFinite(threshold) || threshold<0 || threshold>1) throw Error('invalid acquisition config');
+      acquisitionMode=value.mode;cropPadding=padding;detectorThreshold=threshold;sync();
+      record({kind:'hand-live.acquisition',phase:'applied',effective:read()});return read();
+    };
     frame();
     const unsubscribe=scene.onFrame(sync);
     const start = async () => {
@@ -122,7 +133,7 @@ export default {
       finally {starting=false;sync();}
     };
     return {
-      read,operations:{start,stop,frame},
+      read,operations:{start,stop,frame,setAcquisition},
       mount({root,document,invoke}) {
         const preview=document.createElement('div');preview.style.cssText='position:relative;overflow:hidden';
         overlay=document.createElement('div');overlay.style.cssText='position:absolute;border:2px solid #ffd75a;pointer-events:none;box-sizing:border-box';
@@ -134,6 +145,22 @@ export default {
         const frameButton=document.createElement('button');frameButton.textContent='Frame hand';frameButton.onclick=()=>invoke('frame');
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
+        const modeSelect=document.createElement('select');modeSelect.setAttribute('aria-label','Crop mode');
+        for(const [value,label] of [['detector','Automatic crop'],['manual','Manual crop']]) {
+          const option=document.createElement('option');option.value=value;option.textContent=label;
+          option.disabled=value==='detector'&&!health.identity.detector;modeSelect.append(option);
+        }
+        modeSelect.value=acquisitionMode;
+        modeSelect.onchange=()=>invoke('setAcquisition',{mode:modeSelect.value}).catch(cause=>{error=String(cause);sync();});
+        root.append(modeSelect);
+        for(const [label,key,value,min,step] of [['Auto padding','padding',cropPadding,1,.1],['Detector threshold','threshold',detectorThreshold,0,.01]]) {
+          const holder=document.createElement('label');holder.textContent=label;
+          const input=document.createElement('input');input.type='number';input.min=min;input.step=step;input.value=value;
+          if(key==='threshold') input.max=1;
+          input.setAttribute('aria-label',label);input.style.width='100%';
+          input.onchange=()=>invoke('setAcquisition',{mode:acquisitionMode,[key]:Number(input.value)}).catch(cause=>{error=String(cause);sync();});
+          holder.append(input);root.append(holder);
+        }
         for(const [label,value,change] of [['Crop X',cropX,v=>cropX=v],['Crop Y',cropY,v=>cropY=v],['Crop size',cropSize,v=>cropSize=v]]) {
           const holder=document.createElement('label');holder.textContent=label;
           const input=document.createElement('input');input.type='range';input.min=label==='Crop size'?'.1':'0';input.max='1';input.step='.01';input.value=value;input.setAttribute('aria-label',label);input.style.width='100%';
