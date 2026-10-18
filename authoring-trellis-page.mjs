@@ -5,18 +5,22 @@
 // resident geometry and material tensors when the run finishes.
 
 const MODEL_DEPS=async()=>{
-  const [host,inputs,generation,material]=await Promise.all([import('./models/trellis2/shared-host.js'),
-    import('./models/trellis2/generation-inputs.js'),import('./models/trellis2/trellis-generation.js'),import('./models/trellis2/trellis-material.js')]);
+  const [host,inputs,generation,material,mesh]=await Promise.all([import('./models/trellis2/shared-host.js'),
+    import('./models/trellis2/generation-inputs.js'),import('./models/trellis2/trellis-generation.js'),import('./models/trellis2/trellis-material.js'),
+    import('./models/trellis2/trellis-mesh.js')]);
   return {createTrellisSharedHost:host.createTrellisSharedHost,loadGenerationInputs:inputs.loadGenerationInputs,
-    createTrellisImageGenerationAdapter:generation.createTrellisImageGenerationAdapter,createTrellisAssetAdapter:material.createTrellisAssetAdapter};
+    createTrellisImageGenerationAdapter:generation.createTrellisImageGenerationAdapter,createTrellisAssetAdapter:material.createTrellisAssetAdapter,
+    createTrellisMeshAdapter:mesh.createTrellisMeshAdapter};
 };
 
 // decoderActivationStorage 'f16' is the queued route's accepted setting (half the decoder
 // activation memory); it needs shader-f16 on the shared device.
-export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,finishing,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
+// Every run also yields a surfel asset (trellis-surfels.mjs) from the decoded field, built from the raw
+// mesh before any cleanup. finishMesh:false stops there: no cleanup, UV or bake, and no mesh GLB.
+export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixelValues,finishing,finishMesh=true,decoderActivationStorage,signal,onPhase=()=>{},provenance={},deps}){
   if(!(pixelValues instanceof Float32Array)||pixelValues.length!==512*512*3)
     throw TypeError('TRELLIS needs the selected image as prepared 512x512 RGB pixels');
-  if(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function')
+  if(finishMesh&&(typeof finishing?.postprocessMesh!=='function'||typeof finishing?.unwrapMesh!=='function'))
     throw TypeError('TRELLIS page finishing needs mesh cleanup and UV providers');
   if(decoderActivationStorage!==undefined&&!['f32','f16'].includes(decoderActivationStorage))throw TypeError('f32 or f16 decoder activation storage');
   if(decoderActivationStorage==='f16'&&appGpu.device?.features?.has?.('shader-f16')===false)throw Error('f16 decoder activations need shader-f16 on the page device');
@@ -52,21 +56,35 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       error.name=completed.failure?.name??'Error';throw error;
     }
     const out=completed.output;
-    // The raw dual-grid mesh, kept for the surfel asset (trellis-surfels.mjs) built after the mesh.
-    let rawMesh=null;
+    // Surfels come from the raw dual-grid mesh plus the decoded material, before any cleanup, while the
+    // run still holds its tensors. A surfel failure is recorded; it never costs the mesh.
+    const surfelInputs={runtime:run.route.runtime,out,withForeground:(p,w)=>run.withForeground(p,w),
+      provenance:{...provenance,route:run.route.routeId,runId:run.runId}};
+    if(!finishMesh){
+      const meshConsumer=d.createTrellisMeshAdapter({runtime:run.route.runtime,decoded:out.geometry});
+      try{
+        await timed({phase:'post-model-mesh-extraction'});const raw=await meshConsumer.run();
+        if(raw.status!=='surface')throw Error('learned geometry has no surface; no asset');
+        const built=await buildRunSurfels({...surfelInputs,rawMesh:raw});
+        if(built.surfels.status!=='built')throw Error(`surfels could not be built: ${built.surfels.error}`);
+        result={glb:null,...built,route:run.route.routeId};
+      }finally{meshConsumer.dispose?.();}
+    }else{
+    let surfels=null;
     asset=d.createTrellisAssetAdapter({runtime:run.route.runtime,geometry:out.geometry,material:out.material,
-      postprocessMesh:mesh=>{rawMesh=mesh?.vertices instanceof Float32Array&&mesh?.triangles instanceof Uint32Array?{vertices:mesh.vertices.slice(),triangles:mesh.triangles.slice()}:null;
+      postprocessMesh:async mesh=>{
+        const rawMesh=mesh?.vertices instanceof Float32Array&&mesh?.triangles instanceof Uint32Array?{vertices:mesh.vertices,triangles:mesh.triangles}:null;
+        surfels=await buildRunSurfels({...surfelInputs,rawMesh});
         return run.withForeground('trellis-mesh-cleanup',()=>finishing.postprocessMesh(mesh));},
       unwrapMesh:mesh=>run.withForeground('trellis-uv-unwrap',()=>finishing.unwrapMesh(mesh)),
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
-    const finished=await asset.run();
+    let finished;
+    try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels=surfels;throw error;}
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
-    result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId};
-    // Surfels from the same decoded field, read while the run still holds its tensors. A surfel
-    // failure is recorded on the result; it never costs the mesh.
-    Object.assign(result,await buildRunSurfels({runtime:run.route.runtime,out,rawMesh,withForeground:(p,w)=>run.withForeground(p,w),
-      provenance:{...provenance,route:run.route.routeId,runId:run.runId}}));
+    result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId,
+      ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
+    }
   }catch(error){
     // While the run still holds its tensors: what a decoder-only replay needs.
     if(run&&generation&&error&&typeof error==='object')

@@ -187,9 +187,11 @@ test('scene frames are served while checkpoints load and while the mesh is clean
 });
 
 // A run whose asset consumer cleans a real (tiny) raw dual-grid mesh, with readable geometry and material tensors.
+const rawFixture=()=>{const coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
+  return {vertices:new Float32Array(coords.flatMap(c=>c.map(v=>(v+.5)/8-.5))),triangles:new Uint32Array([0,1,3,0,3,2])};};
 function surfelRun({failMaterial=false}={}){
   const f=fixture(),res=8,coords=[[2,2,3],[3,2,3],[2,3,3],[3,3,3],[6,6,6]];
-  const vertices=new Float32Array(coords.flatMap(c=>c.map(v=>(v+.5)/res-.5))),triangles=new Uint32Array([0,1,3,0,3,2]);
+  const {vertices,triangles}=rawFixture();
   const tensors={gc:new Int32Array(coords.flat()).buffer,mc:new Int32Array(coords.flat()).buffer,
     mf:new Float32Array(coords.flatMap(()=>[1,-1,-1,-1,.8,1])).buffer};
   const outputs={geometry:{coordinates:{id:'gc'},resolution:res},material:{coordinates:{id:'mc'},features:{id:'mf'},resolution:res}};
@@ -214,4 +216,21 @@ test('a surfel failure is recorded but never costs the mesh',async()=>{
   const result=await call(surfelRun({failMaterial:true}));
   assert.equal(result.glb,glb);assert.equal(result.surfelGlb,null);
   assert.equal(result.surfels.status,'failed');assert.match(result.surfels.error,/material readback lost/);
+});
+
+test('surfels are built from the raw mesh before cleanup, so a failed finish still carries them',async()=>{
+  const f=surfelRun();const adapter=f.deps.createTrellisAssetAdapter;
+  f.deps.createTrellisAssetAdapter=options=>({...adapter(options),async run(){await options.postprocessMesh(rawFixture());throw Error('UV unwrap failed');},dispose(){}});
+  const error=await call(f).catch(e=>e);
+  assert.match(error.message,/UV unwrap failed/);
+  assert.equal(error.trellisSurfels?.surfels?.status,'built');assert.ok(error.trellisSurfels.surfelGlb.byteLength>0);
+});
+
+test('finishMesh:false yields the surfel asset without cleanup, UV or bake',async()=>{
+  const f=surfelRun();let assetBuilt=false;const adapter=f.deps.createTrellisAssetAdapter;
+  f.deps.createTrellisAssetAdapter=o=>{assetBuilt=true;return adapter(o);};
+  f.deps.createTrellisMeshAdapter=()=>({async run(){return {status:'surface',...rawFixture()};},dispose(){}});
+  const result=await call(f,{finishMesh:false,finishing:undefined});
+  assert.equal(assetBuilt,false,'no mesh finishing');assert.equal(result.glb,null);
+  assert.equal(result.surfels.status,'built');assert.equal(result.surfels.count,5);
 });

@@ -94,3 +94,97 @@ test('each chunk draws the coarsest level whose surfels still look about a pixel
   assert.equal(levelAt(5),1,'merged x2 once its surfels are about 1.2 pixels');
   assert.equal(levelAt(12),2,'merged x4 far away');
 });
+
+// ---- scene consumers: navigation, duplication, framing and grounding, viewport, fallback colour (TS-01..05)
+// A small 512-grid sheet away from the origin, so rays through the origin miss it.
+function offsetField(){
+  const coords=new Int32Array([128,128,192,129,128,192,128,129,192,129,129,192]);
+  return buildSurfelField({vertices:new Float32Array([...coords].map(v=>(v+.5)/512-.5)),triangles:new Uint32Array([0,1,3,0,3,2]),
+    geometryCoordinates:coords,material:{coordinates:coords,features:new Float32Array([0,0,0,-1,.8,1, 0,0,0,-1,.8,1, 0,0,0,-1,.8,1, 0,0,0,-1,.8,1]),resolution:512}});
+}
+
+test('TS-01: navigation preparation keeps surfel picking: a ray that misses the field hits nothing',async()=>{
+  const {prepareNavigationGeometry}=await import('../scene-navigation.mjs');
+  const object=createSurfelObject(THREE,offsetField());object.updateMatrixWorld(true);
+  await prepareNavigationGeometry(object);
+  const miss=new THREE.Raycaster(new THREE.Vector3(0,0,1),new THREE.Vector3(0,0,-1));
+  assert.deepEqual(miss.intersectObject(object,true),[],'no template-triangle hits after preparation');
+  const p=surfelPositions(offsetField());
+  const hit=new THREE.Raycaster(new THREE.Vector3(p[0],p[1],1),new THREE.Vector3(0,0,-1)).intersectObject(object,true);
+  assert.equal(hit.length,1);assert.equal(hit[0].object,object);
+});
+
+test('TS-01: navigation depth uses the surfel field, not template triangles',async()=>{
+  const {prepareNavigationGeometry,navigationPivot}=await import('../scene-navigation.mjs');
+  const object=createSurfelObject(THREE,offsetField());object.updateMatrixWorld(true);await prepareNavigationGeometry(object);
+  const p=surfelPositions(offsetField()),camera=new THREE.PerspectiveCamera(30,1,.01,10);
+  camera.position.set(p[0],p[1],1);camera.lookAt(p[0],p[1],0);camera.updateMatrixWorld(true);
+  const pivot=navigationPivot(camera,new THREE.Vector3(),new THREE.Vector2(0,0),[object]);
+  assert.equal(pivot.source,'mesh-surface');assert.ok(Math.abs(pivot.point.z-(193/512-.5))<1e-4,'the top of the surfel cell');
+  camera.position.set(0,0,1);camera.lookAt(0,0,0);camera.updateMatrixWorld(true);
+  assert.equal(navigationPivot(camera,new THREE.Vector3(),new THREE.Vector2(0,0),[object]).source,'retained-depth','empty space keeps the retained pivot');
+});
+
+test('TS-02: a production clone keeps voxel picking and projected-size LOD, on its own transform',async()=>{
+  const {clone}=await import('../node_modules/three/examples/jsm/utils/SkeletonUtils.js');
+  const source=createSurfelObject(THREE,{...offsetField()},{viewportHeight:1050});source.scale.setScalar(1.377);source.updateMatrixWorld(true);
+  const copy=clone(source);copy.position.x=2;copy.updateMatrixWorld(true);
+  const camera=new THREE.PerspectiveCamera(50,1.5,.01,100);
+  const levelOf=(o,d)=>{const lod=o.children.find(c=>c.isLOD),wp=lod.getWorldPosition(new THREE.Vector3());camera.position.copy(wp).add(new THREE.Vector3(0,0,d));camera.lookAt(wp);camera.updateMatrixWorld(true);lod.update(camera);return lod.levels.findIndex(l=>l.object.visible);};
+  for(const d of [2.9,5,12])assert.equal(levelOf(copy,d),levelOf(source,d),`same level at ${d}`);
+  const p=surfelPositions(offsetField()),w=new THREE.Vector3(p[0],p[1],p[2]).applyMatrix4(copy.matrixWorld);
+  const hits=new THREE.Raycaster(new THREE.Vector3(w.x,w.y,5),new THREE.Vector3(0,0,-1)).intersectObject(copy,true);
+  assert.equal(hits.length,1);assert.equal(hits[0].object,copy,'the copy picks itself through its own grid walk');
+});
+
+test('TS-03: the scene-geometry proxy matches the drawn surfels for framing and grounding',()=>{
+  const object=createSurfelObject(THREE,offsetField());const proxy=object.sceneGeometry;
+  assert.ok(proxy?.isBufferGeometry,'the surfel root offers plain triangles for scene geometry consumers');
+  const box=new THREE.Box3().setFromBufferAttribute(proxy.getAttribute('position'));
+  object.updateMatrixWorld(true);const drawn=new THREE.Box3();object.traverse(o=>{if(o.isLOD)drawn.union(new THREE.Box3().setFromObject(o.levels[0].object,true));});
+  const voxel=1/512;
+  for(const a of ['x','y','z'])assert.ok(Math.abs(box.min[a]-drawn.min[a])<=3*voxel&&Math.abs(box.max[a]-drawn.max[a])<=3*voxel,`proxy bounds follow the surfels on ${a}`);
+});
+
+test('TS-04: the viewport height comes from the page and is read at every update; orthographic too',async()=>{
+  const {configureSurfelRendering}=await import('../trellis-surfels.mjs');
+  let height=1080;configureSurfelRendering({viewportHeight:()=>height});
+  try{
+    const object=createSurfelObject(THREE,{...offsetField()});object.scale.setScalar(1.377);object.updateMatrixWorld(true);
+    const lod=object.children.find(c=>c.isLOD),wp=lod.getWorldPosition(new THREE.Vector3());
+    const camera=new THREE.PerspectiveCamera(50,1.5,.01,100);camera.position.copy(wp).add(new THREE.Vector3(0,0,5));camera.lookAt(wp);camera.updateMatrixWorld(true);
+    const level=()=>{lod.update(camera);return lod.levels.findIndex(l=>l.object.visible);};
+    assert.equal(level(),1);height=2160;assert.equal(level(),0,'a taller drawing buffer keeps more detail');
+    const ortho=new THREE.OrthographicCamera(-1,1,1,-1,.01,100);ortho.position.copy(camera.position);ortho.updateMatrixWorld(true);
+    height=1080;ortho.zoom=.1;ortho.updateProjectionMatrix();lod.update(ortho);const far=lod.levels.findIndex(l=>l.object.visible);
+    ortho.zoom=8;ortho.updateProjectionMatrix();lod.update(ortho);const near=lod.levels.findIndex(l=>l.object.visible);
+    assert.ok(far>near,'zooming an orthographic view in selects finer surfels');
+  }finally{configureSurfelRendering({viewportHeight:null});}
+});
+
+test('TS-05: the fallback mesh carries linear vertex colour, like the plugin',async()=>{
+  const coords=new Int32Array([3,3,3]);
+  const field=buildSurfelField({vertices:new Float32Array([...coords].map(v=>(v+.5)/8-.5)),triangles:new Uint32Array(),geometryCoordinates:coords,
+    material:{coordinates:coords,features:new Float32Array([0,0,0,-1,.8,1]),resolution:8}});
+  const {json}=readSurfelGLBExtension(encodeSurfelGLB(field,{fallbackFactor:1}));
+  const glb=encodeSurfelGLB(field,{fallbackFactor:1}),view=new DataView(glb),jl=view.getUint32(12,true),acc=json.accessors[1],bv=json.bufferViews[acc.bufferView];
+  const r=new Uint8Array(glb,28+jl+bv.byteOffset,4)[0]/255;
+  assert.ok(Math.abs(r-new THREE.Color().setRGB(128/255,0,0,THREE.SRGBColorSpace).r)<1/255+1e-6,`fallback stores linear ${r}`);
+});
+
+test('TS-03: framing and Snap Ground read the surfel proxy, so a grounded surfel asset rests on the ground',async()=>{
+  const fs=await import('node:fs');const {snapGroundWorldDelta}=await import('../asset-resting-plane.mjs');
+  const source=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=source.indexOf('function sceneObjectWorldGeometry(');const end=source.indexOf('function sceneObjectWorldPoints(',start);
+  const readGeometry=new Function('THREE',source.slice(start,end)+'return sceneObjectWorldGeometry;')(THREE);
+  // the encoded node matrix plus an authored transform, around an asymmetric, offset field
+  const object=createSurfelObject(THREE,offsetField()),node=new THREE.Group();
+  node.matrix.fromArray([1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]);node.matrixAutoUpdate=false;node.add(object);
+  const authored=new THREE.Group();authored.add(node);authored.position.set(.3,1.2,-.4);authored.rotation.y=.7;authored.scale.setScalar(1.377);authored.updateMatrixWorld(true);
+  const g=readGeometry(authored,{triangles:true});
+  const drawn=new THREE.Box3();object.traverse(o=>{if(o.isLOD)drawn.union(new THREE.Box3().setFromObject(o.levels[0].object,true));});
+  const consumer=new THREE.Box3().setFromArray(g.points);const tol=4*1.377/512;
+  for(const a of ['x','y','z'])assert.ok(Math.abs(consumer.min[a]-drawn.min[a])<=tol&&Math.abs(consumer.max[a]-drawn.max[a])<=tol,`consumer bounds follow the surfels on ${a}`);
+  const {delta}=snapGroundWorldDelta({...g,groundY:0});
+  assert.ok(Math.abs(drawn.clone().applyMatrix4(delta).min.y)<=tol,'after Snap Ground the surfels rest on the ground');
+});

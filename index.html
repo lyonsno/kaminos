@@ -3275,9 +3275,11 @@ import {
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { trellisSurfelsGLTFPlugin } from './trellis-surfels.mjs';
+import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
+// Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
+configureSurfelRendering({ viewportHeight: () => { try { return renderer?.domElement?.height || 0; } catch { return 0; } } });
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
@@ -12357,8 +12359,12 @@ window.undoLeveling = function() {
 
 function sceneObjectWorldGeometry(object, { triangles: withTriangles = false } = {}) {
   object.updateWorldMatrix(true, true);
-  const meshes = [];
-  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position')) meshes.push(child); });
+  // An object offering sceneGeometry (a TRELLIS surfel field: its triangles live in instance transforms)
+  // answers with that plain geometry in place of its mesh descendants.
+  const meshes = [], proxied = [];
+  object.traverse(child => { if (child.sceneGeometry?.getAttribute?.('position')) { proxied.push(child); meshes.push({ geometry: child.sceneGeometry, matrixWorld: child.matrixWorld }); } });
+  const underProxy = child => { for (let p = child; p; p = p.parent) if (proxied.includes(p)) return true; return false; };
+  object.traverse(child => { if (child.isMesh && child.geometry?.getAttribute('position') && !(proxied.length && underProxy(child))) meshes.push(child); });
   const total = meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute('position').count, 0);
   const points = new Float32Array(total * 3), v = new THREE.Vector3();
   const triangles = [];
@@ -26941,6 +26947,10 @@ function setupAuthoringAssets(){
   // the other. Storing the surfels never fails the mesh; the outcome is kept in the mesh's generation record.
   const sha256Of=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
   const persistTrellisPageRun=async out=>{
+    // A surfels-only run (finishMesh:false) stores the surfel asset as the result.
+    if(!out.glb){if(!out.surfelGlb)throw Error('TRELLIS run produced neither a mesh nor surfels');
+      const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',surfels:undefined},out.label,'TRELLIS surfels');
+      return {...saved,surfels:{...out.surfels,sha256:saved.sha256,source:saved.source}};}
     let surfels=out.surfels??{status:'not built'};
     if(out.surfelGlb){
       try{const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',meshSha256:await sha256Of(out.glb),surfels:undefined},out.label,'TRELLIS surfels');
@@ -26955,7 +26965,7 @@ function setupAuthoringAssets(){
   // Browser U2Net for opaque photos: the shop-hosted package (immutable revision, sha-checked on load).
   const U2NET_PACKAGE_URL='https://huggingface.co/BasinShapers/u2net-webgpu/resolve/f4f82a54b6e8d7ffd4321005dbff1cb03198c78b/f32/';
   let u2netRunner=null;
-  const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase,onInput}={})=>{
+  const trellisPageRunInner=async({pixels,image,label='TRELLIS page',signal,onPhase,onInput,finishMesh=true}={})=>{
     const response=await fetch('/api/runtime-config',{cache:'no-store'});const config=response.ok?await response.json():{};
     const [{runTrellisInPage,createTrellisPageCheckpoints},{createBrowserMeshPostprocess},{createWasmXatlasUnwrapper}]=await Promise.all([
       import('./authoring-trellis-page.mjs'),import('./models/trellis2/mesh-cleanup.js'),import('./models/trellis2/wasm-xatlas.js')]);
@@ -26993,7 +27003,7 @@ function setupAuthoringAssets(){
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
     try{
       const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
-      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',
+      const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
         provenance:{checkpointManifestSha256:pack.manifestSha256,
