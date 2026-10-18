@@ -8,7 +8,7 @@ fs.mkdirSync(args.out,{recursive:true});const report={status:'failed',phase:'sta
 const equalHeads=(a,b)=>assert.deepEqual(a.joints.map(j=>[j.name,j.parent,j.head]),b.joints.map(j=>[j.name,j.parent,j.head]));
 try{
  report.runtime=await(await fetch(new URL('/api/runtime-config',args.url))).json();assert.equal(report.runtime.source.commit,args.commit);assert.equal(report.runtime.source.repoRoot,args['repo-root']);assert.equal(report.runtime.source.dirty,false);
- const {chromium}=await import(args.playwright);context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(args.out,'profile-')),{executablePath:args.browser,headless:true,viewport:{width:1700,height:1100},args:['--use-mock-keychain','--password-store=basic']});page=await context.newPage();page.on('pageerror',e=>report.errors.push(e.message));
+ const {chromium}=await import(args.playwright);context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(args.out,'profile-')),{executablePath:args.browser,headless:true,viewport:{width:1700,height:1100},args:['--use-mock-keychain','--password-store=basic']});page=await context.newPage();page.on('pageerror',e=>{report.errors.push(e.message);(report.errorStacks??=[]).push({phase:report.phase,checks:report.checks.length,stack:e.stack});});
  report.phase='mount';await page.goto(args.url);await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='marionette/rest-skeleton');await page.waitForTimeout(600);
  const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),invoke=(name,value)=>page.evaluate(({name,value})=>window.kaminosWorkbenchExperiments.invoke(name,value),{name,value});
  const ratio=s=>s.proportions.candidate.features.find(f=>f.id==='shoulderWidth').value;
