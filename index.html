@@ -22973,7 +22973,7 @@ async function addFirstFlameField(presetId,{signal}={}) {
   await scenePlacementTools.edits.applySettled('@first-flame-field',{composition,settings,sourcePresent:true,route},'Add flame field and source');
   if(!activeSceneComposition)throw Error('Flame creation was undone during mount');
   setActiveSceneObject(FLAME_EMITTER_ID);
-  const clamped=window.__kaminosFlameBasinClamps||[];
+  const clamped=globalThis.__kaminosFlameBasinClamps||[];
   setInfo(clamped.length?`Added flame from the saved basin, clamped to range (${clamped.map(clamp=>clamp.message).join('; ')}). Move its source; Undo removes the field.`:'Added flame from the saved basin. Move its source; Undo removes the field.');
   return FLAME_EMITTER_ID;
 }
