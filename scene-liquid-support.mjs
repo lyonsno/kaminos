@@ -5,7 +5,8 @@ export function sceneLiquidCollider(record) {
  if(record?.type!=='procedural-mesh'||record.waterCollision===false||!['plane','sphere','bowl'].includes(record.geometry?.kind))return null;
  const {kind,parameters:p}=checkedGeometry(record.geometry);
  let position,scale,rotation;
- if(record.object){record.object.updateWorldMatrix(true,false);for(let node=record.object;node;node=node.parent)if(!node.visible)return null;
+ if(record.object){record.object.updateWorldMatrix(true,false);
+  // Viewport hiding masks Object3D.visible during submission; collision is authored separately.
   position=new Vector3();scale=new Vector3();rotation=new Quaternion();record.object.matrixWorld.decompose(position,rotation,scale);
  }else{position=new Vector3(...record.transform.position);scale=new Vector3(...record.transform.scale);rotation=new Quaternion().setFromEuler(new Euler(...record.transform.rotation));}
  if(!(scale.x>0)||[scale.y,scale.z].some(v=>Math.abs(v-scale.x)>1e-6*scale.x))throw Error(`Water collider ${record.id} requires positive uniform scale`);
