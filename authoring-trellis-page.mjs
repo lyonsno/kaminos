@@ -80,7 +80,7 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
       provenance:{input:'caller-prepared pixels',...provenance,route:run.route.routeId,modelIdentities:out.modelIdentities},
       onPhase:timed});
     let finished;
-    try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels=surfels;throw error;}
+    try{finished=await asset.run();}catch(error){if(surfels&&error&&typeof error==='object')error.trellisSurfels={...surfels,route:run.route.routeId};throw error;}
     if(!(finished.glb?.byteLength>=12)||new DataView(finished.glb).getUint32(0,true)!==0x46546c67)throw Error('TRELLIS page run returned bytes that are not a GLB');
     result={glb:finished.glb,uv:finished.mesh?.uvMetadata??null,material:finished.textures?.metadata??null,route:run.route.routeId,
       ...(surfels??{surfelGlb:null,surfels:{status:'failed',error:'the asset consumer did not hand over the raw mesh'}})};
@@ -170,9 +170,13 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     return value.status==='available'?null:(value.message||'TRELLIS cannot run in this page');};
   const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
   async function storePending(){
-    set({status:'saving',stage:'Saving mesh',progress:'Saving generated mesh…'});
-    const {glb,generation,label,surfelGlb,surfels}=state.pending;const saved=await persist(glb,generation,label,{surfelGlb,surfels});
-    state.results.push(saved);state.pending=null;set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
+    const {glb,generation,label,surfelGlb,surfels,meshError}=state.pending;
+    set({status:'saving',stage:glb?'Saving mesh':'Saving surfels',progress:glb?'Saving generated mesh…':'Saving the surfels from the decoded field…'});
+    const saved=await persist(glb,generation,label,{surfelGlb,surfels});
+    state.results.push(saved);state.pending=null;
+    // A mesh-finishing failure stays the run's outcome; the surfels are what it kept.
+    if(meshError)set({status:'failed',error:`inference: ${meshError}; surfels saved`,stage:null,progress:'The mesh could not be finished. The surfels from the decoded field were saved.'});
+    else set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
     return saved;
   }
   return {
@@ -198,8 +202,8 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
+      const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
       try{
-        const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null};
@@ -209,6 +213,16 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
         // stopping is still a failure (the run may hold resources).
         const cancelled=error===abort.signal.reason||error?.name==='AbortError';
         if(abort.signal.aborted&&cancelled&&phase!=='persistence'){set({status:'stopped',error:null,stage:null,progress:'TRELLIS stopped. Your scene is unchanged.'});return null;}
+        // Decoding succeeded and mesh finishing failed: keep the surfels built before cleanup, saved
+        // through the same pending/retry path, with the mesh failure as the run's outcome.
+        const kept=phase==='inference'&&!cancelled?error?.trellisSurfelsRun:null;
+        if(kept?.surfelGlb){
+          const message=error?.message||String(error);
+          state.pending={glb:null,generation:{...kept.generation,input:{...kept.generation?.input,source:input.source}},label:kept.label||label,
+            surfelGlb:kept.surfelGlb,surfels:kept.surfels??null,meshError:message};
+          try{await storePending();}catch(persistError){set({status:'failed',error:`inference: ${message}; surfels not saved yet: ${persistError.message}`,stage:null});}
+          throw error;
+        }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
       }finally{active=false;abort=null;state.canStop=false;publish();}
     },

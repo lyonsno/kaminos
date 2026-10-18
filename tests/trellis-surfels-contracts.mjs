@@ -188,3 +188,18 @@ test('TS-03: framing and Snap Ground read the surfel proxy, so a grounded surfel
   const {delta}=snapGroundWorldDelta({...g,groundY:0});
   assert.ok(Math.abs(drawn.clone().applyMatrix4(delta).min.y)<=tol,'after Snap Ground the surfels rest on the ground');
 });
+
+test('TS-01-C1: a fully transparent or hidden surfel object gives no navigation depth; a visible surface behind it does',async()=>{
+  const {prepareNavigationGeometry,navigationPivot}=await import('../scene-navigation.mjs');
+  const object=createSurfelObject(THREE,offsetField());object.updateMatrixWorld(true);await prepareNavigationGeometry(object);
+  const behind=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial());behind.position.z=-.3;behind.updateMatrixWorld(true);
+  const p=surfelPositions(offsetField()),camera=new THREE.PerspectiveCamera(30,1,.01,10);
+  camera.position.set(p[0],p[1],1);camera.lookAt(p[0],p[1],0);camera.updateMatrixWorld(true);
+  const z=()=>navigationPivot(camera,new THREE.Vector3(),new THREE.Vector2(0,0),[object,behind]).point.z;
+  assert.ok(Math.abs(z()-(193/512-.5))<1e-4,'visible surfels supply depth');
+  const materials=new Set();object.traverse(o=>{if(o.isInstancedMesh)materials.add(o.material);});
+  for(const m of materials){m.transparent=true;m.opacity=0;}
+  assert.ok(Math.abs(z()+.3)<1e-6,'transparent surfels let the surface behind supply depth');
+  for(const m of materials){m.transparent=false;m.opacity=1;m.visible=false;}
+  assert.ok(Math.abs(z()+.3)<1e-6,'hidden surfel material too');
+});

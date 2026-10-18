@@ -27001,8 +27001,8 @@ function setupAuthoringAssets(){
     }
     // Caller pixels without an image are identified by their own bytes.
     imageSha256??=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixelValues)),b=>b.toString(16).padStart(2,'0')).join('');
+    const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
     try{
-      const runId=`authoring-trellis-page-${crypto.randomUUID()}`;
       const result=await runTrellisInPage({appGpu,manifest:pack.manifest,fetchTensor:pack.fetchTensor,pixelValues,signal,onPhase,decoderActivationStorage:'f16',finishMesh:finishMesh!==false,
         // Stop reaches the finishing providers too (cleanup and UV in workers where supported).
         finishing:{postprocessMesh:createBrowserMeshPostprocess({targetFaces:200000,WorkerClass:Worker,signal}),unwrapMesh:createWasmXatlasUnwrapper({WorkerClass:Worker,signal})},
@@ -27014,6 +27014,11 @@ function setupAuthoringAssets(){
       return {glb:result.glb,generation,label,timing:result.timing,surfelGlb:result.surfelGlb??null,surfels:result.surfels??null};
     }catch(error){
       // Kept for a decoder-only replay: the run's own capture plus the exact input and settings.
+      // Decoding succeeded and mesh finishing failed: the surfels built before cleanup go back with the run's identity.
+      if(error?.trellisSurfels?.surfelGlb&&!signal?.aborted)error.trellisSurfelsRun={surfelGlb:error.trellisSurfels.surfelGlb,surfels:error.trellisSurfels.surfels,label,
+        generation:{schema:'kaminos.asset-generation.v1',runId,route:error.trellisSurfels.route,target:'this-page',
+          input:{sha256:imageSha256,pixels:image?'page-alpha-prepared':pixels==='package'?'checkpoint-package-prepared':'caller-prepared',source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256},
+          decoderActivationStorage:'f16',meshFinishing:{status:'failed',error:error.message}}};
       if(error?.trellisCapture)window.__kaminosTrellisLastCapture={...error.trellisCapture,error:{name:error.name,message:error.message},
         input:{pixels:pixelValues,sha256:imageSha256,source:image?.source??null,preparation,checkpointManifestSha256:pack.manifestSha256,decoderActivationStorage:'f16'}};
       throw error;
@@ -27027,7 +27032,11 @@ function setupAuthoringAssets(){
     try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
   };
   // Witness hook: run in the page and save the GLB.
-  window.kaminosTrellisPage=async options=>{const out=await trellisPageRun(options);return {...await persistTrellisPageRun(out),timing:out.timing};};
+  window.kaminosTrellisPage=async options=>{
+    let out;
+    try{out=await trellisPageRun(options);}
+    catch(error){if(error?.trellisSurfelsRun){error.trellisSurfelsSaved=await persistTrellisPageRun({...error.trellisSurfelsRun,glb:null}).catch(e=>({error:e.message}));}throw error;}
+    return {...await persistTrellisPageRun(out),timing:out.timing};};
   // The Generate drawer's "TRELLIS 2 · this page" target: the prepared cutout, on this page's GPU.
   let trellisPageAvailability=null,authoringTrellisPageGenerator=null;
   const trellisPage=()=>{

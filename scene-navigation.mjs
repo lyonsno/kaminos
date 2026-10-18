@@ -146,7 +146,17 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
     for (let p = root; p; p = p.parent) if (!p.visible) visible = false;
     if (visible) root.traverseVisible(o => {
       // An object that raycasts as a whole (a TRELLIS surfel field) answers for itself; its parts never do.
-      if (o.userData?.raycastsAsWhole && o.layers.test(camera.layers)) { wholes.add(o); return; }
+      if (o.userData?.raycastsAsWhole && o.layers.test(camera.layers)) {
+        // It answers only while something it draws is actually visible.
+        let drawn = false;
+        o.traverseVisible(part => {
+          if (drawn || !part.isMesh) return;
+          const materials = Array.isArray(part.material) ? part.material : [part.material];
+          drawn = materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
+        });
+        if (drawn) wholes.add(o);
+        return;
+      }
       if (o.isMesh && o.layers.test(camera.layers)) {
         const materials = Array.isArray(o.material) ? o.material : [o.material];
         if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
