@@ -110,7 +110,9 @@ def run(args):
     try:
         plan_path=Path(args.plan).resolve(); plan=json.loads(plan_path.read_text())
         records=[plan['frame'],plan['radii'],*plan['binderFiles'],*[c['case'] for c in plan['casts']]]
-        if args.stage=='correct': records.append(plan['fitReport'])
+        if args.stage=='correct':
+            if not args.fit_report:raise ValueError('explicit fit report required for correction')
+            records.append(record(args.fit_report))
         protected=[plan_path,*[Path(r['path']).resolve() for r in records]]
         for case in plan['casts']:
             manifest_path=Path(case['case']['path']).resolve()
@@ -134,14 +136,10 @@ def run(args):
                            'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parents[1],text=True).strip()}
         out.mkdir(parents=True,exist_ok=True)
         if args.stage=='correct':
-            fit_report=json.loads(Path(plan['fitReport']['path']).read_text())
+            fit_report=json.loads(Path(args.fit_report).read_text())
             if fit_report['status']!='completed' or fit_report['phase']!='complete': raise ValueError('fit report not completed')
-            if fit_report['inputs']!=[record(plan_path),*records]:
-                # Plan gains exactly fitReport between stages; authenticate all
-                # case/frame identities explicitly instead of equating plans.
-                original={r['path']:r['sha256'] for r in fit_report['inputs']}
-                for item in records[:-1]:
-                    if original.get(item['path'])!=item['sha256']: raise ValueError('fit/correction input identity changed')
+            if fit_report['inputs']!=[record(plan_path),*records[:-1]]:
+                raise ValueError('fit/correction input identity changed')
             binder_root=Path(plan['binderFiles'][0]['path']).parent
             sys.path.insert(0,str(binder_root))
             spec=importlib.util.spec_from_file_location('retained_full_binding',binder_root/'full-creature-binding.py')
@@ -228,5 +226,6 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser()
     for key in ['plan','out','report']: parser.add_argument('--'+key,required=True)
     parser.add_argument('--stage',choices=['fit','correct'],required=True)
+    parser.add_argument('--fit-report')
     parser.add_argument('--voxel-size',type=float,default=.08)
     run(parser.parse_args())
