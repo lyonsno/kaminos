@@ -2904,7 +2904,7 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import {collisionVoxelInstances} from './scene-collision-debug.mjs';
 import {authorFireObjects,fireControlOwner,FIRE_DOMAIN_ID,projectFireSettingsToSchema} from './scene-fire-domain.mjs';
-import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue } from './flame-authoring.mjs';
+import { createFlameAuthoring, createFlameInspector, flameControlDisplayValue, portableFlamePreset, flamePresetRadius } from './flame-authoring.mjs';
 import { createFlameWorkbench } from './flame-workbench.mjs';
 import { opticalSteppingConfig } from './volume-optical-native.mjs';
 import { defaultLocalLiquidSetup, normalizeLocalLiquidSetup, LOCAL_LIQUID_EMITTER_SOURCE, LOCAL_LIQUID_EMITTER_TYPE, LOCAL_LIQUID_EMITTER_CAPACITY, LOCAL_LIQUID_EMITTER_SCHEMA, normalizeLocalLiquidEmitter, normalizeLocalLiquidEmitterPose } from './local-liquid-setup.mjs';
@@ -17246,7 +17246,8 @@ async function saveVolumeSettingsPreset({ preset: suppliedPreset, label: supplie
       if (reuseBlock) throw new Error(reuseBlock);
     }
     await volumeCockpitLayoutReady;
-    const preset = suppliedPreset || buildVolumeSettingsPreset();
+    const rawPreset = suppliedPreset || buildVolumeSettingsPreset();
+    const preset = sceneSnapshot || suppliedPreset ? rawPreset : portableFlamePreset(rawPreset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]);
     const response = await fetch('/api/volume-settings-presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -21528,7 +21529,7 @@ function createFlameQuickFields() {
   document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)window.selectSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   flameInspector=createFlameInspector({document,host:document.getElementById('selected-flame-fields'),sharedHost:shared,
     listBasins:async()=>{await refreshVolumeSettingsPresetList();return volumeSettingsPresetIndex;},
-    applyBasin:id=>window.kaminosFlameAuthoring.applyBasin(id),
+    applyBasin:(id,options)=>window.kaminosFlameAuthoring.applyBasin(id,options),
     readSource:()=>activeVolumeSettingsPresetReceipt ? {label:activeVolumeSettingsPresetReceipt.label,
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),activeVolumeSettingsPresetReceipt.preset)} : null,
     readSourceRuntime:()=>volumePrototype?.debugState?.().immersedSource,
@@ -21538,14 +21539,22 @@ function createFlameQuickFields() {
     onError:error=>setInfo(error.message)});
 }
 
-function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt) {
+function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolumeSettingsPresetReceipt,options={}) {
+  if(options.sourceSize && !['preset','current'].includes(options.sourceSize))throw Error('Unknown preset source-size choice');
   const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
     sourcePose:flameEmitterPose,
-    source:source ? {presetId:source.presetId,label:source.label,preset:structuredClone(source.preset)} : null});
+    source:source ? {presetId:source.presetId,label:source.label,preset:structuredClone(source.preset),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})} : null});
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
+    if(options.sourceSize==='current') {
+      state.domControls['volume-immersed-radius']=structuredClone(readVolumeSettingsValues().domControls['volume-immersed-radius']);
+      if(state.source)state.source.sourceSizeRecovery='current-emitter-size';
+    } else if(preset.sourceRadiusSpace) {
+      const radius=flamePresetRadius(preset,flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale).scale[0]);
+      const d=state.domControls['volume-immersed-radius'];d.value=radius;d.rawValue=String(radius);
+    }
     const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale),false);
     for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
       const id=`volume-immersed-${suffix}`;
@@ -21683,7 +21692,7 @@ function installFlameAuthoring() {
     load:loadAuthoredFlameBasin});
 }
 
-async function loadAuthoredFlameBasin(id) {
+async function loadAuthoredFlameBasin(id,options={}) {
   const [artifactResponse,schemaResponse]=await Promise.all([fetch(`/api/volume-settings-preset?id=${encodeURIComponent(id)}`,{cache:'no-store'}),fetch('/volume-settings-preset-schema-v2.json',{cache:'no-store'})]);
   const [artifact,schema]=await Promise.all([artifactResponse.json(),schemaResponse.json()]);
   if(!artifactResponse.ok||!schemaResponse.ok)throw Error(artifact.error||'Basin lookup failed');
@@ -21691,7 +21700,7 @@ async function loadAuthoredFlameBasin(id) {
   if(receipt.preset.domControls['emitter-assay-family'].value==='cluster')throw Error('Cluster basins have no placeable flame source; use Workbench for that route');
   // Operator, 2026-10-18: values outside a control's range do not ban a basin;
   // they are clamped before the write and the page says which.
-  const state=flameSettingsState(receipt.preset,receipt);
+  const state=flameSettingsState(receipt.preset,receipt,options);
   const clamps=flameSettingsStateClamps(state);
   window.__kaminosFlameBasinClamps=Object.freeze(clamps);
   // Named in the flame warning until another basin replaces it.
