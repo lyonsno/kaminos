@@ -1,0 +1,24 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from '../lib/three.core.js';
+import {loadRigCastSources} from '../experiments/creature-motion/rig-cast-source.mjs';
+const matrix=y=>[[1,0,0,0],[0,1,0,y],[0,0,1,0],[0,0,0,1]];
+const base={schema:'kaminos.full-given-rig-frame.v1',canonicalWorldToSourceNormalized:matrix(0),bones:[{name:'pelvis',parent:null,restMatrix:matrix(0)},{name:'toe',parent:'pelvis',restMatrix:matrix(1)}]};
+const frame={...structuredClone(base),bones:[...structuredClone(base.bones),{name:'tip',parent:'toe',restMatrix:matrix(2)}]};
+const motion={status:'completed',route:'unimate.text-to-motion.webgpu-local.v0',textEncoder:'browser T5',cooperative:true,controllerNorm:'valid-joints',frames:1,joints:2,skeleton:{jointNames:['pelvis','toe'],parents:[-1,0],fps:30},positions:[0,0,0,0,1,0],localRotations:[1,0,0,0,1,0,0,0]};
+const files={motion,base,frame},sha=async text=>Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text))).toString('hex');
+const inputs={case:'case',case_sha256:'a'.repeat(64),motion:'motion',base_frame:'base',frame:'frame'};
+for(const [key,path] of [['motion','motion'],['base_frame','base'],['frame','frame']])inputs[key+'_sha256']=await sha(JSON.stringify(files[path]));
+const fetchImpl=async path=>files[path]?new Response(JSON.stringify(files[path])):new Response('missing',{status:404});
+const loadSkin=async()=>({manifest:{bones:structuredClone(frame.bones),provenance:{frameChainSha256:inputs.frame_sha256}},source:{caseSha256:inputs.case_sha256}});
+const load=i=>loadRigCastSources(i,{THREE,fetchImpl,loadSkin});
+const result=await load(inputs);assert.equal(result.adapter.jointNames.length,3);assert.equal(result.source.motionSha256,inputs.motion_sha256);
+assert.equal(result.source.effectiveMotionRoute,'retained-source-plus-fixed-rest-descendants');
+assert.equal(result.adapter.frame(0).bones[2].worldMatrix[13],2);
+await assert.rejects(()=>load({...inputs,motion_sha256:'0'.repeat(64)}),/digest/);
+await assert.rejects(()=>load({...inputs,motion:'missing'}),/HTTP 404/);
+const route=motion.route;motion.route='fallback';
+await assert.rejects(async()=>load({...inputs,motion_sha256:await sha(JSON.stringify(motion))}),/route/);motion.route=route;
+const saved=files.frame;files.frame={...frame,bones:frame.bones.slice(0,2)};
+await assert.rejects(async()=>load({...inputs,frame_sha256:await sha(JSON.stringify(files.frame))}),/frame/);files.frame=saved;
+console.log('rig-cast sources: authenticated geometry/frame/retained route and negative checks pass');
