@@ -438,11 +438,15 @@ export function createVantagePilot(host) {
           if (next === 'event') {
             // The event came: one more frame at once shows what followed, then
             // with `after` the cadence goes on until that long after the event.
+            // The event frame stands for the interval it starts in; the cadence
+            // then carries on as before, so intervals that pass while it reads
+            // back are counted missed and one still open gets its frame.
+            const startedIn = Math.floor((host.now() - started) / interval);
             await draw();
             extended = true;
             if (afterMs <= 0) break;
             deadlineMs = event.atMs + afterMs;
-            tick = Math.floor((host.now() - started) / interval);
+            tick = Math.max(tick, startedIn);
             continue;
           }
           await draw();

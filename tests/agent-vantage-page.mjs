@@ -1606,7 +1606,8 @@ function watchClock(host, state, {drawMs = 30, onSleep = null} = {}) {
   host.sleep = async ms => { t += ms; onSleep?.(t); };
   host.renderView = options => {
     renders.push({...copy(options), at: t, view: copy(state.view)});
-    t += drawMs;
+    const ms = typeof drawMs === 'function' ? drawMs(renders.length - 1, t) : drawMs;   // may itself advance the clock
+    t += ms;
     return {ready: Promise.resolve({canvas: {watch: renders.length}, width: options.width, height: options.height})};
   };
   host.listen = (name, handler) => {
@@ -1863,4 +1864,26 @@ test('after an event, after keeps watching on the cadence for that many seconds'
   assert.equal(strip.event.atMs, 1000);
   assert.equal(strip.requested.after, 1.5);
   assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500, 2000], 'the frame at the event, then the cadence until 1.5 s after it');
+});
+
+test('a slow event frame does not reset the cadence: open intervals still get frames, and passed ones are counted missed', async () => {
+  // The event arrives during a sleep; its frame starts in the first interval and reads back slowly.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => (index === 1 ? 1200 : 0)});
+    host.sleep = async ms => { clock.advance(Math.min(ms, 100)); if (host.now() >= 100) clock.emit('pulse-end', {}); };
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 100, 1300, 1500, 2000], 'the 1000–1500 ms interval was still open when the event frame finished');
+    assert.equal(strip.missedTicks, 1, 'the 500–1000 ms interval passed during the event frame\'s readback');
+  }
+  // The event arrives during a slow draw; the event frame starts in an interval the cadence had not reached.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: (index, t) => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 800; } return index === 1 ? 400 : 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 900, 1300, 1500, 2000], 'the event frame at 900 ms stands for its own interval; the next open one still gets its frame');
+    assert.equal(strip.missedTicks, 0);
+  }
 });
