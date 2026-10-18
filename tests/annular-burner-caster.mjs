@@ -81,8 +81,26 @@ test('review AB-01: the two reported rays', () => {
   }
 });
 
+test('confirmation review AB-01: rays just inside the rim, between differently spaced vertices, still hit the stand-in', () => {
+  const second = {...BURNER_DEFAULTS, ringCount: 7, sectorCount: 5, outerRadius: 0.5, grooveFraction: 0.5};
+  compareHeights(second, [[0.49995, 48 * Math.PI / 37 + 0.00001]]);
+  const coarse = (recipe, rays) => { const {burner, withoutBolts} = detailed(recipe), mesh = casterMesh(createAnnularBurnerCaster(THREE, mergeGeometries, recipe, {maxSagitta: 0.004}));
+    for (const [r, a] of rays) { const x = Math.sin(a) * r, z = Math.cos(a) * r, h0 = heightAt(withoutBolts, x, z), h1 = heightAt([mesh], x, z);
+      if (h0 !== null) assert.ok(h1 !== null && h1 >= h0 - 1e-4, `r=${r} a=${a} caster ${h1} burner ${h0}`); }
+    burner.dispose(); };
+  coarse(BURNER_DEFAULTS, [[0.86995, 48 * Math.PI / 37 + 0.00001]]);
+  // A dense angular sweep 50 um either side of every wall, so no vertex spacing can hide a strip.
+  for (const recipe of [BURNER_DEFAULTS, second]) {
+    const rings = burnerRings(recipe), walls = [recipe.innerRadius, recipe.outerRadius, recipe.outerRadius + 0.045, ...rings.flatMap(r => [r.radius - r.width / 2, r.radius + r.width / 2])];
+    compareHeights(recipe, walls.flatMap(w => [-5e-5, 5e-5].flatMap(d => Array.from({length: 720}, (_, i) => [w + d, i * Math.PI / 360 + 0.0003]))));
+  }
+});
+
 test('review AB-02: a tolerance too fine to represent is refused before any geometry is built', () => {
-  assert.throws(() => createAnnularBurnerCaster(THREE, mergeGeometries, BURNER_DEFAULTS, {maxSagitta: 1e-20}), /too fine/);
+  assert.throws(() => createAnnularBurnerCaster(THREE, mergeGeometries, BURNER_DEFAULTS, {maxSagitta: 1e-20}), /finer than the burner/);
+  // Confirmation review AB-03: no fixed budget; the boundary is the burner's own tessellation.
+  assert.throws(() => createAnnularBurnerCaster(THREE, mergeGeometries, BURNER_DEFAULTS, {maxSagitta: 1e-5}), /finer than the burner/);
+  assert.ok(createAnnularBurnerCaster(THREE, mergeGeometries, {...BURNER_DEFAULTS, subdivisions: 4096}, {maxSagitta: 1e-5}).triangles > 0);
 });
 
 test('a tighter sagitta buys more triangles; the bound is reported', () => {
@@ -98,9 +116,9 @@ test('the key follows the geometry a caster depends on and nothing else', () => 
   const key = annularBurnerCasterKey(BURNER_DEFAULTS);
   assert.match(key, /^kaminos\.annular-burner-caster\.v1:/);
   assert.equal(createAnnularBurnerCaster(THREE, mergeGeometries, BURNER_DEFAULTS).key, key);
-  for (const surface of [{bedColor: '#000000'}, {glow: 9}, {coolingSeconds: 2}, {subdivisions: 48}, {enabled: false}])
+  for (const surface of [{bedColor: '#000000'}, {glow: 9}, {coolingSeconds: 2}, {enabled: false}])
     assert.equal(annularBurnerCasterKey({...BURNER_DEFAULTS, ...surface}), key, JSON.stringify(surface));
-  for (const shape of [{ringCount: 12}, {sectorCount: 6}, {outerRadius: 0.9}, {grooveDepth: 0.02}, {rimHeight: 0.03}, {thickness: 0.07}, {innerRadius: 0.03}, {grooveFraction: 0.5}])
+  for (const shape of [{subdivisions: 96}, {ringCount: 12}, {sectorCount: 6}, {outerRadius: 0.9}, {grooveDepth: 0.02}, {rimHeight: 0.03}, {thickness: 0.07}, {innerRadius: 0.03}, {grooveFraction: 0.5}])
     assert.notEqual(annularBurnerCasterKey({...BURNER_DEFAULTS, ...shape}), key, JSON.stringify(shape));
   assert.notEqual(annularBurnerCasterKey(BURNER_DEFAULTS, {maxSagitta: 0.001}), key);
   assert.throws(() => annularBurnerCasterKey({...BURNER_DEFAULTS, ringCount: 0}), /ringCount/);
