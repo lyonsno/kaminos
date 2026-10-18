@@ -218,7 +218,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  step(12);
  const after=attention.read().history.filter(e=>e.kind==='look').length;
  step(8);assert.equal(attention.read().history.filter(e=>e.kind==='look').length,after,'once adapted, the brighter light draws nothing more');
- level[2]=level[2]*.15;step(1.5);
+ level[2]=level[2]*.15;level[3]=level[3]*.15;step(1.5);
  seen=attention.read().history.filter(e=>e.kind==='look').slice(after);
  assert.equal(seen.length,1,'a sudden shadow draws one look');assert.equal(seen[0].cause,'shadow');
  const focus=attention.read().focus?.point??attention.read().aim;
@@ -254,13 +254,24 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
 }
 
 {
+ // The light field is computed from a live simulation, so single ground points
+ // jitter on their own. One point dipping is noise; a shadow darkens an area.
+ const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
+ const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
+ let t=0;
+ for(let k=0;k<120;k++){const dip=Math.floor(k/12)%8;attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:i===dip?.01:.1}))});t=watch(attention,c,.25,t).t;}
+ assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,`single-point dips draw nothing (${JSON.stringify(attention.read().history.map(e=>e.cause))})`);
+}
+
+{
  // Two shadows in different places are two events, not one shadow that moved.
  const c=creature(),fire={id:'flame-emitter',label:'flame',point:[1.2,.6,.5]};
  const attention=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
  const ring=Array.from({length:8},(_,i)=>[Math.cos(i/8*Math.PI*2)*.7,0,-1.8+Math.sin(i/8*Math.PI*2)*.7]);
  let level=ring.map(()=>.1),t=0;
  const step=seconds=>{for(let k=0;k<Math.round(seconds*4);k++){attention.sense({time:t,source:fire,sourcePower:1,samples:ring.map((point,i)=>({point,luminance:level[i]}))});t=watch(attention,c,.25,t).t;}};
- step(4);level[1]*=.15;step(8);level[1]=.1;step(6);level[5]*=.15;step(3);
+ step(4);level[1]*=.15;level[2]*=.15;step(8);level[1]=level[2]=.1;step(6);level[5]*=.15;level[6]*=.15;step(3);
  const seen=attention.read().history.filter(e=>e.kind==='look');
  assert.deepEqual(seen.map(e=>e.cause),['shadow','shadow'],`two separate shadows (${JSON.stringify(seen.map(e=>[e.id,e.cause]))})`);
  assert.notEqual(seen[0].id,seen[1].id,'each shadow is its own thing');
