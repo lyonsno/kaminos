@@ -35,4 +35,7 @@ let failedFrame;
 assert.throws(()=>shadow.renderFireShadowBatch({scene,shadows:[{render(frame){failedFrame=frame;throw Error('capture failed');}}]}),/capture failed/);
 assert.throws(()=>real.render(failedFrame),/inactive-or-foreign-batch/,'failed batches must also expire');
 real.dispose();mesh.geometry.dispose();mesh.material.dispose();
+let casterScopes=0;
+shadow.renderFireShadowBatch({scene:new THREE.Scene(),shadows:[],casterScene:{withCapture(fn){casterScopes++;return fn();}}});
+assert.equal(casterScopes,1,'one caster-only scene scope must enclose the complete fresh-cube batch');
 console.log('PASS shared current capture preparation, visibility and support failure');

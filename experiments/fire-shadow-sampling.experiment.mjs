@@ -15,7 +15,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[],numberScrubs=[];
@@ -35,6 +35,9 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       if(grainSelector&&!diagnostics)for(const option of grainSelector.children)option.hidden=option.value==='ordered'&&comparison.grain!=='ordered';
       if(cellInput){value(cellInput,comparison.worldCellSize);cellRow.hidden=comparison.grain!=='world';}
       value(selector,state.effective??requested);
+      const caster=win.__kaminosSceneRadiance?.debugState().casters;
+      value(casterSelector,caster?.level??'original');
+      if(casterStatus)casterStatus.textContent=caster?.error?`Caster load failed: ${caster.error}; using ${caster.level}.`:caster?.level!=='original'&&caster?`${caster.targets} mapped kiln(s): ${caster.originalTriangles.toLocaleString()} → ${caster.captureTriangles.toLocaleString()} caster triangles. Visible geometry and smoke visibility unchanged. Error unmeasured.`:'Original scene geometry. Reduced choices apply only to the mapped kiln, not other objects.';
       value(pointSelector,state.pointSampling==='paired'?'4-paired':String(state.points??requestedPoints??1));
       for(const {key,number} of qualityControls){
         value(number,state.shadowQuality?.[key]??requestedQuality?.[key]??DEFAULT_SHADOW_QUALITY[key]);
@@ -73,6 +76,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
     return {
       read,sync,
       operations:{
+        async setCasterLevel(value){await source().setShadowCasterLevel(value);sync();session.redraw();const effective=source().debugState().casters;record({kind:'fire-shadow.caster-level',requested:value,effective});return effective;},
         async retryCompile(){await source().retryRebuild();sync();session.redraw();return read();},
         setShadowComparison,setShadowQuality,restoreShadowQuality(){return setShadowQuality(DEFAULT_SHADOW_QUALITY);},
         setQuadrature,setPoints(value){return setQuadrature({points:value});},
@@ -115,6 +119,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
         grainSummary.textContent='About grain and A/B';
         grainText.textContent='Independent comparisons; shader changes may pause briefly. Grain scrambles complementary filter phases and source pairs, with no temporal history. Animated screen grain changes every rendered frame, including with a frozen flame. Stable screen grain stays on pixels; world grain stays in world-space cells. This is sampling noise, not simulated photographic film or a denoiser. Use complementary sampling to compare filter grain.';
         grainHelp.append(grainSummary,grainText);if(diagnostics)panel.append(grainHelp);
+        const casterLabel=document.createElement('label');casterLabel.textContent='Kiln shadow caster';
+        casterSelector=document.createElement('select');casterSelector.setAttribute('aria-label','Kiln shadow caster');
+        for(const [value,text]of [['original','Original geometry'],['10k','10k triangles — reduced caster'],['5k','5k triangles — reduced caster']]){const option=document.createElement('option');option.value=value;option.textContent=text;casterSelector.append(option);}
+        casterSelector.addEventListener('change',()=>invoke('setCasterLevel',casterSelector.value).catch(failed));
+        casterStatus=document.createElement('div');casterStatus.setAttribute('aria-live','polite');casterLabel.append(casterSelector);panel.append(casterLabel,casterStatus);
         const heading=document.createElement('h3');heading.textContent='Shadow quality';panel.append(heading);
         for(const [key,text,help] of [
           ['resolution','Shadow cube resolution','Pixels per cube face. Lower values reduce capture size and shadow detail.'],
