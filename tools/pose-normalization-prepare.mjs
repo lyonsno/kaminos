@@ -2,16 +2,23 @@ import {readFileSync,writeFileSync,mkdirSync,symlinkSync,existsSync,realpathSync
 import {resolve,join,relative} from 'node:path';
 import {createHash} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
+import {validateNormalizationDerivation} from '../experiments/creature-motion/pose-normalization-provenance.mjs';
 const args=new Map(process.argv.slice(2).reduce((a,v,i,s)=>i%2?a:[...a,[v,s[i+1]]],[]));
 for(const key of ['root','plan','motion-inputs','correction-report','mount','out','origin'])if(!args.get('--'+key))throw Error('Required --'+key);
 const root=realpathSync(args.get('--root')),out=resolve(args.get('--out')),mount=resolve(root,args.get('--mount'));
 if(!relative(root,mount).startsWith('scratch/')||relative(root,mount).includes('..'))throw Error('Caller-owned scratch mount required');
 const sha=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
 const plan=JSON.parse(readFileSync(args.get('--plan'))),motion=JSON.parse(readFileSync(args.get('--motion-inputs'))),report=JSON.parse(readFileSync(args.get('--correction-report')));
-if(report.status!=='completed'||report.phase!=='complete'||report.casts?.length!==2||report.casts.some(c=>!plan.casts.some(p=>p.slug===c.slug)))throw Error('Both completed correction packages required');
+if(report.status!=='completed'||report.phase!=='complete'||plan.casts?.length!==2||report.casts?.length!==2||new Set(report.casts.map(c=>c.slug)).size!==2||report.casts.some(c=>!plan.casts.some(p=>p.slug===c.slug)))throw Error('Both completed correction packages required');
 const check=record=>{if(sha(record.path)!==record.sha256)throw Error('Source digest changed: '+record.path);};
 for(const r of [plan.frame,motion.motion,motion.baseFrame,...plan.casts.map(c=>c.case),...report.casts.flatMap(c=>[c.case,c.correction])])check(r);
 for(const c of [...plan.casts,...report.casts]){const m=JSON.parse(readFileSync(c.case.path));if(m.bones.length!==36||m.provenance.frameChainSha256!==plan.frame.sha256)throw Error('Unexpected bind frame');for(const [name,a]of Object.entries(m.assets))if(sha(join(resolve(c.case.path,'..'),name))!==a.sha256)throw Error('Package asset changed');}
+// Authenticate the derivation of BOTH cases before creating either offer.
+for(const cast of plan.casts){
+ const derived=report.casts.find(c=>c.slug===cast.slug);
+ validateNormalizationDerivation({plan:{path:realpathSync(args.get('--plan')),sha256:sha(args.get('--plan'))},source:cast.case,report,
+  original:JSON.parse(readFileSync(cast.case.path)),corrected:JSON.parse(readFileSync(derived.case.path)),correction:JSON.parse(readFileSync(derived.correction.path))});
+}
 const commit=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
 mkdirSync(mount,{recursive:true});mkdirSync(out,{recursive:true});
 function link(path,name){const target=join(mount,name);if(existsSync(target)){if(realpathSync(target)!==realpathSync(path))throw Error('Conflicting mount '+target);}else symlinkSync(path,target);}
