@@ -46,3 +46,8 @@ const nativeStatus=nativeControls.find(v=>v.attrs.role==='status');
 assert.match(nativeStatus.textContent,/fixed.*legacy/,'saved diagnostic configurations remain visible, never silently relabeled');
 assert.equal(state.shadowSampling,'fixed','mount and sync do not migrate saved lighting');
 console.log('PASS ordinary fire settings retain quality and report legacy state without experimental controls');
+const casterMenu=nativeControls.find(v=>v.attrs['aria-label']==='Kiln shadow caster');
+assert(casterMenu,'the ordinary Rendering panel exposes explicit caster choices');
+assert.deepEqual(casterMenu.children.map(v=>v.value),['original','10k','5k']);
+document.defaultView.__kaminosSceneRadiance.setShadowCasterLevel=async value=>{state={...state,shadowCasterLevel:value,casters:{level:value,targets:1,originalTriangles:287407,captureTriangles:10000}};};
+const applied=await nativeSettings.operations.setCasterLevel('10k');assert.equal(applied.level,'10k');nativeSettings.sync();assert.equal(casterMenu.value,'10k');
