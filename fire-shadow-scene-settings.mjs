@@ -6,6 +6,8 @@ import {validateCasterLevel} from './fire-shadow-casters.mjs';
 const prefix='volume_light_field_hybrid_';
 export function readFireShadowSceneSettings(params) {
   const number=(key,fallback)=>Number(params.get(prefix+key)??fallback);
+  const surface=params.get(prefix+'surface_enabled');
+  if(surface!==null&&!['0','1'].includes(surface))throw Error('surface enabled must be 0 or 1');
   const quality=validateShadowQuality({resolution:number('shadow_resolution',256),blockerSamples:number('blocker_samples',9),filterSamples:number('filter_samples',16)});
   const comparison=validateShadowComparison({implementation:params.get(prefix+'shadow_implementation')??'shared',grain:params.get(prefix+'shadow_grain')??'ordered',worldCellSize:number('shadow_world_cell_size',0.02)});
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
@@ -13,12 +15,12 @@ export function readFireShadowSceneSettings(params) {
   const sampling=validateShadowSampling(params.get(prefix+'shadow_sampling')??'fixed');
   const softness=number('shadow_softness',0);
   if(!Number.isFinite(softness)||softness<0)throw Error('shadow softness must be finite and nonnegative');
-  return {pointCount:points,pointSampling,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples,shadowSampling:sampling,shadowSoftness:softness,shadowComparison:comparison,...(params.has(prefix+'caster_level')?{shadowCasterLevel:validateCasterLevel(params.get(prefix+'caster_level'))}:{})};
+  return {pointCount:points,pointSampling,shadowResolution:quality.resolution,blockerSamples:quality.blockerSamples,filterSamples:quality.filterSamples,shadowSampling:sampling,shadowSoftness:softness,shadowComparison:comparison,...(surface===null?{}:{surfaceEnabled:surface==='1'}),...(params.has(prefix+'caster_level')?{shadowCasterLevel:validateCasterLevel(params.get(prefix+'caster_level'))}:{})};
 }
 
 export function fireShadowSceneRoute(state) {
   if(!state?.shadowSampling)return {};
-  const values={points:state.pointCount,point_sampling:state.pointSampling,shadow_resolution:state.shadowResolution,
+  const values={...(state.surfaceEnabled===undefined?{}:{surface_enabled:state.surfaceEnabled?'1':'0'}),points:state.pointCount,point_sampling:state.pointSampling,shadow_resolution:state.shadowResolution,
     blocker_samples:state.blockerSamples,filter_samples:state.filterSamples,shadow_sampling:state.shadowSampling,
     shadow_softness:state.shadowSoftness,shadow_implementation:state.shadowImplementation,
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
