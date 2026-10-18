@@ -78,6 +78,39 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   return {pixels, tangents, coveredPixels, unsampled, maxDegrees};
 }
 
+// The source's interpolated shading normal for a level point: the nearest source surface hit by a
+// ray along the level normal (both ways) within `reach`, else the closest source point. Looking
+// along the normal keeps a nearby strand or sheet beside the point (fur, fins) from standing in
+// for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
+export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach}) {
+  if (!normals) throw Error('source has no shading normals');
+  if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1));
+  const bvh = new MeshBVH(geometry), ray = new THREE.Ray(), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
+  const corner = i => new THREE.Vector3(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
+  const normalAt = (face, at) => {
+    const v = [0, 1, 2].map(k => faces[face * 3 + k]);
+    tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(at, weights);
+    const w = [weights.x, weights.y, weights.z];
+    if (!w.every(Number.isFinite)) return null;
+    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * normals[vi * 3 + a], 0));
+  };
+  const sample = (p, n) => {
+    let best = null;
+    if (n && reach > 0) for (const side of [1, -1]) {
+      ray.origin.set(p[0], p[1], p[2]); ray.direction.set(n[0] * side, n[1] * side, n[2] * side);
+      const h = bvh.raycastFirst(ray, THREE.DoubleSide);
+      if (h && h.distance <= reach && (!best || h.distance < best.distance)) best = h;
+    }
+    if (best) return normalAt(best.faceIndex, best.point);
+    bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
+    return normalAt(hit.faceIndex, hit.point);
+  };
+  sample.method = 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal';
+  return sample;
+}
+
 // Adds a baked normal map and TANGENT attribute to a one-mesh, one-primitive GLB with float
 // POSITION, NORMAL and TEXCOORD_0. sampleWorldNormal(point, levelNormal) works in world space
 // (after the node transform), so the source can be any mesh in the same world frame.
@@ -129,7 +162,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   json.textures = [...(json.textures ?? []), {source: json.images.length - 1, sampler: 0}];
   material.normalTexture = {index: json.textures.length - 1};
   json.extras = {...json.extras, lodNormalMap: {source, textureSize, coveredPixels: baked.coveredPixels, unsampledTexels: baked.unsampled,
-    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: 'closest point on the source; its interpolated shading normal',
+    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: sampleWorldNormal.method ?? 'caller-supplied sampler',
     tangentFrame: 'glTF: T along +u from UV gradients, Gram-Schmidt to N; B = cross(N, T) * w toward decreasing v'}};
   json.buffers[0].byteLength = offset;
   const text = new TextEncoder().encode(JSON.stringify(json)), textLength = Math.ceil(text.length / 4) * 4;

@@ -124,11 +124,13 @@ test('error is measured against the hero; an off-target tier publishes under its
   assert.match(level.errorAgainstRawDecode.reference.digests['vertices.f32'], /^[a-f0-9]{64}$/);
   assert.equal(server.registered[0].supersede, false);
   // By default every tier carries a normal map baked from the hero, and the record says so.
-  assert.deepEqual(level.normalMap, {source: {kind: 'hero', sha256: 'a'.repeat(64)}, textureSize: level.textureSize});
+  assert.deepEqual({...level.normalMap, reach: undefined}, {source: {kind: 'hero', sha256: 'a'.repeat(64)}, textureSize: level.textureSize, sampler: 'ray-along-level-normal', reach: undefined});
+  assert.ok(level.normalMap.reach >= 0 && Math.abs(level.normalMap.reach - 1.25 * level.error.levelToSource.max) < 1e-12, 'reach follows the measured level-to-hero distance');
   const published = glbJSON(server.stored[0]);
   assert.ok(published.materials[0].normalTexture, 'published GLB has a normal map');
   assert.ok(published.meshes[0].primitives[0].attributes.TANGENT !== undefined);
   assert.equal(published.extras.lodNormalMap.source.kind, 'hero');
+  assert.match(published.extras.lodNormalMap.method, /^ray along the level normal/);
 });
 
 test('a hero without shading normals is refused before anything is stored, unless normal maps are off', async () => {

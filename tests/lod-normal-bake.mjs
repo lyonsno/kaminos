@@ -122,3 +122,18 @@ test('world normals come back with the world mesh, through the node transform', 
   const {normals} = readGLBWorldMesh(squareGLB());
   for (let i = 0; i < 4; i++) assert.deepEqual([...normals.subarray(i * 3, i * 3 + 3)].map(v => Math.round(v) + 0), [0, 1, 0]);
 });
+
+test('hero sampler looks along the level normal: a nearby strand does not stand in for the body behind it', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
+  // Body: a large plane at z = 0 facing +z. Strand: a thin vertical sheet at x = 0.003 facing +x.
+  const vertices = new Float32Array([-1,-1,0, 1,-1,0, 1,1,0, -1,1,0,  0.003,-0.01,-0.01, 0.003,0.01,-0.01, 0.003,0,0.05]);
+  const faces = new Uint32Array([0,1,2, 0,2,3, 4,5,6]);
+  const normals = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1, 1,0,0, 1,0,0, 1,0,0]);
+  const sample = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.02});
+  const n = sample([0, 0, 0.004], [0, 0, 1]); // the strand is 3 mm away, the body 4 mm below
+  assert.ok(n[2] > 0.99, `body normal expected, got ${n}`);
+  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal');
+  // Out of reach along the normal: falls back to the closest point (here the strand).
+  const far = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.001})([0, 0, 0.004], [0, 0, 1]);
+  assert.ok(far[0] > 0.99, `closest-point fallback expected, got ${far}`);
+});

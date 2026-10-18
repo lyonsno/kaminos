@@ -28,7 +28,7 @@ try {
   const {MeshBVH} = await import('three-mesh-bvh');
   const {prepareLowTiers, readGLBWorldMesh, measureGeometricError} = await import('../mesh-lod-ladder.mjs');
   const {createHash} = await import('node:crypto');
-  const {addNormalMapToGLB} = await import('../lod-normal-bake.mjs');
+  const {addNormalMapToGLB, createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
   const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
   const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
   const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
@@ -99,22 +99,13 @@ try {
   if (normalMaps) {
     report.phase = 'normal-map'; save();
     if (!hero.normals) throw Error('hero has no shading normals to bake from (use --normal-maps false to publish without normal maps)');
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(hero.vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(hero.faces, 1));
-    const bvh = new MeshBVH(geometry), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
-    const corner = i => new THREE.Vector3(hero.vertices[i*3], hero.vertices[i*3+1], hero.vertices[i*3+2]);
-    // The hero's interpolated shading normal at its closest point to p.
-    const heroNormalAt = p => {
-      bvh.closestPointToPoint(point.set(p[0], p[1], p[2]), hit);
-      const v = [0, 1, 2].map(k => hero.faces[hit.faceIndex * 3 + k]);
-      tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(hit.point, weights);
-      const w = [weights.x, weights.y, weights.z];
-      if (!w.every(Number.isFinite)) return null;
-      return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * hero.normals[vi * 3 + a], 0));
-    };
     for (const tier of tiers) {
-      tier.glb = await addNormalMapToGLB(tier.glb, {textureSize: tier.textureSize, source: {kind: 'hero', sha256: source}, sampleWorldNormal: heroNormalAt});
-      tier.normalMap = {source: {kind: 'hero', sha256: source}, textureSize: tier.textureSize};
+      // Look along the level normal as far as this level is measured to stray from the hero
+      // (sampled maximum, with a quarter more since sampling underestimates it).
+      const reach = 1.25 * tier.error.levelToSource.max;
+      const sampleWorldNormal = createHeroNormalSampler({hero, THREE, MeshBVH, reach});
+      tier.glb = await addNormalMapToGLB(tier.glb, {textureSize: tier.textureSize, source: {kind: 'hero', sha256: source}, sampleWorldNormal});
+      tier.normalMap = {source: {kind: 'hero', sha256: source}, textureSize: tier.textureSize, sampler: 'ray-along-level-normal', reach};
     }
   }
   report.phase = 'publish'; save();
