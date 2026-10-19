@@ -12214,6 +12214,7 @@ async function initScene() {
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
   installAuthoringParameterEditing();
   const upgradedRangeFields=installLegacyRangeFields({root:document,installNumberDrag:installRelativeNumberDrag,
+    unboundedMax:source=>source.id==='volume-immersed-radius',
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   window.kaminosSceneEdits = scenePlacementTools.edits;
