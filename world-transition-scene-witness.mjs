@@ -8,7 +8,8 @@ params.set('volume_pressure_solver','converged-open-top');
 params.set('volume_pressure_solver_iterations','24');
 params.set('volume_reaction_live_view','boundary_fire');
 params.set('scene','scene_2026-10-17_14-36-46_a960e120a7954752892513416031435e_62581239d5af42b496f9ba5666a43984.kaminos.json');
-const report={status:'failed',phase:'source',url:origin+'/?'+params,executablePath,errors:[],states:[]};let browser,page;
+const scene=params.get('scene');params.delete('scene');
+const report={status:'failed',phase:'source',url:origin+'/?'+params+'#scene='+scene,executablePath,errors:[],states:[]};let browser,page;
 await mkdir(out,{recursive:true});
 try{
  report.source=await(await fetch(origin+'/api/runtime-config')).json();assert.equal(report.source.source.repoRoot,process.cwd());
@@ -37,6 +38,15 @@ try{
  assert.equal(report.states.at(-1).worldSmoke.transitionCells,2);
  assert.equal(report.states.at(-1).waveletTurbulence.strength,12);assert.deepEqual(report.states.at(-1).waveletTurbulence.octaveWeights,[0,.5]);
  await page.screenshot({path:out+'/scene.png'});assert.deepEqual(report.errors,[]);
+ report.phase='save-reopen';
+ await page.evaluate(()=>{for(const [id,value] of [['volume-wavelet-strength',4],['volume-wavelet-octave1-weight',1],['volume-wavelet-octave2-weight',1],['volume-world-smoke-transition',0]]){const el=document.getElementById(id);el.value=String(value);el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}));}});
+ report.saved=await page.evaluate(()=>window.saveSceneAs({result:true}));assert.equal(report.saved.ok,true);
+ await page.goto(report.saved.url,{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>document.getElementById('info-bar')?.textContent?.startsWith('Scene loaded:')&&window.__kaminosVolumePrototype?.debugState?.().simStepCount>8);
+ report.reopened=await read();assert.equal(report.reopened.worldSmoke.effective,'one-way-world-field');assert.equal(report.reopened.worldSmoke.transitionCells,0);assert.deepEqual(report.reopened.waveletTurbulence.octaveWeights,[1,1]);assert.equal(report.reopened.waveletTurbulence.strength,4);
+ report.offeredUrl=report.saved.url;
+ await page.evaluate(()=>window.selectSceneField('flame-field'));await page.keyboard.press('f');await page.locator('#flame-view-quality').click();
+ await page.screenshot({path:out+'/reopened.png'});assert.deepEqual(report.errors,[]);
  report.status='passed';report.phase='complete';
 }catch(e){report.error=e.stack;process.exitCode=1;if(page){report.final=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),body:document.body.innerText})).catch(()=>null);await page.screenshot({path:out+'/failure.png'}).catch(()=>{});}}
 finally{await browser?.close();await writeFile(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}
