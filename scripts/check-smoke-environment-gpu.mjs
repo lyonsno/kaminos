@@ -21,6 +21,10 @@ export async function checkSmokeEnvironmentGpu(device){
  try{
   const previous=new THREE.RenderTarget(2,2);renderer.setRenderTarget(previous);renderer.toneMapping=THREE.ACESFilmicToneMapping;
   const environment=projection.frame();assert(renderer.getRenderTarget()===previous,'projection must restore host target');assert(renderer.toneMapping===THREE.ACESFilmicToneMapping,'projection must restore tone mapping');
+  const pixelBuffer=device.createBuffer({size:256,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const copy=device.createCommandEncoder();copy.copyTextureToBuffer({texture:environment.texture,origin:[10,10]},{buffer:pixelBuffer,bytesPerRow:256},[1,1]);device.queue.submit([copy.finish()]);await pixelBuffer.mapAsync(GPUMapMode.READ);
+  const projected=Array.from(new Uint16Array(pixelBuffer.getMappedRange()).slice(0,4),THREE.DataUtils.fromHalfFloat);pixelBuffer.unmap();pixelBuffer.destroy();
+  rows.push({phase:'actual-projected-environment',projected});near(projected.slice(0,3),rgb.map(v=>v*2),'actual GPU environment projection');
   assert(projection.frame().metadata.generation===environment.metadata.generation,'unchanged environment must not project per frame');
   scene.backgroundIntensity=100;assert(projection.frame().metadata.generation===environment.metadata.generation,'background grading must not illuminate smoke');
   scene.environmentRotation.y=.3;assert(projection.frame().metadata.generation===environment.metadata.generation+1,'rotation must invalidate projection');
