@@ -12173,12 +12173,12 @@ async function initScene() {
     const record=settings.cameraId===null?null:sceneCameras.read().cameras.find(item=>item.id===settings.cameraId);
     if(settings.cameraId!==null&&!record)throw Error('The output camera is missing from this scene');
     if(record&&record.camera.projection!=='perspective')throw Error('Recording supports perspective camera objects');
-    const snapshot={pixelRatio:renderer.getPixelRatio(),zoom:camera.zoom,view:readAuthoredCameraView(),projection:viewProjection.state()};
+    const snapshot={pixelRatio:renderer.getPixelRatio(),zoom:camera.zoom,view:readAuthoredCameraView(),projection:viewProjection.state(),cameraViewport:sceneCameras.viewportState(),cameraLayout:sceneCameras.frameLayout()};
     let released=false,frame=null;
     const release=()=>{if(released)return;released=true;recordingFrameSink=null;recordingExtent=null;
       // Keep the view reached by navigating a viewport recording. A borrowed
       // scene-camera view goes back to the preceding authoring view.
-      if(record){viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;writeAuthoredCameraView(snapshot.view);}
+      if(record){viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;sceneCameras.restoreViewport(snapshot.cameraViewport);sceneCameras.restoreFrameLayout(snapshot.cameraLayout);if(snapshot.cameraViewport.mode!=='camera')writeAuthoredCameraView(snapshot.view);}
       renderer.setPixelRatio(snapshot.pixelRatio);syncViewportRendererSize();camera.updateProjectionMatrix();
       volumePrototype?.setControls(readVolumeControls());sceneGI.resetHistory('recording-restored');markDirty();
     };
@@ -12189,7 +12189,7 @@ async function initScene() {
     }};
     try{
       checkFire();signal.throwIfAborted();recordingExtent=pixels;
-      if(record){viewProjection.setOrthographic(false);camera.zoom=1;writeAuthoredCameraView(cameraViewFromRecord(record,pixels.width/pixels.height));}
+      if(record){sceneCameras.leave({continueFromCamera:true});viewProjection.setOrthographic(false);camera.zoom=1;writeAuthoredCameraView(cameraViewFromRecord(record,pixels.width/pixels.height));}
       renderer.setPixelRatio(1);syncViewportRendererSize();camera.updateProjectionMatrix();sceneGI.resetHistory('recording-size');
       volumePrototype?.setControls(readVolumeControls({quality:settings.quality==='scene'?viewportDisplay.quality:settings.quality}));markDirty();
       return {release,subscribe(listener){recordingFrameSink=value=>{frame=value;listener();};return ()=>{recordingFrameSink=null;};},capture(){
