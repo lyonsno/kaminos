@@ -1,7 +1,7 @@
 import {checkedRenderOutput,outputPixels,checkedRecordingOptions} from './render-output.mjs';
 export function checkedRecording(raw={}){
- const options=checkedRecordingOptions({...raw.recording,...raw}),value=checkedRenderOutput({...raw,kind:'recording',recording:options});
- return {...value,...options};
+ const keys=['frames','fps','format','columns','tileWidth'],options=checkedRecordingOptions({...raw.recording,...Object.fromEntries(keys.filter(key=>Object.hasOwn(raw,key)).map(key=>[key,raw[key]]))}),value=checkedRenderOutput({...raw,kind:'recording',recording:options});
+ return {...value,...Object.fromEntries(keys.map(key=>[key,options[key]]))};
 }
 // Capture callbacks run inside the actual renderer's presentation task. Nothing
 // here advances, holds, or resets a simulation or creates another render loop.
