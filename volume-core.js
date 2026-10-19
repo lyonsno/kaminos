@@ -11599,6 +11599,7 @@ export function createKaminosVolumePrototype({
   sharedGpuContext = null,
   getSceneDepth = null,
   getPresentationSize = () => null,
+  onPresentedFrame = null,
   getSceneCollision = null,
   transparentCanvas = false,
   productFrameOwner = 'prototype',
@@ -21814,6 +21815,7 @@ export function createKaminosVolumePrototype({
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       if (pressureResidualCopyPending) void resolvePressureResidualProbe();
       state.frameCount += 1;
+      onPresentedFrame?.({canvas,frameCount:state.frameCount,simStepCount:state.simStepCount,width:state.width,height:state.height,backend:state.backend,effectiveRoute:state.effectiveRoute,renderScale:state.renderScale,raySteps:controlsSnapshot.raySteps});
       if (selectiveHeadLiveExactPause) {
         const exactPause = selectiveHeadLiveExactPause;
         if (state.simStepCount >= exactPause.targetSimStepCount) {

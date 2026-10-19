@@ -3571,6 +3571,8 @@ import { loadStartupRuntimeConfig } from './runtime-config-once.mjs';
 import {createUserPreferences,sceneDefaultsFromDocument,sceneDefaultsApplyToLocation,newSceneDocument} from './user-preferences.mjs';
 import {installUserPreferences} from './user-preferences-ui.mjs';
 import {captureStill,createOutputProfiles} from './render-output.mjs';
+import {createViewportRecording} from './viewport-recording.mjs';
+import {createRecordingSink} from './recording-mp4.mjs';
 import {installRenderOutput} from './render-output-ui.mjs';
 import { settleStartupVeil } from './startup-veil.mjs';
 // Adopt the <head> guard's early runtime-config request (startup-veil-guard.js).
@@ -4117,10 +4119,10 @@ function syncViewportDisplayControls() {
 // Viewport Preview: the scene at device pixel ratio 1 and the fire's raymarch
 // on the runtime ladder's preview tier (see preview-quality.mjs). Applied
 // when the preference changes; the simulation is not touched.
-let outputCaptureExtent=null;
+let outputCaptureExtent=null,recordingExtent=null,recordingFrameSink=null;
 let appliedViewportQuality=null;
 function syncViewportQuality(syncRendererSize) {
- if(outputCaptureExtent)return;
+ if(outputCaptureExtent||recordingExtent)return;
  const quality=viewportDisplay.quality;
  if(quality===appliedViewportQuality)return;
  appliedViewportQuality=quality;
@@ -11593,7 +11595,7 @@ async function initScene() {
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
   cameraProjectionBase=camera.updateProjectionMatrix.bind(camera);
-  camera.updateProjectionMatrix=()=>{if(outputCaptureExtent){camera.aspect=outputCaptureExtent.width/outputCaptureExtent.height;cameraProjectionBase();return;}const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
+  camera.updateProjectionMatrix=()=>{if(outputCaptureExtent||recordingExtent){const extent=outputCaptureExtent??recordingExtent;camera.aspect=extent.width/extent.height;cameraProjectionBase();return;}const state=sceneCameras?.state();if(state?.mode!=='camera')camera.aspect=document.getElementById('viewport').clientWidth/document.getElementById('viewport').clientHeight;if(state?.mode==='camera'){camera.aspect=sceneCameras.read().settings.aspect[0]/sceneCameras.read().settings.aspect[1];}cameraProjectionBase();if(state?.mode==='camera'){const vp=document.getElementById('viewport'),frame=state.frame;const clip=new THREE.Matrix4().set(frame.width/vp.clientWidth,0,0,2*(frame.x+frame.width/2)/vp.clientWidth-1,0,frame.height/vp.clientHeight,0,1-2*(frame.y+frame.height/2)/vp.clientHeight,0,0,1,0,0,0,0,1);camera.projectionMatrix.premultiply(clip);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();}};
 
   try {
     samHostConfig = (await loadStartupRuntimeConfig()).sam3 || null;
@@ -12006,13 +12008,13 @@ async function initScene() {
   let needsRender = true;
   let idleFrames = 0;
   function syncViewportRendererSize() {
-    const w = outputCaptureExtent?.width ?? Math.max(1, vp.clientWidth);
-    const h = outputCaptureExtent?.height ?? Math.max(1, vp.clientHeight);
+    const w = (outputCaptureExtent??recordingExtent)?.width ?? Math.max(1, vp.clientWidth);
+    const h = (outputCaptureExtent??recordingExtent)?.height ?? Math.max(1, vp.clientHeight);
     const currentSize = renderer.getSize(new THREE.Vector2());
     if (currentSize.x !== w || currentSize.y !== h) {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h, !outputCaptureExtent);
+      renderer.setSize(w, h, !(outputCaptureExtent||recordingExtent));
       needsRender = true;
       idleFrames = 0;
       cameraAuthoring?.refresh();
@@ -12405,6 +12407,7 @@ async function initScene() {
         try { localLiquidHost.render({advance:!outputCaptureExtent}); }
         catch (error) {
           if(outputCaptureExtent)throw error;
+          recordingFrameSink?.({error});
           console.error('Local water frame failed', error);
           localLiquidFailure = String(error?.message || error);
           localLiquidHost.dispose();
@@ -12419,6 +12422,7 @@ async function initScene() {
     // copy after the step.
     if (waterProxy && proxySnapshots.wanted('water')) waterProxy.producer.tick();
     sceneFrameCount++;
+    if(recordingFrameSink&&(!activeSceneComposition||!isSceneItemVisible('flame-field')||!volumePrototype?.isActive()))recordingFrameSink();
     lastViewportShadingRender = {...shadingReceipt, sceneFrameCount};
     const frameMs = performance.now() - t0;
     fpsFrames++;
@@ -12436,6 +12440,7 @@ async function initScene() {
     if(outputCaptureExtent)return;
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
+    if(recordingExtent)needsRender=true;
     controls.update();
     viewProjection?.update();
     workbenchSceneFrames.tick(performance.now());
@@ -12537,7 +12542,7 @@ async function initScene() {
   };
   const outputProfiles=createOutputProfiles({controller:createUserPreferences()});
   const renderOutput=captureStill({async begin({settings,pixels,signal}){
-    const busy=vantageBusy();if(busy)throw Error(busy);
+    const busy=recordingExtent?'A viewport recording is running':vantageBusy();if(busy)throw Error(busy);
     if(sceneSaveBlockedByFailedRestore)throw Error('Restore the scene before rendering output');
     if(sceneObjects.some(item=>item.type==='splat'))throw Error('Splat overlay output is not supported by the mesh/flame capture');
     const limit=renderer.backend.device?.limits?.maxTextureDimension2D;
@@ -12594,8 +12599,48 @@ async function initScene() {
       }};
     }catch(error){await release();throw error;}
   }});
-  const outputUI=installRenderOutput({document,profiles:outputProfiles,capture:renderOutput,cameras:()=>sceneCameras.read().cameras});
-  window.kaminosRenderOutput={open:outputUI.open,close:outputUI.close,read:outputUI.read,write:outputUI.write,capture:renderOutput,profiles:outputProfiles,
+  const viewportRecording=createViewportRecording({makeSink:createRecordingSink,host:{async begin({settings,pixels,signal}){
+    const busy=vantageBusy();if(busy)throw Error(busy);
+    if(vantageCaptureHeld||outputCaptureExtent||recordingExtent)throw Error('Another output operation is running');
+    if(sceneSaveBlockedByFailedRestore)throw Error('Restore the scene before recording');
+    if(sceneObjects.some(item=>item.type==='splat'))throw Error('Splat overlay recording is not supported');
+    const limit=renderer.backend.device?.limits?.maxTextureDimension2D;
+    if(!limit||pixels.width>limit||pixels.height>limit)throw Error('Recording size exceeds the WebGPU texture capacity');
+    const record=settings.cameraId===null?null:sceneCameras.read().cameras.find(item=>item.id===settings.cameraId);
+    if(settings.cameraId!==null&&!record)throw Error('The output camera is missing from this scene');
+    if(record&&record.camera.projection!=='perspective')throw Error('Recording supports perspective camera objects');
+    const snapshot={pixelRatio:renderer.getPixelRatio(),zoom:camera.zoom,view:readAuthoredCameraView(),projection:viewProjection.state()};
+    let released=false,frame=null;
+    const release=()=>{if(released)return;released=true;recordingFrameSink=null;recordingExtent=null;
+      // Keep the view reached by navigating a viewport recording. A borrowed
+      // scene-camera view goes back to the preceding authoring view.
+      if(record){viewProjection.setOrthographic(snapshot.projection.orthographic,{auto:snapshot.projection.auto});camera.zoom=snapshot.zoom;writeAuthoredCameraView(snapshot.view);}
+      renderer.setPixelRatio(snapshot.pixelRatio);syncViewportRendererSize();camera.updateProjectionMatrix();
+      volumePrototype?.setControls(readVolumeControls());sceneGI.resetHistory('recording-restored');markDirty();
+    };
+    const checkFire=()=>{if(activeSceneComposition&&isSceneItemVisible('flame-field')){
+      const d=volumePrototype?.debugState();
+      if(!isFireLightFieldRoute()||viewportDisplay.fire==='proxy')throw Error('Choose Full fire display to record this flame');
+      if(!d?.active||d.error||d.selectiveHeadLiveCapturePaused)throw Error(d?.error||'Flame presentation is inactive');
+    }};
+    try{
+      checkFire();signal.throwIfAborted();recordingExtent=pixels;
+      if(record){viewProjection.setOrthographic(false);camera.zoom=1;writeAuthoredCameraView(cameraViewFromRecord(record,pixels.width/pixels.height));}
+      renderer.setPixelRatio(1);syncViewportRendererSize();camera.updateProjectionMatrix();sceneGI.resetHistory('recording-size');
+      volumePrototype?.setControls(readVolumeControls({quality:settings.quality==='scene'?viewportDisplay.quality:settings.quality}));markDirty();
+      return {release,subscribe(listener){recordingFrameSink=value=>{frame=value;listener();};return ()=>{recordingFrameSink=null;};},capture(){
+        if(frame?.error)throw frame.error;checkFire();
+        const visible=!!activeSceneComposition&&isSceneItemVisible('flame-field');
+        if(visible&&!frame?.fire)throw Error('A complete flame frame was not presented');
+        const host=renderer.domElement,bounds=host.getBoundingClientRect(),canvas=document.createElement('canvas');canvas.width=pixels.width;canvas.height=pixels.height;
+        const ctx=canvas.getContext('2d');ctx.drawImage(host,0,0,canvas.width,canvas.height);
+        if(visible){const volume=frame.fire.canvas;ctx.drawImage(volume,0,0,canvas.width,canvas.height);}
+        return {canvas,receipt:{backend:'webgpu',sceneFrameCount,camera:readAuthoredCameraView(),layers:visible?['mesh','ordinary-emissive-volume']:['mesh'],fire:visible?{...frame.fire,canvas:undefined}:null,water:localLiquidHost?{frameCount:localLiquidHost.state().frameCount,paused:!!localLiquidHost.paused}:null}};
+      }};
+    }catch(error){release();throw error;}
+  }}});
+  const outputUI=installRenderOutput({document,profiles:outputProfiles,capture:renderOutput,recording:viewportRecording,cameras:()=>sceneCameras.read().cameras});
+  window.kaminosRenderOutput={open:outputUI.open,close:outputUI.close,read:outputUI.read,write:outputUI.write,capture:renderOutput,profiles:outputProfiles,recording:viewportRecording,
     state:()=>({capturing:!!outputCaptureExtent,canvas:[renderer.domElement.width,renderer.domElement.height],camera:readAuthoredCameraView(),projection:viewProjection.state(),pixelRatio:renderer.getPixelRatio()})};
   // Per-canvas frame counters let a capture refuse any pictured layer that did not redraw.
   const vantageFrameState=()=>{const volume=volumePrototype?.debugState?.(),volumeCanvas=volumePrototype?.canvasElement?.();return {sceneFrameCount,layers:{[renderer.domElement.id]:sceneFrameCount,...(volumeCanvas?.id&&Number.isFinite(volume?.frameCount)?{[volumeCanvas.id]:volume.frameCount}:{})},volume:volume?{active:!!volume.active,frameCount:volume.frameCount??null,simStepCount:volume.simStepCount??null,effectiveRoute:volume.effectiveRoute??null,backend:volume.backend??null}:null,localWater:localLiquidHost?{paused:!!localLiquidHost.paused}:null};};
@@ -21048,7 +21093,8 @@ async function initKaminosVolumeRoute() {
     // The finger-fluid liquid-contact route adopts the fluid solver's device
     // through its descriptor; seating the host device here would refuse it.
     sharedGpuContext: fingerFluidPyroCompositionRequested() ? null : sharedGpu,
-    getPresentationSize: () => outputCaptureExtent,
+    getPresentationSize: () => outputCaptureExtent??recordingExtent,
+    onPresentedFrame: frame=>{if(recordingFrameSink&&isSceneItemVisible('flame-field'))recordingFrameSink({fire:frame});},
     getSceneDepth: () => ordinarySceneDepthProvider?.() ?? null,
     // The kiln is an explicit authored-solid experiment. Its exact registered
     // mesh and world transform, not its bounding box or camera depth, feed the
