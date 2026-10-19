@@ -1,7 +1,7 @@
 // Actual host environment, projected once per lighting edit on the shared GPU.
 // Background visibility/grading is deliberately not an illumination input.
 import * as THREE from './lib/three.webgpu.js';
-import {vec4,pmremTexture,equirectDirection,uv,uniform} from './lib/three.tsl.js';
+const {vec4,pmremTexture,equirectDirection,uv,uniform}=THREE.TSL;
 
 export function sceneSmokeEnvironmentRecipe(scene){
   const source=scene.environment,intensity=scene.environmentIntensity??1;
