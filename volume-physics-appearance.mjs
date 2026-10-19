@@ -39,13 +39,11 @@ export function resolvePhysicsAppearance(controls = {}, { reactantAdmitted = fal
   const kelvinPerHeat = clampTo(controls.physicalKelvinPerHeat, PHYSICS_APPEARANCE_RANGES.kelvinPerHeat, PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat);
   const sootBurnoutRate = clampTo(controls.physicalSootBurnoutRate, PHYSICS_APPEARANCE_RANGES.sootBurnoutRate, PHYSICS_APPEARANCE_DEFAULTS.sootBurnoutRate);
   const sootBurnoutKelvin = clampTo(controls.physicalSootBurnoutKelvin, PHYSICS_APPEARANCE_RANGES.sootBurnoutKelvin, PHYSICS_APPEARANCE_DEFAULTS.sootBurnoutKelvin);
-  const lawOk = requested && reactantAdmitted === true;
-  const render = lawOk && emissiveRouteEffective === true;
-  // The burnout is simulation: it follows the law, never the view drawing the frame.
-  const sootBurnout = lawOk && sootBurnoutRate > 0;
-  let reason = null;
-  if (requested && !lawOk) reason = 'physics-appearance-requires-the-reactant-law';
-  else if (requested && !render) reason = 'physics-appearance-draws-only-on-the-emissive-transport-route';
+  // The law draws on the emissive transport route under every reaction law;
+  // the soot burnout is simulation and needs the reactant law's oxidizer field.
+  const render = requested && emissiveRouteEffective === true;
+  const sootBurnout = requested && reactantAdmitted === true && sootBurnoutRate > 0;
+  const reason = requested && !render ? 'physics-appearance-draws-only-on-the-emissive-transport-route' : null;
   return {
     identity: PHYSICS_APPEARANCE_IDENTITY,
     requested,

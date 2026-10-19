@@ -17158,16 +17158,11 @@ export function createKaminosVolumePrototype({
       reactantAdmitted: reactantCombustionConfig.effective.admitted === true,
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
     });
-    // Physics (soot x blackbody) is the material law (operator, 2026-10-18; the
-    // legacy laws' controls are retired). Where it cannot draw, because the
-    // authored reaction law carries no soot and temperature fields it trusts,
-    // the transported heat + soot material stands in, never the mixed carriers.
-    const transportedEmissiveMaterial = !physicsAppearance.effective.render;
     state.physicsAppearance = physicsAppearance;
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
-      controlsSnapshot.physicalAmbient ?? 0.02, transportedEmissiveMaterial ? 1 : 0,
+      controlsSnapshot.physicalAmbient ?? 0.02, 0, // Physics is the material law; the transported stand-in (w = 1) is retired
       ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
       ...physicsAppearanceUniformValues(physicsAppearance),
     ], EMISSIVE_UNIFORM_OFFSET);
@@ -17182,9 +17177,9 @@ export function createKaminosVolumePrototype({
       rayStartPattern: uniforms[47] > 0.5 ? (controlsSnapshot.rayNoiseAnimated ? 'fast-spatiotemporal-128x128x32-v1' : 'fast-spatial-slice-zero-128-v1') : 'midpoint',
       rayNoisePhase: uniforms[41],
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
-      materialLawRequested: physicalColorMode === 2 ? (physicsAppearance.requested ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      temperatureAuthority: physicalColorMode === 2 ? (physicsAppearance.effective.render ? 'transported-heat-linear-kelvin-per-heat' : transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
+      materialLawRequested: physicalColorMode === 2 ? 'physics-soot-blackbody-v0' : null,
+      materialLawEffective: physicalColorMode === 2 && physicalColorEffective && physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : null,
+      temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-linear-kelvin-per-heat' : null,
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',

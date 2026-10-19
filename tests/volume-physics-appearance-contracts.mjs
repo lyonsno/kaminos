@@ -42,15 +42,19 @@ test('the physics law is a third material law, requested by material law 2', () 
   assert.match(core, /const physicalColorMode = 2;/, 'emissive transport is the one colour route');
 });
 
-test('it needs the reactant law; the soot burnout does not depend on which view draws the frame', () => {
-  const noLaw = resolvePhysicsAppearance({ physicalMaterialLaw: 2, physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: false, emissiveRouteEffective: true });
-  assert.deepEqual(noLaw.effective, { render: false, sootBurnout: false });
-  assert.equal(noLaw.reason, 'physics-appearance-requires-the-reactant-law');
-  const offRoute = resolvePhysicsAppearance({ physicalMaterialLaw: 2, physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: true, emissiveRouteEffective: false });
+test('it draws under every reaction law; the soot burnout still follows the reactant law, never the view', () => {
+  // Physics is the one material law (operator, 2026-10-18): there is no stand-in
+  // for the authored reaction law any more, so the view draws Physics there too.
+  const authored = resolvePhysicsAppearance({ physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: false, emissiveRouteEffective: true });
+  assert.deepEqual(authored.effective, { render: true, sootBurnout: false }, 'the authored law renders Physics; burnout needs the reactant oxidizer field');
+  assert.equal(authored.reason, null);
+  const offRoute = resolvePhysicsAppearance({ physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: true, emissiveRouteEffective: false });
   assert.deepEqual(offRoute.effective, { render: false, sootBurnout: true }, 'a diagnostic view must not change the simulation');
   assert.equal(offRoute.reason, 'physics-appearance-draws-only-on-the-emissive-transport-route');
-  assert.deepEqual(physicsAppearanceUniformValues(noLaw), [0, noLaw.kelvinPerHeat, 0, noLaw.sootBurnoutKelvin]);
+  assert.deepEqual(physicsAppearanceUniformValues(authored), [1, authored.kelvinPerHeat, 0, authored.sootBurnoutKelvin]);
   assert.deepEqual(physicsAppearanceUniformValues(offRoute), [0, offRoute.kelvinPerHeat, 0.4, offRoute.sootBurnoutKelvin]);
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(core, /transportedEmissiveMaterial|transported-heat-soot-v1|mixed-carrier-soot-floor-v2/, 'the transported and mixed-carrier stand-ins are gone from the core');
 });
 
 test('controls are clamped to their ranges and non-finite input falls back to the defaults', () => {
