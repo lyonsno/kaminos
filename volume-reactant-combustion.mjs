@@ -89,7 +89,7 @@ export const REACTANT_CONTROL_DEFAULTS = Object.freeze({
   coolingTimeSteps: -1 / Math.log(0.982),
 });
 export const REACTANT_CONTROL_RANGES = Object.freeze({
-  mixingTimeSteps: Object.freeze([0.25, 30]),
+  mixingTimeSteps: Object.freeze([0.1, 30]),
   coolingTimeSteps: Object.freeze([5, 300]),
 });
 export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'air-starved', 'too-cold', 'mixing-limited', 'burning', 'depleted', 'products']);

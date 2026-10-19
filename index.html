@@ -1604,13 +1604,18 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
         <span class="slider-label" title="Rendering-only displacement carried by the flow, in cells. Zero preserves the original reconstruction.">Flow detail</span>
-        <input type="range" id="volume-render-detail" min="0" max="1" step="any" value="0">
+        <input type="range" id="volume-render-detail" min="0" max="2" step="any" value="0">
         <span class="slider-val" id="volume-render-detail-val">0.00</span>
       </div>
       <div class="slider-row">
         <span class="slider-label" title="Base wavelength of continuous rendering detail, in simulation cells.">Flow detail scale</span>
         <input type="range" id="volume-render-detail-scale" min="0.5" max="4" step="any" value="2">
         <span class="slider-val" id="volume-render-detail-scale-val">2.00</span>
+      </div>
+      <div class="slider-row">
+        <label for="volume-render-detail-fine">Fine breakup</label>
+        <input type="range" id="volume-render-detail-fine" min="0" max="1" step="any" value="0.35">
+        <span class="slider-val" id="volume-render-detail-fine-val">0.35</span>
       </div>
       <div class="slider-row">
         <span class="slider-label" id="volume-physical-temperature-label">Thermal K</span>
@@ -2871,7 +2876,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box, and Fire Licks / Interface Shred shape only the look. Tall plume scene with the inflow or immersed source only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
-      <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.25" max="30" step="any" value="3">
+      <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.1" max="30" step="any" value="3">
       <span class="slider-val" id="volume-reactant-mixing-time-val">3.0</span>
     </div>
     <span class="slider-help">Reactant candidate: how quickly fuel and air that already share a cell and are hot enough burn, in reference steps (each step burns 1 − e^(−dt/time) of what can burn). Shorter makes a thinner, brighter flame front; longer lets fuel travel further before it burns. It does not bring fuel and air together: the flow and the neighbour exchange do.</span>
@@ -17512,8 +17517,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
   { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
-  { key: 'renderDetail', id: 'volume-render-detail', param: 'volume_render_detail', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'renderDetail', id: 'volume-render-detail', param: 'volume_render_detail', min: 0, max: 2, continuous: true, decimals: 2 },
   { key: 'renderDetailScale', id: 'volume-render-detail-scale', param: 'volume_render_detail_scale', min: 0.5, max: 4, continuous: true, decimals: 2 },
+  { key: 'renderDetailFine', id: 'volume-render-detail-fine', param: 'volume_render_detail_fine', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },

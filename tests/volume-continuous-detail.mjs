@@ -8,7 +8,7 @@ test('the UI snapshot forwards independent detail controls to the renderer', () 
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const filter = index.match(/REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS\.filter\((field => [^\n]+?)\)\.map/)[1];
   const admitted = new Function(`return (${filter})`)();
-  for (const key of ['renderDetail', 'renderDetailScale']) assert.equal(admitted({key}), true, `${key} reaches the renderer`);
+  for (const key of ['renderDetail', 'renderDetailScale', 'renderDetailFine']) assert.equal(admitted({key}), true, `${key} reaches the renderer`);
 });
 
 test('coordinate publication carries its own blend phase through moving and held draws', () => {
@@ -16,7 +16,7 @@ test('coordinate publication carries its own blend phase through moving and held
   const store = core.match(/fn waveletCoordStore[\s\S]*?\n}/)[0];
   assert.match(store, /vec4<f32>\(coord, u\.wavelet_turbulence\.w\)/, 'stamp the phase used by coordinate transport, not the later CPU step counter');
   assert.match(CONTINUOUS_DETAIL_WGSL, /textureLoad\(waveletCoordSrc, vec3<i32>\(0\), 0\)\.w/, 'draw reads the consumed generation stamp');
-  assert.doesNotMatch(CONTINUOUS_DETAIL_WGSL, /u\.continuous_detail\.z/);
+  assert.match(CONTINUOUS_DETAIL_WGSL, /waveletBlendA\(u32\(phase\)/);
   const a = [2.3, 4.5, 6.7], b = [7.4, 1.5, 3.1], reset = [12.5, 4.5, 8.5];
   for (const step of [24, 48]) {
     const published = {phase: step, a: step === 48 ? reset : a, b: step === 24 ? reset : b};
@@ -31,11 +31,28 @@ test('saved basins can retain independent render detail without enabling a simul
   const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
   assert.equal(schema.controlCount, schema.controls.length, 'server validates schema inventory before any basin load');
   const controls = Object.values(schema).flat().filter(x => x && typeof x === 'object');
-  for (const [key, value] of [['volume-render-detail', 0], ['volume-render-detail-scale', 2]]) {
+  for (const [key, value] of [['volume-render-detail', 0], ['volume-render-detail-scale', 2], ['volume-render-detail-fine', .35]]) {
     const control = controls.find(c => c.key === key);
     assert.ok(control, `${key} must be a persisted, additive control`);
     assert.equal(control.additiveDefault, value);
   }
+});
+
+test('two-cell displacement and adjustable fine weight preserve the accepted default', () => {
+  const a = [2.3, 4.5, 6.7], b = [7.4, 1.5, 3.1];
+  assert.equal(resolveContinuousDetail({renderDetail:2}).amount,2);
+  assert.equal(resolveContinuousDetail({}).fine,.35);
+  assert.equal(resolveContinuousDetail({renderDetailFine:0}).fine,0);
+  const baseline = continuousDetailOffset(a,b,13,1,2);
+  assert.deepEqual(continuousDetailOffset(a,b,13,1,2,.35),baseline);
+  assert.deepEqual(continuousDetailOffset(a,b,13,2,2,.35),baseline.map(x=>x*2));
+  assert.notDeepEqual(continuousDetailOffset(a,b,13,1,2,0),baseline);
+  for (const fine of [0,.35,1]) for (let step=0;step<48;step++) {
+    assert.ok(Math.hypot(...continuousDetailOffset(a,b,step,2,.5,fine))<2);
+  }
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url),'utf8');
+  assert.match(core,/Math\.ceil\(continuousDetail\.amount\)/,'uniform halo follows actual displacement bound');
+  assert.match(core,/flameGuideSegmentPadded\([^\n]+i32\(u\.continuous_detail\.w\)\)/,'GPU guidance consumes the expanded halo');
 });
 
 test('displacement is bounded by its support halo and continuous within a cell', () => {

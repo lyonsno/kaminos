@@ -228,6 +228,10 @@ test('the reactant law is admitted only for the tall plume with an inflow or imm
   const tuned = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 9, reactantCoolingTime: 120 }, { grid: 32 });
   assert.equal(tuned.effective.mixingTimeSteps, 9);
   assert.equal(tuned.effective.coolingTimeSteps, 120);
+  const fast = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: .1 }, { grid: 32 });
+  assert.equal(fast.effective.mixingTimeSteps,.1);
+  assert.equal(rc.reactantCombustionUniformValues(fast)[1],.1);
+  assert.equal(rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 0 }, { grid: 32 }).effective.mixingTimeSteps,.1);
   const clamped = rc.resolveReactantCombustionConfig({ ...base, reactantMixingTime: 1e6, reactantCoolingTime: -3 }, { grid: 32 });
   assert.equal(clamped.effective.mixingTimeSteps, rc.REACTANT_CONTROL_RANGES.mixingTimeSteps[1]);
   assert.equal(clamped.effective.coolingTimeSteps, rc.REACTANT_CONTROL_RANGES.coolingTimeSteps[0]);

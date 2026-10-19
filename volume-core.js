@@ -8721,7 +8721,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
         let remaining = opticalStep.end - opticalStep.cursor;
         let horizon = min(remaining, dtBase * 8.0);
-        let guide = flameGuideSegmentPadded(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon, select(0, 1, u.continuous_detail.x > 0.0));
+        let guide = flameGuideSegmentPadded(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon, i32(u.continuous_detail.w));
         let cellWidth = 2.0 / f32(GRID);
         let nearby = guide.x <= cellWidth;
         let support = select(0.0, guide.y, nearby);
@@ -17093,7 +17093,7 @@ export function createKaminosVolumePrototype({
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     const continuousDetail = resolveContinuousDetail(controlsSnapshot);
     state.continuousDetail = continuousDetail;
-    uniforms.set([continuousDetail.amount, continuousDetail.scale, 0, 0], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
+    uniforms.set([continuousDetail.amount, continuousDetail.scale, continuousDetail.fine, Math.ceil(continuousDetail.amount)], CONTINUOUS_DETAIL_UNIFORM_OFFSET);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted || continuousDetail.admitted, waveletTurbulence.effective.admitted)) {
