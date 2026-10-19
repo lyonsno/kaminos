@@ -5,6 +5,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { validateVolumeSettingsPresetSourceIdentity } from './volume-settings-preset-contract.mjs';
+import { VOLUME_AUTHORED_MIX_CONTROL_IDS } from './volume-cockpit-layout.mjs';
+// The authored-mix surface keeps no resident control since the legacy material
+// laws' controls were retired (2026-10-18); its canary is whichever control the
+// layout declares resident, or none.
+const authoredMixCanaryId = VOLUME_AUTHORED_MIX_CONTROL_IDS[0] ?? null;
 
 const args = parseArgs(process.argv.slice(2));
 const url = String(args.get('--url') || '');
@@ -370,7 +375,8 @@ try {
     const body = operatorDocument.getElementById('volume-authored-mix-body');
     const toggle = operatorDocument.getElementById('volume-authored-mix-toggle');
     const authoredRoot = operatorDocument.getElementById('volume-authored-mix-control-root');
-    const canary = operatorDocument.getElementById('volume-reaction-boundary-support-thermal');
+    const canaryId = ${JSON.stringify(authoredMixCanaryId)};
+    const canary = canaryId ? operatorDocument.getElementById(canaryId) : null;
     const viewport = operatorDocument.getElementById('viewport');
     const hostRendererCanvas = operatorDocument.getElementById('kaminos-host-renderer-canvas');
     const outerToolbar = document.getElementById('toolbar');
@@ -446,8 +452,9 @@ try {
         toggleWidth: toggleRect.width,
         viewportRight: viewportRect.right,
         viewportWidth: viewportRect.width,
-        canaryWidth: canaryRect.width,
-        canaryInAuthoredRoot: authoredRoot?.contains(canary) || false,
+        canaryId,
+        canaryWidth: canaryRect ? canaryRect.width : null,
+        canaryInAuthoredRoot: canary ? (authoredRoot?.contains(canary) || false) : null,
         hitInsidePanel: !!hit && panel.contains(hit),
       } : null,
     };
@@ -455,7 +462,7 @@ try {
   lastTrustworthyEvidence.cockpitVisibility = cockpitVisibility;
   assert.deepEqual(
     cockpitVisibility.retired.map(entry => entry.name).sort(),
-    ['atlas-capture', 'raymarch-history', 'topology-shell'],
+    ['atlas-capture'],
     'cockpit retired-control group inventory changed',
   );
   for (const entry of cockpitVisibility.retired) {
@@ -517,8 +524,12 @@ try {
   assert.ok(cockpitVisibility.panelGeometry?.toggleWidth >= 30, 'authored-mix panel toggle has no stable hit target');
   assert.ok(cockpitVisibility.panelGeometry?.viewportWidth > 0, 'authored-mix panel displaced the viewport completely');
   assert.ok(cockpitVisibility.panelGeometry?.left >= cockpitVisibility.panelGeometry?.viewportRight - 1, 'authored-mix panel overlaps the viewport as an unlabeled overlay');
-  assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
-  assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
+  if (authoredMixCanaryId) {
+    assert.equal(cockpitVisibility.panelGeometry?.canaryInAuthoredRoot, true, 'authored-mix canary was cloned or left in the primary root');
+    assert.ok(cockpitVisibility.panelGeometry?.canaryWidth > 0, 'authored-mix canary has no rendered width');
+  } else {
+    assert.equal(cockpitVisibility.panelGeometry?.canaryId, null, 'no resident authored-mix control is declared, so no canary is measured');
+  }
   assert.equal(cockpitVisibility.panelGeometry?.hitInsidePanel, true, 'authored-mix panel is painted behind another surface');
   const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
