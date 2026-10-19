@@ -49,14 +49,20 @@ export async function fetchBytes(url, onBytes, { expectBytes = null } = {}) {
       await cache.delete(url).catch(() => {});
     }
   }
-  const buffer = await download(url, onBytes);
+  // Tee the network response for Cache Storage. Building another Response from the full
+  // ArrayBuffer synchronously copies up to 219 MB on the page thread.
+  let cacheResponse = null;
+  const buffer = await download(url, onBytes, response => {
+    if (cache) cacheResponse = response.clone();
+  });
   if (expectBytes && buffer.byteLength !== expectBytes) throw new Error(`${url}: ${buffer.byteLength} bytes, expected ${expectBytes}`);
-  if (cache) await cache.put(url, new Response(buffer)).catch(e => console.warn('could not cache', url, e));
+  if (cacheResponse) await cache.put(url, cacheResponse).catch(e => console.warn('could not cache', url, e));
   return buffer;
 }
-async function download(url, onBytes) {
+async function download(url, onBytes, onResponse) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  onResponse?.(res);
   const total = Number(res.headers.get('content-length')) || null;
   if (!res.body || !onBytes) return res.arrayBuffer();
   const reader = res.body.getReader(), chunks = [];
