@@ -24,7 +24,7 @@ const device={limits:{maxStorageBufferBindingSize:1e9,maxTextureDimension2D:1024
  queue:{writeBuffer(b,o,data){uploads.set(b.label,Array.from(data));},submit(){}},
  createBuffer(d){return {...d,destroy(){}};},createTexture(){return {createView(){return {};},destroy(){}};},
  createShaderModule(d){return d;},createComputePipeline(){return {getBindGroupLayout(){return {};}};},createBindGroup(){return {};},
- createCommandEncoder(){return {beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
+ createCommandEncoder(){return {copyBufferToBuffer(){},beginComputePass({label}){passes.push(label);return {setPipeline(){},setBindGroup(){},dispatchWorkgroups(){},end(){}};},finish(){return {};}};}};
 const gather=createVolumeGather(device,{geometry:buildTriangleVisibility([]).packGpu(),receivers:[],volumeGrid:2,directions:8});
 const source={status:'encoded',texture:{createView(){return {};}},generation:1,frame:7,dimensions:[4,8,4],localMax:[1,3,1]};
 const environment={texture:{createView(){return {};}},metadata:{route:'scene-pmrem-world-radiance-v1',generation:1,source:'actual-hdr',intensity:2}};
@@ -40,6 +40,9 @@ for(const pattern of ['source','guided']){
  const frame=gather.encode(source,{environment});
  assert.equal(frame.environment.enabled,true);
  assert.ok(passes.includes('cache environment visibility'),'source-biased rays need independent full-sphere environment visibility');
+ gather.setDirections(24);gather.encode(source,{environment});
+ gather.setDirections(8);gather.encode(source,{environment});
+ assert.equal(uploads.get('uniform environment directions').length,8*4,'lowering requested count must upload its own full-sphere constellation, not retain the larger one');
 }
 gather.destroy();
 console.log('PASS environment input, off transition, source-gain isolation and full-sphere source-pattern coverage');

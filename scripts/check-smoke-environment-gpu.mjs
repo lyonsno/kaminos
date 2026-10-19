@@ -52,6 +52,20 @@ export async function checkSmokeEnvironmentGpu(device){
   for(let i=0;i<box.index.count;i+=3){const v=[];for(let j=0;j<3;j++){const n=box.index.getX(i+j);v.push([pos.getX(n),pos.getY(n),pos.getZ(n)]);}triangles.push({a:v[0],b:v[1],c:v[2]});}box.dispose();
   gather=createVolumeGather(device,{geometry:buildTriangleVisibility(triangles).packGpu(),receivers:[],volumeGrid:2,smokeRefinement:1,directions:8});
   for(const pattern of ['fixed','source','guided']){gather.setAngularPattern(pattern);near(await sample({gain:0,environment:projection.frame()}),[0,0,0],`${pattern} opaque enclosure blocks environment`);}
+  gather.destroy();gather=null;upload(1);
+  const partial=triangles.filter(t=>[t.a,t.b,t.c].every(p=>p[0]===5));
+  assert(partial.length===2,'partial visibility fixture must contain the actual +X wall');
+  for(const pattern of ['source','guided']){
+   const geometry=buildTriangleVisibility(partial).packGpu();
+   gather=createVolumeGather(device,{geometry,receivers:[],volumeGrid:2,smokeRefinement:1,directions:8,angularPattern:pattern});
+   const cold=await sample({gain:0,environment:projection.frame()});gather.destroy();
+   gather=createVolumeGather(device,{geometry,receivers:[],volumeGrid:2,smokeRefinement:1,directions:24,angularPattern:pattern});
+   await sample({gain:0,environment:projection.frame()});gather.setDirections(8);
+   const lowered=await sample({gain:0,environment:projection.frame()});
+   near(lowered,cold,`${pattern} cold8 and retained24→8 must agree through partial visibility`,.00001);
+   assert(lowered.some(x=>x>0),'partial wall must leave some sky visible');
+   gather.destroy();gather=null;
+  }
   return {identity:'actual-scene-pmrem-and-smoke-gather-v1',rows};
  }finally{gather?.destroy();projection.dispose();source.destroy();pmrem.dispose();image.dispose();generator.dispose();renderer.dispose();}
 }

@@ -122,8 +122,8 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const environmentCache=sourcePattern()?device.createComputePipeline({label:'cache full-sphere environment visibility',layout:'auto',compute:{module,entryPoint:'cacheEnvironment'}}):null;
       const environmentCacheGroup=environmentCache?device.createBindGroup({layout:environmentCache.getBindGroupLayout(0),entries:[
         {binding:0,resource:{buffer:nodes}},{binding:1,resource:{buffer:triangles}},{binding:2,resource:{buffer:receiverBuffer}},
-        {binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;
-      const state={owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCacheBuilt:false,family:family(),capacity:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
+        {binding:12,resource:{buffer:environmentParams}},{binding:13,resource:{buffer:environmentDirections}},{binding:14,resource:{buffer:environmentHits}}]}):null;
+      const state={owned,directionBuffer,distances,cache,cacheGroup,fullCache,fullCacheGroup,gather,gatherVolume,environmentCache,environmentCacheGroup,environmentDirections,environmentHits,environmentCount:directions,environmentCacheBuilt:false,family:family(),capacity:directions,prefix,sourceTexture:null,gatherGroup:null,cacheBuilt:false};
       angularStates.set(key,state);
       if(!retainComparisons&&!sourcePattern())pruneComparisons();
       return state;
@@ -167,6 +167,13 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         preparedSmoke.invalidateGeometry();softening?.invalidateGeometry();
       }
       const state=angularState();
+      if(sourcePattern()&&environment&&state.environmentCount!==directions){
+        // Progressive flame samples may reuse a larger cache, but a uniform
+        // sphere is not a progressive prefix. Its current constellation and
+        // solid distances must describe the requested count after every edit.
+        device.queue.writeBuffer(state.environmentDirections,0,new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])));
+        state.environmentCount=directions;state.environmentCacheBuilt=false;
+      }
       if(softening&&softeningDimensions!==field.dimensions.join(',')){softening.destroy();softening=null;}
       if(sourceSoftness>0&&!softening){
         softening=createSourceSoftening(device,{nodes,triangles,nodeCount:geometry.nodeCount,dimensions:field.dimensions});
@@ -174,7 +181,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       }
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;
       device.queue.writeBuffer(params,0,new Float32Array([gain,stepLength,smokeEnabled||surfaceScattering?total:receivers.length,directions]));
-      device.queue.writeBuffer(environmentParams,0,new Float32Array([environment?1:0,0,0,0]));
+      device.queue.writeBuffer(environmentParams,0,new Float32Array([environment?1:0,directions,0,0]));
       if(state.sourceTexture!==lightingTexture||state.environmentTexture!==environmentTexture) {
         const entries=[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
@@ -188,7 +195,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       if(environment&&(smokeEnabled||surfaceScattering)&&state.environmentCache&&!state.environmentCacheBuilt){
         const pass=encoder.beginComputePass({label:'cache environment visibility'});
         pass.setPipeline(state.environmentCache);pass.setBindGroup(0,state.environmentCacheGroup);
-        pass.dispatchWorkgroups(...receiverDispatch(volumeCount*state.capacity,dispatchLimit));pass.end();state.environmentCacheBuilt=true;
+        pass.dispatchWorkgroups(...receiverDispatch(volumeCount*directions,dispatchLimit));pass.end();state.environmentCacheBuilt=true;
       }
       if(!state.cacheBuilt) {
         if(state.prefix)encoder.copyBufferToBuffer(state.prefix.distances,0,state.distances,0,total*state.prefix.capacity*4);
@@ -450,16 +457,17 @@ const SOURCE_ENVIRONMENT_WGSL=`
 @compute @workgroup_size(64)
 fn cacheEnvironment(@builtin(global_invocation_id) global:vec3<u32>){
   let id=global.x+global.y*DISPATCH_WIDTH;
-  if(id>=(RECEIVER_COUNT-SURFACE_COUNT)*DIRECTION_COUNT){return;}
-  let receiver=SURFACE_COUNT+id/DIRECTION_COUNT;let a=id%DIRECTION_COUNT;
-  environmentHits[id]=firstSolid(receivers[receiver].position.xyz,environmentDirections[a].xyz);
+  let count=u32(environmentSettings.y);
+  if(id>=(RECEIVER_COUNT-SURFACE_COUNT)*count){return;}
+  let receiver=SURFACE_COUNT+id/count;let a=id%count;
+  environmentHits[(receiver-SURFACE_COUNT)*DIRECTION_COUNT+a]=firstSolid(receivers[receiver].position.xyz,environmentDirections[a].xyz);
 }
 fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{
   var sky=vec3<f32>(0.0);
-  for(var a=0u;a<DIRECTION_COUNT;a++){
+  for(var a=0u;a<u32(environmentSettings.y);a++){
     if(environmentHits[(receiver-SURFACE_COUNT)*DIRECTION_COUNT+a]<1e19){continue;}
     let d=environmentDirections[a].xyz;
-    sky+=environmentAt(d)*integrateRay(p,d,1e20).a/f32(DIRECTION_COUNT);
+    sky+=environmentAt(d)*integrateRay(p,d,1e20).a/environmentSettings.y;
   }
   return sky;
 }
