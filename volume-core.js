@@ -1468,6 +1468,11 @@ export async function requestKaminosSharedWebGpuDevice({
     );
   }
   raise('maxStorageBuffersPerShaderStage', storageBuffersPerStage);
+  // The shared device also owns Three's composed materials and authored
+  // shadow maps. Enabling another light can exceed WebGPU's default16 even
+  // though the adapter admits the layout. Preserve that actual capacity.
+  const sampledTexturesPerStage = adapterLimit('maxSampledTexturesPerShaderStage');
+  if (sampledTexturesPerStage > 0) raise('maxSampledTexturesPerShaderStage', sampledTexturesPerStage);
   for (const [name, required] of Object.entries({
     maxStorageBuffersInFragmentStage: 5,
     maxStorageBuffersInVertexStage: 4,
