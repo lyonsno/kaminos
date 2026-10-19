@@ -37,3 +37,12 @@ test('saved radius expands the range before the browser can clamp it',()=>{
  apply(input,135.764753512356);assert.equal(Number(input.value),135.764753512356);
  apply(input,200);assert.equal(Number(input.value),200);
 });
+test('cold route setter preserves a large saved radius before native sanitization',()=>{
+ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+ const fn=html.slice(html.indexOf('function setVolumeControlValue(')).split('\n}')[0]+'\n}';
+ const input={id:'volume-immersed-radius',type:'range',max:'.5',
+  set value(v){this.raw=String(Math.min(Number(this.max),Number(v)));},get value(){return this.raw;}};
+ const set=vm.runInNewContext(fn+';setVolumeControlValue',{document:{getElementById:()=>input}});
+ set(input.id,'135.764753512356');
+ assert.equal(Number(input.value),135.764753512356);
+});

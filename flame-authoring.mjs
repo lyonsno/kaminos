@@ -59,8 +59,7 @@ const reflectedRangeBounds=new WeakMap();
 export function syncFlameRangeBounds(source,bounds) {
   if(bounds.max===null) {
     const value=source.value;
-    source.max=String(Math.max(Number(source.max)||0,Number(value)||0,bounds.min));
-    source.min=String(bounds.min);
+    syncFlameRangeBounds(source,{min:bounds.min,max:Math.max(Number(source.max)||0,Number(value)||0,bounds.min)});
     source.value=value;
     return;
   }

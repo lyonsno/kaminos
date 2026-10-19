@@ -17214,6 +17214,7 @@ function setVolumeControlValue(id, value) {
   }
   const el = document.getElementById(id);
   if (!el) return;
+  if(id==='volume-immersed-radius'&&Number.isFinite(Number(value)))el.max=String(Math.max(Number(el.max)||0,Number(value)));
   if (el.type === 'checkbox') {
     el.checked = value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
     return;

@@ -28,7 +28,7 @@ test('screen percentage converts at the UI boundary while saved rendering keeps 
 
 import * as flameControls from '../flame-authoring.mjs';
 test('an unbounded radius retains its value and expands the slider extent',()=>{
- const source={min:'.02',max:'.5',value:'135.764753512356'};
+ const source={min:'.02',max:'.5',value:'135.764753512356',cloneNode(){return{...this};}};
  flameControls.syncFlameRangeBounds(source,{min:.01,max:null});
  assert.equal(source.value,'135.764753512356');
  assert.equal(source.max,'135.764753512356');
@@ -50,6 +50,8 @@ test('scaled radius bounds use the observed native range representation so legal
  assert.ok(Number(observed.get(String(bounds.max)))<=Number(source.max));
  flameControls.syncFlameRangeBounds(source,bounds);assert.equal(clones,1,'unchanged limits need no repeated clone or native writes');
  flameControls.syncFlameRangeBounds(source,{min:.01,max:.25});assert.equal(source.min,'0.01');assert.equal(source.max,'0.25');
+ flameControls.syncFlameRangeBounds(source,{min:bounds.min,max:null});
+ assert.equal(source.min,observed.get(String(bounds.min)),'unbounded upper radius still normalizes its finite lower endpoint');
 });
 
 test('the authoring quality panel exposes the landed grid-height control',()=>{assert.ok(FLAME_PROPERTY_GROUPS.find(g=>g.name==='Quality').fields.some(([id])=>id==='volume-grid-height-ratio'),'height editing belongs in the authoring field inspector');});
