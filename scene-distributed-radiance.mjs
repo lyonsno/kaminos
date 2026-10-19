@@ -10,6 +10,7 @@ import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-rec
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
+import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,onStatus=()=>{}}) {
   const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
@@ -194,7 +195,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
       }
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
-      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment});
+      const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment,sceneLights});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
       onStatus({...status});throw error;

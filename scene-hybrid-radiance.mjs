@@ -14,6 +14,7 @@ import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
 import {createFireShadowCasters} from './fire-shadow-casters.mjs';
 import {createFireSmokeShadow,smokeShadowPlan} from './fire-smoke-shadow.mjs';
 import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
+import {collectSceneSmokeLights} from './scene-smoke-lights.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
@@ -159,7 +160,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
       const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
-      frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment});
+      const sceneLights=collectSceneSmokeLights(scene,sourceTransform);
+      frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment,sceneLights});
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       if(surfaceEnabled){
