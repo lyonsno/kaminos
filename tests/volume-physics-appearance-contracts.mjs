@@ -116,8 +116,8 @@ test('the kernel and the renderer carry the same laws as these references', () =
 test('the uncoupled-control list names real cockpit controls and the switch lives in the Emissive transport group', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   // The paintings were retired with the legacy material laws (2026-10-18); only the carrier drivers remain uncoupled.
-  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 6);
-  assert.deepEqual(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(c => c.reason === 'unused').map(c => c.id), ['volume-physical-temperature', 'volume-physical-spread'], 'the peak-Kelvin mapping stays live for the transported stand-in');
+  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 4);
+  assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.every(c => c.reason === 'carriers-only'));
   for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
     assert.ok(index.includes(`id="${id}"`), `${id} exists in the cockpit`);
     assert.ok(['unused', 'carriers-only'].includes(reason), `${id}: ${reason}`);

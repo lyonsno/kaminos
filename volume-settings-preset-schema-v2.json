@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 145,
+  "controlCount": 143,
   "controls": [
     {
       "key": "volume-physical-white",
@@ -29,20 +29,6 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": "0.02"
-    },
-    {
-      "key": "volume-physical-temperature",
-      "param": "volume_physical_temperature",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": "1900"
-    },
-    {
-      "key": "volume-physical-spread",
-      "param": "volume_physical_spread",
-      "tagName": "INPUT",
-      "type": "range",
-      "additiveDefault": "900"
     },
     {
       "key": "volume-physical-thermal",
@@ -1108,6 +1094,20 @@
       "param": "volume_physical_mode",
       "tagName": "SELECT",
       "type": "select-one"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-physical-temperature",
+      "param": "volume_physical_temperature",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-physical-spread",
+      "param": "volume_physical_spread",
+      "tagName": "INPUT",
+      "type": "range"
     },
     {
       "axis": "domControls",

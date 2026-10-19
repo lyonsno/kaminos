@@ -118,12 +118,7 @@ fn sootBurnoutSurvival(heat: f32, oxidizerFraction: f32, timeStep: f32) -> f32 {
 // which are not drawn but can still move the flow when a carrier force
 // toggle is on.
 const carriersOnly = ['volume-fire-licks', 'volume-interface-shred', 'volume-microdetail', 'volume-detail-scale'];
-// unused while the Physics law draws: the peak-Kelvin mapping belongs to the
-// transported heat + soot material that stands in where it cannot (the
-// authored reaction law), so these two stay live for that route.
-const unused = ['volume-physical-temperature', 'volume-physical-spread'];
-export const PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS = Object.freeze([
-  ...unused.map(id => Object.freeze({ id, reason: 'unused' })),
-  ...carriersOnly.map(id => Object.freeze({ id, reason: 'carriers-only' })),
-]);
+export const PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS = Object.freeze(
+  carriersOnly.map(id => Object.freeze({ id, reason: 'carriers-only' })),
+);
 
