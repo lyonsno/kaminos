@@ -27,6 +27,15 @@ test('screen percentage converts at the UI boundary while saved rendering keeps 
 });
 
 import * as flameControls from '../flame-authoring.mjs';
+test('an unbounded radius retains its value and expands the slider extent',()=>{
+ const source={min:'.02',max:'.5',value:'135.764753512356'};
+ flameControls.syncFlameRangeBounds(source,{min:.01,max:null});
+ assert.equal(source.value,'135.764753512356');
+ assert.equal(source.max,'135.764753512356');
+ assert.equal(source.min,'0.01');
+ flameControls.syncFlameRangeBounds(source,{min:.02,max:null});
+ assert.equal(source.max,'135.764753512356','resync does not shrink the authored extent');
+});
 test('scaled radius bounds use the observed native range representation so legal endpoint values pass validation',()=>{
  assert.equal(typeof flameControls.syncFlameRangeBounds,'function');
  // Chrome for Testing154, actual saved kiln at31dc332f, report.radius-before-lower.json:

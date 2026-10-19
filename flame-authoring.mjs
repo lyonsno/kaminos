@@ -57,6 +57,13 @@ export function flamePropertyInputType(source) {
 }
 const reflectedRangeBounds=new WeakMap();
 export function syncFlameRangeBounds(source,bounds) {
+  if(bounds.max===null) {
+    const value=source.value;
+    source.max=String(Math.max(Number(source.max)||0,Number(value)||0,bounds.min));
+    source.min=String(bounds.min);
+    source.value=value;
+    return;
+  }
   const requested={min:String(bounds.min),max:String(bounds.max)},previous=reflectedRangeBounds.get(source);
   if(previous && previous.requested.min===requested.min && previous.requested.max===requested.max && source.min===previous.min && source.max===previous.max)return;
   // A browser range input can serialize a derived endpoint with fewer digits.
@@ -116,7 +123,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
   { name:'Detail', view:'shape', fields:[
-    ['volume-render-detail','Flow detail'], ['volume-render-detail-scale','Flow detail scale (cells)'], ['volume-render-detail-fine','Fine breakup'],
+    ['volume-render-detail','Flow detail'], ['volume-render-detail-scale','Flow detail scale (cells)'], ['volume-render-detail-fine','Fine noise weight'],
     ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'], ['volume-detail-scale','Detail scale'],
   ] },
@@ -269,7 +276,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         const bounds=readControlBounds(id);
         if(bounds)syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
-          if(source[key])field[key]=String(flameControlDisplayValue(id,source[key]));
+          field[key]=bounds?.[key]===null?'':source[key]?String(flameControlDisplayValue(id,source[key])):'';
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;

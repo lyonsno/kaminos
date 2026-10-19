@@ -2741,7 +2741,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
   const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
-  const radius = clampFinite(controls.immersedRadius, 0.02, 0.5, 0.2);
+  const radius = clampFinite(controls.immersedRadius, 0.02, Infinity, 0.2);
   const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
   const speed = clampFinite(controls.immersedSpeed, 0, 1, 0.1);
   const fuel = clampFinite(controls.immersedFuel, 0, 1, 0.56);
