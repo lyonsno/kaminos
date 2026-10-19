@@ -33,7 +33,7 @@ test('basin pose projection uses browser-representable values without changing f
  // tolerance. Native conformance exercises this same projection with real DOM.
  const context=vm.createContext({structuredClone,flameEmitterPose:observed.sourcePose,flameDomainTranslation:[0,0,0],flameDomainScale:1,activeVolumeSettingsPresetReceipt:null,flamePoseToDomain,immersedControlsForFlamePose,
   document:{getElementById:id=>({cloneNode(){clones++;return{step:'any',set value(value){assert.equal(Number(value),observed.expected[id].value);},get value(){return String(observed.observed[id].value);}};}})}});
- vm.runInContext(code,context);const state=context.flameSettingsState(preset);
+ vm.runInContext(code,context);const state=context.flameSettingsState(preset,{preset});
  for(const [id,descriptor] of Object.entries(observed.observed)){
   assert.equal(state.domControls[id].value,descriptor.value,id);
   assert.equal(Number(state.domControls[id].rawValue),descriptor.value,id);
@@ -41,4 +41,7 @@ test('basin pose projection uses browser-representable values without changing f
  assert.equal(clones,5);assert.deepEqual(preset,before,'preset stays immutable');
  assert.deepEqual(state.sourcePose,observed.sourcePose,'no direction or position change');
  assert.equal(state.domControls['volume-immersed-fuel'].value,.789012345,'feed stays exact');
+ assert.deepEqual(state.source.preset,before,'retained original is not pose-projected');
+ state.domControls['volume-immersed-radius'].value=.5;
+ assert.deepEqual(state.source.preset,before,'subsequent clamping cannot mutate the retained original');
 });
