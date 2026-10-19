@@ -30,7 +30,7 @@ export function muxAvcMp4({width,height,fps,samples,description}){
 }
 export async function createRecordingSink({settings,pixels,document=globalThis.document,VideoEncoder=globalThis.VideoEncoder,VideoFrame=globalThis.VideoFrame}){
  if(settings.format==='filmstrip'){
-  const columns=Math.min(settings.columns,settings.frames),tileWidth=settings.tileWidth,tileHeight=Math.round(tileWidth*pixels.height/pixels.width),rows=Math.ceil(settings.frames/columns);
+  const columns=Math.min(settings.columns,settings.frames),tileWidth=settings.tileWidth,tileHeight=Math.max(1,Math.round(tileWidth*pixels.height/pixels.width)),rows=Math.ceil(settings.frames/columns);
   const canvas=document.createElement('canvas');canvas.width=columns*tileWidth;canvas.height=rows*tileHeight;
   const ctx=canvas.getContext('2d');if(!ctx||canvas.width!==columns*tileWidth||canvas.height!==rows*tileHeight)throw Error('Filmstrip dimensions exceed this browser’s canvas capacity');
   return {add(frame,i){ctx.drawImage(frame,i%columns*tileWidth,Math.floor(i/columns)*tileHeight,tileWidth,tileHeight);},async finish(count){
