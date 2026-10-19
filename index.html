@@ -12632,9 +12632,10 @@ async function initScene() {
         if(frame?.error)throw frame.error;checkFire();
         const visible=!!activeSceneComposition&&isSceneItemVisible('flame-field');
         if(visible&&!frame?.fire)throw Error('A complete flame frame was not presented');
-        const host=renderer.domElement,bounds=host.getBoundingClientRect(),canvas=document.createElement('canvas');canvas.width=pixels.width;canvas.height=pixels.height;
+        const host=renderer.domElement,canvas=document.createElement('canvas');canvas.width=pixels.width;canvas.height=pixels.height;
         const ctx=canvas.getContext('2d');ctx.drawImage(host,0,0,canvas.width,canvas.height);
         if(visible){const volume=frame.fire.canvas;ctx.drawImage(volume,0,0,canvas.width,canvas.height);}
+        const overlay=transformControls?.getOverlay?.();if(overlay&&overlay.style.display!=='none'&&overlay.width&&overlay.height)ctx.drawImage(overlay,0,0,canvas.width,canvas.height);
         return {canvas,receipt:{backend:'webgpu',sceneFrameCount,camera:readAuthoredCameraView(),layers:visible?['mesh','ordinary-emissive-volume']:['mesh'],fire:visible?{...frame.fire,canvas:undefined}:null,water:localLiquidHost?{frameCount:localLiquidHost.state().frameCount,paused:!!localLiquidHost.paused}:null}};
       }};
     }catch(error){release();throw error;}
