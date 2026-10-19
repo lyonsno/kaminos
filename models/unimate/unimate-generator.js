@@ -51,7 +51,7 @@ export async function fetchBytes(url, onBytes, { expectBytes = null } = {}) {
   }
   const buffer = await download(url, onBytes);
   if (expectBytes && buffer.byteLength !== expectBytes) throw new Error(`${url}: ${buffer.byteLength} bytes, expected ${expectBytes}`);
-  if (cache) await cache.put(url, new Response(buffer.slice(0))).catch(e => console.warn('could not cache', url, e));
+  if (cache) await cache.put(url, new Response(buffer)).catch(e => console.warn('could not cache', url, e));
   return buffer;
 }
 async function download(url, onBytes) {

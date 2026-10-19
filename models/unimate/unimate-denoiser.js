@@ -13,7 +13,7 @@
 // joint outputs do not depend on padded joints (checked against the PyTorch
 // reference by probe-conditioning.py).
 
-import { tensorFloat32Bytes } from './unimate-weights.js';
+import { uploadWeightTensors } from './unimate-weights.js';
 import * as K from './unimate-kernels.js';
 
 // The WebGPU spec's buffer usage flags, so the module also loads where WebGPU is absent (bundling,
@@ -46,17 +46,10 @@ export class UniMateDenoiser {
   }
 
   // Upload a packed weight file (manifest from pack-weights.py).
-  static async create(device, manifest, bytes) {
-    const weights = new Map();
-    for (const t of manifest.tensors) {
-      const data = tensorFloat32Bytes(bytes, t);
-      const size = Math.max(256, Math.ceil(data.byteLength / 256) * 256);
-      const buffer = device.createBuffer({ size, usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(data);
-      buffer.unmap();
-      weights.set(t.name, { buffer, shape: t.shape, byteLength: data.byteLength });
-    }
-    return new UniMateDenoiser(device, manifest, weights);
+  static async create(device, manifest, bytes, options = {}) {
+    const weights = await uploadWeightTensors(device, manifest, bytes, options);
+    try { return new this(device, manifest, weights); }
+    catch (e) { weights.forEach(w => w.buffer.destroy()); throw e; }
   }
 
   weight(name) {

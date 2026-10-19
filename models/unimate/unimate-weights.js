@@ -1,3 +1,5 @@
+import { createCooperativeYield } from '../../webgpu-inference-kit/src/core.js';
+
 // Packed weight tensors as float32 bytes for the GPU. A tensor stored as float16 (manifest
 // tensor dtype 'float16', written by pack-half.py) is widened to float32 at load through a
 // 65536-entry table, so the kernels always compute in float32; a float32 tensor is passed through.
@@ -21,4 +23,45 @@ export function tensorFloat32Bytes(bytes, t) {
   const out = new Float32Array(half.length);
   for (let i = 0; i < half.length; i++) out[i] = table[half[i]];
   return new Uint8Array(out.buffer);
+}
+
+// The largest T5 embedding widens to 99 MB. Convert directly into its mapped GPU buffer,
+// offering a browser task after each 4 MiB of output rather than blocking on the whole model.
+// This changes scheduling and temporary storage only: GPU buffers and FP32 values stay the same.
+const CHUNK_VALUES = 1 << 20;
+const fallbackYield = createCooperativeYield();
+const yieldToBrowser = () => globalThis.scheduler?.yield ? globalThis.scheduler.yield() : fallbackYield();
+export async function uploadWeightTensors(device, manifest, bytes, options = {}) {
+  const weights = new Map(), allocated = [];
+  try {
+    for (const t of manifest.tensors) {
+      const dtype = t.dtype ?? 'float32';
+      if (!['float16', 'float32'].includes(dtype)) throw new Error(`unsupported tensor dtype ${dtype} for ${t.name}`);
+      const values = t.byteLength / (dtype === 'float16' ? 2 : 4), byteLength = values * 4;
+      const buffer = device.createBuffer({ size: Math.max(256, Math.ceil(byteLength / 256) * 256),
+        usage: 128 | 4 | 8, mappedAtCreation: true });
+      allocated.push(buffer);
+      const mapped = buffer.getMappedRange();
+      if (dtype === 'float16') {
+        const half = new Uint16Array(bytes, t.offset, values), out = new Float32Array(mapped, 0, values), table = halfTable();
+        for (let at = 0; at < values; at += CHUNK_VALUES) {
+          const end = Math.min(values, at + CHUNK_VALUES);
+          for (let i = at; i < end; i++) out[i] = table[half[i]];
+          await (options.yieldToBrowser ?? yieldToBrowser)();
+        }
+      } else {
+        const source = new Uint8Array(bytes, t.offset, t.byteLength), out = new Uint8Array(mapped);
+        for (let at = 0; at < source.length; at += CHUNK_VALUES * 4) {
+          out.set(source.subarray(at, at + CHUNK_VALUES * 4), at);
+          await (options.yieldToBrowser ?? yieldToBrowser)();
+        }
+      }
+      buffer.unmap();
+      weights.set(t.name, { buffer, shape: t.shape, byteLength });
+    }
+    return weights;
+  } catch (e) {
+    allocated.forEach(buffer => buffer.destroy());
+    throw e;
+  }
 }

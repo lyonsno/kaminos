@@ -8,7 +8,7 @@
 // comes from the packed table (HF's own _relative_position_bucket).
 
 import * as K from './unimate-kernels.js';
-import { tensorFloat32Bytes } from './unimate-weights.js';
+import { tensorFloat32Bytes, uploadWeightTensors } from './unimate-weights.js';
 import { createT5Tokenizer } from './unimate-t5-tokenizer.js';
 
 // The WebGPU spec's buffer usage flags, so the module also loads where WebGPU is absent (bundling,
@@ -17,19 +17,14 @@ const SU = globalThis.GPUBufferUsage ?? { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4
 const STORAGE = SU.STORAGE | SU.COPY_SRC | SU.COPY_DST;
 
 export class T5Encoder {
-  static async create(device, manifest, bytes, tokenizerSpec) {
-    const w = new Map();
-    for (const t of manifest.tensors) {
-      const data = tensorFloat32Bytes(bytes, t);
-      const buffer = device.createBuffer({ size: Math.max(256, Math.ceil(data.byteLength / 256) * 256), usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(data);
-      buffer.unmap();
-      w.set(t.name, { buffer, shape: t.shape });
-    }
-    // The bias table is also needed on the host to build per-length bias matrices.
-    const relEntry = manifest.tensors.find(t => t.name === 'relative_attention_bias');
-    const rel = new Float32Array(tensorFloat32Bytes(bytes, relEntry).slice().buffer);
-    return new T5Encoder(device, manifest, w, rel, createT5Tokenizer(tokenizerSpec));
+  static async create(device, manifest, bytes, tokenizerSpec, options = {}) {
+    const w = await uploadWeightTensors(device, manifest, bytes, options);
+    try {
+      // The bias table is also needed on the host to build per-length bias matrices.
+      const relEntry = manifest.tensors.find(t => t.name === 'relative_attention_bias');
+      const rel = new Float32Array(tensorFloat32Bytes(bytes, relEntry).slice().buffer);
+      return new T5Encoder(device, manifest, w, rel, createT5Tokenizer(tokenizerSpec));
+    } catch (e) { w.forEach(weight => weight.buffer.destroy()); throw e; }
   }
 
   constructor(device, manifest, weights, relTable, tokenizer) {

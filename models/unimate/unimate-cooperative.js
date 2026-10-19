@@ -10,7 +10,6 @@
 // createCooperativeCfgDrift returns the classifier-free-guided drift
 // (uncond + scale * (cond - uncond), float32) the dopri5 solver calls.
 
-import { tensorFloat32Bytes } from './unimate-weights.js';
 import { UniMateDenoiser } from './unimate-denoiser.js';
 import { WebGpuCommandDutyScheduler } from '../../webgpu-inference-kit/src/command-duty-scheduler.js';
 import { assertEvaluated } from './unimate-drift.js';
@@ -34,19 +33,6 @@ function estimateFlops(kernel, fields) {
 }
 
 export class CooperativeUniMateDenoiser extends UniMateDenoiser {
-  static async create(device, manifest, bytes) {
-    const weights = new Map();
-    for (const t of manifest.tensors) {
-      const data = tensorFloat32Bytes(bytes, t);
-      const size = Math.max(256, Math.ceil(data.byteLength / 256) * 256);
-      const buffer = device.createBuffer({ size, usage: STORAGE, mappedAtCreation: true });
-      new Uint8Array(buffer.getMappedRange()).set(data);
-      buffer.unmap();
-      weights.set(t.name, { buffer, shape: t.shape, byteLength: data.byteLength });
-    }
-    return new CooperativeUniMateDenoiser(device, manifest, weights);
-  }
-
   op(kernel, bindings, fields, workgroups, label) {
     const step = super.op(kernel, bindings, fields, workgroups, label);
     step.flops = estimateFlops(kernel, fields);
