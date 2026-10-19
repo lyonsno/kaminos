@@ -22755,7 +22755,15 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
       const radius=flamePresetRadius(preset,flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale).scale[0]);
       const d=state.domControls['volume-immersed-radius'];d.value=radius;d.rawValue=String(radius);
     }
-    const mapped=immersedControlsForFlamePose({immersedRadius:Number(state.domControls['volume-immersed-radius'].value)},flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale),false);
+    const pose=flamePoseToDomain(state.sourcePose,flameDomainTranslation,flameDomainScale);
+    const descriptor=state.domControls['volume-immersed-radius'],radius=Number(descriptor.rawValue??descriptor.value);
+    if(!Number.isFinite(radius))throw Error('Preset emitter radius must be finite');
+    const bounds=immersedRadiusBounds(pose),held=Math.max(bounds.min,Math.min(bounds.max,radius));
+    if(held!==radius) {
+      descriptor.value=held;descriptor.rawValue=String(held);
+      if(state.source)state.source.sourceSizeRecovery='clamped-to-valid-range';
+    }
+    const mapped=immersedControlsForFlamePose({immersedRadius:held},pose,false);
     for(const [suffix,key] of [['centre-x','immersedCentreX'],['centre-y','immersedCentreY'],['centre-z','immersedCentreZ'],['yaw','immersedYaw'],['pitch','immersedPitch']]) {
       const id=`volume-immersed-${suffix}`;
       // Pose-derived doubles have not passed through a browser range input,

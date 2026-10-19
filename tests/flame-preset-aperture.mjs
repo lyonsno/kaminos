@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as aperture from '../flame-authoring.mjs';
 import {volumeSettingsPresetControlValuesEqual,volumeSettingsPresetAppliedDifferences} from '../volume-settings-preset-contract.mjs';
-import {flamePoseToDomain,immersedControlsForFlamePose} from '../scene-flame-emitter.mjs';
+import {flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusBounds} from '../scene-flame-emitter.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 // Exercise the actual authored consumer, with only DOM representation mocked.
 const source=html.slice(html.indexOf('function flameSettingsState('),html.indexOf('// Every reason the flame settings'));
@@ -14,14 +14,32 @@ function load(radius,options={},space,scale=1){
  if(space)preset.sourceRadiusSpace=space;
  const current=structuredClone(preset);current.domControls['volume-immersed-radius']={value:.2/scale,rawValue:String(.2/scale)};
  const context={structuredClone,readVolumeSettingsValues:()=>current,activeVolumeSettingsPresetReceipt:null,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},flameDomainTranslation:[0,0,0],flameDomainScale:1,
- flamePoseToDomain,immersedControlsForFlamePose,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:()=>({cloneNode:()=>({value:0})})}};
+ flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusBounds,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:()=>({cloneNode:()=>({value:0})})}};
  vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);return context.run(preset,{presetId:'legacy-test',label:'Original',preset},options);
 }
 test('explicit legacy recovery retains current aperture rather than clamping saved radius',()=>{
  const state=load(135.764753512356,{sourceSize:'current'});
  assert.equal(state.domControls['volume-immersed-radius'].value,.2);
 });
-test('ordinary apply still refuses an unrecoverable legacy aperture',()=>assert.throws(()=>load(135.764753512356),/radius/));
+test('ordinary basin apply clamps legacy aperture without an opt-in and preserves its receipt',()=>{
+ for(const scale of [.001,.1,1,8]){
+  const original=135764.753512356,state=load(original,{},undefined,scale);
+  assert.equal(state.domControls['volume-immersed-radius'].value,.5/scale);
+  assert.equal(Number(state.domControls['volume-immersed-radius'].rawValue),.5/scale);
+  assert.equal(state.source.preset.domControls['volume-immersed-radius'].value,original);
+  assert.equal(state.source.sourceSizeRecovery,'clamped-to-valid-range');
+  assert.equal(state.sourcePose.scale[0],scale);
+ }
+});
+test('ordinary basin apply clamps a small radius at the scaled lower bound',()=>{
+ for(const scale of [.1,1,8])assert.equal(load(0,{},undefined,scale).domControls['volume-immersed-radius'].value,.02/scale);
+});
+test('automatic clamping keeps valid and portable apertures exact and rejects nonfinite or unknown spaces',()=>{
+ assert.equal(load(.23).domControls['volume-immersed-radius'].value,.23);
+ assert.equal(load(.23,{},'simulation-v1',.1).domControls['volume-immersed-radius'].value,.23/.1);
+ assert.throws(()=>load(Infinity),/radius|finite/i);
+ assert.throws(()=>load(.2,{},'unknown'),/radius space/);
+});
 test('legacy recovery preserves the source receipt instead of aliasing it to applied controls',()=>{
  const original=135.764753512356,state=load(original,{sourceSize:'current'});
  assert.equal(state.domControls['volume-immersed-radius'].value,.2);

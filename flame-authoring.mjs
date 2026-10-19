@@ -246,7 +246,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
-  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><label class="flame-scope"><input type="checkbox" id="flame-basin-keep-size"> Keep current emitter size (legacy preset recovery)</label><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
+  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   panels.get('look').append(basin);
   const byId=id=>document.getElementById(id);
   let entries=[];
@@ -268,7 +268,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   byId('flame-basin-refresh').onclick=refresh;
   byId('flame-basin-apply').onclick=async()=>{
     const button=byId('flame-basin-apply');button.disabled=true;status('Loading basin…');
-    try {const keepSize=byId('flame-basin-keep-size').checked;await applyBasin(byId('flame-basin-select').value,{sourceSize:keepSize?'current':'preset'});status(`Applied${keepSize?' · current emitter size retained':''} · Undo restores the previous settings`);}
+    try {const applied=await applyBasin(byId('flame-basin-select').value);status(`Applied${applied?.source?.sourceSizeRecovery==='clamped-to-valid-range'?' · emitter radius clamped to valid range':''} · Undo restores the previous settings`);}
     catch(error){status(error.message);onError(error);}
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
