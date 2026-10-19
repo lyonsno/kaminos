@@ -22911,7 +22911,7 @@ async function loadAuthoredFlameBasin(id) {
   // Named in the flame warning until another basin replaces it.
   window.__kaminosFlameBasinClampReport=Object.freeze({label:receipt.label||id,clamps});
   if(clamps.length){console.warn(`Basin ${receipt.label||id} clamped:`,clamps);setInfo(`Basin ${receipt.label||id}: clamped to range: ${clamps.map(clamp=>clamp.message).join('; ')}`);}
-  return clamps.length?clampedFlameSettingsState(state):state;
+  return clampedFlameSettingsState(state);
 }
 
 function firstFlameFieldState() {
