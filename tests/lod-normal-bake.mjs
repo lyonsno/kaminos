@@ -122,3 +122,44 @@ test('world normals come back with the world mesh, through the node transform', 
   const {normals} = readGLBWorldMesh(squareGLB());
   for (let i = 0; i < 4; i++) assert.deepEqual([...normals.subarray(i * 3, i * 3 + 3)].map(v => Math.round(v) + 0), [0, 1, 0]);
 });
+
+test('hero sampler looks along the level normal: a nearby strand does not stand in for the body behind it', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
+  // Body: a large plane at z = 0 facing +z. Strand: a thin vertical sheet at x = 0.003 facing +x.
+  const vertices = new Float32Array([-1,-1,0, 1,-1,0, 1,1,0, -1,1,0,  0.003,-0.01,-0.01, 0.003,0.01,-0.01, 0.003,0,0.05]);
+  const faces = new Uint32Array([0,1,2, 0,2,3, 4,5,6]);
+  const normals = new Float32Array([0,0,1, 0,0,1, 0,0,1, 0,0,1, 1,0,0, 1,0,0, 1,0,0]);
+  const sample = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.02});
+  const n = sample([0, 0, 0.004], [0, 0, 1]); // the strand is 3 mm away, the body 4 mm below
+  assert.ok(n[2] > 0.99, `body normal expected, got ${n}`);
+  assert.equal(sample.method, 'ray along the level normal within reach (both ways, nearest hit), else closest point; interpolated shading normal');
+  // Out of reach along the normal: falls back to the closest point (here the strand).
+  const far = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.001})([0, 0, 0.004], [0, 0, 1]);
+  assert.ok(far[0] > 0.99, `closest-point fallback expected, got ${far}`);
+});
+
+test('the bake tells the sampler how large a texel is on the surface', () => {
+  const sizes = [];
+  const {texelSize} = bakeTangentNormalMap({...square(), textureSize: 16, sampleNormal: (p, n, size) => { sizes.push(size); return n; }});
+  // The unit square fills the whole 16x16 atlas: one texel is 1/16 across.
+  assert.ok(Math.abs(texelSize - 1 / 16) < 1e-3, `${texelSize}`);
+  assert.ok(sizes.length > 200 && sizes.every(s => s === texelSize));
+});
+
+test('with a footprint the hero sampler averages detail finer than a texel instead of picking one strand', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler} = await import('../lod-normal-bake.mjs');
+  // Two half-planes at z = 0 meeting at x = 0, shaded leaning -x on the left and +x on the right.
+  const l = [-0.6, 0, 0.8], r = [0.6, 0, 0.8];
+  const vertices = new Float32Array([-1,-1,0, 0,-1,0, 0,1,0, -1,1,0,  0,-1,0, 1,-1,0, 1,1,0, 0,1,0]);
+  const faces = new Uint32Array([0,1,2, 0,2,3, 4,5,6, 4,6,7]);
+  const normals = new Float32Array([...l, ...l, ...l, ...l, ...r, ...r, ...r, ...r]);
+  const hero = {vertices, faces, normals}, at = [0.0001, 0, 0.001], up = [0, 0, 1];
+  const single = createHeroNormalSampler({hero, THREE, MeshBVH, reach: 0.01})(at, up, 0.1);
+  const footprint = createHeroNormalSampler({hero, THREE, MeshBVH, reach: 0.01, footprint: true});
+  const averaged = footprint(at, up, 0.1), unitOf = v => { const s = Math.hypot(...v); return v.map(x => x / s); };
+  assert.ok(single[0] > 0.5, `one sample takes one side: ${single}`);
+  // The point sits just right of the seam: 6 of 9 grid samples land right, 3 left, so the average
+  // leans (6-3)/9 of the way: far less than one sample's full lean.
+  assert.ok(Math.abs(unitOf(averaged)[0] - 0.243) < 0.01, `the average sees both sides in proportion: ${unitOf(averaged)}`);
+  assert.match(footprint.method, /averaged over the texel footprint/);
+});

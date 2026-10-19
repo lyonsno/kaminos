@@ -57,7 +57,7 @@ unintegrated.
 
 ## Tests
 
-Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, the full suite must report no new failures for the commit you land; the landing paragraph below says how to get that result. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, the full suite must report no new failures for the commit you land; the landing paragraph below says how to get that result. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Agent browser runs stay within the live fire budget (at most 40 ray steps; live viewing uses 6 to 8 adaptive) unless the question needs the authored look; the scene witness enforces it. Details: `docs/testing.md`.
 
 The runner gives tests a private HOME and refuses calls to tools that act on the machine (`gpu-greenroom`, `wezterm`, `claude` and the like), listing each attempt as a warning; a test that needs such a tool brings its own fake. Details: `docs/testing.md`.
 

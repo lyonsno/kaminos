@@ -10,6 +10,7 @@ import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
+import { createAgentLiveBudget } from './agent-live-budget.mjs';
 import { ambientGpuLabel, createGpuUtilizationSampler, windowUtilization } from './gpu-utilization.mjs';
 
 const args = new Map();
@@ -26,6 +27,9 @@ let browserLaunch = null;
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
+// The live budget agent runs stay within (agent-live-budget.mjs); opt in only when the question needs an offline look.
+const liveBudget = createAgentLiveBudget({ allowed: Boolean(args.get('--allow-over-live-budget')) });
+let liveBudgetTimer = null;
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
@@ -68,6 +72,7 @@ function writeReport(report) {
     phase,
     browserVersion,
     stderrTail: stderr.slice(-2000),
+    liveBudget: liveBudget.report(),
     ...report,
   }, null, 2));
 }
@@ -146,6 +151,7 @@ function waitForWebSocketOpen(ws) {
 }
 
 async function evaluate(ws, expression, options = {}) {
+  if (!options.liveBudgetRemedy) liveBudget.check();
   const result = await wsRequest(ws, 'Runtime.evaluate', {
     awaitPromise: true,
     returnByValue: true,
@@ -155,6 +161,30 @@ async function evaluate(ws, expression, options = {}) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
+}
+
+// After loading a saved flame basin (several are authored at 160 steps), drop
+// its raymarch to a live tier unless the run opted into the authored look.
+async function applyLiveFireSteps(ws, steps = 8) {
+  if (args.get('--allow-over-live-budget')) return null;
+  const effective = await setLiveFireSteps(ws, steps);
+  liveBudget.observe({ fireRaySteps: effective });
+  return effective;
+}
+
+async function setLiveFireSteps(ws, steps) {
+  // A flame scene's settings belong to its edit session, so the change goes
+  // through kaminosFlameAuthoring.edit (retrying while the runtime starts).
+  return evaluate(ws, `(async () => { const s = document.getElementById('volume-steps'); if (!s) return null;
+    const set = () => { s.value = '${steps}'; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); };
+    let lastError = null;
+    for (let i = 0; i < 100; i++) {
+      try { if (window.kaminosFlameAuthoring) window.kaminosFlameAuthoring.edit(set, 'Agent live tier'); else set(); lastError = null; break; }
+      catch (error) { lastError = String(error?.message || error); await new Promise(r => setTimeout(r, 100)); }
+    }
+    if (lastError) throw new Error('could not set the live fire tier: ' + lastError);
+    await new Promise(r => setTimeout(r, 300));
+    return window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? Number(s.value); })()`, { timeoutMs: 30000, liveBudgetRemedy: true });
 }
 
 async function runMeshAssetLinkScenario(ws) {
@@ -395,6 +425,7 @@ async function runViewportWireframeFireShadowScenario(ws) {
   await evaluate(ws, `(() => { window.__wireframeWitnessErrors = []; addEventListener('error', event => window.__wireframeWitnessErrors.push(String(event.message || event.error))); const original = console.error; console.error = (...items) => { window.__wireframeWitnessErrors.push(items.map(String).join(' ')); return original.apply(console, items); }; })()`);
   phase = 'scenario-viewport-wireframe-fire-shadow-add-flame';
   evidence.added = await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(presetId)}).then(() => true)`, { timeoutMs: 120000 });
+  evidence.liveFireSteps = await applyLiveFireSteps(ws);
   phase = 'scenario-viewport-wireframe-fire-shadow-wait-shadow';
   let shadow = null;
   for (let i = 0; i < 240; i++) { shadow = (await evaluate(ws, 'window.kaminosFireLightFieldDebugState?.()?.shadow ?? null')); if (shadow?.effective && shadow.renderCount > 0) break; await delay(250); }
@@ -686,6 +717,7 @@ async function runFireProxySplatsScenario(ws) {
     const rect = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect();
     return { canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
   })`, { timeoutMs: 180000 });
+  evidence.liveFireSteps = await applyLiveFireSteps(ws);
   for (let i = 0; i < 1200; i++) { const d = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (d >= settleSteps) break; await delay(250); }
   evidence.camera = await evaluate(ws, `(() => {
     window.kaminosSelection?.clear?.();
@@ -911,6 +943,7 @@ async function runViewportWireCostScenario(ws) {
   const evidence = lastEvidence.viewportWireCost = { windows: [] };
   if (args.get('--with-flame')) {
     await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
+    await applyLiveFireSteps(ws);
   }
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   if (args.get('--fire-proxy')) {
@@ -953,6 +986,7 @@ async function runPreviewCostScenario(ws) {
   const evidence = lastEvidence.previewCost = { windows: [], arms: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   if (args.get('--with-water')) await evaluate(ws, 'window.kaminosSceneAuthoring.addWaterEmitter()', { timeoutMs: 180000 });
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
@@ -1025,6 +1059,7 @@ async function runFireSlowMotionProbeScenario(ws) {
   const evidence = lastEvidence.fireSlowMotion = { windows: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
   const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { speed: Number(document.getElementById('volume-speed').value), timeStep: window.__kaminosVolumePrototype.joinedProducerState?.()?.timeStep ?? null, resets: d.fluidStateResetCount, steps: d.simStepCount, frames: d.frameCount, simTime: d.simTimeSeconds ?? null }; })()`);
@@ -1056,6 +1091,7 @@ async function runViewportPreviewQualityScenario(ws) {
   const evidence = lastEvidence.viewportPreviewQuality = { failures, rates: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws, 40);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.camera = await evaluate(ws, `(() => { const domain = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
@@ -1137,6 +1173,7 @@ async function runPreviewBoundScenario(ws) {
   const evidence = lastEvidence.previewBound = { windows: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.identity = await evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { gridDims: window.__kaminosVolumeGridDimensions ?? null, gridSize: d.gridSize ?? null,
@@ -7018,6 +7055,11 @@ try {
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Page.bringToFront');
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
+  // Observe the fire's effective ray steps once a second for the live budget.
+  liveBudgetTimer = setInterval(() => {
+    wsRequest(ws, 'Runtime.evaluate', { returnByValue: true, expression: 'window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null' }, { timeoutMs: 5000 })
+      .then(result => liveBudget.observe({ fireRaySteps: result?.result?.value ?? null })).catch(() => {});
+  }, 1000);
   for (let attempt=0;attempt<240;attempt++) {
     effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
     if (effectiveUrl && effectiveUrl !== 'about:blank') break;
@@ -7049,6 +7091,11 @@ try {
     await runFireProxySplatsScenario(ws);
   } else if (scenario === 'fire-proxy-bridge-route') {
     await runFireProxyBridgeRouteScenario(ws);
+  } else if (scenario === 'live-budget-probe') {
+    // Lets the page run for a few seconds so the live budget can judge it.
+    phase = 'scenario-live-budget-probe';
+    if (args.get('--with-flame')) await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
+    for (let i = 0; i < 12; i++) { lastEvidence.liveBudgetProbe = { steps: await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null') }; await delay(1000); }
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
   } else if (scenario === 'viewport-preview-quality') {
@@ -7191,6 +7238,7 @@ try {
   });
   throw error;
 } finally {
+  if (liveBudgetTimer) clearInterval(liveBudgetTimer);
   try { ws?.close?.(); } catch {}
   chromeProcess?.kill('SIGTERM');
   await gpuSampler?.stop();
