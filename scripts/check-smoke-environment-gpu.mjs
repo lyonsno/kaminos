@@ -7,9 +7,11 @@ import {buildTriangleVisibility} from '../scene-light-visibility.mjs';
 export async function checkSmokeEnvironmentGpu(device){
  const renderer=new THREE.WebGPURenderer({device});await renderer.init();
  const scene=new THREE.Scene(),generator=new THREE.PMREMGenerator(renderer),rows=[];
- const rgb=[.25,.5,1],pixels=new Float32Array(32*16*4);
+ // Vendored Three's minimum PMREM LOD is a 16px cube face: use the
+ // corresponding 64x32 equirectangular input, not an invalid 8px face.
+ const rgb=[.25,.5,1],pixels=new Float32Array(64*32*4);
  for(let i=0;i<pixels.length;i+=4)pixels.set([...rgb,1],i);
- const image=new THREE.DataTexture(pixels,32,16,THREE.RGBAFormat,THREE.FloatType);image.mapping=THREE.EquirectangularReflectionMapping;image.needsUpdate=true;
+ const image=new THREE.DataTexture(pixels,64,32,THREE.RGBAFormat,THREE.FloatType);image.mapping=THREE.EquirectangularReflectionMapping;image.needsUpdate=true;
  const pmrem=generator.fromEquirectangular(image);scene.environment=pmrem.texture;scene.environmentIntensity=2;
  const projection=createSceneSmokeEnvironment({renderer,scene,device}),source=device.createTexture({size:[4,8,4],dimension:'3d',format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
  let gather;
