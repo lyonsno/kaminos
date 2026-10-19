@@ -19,6 +19,40 @@ export function leanEmissiveRaymarchAdmission({
 }
 
 const fields = ['velocityDensity', 'material', 'fireLayer', 'microLayer', 'frontTopology'];
+export const FLAME_GUIDANCE_WGSL = /* wgsl */`
+fn flameGuideAt(p: vec3<f32>) -> f32 {
+  let corner = vec3<i32>(floor(worldToCell(p) - vec3<f32>(0.5)));
+  var support = 0.0;
+  // Max over the reconstruction footprint broadens thin support without
+  // interpolating emission or treating the guide as an emptiness certificate.
+  for (var z = 0; z < 2; z++) { for (var y = 0; y < 2; y++) { for (var x = 0; x < 2; x++) {
+    let cell = clampCell(corner + vec3<i32>(x, y, z));
+    let index = index3(cell);
+    var cue = boundarySidecar[index].y;
+    if (u.emissive_physics.x > 0.5) {
+      let material = max(fluidSrc[index * SLOTS_PER_CELL + 1u], vec4<f32>(0.0));
+      let thermal = smoothstep(800.0, 1800.0, physicsSootKelvin(material.y, u.emissive_physics.y))
+        * smoothstep(0.0, 0.02, material.x);
+      var burn = 0.0;
+      if (reactantLawOn()) { burn = reactionLightFromBurn(textureLoad(reactantSrc, vec3<i32>(cell), 0).y, u.reactant_combustion_d.x); }
+      cue = max(cue, max(thermal, burn));
+    }
+    support = max(support, cue);
+  } } }
+  return smoothstep(0.01, 0.20, support);
+}
+fn flameGuideSegment(p: vec3<f32>, direction: vec3<f32>, length: f32) -> vec2<f32> {
+  var distance = 0.0;
+  loop {
+    let point = p + direction * distance;
+    let support = flameGuideAt(point);
+    if (support > 0.0 || distance >= length) { return vec2<f32>(distance, support); }
+    // Walk crossed cells rather than sampling a few evenly spaced locations
+    // that can jump over the very support this guide is meant to protect.
+    distance = min(length, distance + max(0.0001, directCellExitDistance(point, direction) + 0.0001));
+  }
+}
+`;
 export const RAYMARCH_NEIGHBORHOOD_WGSL = /* wgsl */`
 struct RaymarchNeighborhood {
   sample: FlowReconstructionSample,

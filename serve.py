@@ -2748,8 +2748,11 @@ def mesh_lod_level_index():
     for path in root.glob('.*.glb.lods.json'):
         source = path.name[1:-len('.glb.lods.json')]
         try:
-            for level in read_mesh_lod_set(source)['levels']:
+            record = read_mesh_lod_set(source)
+            for level in record['levels']:
                 index[level['sha256']] = {'source': source, 'faces': level['faces']}
+            for level in record.get('retired', []):
+                index[level['sha256']] = {'source': source, 'faces': level['faces'], 'retired': True}
         except (ValueError, MeshLodRecordError, KeyError, OSError):
             continue
     return index
@@ -2784,8 +2787,17 @@ def save_mesh_lod_level(payload):
             raise ValueError('Registered level is immutable')
         same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256']
                           and l['faces'] == level['faces'] and l['route'] == level['route']), None)
+        retired_now = []
+        if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
+            raise ValueError('That level was retired from this source')
         if previous is None and same_slot is not None:
-            raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+            if payload.get('supersede') is not True:
+                raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+            # Replace with retire: the old level leaves the choice set but its record is kept.
+            data['levels'].remove(same_slot)
+            data.setdefault('retired', []).append({**same_slot, 'retiredBy': level['sha256'],
+                                                   'retiredAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            retired_now.append(same_slot['sha256'])
         if previous is None:
             data['levels'].append(level)
             data['levels'].sort(key=lambda l: -l['faces'])
@@ -2796,7 +2808,7 @@ def save_mesh_lod_level(payload):
                 os.replace(temporary, path)
             finally:
                 temporary.unlink(missing_ok=True)
-    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level}
+    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level, 'retired': retired_now}
 
 
 def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
@@ -2822,7 +2834,8 @@ def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
         if measured:
             fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
             choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
-    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within}
+    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within,
+              'retired': data.get('retired', [])}
     if unmeasured is not None:
         result['unmeasured'] = unmeasured
     return result
@@ -3958,6 +3971,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_delete_scene(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/link":
             self.handle_vantage_link(parse_qs(parsed.query))
+        elif parsed.path == "/api/vantage/hub":
+            self.handle_vantage_hub(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/pages":
             self.handle_vantage_pages()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
@@ -4009,6 +4024,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_reply()
         elif parsed.path == "/api/vantage/presence":
             self.handle_vantage_presence()
+        elif parsed.path == "/api/vantage/join":
+            self.handle_vantage_join()
+        elif parsed.path == "/api/vantage/leave":
+            self.handle_vantage_leave()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
             notes_http().handle(self, "POST", self.path)
         else:
@@ -4094,7 +4113,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_vantage_pages(self):
         if self._vantage_allowed():
             bridge, broker = vantage_bridge()
-            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "pages": broker.pages()})
+            # `hub`: pages may share one stream per browser (see handle_vantage_hub).
+            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "hub": True, "pages": broker.pages()})
 
     def handle_vantage_link(self, query):
         if not self._vantage_allowed():
@@ -4109,6 +4129,45 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except bridge.VantageError as error:
             self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
             return
+        self._vantage_stream(bridge, broker, link)
+
+    # One stream for every Kaminos tab of a browser: its shared worker holds it,
+    # pages join it, and each command names its page.
+    def handle_vantage_hub(self, query):
+        if not self._vantage_allowed():
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            link = broker.attach_hub(query.get("hub", [None])[0])
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        self._vantage_stream(bridge, broker, link)
+
+    def handle_vantage_join(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is None:
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            joined = broker.join(str(body.get("hub") or ""), body.get("page"), body, member=body.get("member"))
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        # ok false: an older membership than the page already has; nothing changed.
+        self.send_json({"ok": joined})
+
+    def handle_vantage_leave(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            left = vantage_bridge()[1].leave(str(body.get("hub") or ""), str(body.get("page") or ""), member=body.get("member"))
+            self.send_json({"ok": left})
+
+    def _vantage_stream(self, bridge, broker, link):
         self.close_connection = True
         message = None
         try:

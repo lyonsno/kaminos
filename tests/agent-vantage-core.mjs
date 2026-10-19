@@ -429,3 +429,14 @@ test('watch after is seconds past the event, only with an event to wait for', ()
   assert.throws(() => checkedCommand({command: 'watch', args: {until: 'pulse-end', after: -1}}), /after/);
   assert.throws(() => checkedCommand({command: 'watch', args: {until: 'pulse-end', seconds: 3000, after: 700}}), /3600/);
 });
+
+
+test('a pick map records the proxies drawn outside it, and a picture pick carries them', () => {
+  const ids = {width: 1, height: 1, objects: new Uint16Array([0]), instances: new Uint16Array([0])};
+  assert.deepEqual(core.finishPickMap(ids, [], {proxies: ['fire']}).proxies, ['fire']);
+  assert.equal(core.finishPickMap(ids, [], {}).proxies, undefined, 'a map with no proxy drawn outside it is as it always was');
+  const optics = {projection: Array(16).fill(1), viewInverse: Array(16).fill(1)};
+  const checked = checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0}, scene: {clouds: [], fields: [], water: false, proxies: ['fire']}}});
+  assert.deepEqual(checked.args.scene.proxies, ['fire']);
+  assert.throws(() => checkedCommand({command: 'pick', args: {at: [0.5, 0.5], optics, pictured: {n: 0}, scene: {proxies: ['smoke-machine']}}}), /proxies/);
+});

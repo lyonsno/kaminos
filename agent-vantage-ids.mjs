@@ -101,8 +101,11 @@ export function createIdPass({THREE, TSL, renderer, scene, hideEditorObjects = (
   // depth when `depth` is set. Everything up to the GPU submission happens in
   // this call, so the map shows the scene as it is at this call. `drawn` lists
   // every object drawn, with its number, and marks those drawn with a stand-in.
-  function draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false, bridges = false}) {
+  // `withoutLayers` leaves layers out of this map (a sub's map draws no proxy,
+  // which is drawn outside it; an operator pick keeps the operator's view).
+  function draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false, bridges = false, withoutLayers = []}) {
     const camera = cameraFor(optics);
+    for (const layer of withoutLayers) camera.layers.disable(layer);
     const target = new THREE.RenderTarget(width, height, {count: 2, type: THREE.UnsignedByteType, format: THREE.RGBAFormat, colorSpace: THREE.NoColorSpace,
       depthBuffer: true, generateMipmaps: false, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter});
     target.textures[0].name = 'output';

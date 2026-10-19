@@ -116,6 +116,17 @@ with tempfile.TemporaryDirectory() as directory:
         assert request('POST', '/api/ingest-mesh', twin)[0] == 200
         assert request('POST', '/api/mesh-lods', {'source': hero, 'level': {**level('l1000', 1000), 'sha256': twin_sha}})[0] == 400
 
+        # Replace with retire (operator decision 2026-10-18): supersede moves the old level to `retired`.
+        status, body = request('POST', '/api/mesh-lods', {'source': hero, 'level': {**level('l1000', 1000), 'sha256': twin_sha}, 'supersede': True})
+        assert status == 200 and body['retired'] == [stored['l1000']], body
+        status, body = request('GET', f'/api/mesh-lods?source={hero}&faces=2000')
+        assert body['choice']['sha256'] == twin_sha and stored['l1000'] not in [l['sha256'] for l in body['levels']]
+        assert [r['sha256'] for r in body['retired']] == [stored['l1000']] and body['retired'][0]['retiredBy'] == twin_sha
+        listed = {Path(e['source'].split('path=')[-1]).stem for e in serve.authoring_asset_catalog('generated-meshes')['entries']}
+        assert not listed & {stored['l1000'], twin_sha}, 'retired and current levels both stay out of the asset list'
+        # A retired level cannot come back by plain registration.
+        assert request('POST', '/api/mesh-lods', {'source': hero, 'level': level('l1000', 1000)})[0] == 400
+
         # Review N1: tighter validation.
         for bad in ({'faces': True}, {'textureSize': 'big'}, {'sha256': hero}, {'route': ''}):
             assert request('POST', '/api/mesh-lods', {'source': hero, 'level': {**level('l500', 500), **bad}})[0] == 400, bad

@@ -37,8 +37,10 @@ focused tests and their existing visual consumer where relevant. When task fit
 is uncertain, ask the operator before choosing the development surface: describe
 what needs to be observed or manipulated, recommend a route, and name the
 uncertainty. Resolve ordinary API questions through source and current owners.
-An unavailable shared capability is an integration question: identify the
-concrete missing operation and coordinate a reusable extension with its owner.
+When a feature needs a shared capability that doesn't exist, add it with
+tests. Contact the owner only when you change existing behavior they rely on,
+or need something from them you can't do yourself; a tested change that
+merges cleanly speaks for itself.
 
 ## Feature Branch Ancestry
 
@@ -55,7 +57,9 @@ unintegrated.
 
 ## Tests
 
-Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, the full suite must report no new failures for the commit you land; the landing paragraph below says how to get that result. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Details: `docs/testing.md`.
+Before a handoff, run the tests you touched with `npm test -- --only tests/a.mjs,tests/b.mjs`. Before landing, the full suite must report no new failures for the commit you land; the landing paragraph below says how to get that result. `npm test` may end with warnings, for example missing Python packages; they never fail the run and print their remedy. Declare the kind of each new test file on its first line, for example `// kaminos-test: node`, instead of editing the shared manifest. Prefer behavior tests over regular-expression assertions on `index.html` source. Agent browser runs stay within the live fire budget (at most 40 ray steps; live viewing uses 6 to 8 adaptive) unless the question needs the authored look; the scene witness enforces it. Details: `docs/testing.md`.
+
+The runner gives tests a private HOME and refuses calls to tools that act on the machine (`gpu-greenroom`, `wezterm`, `claude` and the like), listing each attempt as a warning; a test that needs such a tool brings its own fake. Details: `docs/testing.md`.
 
 Many worktrees link `node_modules` to one shared install. Never run `npm ci` or `npm install` through such a link or in the worktree it points to: it empties or changes the install for every linked worktree. For your own install, `unlink node_modules`, then `npm ci`.
 

@@ -5,7 +5,7 @@ import { createGpuSceneSolidProducer } from './scene-solid-gpu.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
 import { pressureResolutionPlan, createPressureTransfer, pressureProfileWindows } from './volume-pressure-resolution.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
-import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL } from './volume-raymarch-sampling.mjs';
+import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDANCE_WGSL } from './volume-raymarch-sampling.mjs';
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
@@ -889,6 +889,8 @@ export function resolveBoundarySplatExecutionPlan({
   boundarySplatInstanceConsumer = false,
   explicitSplatConsumer = null,
   explicitSidecarConsumer = null,
+  flamePriority = 0,
+  raymarchMode = 'numerical',
 } = {}) {
   const mode = normalizeBoundarySplatMode(boundarySplatMode);
   const compositionRequest = selectiveHeadLiveRenderCompositionRequest(renderComposition);
@@ -914,11 +916,14 @@ export function resolveBoundarySplatExecutionPlan({
     && source !== 'live';
   const sidecarViewConsumer = presentationActive && view !== 'off';
   const explicitSidecarDispatch = presentationActive && Boolean(namedExplicitSidecarConsumer);
+  const flameGuidanceConsumer = presentationActive && compositionRequest.definition.raymarch
+    && raymarchMode === 'numerical' && flamePriority > 0;
   const sidecarDispatch = source !== 'override' && (
     splatDispatch
     || raymarchStructureConsumer
     || sidecarViewConsumer
     || explicitSidecarDispatch
+    || flameGuidanceConsumer
   );
   const splatConsumer = presentationSplatConsumer
     ? 'presentation'
@@ -933,7 +938,7 @@ export function resolveBoundarySplatExecutionPlan({
         ? 'raymarch-structure'
         : sidecarViewConsumer
           ? 'sidecar-view'
-          : namedExplicitSidecarConsumer;
+          : flameGuidanceConsumer ? 'flame-guidance' : namedExplicitSidecarConsumer;
   return {
     identity: 'boundary-splat-consumer-execution-plan-v0',
     presentationActive,
@@ -1279,7 +1284,7 @@ function runtimeQualityReceipt(controls = {}) {
     gpuPressure,
     knobs: {
       renderScale: normalizeRenderScale(controls.renderScale),
-      raySteps: clampFinite(controls.raySteps, 6, 160, 96),
+      raySteps: clampFinite(controls.raySteps, 1, 160, 96),
       adaptiveRays: clampFinite(controls.adaptiveRays, 0, 1, 0.65),
       occupancySkip: clampFinite(controls.occupancySkip, 0, 1, 0.35),
       pressureStrategy: normalizePressureStrategy(controls.pressureStrategy, controls.volumeScene),
@@ -6448,6 +6453,7 @@ ${PHYSICAL_COLOR_WGSL}
 ${AGX_WGSL}
 ${RAY_START_WGSL}
 ${OPTICAL_STEPPING_WGSL}
+${FLAME_GUIDANCE_WGSL}
 override RAY_STEP_STATS: bool = false;
 @group(0) @binding(26) var<storage, read_write> rayStepCounters: array<u32>;
 ${EMISSIVE_TRANSPORT_WGSL}
@@ -8548,7 +8554,7 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     );
   }
 
-  let steps = select(clamp(u.viewport_steps_density.z, 6.0, 192.0), f32(GRID), fullGridCapture);
+  let steps = select(clamp(u.viewport_steps_density.z, 1.0, 192.0), f32(GRID), fullGridCapture);
   let renderSceneMode = clamp(u.scene_controls.x, 0.0, 3.0);
   let minimalPlumeRenderScene = step(2.5, renderSceneMode);
   let bonfireRenderScene = step(1.5, renderSceneMode) * (1.0 - minimalPlumeRenderScene);
@@ -8674,11 +8680,12 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
   // rather than resampling the visible fire at a different density.
   let standaloneDt = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;
   let dtBase = select(standaloneDt,max(2.0/f32(GRID),max(0.0,nearHit.y-max(0.0,nearHit.x)))/steps,worldActive);
-  let jitter = dtBase * rayStartPhase(in.pos.xy, u.reserved_render_controls.w, fullGridCapture);
+  let rayPhase = rayStartPhaseAtFrame(in.pos.xy, u.reserved_render_controls.w, fullGridCapture, u.occupancy_controls.y);
+  let jitter = dtBase * rayPhase;
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
   let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5 && !worldActive;
-  var opticalStep = opticalStepInit(startT, endT, dtBase);
+  var opticalStep = opticalStepInitPhased(startT, endT, dtBase, select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   if (physicalColorMode > 0.5) { color = vec3<f32>(0.0); }
@@ -8719,7 +8726,24 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     if (!opticalStepping && !fullGridCapture && !opticalTrace && (raymarchEarlyTermination(trans) || t > endT)) { break; }
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
+      let priority = clamp(u.occupancy_controls.z, 0.0, 1.0);
+      if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
+        let remaining = opticalStep.end - opticalStep.cursor;
+        let horizon = min(remaining, dtBase * 8.0);
+        let guide = flameGuideSegment(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon);
+        let cellWidth = 2.0 / f32(GRID);
+        let nearby = guide.x <= cellWidth;
+        let support = select(0.0, guide.y, nearby);
+        let minimum = dtBase * mix(1.0, 0.25, priority * support);
+        let maximum = dtBase * 4.0 * mix(1.0, 2.0 - 1.75 * support, priority);
+        let stop = select(remaining, max(minimum, guide.x - cellWidth * 0.5), !nearby && guide.y > 0.0);
+        opticalStepConstrain(&opticalStep, minimum, maximum, stop);
+      }
       t = opticalStepPosition(opticalStep);
+      let probeIndex = opticalStepIndex(opticalStep.mask);
+      if (u.reserved_render_controls.w > 0.5 && u.occupancy_controls.w > 0.5 && (probeIndex == 1u || probeIndex == 3u)) {
+        t = opticalStepPositionJittered(&opticalStep, rayNoiseSample(in.pos.xy, u.occupancy_controls.y, rayMaterialSamples + 1u));
+      }
     }
     traversalSteps = traversalSteps + 1u;
     let sampleIndex = expensiveSamples;
@@ -11940,6 +11964,8 @@ export function createKaminosVolumePrototype({
       boundarySplatFeatureCapture: controlsSnapshot.boundarySplatFeatureCapture,
       flowKernelDescriptorCapture: controlsSnapshot.flowKernelDescriptorCapture,
       boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
+      flamePriority: controlsSnapshot.flamePriority,
+      raymarchMode: controlsSnapshot.raymarchMode,
     }),
     boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
@@ -16728,6 +16754,10 @@ export function createKaminosVolumePrototype({
     uniforms[39] = controlsSnapshot.adaptiveRays ?? 0.65;
     uniforms[40] = controlsSnapshot.occupancySkip ?? 0.35;
     uniforms.fill(0, 41, 47);
+    uniforms[41] = controlsSnapshot.rayStartNoise !== false && controlsSnapshot.rayNoiseAnimated === true
+      ? (controlsSnapshot.rayNoiseFrame ?? state.frameCount) % 32 : 0;
+    uniforms[42] = clampFinite(controlsSnapshot.flamePriority, 0, 1, 0);
+    uniforms[43] = controlsSnapshot.quadratureJitter === false ? 0 : 1;
     // Reuse a retired history slot; presentation flags retain their own lanes.
     uniforms[44] = controlsSnapshot.flowDebug || 0;
     uniforms[45] = debugOpticalStepping.tolerance;
@@ -17225,7 +17255,8 @@ export function createKaminosVolumePrototype({
       workingSpace: 'linear-srgb', outputSpace: 'srgb',
       toneMapping: uniforms[46] > 0.5 ? 'agx' : 'custom',
       rayStartNoise: uniforms[47] > 0.5,
-      rayStartPattern: uniforms[47] > 0.5 ? 'stable-spatial-blue-noise-64-v1' : 'midpoint',
+      rayStartPattern: uniforms[47] > 0.5 ? (controlsSnapshot.rayNoiseAnimated ? 'fast-spatiotemporal-128x128x32-v1' : 'fast-spatial-slice-zero-128-v1') : 'midpoint',
+      rayNoisePhase: uniforms[41],
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
       materialLawRequested: physicalColorMode === 2 ? (physicsAppearance.requested ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
       materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
@@ -18364,6 +18395,8 @@ export function createKaminosVolumePrototype({
       boundarySplatInstanceConsumer: controlsSnapshot.boundarySplatInstanceConsumer,
       explicitSplatConsumer: options.explicitSplatConsumer,
       explicitSidecarConsumer: options.explicitSidecarConsumer,
+      flamePriority: controlsSnapshot.flamePriority,
+      raymarchMode: debugOpticalStepping.mode,
     });
     state.boundarySplatExecutionPlan = plan;
     return plan;
@@ -21281,7 +21314,12 @@ export function createKaminosVolumePrototype({
     state.rayStepTelemetry=rayStepTelemetry.read();
     const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};
     state.opticalStepping = { ...optical, effective: optical.mode,
-      source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current' };
+      source:'native-emissive-material-and-current-incident-light', fullRay:optical.mode !== 'current',
+      flamePriorityRequested:controlsSnapshot.flamePriority??0,
+      flamePriority:optical.mode==='numerical'?uniforms[42]:0,
+      quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
+      quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
+      guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
     const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;

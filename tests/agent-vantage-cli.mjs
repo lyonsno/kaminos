@@ -363,3 +363,16 @@ test('watch --after keeps watching past the event and waits that much longer for
   assert.equal(tooLong.code, 2);
   assert.equal(received.length, 1);
 });
+
+
+test('a picture pick passes on the proxies its picture drew outside the pick map', async t => {
+  const {server, received, url} = await fakeServer((request, body) => [200, pickReply(body.args)]);
+  const out = mkdtempSync(path.join(tmpdir(), 'vantage-cli-'));
+  t.after(() => { server.close(); rmSync(out, {recursive: true, force: true}); });
+  const optics = {projection: Array.from({length: 16}, () => 1), viewInverse: Array.from({length: 16}, () => 1)};
+  const recordPath = path.join(out, 'glance.json');
+  writeFileSync(recordPath, JSON.stringify({result: {kind: 'glance', image: {width: 4, height: 2}, optics, pickMap: {...pickMap([kilnRow], '0 0 8'), proxies: ['fire']}}}));
+  const picked = await run(['--server', url, 'pick', '1', '1', '--picture', recordPath]);
+  assert.equal(picked.code, 0, picked.stderr);
+  assert.deepEqual(received[0].body.args.scene.proxies, ['fire']);
+});

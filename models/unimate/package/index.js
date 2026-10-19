@@ -2,7 +2,7 @@
 //
 // Generate on your own device:          createUniMateGenerator({ device, session, beginRun, ... })
 // As a model in a host app:             createUniMateConsumer(host).run({ asset, prompt, seed })
-// Bring your own rig:                   readRig(bytes) -> createLabeler().label(rig) -> buildSkeletonBundle(...)
+// Bring your own rig:                   readRig(bytes) -> (await createLabeler()).label(rig) -> buildSkeletonBundle(...)
 // Save the result:                      exportMotionGlb({ ... }) -> animated .glb (skinned mesh for a rig)
 export { createUniMateGenerator, UNIMATE_ROUTE_ID, gaussianNoise, fetchBytes } from './unimate-generator.js';
 export { createUniMateConsumer, unimateMemoryEstimate, HUB } from './unimate-consumer.js';

@@ -57,7 +57,7 @@ const { glb, motion, rig } = await consumer.run({ asset: { bytes, name: 'fox' },
 To prepare the rig yourself, call the steps directly:
 
 1. `readRig(bytes)` reads the skeleton the way UniMate's Blender import and export do.
-2. `createLabeler().label(rig)` runs UniMate's own rule-based joint labeller (Python, in the page via Pyodide, loaded on first use) for joint labels and the facing direction.
+2. `await (await createLabeler()).label(rig)` runs UniMate's own rule-based joint labeller (Python via Pyodide, loaded on first use) for joint labels and the facing direction. It runs in a web worker so your page keeps drawing. Vite, webpack and Parcel bundle the worker; if your bundler leaves `unimate-rig-labels-worker.js` out, the labeller runs on the page instead and says so in its status.
 3. `buildSkeletonBundle(rig, labels, ...)` builds the model's conditioning and the bound mesh.
 4. `exportMotionGlb(...)` writes the result.
 

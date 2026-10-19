@@ -2195,13 +2195,26 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <div class="slider-row">
       <span class="slider-label">Ray Steps</span>
-      <input type="range" id="volume-steps" min="6" max="160" step="1" value="96">
+      <input type="range" id="volume-steps" min="1" max="160" step="1" value="96">
       <span class="slider-val" id="volume-steps-val">96</span>
     </div>
     <div class="slider-row">
-      <label class="slider-label" for="volume-ray-start-noise">Blue-noise ray starts</label>
+      <label class="slider-label" for="volume-ray-start-noise">Blue-noise sampling</label>
       <input type="checkbox" id="volume-ray-start-noise" data-volume-settings-role="renderer" checked>
       <span class="slider-val" id="volume-ray-start-noise-val">on</span>
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-ray-noise-animated">Animate noise</label>
+      <input type="checkbox" id="volume-ray-noise-animated" checked data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-quadrature-jitter">Interior jitter</label>
+      <input type="checkbox" id="volume-quadrature-jitter" checked data-volume-settings-role="renderer">
+    </div>
+    <div class="slider-row">
+      <label class="slider-label" for="volume-flame-priority">Flame priority</label>
+      <input type="range" id="volume-flame-priority" min="0" max="1" step="any" value="0" data-volume-settings-role="renderer">
+      <span class="slider-val" id="volume-flame-priority-val">0.00</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Adaptive Rays</span>
@@ -7371,7 +7384,7 @@ function pickVisibleFlameFromViewportPointer(hits) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, .playback-controls, .scene-owner-playback');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -12568,6 +12581,10 @@ async function initScene() {
       viewport:viewportEl,hostCanvas:renderer.domElement,busy:vantageBusy,hold:holdViewportForVantage,cameraMatrices:vantageCameraMatrices,suspendEditorDrawing:suspendEditorDrawingForVantage,
       redraw:()=>window._kaminosDirty?.(),frameState:vantageFrameState,extraTargets:vantageTargets,
       idPass,glance,water:()=>!!localLiquidHost,coordinateSystem:renderer.coordinateSystem,
+      // The fire and water proxies (Proxy Preview) a sub's own camera can draw: held while a sub looks, read from their own state.
+      proxies:window.kaminosProxyPreview?{layers:window.kaminosProxyPreview.layers,require:source=>window.kaminosProxyPreview.require(source),
+       states:()=>({fire:{present:!!volumePrototype&&(volumePrototype.isActive?.()??true),visible:isSceneItemVisible('flame-field'),fieldGeneration:volumePrototype?.getResidualFieldGeneration?.()??null,layer:window.kaminosFireProxyDebugState?.().layer??null},
+        water:{present:!!localLiquidHost,visible:isSceneItemVisible('water-field'),layer:window.kaminosWaterProxyDebugState?.().layer??null}})}:null,
       link:new URLSearchParams(location.search).get('vantage')!=='0'});
     // capturing() and idle() let a page reader avoid reading canvases while a sub picture holds the camera; watching() reports a watch in progress.
     window.kaminosAgentVantage={pageId:agentVantage.pageId,run:agentVantage.run,capturing:agentVantage.capturing,watching:agentVantage.watching,idle:agentVantage.idle};
@@ -17077,7 +17094,7 @@ function routeBonfireAblationControl(params, routeName, controlName) {
 }
 
 function snapVolumeRaySteps(value) {
-  return Math.round(clampVolumeValue(value, 6, 160));
+  return Math.round(clampVolumeValue(value, 1, 160));
 }
 
 function snapVolumeAdaptiveRays(value) {
@@ -18949,7 +18966,7 @@ function rayBudgetGamutPointFromControls() {
   const steps = parseFloat(document.getElementById('volume-steps').value);
   const adaptive = parseFloat(document.getElementById('volume-adaptive-rays').value);
   return {
-    x: (snapVolumeRaySteps(steps) - 6) / (160 - 6),
+    x: (snapVolumeRaySteps(steps) - 1) / (160 - 1),
     y: 1 - snapVolumeAdaptiveRays(adaptive),
   };
 }
@@ -18973,7 +18990,7 @@ function syncRayBudgetGamutFromControls() {
 }
 
 function applyRayBudgetGamutPoint(x, y) {
-  const nextSteps = snapVolumeRaySteps(6 + clampVolumeValue(x, 0, 1) * (160 - 6));
+  const nextSteps = snapVolumeRaySteps(1 + clampVolumeValue(x, 0, 1) * (160 - 1));
   const nextAdaptive = snapVolumeAdaptiveRays(1 - clampVolumeValue(y, 0, 1));
   setVolumeControlValue('volume-steps', nextSteps);
   setVolumeControlValue('volume-adaptive-rays', nextAdaptive.toFixed(2));
@@ -19195,6 +19212,9 @@ function readVolumeControls() {
     opticalTolerance: Number(document.getElementById('volume-optical-tolerance').value),
     rayStepTelemetry: document.getElementById('volume-ray-step-telemetry').checked,
     rayStartNoise: document.getElementById('volume-ray-start-noise').checked,
+    rayNoiseAnimated: document.getElementById('volume-ray-noise-animated').checked,
+    quadratureJitter: document.getElementById('volume-quadrature-jitter').checked,
+    flamePriority: Number(document.getElementById('volume-flame-priority').value),
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',
@@ -19489,7 +19509,10 @@ function supersedeVolumeRebuildHolds() {
 function updateVolumeControlLabels() {
   const c = readVolumeControls();
   document.getElementById('volume-optical-tolerance').disabled=c.raymarchMode!=='numerical';
-  for(const id of ['volume-adaptive-rays','volume-occupancy-skip','volume-ray-start-noise'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  for(const id of ['volume-adaptive-rays','volume-occupancy-skip'])document.getElementById(id).disabled=c.raymarchMode!=='current';
+  document.getElementById('volume-flame-priority').disabled=c.raymarchMode!=='numerical';
+  document.getElementById('volume-ray-noise-animated').disabled=!c.rayStartNoise;
+  document.getElementById('volume-quadrature-jitter').disabled=c.raymarchMode==='current'||!c.rayStartNoise;
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
@@ -19522,6 +19545,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-speed-val').textContent = c.speed.toFixed(2);
   document.getElementById('volume-steps-val').textContent = String(c.raySteps | 0);
   document.getElementById('volume-ray-start-noise-val').textContent = c.rayStartNoise ? 'on' : 'off';
+  document.getElementById('volume-flame-priority-val').textContent = c.flamePriority.toFixed(2);
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
@@ -20838,7 +20862,7 @@ async function initKaminosVolumeRoute() {
   }
   const routeRaySteps = Number(params.get('volume_steps'));
   if (params.has('volume_steps') && Number.isFinite(routeRaySteps)) {
-    document.getElementById('volume-steps').value = String(Math.max(6, Math.min(160, routeRaySteps)));
+    document.getElementById('volume-steps').value = String(Math.max(1, Math.min(160, routeRaySteps)));
     activeVolumeRayBudgetPreset = '';
     routedVolumeRayBudgetPreset = '';
   }
@@ -20971,6 +20995,9 @@ async function initKaminosVolumeRoute() {
     ['volume-raymarch-mode', 'volume_raymarch_mode'],
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
     ['volume-ray-step-telemetry', 'volume_ray_step_telemetry'],
+    ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
+    ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
+    ['volume-flame-priority', 'volume_flame_priority'],
     ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
     ['volume-force-interface-shred', 'volume_force_interface_shred'],
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
@@ -21333,6 +21360,9 @@ async function initKaminosVolumeRoute() {
     'volume-optical-tolerance',
     'volume-ray-step-telemetry',
     'volume-ray-start-noise',
+    'volume-ray-noise-animated',
+    'volume-quadrature-jitter',
+    'volume-flame-priority',
     'volume-emitter-source-depth',
     'volume-emitter-inlet-profile',
     'volume-emitter-momentum-linked',

@@ -13,7 +13,7 @@ await save();
 let browser,page;
 try {
   const raySteps = rayStepsText === undefined ? undefined : Number(rayStepsText);
-  if (raySteps !== undefined) assert.ok(Number.isInteger(raySteps) && raySteps >= 6 && raySteps <= 160, 'invalid requested ray steps');
+  if (raySteps !== undefined) assert.ok(Number.isInteger(raySteps) && raySteps >= 1 && raySteps <= 160, 'invalid requested ray steps');
   report.requestedRaySteps = raySteps;
   report.source={head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim()};
   const files=['volume-core.js','volume-optical-native.mjs','index.html','scripts/preview-optical-stepping.mjs','scripts/check-optical-step-gpu.mjs'];

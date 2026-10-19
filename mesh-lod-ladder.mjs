@@ -322,3 +322,73 @@ export function measureGeometricError({source, level, closestSource, closestLeve
     levelToSource: {...stats(forward.distances), normalDeviationDegrees: stats(forward.angles)},
     sourceToLevel: {...stats(backward.distances), normalDeviationDegrees: stats(backward.angles)}};
 }
+
+// World-space triangles of a GLB: every triangle primitive in the default scene, with each
+// node's matrix or translation/rotation/scale applied down the hierarchy. Positions must be
+// float32 (quantized or compressed positions are refused rather than misread). Used to compare
+// a level with the hero a consumer would otherwise draw, in the frame both are drawn in.
+// glTF node transforms: column-major 4x4.
+const mat4Mul = (a, b) => { const o = new Array(16).fill(0); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let k = 0; k < 4; k++) o[c*4+r] += a[k*4+r] * b[c*4+k]; return o; };
+const nodeLocalMatrix = node => {
+  if (node.matrix) return node.matrix.slice();
+  const [x, y, z, w] = node.rotation ?? [0, 0, 0, 1], [sx, sy, sz] = node.scale ?? [1, 1, 1], [tx, ty, tz] = node.translation ?? [0, 0, 0];
+  return [(1-2*(y*y+z*z))*sx, 2*(x*y+z*w)*sx, 2*(x*z-y*w)*sx, 0, 2*(x*y-z*w)*sy, (1-2*(x*x+z*z))*sy, 2*(y*z+x*w)*sy, 0,
+          2*(x*z+y*w)*sz, 2*(y*z-x*w)*sz, (1-2*(x*x+y*y))*sz, 0, tx, ty, tz, 1];
+};
+// Inverse transpose of a column-major 4x4's linear part, as a column-major 3x3: carries normals.
+export function normalMatrixOf(m) {
+  const [a, b, c, d, e, f, g, h, i] = [m[0], m[4], m[8], m[1], m[5], m[9], m[2], m[6], m[10]]; // rows
+  const det = a*(e*i-f*h) - b*(d*i-f*g) + c*(d*h-e*g);
+  if (!(Math.abs(det) > 1e-12)) throw Error('singular node transform');
+  // cofactor matrix / det is the inverse transpose; store column-major
+  const cof = [e*i-f*h, -(d*i-f*g), d*h-e*g, -(b*i-c*h), a*i-c*g, -(a*h-b*g), b*f-c*e, -(a*f-c*d), a*e-b*d]; // rows
+  return [cof[0], cof[3], cof[6], cof[1], cof[4], cof[7], cof[2], cof[5], cof[8]].map(v => v / det);
+}
+// World matrix of every node that is reached from the scene, by node index.
+export function glbNodeWorldMatrices(json) {
+  const worlds = new Map();
+  const visit = (index, parent) => { const world = mat4Mul(parent, nodeLocalMatrix(json.nodes[index])); worlds.set(index, world);
+    for (const child of json.nodes[index].children ?? []) visit(child, world); };
+  for (const root of json.scenes?.[json.scene ?? 0]?.nodes ?? json.nodes.map((_, i) => i)) visit(root, [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  return worlds;
+}
+
+// World-space triangles of a GLB, with world shading normals when every primitive carries float
+// normals (otherwise normals is null).
+export function readGLBWorldMesh(glb) {
+  const view = new DataView(glb);
+  if (view.getUint32(0, true) !== 0x46546c67) throw Error('not a GLB');
+  const jsonLength = view.getUint32(12, true), json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength)));
+  const binStart = 28 + jsonLength;
+  const read = (index, width) => {
+    const a = json.accessors[index]; if (a.sparse) throw Error('sparse accessors are not read');
+    const bv = json.bufferViews[a.bufferView], T = {5126: Float32Array, 5125: Uint32Array, 5123: Uint16Array, 5122: Int16Array, 5121: Uint8Array, 5120: Int8Array}[a.componentType];
+    if (!T) throw Error(`unsupported component type ${a.componentType}`);
+    const stride = bv.byteStride || width * T.BYTES_PER_ELEMENT, base = binStart + (bv.byteOffset || 0) + (a.byteOffset || 0), out = new T(a.count * width);
+    for (let i = 0; i < a.count; i++) out.set(new T(glb.slice(base + i * stride, base + i * stride + width * T.BYTES_PER_ELEMENT)), i * width);
+    return {array: out, componentType: a.componentType};
+  };
+  const vertices = [], faces = [];
+  let normals = [];
+  for (const [index, world] of glbNodeWorldMatrices(json)) {
+    const node = json.nodes[index];
+    if (node.mesh !== undefined) for (const primitive of json.meshes[node.mesh].primitives) {
+      if ((primitive.mode ?? 4) !== 4) throw Error('only triangle primitives are read');
+      if (primitive.extensions?.KHR_draco_mesh_compression) throw Error('compressed primitives are not read');
+      const p = read(primitive.attributes.POSITION, 3);
+      if (p.componentType !== 5126) throw Error('float positions required (quantized positions are not read)');
+      const base = vertices.length / 3;
+      for (let i = 0; i < p.array.length; i += 3) { const [x, y, z] = [p.array[i], p.array[i+1], p.array[i+2]];
+        vertices.push(world[0]*x + world[4]*y + world[8]*z + world[12], world[1]*x + world[5]*y + world[9]*z + world[13], world[2]*x + world[6]*y + world[10]*z + world[14]); }
+      const ix = primitive.indices !== undefined ? read(primitive.indices, 1).array : Uint32Array.from({length: p.array.length / 3}, (_, i) => i);
+      for (const i of ix) faces.push(base + i);
+      const n = normals && primitive.attributes.NORMAL !== undefined ? read(primitive.attributes.NORMAL, 3) : null;
+      if (!n || n.componentType !== 5126) { normals = null; continue; }
+      const nm = normalMatrixOf(world);
+      for (let i = 0; i < n.array.length; i += 3) { const [x, y, z] = [n.array[i], n.array[i+1], n.array[i+2]];
+        const w = [nm[0]*x + nm[3]*y + nm[6]*z, nm[1]*x + nm[4]*y + nm[7]*z, nm[2]*x + nm[5]*y + nm[8]*z], l = Math.hypot(...w) || 1;
+        normals.push(w[0] / l, w[1] / l, w[2] / l); }
+    }
+  }
+  return {vertices: Float32Array.from(vertices), faces: Uint32Array.from(faces), normals: normals && Float32Array.from(normals)};
+}
