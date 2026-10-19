@@ -1,12 +1,7 @@
-import {checkedRenderOutput,outputPixels} from './render-output.mjs';
+import {checkedRenderOutput,outputPixels,checkedRecordingOptions} from './render-output.mjs';
 export function checkedRecording(raw={}){
- const value={...checkedRenderOutput(raw),frames:120,fps:24,format:'mp4',columns:4,tileWidth:320,...structuredClone(raw)};
- for(const key of ['frames','columns','tileWidth'])if(!Number.isSafeInteger(value[key])||value[key]<1)throw Error(`${key} needs a positive whole number`);
- if(!Number.isFinite(value.fps)||value.fps<=0)throw Error('FPS must be positive');
- if(!['mp4','filmstrip'].includes(value.format))throw Error('Choose MP4 or PNG filmstrip');
- const extension=value.format==='mp4'?'mp4':'png';
- value.filename=checkedRenderOutput({...value,filename:value.filename.replace(/\.(mp4|png)$/i,'')}).filename.replace(/\.png$/,'.'+extension);
- outputPixels(value);return value;
+ const options=checkedRecordingOptions({...raw.recording,...raw}),value=checkedRenderOutput({...raw,kind:'recording',recording:options});
+ return {...value,...options};
 }
 // Capture callbacks run inside the actual renderer's presentation task. Nothing
 // here advances, holds, or resets a simulation or creates another render loop.
