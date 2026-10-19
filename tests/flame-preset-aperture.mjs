@@ -5,23 +5,42 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as aperture from '../flame-authoring.mjs';
 import {volumeSettingsPresetControlValuesEqual,volumeSettingsPresetAppliedDifferences} from '../volume-settings-preset-contract.mjs';
-import {flamePoseToDomain,immersedControlsForFlamePose} from '../scene-flame-emitter.mjs';
+import {flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusClamp} from '../scene-flame-emitter.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 // Exercise the actual authored consumer, with only DOM representation mocked.
 const source=html.slice(html.indexOf('function flameSettingsState('),html.indexOf('// Every reason the flame settings'));
-function load(radius,options={},space,scale=1){
+function load(radius,options={},space,scale=1,apply=false){
  const preset={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:radius,rawValue:String(radius)},...Object.fromEntries(['centre-x','centre-y','centre-z','yaw','pitch'].map(x=>['volume-immersed-'+x,{value:0}]))},rendererControls:{},presentationControls:{}};
  if(space)preset.sourceRadiusSpace=space;
+ preset.domControls['emitter-assay-family']={value:'ring'};
  const current=structuredClone(preset);current.domControls['volume-immersed-radius']={value:.2/scale,rawValue:String(.2/scale)};
  const context={structuredClone,readVolumeSettingsValues:()=>current,activeVolumeSettingsPresetReceipt:null,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},flameDomainTranslation:[0,0,0],flameDomainScale:1,
- flamePoseToDomain,immersedControlsForFlamePose,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:()=>({cloneNode:()=>({value:0})})}};
- vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);return context.run(preset,null,options);
+ flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusClamp,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:id=>({type:id==='volume-immersed-radius'?'range':'text',min:String(.02/scale),max:String(.5/scale),cloneNode:()=>({value:0})})}};
+ vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);
+ if(!apply)return context.run(preset,null,options);
+ const clamps=html.slice(html.indexOf('function flameSettingsStateClamps('),html.indexOf('function checkFlameSettingsState('));
+ const start=html.indexOf('async function loadAuthoredFlameBasin(');
+ const consumer=html.slice(start,html.indexOf('\n}\n',start)+3);
+ Object.assign(context,{fetch:async()=>({ok:true,json:async()=>({})}),encodeURIComponent,validateVolumeSettingsPresetDocument:()=>({preset,label:'Legacy'}),window:{},console:{warn(){}},setInfo(){}});
+ vm.runInContext(clamps+consumer,context);
+ return context.loadAuthoredFlameBasin('legacy',options).then(state=>({state,report:context.window.__kaminosFlameBasinClampReport}));
 }
 test('explicit legacy recovery retains current aperture rather than clamping saved radius',()=>{
  const state=load(135.764753512356,{sourceSize:'current'});
  assert.equal(state.domControls['volume-immersed-radius'].value,.2);
 });
-test('ordinary apply still refuses an unrecoverable legacy aperture',()=>assert.throws(()=>load(135.764753512356),/radius/));
+test('ordinary legacy apply clamps and reports while explicit recovery retains current aperture',async()=>{
+ const ordinary=await load(135.764753512356,{},undefined,1,true);
+ assert.equal(ordinary.state.domControls['volume-immersed-radius'].value,.5);
+ assert.equal(ordinary.report.clamps.length,1);
+ assert.equal(ordinary.report.clamps[0].id,'volume-immersed-radius');
+ assert.match(ordinary.report.clamps[0].message,/clamped to 0\.5/);
+ assert.equal(ordinary.state.source.preset.domControls['volume-immersed-radius'].value,135.764753512356);
+ const recovered=await load(135.764753512356,{sourceSize:'current'},undefined,1,true);
+ assert.equal(recovered.state.domControls['volume-immersed-radius'].value,.2);
+ assert.equal(recovered.report.clamps.length,0);
+ assert.equal(recovered.state.source.sourceSizeRecovery,'current-emitter-size');
+});
 test('portable preset applies the same effective aperture to differently scaled emitters',()=>{
  for(const scale of [.001,.1,1,8]){
    const state=load(.3,{},'simulation-v1',scale);
