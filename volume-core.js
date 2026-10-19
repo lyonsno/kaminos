@@ -23,7 +23,7 @@ import { validateOrdinarySceneDepth } from './volume-ordinary-scene-depth.mjs';
 import { countEmitterChemicalSupport, packSolidTextureRows, sceneSolidRevision, trianglesFromSceneObject, voxelizeTriangleSolid, createSceneSolidGeometryCache } from './volume-scene-solid.mjs';
 import { EMISSIVE_TRANSPORT_WGSL, EMISSIVE_LIGHT_GRID, cameraWhiteBalance, createEmissiveLightField, emissiveCoefficientStats } from './volume-emissive-transport.mjs';
 import { SOOT_BURNOUT_WGSL, resolvePhysicsAppearance, physicsAppearanceUniformValues } from './volume-physics-appearance.mjs';
-import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
+import { WAVELET_TURBULENCE_WGSL, WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues, waveletOctaveUniformValues, velocityBandEnergies } from './volume-wavelet-turbulence.mjs';
 import { SCENE_VOLUME_SOURCE_WGSL, createSceneVolumeSource, prepareSceneSourceFrame } from './scene-volume-source.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
@@ -2154,7 +2154,7 @@ export const JOINED_BOUNDARY_UNIFORM_FLOATS = 12;
 // vec4 after the joined boundary: gain (0 off), octaves, coherence period in
 // steps, step count. Off, the kernel path is the one main runs.
 export const WAVELET_TURBULENCE_UNIFORM_OFFSET = JOINED_BOUNDARY_UNIFORM_OFFSET + JOINED_BOUNDARY_UNIFORM_FLOATS;
-export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 4;
+export const WAVELET_TURBULENCE_UNIFORM_FLOATS = 8;
 export { WAVELET_TURBULENCE_IDENTITY, resolveWaveletTurbulence, waveletTurbulenceUniformValues };
 export const VOLUME_UNIFORM_FLOATS = WAVELET_TURBULENCE_UNIFORM_OFFSET + WAVELET_TURBULENCE_UNIFORM_FLOATS;
 // The widest a transport sample reaches outside the box: the 8-cell backtrace
@@ -3799,6 +3799,7 @@ struct Uniforms {
   joined_ghost_geometry: vec4<f32>,
   joined_ghost_dims: vec4<f32>,
   wavelet_turbulence: vec4<f32>,
+  wavelet_octave_weights: vec4<f32>,
 };
 
 struct ExternalEmitter {
@@ -4092,12 +4093,12 @@ fn waveletCorrection(foot: vec3<f32>, transported: vec3<f32>, coordA: vec3<f32>,
   let octaves = clamp(u32(u.wavelet_turbulence.y), 1u, 2u);
   let wa = waveletBlendA(u32(u.wavelet_turbulence.w), WAVELET_COHERENCE_PERIOD_STEPS);
   var detail = vec3<f32>(0.0);
-  if (wa > 0.0) { detail = detail + wa * waveletDetail(coordA, octaves); }
-  if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetail(coordB, octaves); }
+  if (wa > 0.0) { detail = detail + wa * waveletDetailWeighted(coordA, octaves, u.wavelet_octave_weights.xy); }
+  if (wa < 1.0) { detail = detail + (1.0 - wa) * waveletDetailWeighted(coordB, octaves, u.wavelet_octave_weights.xy); }
   let dd = dot(detail, detail);
   if (dd < 1e-12) { return vec3<f32>(0.0); }
   let highPass = transported - waveletLowPassSample(foot);
-  let readGain = WAVELET_DETAIL_HIGHPASS_GAIN[octaves - 1u];
+  let readGain = u.wavelet_octave_weights.z;
   let carried = dot(highPass, detail) / (dd * readGain);
   let fillTo = amplitude * max(u.wavelet_turbulence.z, 0.0);
   let blend = stepBlend(clamp(u.wavelet_turbulence.x, 0.0, 1.0));
@@ -12403,7 +12404,7 @@ export function createKaminosVolumePrototype({
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,solids,collisionSource})};
+    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource})};
     const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
     Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale}});
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
@@ -17161,6 +17162,7 @@ export function createKaminosVolumePrototype({
     const waveletTurbulence = resolveWaveletTurbulence(controlsSnapshot);
     state.waveletTurbulence = waveletTurbulence;
     uniforms.set(waveletTurbulenceUniformValues(waveletTurbulence, { simStepCount: state.simStepCount }), WAVELET_TURBULENCE_UNIFORM_OFFSET);
+    uniforms.set(waveletOctaveUniformValues(waveletTurbulence), WAVELET_TURBULENCE_UNIFORM_OFFSET + 4);
     if (ensureWaveletCoordinates(waveletTurbulence.effective.admitted)) {
       rebuildFluidBindGroups();
       rebuildSceneSolidBindingViews();
@@ -28761,7 +28763,7 @@ export function createKaminosVolumePrototype({
     async debugWaveletBandEnergy() {
       if (!device || !fluidBuffers) return { status: 'unsupported', reason: 'gpu-not-initialized' };
       const dims = [gridSize, gridHeight, gridSize];
-      const snapshot = { dims, simStepCount: state.simStepCount, wavelet: state.waveletTurbulence ? { gain: state.waveletTurbulence.gain, octaves: state.waveletTurbulence.octaves, strength: state.waveletTurbulence.strength, admitted: state.waveletTurbulence.effective.admitted } : null };
+      const snapshot = { dims, simStepCount: state.simStepCount, wavelet: state.waveletTurbulence ? { gain: state.waveletTurbulence.gain, octaves: state.waveletTurbulence.octaves, strength: state.waveletTurbulence.strength, octaveWeights: [...state.waveletTurbulence.octaveWeights], admitted: state.waveletTurbulence.effective.admitted } : null };
       const bytes = fluidBuffers[currentFluid].size;
       const staging = device.createBuffer({ label: 'kaminos wavelet band energy readback', size: bytes, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       try {
@@ -28773,7 +28775,7 @@ export function createKaminosVolumePrototype({
         staging.unmap();
         if (values.length !== dims[0] * dims[1] * dims[2] * 16) return { status: 'invalid', reason: 'readback-size-mismatch', ...snapshot };
         // The copy is a snapshot of the step it was encoded at; stepping may continue while it maps.
-        const bands = velocityBandEnergies(values, dims, { octaves: snapshot.wavelet?.octaves ?? 2 });
+        const bands = velocityBandEnergies(values, dims, { octaves: snapshot.wavelet?.octaves ?? 2, octaveWeights: snapshot.wavelet?.octaveWeights ?? [1, 1] });
         if (![bands.total, bands.sub, bands.near, bands.mid, bands.large, bands.kolmogorovSubEnergy].every(Number.isFinite)) return { status: 'invalid', reason: 'nonfinite-band-energy', ...snapshot };
         return { status: 'sampled', ...snapshot, ...bands };
       } finally { staging.destroy(); }

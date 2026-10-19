@@ -1,7 +1,10 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 264,
+  "controlCount": 267,
   "controls": [
+    {"key":"volume-world-smoke-transition","param":"volume_world_smoke_transition","tagName":"SELECT","type":"select-one","additiveDefault":"0","allowedValues":["0","1","2"],"additiveSinceControlCount":267},
+    {"key":"volume-wavelet-octave1-weight","param":"volume_wavelet_octave1_weight","tagName":"INPUT","type":"range","additiveDefault":1,"additiveSinceControlCount":265},
+    {"key":"volume-wavelet-octave2-weight","param":"volume_wavelet_octave2_weight","tagName":"INPUT","type":"range","additiveDefault":1,"additiveSinceControlCount":266},
     {"key":"volume-world-smoke","param":"volume_world_smoke","tagName":"SELECT","type":"select-one","additiveDefault":"off","allowedValues":["off","on"],"additiveSinceControlCount":261},
     {"key":"volume-world-smoke-flow","param":"volume_world_smoke_flow","tagName":"SELECT","type":"select-one","additiveDefault":"16","allowedValues":["8","16","24","32"],"additiveSinceControlCount":262},
     {"key":"volume-world-smoke-material","param":"volume_world_smoke_material","tagName":"SELECT","type":"select-one","additiveDefault":"32","allowedValues":["16","32","48","64"],"additiveSinceControlCount":263},

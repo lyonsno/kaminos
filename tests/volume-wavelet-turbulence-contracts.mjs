@@ -45,7 +45,7 @@ test('resolver: off at gain 0, admitted above it, octaves and gain clamped to th
   assert.equal(on.gain, 0.4);
   assert.equal(on.octaves, 2);
   assert.equal(on.strength, 1, 'strength defaults to the cascade expectation');
-  assert.equal(resolveWaveletTurbulence({ waveletStrength: 9 }).strength, WAVELET_TURBULENCE_RANGES.strength[1]);
+  assert.equal(resolveWaveletTurbulence({ waveletStrength: 9 }).strength, 9);
   assert.equal(resolveWaveletTurbulence({ waveletStrength: 2.5 }).strength, 2.5);
   const clamped = resolveWaveletTurbulence({ waveletTurbulence: 9, waveletOctaves: 7 });
   assert.equal(clamped.gain, WAVELET_TURBULENCE_RANGES.gain[1]);

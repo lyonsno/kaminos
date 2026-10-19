@@ -22,7 +22,7 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_FLOATS, 12);
   assert.equal(core.WAVELET_TURBULENCE_UNIFORM_OFFSET, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS, 'wavelet turbulence follows the joined boundary');
   assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n\}/);
+  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);

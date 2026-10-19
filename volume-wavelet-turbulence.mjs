@@ -33,7 +33,8 @@ export const WAVELET_TURBULENCE_DEFAULTS = Object.freeze({ gain: 0, octaves: 2, 
 // Octaves at 4 and 2 cells; a third would sit at one cell, below Nyquist.
 // Strength multiplies the Kolmogorov target amplitude: 1 is the cascade
 // expectation; above it is deliberate exaggeration, labelled as such.
-export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2], strength: [0.25, 4] });
+// Strength's UI range is exploratory, not a measured stability boundary.
+export const WAVELET_TURBULENCE_RANGES = Object.freeze({ gain: [0, 1], octaves: [1, 2], strength: [0.25, 16] });
 
 // Band estimator (measured on unit curl fields, see the contracts). The kernel
 // stores L1 = box3(v) and L2 = box3(L1) in a pre-pass; the resolved band it
@@ -68,6 +69,7 @@ export function resolveWaveletTurbulence(params = {}) {
     gain,
     octaves,
     strength,
+    octaveWeights: [params.waveletOctave1Weight, params.waveletOctave2Weight].map(v => clamp(finite(Number(v), 1), [0, 1])),
     baseWavelengthCells: WAVELET_BASE_WAVELENGTH_CELLS,
     bandSlope: WAVELET_BAND_SLOPE,
     coherencePeriodSteps: WAVELET_COHERENCE_PERIOD_STEPS,
@@ -79,6 +81,20 @@ export function resolveWaveletTurbulence(params = {}) {
 // count. The coherence period is a WGSL constant.
 export function waveletTurbulenceUniformValues(resolved, { simStepCount = 0 } = {}) {
   return [resolved.gain, resolved.octaves, resolved.strength, simStepCount >>> 0];
+}
+export function waveletOctaveUniformValues(resolved) {
+  const weights = resolved.octaveWeights ?? [1, 1];
+  return [...weights, waveletDetailReadGain(resolved.octaves, weights), 0];
+}
+// Infer the second band's response from the existing measured one-/two-band
+// calibrations. Weighted energy assumes decorrelated octaves, as the RMS law
+// already does; it is not a new measurement of every advected deformation.
+export function waveletDetailReadGain(octaves, weights = [1, 1]) {
+  const a = weights[0] ** 2;
+  const b = octaves > 1 ? (weights[1] * waveletOctaveWeight(1)) ** 2 : 0;
+  const ratio = waveletOctaveWeight(1) ** 2;
+  const second = (WAVELET_DETAIL_HIGHPASS_GAIN[1] * (1 + ratio) - WAVELET_DETAIL_HIGHPASS_GAIN[0]) / ratio;
+  return a + b > 0 ? (a * WAVELET_DETAIL_HIGHPASS_GAIN[0] + b * second) / (a + b) : WAVELET_DETAIL_HIGHPASS_GAIN[0];
 }
 
 // ---- CPU reference -------------------------------------------------------
@@ -135,10 +151,11 @@ export const waveletOctaveFrequency = i => WAVELET_LACUNARITY ** i / WAVELET_BAS
 
 // Unit-amplitude detail velocity at cell-space position p: octaves of the
 // unit curl field on the Kolmogorov slope. Multiply by the target amplitude.
-export function waveletDetailVelocity(p, octaves) {
+export function waveletDetailVelocity(p, octaves, weights = [1, 1]) {
   const out = [0, 0, 0];
   for (let i = 0; i < octaves; i++) {
-    const s = waveletOctaveFrequency(i), o = OCTAVE_OFFSETS[i], w = waveletOctaveWeight(i);
+    const s = waveletOctaveFrequency(i), o = OCTAVE_OFFSETS[i], w = waveletOctaveWeight(i) * (weights[i] ?? 1);
+    if (w === 0) continue;
     const c = waveletCurlUnit([p[0] * s + o[0], p[1] * s + o[1], p[2] * s + o[2]]);
     out[0] += w * c[0]; out[1] += w * c[1]; out[2] += w * c[2];
   }
@@ -153,9 +170,9 @@ export function waveletTargetAmplitude(energy) {
   return energy <= 0 ? 0 : Math.sqrt(2 * energy) * WAVELET_TARGET_PER_ROOT_ENERGY;
 }
 // rms of the unit detail field for n octaves (octaves add in quadrature).
-export function waveletDetailRms(octaves) {
+export function waveletDetailRms(octaves, weights = [1, 1]) {
   let s = 0;
-  for (let i = 0; i < octaves; i++) s += waveletOctaveWeight(i) ** 2;
+  for (let i = 0; i < octaves; i++) s += (waveletOctaveWeight(i) * (weights[i] ?? 1)) ** 2;
   return Math.sqrt(s);
 }
 
@@ -174,7 +191,7 @@ export function waveletBlendWeights(simStepCount) {
 // cells), large = L4. kolmogorovSubEnergy is the energy the closure would hold
 // in the synthesized band at equilibrium (½ A² rms² per cell, averaged), from
 // the same per-cell estimator the kernel uses.
-export function velocityBandEnergies(values, dims, { stride = 16, offset = 0, octaves = WAVELET_TURBULENCE_DEFAULTS.octaves } = {}) {
+export function velocityBandEnergies(values, dims, { stride = 16, offset = 0, octaves = WAVELET_TURBULENCE_DEFAULTS.octaves, octaveWeights = [1, 1] } = {}) {
   const [nx, ny, nz] = dims, cells = nx * ny * nz;
   if (values.length < cells * stride) throw new Error(`velocity readback holds ${values.length} floats, ${cells * stride} expected`);
   const index = (x, y, z) => (Math.min(nz - 1, Math.max(0, z)) * ny + Math.min(ny - 1, Math.max(0, y))) * nx + Math.min(nx - 1, Math.max(0, x));
@@ -190,7 +207,7 @@ export function velocityBandEnergies(values, dims, { stride = 16, offset = 0, oc
   };
   const reader = arr => (x, y, z, k) => arr[index(x, y, z) * 3 + k];
   const l1 = box(at, 1), l2 = box(reader(l1), 1), l3 = box(reader(l2), 2), l4 = box(reader(l2), 4);
-  const detailRms2 = waveletDetailRms(octaves) ** 2;
+  const detailRms2 = waveletDetailRms(octaves, octaveWeights) ** 2;
   let total = 0, sub = 0, near = 0, mid = 0, large = 0, kolmogorov = 0, hash = 0x811c9dc5;
   const bits = new Uint32Array(values.buffer, values.byteOffset, values.length);
   for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
@@ -264,11 +281,14 @@ fn waveletCurlUnit(p: vec3<f32>) -> vec3<f32> {
 // Unit-amplitude detail velocity at cell-space position p: octaves on the
 // Kolmogorov slope, each 2^(-5/6) of the previous.
 fn waveletDetail(p: vec3<f32>, octaves: u32) -> vec3<f32> {
+  return waveletDetailWeighted(p, octaves, vec2<f32>(1.0));
+}
+fn waveletDetailWeighted(p: vec3<f32>, octaves: u32, weights: vec2<f32>) -> vec3<f32> {
   var out = vec3<f32>(0.0);
   var s = 1.0 / WAVELET_BASE_WAVELENGTH_CELLS;
   var w = 1.0;
   for (var i = 0u; i < min(octaves, 2u); i = i + 1u) {
-    out = out + w * waveletCurlUnit(p * s + WAVELET_OCTAVE_OFFSETS[i]);
+    if (weights[i] > 0.0) { out = out + w * weights[i] * waveletCurlUnit(p * s + WAVELET_OCTAVE_OFFSETS[i]); }
     s = s * WAVELET_LACUNARITY;
     w = w * pow(WAVELET_LACUNARITY, WAVELET_BAND_SLOPE);
   }

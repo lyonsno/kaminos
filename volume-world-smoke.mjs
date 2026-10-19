@@ -13,6 +13,15 @@ export function worldSmokeMapping(plan,anchor,fine){
   const offset=fine.translate.map((v,i)=>(v-anchor.translate[i])/anchor.scale),scale=fine.scale/anchor.scale;
   return {fineToField:[...offset,scale],renderMin:plan.min.map((v,i)=>(v-offset[i])/scale),renderMax:plan.max.map((v,i)=>(v-offset[i])/scale),renderPitch:plan.materialPitch/scale};
 }
+// Reference geometry for the optional momentum collar. Material is not copied
+// into the collar: it must actually advect out of the donor.
+export function worldTransitionSample(p,{fineDims,mapping,flowPitch,cells}){
+ const margin=2/fineDims[0],lo=[-1+margin,-1+margin,-1+margin],hi=[1-margin,2*fineDims[1]/fineDims[0]-1-margin,1-margin];
+ const q=p.map((v,i)=>(v-mapping[i])/mapping[3]),sample=q.map((v,i)=>Math.min(hi[i],Math.max(lo[i],v)));
+ const delta=q.map((v,i)=>v-sample[i]),distance=Math.hypot(...delta)*mapping[3];
+ const t=cells>0?Math.min(1,distance/(cells*flowPitch)):1;
+ return {sample:sample.map((v,i)=>v*mapping[3]+mapping[i]),normal:delta.map(v=>distance>0?v*mapping[3]/distance:0),weight:distance>0?1-t*t*(3-2*t):0};
+}
 
 export const WORLD_SMOKE_WGSL=/* wgsl */`
 struct Params {
@@ -37,9 +46,28 @@ ${REACTANT_COMBUSTION_WGSL}
 ${SOOT_BURNOUT_WGSL}
 fn idx(c:vec3<i32>,d:vec3<f32>)->u32{return u32(c.x)+u32(d.x)*(u32(c.y)+u32(d.y)*u32(c.z));}
 fn inside(c:vec3<i32>,d:vec3<f32>)->bool{return all(c>=vec3<i32>(0))&&all(c<vec3<i32>(d));}
-fn blocked(c:vec3<i32>)->bool{return inside(c,u.flow.xyz)&&textureLoad(solids,c,0).x!=0u;}
+fn blocked(c:vec3<i32>)->bool{if(u.time.w<.5){return false;}return inside(c,u.flow.xyz)&&textureLoad(solids,c,0).x!=0u;}
 fn finePoint(p:vec3<f32>)->vec3<f32>{return (p-u.mapping.xyz)/u.mapping.w;}
 fn donor(p:vec3<f32>)->bool{let q=finePoint(p);let margin=2.0/u.near.x;return all(q>=vec3<f32>(-1.0+margin))&&all(q<=vec3<f32>(1.0-margin,2.0*u.near.y/u.near.x-1.0-margin,1.0-margin));}
+// u.lo.w is the collar width in coarse flow cells. Only outward donor momentum
+// is continued; no radial force is invented. The usual whole-world pressure
+// projection follows, so this is not an independent shell pressure solve.
+fn collarVelocity(p:vec3<f32>,advected:f32,a:u32)->f32{
+ if(u.lo.w<=0.0){return advected;}
+ let margin=2.0/u.near.x;
+ let q=finePoint(p);let edge=clamp(q,vec3<f32>(-1.0+margin),vec3<f32>(1.0-margin,2.0*u.near.y/u.near.x-1.0-margin,1.0-margin));
+ let delta=q-edge;let distance=length(delta)*u.mapping.w;
+ let width=u.lo.w*u.flow.w;if(distance<=0.0||distance>=width){return advected;}
+ let sample=edge*u.mapping.w+u.mapping.xyz;
+ // Do not extend momentum through an intervening coarse obstacle.
+ if(length(clipped(p,sample)-sample)>1e-5){return advected;}
+ var source=vec3<f32>(0);
+ for(var k=0u;k<3u;k++){var offset=vec3<f32>(.5);if(u.near.w>.5){offset[k]=1.0;}source[k]=fineSlot(sample,0u,offset)[k]*2.0/u.near.x*u.mapping.w;}
+ if(dot(source,delta)<=0.0){return advected;}
+ let weight=1.0-smoothstep(0.0,width,distance);
+ let relaxation=1.0-pow(1.0-weight,max(u.time.x,0.0));
+ return mix(advected,source[a],relaxation);
+}
 fn fineSlot(p:vec3<f32>,slot:u32,offset:vec3<f32>)->vec4<f32>{
  let q=(finePoint(p)+vec3<f32>(1))*u.near.x*.5-offset;let base=vec3<i32>(floor(q));let f=fract(q);var value=vec4<f32>(0);
  for(var z=0;z<2;z++){for(var y=0;y<2;y++){for(var x=0;x<2;x++){
@@ -81,6 +109,7 @@ fn gas(p:vec3<f32>)->Gas{
 // Voxel traversal stops characteristics at coarse solid boundaries, rather than
 // allowing a long backtrace to tunnel through an obstacle.
 fn clipped(p:vec3<f32>,q:vec3<f32>)->vec3<f32>{
+ if(u.time.w<.5){return q;}
  let a=(p-u.lo.xyz)/u.flow.w;let b=(q-u.lo.xyz)/u.flow.w;let delta=b-a;let direction=sign(delta);var c=vec3<i32>(floor(a));
  let inv=1.0/max(abs(delta),vec3<f32>(1e-12));var tmax=select(a-floor(a),floor(a)+1.0-a,delta>vec3<f32>(0))*inv;
  loop{var k=0u;if(tmax.y<tmax[k]){k=1u;}if(tmax.z<tmax[k]){k=2u;}let t=tmax[k];if(t>=1.0){break;}c[k]+=i32(direction[k]);if(blocked(c)){return mix(p,q,max(0.0,t-1e-5));}tmax[k]+=inv[k];}
@@ -92,6 +121,7 @@ fn clipped(p:vec3<f32>,q:vec3<f32>)->vec3<f32>{
  let p=center+vec3<f32>(axis(a))*.5*u.flow.w;let back=clipped(p,p-velocity(p)*u.time.y);v[a]=velocity(back)[a];
  if(a==1u){v[a]+=gas(p).a.y*u.time.z*u.time.x;}
  if(donor(p)){var o=vec3<f32>(.5);if(u.near.w>.5){o[a]=1;}v[a]=fineSlot(p,0u,o)[a]*2.0/u.near.x*u.mapping.w;}
+ else{v[a]=collarVelocity(p,v[a],a);}
  if(blocked(c)||blocked(c+axis(a))){v[a]=0;}
  }vout[idx(c,u.flow.xyz)]=vec4<f32>(v,0);
 }
@@ -107,21 +137,29 @@ fn divergence(c:vec3<i32>)->f32{var d=0.0;for(var a=0u;a<3u;a++){d+=face(c,a)-fa
  for(var a=0u;a<3u;a++){let n=c+axis(a);var next=0.0;if(inside(n,u.flow.xyz)){next=pin[idx(n,u.flow.xyz)];}v[a]-=(next-pin[i])/u.flow.w;if(blocked(c)||blocked(n)){v[a]=0;}}
  vout[i]=vec4<f32>(v,0);
 }
+fn storeMaterial(c:vec3<i32>,i:u32,p:vec3<f32>,value:Gas){
+ var r=value;
+ if(blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){r=Gas(vec4<f32>(0),vec4<f32>(0));}
+ gout[i]=r;textureStore(optical,c,vec4<f32>(r.a.xyz,r.b.x));
+}
 @compute @workgroup_size(4,4,4) fn transportMaterial(@builtin(global_invocation_id) gid:vec3<u32>){
  let c=vec3<i32>(gid);if(!inside(c,u.material.xyz)){return;}let i=idx(c,u.material.xyz);let p=u.lo.xyz+(vec3<f32>(c)+.5)*u.material.w;
+ if(donor(p)){
+   let m=fineSlot(p,1u,vec3<f32>(.5));let chemical=fineBurn(p);let r=Gas(vec4<f32>(m.xyz,chemical.x),vec4<f32>(chemical.y,0,0,0));
+   storeMaterial(c,i,p,r);return;
+ }
  var r=gas(clipped(p,p-velocity(p)*u.time.y));
  if(reactantLawOn()){
    let dt=u.time.x;let w=reactantExchangeWeightFor(dt);var neighbors=vec4<f32>(0);
-   for(var a=0u;a<3u;a++){let off=vec3<f32>(axis(a))*u.material.w;neighbors+=gas(clipped(p,p+off)).a+gas(clipped(p,p-off)).a;}
+   for(var a=0u;a<3u;a++){
+     if(u.time.w<.5){neighbors+=gasCell(c+axis(a)).a+gasCell(c-axis(a)).a;}
+     else{let off=vec3<f32>(axis(a))*u.material.w;neighbors+=gas(clipped(p,p+off)).a+gas(clipped(p,p-off)).a;}
+   }
    r.a=max(vec4<f32>(0),r.a*(1.0-6.0*w)+neighbors*w);
    let burned=reactantBurn(r.a.z,r.a.w,r.a.y,dt);r.a=vec4<f32>((r.a.x+burned.w*u.reactant_combustion_b.z)*reactantSootSurvival(dt),burned.z*reactantCoolingSurvival(dt),burned.x,burned.y);
    r.a.x*=sootBurnoutSurvival(r.a.y,r.a.w,dt);r.b.x=burned.w/max(dt,1e-6);
  }else{r.a.x*=pow(.990,u.time.x);r.a.y*=pow(.982,u.time.x);r.b.x=0;}
- if(donor(p)){
-   let m=fineSlot(p,1u,vec3<f32>(.5));let chemical=fineBurn(p);r.a=vec4<f32>(m.xyz,chemical.x);r.b=vec4<f32>(chemical.y,0,0,0);
- }
- if(blocked(vec3<i32>(floor((p-u.lo.xyz)/u.flow.w)))){r=Gas(vec4<f32>(0),vec4<f32>(0));}
- gout[i]=r;textureStore(optical,c,vec4<f32>(r.a.xyz,r.b.x));
+ storeMaterial(c,i,p,r);
 }
 `;
 
@@ -142,11 +180,12 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid;
   const values=new Float32Array(44);
   return {optical,plan,anchor,
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,solids=solidTexture??fallback,collisionSource=null}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null}){
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
+      if(![0,1,2].includes(transitionCells))throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
       const mapping=worldSmokeMapping(plan,anchor,transform);
-      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,0,time.dtScale,time.backtraceScale,buoyancy,0]);
+      values.set([...plan.flowDims,plan.flowPitch,...plan.materialDims,plan.materialPitch,...fineDims,fineVelocityMode==='staggered'?1:0,...mapping.fineToField,...plan.min,transitionCells,time.dtScale,time.backtraceScale,buoyancy,solids===fallback?0:1]);
       values.set(reactantCombustionUniformValues(reactant),24);
       // Diffusivity is in fine-local length units; scale to the anchored field.
       if(reactant?.effective?.admitted)values[27]=reactant.effective.model.exchangeDiffusivity*mapping.fineToField[3]**2/plan.materialPitch**2;
@@ -159,7 +198,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
       for(let i=0;i<iterations;i++){run('pressure',plan.flowDims);p=1-p;}
       run('project',plan.flowDims);v=1-v;
       run('transportMaterial',plan.materialDims);m=1-m;steps++;
-      return {identity:'world-smoke-one-way-v0',steps,flowDims:plan.flowDims,materialDims:plan.materialDims,anchor,pressureIterations:iterations,fineVelocityMode,fineFeedback:false,materialLaw:reactant?.effective?.admitted?'reactant-v0':'passive-authored',handoff:'interior-overwrite-not-conservative-flux',collision:solids===fallback?'empty-fallback':'coarse-resident-mask',collisionSource:solids===fallback?null:collisionSource,collisionVerification:solids===fallback?'empty-by-construction':'submitted-unverified',worldAnchored:true};
+      return {identity:'world-smoke-one-way-v0',steps,flowDims:plan.flowDims,materialDims:plan.materialDims,anchor,pressureIterations:iterations,transitionCells,transitionLaw:transitionCells?'outward-momentum-collar-before-projection':'none',fineVelocityMode,fineFeedback:false,materialLaw:reactant?.effective?.admitted?'reactant-v0':'passive-authored',handoff:'interior-overwrite-not-conservative-flux',collision:solids===fallback?'empty-fallback':'coarse-resident-mask',collisionSource:solids===fallback?null:collisionSource,collisionVerification:solids===fallback?'empty-by-construction':'submitted-unverified',worldAnchored:true};
     },
     destroy(){for(const x of [...flows,...materials,...pressures,uniform,optical,fallback])x?.destroy();groups.clear();}
   };

@@ -1598,8 +1598,18 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <div class="slider-row">
         <span class="slider-label" title="Multiplier on the Kolmogorov target amplitude. 1 = the cascade expectation from the resolved 8–11-cell motion; above 1 exaggerates the sub-grid detail on purpose.">Wavelet strength</span>
-        <input type="range" id="volume-wavelet-strength" min="0.25" max="4" step="any" value="1">
+        <input type="range" id="volume-wavelet-strength" min="0.25" max="16" step="any" value="1">
         <span class="slider-val" id="volume-wavelet-strength-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Relative weight of four-cell detail. 1 preserves the original spectral weight; 0 removes this octave.">Four-cell octave weight</span>
+        <input type="range" id="volume-wavelet-octave1-weight" min="0" max="1" step="any" value="1">
+        <span class="slider-val" id="volume-wavelet-octave1-weight-val">1.00</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label" title="Relative weight of two-cell detail, on top of the existing spectral falloff. Ignored when octave count is one.">Two-cell octave weight</span>
+        <input type="range" id="volume-wavelet-octave2-weight" min="0" max="1" step="any" value="1">
+        <span class="slider-val" id="volume-wavelet-octave2-weight-val">1.00</span>
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
@@ -2856,6 +2866,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row"><span class="slider-label">World flow width</span><select id="volume-world-smoke-flow" class="select-input" data-volume-settings-param="volume_world_smoke_flow"><option>8</option><option selected>16</option><option>24</option><option>32</option></select></div>
     <div class="slider-row"><span class="slider-label">World material width</span><select id="volume-world-smoke-material" class="select-input" data-volume-settings-param="volume_world_smoke_material"><option>16</option><option selected>32</option><option>48</option><option>64</option></select></div>
     <div class="slider-row"><span class="slider-label">World extent / fine width</span><select id="volume-world-smoke-extent" class="select-input" data-volume-settings-param="volume_world_smoke_extent"><option>2</option><option selected>3</option><option>4</option><option>6</option></select></div>
+    <div class="slider-row"><span class="slider-label" title="Experimental: continue outward fine-grid velocity into a narrow coarse collar before world pressure projection. No extra material or radial kick.">Momentum collar</span><select id="volume-world-smoke-transition" class="select-input" data-volume-settings-param="volume_world_smoke_transition"><option value="0" selected>Off (baseline)</option><option value="1">1 coarse cell</option><option value="2">2 coarse cells</option></select></div>
     <span class="slider-help">Experimental world-anchored smoke: independent coarse flow/pressure and finer material transport/reaction. Requires reactant emission. One-way fine-to-world transfer; no pressure feedback into the flame. World dimensions restart only the world field. Material width must be at least flow width. Bounds anchor when enabled; a fine-grid rebuild clears this experimental field.</span>
     <span class="slider-help">First material/dynamics separation checkpoint: only pressure is cheaper. Material transport, reaction, forces, lighting and rendering keep their current resolution and cadence. Half dimensions gives 1/8 as many pressure cells, with coarser obstacle boundaries. Requires converged pressure; floor-inflow and joined routes retain original pressure with an explicit reason. Switch live without clearing the flame. Same resolution is the transfer parity control.</span>
     <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1.0 the divergence converges to the target S, and a partial projection leaves (1 − gain) × D(v_before) + gain × S. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
@@ -17535,7 +17546,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'physicalSootBurnoutKelvin', id: 'volume-physical-soot-burnout-kelvin', param: 'volume_physical_soot_burnout_kelvin', min: 600, max: 3000, continuous: true, decimals: 0 },
   { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
-  { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
+  { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 16, continuous: true, decimals: 2 },
+  { key: 'waveletOctave1Weight', id: 'volume-wavelet-octave1-weight', param: 'volume_wavelet_octave1_weight', min: 0, max: 1, continuous: true, decimals: 2 },
+  { key: 'waveletOctave2Weight', id: 'volume-wavelet-octave2-weight', param: 'volume_wavelet_octave2_weight', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalColorMode', id: 'volume-physical-mode', param: 'volume_physical_mode', min: 0, max: 2, continuous: false, decimals: 0 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
@@ -17767,7 +17780,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
   ['pressureResolution', 'volume_pressure_resolution'],
-  ['worldSmoke', 'volume_world_smoke'], ['worldSmokeFlow', 'volume_world_smoke_flow'], ['worldSmokeMaterial', 'volume_world_smoke_material'], ['worldSmokeExtent', 'volume_world_smoke_extent'],
+  ['worldSmoke', 'volume_world_smoke'], ['worldSmokeFlow', 'volume_world_smoke_flow'], ['worldSmokeMaterial', 'volume_world_smoke_material'], ['worldSmokeExtent', 'volume_world_smoke_extent'], ['worldSmokeTransition', 'volume_world_smoke_transition'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
   ['confinement', 'volume_confinement'],
@@ -19409,6 +19422,7 @@ function readVolumeControls() {
     worldSmokeFlow: Number(document.getElementById('volume-world-smoke-flow').value),
     worldSmokeMaterial: Number(document.getElementById('volume-world-smoke-material').value),
     worldSmokeExtent: Number(document.getElementById('volume-world-smoke-extent').value),
+    worldSmokeTransition: Number(document.getElementById('volume-world-smoke-transition').value),
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -21003,7 +21017,7 @@ async function initKaminosVolumeRoute() {
     ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
     ['volume-pressure-resolution', 'volume_pressure_resolution'],
-    ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'],
+    ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -21408,7 +21422,7 @@ async function initKaminosVolumeRoute() {
     'volume-fixed-source-dephase',
     'volume-pressure-solver',
     'volume-pressure-resolution',
-    'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent',
+    'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',

@@ -113,9 +113,11 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
     ['volume-pressure-resolution','Pressure grid (experimental)'],
     ['volume-wavelet-turbulence','Wavelet turbulence'], ['volume-wavelet-octaves','Wavelet octaves'], ['volume-wavelet-strength','Wavelet strength'],
+    ['volume-wavelet-octave1-weight','Four-cell octave weight'], ['volume-wavelet-octave2-weight','Two-cell octave weight'],
   ] },
   { name:'World smoke', view:'quality', open:true, scope:'One-way, world-anchored field. Changing its dimensions resets only this field; fine pressure stays independent. Material width must be ≥ flow width.', fields:[
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
+    ['volume-world-smoke-transition','Momentum collar (experimental)'],
   ] },
   { name:'Appearance', view:'look', open:true, fields:[
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
