@@ -22737,7 +22737,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
   const state=structuredClone({domControls:preset.domControls,rendererControls:preset.rendererControls,
     presentationControls:preset.presentationControls,
     sourcePose:flameEmitterPose,
-    source:source ? {presetId:source.presetId,label:source.label,preset:source.preset} : null});
+    source:source ? {presetId:source.presetId,label:source.label,preset:structuredClone(source.preset)} : null});
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
