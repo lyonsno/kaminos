@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createFingerFluidTruthScenePopulation, createWebGPUFingerFluidSolver } from '../finger-fluid-webgpu-core.js';
+import { createFingerFluidTruthScenePopulation, createWebGPUFingerFluidSolver, resolveFingerFluidPressureOptimizations } from '../finger-fluid-webgpu-core.js';
 
 const shaderSource = readFileSync(new URL('../finger-fluid-webgpu-core.js', import.meta.url), 'utf8');
 const browserSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -21,7 +21,9 @@ assert.ok(browserSource.includes("params.get('finger_fluid_density_cell_rejectio
 assert.ok(browserSource.includes('densityCellRejection: fingerFluidBenchConfig.effectiveDensityCellRejection'), 'the browser forwards the effective switch to the solver');
 assert.ok(browserSource.includes('effectiveDensityCellRejection: requestedDensityCellRejection && !requestedAdaptiveDensity'), 'adaptive-density route explicitly downgrades the uniform-volume cull');
 assert.ok(browserSource.includes('gpuState.effectiveDensityCellRejection = gpuState.densityCellRejection'), 'debug evidence reports the effective route');
-assert.match(shaderSource, /const safeDensityCellRejection = densityCellRejection === true && !safeAdaptiveDensity;/, 'direct API marks the adaptive bypass ineffective');
+assert.equal(resolveFingerFluidPressureOptimizations({adaptiveDensity:true,densityCellRejection:true}).densityCellRejection,false,'adaptive density bypasses the cull');
+assert.equal(resolveFingerFluidPressureOptimizations({pressureSolver:'ipbf',densityCellRejection:true}).densityCellRejection,false,'IPBF preserves its full support search');
+assert.equal(resolveFingerFluidPressureOptimizations({densityCellRejection:true}).densityCellRejection,true,'fixed PBF retains requested cull');
 await assert.rejects(createWebGPUFingerFluidSolver({ densityCellRejection: 1 }), /density cell rejection must be a boolean/, 'the direct API rejects a silently downgraded switch');
 
 // f32 grid-coordinate arithmetic can assign a contributing particle just

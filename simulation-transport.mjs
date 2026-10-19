@@ -25,6 +25,7 @@ export function createSimulationTransport(adapter){
   read,state:()=>({busy,disposed}),
   toggle:()=>run(async()=>{await adapter.pause(!read().paused);return read();}),
   rate:value=>run(async()=>{if(!Number.isFinite(value)||value<=0)throw Error('Playback rate must be finite and positive');await adapter.rate(value);return read();}),
+  cadence:value=>run(async()=>{if(!adapter.cadence)throw Error('Playback cadence capability unavailable');await adapter.cadence(value);return read();}),
   step:direction=>run(()=>{if(![-1,1].includes(direction))throw Error('Step direction must be -1 or 1');return seekStep(Math.max(0,read().step+direction));}),
   seek:seconds=>run(()=>{if(!Number.isFinite(seconds)||seconds<0)throw Error('Seek requires nonnegative simulated seconds');const n=Math.round(seconds/read().dt);if(!Number.isSafeInteger(n))throw Error('Target tick is not representable');return seekStep(n);}),
   replay:()=>run(async()=>{await adapter.pause(true);await adapter.restart();await adapter.pause(true);return read();}),
