@@ -13,6 +13,7 @@ import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
 import {createFireShadowCasters} from './fire-shadow-casters.mjs';
 import {createFireSmokeShadow,smokeShadowPlan} from './fire-smoke-shadow.mjs';
+import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
 
 // Opt-in prototype. Smoke retains distributed transport. Surfaces consume a
 // live GPU reduction of that same source, with independent raster visibility.
@@ -27,6 +28,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     smokeShadowPlan({steps:Math.max(1,steps),resolution,count},device.limits);
   };
   validateSmoke(smokeShadowSteps,smokeShadowResolution);
+  const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
   const {uniform,vec2,vec3,textureLoad,ivec2,positionWorld,normalWorld,screenCoordinate,Fn,If}=THREE.TSL;
   const translation=uniform(new THREE.Vector3()),scale=uniform(1),surfaceGain=uniform(1);
   const surfaceOn=uniform(surfaceEnabled,'bool');
@@ -156,7 +158,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       }
       // Even legacy smoke display may request scattered contribution to the
       // surface points; the gather owns that once-scattered source and gain.
-      frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed'});
+      const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
+      frame=gather.encode(field.source,{gain,sourceSoftness,surfaceScattering,smokeEnabled:smokeMode==='distributed',environment});
       const reduction=surfaceEnabled?points.encode(gather.transportSource()):null;
       const medium=surfaceEnabled&&smokeShadow?smokeShadow.encode(field.source,reduction):null;
       if(surfaceEnabled){
@@ -236,7 +239,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         }
         for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
       }
-      originals.clear();releasePoints();gather?.destroy();casterScene.dispose();
+      originals.clear();releasePoints();gather?.destroy();casterScene.dispose();smokeEnvironment.dispose();
       };
       if(rebuildTask)rebuildTask.then(cleanup,cleanup);else {cleanup();rebuild?.hold(false);}
     },

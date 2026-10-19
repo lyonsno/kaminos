@@ -9,8 +9,10 @@ import {validateSceneSourceTransform,sceneSourceLocalPoint,sceneSourceDomain,sce
 import {surfaceReceiverLayout,validateReceiverSpacing} from './scene-surface-receivers.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from './scene-light-inspection.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
+import {createSceneSmokeEnvironment} from './scene-smoke-environment.mjs';
 
 export function mountDistributedSceneRadiance({renderer,scene,prototype,device,directions=24,volumeGrid=16,getSourceGuide=null,onStatus=()=>{}}) {
+  const smokeEnvironment=createSceneSmokeEnvironment({renderer,scene,device});
   let gain=1,smokeMode='distributed',sourceSoftness=0,handle=null,revision=null,frame=null,external=null,externalBack=null,disposed=false;
   const originals=new Map();
   const editing=new Set();let editCommitted=false,rebuildAnnounced=false,retainComparisons=false;
@@ -191,7 +193,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
         if(!getSourceGuide)throw new Error('emitter-informed sampling requires an authored emitter descriptor');
         handle.setSourceGuide(deriveSourceGuide(getSourceGuide(),sourceTransform,sourceDomain));
       }
-      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering});
+      const environment=smokeMode==='distributed'||surfaceScattering?smokeEnvironment.frame():null;
+      frame=handle.encode(field.source,{gain,smokeEnabled:smokeMode==='distributed',sourceSoftness,surfaceReconstruction,surfaceScattering,environment});
     } catch(error) {
       status.status='preparation-failed';status.error=String(error.message);
       onStatus({...status});throw error;
@@ -252,7 +255,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       return result;
     },
     canRender(){return !disposed&&!status.error&&handle&&frame?.generation===prototype.sceneVolumeSourceField().generation;},
-    dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();},
+    dispose(){disposed=true;prototype.setSceneSourceFrameConsumer(null);retire();smokeEnvironment.dispose();},
   };
 }
 function lightingCount(value){if(!Number.isInteger(value)||value<2||value%2)throw new Error('even angular sample count required');}
