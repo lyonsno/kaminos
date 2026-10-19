@@ -10,7 +10,16 @@ export function checkedRenderOutput(raw){
  if(value.cameraId!==null&&(typeof value.cameraId!=='string'||!value.cameraId))throw Error('Choose an output camera');
  if(!['scene','full','preview'].includes(value.quality))throw Error('Unknown output quality');
  if(typeof value.filename!=='string'||!value.filename.trim()||/[\\/\x00-\x1f]/.test(value.filename)||value.filename==='.'||value.filename==='..')throw Error('Enter a filename without a folder path');
- value.filename=value.filename.trim().replace(/\.png$/i,'')+'.png';
+ if(value.kind==='recording')value.recording=checkedRecordingOptions(value.recording);
+ const extension=value.kind==='recording'&&value.recording.format==='mp4'?'mp4':'png';
+ value.filename=value.filename.trim().replace(/\.(png|mp4)$/i,'')+'.'+extension;
+ return value;
+}
+export function checkedRecordingOptions(raw={}){
+ const value={frames:120,fps:24,format:'mp4',columns:4,tileWidth:320,...structuredClone(raw)};
+ for(const key of ['frames','columns','tileWidth'])if(!Number.isSafeInteger(value[key])||value[key]<1)throw Error(`${key} needs a positive whole number`);
+ if(!Number.isFinite(value.fps)||value.fps<=0)throw Error('FPS must be positive');
+ if(!['mp4','filmstrip'].includes(value.format))throw Error('Choose MP4 or PNG filmstrip');
  return value;
 }
 export function outputPixels(raw){
@@ -51,7 +60,7 @@ export function captureStill(host){
  let busy=false;
  return async(raw,{signal}={})=>{
   if(busy)throw Error('A still capture is already in progress');
-  const settings=checkedRenderOutput(raw),pixels=outputPixels(settings);signal?.throwIfAborted();busy=true;
+  const settings=checkedRenderOutput(raw);if(settings.kind==='recording')throw Error('Use viewport recording for this output preset');const pixels=outputPixels(settings);signal?.throwIfAborted();busy=true;
   let session,result,failure;
   try{
    session=await host.begin({settings,pixels,signal});signal?.throwIfAborted();
