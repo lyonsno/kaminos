@@ -1,4 +1,5 @@
 import { Euler, Vector3 } from './lib/three.core.js';
+import { normalizeAuthoredWaterDrop, normalizeAuthoredWaterSampling } from './authored-water-drop.mjs';
 
 export const LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v1';
 export const LEGACY_LOCAL_LIQUID_SCHEMA = 'kaminos.local-liquid-setup.v0';
@@ -36,6 +37,12 @@ export function normalizeLocalLiquidEmitterPose(value) {
 
 export function normalizeLocalLiquidEmitter(value, pose = null) {
   if (!value || value.schema !== LOCAL_LIQUID_EMITTER_SCHEMA) throw Error('Unsupported local liquid emitter settings');
+  const mode=value.mode??'continuous';
+  if(!['continuous','finite_drop'].includes(mode))throw Error('Unknown water source mode');
+  if(mode==='finite_drop'){
+    if(pose)normalizeLocalLiquidEmitterPose(pose);
+    return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius??.08,strength:value.strength??1.15,rate:value.rate??1200,mode,drop:normalizeAuthoredWaterDrop(value.drop)};
+  }
   for (const key of ['baseRadius','strength','rate']) {
     if (!Number.isFinite(value[key])) throw Error(`Invalid local liquid emitter ${key}`);
   }
@@ -47,7 +54,7 @@ export function normalizeLocalLiquidEmitter(value, pose = null) {
     const radius=value.baseRadius*checked.scale[0];
     if (radius < .035 || radius > .18) throw Error('Water emitter aperture must stay between 0.035 and 0.18');
   }
-  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate};
+  return {schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:value.baseRadius,strength:value.strength,rate:value.rate,...(Object.hasOwn(value,'mode')?{mode}: {})};
 }
 
 function normalizeLegacySetup(value) {
@@ -68,7 +75,7 @@ function normalizeLocalLiquidSetupCore(value) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
   return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
-    showSupportGeometry:value.showSupportGeometry??true};
+    showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
 }
 
 export function normalizeLocalLiquidSetup(value) {
@@ -95,15 +102,15 @@ export function localLiquidInletPacket(setup, sceneEmitters = [], generation = 1
   if(!checked)throw Error('Local liquid setup is required to create an inlet packet');
   if(checked.legacySource)throw Error('Legacy local liquid source must migrate into a scene emitter before mounting');
   if(!Array.isArray(sceneEmitters))throw Error('Local liquid emitters must be an array');
-  if(sceneEmitters.length>LOCAL_LIQUID_EMITTER_CAPACITY) {
-    throw Error(`Local liquid emitter count ${sceneEmitters.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
-  }
-  const emitters=sceneEmitters.map((record,index)=>{
-    if(record?.type!==LOCAL_LIQUID_EMITTER_TYPE || typeof record.id!=='string' || !record.id) {
-      throw Error(`Invalid local liquid emitter scene object at index ${index}`);
-    }
+  const sources=sceneEmitters.map((record,index)=>{
+    if(record?.type!==LOCAL_LIQUID_EMITTER_TYPE || typeof record.id!=='string' || !record.id)throw Error(`Invalid local liquid emitter scene object at index ${index}`);
     const pose=normalizeLocalLiquidEmitterPose(record.transform);
     const settings=normalizeLocalLiquidEmitter(record.localLiquidEmitter,pose);
+    return {record,pose,settings};
+  });
+  const inlets=sources.filter(source=>source.settings.mode!=='finite_drop');
+  if(inlets.length>LOCAL_LIQUID_EMITTER_CAPACITY)throw Error(`Local liquid emitter count ${inlets.length} exceeds retained solver capacity ${LOCAL_LIQUID_EMITTER_CAPACITY}`);
+  const emitters=inlets.map(({record,pose,settings})=>{
     const radius=settings.baseRadius*pose.scale[0];
     const aim=new Vector3(0,0,1).applyEuler(new Euler(...pose.rotation)).normalize().toArray();
     return {id:record.id,active:settings.rate>0,emission_state:settings.rate>0?'jet':'off',

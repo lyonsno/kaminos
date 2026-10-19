@@ -357,7 +357,7 @@ assert.match(
 );
 assert.match(
   source,
-  /providerExecution:\s*lastHostFrameCompositionEvidence[\s\S]*host_scene_color_depth_environment_bound_toy_world_suppressed_v0/,
+  /providerExecution:\s*lastHostFrameCompositionEvidence[\s\S]*host_camera_depth_radiance_query_v1/,
   'optical evidence must distinguish the bound host scene from the producer control',
 );
 assert.match(
