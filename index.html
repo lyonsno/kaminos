@@ -11512,6 +11512,7 @@ async function initScene() {
   scenePlacementTools.edits.subscribe(releaseUnreferencedSceneMembershipObjects);
   installAuthoringParameterEditing();
   const upgradedRangeFields=installLegacyRangeFields({root:document,installNumberDrag:installRelativeNumberDrag,
+    unboundedMax:source=>source.id==='volume-immersed-radius',
     beforeEdit:()=>authoringControlSessions.forEach(session=>session.commit())});
   scenePlacementTools.edits.subscribe(state=>{if(!state.active)for(const field of upgradedRangeFields)field.scrub.stop();});
   window.kaminosSceneEdits = scenePlacementTools.edits;
@@ -16493,6 +16494,7 @@ function setVolumeControlValue(id, value) {
   }
   const el = document.getElementById(id);
   if (!el) return;
+  if(id==='volume-immersed-radius'&&Number.isFinite(Number(value)))el.max=String(Math.max(Number(el.max)||0,Number(value)));
   if (el.type === 'checkbox') {
     el.checked = value === true || ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
     return;
@@ -16517,6 +16519,7 @@ function setVolumeColorControlValue(id, value, fallback) {
 // step to any rather than snapping, and is recorded.
 function applyVolumeRangeSavedValue(el, value) {
   if (!el || !Number.isFinite(value)) return;
+  if(el.id==='volume-immersed-radius')el.max=String(Math.max(Number(el.max)||0,value));
   const min = el.min === '' ? -Infinity : Number(el.min);
   const max = el.max === '' ? Infinity : Number(el.max);
   const held = Math.min(max, Math.max(min, value));
@@ -21586,8 +21589,8 @@ function flameSettingsStateProblems(state) {
   }
   return problems;
 }
-// Values outside a control's range, and an immersed radius the source scale
-// takes outside [0.02, 0.5]. Operator, 2026-10-18: an out-of-range basin value
+// Values outside a control's range, and an immersed radius below its positive
+// numerical floor. Operator, 2026-10-18: an out-of-range basin value
 // is not a reason to ban the basin; it is clamped where it is applied (range
 // inputs clamp on write, the source clamps its radius) and the page says so.
 function flameSettingsStateClamps(state) {
@@ -21596,7 +21599,7 @@ function flameSettingsStateClamps(state) {
     for(const [id,descriptor] of Object.entries(state?.[axis]||{})) {
       if(!descriptor||typeof descriptor!=='object'||id==='volume-render-scale')continue;
       // An immersed source's radius is reported once, below, as the scaled aperture.
-      if(id==='volume-immersed-radius'&&state.domControls?.['volume-emitter-source-law']?.value==='immersed-source')continue;
+      if(id==='volume-immersed-radius')continue;
       const source=document.getElementById(id);
       if(!source||!['range','number'].includes(source.type))continue;
       const value=Number(descriptor.rawValue??descriptor.value);
@@ -21609,7 +21612,7 @@ function flameSettingsStateClamps(state) {
     const radius=state.domControls['volume-immersed-radius'];
     const clamp=immersedRadiusClamp({immersedRadius:Number(radius?.rawValue??radius?.value)},
       flamePoseToDomain(state.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale));
-    if(clamp)clamps.push({id:'volume-immersed-radius',message:`scaled immersed source radius ${+clamp.requested.toFixed(4)} is outside 0.02 to 0.5; clamped to ${clamp.applied}`});
+    if(clamp)clamps.push({id:'volume-immersed-radius',message:`scaled immersed source radius ${+clamp.requested.toFixed(4)} is below 0.02; clamped to ${clamp.applied}`});
   }
   return clamps;
 }
@@ -21626,10 +21629,11 @@ function clampedFlameSettingsState(state) {
       if(!source||!['range','number'].includes(source.type))continue;
       const value=Number(descriptor.rawValue??descriptor.value);
       if(!Number.isFinite(value))continue;
-      const min=source.min===''?-Infinity:Number(source.min),max=source.max===''?Infinity:Number(source.max);
+      const bounds=id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(next.sourcePose||flameEmitterPose,flameDomainTranslation,flameDomainScale)):null;
+      const min=bounds?bounds.min:source.min===''?-Infinity:Number(source.min),max=bounds?.max===null?Infinity:source.max===''?Infinity:Number(source.max);
       if(value>=min&&value<=max)continue;
-      let raw=String(value<min?source.min:source.max);
-      if(typeof source.cloneNode==='function'){const probe=source.cloneNode();probe.step='any';probe.value=raw;raw=probe.value;}
+      let raw=String(value<min?min:max);
+      if(typeof source.cloneNode==='function'){const probe=source.cloneNode();probe.step='any';if(bounds)probe.min=String(min);probe.value=raw;raw=probe.value;}
       descriptor.value=Number(raw);if('rawValue' in descriptor||source.type==='range')descriptor.rawValue=raw;
     }
   }
