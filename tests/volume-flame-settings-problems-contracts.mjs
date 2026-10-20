@@ -18,7 +18,7 @@ assert.ok(problemsSource, 'a problem lister exists');
 assert.ok(checkSource, 'the edit check exists');
 
 const controls = {
-  'volume-shell-inspect-mode': { tagName: 'SELECT', type: 'select-one', options: [{ value: 'shell' }, { value: 'thermal' }] },
+  'volume-reaction-live-view': { tagName: 'SELECT', type: 'select-one', options: [{ value: 'shell' }, { value: 'thermal' }] },
   'volume-emitter-aperture-pattern': { tagName: 'SELECT', type: 'select-one', options: [{ value: 'shape' }, { value: 'jets' }] },
   'volume-density': { tagName: 'INPUT', type: 'range', min: '0', max: '2' },
   'volume-render-scale': { tagName: 'INPUT', type: 'range', min: '0.1', max: '0.3' },
@@ -28,7 +28,7 @@ const state = (dom, smoke = 'on') => ({
   rendererControls: {},
   presentationControls: { 'raymarch-smoke-presentation': { value: smoke } },
 });
-let current = state({ 'volume-shell-inspect-mode': 'shell', 'volume-emitter-aperture-pattern': 'shape', 'volume-density': 1, 'volume-render-scale': 1 });
+let current = state({ 'volume-reaction-live-view': 'shell', 'volume-emitter-aperture-pattern': 'shape', 'volume-density': 1, 'volume-render-scale': 1 });
 const context = vm.createContext({
   document: { getElementById: id => controls[id] || null },
   flameSettingsState: () => current,
@@ -41,9 +41,9 @@ const good = current;
 assert.deepEqual(JSON.parse(JSON.stringify(context.problems(good))), [], 'a valid state has no problems');
 assert.equal(context.check(good), good, 'the edit check passes a valid state through');
 
-current = state({ 'volume-shell-inspect-mode': '', 'volume-emitter-aperture-pattern': 'spiral', 'volume-density': 3, 'volume-render-scale': 1 }, 'maybe');
+current = state({ 'volume-reaction-live-view': '', 'volume-emitter-aperture-pattern': 'spiral', 'volume-density': 3, 'volume-render-scale': 1 }, 'maybe');
 assert.deepEqual(JSON.parse(JSON.stringify(context.problems(current))), [
-  { id: 'volume-shell-inspect-mode', message: 'Unsupported volume-shell-inspect-mode: ' },
+  { id: 'volume-reaction-live-view', message: 'Unsupported volume-reaction-live-view: ' },
   { id: 'raymarch-smoke-presentation', message: 'Invalid smoke presentation' },
 ], 'every invalid control is listed with the message the edit check gives; a kept retired pattern and Full render scale are valid');
 // Operator, 2026-10-18: an out-of-range value is clamped and warned about, never a refusal.
@@ -57,7 +57,7 @@ assert.equal(Number(clamped.domControls['volume-density'].value), 2);
 assert.equal(String(clamped.domControls['volume-density'].rawValue), '2');
 assert.equal(current.domControls['volume-density'].value, 3, 'the original state is not modified');
 assert.deepEqual(JSON.parse(JSON.stringify(context.clamps(clamped))), [], 'a clamped state has nothing left to clamp');
-assert.throws(() => context.check(current), /^Error: Unsupported volume-shell-inspect-mode: $/, 'the edit check still refuses with the first problem');
+assert.throws(() => context.check(current), /^Error: Unsupported volume-reaction-live-view: $/, 'the edit check still refuses with the first problem');
 
 current = { domControls: { 'volume-density': null }, rendererControls: {}, presentationControls: { 'raymarch-smoke-presentation': null } };
 assert.deepEqual(JSON.parse(JSON.stringify(context.problems(current))).map(p => p.message), ['Invalid flame setting volume-density', 'Invalid flame setting raymarch-smoke-presentation'],
@@ -78,11 +78,11 @@ const show = grab('function showVolumeSettingsPresetStatus(');
 assert.match(show, /describeFlameSettingsProblems\(\)/, 'the status line includes the problems');
 const describeSource = grab('function describeFlameSettingsProblems(');
 const describe = vm.runInNewContext(`${describeSource}; describeFlameSettingsProblems`, { flameSettingsProblemLabel: problem => problem.id, window: { __kaminosFlameSettingsProblems: [
-  { id: 'volume-shell-inspect-mode', message: 'Unsupported volume-shell-inspect-mode: ' },
+  { id: 'volume-reaction-live-view', message: 'Unsupported volume-reaction-live-view: ' },
   { id: 'volume-density', message: 'Out of range volume-density' },
 ] } });
 assert.deepEqual(JSON.parse(JSON.stringify(describe())), {
-  text: 'FLAME EDITS REFUSED: 2 invalid controls (volume-shell-inspect-mode, volume-density); Unsupported volume-shell-inspect-mode: ; Out of range volume-density',
+  text: 'FLAME EDITS REFUSED: 2 invalid controls (volume-reaction-live-view, volume-density); Unsupported volume-reaction-live-view: ; Out of range volume-density',
   warning: true,
 }, 'the warning names every invalid control');
 // A basin clamped on load stays named in the warning until another basin replaces it.
