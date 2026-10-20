@@ -62,7 +62,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
   adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
-  familiarSeconds:180,interruptSeconds:.65,investigateSeconds:1.8,stillSeconds:.18,
+  familiarSeconds:180,interruptSeconds:.65,investigateSeconds:1.8,stillSeconds:.18,lossRate:.3,
   lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
@@ -142,7 +142,10 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    }
    const listed=interests(),ids=new Set(listed.map(x=>x.id));
    for(const [id,x] of lightSources)if(time>x.until&&focus?.id!==id)lightSources.delete(id);
-   for(const source of [...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))]){
+   const sources=[...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))];
+   // A remembered light event is not a current observation of its source.
+   for(const [id,known] of states)if(!ids.has(id)){known.memory.gap();known.previous=null;}
+   for(const source of sources){
     const m=memo(source.id),significance=source.interest,active=source.active!==false&&source.sensed!==false;
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
     // forgetting time: a restless source never stays familiar for long.
@@ -157,6 +160,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
       const state=!active?'off':source.restless?'moving':'still',learned=known.memory.observe({time,value:state});
       if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
+      else if(known.previous==='still'&&state==='moving'){m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.familiarity*=.4;m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='movement resumed';}
       known.previous=state;
      }else{known.memory.gap();known.previous=null;}
     }
@@ -204,7 +208,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
-    if(!interruption&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
+    const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
+    if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
    }
    // Idle looking around: a brief look at a spot beside the path ahead.
    if(o.idleScan&&!interruption){
@@ -219,7 +224,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      if(score>0&&time-scan.started<o.scanSeconds+o.minDwellSeconds)observations.push({id:scan.id,point:scan.point,score,reason:'looking around'});else scan=null;
     }
    }
-   const previous=focus;focus=policy.update({time,observations:interruption?[]:observations}).focus;
+   if(interruption&&observations.length){remember('resolved',time,{id:interruption.id,cause:interruption.cause,resolvedBy:observations[0].id});interruption=null;}
+   const previous=focus;focus=policy.update({time,observations}).focus;
    if(focus&&focus.id!==previous?.id){
     const c=candidates.find(x=>x.id===focus.id);
     why={cause:focus.reason,id:focus.id,label:c?.label??focus.id,since:time,familiarity:c?.familiarity??null,competitors:candidates.filter(x=>x.id!==focus.id&&x.score>0).map(x=>({id:x.id,label:x.label,cause:x.cause,score:x.score}))};
@@ -279,7 +285,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  function sense({time,samples,source=null,sourcePower=null,status='effective'}){
   if(!enabled)return;
   const valid=Array.isArray(samples)&&samples.length>0&&samples.every(x=>Number.isFinite(x.luminance)&&x.luminance>=0&&Array.isArray(x.point)&&x.point.length===3&&x.point.every(Number.isFinite));
-  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;return;}
+  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
   const dt=light.time===null?0:Math.max(0,time-light.time);
   // Light is remembered per fixed patch of ground, not per sample slot, so
@@ -310,15 +316,19 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(Number.isFinite(sourcePower)&&sourcePower>=0){
    const learned=powerHistory.observe({time,value:sourcePower});
    if(light.powerNow===null){light.powerNow=sourcePower;light.powerUsual=sourcePower;}
-   light.powerNow+=(sourcePower-light.powerNow)*fast;
+   const before=light.powerNow;light.powerNow+=(sourcePower-light.powerNow)*fast;
    surge=Math.log((light.powerNow+1e-6)/(light.powerUsual+1e-6));
-   if(surge<-o.flareAt&&powerDropArmed&&source){interrupt({id:source.id,cause:'light faded',familiarity:learned.familiarity,evidence:{power:sourcePower,now:light.powerNow,usual:light.powerUsual}},time);powerDropArmed=false;}
+   const fallRate=dt>0?(before-light.powerNow)/(Math.max(light.powerUsual,1e-6)*dt):0;
+   // Keep the evidence of a sharp fall while the short average catches up;
+   // a slow downward drift never accumulates that rate by merely lasting.
+   light.lossSpeed=Math.max(fallRate,(light.lossSpeed??0)*Math.exp(-dt/(2*o.glanceSeconds)));
+   if(surge<-o.flareAt&&light.lossSpeed>o.lossRate&&powerDropArmed&&source){interrupt({id:source.id,cause:'light faded',familiarity:learned.familiarity,evidence:{power:sourcePower,now:light.powerNow,usual:light.powerUsual,fallRate,recentFallRate:light.lossSpeed}},time);powerDropArmed=false;}
    if(surge>-o.flareAt*.5)powerDropArmed=true;
    // How fast the light is rising, per second: a sudden jump is more urgent.
    light.rise=dt>0?Math.max(0,(surge-(light.lastSurge??surge))/dt):0;light.lastSurge=surge;
    light.powerUsual+=(sourcePower-light.powerUsual)*slow;
    if(surge>o.flareAt&&light.flareArmed)flare={change:surge,rise:light.rise};
-  }else{powerHistory.gap();light.powerNow=null;light.powerUsual=null;}
+  }else{powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;}
   // A shadow from an object darkens an area: at least two neighbouring
   // patches together. One patch dipping on its own is the field's own noise.
   let shadow=null;

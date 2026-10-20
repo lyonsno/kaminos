@@ -400,7 +400,25 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
  let t=watch(a,c,10,0).t;flame.restless=false;run(a,c,1/30,t);
  assert.equal(a.read().interruption?.cause,'movement stopped','a frozen visible flame is distinct from one going out');
+ t=watch(a,c,.4,t+1/30).t;flame.restless=true;watch(a,c,.2,t);
+ assert.equal(a.read().arrested,false,'renewed motion resolves the scan after the initial arrest');
+ assert.equal(a.read().why?.cause,'movement resumed','the fresh source gives the creature a directed look');
  a.setEnabled(false);assert.equal(a.read().interruption,null,'disabling clears the interruption immediately');
+}
+{
+ const c=creature(),flame={id:'fire',point:[.8,.5,-2.5],interest:1,active:false,restless:false};let present=true;
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>present?[{...flame}]:[]});
+ let t=watch(a,c,30,0).t;flame.active=true;flame.restless=true;t=watch(a,c,2,t).t;
+ present=false;t=watch(a,c,600,t).t;present=true;flame.active=false;flame.restless=false;watch(a,c,.1,t);
+ assert.equal(a.read().interruption,null,'FC-2: reappearance cannot manufacture a cessation across an unobserved gap');
+}
+{
+ const c=creature(),source={id:'fire',point:[.8,.5,-2.5]};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});let t=0;
+ const sample=power=>{a.sense({time:t,source,sourcePower:power,samples:[{point:[0,.3,0],luminance:.1*power}]});t=watch(a,c,.25,t).t;};
+ for(let k=0;k<120;k++)sample(1);
+ for(let k=1;k<=240;k++)sample(1-k/240);
+ assert.equal(a.read().history.filter(e=>e.kind==='interrupt').length,0,'gradual dimming is not a sudden interruption');
 }
 {
  // Sensory gaps and out-of-view sources do not confer knowledge of a stop.

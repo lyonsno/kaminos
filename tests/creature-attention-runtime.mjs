@@ -89,6 +89,29 @@ try{
  assert.notDeepEqual(walker.pose({bones:['pelvis']}).bones,poseBefore.bones.slice(0,1),'walking resumes without a user play command');
  await walker.dispose();assert.equal(notify,null,'dispose removes the flame subscription');
 
+ // FC-1: exercise rejected and disappearing probes through the actual timer
+ // bridge. Missing observations must not become long exposure at the old level.
+ const timers={set:globalThis.setInterval,clear:globalThis.clearInterval};let poll;
+ globalThis.setInterval=fn=>{poll=fn;return {testTimer:true};};globalThis.clearInterval=()=>{};
+ let sampled;
+ try{
+  fire={active:true,paused:false};let power=1,reject=false;
+  const probe={sample:async points=>{if(reject)throw Error('probe unavailable');return {status:'effective',source:{power},values:points.map(()=>({luminance:.1*power}))};}};
+  window.kaminosFireLightProbe=probe;
+  sampled=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  await sampled.operations.action({kind:'wander'});
+  const tick=()=>{for(let i=0;i<8;i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}};
+  await poll();reject=true;tick();await poll();
+  assert.equal(sampled.read().attention.light.status,'unavailable','FC-1: a rejected probe lowers sensory status');
+  for(let i=0;i<119;i++){tick();await poll();}
+  reject=false;power=8;for(let i=0;i<8;i++){tick();await poll();}
+  power=1;for(let i=0;i<16;i++){tick();await poll();}
+  const faded=sampled.read().attention.history.find(e=>e.kind==='interrupt'&&e.cause==='light faded');
+  assert.ok(faded&&faded.familiarity<.2,'FC-1: failed polls did not teach the old power as a familiar destination');
+  delete window.kaminosFireLightProbe;tick();await poll();
+  assert.equal(sampled.read().attention.light.status,'unavailable','a disappearing probe also breaks observation continuity');
+ }finally{await sampled?.dispose();globalThis.setInterval=timers.set;globalThis.clearInterval=timers.clear;delete window.kaminosFireLightProbe;}
+
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}

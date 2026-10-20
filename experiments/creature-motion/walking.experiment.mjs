@@ -205,7 +205,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    // points around the creature (world space, independent of any camera).
    const senseLight=async()=>{
     const probe=globalThis.window?.kaminosFireLightProbe;
-    if(disposed||lightBusy||!probe||!attention||player?.read().status!=='playing')return;
+    if(disposed||lightBusy||!attention||player?.read().status!=='playing')return;
+    if(!probe){attention.sense({time:clock/1000,status:'unavailable',samples:null});return;}
     lightBusy=true;
     try{
      runtime.group.updateMatrixWorld(true);
@@ -220,7 +221,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;
      attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
-    }catch(error){record({kind:'attention.light',phase:'failed',error:error.message});}
+    }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
     finally{lightBusy=false;}
    };
    lightTimer=setInterval(senseLight,250);
