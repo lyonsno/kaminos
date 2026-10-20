@@ -180,7 +180,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      // Causes fire on transitions and changes, not on mere presence.
      if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
      else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
-     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.cause='moved';m.movedUnseen=false;}
+     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.eventAt=time;m.cause='moved';m.movedUnseen=false;}
      else if(!m.seen&&!m.inspected&&m.eventAt!==time&&!source.transient){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
      m.everSeen=true;
     }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}

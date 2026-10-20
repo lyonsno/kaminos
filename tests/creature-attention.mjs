@@ -445,4 +445,15 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  assert.equal(a.read().history.filter(e=>e.kind==='interrupt').length,1,'invalid probe values cannot impersonate darkness either');
 }
 
+{
+ // FC-3: fresh observed displacement, without a version change, can redirect.
+ const c=creature(),fire={id:'fire',point:[.8,.5,-2.5],interest:1,active:true,restless:true};
+ const prop={id:'prop',point:[-.8,.5,-2.5],interest:2};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...fire},{...prop,point:[...prop.point]}]});
+ let t=watch(a,c,15,0).t;fire.restless=false;t=watch(a,c,.4,t).t;
+ assert.equal(a.read().arrested,true,'unchanged presence leaves the scan in progress');
+ prop.point=[-.3,.5,-2.5];watch(a,c,.1,t);
+ assert.equal(a.read().arrested,false,'FC-3: newly observed prop movement resolves the scan');
+ assert.equal(a.read().focus?.id,'prop');assert.equal(a.read().why?.cause,'moved');
+}
 console.log('Creatures attend, learn familiar states, interrupt on cessation, scan, and settle');
