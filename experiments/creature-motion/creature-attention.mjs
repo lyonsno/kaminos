@@ -1,4 +1,5 @@
 import {createAttentionPolicy} from './attention-policy.mjs';
+import {createSignalFamiliarity} from './signal-familiarity.mjs';
 import {createLookPoseModifier} from './look-pose.mjs';
 
 // Head-local muzzle forward/up for one cast, measured from its own skin: the
@@ -61,6 +62,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  if(typeof interests!=='function')throw Error('Creature attention requires an interest source');
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
   adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
+  familiarSeconds:180,interruptSeconds:.65,investigateSeconds:1.8,stillSeconds:.18,
   lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
  const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
@@ -68,6 +70,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
  let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
  const patches=new Map();
+ const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
+ let interruption=null,powerDropArmed=true;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -100,6 +104,20 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const worldPosition=bone=>new THREE.Vector3().setFromMatrixPosition(bone.matrixWorld);
  const remember=(kind,time,extra)=>{const event={kind,time,...extra};history.push(event);if(history.length>32)history.shift();try{o.onEvent(event);}catch{}};
  const memo=id=>{if(!memory.has(id))memory.set(id,{familiarity:0,everSeen:false,seen:false,last:null,impulse:0,cause:null});return memory.get(id);};
+ function interrupt({id,cause,familiarity,evidence},time){
+  // One perceived cessation may arrive through source state and light power.
+  if(cause==='light faded'&&states.get(id)?.previous==='off')return;
+  if(interruption?.id===id&&time-interruption.since<o.glanceSeconds)return;
+  const surprise=1-familiarity;
+  interruption={id,cause,familiarity,surprise,since:time,until:time+o.interruptSeconds+o.investigateSeconds*surprise,evidence};
+  policy.reset();focus=null;why=null;scan=null;nextScan=null;
+  const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
+  remember('interrupt',time,structuredClone(interruption));
+ }
+ const motionSeconds=(from,to)=>{
+  if(!enabled||!interruption)return Math.max(0,to-from);
+  return Math.max(0,to-from-Math.max(0,Math.min(to,interruption.until)-Math.max(from,interruption.since)));
+ };
 
  function modify({bones,group,time,placement}){
   if(!enabled){reticle.visible=false;return;}
@@ -113,6 +131,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=fov>=2*Math.PI?1:Math.max(0,1-Math.max(0,angle-fov*.5)/(fov*.35));
     return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
+   if(interruption&&time>=interruption.until){remember('settled',time,{id:interruption.id,cause:interruption.cause});interruption=null;restUntil=time+o.restSeconds;}
    candidates=[];const observations=[];
    // Light events sensed since the last frame: alert the creature to their
    // source wherever it is (light reaches all around).
@@ -124,15 +143,26 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const listed=interests(),ids=new Set(listed.map(x=>x.id));
    for(const [id,x] of lightSources)if(time>x.until&&focus?.id!==id)lightSources.delete(id);
    for(const source of [...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))]){
-    const m=memo(source.id),significance=source.interest,active=source.active!==false;
+    const m=memo(source.id),significance=source.interest,active=source.active!==false&&source.sensed!==false;
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
     // forgetting time: a restless source never stays familiar for long.
     const names={lit:'lit',changed:'changed',again:'noticed again',...source.causes};
     // Bright things such as flame are seen from farther than ordinary props.
     const range=source.noticeRadius??o.noticeRadius;
+    // Learn only a source state that can actually be observed. A failed read
+    // or a source outside view is a gap, not an observed disappearance.
+    if(source.restless!==undefined||source.active!==undefined){
+     let known=states.get(source.id);if(!known){known={memory:createSignalFamiliarity({decaySeconds:o.familiarSeconds}),previous:null};states.set(source.id,known);}
+     if(source.sensed!==false&&sight(source.point,range).visible){
+      const state=!active?'off':source.restless?'moving':'still',learned=known.memory.observe({time,value:state});
+      if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
+      else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
+      known.previous=state;
+     }else{known.memory.gap();known.previous=null;}
+    }
     const forgetThis=Math.exp(-dt/(source.forgetSeconds??o.forgetSeconds));
     const lit=active&&m.wasActive===false,changed=m.version!==undefined&&source.version!==undefined&&source.version!==m.version;
-    m.wasActive=active;m.version=source.version;
+    m.wasActive=source.sensed===false?undefined:active;m.version=source.version;
     const hidden={distance:Infinity,angle:Math.PI,view:0,visible:false};
     const plain=active?sight(source.point,range):hidden;
     // Sudden changes (a flame lit or flaring) are noticed over a wider field
@@ -174,10 +204,10 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
     candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
-    if(score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
+    if(!interruption&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
    }
    // Idle looking around: a brief look at a spot beside the path ahead.
-   if(o.idleScan){
+   if(o.idleScan&&!interruption){
     if(nextScan===null)nextScan=time+o.scanEvery[0]+random()*(o.scanEvery[1]-o.scanEvery[0]);
     if(!scan&&!focus&&time>=nextScan&&time>=restUntil){
      const side=random()<.5?-1:1,turn=side*(.5+random()*.5),dir=body.clone().applyAxisAngle(new THREE.Vector3(0,1,0),turn);
@@ -189,7 +219,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      if(score>0&&time-scan.started<o.scanSeconds+o.minDwellSeconds)observations.push({id:scan.id,point:scan.point,score,reason:'looking around'});else scan=null;
     }
    }
-   const previous=focus;focus=policy.update({time,observations}).focus;
+   const previous=focus;focus=policy.update({time,observations:interruption?[]:observations}).focus;
    if(focus&&focus.id!==previous?.id){
     const c=candidates.find(x=>x.id===focus.id);
     why={cause:focus.reason,id:focus.id,label:c?.label??focus.id,since:time,familiarity:c?.familiarity??null,competitors:candidates.filter(x=>x.id!==focus.id&&x.score>0).map(x=>({id:x.id,label:x.label,cause:x.cause,score:x.score}))};
@@ -208,6 +238,18 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const u=memory.get(focus.id)?.urgency??0,quick=1+o.urgencyGain*u;
     aim=aim?aim.lerp(target,smooth(o.aimSeconds/quick,dt)):target;
    }else reachable=false;
+   if(interruption){
+    // First arrest, then sample alternate sides. These are sample directions,
+    // not a claimed source location or a focus reticle on an invented object.
+    const elapsed=time-interruption.since;
+    if(elapsed>=o.stillSeconds){
+     const phase=(elapsed-o.stillSeconds)/Math.max(.01,interruption.until-interruption.since-o.stillSeconds);
+     const turn=phase<.4?.8:phase<.8?-.8:.25;
+     const target=headAt.clone().addScaledVector(body.clone().applyAxisAngle(new THREE.Vector3(0,1,0),turn),o.scanDistance);
+     aim=aim?aim.lerp(target,smooth(.08,dt)):target;
+    }
+    want=aim?1:0;
+   }
    // Bigger, faster changes turn the head faster and let it go more slowly.
    const urgency=focus?memory.get(focus.id)?.urgency??0:lastUrgency;if(focus)lastUrgency=urgency;
    weight+=(want-weight)*smooth(want>weight?o.acquireSeconds/(1+o.urgencyGain*urgency):o.releaseSeconds*(1+urgency),dt);
@@ -236,7 +278,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // draws a look at where the shadow fell. Steady light, bright or dim, does not.
  function sense({time,samples,source=null,sourcePower=null,status='effective'}){
   if(!enabled)return;
-  if(status!=='effective'||!Array.isArray(samples)){light={...light,status,time};return;}
+  const valid=Array.isArray(samples)&&samples.length>0&&samples.every(x=>Number.isFinite(x.luminance)&&x.luminance>=0&&Array.isArray(x.point)&&x.point.length===3&&x.point.every(Number.isFinite));
+  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
   const dt=light.time===null?0:Math.max(0,time-light.time);
   // Light is remembered per fixed patch of ground, not per sample slot, so
@@ -265,14 +308,17 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   // read from the source's own output so it holds wherever the creature walks.
   let flare=null,surge=0;
   if(Number.isFinite(sourcePower)&&sourcePower>=0){
+   const learned=powerHistory.observe({time,value:sourcePower});
    if(light.powerNow===null){light.powerNow=sourcePower;light.powerUsual=sourcePower;}
    light.powerNow+=(sourcePower-light.powerNow)*fast;
    surge=Math.log((light.powerNow+1e-6)/(light.powerUsual+1e-6));
+   if(surge<-o.flareAt&&powerDropArmed&&source){interrupt({id:source.id,cause:'light faded',familiarity:learned.familiarity,evidence:{power:sourcePower,now:light.powerNow,usual:light.powerUsual}},time);powerDropArmed=false;}
+   if(surge>-o.flareAt*.5)powerDropArmed=true;
    // How fast the light is rising, per second: a sudden jump is more urgent.
    light.rise=dt>0?Math.max(0,(surge-(light.lastSurge??surge))/dt):0;light.lastSurge=surge;
    light.powerUsual+=(sourcePower-light.powerUsual)*slow;
    if(surge>o.flareAt&&light.flareArmed)flare={change:surge,rise:light.rise};
-  }
+  }else{powerHistory.gap();light.powerNow=null;light.powerUsual=null;}
   // A shadow from an object darkens an area: at least two neighbouring
   // patches together. One patch dipping on its own is the field's own noise.
   let shadow=null;
@@ -299,16 +345,16 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
-  return {enabled,weight,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {enabled,weight,arrested:enabled&&interruption!==null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
- return Object.freeze({modify,sense,read,setEnabled,setProfile,reticle,dispose});
+ return Object.freeze({modify,sense,read,motionSeconds,setEnabled,setProfile,reticle,dispose});
 }
 
 // Authored interests attached to existing scene objects, resolved live so that
@@ -349,16 +395,16 @@ export function sceneObjectInterests({THREE,root,specs}) {
 export function flameInterests({THREE,root,workbench,interest=1.5,id='flame-emitter',pollMs=500,now=()=>performance.now()}) {
  if(typeof workbench?.read!=='function')throw Error('Flame interest requires the shared flame workbench');
  if(!Number.isFinite(interest)||interest<0)throw Error('Flame interest must be finite and nonnegative');
- let state={active:false,paused:false},polled=-Infinity,cached=null,dirty=false;
+ let state={active:false,paused:false,available:false},polled=-Infinity,cached=null,dirty=false;
  // Edits re-read the flame's state promptly instead of waiting for the poll.
  const unsubscribe=workbench.subscribe?.(()=>{dirty=true;})??(()=>{});
  function find(){const scene=root();if(cached&&cached.userData?.kaminosSceneObject?.id===id){let node=cached;while(node.parent)node=node.parent;if(node===scene)return cached;}
   cached=null;scene.traverse(node=>{if(!cached&&node.userData?.kaminosSceneObject?.id===id)cached=node;});return cached;}
  function read(){
   const object=find();if(!object)return [];
-  const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true};}catch{state={active:false,paused:false};}}
+  const time=now();if(dirty||time-polled>=pollMs){polled=time;dirty=false;try{const r=workbench.read();state={active:r?.active===true,paused:r?.paused===true,available:typeof r?.active==='boolean'&&typeof r?.paused==='boolean'};}catch{state={...state,available:false};}}
   return [{id,label:'flame',point:new THREE.Vector3().setFromMatrixPosition(object.matrixWorld).toArray(),interest,noticeRadius:12,active:state.active,
-   restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',again:'flickering'}}];
+   sensed:state.available,restless:state.active&&!state.paused,forgetSeconds:state.active&&!state.paused?8:undefined,causes:{lit:'flame lit',again:'flickering'}}];
  }
  return Object.freeze({read,dispose(){unsubscribe();}});
 }

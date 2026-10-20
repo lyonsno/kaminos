@@ -66,6 +66,29 @@ try{
  assert.ok((creature.inspect??window.kaminosWalkingCreature)().vertices.some((v,i)=>Math.abs(v-turnedVertices[i])>1e-6),'the deformed body follows');
  await creature.dispose();
 
+ // Attention may hold locomotion without pausing the creature's observation
+ // clock. Exercise the real walking consumer, source adapter and flame bridge.
+ const emitter=new THREE.Object3D();emitter.userData.kaminosSceneObject={id:'flame-emitter'};emitter.position.set(.8,.4,-2.5);scene.add(emitter);
+ let fire={active:false,paused:false},notify=null;
+ window.kaminosFlameWorkbench={open:async()=>({read:()=>({...fire}),subscribe:fn=>{notify=fn;return ()=>notify=null;}})};
+ const walker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);
+ await Promise.resolve();
+ await walker.operations.action({kind:'wander'});
+ const step=seconds=>{for(let i=0;i<Math.round(seconds*30);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}};
+ step(2);fire.active=true;notify();step(.5);fire.active=false;notify();step(1/30);
+ assert.equal(walker.read().attention.arrested,true,'the actual flame bridge requests an arrest');
+ const before=walker.read(),poseBefore=walker.pose({bones:['pelvis','spine-chest','head']});
+ step(.25);
+ const during=walker.read(),poseDuring=walker.pose({bones:['pelvis','spine-chest','head']});
+ assert.equal(during.playback.status,'playing','an attention hold does not change the authored Run/Pause choice');
+ assert.equal(during.playback.frame,before.playback.frame,'the stride sample is held');
+ assert.deepEqual(poseDuring.bones.slice(0,2),poseBefore.bones.slice(0,2),'pelvis and chest do not travel or animate during arrest');
+ assert.ok(poseDuring.bones[2].matrix.some((v,i)=>Math.abs(v-poseBefore.bones[2].matrix[i])>1e-5),'head scanning continues while the stride is held');
+ step(4);
+ assert.equal(walker.read().attention.arrested,false,'the independent attention clock releases locomotion');
+ assert.notDeepEqual(walker.pose({bones:['pelvis']}).bones,poseBefore.bones.slice(0,1),'walking resumes without a user play command');
+ await walker.dispose();assert.equal(notify,null,'dispose removes the flame subscription');
+
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}

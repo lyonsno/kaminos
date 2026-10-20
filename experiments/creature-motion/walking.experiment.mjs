@@ -71,7 +71,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.held_wander}):null;
- let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1;
+ let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
  const relatedAssets=[];
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
  if(!Number.isFinite(rate)||rate<=0)throw Error('Playback rate must be finite and positive');
@@ -142,13 +142,15 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   stop=session.onFrame(({deltaSeconds})=>{
    if(disposed||!stop)return;
    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Walking clock requires a finite nonnegative host delta');
-   clock+=deltaSeconds*1000*rate;
+   const from=clock/1000;clock+=deltaSeconds*1000*rate;
+   const motionDelta=attention?.motionSeconds(from,clock/1000)??deltaSeconds*rate;
+   motionClock+=motionDelta*1000;
    try{
     if(wander){
      if(player.read().status==='removed'){unsubscribe();return;}
-     presentWander(deltaSeconds*rate,true);return;
+     presentWander(motionDelta,true);return;
     }
-    player.tick(clock);
+    if(motionDelta===0)player.represent();else player.tick(motionClock);
     if(player.read().status==='held'&&mode!=='source'){cycle++;source.presentation.cycle=cycle;player.replay();}
     else if(player.read().status!=='playing'){unsubscribe();if(player.read().status!=='removed')host.scene.refreshPresentation?.(asset);}
     refresh();
@@ -181,8 +183,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  function makePlayer(){
   runtime.group.position.set(0,0,0);runtime.group.quaternion.identity();runtime.group.scale.set(1,1,1);
   const derivedAdapter={...adapter,frame:index=>wander?wander.frame(index):walking.frame(index,{mode,cycle})};
-  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>clock,
-   poseModifier:attention?state=>attention.modify({...state,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
+  return attachGivenPalettePlayback({THREE,runtime,adapter:derivedAdapter,source,document,mountRoot:instruments,mountControls:false,posePresentation:liveRoot,now:()=>motionClock,
+   poseModifier:attention?state=>attention.modify({...state,time:clock/1000,placement}):null,dirty:()=>session.redraw(),isMounted:()=>Boolean(placement.parent)});
  }
  try{
   session=await host.scene.open();runtime=createFullBodyRuntime({THREE,...data,deformerFactory});
@@ -280,7 +282,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
    selectArea:operation('selectArea',()=>{if(!areaAsset||!areaRoot.parent)throw Error('No wander area is mounted');globalThis.window?.selectSceneObject?.(areaAsset.id);return read();}),
-   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();clock+=input.seconds*1000;const state=presentWander(input.seconds,false);host.scene.refreshPresentation?.(asset);return state;}),
+   advance:operation('advance',input=>{if(!wander)throw Error('Exact action advance requires Wander here');if(!Number.isFinite(input?.seconds)||input.seconds<0)throw Error('Action advance requires finite nonnegative seconds');unsubscribe();player.pause();const from=clock/1000;clock+=input.seconds*1000;const delta=attention?.motionSeconds(from,clock/1000)??input.seconds;motionClock+=delta*1000;const state=presentWander(delta,false);host.scene.refreshPresentation?.(asset);return state;}),
    rate:operation('rate',input=>{if(!Number.isFinite(input?.rate)||input.rate<=0)throw Error('Playback rate must be finite and positive');rate=input.rate;return read();}),
    skin:operation('skin',input=>{if(!skinSelection)throw Error('This creature has no registered cast choices');return skinSelection.select(input);}),
    play:operation('play',()=>{if(wander){if(!syncArea())return read();presentWander(0,true);}else player.play();if(player.read().status==='playing')startClock();return read();}),

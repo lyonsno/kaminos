@@ -251,6 +251,7 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  let t=0,seed=7;const rand=()=>((seed=(seed*16807)%2147483647)/2147483647);
  for(let k=0;k<160;k++){const flicker=.1*(1+.45*(rand()*2-1));attention.sense({time:t,source:fire,sourcePower:flicker*10,samples:ring.map((point,i)=>({point,luminance:flicker*(1+.3*(rand()*2-1))}))});t=watch(attention,c,.25,t).t;}
  assert.equal(attention.read().history.filter(e=>e.kind==='look').length,0,`flicker draws nothing (${JSON.stringify(attention.read().history.map(e=>e.cause))})`);
+ assert.equal(attention.read().history.filter(e=>e.kind==='interrupt').length,0,'ordinary flicker does not arrest the creature');
 }
 
 {
@@ -368,4 +369,62 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  assert.ok(changes<=4,`no on/off flicker (${changes} changes in 20 s)`);
 }
 
-console.log('Creatures look for reasons: first sight, change, renewed sight after forgetting, and idle looking around, each recorded');
+{
+ // Familiar destination: the same off event gets a brief interruption after
+ // a short burn, but a longer response after light became the usual condition.
+ const cessation=burnSeconds=>{
+  const c=creature(),flame={id:'fire',point:[.8,.5,-2.5],interest:1,active:false,restless:false};
+  const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
+  let t=watch(a,c,30,0).t;flame.active=true;flame.restless=true;t=watch(a,c,burnSeconds,t).t;
+  flame.active=false;flame.restless=false;run(a,c,1/30,t);
+  const s=a.read();
+  assert.equal(s.interruption?.cause,'light went out','a disappearing visible source interrupts explicitly');
+  assert.equal(s.arrested,true,'the attention state requests a stride hold');
+  assert.equal(s.focus,null,'cessation does not invent a point to stare at');
+  const event=structuredClone(s.interruption),before=headForward(c.bones);
+  t=watch(a,c,.8,t+1/30).t;
+  assert.ok(headForward(c.bones).distanceTo(before)>.05,'the interruption produces an actual scanning head pose');
+  t=watch(a,c,5,t).t;
+  assert.equal(a.read().arrested,false,'the hold ends without further events');
+  assert.equal(a.read().interruption,null,'the scan ends too');
+  assert.equal(a.read().history.filter(e=>e.kind==='interrupt').length,1,'steady absence does not retrigger');
+  a.setEnabled(false);assert.equal(a.read().arrested,false);
+  return event;
+ };
+ const brief=cessation(2),established=cessation(600);
+ assert.ok(brief.familiarity>.85&&established.familiarity<.05,'destination familiarity reflects experienced history');
+ assert.ok(established.until-established.since>brief.until-brief.since+1,'familiar return settles sooner');
+}
+{
+ const c=creature(),flame={id:'fire',point:[.8,.5,-2.5],interest:1,active:true,restless:true};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
+ let t=watch(a,c,10,0).t;flame.restless=false;run(a,c,1/30,t);
+ assert.equal(a.read().interruption?.cause,'movement stopped','a frozen visible flame is distinct from one going out');
+ a.setEnabled(false);assert.equal(a.read().interruption,null,'disabling clears the interruption immediately');
+}
+{
+ // Sensory gaps and out-of-view sources do not confer knowledge of a stop.
+ const c=creature(),flame={id:'hidden',point:[0,.5,4],interest:1,active:true,restless:true};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,interests:()=>[{...flame}]});
+ let t=watch(a,c,5,0).t;flame.active=false;watch(a,c,1,t);
+ assert.equal(a.read().interruption,null,'an unseen cessation is not perceived');
+ a.sense({time:t+2,status:'unavailable',samples:null,sourcePower:0});
+ assert.equal(a.read().interruption,null,'missing light data is not darkness');
+}
+{
+ const c=creature(),source={id:'fire',point:[.8,.5,-2.5]};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[]});
+ const samples=[{point:[0,.3,0],luminance:.1}];let t=0;
+ const power=(value,seconds)=>{for(let i=0;i<seconds*4;i++){a.sense({time:t,source,sourcePower:value,samples});t=watch(a,c,.25,t).t;}};
+ power(1,30);power(8,2);power(1,4);
+ const stopped=a.read().history.find(e=>e.kind==='interrupt');
+ assert.equal(stopped?.cause,'light faded','a sharp return from a flare is an interruption');
+ assert.ok(stopped.familiarity>.85,'returning to the usual level settles quickly');
+ a.sense({time:t,source,sourcePower:0,samples:[]});watch(a,c,1,t);
+ assert.equal(a.read().history.filter(e=>e.kind==='interrupt').length,1,'an empty probe cannot impersonate a loss of light');
+ t+=1;power(1,4);
+ for(let i=0;i<8;i++){a.sense({time:t,source,sourcePower:0,samples:[{point:[0,.3,0],luminance:NaN}]});t=watch(a,c,.25,t).t;}
+ assert.equal(a.read().history.filter(e=>e.kind==='interrupt').length,1,'invalid probe values cannot impersonate darkness either');
+}
+
+console.log('Creatures attend, learn familiar states, interrupt on cessation, scan, and settle');
