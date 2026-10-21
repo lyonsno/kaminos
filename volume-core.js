@@ -12468,7 +12468,7 @@ export function createKaminosVolumePrototype({
     const source=getSceneCollision?.();let solids,collisionSource=null;
     if(source?.requested&&source.object){
       const a=worldSmoke.anchor;
-      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
+      const produced=worldSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*Number(controlsSnapshot.worldSmokeExtent||3)},{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
       // An empty producer has no presentation dispatch. Never reuse its last
       // nonempty texture after the last collision object has been removed.
       if(produced.triangleCount>0){worldSolidProducer.encode(encoder);solids=worldSolidProducer.texture;collisionSource={revision:produced.revision,members:produced.members,backend:produced.backend};}

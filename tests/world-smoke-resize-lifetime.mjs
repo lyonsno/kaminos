@@ -12,7 +12,9 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const createWorldSmoke=(_device,plan)=>{const optical={destroyed:false};textures.push(optical);return {optical,anchor,encode(){return {flowDims:plan.flowDims,materialDims:plan.materialDims};},destroy(){optical.destroyed=true;}};};
   const oldPlan=worldSmokePlan({flow:16,material:32,extent:3,fineHeightRatio:2});
   const ctx={worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
-    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:{368:2},
+    controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
+    resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
+    encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,
     state:{reactantCombustion:{effective:{admitted:true}},simStepCount:1},gridSize:32,gridHeight:64,
     device:{queue:{writeBuffer(){}}},createWorldSmoke,worldSmokePlan,worldSmokeMapping,productTransform:anchor,
     createGpuSceneSolidProducer:()=>({destroy(){}}),getSceneCollision:()=>null,
@@ -21,7 +23,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
     resolveTimeStepConfig:()=>({effective:{}}),resolvePhysicsAppearance:()=>({}),resolveVelocityStaggeringConfig:()=>({effective:{mode:'cell'}}),
     refreshSceneCollision(){},ensureAppearanceLayout(){},resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
     computePipeline:{},transportPredictBindGroup:{},encodeAnalyticEmitterInjection(){},encodePressureProjection(){return false;},updateSimCostLedger(){},Float32Array};
-  ctx.rebuildFluidBindGroups();vm.createContext(ctx);
+  ctx.uniforms[368]=2;ctx.rebuildFluidBindGroups();vm.createContext(ctx);
   vm.runInContext(['prepareWorldSmoke','encodeWorldSmoke','encodeSim'].map(grab).join('\n'),ctx);
   const encoder={beginComputePass(){return {setPipeline(){},setBindGroup(_i,g){if(g.texture)bound.push(g.texture);},dispatchWorkgroups(){},end(){}};}};
   ctx.encodeSim(encoder);
@@ -35,7 +37,7 @@ test('separated pressure rebinds the current world optical allocation',()=>{
   let optical={destroyed:false};const bound=[];
   const owner={key:'32:64:32:2',uniform:{},before:{},after:{},solid:{createView:()=>({})},burn:{},write:{},read:{},residentBytes:0,prepare(){},encode(){}};
   const ctx={pressureResolutionPlan,gridSize:32,gridHeight:64,controlsSnapshot:{pressureResolution:'half'},state:{simStepCount:1},separatedPressure:owner,
-    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,device:{queue:{writeBuffer(){}}},
+    separatedPressureProjectPipeline:{},uniforms:new Float32Array(512),GRID_SHAPE_UNIFORM_OFFSET:0,OPEN_WORLD_UNIFORM_OFFSET:472,joinedLowerFaceTexture:{},device:{queue:{writeBuffer(){}}},
     sceneSolidTexture:{width:32},reactantTextures:[{},{}],frontBuffers:[{},{}],burnRateTexture:{},worldSmoke:{optical},worldOpticalFallback:{},
     nonRidgeOpticalCaptureRowBuffer:{},sceneSolidTextureView:{},fluidBuffers:[{}],currentFluid:0,
     createFluidRenderBindGroup:()=>({texture:ctx.worldSmoke.optical}),resolveTransportConfig:()=>({effective:{scheme:'maccormack'}}),resolveTimeStepConfig:()=>({effective:{backtraceScale:1}}),TRANSPORT_MAX_BACKTRACE_CELLS:1,
