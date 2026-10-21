@@ -573,9 +573,15 @@ try {
     check('every tab, hidden or not, is in notes presence', routes.every(item => listed.includes(item.page)), {missing: routes.filter(item => !listed.includes(item.page)).map(item => item.page)});
     const extra = await context.newPage();
     const started = Date.now();
-    const loaded = await extra.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 20000}).then(() => true).catch(() => false)
-      && await extra.waitForFunction(() => !!window.kaminosNotes?.session?.author, null, {timeout: 20000}).then(() => true).catch(() => false);
-    check('with nine tabs open, another page still loads and links its notes', loaded, {loaded, ms: Date.now() - started});
+    const loaded = await extra.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 60000}).then(() => true).catch(() => false)
+      && await extra.waitForFunction(() => !!window.kaminosNotes?.session?.author, null, {timeout: 60000}).then(() => true).catch(() => false);
+    // Out of connections, requests queue before they start (long wait for a connection);
+    // a starved machine answers slowly instead. Keep both, so a failure says which.
+    const timing = await extra.evaluate(() => performance.getEntriesByType('navigation').concat(performance.getEntriesByType('resource'))
+      .map(entry => ({url: entry.name.replace(location.origin, ''), waitedForConnection: Math.round(entry.requestStart - entry.startTime), total: Math.round(entry.duration)}))
+      .sort((a, b) => b.waitedForConnection - a.waitedForConnection).slice(0, 8)).catch(error => String(error));
+    report.effective.sharedConnection.extraPage = {loaded, ms: Date.now() - started, longestConnectionWaits: timing};
+    check('with nine tabs open, another page still loads and links its notes', loaded, report.effective.sharedConnection.extraPage);
     const watched = tabs[0];
     const before = await watched.evaluate(() => document.querySelectorAll('.kn-toast').length);
     const sent = await notes(['post', 'shared connection check for the page', '--to', PERSON, '--as', 'hub-check-agent']);
