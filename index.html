@@ -25735,6 +25735,8 @@ function detachSelectionMember(id){
 }
 async function writeSelectionMembershipUnchecked(value){
   const ids=new Set(value.objects.map(o=>o.id));
+  // Retire selection while its roots still exist; placement redraw reads the old selection.
+  if(sceneObjects.some(entry=>!ids.has(entry.id)))clearActiveSceneObjectSelection();
   for(const entry of [...sceneObjects])if(!ids.has(entry.id))detachSelectionMember(entry.id);
   for(const record of value.objects){
     let entry=sceneObjects.find(o=>o.id===record.id);
