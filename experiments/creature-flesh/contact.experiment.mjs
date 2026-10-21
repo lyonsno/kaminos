@@ -70,7 +70,7 @@ export default {
   }
   function reset(){volume=createFleshVolume(prepared,parameters);volume.setEnabled(physical);poseKey='';stepCount=0;stroke=null;setPose(0);putProbe(localStart);publish();return read();}
   async function dispose(){if(disposed)return;disposed=true;unsubscribe?.();refresh=()=>{};mirror?.dispose();deformer.dispose();if(session)await session.dispose();else{geometry.dispose();mesh.material.dispose();probe.geometry.dispose();probe.material.dispose();guideGeometry.dispose();guide.material.dispose();}if(globalThis.window?.kaminosCreatureFlesh===diagnostic)delete globalThis.window.kaminosCreatureFlesh;}
-  const diagnostic={read,advance,geometry:currentGeometry};
+  const diagnostic={read,advance,geometry:currentGeometry,gpu:()=>deformer.readback()};
   try{
    session=await host.scene.open();setPose(0);putProbe(localStart);publish();
    bodyAsset=await session.attach(placement,{owned:true,metadata:{label:placement.name,type:'glb',source:{...data.source,physicalPreparation:inputs.prepared_sha256}}});
