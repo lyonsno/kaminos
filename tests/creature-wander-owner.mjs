@@ -1,0 +1,55 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import {createWalkingCreature} from '../experiments/creature-motion/walking.experiment.mjs';
+class Element{constructor(){this.children=[];this.style={};}append(...x){this.children.push(...x);}prepend(...x){this.children.unshift(...x);}setAttribute(k,v){this[k]=v;}remove(){this.removed=true;}}
+const document={createElement:()=>new Element(),getElementById:()=>null};
+const scene=new THREE.Scene();let callback=null,registered=0;
+const session={async attach(root){scene.add(root);return {id:'owned-'+(++registered),root,owned:true};},onFrame(fn){assert.equal(callback,null,'Wander must reuse one actual shared frame subscription');callback=fn;return ()=>callback=null;},redraw(){},setView(){},readView:()=>({position:[4,2,4],target:[0,0,0]}),async dispose(){scene.clear();callback=null;}};
+const host={controls:{document},scene:{open:async()=>session,refreshPresentation(){}}};
+const I=[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],bones=[{name:'pelvis',parent:null,restMatrix:I,tail:[0,1,0]}];
+const data={manifest:{bones,channels:['fixed','pelvis'],vertices:3,triangles:1},rest:new Float32Array([0,0,0,1,0,0,0,1,0]),triangles:new Uint32Array([0,1,2]),weights:new Float32Array([0,1,0,1,0,1]),frame:{canonicalWorldToSourceNormalized:I,bones},motion:{frames:3,joints:1,skeleton:{fps:30,jointNames:['pelvis'],parents:[-1]},positions:[0,.2,0,0,.2,1,0,.2,2],localRotations:[1,0,0,0,1,0,0,0,1,0,0,0]},source:{motionSha256:'a'.repeat(64),frameSha256:'b'.repeat(64),caseSha256:'c'.repeat(64)}};
+const loadSources=async()=>data;
+const entry=await createWalkingCreature({host,inputs:{blend_frames:1,radius:7}},{loadSources});
+assert.equal(typeof entry.operations.action,'function','An ordinary creature cannot sustain a Wander here action');
+const panel=new Element();entry.mount({root:panel,invoke:(name,input)=>entry.operations[name](input)});
+const nodes=node=>[node,...node.children.flatMap(nodes)];
+assert.ok(nodes(panel).some(n=>n['aria-label']==='Creature action'),'Wander must be an ordinary selected-creature property');
+await entry.operations.action({kind:'wander'});
+assert.equal(entry.read().action.kind,'wander');assert.equal(typeof callback,'function');
+entry.operations.seek({frame:2});const firstEndpoint=entry.read().action.motion.path.position;entry.operations.play();
+assert.equal(typeof callback,'function','Play cannot resume Wander from the last source frame');
+assert.deepEqual(entry.read().action.motion.path.position,firstEndpoint,'Endpoint play must preserve current path position');
+entry.operations.seek({frame:0});entry.operations.play();
+const area=scene.children.find(root=>root.name==='Wander area');assert.ok(area?.isObject3D,'The area is not an actual editable registered scene object');
+callback({deltaSeconds:1/30});assert.ok(entry.read().action.motion.path.distance>.9);
+entry.operations.pause();
+assert.equal(typeof entry.operations.advance,'function','The same wander clock needs a held, exact source-time step for contiguous inspection');
+entry.operations.advance({seconds:1/30});assert.equal(callback,null,'Exact inspection step started a frame pump');
+assert.ok(entry.read().action.motion.path.distance>1.9);entry.operations.play();
+const actual=entry.read().action.motion.path.position;
+area.position.x+=25;callback({deltaSeconds:1/30});
+assert.ok(Math.hypot(...entry.read().action.motion.path.position.map((v,i)=>v-actual[i]))<2,'Moving the area dragged the current creature');
+entry.operations.pause();assert.equal(callback,null);const paused=entry.read().action.motion.path.position;
+// Save immediately after a paused edit: no advance may be needed to make the
+// authored area authoritative when the setup is reconstructed.
+area.position.x+=50;const authoredAreaX=area.position.x;
+const recipe=entry.read().recipe;await entry.dispose();assert.equal(scene.children.length,0);
+const reopened=await createWalkingCreature({host,inputs:recipe},{loadSources});
+assert.deepEqual(reopened.read().action.motion.path.position,paused,'Setup reconstruction lost current wander position');
+assert.equal(callback,null,'Paused reconstruction started a clock');
+assert.equal(reopened.read().action.motion.path.area.center[0],authoredAreaX,'Reopening a paused edit leaves the visible area disconnected from future travel');
+reopened.operations.play();assert.equal(typeof callback,'function');
+reopened.operations.seek({frame:2});const endpoint=reopened.read().action.motion.path.position;reopened.operations.play();
+assert.equal(typeof callback,'function','Play cannot resume Wander after scrubbing to the source endpoint');
+assert.deepEqual(reopened.read().action.motion.path.position,endpoint,'Endpoint resume teleported the root');
+callback({deltaSeconds:1/30});assert.notDeepEqual(reopened.read().action.motion.path.position,endpoint);
+reopened.operations.seek({frame:2});const endpointRecipe=reopened.read().recipe;await reopened.dispose();
+const endpointReopened=await createWalkingCreature({host,inputs:endpointRecipe},{loadSources});
+endpointReopened.operations.play();assert.equal(typeof callback,'function','Reopened source endpoint cannot resume Wander');
+scene.remove(scene.children.find(root=>root.name==='Wander area'));callback({deltaSeconds:1/30});
+assert.equal(callback,null,'Deleting the area left an active creature clock');
+assert.match(endpointReopened.read().action.error,/area.*removed/i);
+assert.equal(endpointReopened.read().source.motionSha256,'a'.repeat(64));
+await endpointReopened.dispose();assert.equal(scene.children.length,0);
+console.log('The ordinary creature owns a selectable area, one shared clock, interruptible movement and exact setup reconstruction');

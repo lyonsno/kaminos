@@ -5,6 +5,22 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import * as THREE from '../lib/three.core.js';
 const hash=b=>createHash('sha256').update(b).digest('hex');
+export function validateCreatureBackendRead(r,requested){
+ assert.ok(['cpu','gpu'].includes(requested),'Unknown requested deformation');
+ const effective=requested==='gpu'?'webgpu-dense-dq':'cpu-reference';
+ assert.equal(r.deformation?.requested,requested);assert.equal(r.deformation?.effective,effective);
+ assert.equal(r.skin.deformation.backend,effective);
+ if(requested==='gpu'){assert.ok(r.skin.deformation.dispatches>0,'GPU request has not drawn');assert.equal(r.skin.deformation.pending,false,'GPU pose has not been presented');}
+ return {requested,effective,dispatches:r.skin.deformation.dispatches??null};
+}
+export function validateCreatureGpuGeometry(gpu,cpu){
+ assert.equal(gpu.backend,'webgpu-dense-dq');assert.ok(gpu.dispatches>0);
+ assert.equal(gpu.positions.length,cpu.vertices.length);assert.equal(gpu.normals.length,cpu.vertices.length);
+ assert.ok(gpu.positions.every(Number.isFinite)&&gpu.normals.every(Number.isFinite),'Invalid GPU geometry');
+ let maxError=0;for(let i=0;i<cpu.vertices.length;i++)maxError=Math.max(maxError,Math.abs(gpu.positions[i]-cpu.vertices[i]));
+ assert.ok(maxError<.0001,'Native GPU positions differ from current CPU pose: '+maxError);
+ return {vertices:gpu.positions.length/3,maxError,tolerance:.0001,backend:gpu.backend,dispatches:gpu.dispatches};
+}
 export function validateCreatureControlRead(r,setup){
  assert.equal(r.host.route,'shared-owner-scene');assert.equal(r.host.scene.rendererBackend,'webgpu');
  assert.equal(r.source.frameSha256,setup.frame_sha256);assert.equal(r.source.caseSha256,r.currentSkin.current.case_sha256);
@@ -30,6 +46,25 @@ export function validateCreatureFrameRead(r,camera){
  assert.ok(new THREE.Vector3().fromArray(camera.target).distanceTo(center)<1e-5,'Frame target is not the current body center');
  const actualDistance=new THREE.Vector3().fromArray(camera.position).distanceTo(center);assert.ok(Math.abs(actualDistance-expectedDistance)<1e-5,'Frame distance includes empty travel or helper bounds');
  return {bodyCenter:center.toArray(),bodySize:size.toArray(),expectedDistance,actualDistance,camera};
+}
+export function validateWanderObservation(r){
+ const a=r.action,m=a?.motion,p=m?.path;
+ assert.equal(a?.kind,'wander');assert.equal(a.error,null);assert.equal(a.area?.mounted,true);
+ assert.ok(r.registration.some(row=>row.id===a.area.id&&row.objectVisible),'Wander area is not actually registered and visible');
+ assert.equal(m.sourceKey,r.source.motionSha256+':'+r.source.frameSha256,'Wander uses a stale motion/bind source');
+ assert.ok(Number.isFinite(m.elapsed)&&m.elapsed>=0);assert.ok(Number.isInteger(m.cycle)&&m.cycle>=0);
+ assert.ok(Number.isFinite(p.distance)&&p.distance>=0);assert.ok(p.position.length===2&&p.position.every(Number.isFinite));
+ const root=r.boneWorld.find(b=>b.name==='pelvis');assert.ok(root,'Observed rig has no actual pelvis root');
+ const position=new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(root.matrix)).applyMatrix4(new THREE.Matrix4().fromArray(r.placementMatrix).invert());
+ assert.ok(Math.hypot(position.x-p.position[0],position.z-p.position[1])<1e-5,'Reported path does not drive the actual root Bone');
+ return {rootInPlacement:position.toArray(),elapsed:m.elapsed,cycle:m.cycle,distance:p.distance,position:p.position};
+}
+export function validateWanderProgress(before,after,{minimumCycles=0}={}){
+ const a=validateWanderObservation(before),b=validateWanderObservation(after);
+ assert.ok(b.elapsed>a.elapsed,'Action clock did not advance');assert.ok(b.distance>a.distance,'Source-paced travel did not advance');
+ assert.ok(b.cycle-a.cycle>=minimumCycles,'Wander did not cross the requested source-clip boundary');
+ assert.ok(Math.hypot(...b.rootInPlacement.map((v,i)=>v-a.rootInPlacement[i]))>1e-5,'Only a reported path advanced; actual root did not move');
+ return {before:a,after:b};
 }
 export async function witness(args){
  const out=resolve(args.out),root=realpathSync(args.root);mkdirSync(out,{recursive:true});

@@ -220,3 +220,17 @@ test('missing runtime and failed mounting cannot leak a recording or claim succe
     document:{},request:()=>{},mount(){throw Error('mount rejected');},guideFactory:()=>({node:{},disconnect(){}})}),/mount rejected/);
   assert.equal(f.listeners.size,0);assert.equal(investigationOperations.active,false);
 });
+
+test('ordinary Enable/Disable publishes its settled state to flame subscribers immediately',async()=>{
+  const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const start=source.indexOf("  document.getElementById('volume-toggle').addEventListener('click', async () => {");
+  const end=source.indexOf("  document.getElementById('volume-fit-camera')",start);
+  assert.ok(start>=0&&end>start,'the actual toggle handler is available');
+  let click,active=true;
+  const observed=[],window=new EventTarget();
+  window.addEventListener('kaminos-flame-controls-changed',()=>observed.push(active));
+  runInNewContext(source.slice(start,end),{document:{getElementById:()=>({addEventListener:(name,fn)=>click=fn})},
+    window,Event,volumePrototype:{debugState:()=>({active}),setActive:async value=>{await Promise.resolve();active=value;}},setInfo(){},refreshVolumeReadout(){}});
+  await click();assert.deepEqual(observed,[false],'off interrupts without waiting for the fallback poll');
+  await click();assert.deepEqual(observed,[false,true],'on publishes only after activation has completed');
+});

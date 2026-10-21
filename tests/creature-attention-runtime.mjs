@@ -66,6 +66,76 @@ try{
  assert.ok((creature.inspect??window.kaminosWalkingCreature)().vertices.some((v,i)=>Math.abs(v-turnedVertices[i])>1e-6),'the deformed body follows');
  await creature.dispose();
 
+ // Attention may hold locomotion without pausing the creature's observation
+ // clock. Exercise the real walking consumer, source adapter and flame bridge.
+ const emitter=new THREE.Object3D();emitter.userData.kaminosSceneObject={id:'flame-emitter'};emitter.position.set(.8,.4,-2.5);scene.add(emitter);
+ let fire={active:false,paused:false},notify=null;
+ window.kaminosFlameWorkbench={open:async()=>({read:()=>({...fire}),subscribe:fn=>{notify=fn;return ()=>notify=null;}})};
+ const walker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);
+ await Promise.resolve();
+ await walker.operations.action({kind:'wander'});
+ const step=seconds=>{for(let i=0;i<Math.round(seconds*30);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}};
+ step(2);fire.active=true;notify();step(.1);
+ assert.equal(walker.read().attention.focus?.id,'flame-emitter','a fresh look has begun before cessation');
+ fire.active=false;notify();step(1/30);
+ assert.equal(walker.read().attention.arrested,true,'the actual flame bridge requests an arrest');
+ const before=walker.read(),poseBefore=walker.pose({bones:['pelvis','spine-chest','head']});
+ step(.25);
+ const during=walker.read(),poseDuring=walker.pose({bones:['pelvis','spine-chest','head']});
+ assert.equal(during.playback.status,'playing','an attention hold does not change the authored Run/Pause choice');
+ assert.equal(during.playback.frame,before.playback.frame,'the stride sample is held');
+ assert.deepEqual(poseDuring.bones.slice(0,2),poseBefore.bones.slice(0,2),'pelvis and chest do not travel or animate during arrest');
+ assert.ok(poseDuring.bones[2].matrix.some((v,i)=>Math.abs(v-poseBefore.bones[2].matrix[i])>1e-5),'head scanning continues while the stride is held');
+ step(4);
+ assert.equal(walker.read().attention.arrested,false,'the independent attention clock releases locomotion');
+ assert.notDeepEqual(walker.pose({bones:['pelvis']}).bones,poseBefore.bones.slice(0,1),'walking resumes without a user play command');
+ await walker.dispose();assert.equal(notify,null,'dispose removes the flame subscription');
+
+ // FC-1: exercise rejected and disappearing probes through the actual timer
+ // bridge. Missing observations must not become long exposure at the old level.
+ const timers={set:globalThis.setInterval,clear:globalThis.clearInterval};let poll;
+ globalThis.setInterval=fn=>{poll=fn;return {testTimer:true};};globalThis.clearInterval=()=>{};
+ let sampled;
+ try{
+  fire={active:true,paused:false};let power=1,reject=false;
+  const probe={sample:async points=>{if(reject)throw Error('probe unavailable');return {status:'effective',source:{power},values:points.map(()=>({luminance:.1*power}))};}};
+  window.kaminosFireLightProbe=probe;
+  sampled=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  await sampled.operations.action({kind:'wander'});
+  const tick=()=>{for(let i=0;i<8;i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}};
+  await poll();reject=true;tick();await poll();
+  assert.equal(sampled.read().attention.light.status,'unavailable','FC-1: a rejected probe lowers sensory status');
+  for(let i=0;i<119;i++){tick();await poll();}
+  reject=false;power=8;for(let i=0;i<8;i++){tick();await poll();}
+  power=1;for(let i=0;i<16;i++){tick();await poll();}
+  const faded=sampled.read().attention.history.find(e=>e.kind==='interrupt'&&e.cause==='light faded');
+  assert.ok(faded&&faded.familiarity<.2,'FC-1: failed polls did not teach the old power as a familiar destination');
+  delete window.kaminosFireLightProbe;tick();await poll();
+  assert.equal(sampled.read().attention.light.status,'unavailable','a disappearing probe also breaks observation continuity');
+ }finally{await sampled?.dispose();globalThis.setInterval=timers.set;globalThis.clearInterval=timers.clear;delete window.kaminosFireLightProbe;}
+
+ // Actual timer -> source-state onset -> retained motion consumer. The light
+ // probe deliberately keeps its cached lit output while the source is off,
+ // matching the native volume-toggle observation from the room.
+ let onsetWalker,onsetPoll;const savedTimers={set:globalThis.setInterval,clear:globalThis.clearInterval};
+ globalThis.setInterval=fn=>{onsetPoll=fn;return {};};globalThis.clearInterval=()=>{};
+ try{
+  fire={active:false,paused:false};
+  window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.08}))})};
+  onsetWalker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  await onsetWalker.operations.action({kind:'wander'});
+  const advance=seconds=>{for(let i=0;i<Math.round(seconds*60);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});}};
+  advance(.1); // OS-1: source transition precedes the first successful poll.
+  fire.active=true;notify();advance(.1);await onsetPoll();advance(1/60);
+  assert.ok(onsetWalker.read().attention.startle,'real timer bridge reads onset despite cached light while off');
+  const before=onsetWalker.read(),pose=onsetWalker.pose({bones:['pelvis','spine-chest']});
+  advance(.1);
+  assert.equal(onsetWalker.read().playback.frame,before.playback.frame,'startle holds retained stride');
+  assert.deepEqual(onsetWalker.pose({bones:['pelvis']}).bones,pose.bones.slice(0,1),'root does not slide during recoil');
+  assert.notDeepEqual(onsetWalker.pose({bones:['spine-chest']}).bones,pose.bones.slice(1),'chest expresses the pulse while stride is held');
+  advance(3);assert.equal(onsetWalker.read().attention.startle,null);assert.notEqual(onsetWalker.read().playback.frame,before.playback.frame,'autonomous walking resumes');
+ }finally{await onsetWalker?.dispose();globalThis.setInterval=savedTimers.set;globalThis.clearInterval=savedTimers.clear;delete window.kaminosFireLightProbe;}
+
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}

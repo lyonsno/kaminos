@@ -3346,6 +3346,7 @@ import {applyPreviewQualityCaps,previewScenePixelRatio} from './preview-quality.
 import {styleHelperLines} from './scene-helper-lines.mjs';
 import {createSelectionFeedback} from './scene-selection-feedback.mjs';
 import {createSceneOwnerControls} from './scene-owner-controls.mjs';
+import {visibleSceneIntersections} from './scene-visible-picking.mjs';
 import {checkedSelection,changeSelection,selectionTransformRoots,selectionFrame,mixedSelectionValue,objectsInScreenBox,pointerHitsBoxOutline,createSelectionTransformTarget} from './scene-selection.mjs';
 
 let authoringWorkspace = null;
@@ -3422,7 +3423,7 @@ function viewportVisibilityObjects(){
 function sceneVisibilityContext(){return {objects:sceneObjects,groups:sceneGroups,fields:[...(activeSceneComposition?[{id:'flame-field'}]:[]),...(localLiquidSetup?[{id:'water-field'}]:[])]};}
 function isSceneItemVisible(id){return itemVisible(id,viewportDisplay.hiddenIds,sceneVisibilityContext());}
 function syncViewportDisplayControls() {
- for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
+ for(const key of ['overlays','gizmos','outlines','bounds','helpers','bones','paths','zones','domains','emitters','hints']){const input=document.getElementById('viewport-show-'+key);if(input)input.checked=viewportDisplay[key];}
  for(const key of ['outlineWidth','outlineOpacity','domainWidth','domainOpacity','emitterWidth','emitterOpacity']){const input=document.getElementById('viewport-'+key);if(input&&document.activeElement!==input)input.value=String(viewportDisplay[key]);}
  for(const button of document.querySelectorAll('.viewport-shading [data-shading]'))button.setAttribute('aria-pressed',String(button.dataset.shading===viewportDisplay.shading));
  for(const button of document.querySelectorAll('.viewport-water [data-water]'))button.setAttribute('aria-pressed',String(button.dataset.water===viewportDisplay.water));
@@ -6642,7 +6643,7 @@ function sceneHitsFromViewportPointer(event) {
   );
   sceneRaycaster.setFromCamera(scenePointerNdc, camera);
   sceneRaycaster.params.Points.threshold = SCENE_OBJECT_POINT_PICK_THRESHOLD;
-  return sceneRaycaster.intersectObjects(sceneObjects.filter(record=>record.object.visible&&isSceneItemVisible(record.id)).map(record => record.object), true);
+  return visibleSceneIntersections({raycaster:sceneRaycaster,roots:sceneObjects.filter(record=>record.object.visible&&isSceneItemVisible(record.id)).map(record=>record.object),camera,viewport:rect});
 }
 
 function pickSceneObjectFromViewportPointer(event,hits=sceneHitsFromViewportPointer(event)) {
@@ -6669,7 +6670,7 @@ function pickVisibleFlameFromViewportPointer(hits) {
 }
 
 function viewportEventHitsInteractiveOverlay(event) {
-  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback');
+  return !!event.target.closest?.('#authoring-viewport-tools, #experiment-toolbar, #transform-bar, #greenroom-preview-controls, #info-bar, #hybrid-splat-viewport-controls, #scene-add-menu, #view-navigation-pie, #volume-viewer-play, .playback-controls, .scene-owner-playback, .living-scene-run');
 }
 
 function viewportEventIsInsideCanvas(event) {
@@ -10648,38 +10649,6 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const lumaWeights = vec3(0.2126, 0.7152, 0.0722);
   const gradientEps = fieldCellPitch;
   const lumaAt = (positionNode) => sampleLatticeAt(positionNode).rgb.dot(lumaWeights);
-  const latticeGradient = vec3(
-    lumaAt(worldPositionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
-    lumaAt(worldPositionNode.add(vec3(0.0, gradientEps, 0.0))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, gradientEps, 0.0)))),
-    lumaAt(worldPositionNode.add(vec3(0.0, 0.0, gradientEps))).sub(lumaAt(worldPositionNode.sub(vec3(0.0, 0.0, gradientEps))))
-  );
-  const gradientLength = latticeGradient.length();
-  const lightDirection = latticeGradient.div(gradientLength.max(1e-6));
-
-  // Outside the lattice box, attenuate continuously with exterior distance so
-  // nearby receivers keep light while the far scene falls off.
-  const exteriorNode = fieldWorldMin.sub(worldPositionNode).max(worldPositionNode.sub(fieldWorldMax)).max(vec3(0.0));
-  const exteriorDistance = exteriorNode.length();
-  const exteriorFalloff = float(1.0).div(
-    exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
-  );
-
-  // Only the native clear depth is background. A .999 cutoff rejects real
-  // surfaces ~9.1 units away with this camera's .01/100 near/far planes,
-  // sweeping a false lighting boundary across the kiln during camera dolly.
-  const backgroundMask = float(1.0).sub(step(float(1.0), depthSampleNode));
-  const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
-  // The prepass stores view-space normals; rotate into world space with the
-  // scene camera's world matrix (w = 0 keeps it a pure rotation).
-  const worldNormalNode = sceneCameraWorldMatrix.mul(vec4(normalSampleNode, 0.0)).xyz.normalize();
-  // Half-wrapped N.L keeps soft fill on grazing surfaces while giving the
-  // above/below/beside response; where the gradient is too weak to trust
-  // (deep outside the field, or dead-flat regions) fall back to isotropic.
-  const wrappedNdotL = worldNormalNode.dot(lightDirection).mul(0.5).add(0.5).pow(2.0);
-  const gradientConfidence = gradientLength.smoothstep(0.00002, 0.0005);
-  const directionalResponse = mix(float(1.0), wrappedNdotL.mul(0.9).add(0.1), gradientConfidence);
-  const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
-
   // Analytic far field: the diffusion lattice only carries light ~4 cells
   // from the flame body, which reads as a flashlight pointing straight up.
   // The producer reduces the live field to centroid/power/color each frame
@@ -10689,26 +10658,68 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
   const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
   const fireCenterWorld = fieldWorldMin.add(metaCore.xyz.mul(fieldWorldMax.sub(fieldWorldMin)));
+  const firePower = metaCore.w;
+  // Fire light arriving at a world point with a surface normal, before shadow
+  // and any screen-only masking. Shared by the receiver pixels and by
+  // world-point probes, so both see exactly the same light.
+  const fireLightAt = (positionNode, normalNode) => {
+    // Directional shading: the irradiance field's luminance gradient points
+    // toward the fire, so central differences over one lattice cell recover the
+    // incident light direction at every receiver. Shading with true N.L against
+    // this direction replaces the earlier camera-facing stand-in, which lit
+    // surfaces by screen orientation instead of the fire-to-surface vector
+    // (operator-reported as proximity glow with no above/below response).
+    const latticeGradient = vec3(
+      lumaAt(positionNode.add(vec3(gradientEps, 0.0, 0.0))).sub(lumaAt(positionNode.sub(vec3(gradientEps, 0.0, 0.0)))),
+      lumaAt(positionNode.add(vec3(0.0, gradientEps, 0.0))).sub(lumaAt(positionNode.sub(vec3(0.0, gradientEps, 0.0)))),
+      lumaAt(positionNode.add(vec3(0.0, 0.0, gradientEps))).sub(lumaAt(positionNode.sub(vec3(0.0, 0.0, gradientEps))))
+    );
+    const gradientLength = latticeGradient.length();
+    const lightDirection = latticeGradient.div(gradientLength.max(1e-6));
+    // Outside the lattice box, attenuate continuously with exterior distance so
+    // nearby receivers keep light while the far scene falls off.
+    const exteriorNode = fieldWorldMin.sub(positionNode).max(positionNode.sub(fieldWorldMax)).max(vec3(0.0));
+    const exteriorDistance = exteriorNode.length();
+    const exteriorFalloff = float(1.0).div(
+      exteriorDistance.mul(exteriorDistance).mul(3.0).add(exteriorDistance.mul(1.5)).add(1.0)
+    );
+    // Half-wrapped N.L keeps soft fill on grazing surfaces while giving the
+    // above/below/beside response; where the gradient is too weak to trust
+    // (deep outside the field, or dead-flat regions) fall back to isotropic.
+    const wrappedNdotL = normalNode.dot(lightDirection).mul(0.5).add(0.5).pow(2.0);
+    const gradientConfidence = gradientLength.smoothstep(0.00002, 0.0005);
+    const directionalResponse = mix(float(1.0), wrappedNdotL.mul(0.9).add(0.1), gradientConfidence);
+    const farVector = fireCenterWorld.sub(positionNode);
+    const farDistanceSq = farVector.dot(farVector);
+    const farDirection = farVector.div(farDistanceSq.sqrt().max(1e-5));
+    const farNdotL = normalNode.dot(farDirection).mul(0.5).add(0.5).pow(2.0);
+    // Soft-saturate the radial term (Reinhard) so a large bright fire raises
+    // the wash sublinearly instead of flooding the scene flat: falloff shape
+    // survives because the compression is monotonic in the raw term.
+    const farRadialRaw = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
+    const farRadial = farRadialRaw.div(farRadialRaw.mul(1.5).add(1.0));
+    const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
+    const nearSignal = sampleLatticeAt(positionNode).rgb
+      .mul(exteriorFalloff)
+      .mul(directionalResponse);
+    return { signal: nearSignal.add(farSignal), lightDirection, gradientConfidence, wrappedNdotL, directionalResponse, exteriorFalloff, farSignal };
+  };
+  // Only the native clear depth is background. A .999 cutoff rejects real
+  // surfaces ~9.1 units away with this camera's .01/100 near/far planes,
+  // sweeping a false lighting boundary across the kiln during camera dolly.
+  const backgroundMask = float(1.0).sub(step(float(1.0), depthSampleNode));
+  const normalSampleNode = sceneNormalNode.sample(viewportUV).rgb.normalize();
+  // The prepass stores view-space normals; rotate into world space with the
+  // scene camera's world matrix (w = 0 keeps it a pure rotation).
+  const worldNormalNode = sceneCameraWorldMatrix.mul(vec4(normalSampleNode, 0.0)).xyz.normalize();
+  const materialResponse = baseOutputNode.rgb.mul(0.65).add(vec3(0.35));
   const fireShadow = createFireLightFieldShadow({renderer,scene,
     sourceNode:fireCenterWorld,receiverNode:worldPositionNode,normalNode:worldNormalNode,
     requested:routeParams.get('volume_light_field_shadows') === '1'});
   const fireShadowVisibility = fireShadow.visibility;
-  const firePower = metaCore.w;
-  const farVector = fireCenterWorld.sub(worldPositionNode);
-  const farDistanceSq = farVector.dot(farVector);
-  const farDirection = farVector.div(farDistanceSq.sqrt().max(1e-5));
-  const farNdotL = worldNormalNode.dot(farDirection).mul(0.5).add(0.5).pow(2.0);
-  // Soft-saturate the radial term (Reinhard) so a large bright fire raises
-  // the wash sublinearly instead of flooding the scene flat: falloff shape
-  // survives because the compression is monotonic in the raw term.
-  const farRadialRaw = firePower.mul(0.006).div(farDistanceSq.mul(2.5).add(0.25));
-  const farRadial = farRadialRaw.div(farRadialRaw.mul(1.5).add(1.0));
-  const farSignal = metaColor.rgb.mul(farRadial).mul(farNdotL).mul(farFieldStrength);
-
-  const nearSignal = latticeSample.rgb
-    .mul(exteriorFalloff)
-    .mul(directionalResponse);
-  const receiverSignal = nearSignal.add(farSignal)
+  const pixelLight = fireLightAt(worldPositionNode, worldNormalNode);
+  const { lightDirection, gradientConfidence, wrappedNdotL, directionalResponse, exteriorFalloff, farSignal } = pixelLight;
+  const receiverSignal = pixelLight.signal
     .mul(fireShadowVisibility)
     .mul(backgroundMask)
     .mul(materialResponse)
@@ -10801,8 +10812,53 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     fireLightFieldStrength.value = 0;
   };
 
+  // World-point probes: the same fire light and shadow, evaluated at listed
+  // world points (e.g. around creatures) instead of screen pixels, so what is
+  // sensed does not depend on where the camera looks. Results read back async.
+  const lightProbe = { count: 0, shadow: true, positions: null, normals: null, results: null, node: null, busy: null };
+  const buildLightProbe = (count, shadow) => {
+    lightProbe.count = count; lightProbe.shadow = shadow;
+    lightProbe.positions = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
+    lightProbe.normals = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
+    // One extra slot after the points carries the fire's own output (color, power).
+    lightProbe.results = new THREE.StorageInstancedBufferAttribute(new Float32Array((count + 1) * 4), 4);
+    const positionsNode = TSL.storage(lightProbe.positions, 'vec4', count);
+    const normalsNode = TSL.storage(lightProbe.normals, 'vec4', count);
+    const resultsNode = TSL.storage(lightProbe.results, 'vec4', count + 1);
+    lightProbe.node = Fn(() => {
+      const point = positionsNode.element(TSL.instanceIndex).xyz;
+      const normal = normalsNode.element(TSL.instanceIndex).xyz.normalize();
+      const visible = shadow ? fireShadow.visibilityAt(point, normal) : float(1.0);
+      const atPoint = vec4(fireLightAt(point, normal).signal.mul(visible).mul(fireLightFieldStrength), visible);
+      resultsNode.element(TSL.instanceIndex).assign(TSL.select(TSL.instanceIndex.equal(TSL.uint(count)), vec4(metaColor.rgb, firePower.mul(fireLightFieldStrength)), atPoint));
+    })().compute(count + 1);
+  };
+  const probeLight = async (points, { shadow = true } = {}) => {
+    if (!Array.isArray(points) || points.some(p => !Array.isArray(p?.position) || p.position.length !== 3 || !p.position.every(Number.isFinite)))
+      throw new Error('Fire light probe requires points with finite [x,y,z] positions');
+    if (!passState.effective) return { status: 'unavailable', reason: passState.reason, values: null };
+    if (!points.length) return { status: 'effective', values: [] };
+    while (lightProbe.busy) await lightProbe.busy;
+    if (lightProbe.count !== points.length || lightProbe.shadow !== shadow) buildLightProbe(points.length, shadow);
+    const position = lightProbe.positions.array, normal = lightProbe.normals.array;
+    points.forEach((p, i) => { position.set([...p.position, 1], i * 4); normal.set([...(p.normal ?? [0, 1, 0]), 0], i * 4); });
+    lightProbe.positions.needsUpdate = true; lightProbe.normals.needsUpdate = true;
+    const run = (async () => {
+      await renderer.computeAsync(lightProbe.node);
+      return new Float32Array(await renderer.getArrayBufferAsync(lightProbe.results));
+    })();
+    lightProbe.busy = run.catch(() => {});
+    try {
+      const raw = await run;
+      const n = points.length * 4;
+      return { status: 'effective', identity: 'fire-light-field-world-point-probe-v0', source: { color: [raw[n], raw[n + 1], raw[n + 2]], power: raw[n + 3] }, values: points.map((_, i) => ({
+        rgb: [raw[i * 4], raw[i * 4 + 1], raw[i * 4 + 2]], visibility: raw[i * 4 + 3],
+        luminance: raw[i * 4] * 0.2126 + raw[i * 4 + 1] * 0.7152 + raw[i * 4 + 2] * 0.0722 })) };
+    } finally { lightProbe.busy = null; }
+  };
   return {
     outputNode,
+    probeLight,
     renderShadows() { if(passState.effective) fireShadow.render(); },
     setShadowsEnabled(enabled) { return fireShadow.setEnabled(enabled); },
     diagnoseShadows(anchors) { return fireShadow.diagnose(anchors,camera.position.toArray()); },
@@ -11263,6 +11319,9 @@ async function initScene() {
   };
   window.kaminosSceneEmissiveCameraDebugState=()=>sceneEmissiveCamera?.debugState()??{requested:false,effective:false,reason:'distributed-route-not-mounted'};
   let sceneCameraStatusText='';
+  // Sample the fire's light at world points (async, ~1-2 frames). Reports
+  // 'unavailable' explicitly when the light field is not running.
+  window.kaminosFireLightProbe = { sample: (points, options) => fireLightFieldPass?.probeLight ? fireLightFieldPass.probeLight(points, options) : Promise.resolve({ status: 'unavailable', reason: 'fire-light-field-pass-not-constructed', values: null }) };
   window.kaminosFireLightFieldDebugState = () => (fireLightFieldPass
     ? fireLightFieldPass.debugState()
     : {
@@ -21164,12 +21223,13 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
-      volumePrototype.setActive(false);
+      await volumePrototype.setActive(false);
       setInfo('Volume renderer disabled');
     } else {
       await volumePrototype.setActive(true);
       setInfo('Volume renderer — native WebGPU compute fluid raymarch');
     }
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
     refreshVolumeReadout();
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);
