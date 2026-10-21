@@ -83,7 +83,7 @@ test('the shader derives target, momentum and scalar entry from one weight and o
   assert.doesNotMatch(weight, /smoothstep\([a-zA-Z]+ \+ 0\.5, [a-zA-Z]+ - 0\.5/, 'no reversed-edge smoothstep');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   assert.match(main, /let immersedSourcesAtCell = immersedContributions\(cell\);/);
-  const collection=readFileSync(new URL('../volume-immersed-source-collection.mjs',import.meta.url),'utf8');
+  const collection=readFileSync(new URL('../volume-immersed-source-collection-wgsl.mjs',import.meta.url),'utf8');
   assert.match(collection,/let slab=immersedSourceWeight\(cell\);let w=immersedPatternedWeight\(cell,slab\);/);
   assert.match(main,/let immersedTarget = immersedSourcesAtCell\.supply;/);assert.match(collection,/min\(u\.immersed_source_d.y,w\*u\.immersed_source_d.z\)/);
   assert.match(main, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored beside heat release');
