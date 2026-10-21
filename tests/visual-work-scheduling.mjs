@@ -1,4 +1,4 @@
-// Test: node --test tests/visual-work-scheduling.mjs
+// kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {checkWater,checkOverlap} from '../examples/visual-work/scheduling-evidence.mjs';
