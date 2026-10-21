@@ -23,7 +23,7 @@ export async function prepareGenerationLevels({decode: {vertices, triangles}, ma
   const phase = name => { report.phase = name; onPhase(report); };
   try {
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored hero mesh');
-    if (!targets.every(t => Number.isSafeInteger(t) && t > 0)) throw Error('targets must be positive integers');
+    if (!targets.length || !targets.every(t => Number.isSafeInteger(t) && t > 0)) throw Error('at least one target face count is required, each a positive integer');
     report.raw = {vertices: vertices.length / 3, faces: triangles.length / 3};
     // Refuse taken slots before storing anything (unless replacing): the server keeps one level per
     // (faces, route), and a tier stored but then refused would linger as an unregistered mesh.
@@ -95,18 +95,26 @@ export async function prepareGenerationLevels({decode: {vertices, triangles}, ma
       }
     }
     phase('publish');
-    const body = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
+    // Each step counts only with a receipt naming what was stored or registered; a 200 that is
+    // not that receipt (an HTML fallback, an empty object) is a failure, not publication.
+    const receipt = async response => { const text = await response.text(); try { return JSON.parse(text); } catch { return {raw: text.slice(0, 500)}; } };
     for (const tier of tiers) {
-      const ingest = await fetch(`${server}/api/ingest-mesh`, {method: 'POST', body: new Uint8Array(tier.glb)});
-      const stored = await body(ingest);
+      const bytes = new Uint8Array(tier.glb), digest = await sha256(bytes);
+      const ingest = await fetch(`${server}/api/ingest-mesh`, {method: 'POST', body: bytes});
+      const stored = await receipt(ingest);
       if (!ingest.ok) { report.failedTier = tier.target; throw Error(`ingest failed for ${tier.target} (HTTP ${ingest.status}): ${JSON.stringify(stored)}`); }
-      const level = {sha256: stored.sha256, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
+      if (stored.sha256 !== digest) { report.failedTier = tier.target; throw Error(`ingest receipt for ${tier.target} does not name the stored bytes ${digest}: ${JSON.stringify(stored).slice(0, 300)}`); }
+      const level = {sha256: digest, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
         closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges, frameDrift: tier.frameDrift,
         error: tier.error, errorAgainstRawDecode: tier.errorAgainstRawDecode, ...(tier.normalMap ? {normalMap: tier.normalMap} : {})};
-      const register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})});
-      const registered = await body(register);
-      if (!register.ok) { report.failedTier = tier.target; report.orphanedIngest = stored.sha256;
+      let register;
+      try { register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})}); }
+      catch (error) { report.failedTier = tier.target; report.unconfirmedRegistration = digest; throw error; } // outcome unknown: stored, maybe registered
+      const registered = await receipt(register);
+      if (!register.ok) { report.failedTier = tier.target; report.orphanedIngest = digest;
         throw Error(`register failed for ${tier.target} (HTTP ${register.status}): ${JSON.stringify(registered)}`); }
+      if (registered.source !== source || registered.level?.sha256 !== digest) { report.failedTier = tier.target; report.orphanedIngest = digest;
+        throw Error(`registration receipt for ${tier.target} does not name level ${digest} of ${source}: ${JSON.stringify(registered).slice(0, 300)}`); }
       report.tiers.push({target: tier.target, ...level, bytes: tier.glb.byteLength, timing: tier.timing}); onPhase(report);
     }
     phase('done');
