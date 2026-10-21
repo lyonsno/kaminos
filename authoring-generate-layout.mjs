@@ -15,12 +15,15 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');
-  // Action first: the model and its button stay in view; the preview takes what is left.
+  // The input and action share a row so neither is buried by model help text.
   const actions=document.createElement('div');actions.className='asset-step-actions';
-  actions.append(...[byId('asset-prepare'),byId('asset-run'),byId('asset-recover')].filter(Boolean));
+  actions.append(...[byId('asset-run'),byId('asset-prepare'),byId('asset-recover')].filter(Boolean));
   const masks=document.createElement('button');masks.type='button';masks.id='asset-step-masks';masks.textContent='Masks…';masks.title='Cut out part of this image with SAM';
   masks.onclick=()=>{const image=selected();if(image?.kind==='image')openMasks?.(image);};actions.append(masks);
-  mesh.append(...[byId('asset-mesh-model-row'),byId('asset-express-row'),settings,actions,queue,preview,sourceName,byId('asset-preparation-status')].filter(Boolean));
+  const controls=document.createElement('div');controls.className='asset-mesh-controls';
+  controls.append(...[byId('asset-mesh-model-row'),actions,byId('asset-express-row')].filter(Boolean));
+  const input=document.createElement('div');input.className='asset-mesh-input';input.append(preview,controls);
+  mesh.append(input,sourceName,settings,queue,...[byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();
   const resultList=byId('asset-results');const empty=document.createElement('p');empty.className='asset-help';empty.id='asset-results-empty';empty.textContent='Generated meshes appear here. Add puts one in the scene.';
   results.append(empty,resultList);
@@ -31,6 +34,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     const source=byId('asset-image');const showing=source&&!source.hidden&&source.getAttribute('src');
     preview.hidden=!showing;if(showing&&preview.getAttribute('src')!==source.getAttribute('src'))preview.src=source.getAttribute('src');
     sourceName.textContent=showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
+    preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
     masks.hidden=!openMasks||selected()?.kind!=='image';

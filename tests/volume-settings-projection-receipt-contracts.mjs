@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import vm from 'node:vm';
+import { flamePresetForLocalControls } from '../flame-authoring.mjs';
+import { flamePoseToDomain } from '../scene-flame-emitter.mjs';
 import {
   describeVolumeSettingsLibraryPublication,
   describeVolumeSettingsPresetProjection,
@@ -197,8 +200,24 @@ assert.equal(volumeSettingsPresetLabelReuseBlock({ ...exact, label: 'Plain', ali
 const init = index.slice(index.indexOf('async function initKaminosVolumeRoute('));
 const initBody = init.slice(0, init.indexOf('\n}\n'));
 assert.match(initBody, /syncControls\(\);\s*recordVolumeSettingsPresetApplied\(\);/, 'the applied values are read back once the route has set every control');
-const recordFn = index.slice(index.indexOf('function recordVolumeSettingsPresetApplied('), index.indexOf('function recordVolumeSettingsPresetApplied(') + 900);
-assert.match(recordFn, /volumeSettingsPresetAppliedDifferences\(activeVolumeSettingsPresetReceipt\.preset, buildVolumeSettingsPreset\(\)\)/);
+const recordFn = index.match(/function recordVolumeSettingsPresetApplied\(\)[^]*?\n\}/)?.[0];
+assert.ok(recordFn, 'the actual applied-value readback function is present');
+for (const scale of [0.1, 1, 8]) {
+  const portable = { sourceRadiusSpace:'simulation-v1', domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:0.3}} };
+  const local = { domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:0.3/scale}} };
+  const context = vm.createContext({ activeVolumeSettingsPresetReceipt:{preset:portable}, activeVolumeSettingsPresetApplied:[],
+    flamePresetForLocalControls, flamePoseToDomain, volumeSettingsPresetAppliedDifferences, console,
+    flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},
+    flameDomainTranslation:[0,0,0], flameDomainScale:1, buildVolumeSettingsPreset:()=>local,
+    showVolumeSettingsPresetStatus(){}, window:{} });
+  vm.runInContext(recordFn, context);
+  assert.equal(context.recordVolumeSettingsPresetApplied().length, 0, 'portable radius is compared in local coordinates');
+  local.domControls['volume-immersed-radius'].value *= 1.1;
+  const actual = context.recordVolumeSettingsPresetApplied();
+  assert.equal(actual.length, 1, 'a real radius edit is still reported');
+  assert.equal(actual[0].id, 'volume-immersed-radius');
+  assert.equal(portable.domControls['volume-immersed-radius'].value, 0.3, 'readback preserves the immutable receipt');
+}
 assert.match(statusFn, /describeVolumeSettingsPresetAppliedDifferences\(activeVolumeSettingsPresetApplied\)/, 'the loaded-basin status reports what changed on load');
 for (const [name, body] of [['save', save], ['promotion', promote]]) {
   assert.match(body, /volumeSettingsPresetLabelReuseBlock\(activeVolumeSettingsPresetReceipt, label, activeVolumeSettingsPresetApplied\)/,

@@ -10,6 +10,7 @@ import { leanEmissiveRaymarchAdmission, RAYMARCH_NEIGHBORHOOD_WGSL, FLAME_GUIDAN
 import { OPTICAL_TRACE_IDENTITY, traceChunkPlan, validateTraceRows, createOpticalCaptureOwner } from './volume-optical-trace.mjs';
 import { opticalSteppingConfig, resolveOpticalStepping, OPTICAL_STEPPING_WGSL } from './volume-optical-native.mjs';
 import { createRayStepTelemetry } from './volume-ray-step-telemetry.mjs';
+import { frameCadenceSummary } from './volume-frame-timing.mjs';
 import { applyPreviewQualityCaps } from './preview-quality.mjs';
 import { REACTANT_COMBUSTION_WGSL, REACTANT_COMBUSTION_UNIFORM_FLOATS, REACTANT_COMBUSTION_IDENTITY, REACTANT_MODEL, resolveReactantCombustionConfig, reactantCombustionUniformValues } from './volume-reactant-combustion.mjs';
 import { buildInflowCoverageMap, normalizeInflowApertureSpec, INFLOW_APERTURE_PATTERNS, INFLOW_APERTURE_RETIRED_PATTERNS } from './volume-inflow-aperture.mjs';
@@ -1472,6 +1473,11 @@ export async function requestKaminosSharedWebGpuDevice({
     );
   }
   raise('maxStorageBuffersPerShaderStage', storageBuffersPerStage);
+  // The shared device also owns Three's composed materials and authored
+  // shadow maps. Enabling another light can exceed WebGPU's default16 even
+  // though the adapter admits the layout. Preserve that actual capacity.
+  const sampledTexturesPerStage = adapterLimit('maxSampledTexturesPerShaderStage');
+  if (sampledTexturesPerStage > 0) raise('maxSampledTexturesPerShaderStage', sampledTexturesPerStage);
   for (const [name, required] of Object.entries({
     maxStorageBuffersInFragmentStage: 5,
     maxStorageBuffersInVertexStage: 4,
@@ -2745,7 +2751,7 @@ export function resolveImmersedSourceConfig(controls = {}, options = {}) {
   const puffFactor = Number.isFinite(options.puffFactor) ? options.puffFactor : 1;
   const centre = [clampFinite(controls.immersedCentreX, -1, 1, 0), clampFinite(controls.immersedCentreY, -1, -1 + 2 * gridHeight / grid, -0.5), clampFinite(controls.immersedCentreZ, -1, 1, 0)];
   const yaw = clampFinite(controls.immersedYaw, 0, 360, 0), pitch = clampFinite(controls.immersedPitch, -90, 90, 90);
-  const radius = clampFinite(controls.immersedRadius, 0.02, 0.5, 0.2);
+  const radius = clampFinite(controls.immersedRadius, 0.02, Infinity, 0.2);
   const thickness = clampFinite(controls.immersedThickness, 1, 4, 1.5);
   const speed = clampFinite(controls.immersedSpeed, 0, 1, 0.1);
   const fuel = clampFinite(controls.immersedFuel, 0, 1, 0.56);
@@ -12903,13 +12909,20 @@ export function createKaminosVolumePrototype({
     if (lastRafNow > 0) pushTimingSample('rafDelta', now - lastRafNow);
     lastRafNow = now;
     pushTimingSample('cpuFrame', cpuFrameMs);
-    const rafP95 = percentileTiming(timingSamples.rafDelta, 0.95);
+    const cadence = frameCadenceSummary(timingSamples.rafDelta);
+    const rafP95 = cadence.p95Ms;
     const cpuP95 = percentileTiming(timingSamples.cpuFrame, 0.95);
     state.timing = {
       ...state.timing,
       timingEvidenceSource: 'raf-and-queue-proxy',
       timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
       rafFps: rafP95 ? 1000 / rafP95 : 0,
+      // Preserve rafFps for existing evidence consumers; its historical
+      // definition is inverse p95. The visible FPS uses the elapsed average.
+      rafMeanFps: cadence.meanFps,
+      frameMeanMs: cadence.meanMs,
+      frameTimingSamples: cadence.samples,
+      frameTimingIgnoredIntervals: cadence.ignoredSamples,
       frameDeltaMs: timingSamples.rafDelta.at(-1) ?? 0,
       frameP95Ms: rafP95 ?? 0,
       cpuFrameMs,
@@ -17258,7 +17271,10 @@ export function createKaminosVolumePrototype({
     uniforms[365] = controlsSnapshot.phasedSway === false ? 0 : 1;
     uniforms[366] = controlsSnapshot.proceduralDetailForces === false ? 0 : 1;
     uniforms[367] = 0;
-    const physicalColorMode = controlsSnapshot.physicalColorMode ?? 0;
+    // Emissive transport is the one colour route: the mode select is retired
+    // with the legacy material laws (operator, 2026-10-18). Reading it from the
+    // snapshot drew the legacy transfer (no emission) once the key was gone.
+    const physicalColorMode = 2;
     const physicalColorRequested = physicalColorMode > 0;
     const ordinaryEmissiveRoute = productFrameOwner !== 'caller'
       && volumePresentationModeEffective === 'beauty'
@@ -17281,7 +17297,6 @@ export function createKaminosVolumePrototype({
       emissiveWhiteMatrix = cameraWhiteBalance(whiteKelvin);
       emissiveWhiteKelvin = whiteKelvin;
     }
-    const transportedEmissiveMaterial = (controlsSnapshot.physicalMaterialLaw ?? 0) === 1;
     const physicsAppearance = resolvePhysicsAppearance(controlsSnapshot, {
       reactantAdmitted: reactantCombustionConfig.effective.admitted === true,
       emissiveRouteEffective: physicalColorEffective && physicalColorMode === 2,
@@ -17290,7 +17305,7 @@ export function createKaminosVolumePrototype({
     uniforms.set([
       controlsSnapshot.physicalSmokeExtinction ?? 2,
       controlsSnapshot.physicalSmokeAlbedo ?? 0.35,
-      controlsSnapshot.physicalAmbient ?? 0.02, transportedEmissiveMaterial ? 1 : 0,
+      controlsSnapshot.physicalAmbient ?? 0.02, 0, // Physics is the material law; the transported stand-in (w = 1) is retired
       ...emissiveWhiteMatrix[0], 0, ...emissiveWhiteMatrix[1], 0, ...emissiveWhiteMatrix[2], 0,
       ...physicsAppearanceUniformValues(physicsAppearance),
     ], EMISSIVE_UNIFORM_OFFSET);
@@ -17305,9 +17320,9 @@ export function createKaminosVolumePrototype({
       rayStartPattern: uniforms[47] > 0.5 ? (controlsSnapshot.rayNoiseAnimated ? 'fast-spatiotemporal-128x128x32-v1' : 'fast-spatial-slice-zero-128-v1') : 'midpoint',
       rayNoisePhase: uniforms[41],
       displayTransform: uniforms[46] > 0.5 ? 'agx-rec2020-default-srgb-v1' : physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-bradford-white-channel-shoulder-srgb-v4' : 'peak-shoulder-delayed-neutral-srgb-v2') : 'legacy-exponential-power',
-      materialLawRequested: physicalColorMode === 2 ? (physicsAppearance.requested ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      materialLawEffective: physicalColorMode === 2 && physicalColorEffective ? (physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : transportedEmissiveMaterial ? 'transported-heat-soot-v1' : 'mixed-carrier-soot-floor-v2') : null,
-      temperatureAuthority: physicalColorMode === 2 ? (physicsAppearance.effective.render ? 'transported-heat-linear-kelvin-per-heat' : transportedEmissiveMaterial ? 'transported-heat-to-peak-kelvin-minus-cooling-spread' : 'mixed-heat-flame-ember-detail-lick-to-kelvin') : 'render-only-heat-proxy-to-kelvin',
+      materialLawRequested: physicalColorMode === 2 ? 'physics-soot-blackbody-v0' : null,
+      materialLawEffective: physicalColorMode === 2 && physicalColorEffective && physicsAppearance.effective.render ? 'physics-soot-blackbody-v0' : null,
+      temperatureAuthority: physicalColorMode === 2 ? 'transported-heat-linear-kelvin-per-heat' : null,
       temperature: uniforms[369], temperatureSpread: uniforms[370], thermalStrength: uniforms[371],
       cleanStrength: uniforms[372], exposureEV: uniforms[373], highlightKnee: uniforms[374],
       paletteAuthority: physicalColorEffective ? (physicalColorMode === 2 ? 'fixed-reference-planck-power-plus-approximate-reaction-spectrum' : 'thermal-lut-plus-clean-palette-no-pyro-repaint') : 'legacy',

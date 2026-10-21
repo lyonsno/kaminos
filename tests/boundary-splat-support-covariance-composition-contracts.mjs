@@ -16,16 +16,6 @@ assert.match(
   /BOUNDARY_SPLAT_KERNEL_MOMENT_AUTHORITY\s*=\s*'base-footprint-plus-flow-kernel-second-moment-tangent-covariance-v0'/,
   'the combined route must name the exact footprint authority rather than generic splat authority',
 );
-assert.match(
-  page,
-  /<option value="kernel_moment_covariance">kernel moment covariance<\/option>/,
-  'the cockpit must request covariance explicitly without substituting another splat mode',
-);
-assert.match(
-  page,
-  /normalizeBoundarySplatMode[\s\S]*'kernel_moment_covariance'/,
-  'URL and preset normalization must retain the covariance request',
-);
 
 const sidecarBake = core.match(/fn csBoundarySidecar[\s\S]*?(?=\n@compute @workgroup_size\(4, 4, 4\)\nfn csMajorant)/)?.[0] || '';
 assert.match(

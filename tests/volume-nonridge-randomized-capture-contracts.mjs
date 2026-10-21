@@ -69,7 +69,7 @@ assert.equal(first.rows[0].role, 'boundary-min');
 assert.equal(first.rows[1].role, 'boundary-max');
 for (const field of NONRIDGE_RANDOMIZED_CONTROL_FIELDS) {
   assert.equal(field.step, expectedSteps.get(field.key), `${field.key} carries its legal slider step`);
-  assert.match(index, new RegExp(`key: '${field.key}'[^\\n]+step: ${String(field.step).replace('.', '\\.')}`), `${field.key} canonical metadata agrees with the assay lattice`);
+  // The cockpit rows for these fields were retired with the legacy material laws (2026-10-18); the assay lattice stands on its own.
   const values = first.rows.map(row => row.requestedControls[field.key]);
   for (const value of values) {
     const latticeIndex = (value - field.min) / field.step;

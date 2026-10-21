@@ -35,4 +35,23 @@ let failedFrame;
 assert.throws(()=>shadow.renderFireShadowBatch({scene,shadows:[{render(frame){failedFrame=frame;throw Error('capture failed');}}]}),/capture failed/);
 assert.throws(()=>real.render(failedFrame),/inactive-or-foreign-batch/,'failed batches must also expire');
 real.dispose();mesh.geometry.dispose();mesh.material.dispose();
+let casterScopes=0;
+shadow.renderFireShadowBatch({scene:new THREE.Scene(),shadows:[],casterScene:{withCapture(fn){casterScopes++;return fn();}}});
+assert.equal(casterScopes,1,'one caster-only scene scope must enclose the complete fresh-cube batch');
+for(const failure of [false,true]){
+  const scene=new THREE.Scene(),mesh=new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial());mesh.castShadow=true;scene.add(mesh);
+  let resets=0,restores=0,hooks=0;
+  const renderer={setRenderObjectFunction(){hooks++;},renderObject(){}};
+  const RendererUtils={resetRendererAndSceneState(){resets++;return {};},restoreRendererAndSceneState(){restores++;}};
+  const lights=Array.from({length:4},(_,i)=>({batchRenderer:renderer,render(batch){
+    assert.equal(mesh.frustumCulled,false,'one batch scope must own temporary culling state');
+    assert.equal(scene.matrixWorldAutoUpdate,false);
+    if(failure&&i===2)throw Error('failed third source');
+  }}));
+  const run=()=>shadow.renderFireShadowBatch({scene,shadows:lights,RendererUtils});
+  if(failure)assert.throws(run,/failed third source/);else run();
+  assert.equal(resets,1);assert.equal(restores,1);assert.equal(hooks,1);
+  assert.equal(mesh.frustumCulled,true);assert.equal(scene.matrixWorldAutoUpdate,true);
+  mesh.geometry.dispose();mesh.material.dispose();
+}
 console.log('PASS shared current capture preparation, visibility and support failure');

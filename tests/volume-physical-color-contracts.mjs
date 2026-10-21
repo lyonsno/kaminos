@@ -36,7 +36,8 @@ const decoded = color.displayPhysicalRGB(input, 0, 0.6).map(color.srgbToLinear);
 input.forEach((v, i) => assert.ok(Math.abs(v - decoded[i]) < 1e-7, 'sub-knee in-gamut radiance is unchanged'));
 console.log('physical color reference, LUT accuracy, and display contracts passed');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
-for (const key of ['mode', 'temperature', 'spread', 'thermal', 'clean', 'exposure', 'knee']) {
+// mode, temperature and spread were retired with the legacy material laws (2026-10-18).
+for (const key of ['thermal', 'clean', 'exposure', 'knee', 'white', 'smoke-extinction', 'smoke-albedo', 'ambient']) {
   const descriptor = schema.controls.find(c => c.key === `volume-physical-${key}`);
   assert.ok(descriptor, `saved color control ${key}`);
   assert.notEqual(descriptor.additiveDefault, undefined, 'old basins have explicit compatibility defaults');

@@ -19,11 +19,12 @@ const dom = artifact.preset.domControls;
 assert.equal(dom['volume-resolution'].value, '64', 'default basin is a 64 grid');
 assert.ok(dom['volume-steps'].value <= 60, 'default basin keeps ray steps cheap');
 assert.equal(dom['volume-adaptive-rays'].value, 1, 'adaptive rays at max');
+const retired = new Set((schema.retiredControls || []).map(control => control.key));
 for (const id of Object.keys(dom)) {
-  if (id === 'volume-render-scale') continue;
+  if (id === 'volume-render-scale' || retired.has(id)) continue; // retired controls are stripped at load (volume-retired-control-migration.mjs)
   assert.ok(html.includes(`id="${id}"`), `default basin control ${id} exists in the page`);
 }
-assert.ok(Object.keys(dom).length <= schema.controlCount, 'default basin fits the current schema');
+assert.ok(Object.keys(dom).filter(id => !retired.has(id)).length <= schema.controlCount, 'default basin fits the current schema once its retired controls are stripped');
 
 // Page: bare routes apply the committed basin before any route parameter is
 // read, and never when a settings preset is routed (preset routes carry their

@@ -799,9 +799,6 @@
     "tests/volume-bonfire-source-periodicity-contracts.mjs": {
       "kind": "node"
     },
-    "tests/volume-boundary-fire-palette-equivalence.mjs": {
-      "kind": "node"
-    },
     "tests/volume-boundary-raster-transition-contracts.mjs": {
       "kind": "node"
     },

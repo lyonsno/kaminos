@@ -10,6 +10,8 @@ function control(id) {
   return match[0];
 }
 
+assertRange('volume-physical-exposure', { min: '-8', max: '8', step: 'any' });
+
 function assertRange(id, { min, max, step }) {
   const source = control(id);
   assert.match(source, new RegExp(`\\bmin="${min}"`), `${id} has minimum ${min}`);
@@ -17,15 +19,6 @@ function assertRange(id, { min, max, step }) {
   assert.match(source, new RegExp(`\\bstep="${step}"`), `${id} has authoring increment ${step}`);
 }
 
-assertRange('volume-exposure', { min: '0', max: '3', step: 'any' });
-assertRange('volume-reaction-boundary-fire-luma', { min: '0', max: '15', step: 'any' });
-assertRange('volume-reaction-boundary-fire-clean-blue', { min: '0', max: '1', step: 'any' });
-assert.match(core, /boundaryFireCleanBlue = clamp\([^\n]+0\.0, 1\.0\)/, 'WGSL Clean blue agrees with its authored ceiling');
-assert.match(core, /boundaryFireLuma = clamp\([^\n]+0\.0, 15\.0\)/, 'WGSL Fire luma agrees with its authored ceiling');
-assert.match(core, /volumeExposure = clamp\(u\.volume_presentation_controls\.x, 0\.0, 3\.0\)/, 'raymarch exposure agrees with its authored ceiling');
-assert.match(core, /cleanBlue: Math\.max\(0, Math\.min\(1,/, 'CPU Clean blue agrees with its authored ceiling');
-assert.match(core, /fireLuma: Math\.max\(0, Math\.min\(15,/, 'CPU Fire luma agrees with its authored ceiling');
-assert.match(core, /clampFinite\(controlsSnapshot\.volumeExposure, 0, 3, 1\)/, 'CPU exposure agrees with its authored ceiling');
 
 assert.match(core, /SUPPORTED_GRID_SIZES\s*=\s*\[[^\]]*128, 136, 140[^\]]*\]/, '136 cubed is a first-class grid between 128 and 140');
 assert.match(index, /<option value="128">128<\/option>\s*<option value="136">136<\/option>\s*<option value="140">140<\/option>/, 'the cockpit exposes the grid widths separately from height');

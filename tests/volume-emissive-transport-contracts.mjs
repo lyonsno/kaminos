@@ -17,10 +17,9 @@ assert.ok(linearLuminance(thermalRadianceRGB(2400)) > 10);
 assert.ok(linearLuminance(thermalRadianceRGB(800)) < 1e-7);
 const matrix = cameraWhiteBalance(4000);
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
-const materialLawControl = schema.controls.find(c => c.key === 'volume-physical-material-law');
-assert.ok(materialLawControl, 'saved settings must identify the selected material law');
-assert.equal(materialLawControl.additiveDefault, '0', 'old presets retain original mixed-carrier material');
-assert.deepEqual(materialLawControl.allowedValues, ['0','1','2']);
+// The material law select is retired (2026-10-18): Physics (soot x blackbody) is the material law; the selector lives on in retiredControls so older basins strip it on load.
+assert.ok((schema.retiredControls || []).some(c => c.key === 'volume-physical-material-law'), 'the retired material law select is declared for migration');
+assert.ok(!schema.controls.some(c => c.key === 'volume-physical-material-law'));
 // Material regression only: a heat/front carrier without transported soot
 // must not manufacture incandescent particles. This is not image acceptance.
 // These two scalar function bodies share JS/WGSL expression syntax. Execute

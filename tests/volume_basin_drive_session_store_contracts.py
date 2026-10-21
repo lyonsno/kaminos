@@ -24,7 +24,7 @@ def control_state(control_schema, exposure):
     values = {"basin": {}, "renderer": {}, "presentation": {}}
     for descriptor in control_schema["inventory"]:
         value = 0
-        if descriptor["id"] == "volume-exposure":
+        if descriptor["id"] == "volume-density":
             value = exposure
         elif descriptor["id"] == "raymarch-smoke-presentation":
             value = "on"
@@ -35,7 +35,7 @@ def control_state(control_schema, exposure):
         "effectivePresentation": {
             "raymarch-smoke-presentation": {"effective": "on", "fallbackReason": None},
         },
-        "route": f"http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_exposure={exposure}",
+        "route": f"http://127.0.0.1:18412/?kaminos_volume_smoke=1&volume_density={exposure}",
     }
 
 
@@ -65,16 +65,16 @@ def session_document(session_store):
         "events": [{
                 "kind": "control",
                 "axis": "basin",
-                "controlId": "volume-exposure",
-            "param": "volume_exposure",
+                "controlId": "volume-density",
+            "param": "volume_density",
             "inputType": "range",
             "requested": 0.12345678901234566,
             "effective": 0.12345678901234566,
             "gesture": {
-                "eventType": "input", "targetId": "volume-exposure",
+                "eventType": "input", "targetId": "volume-density",
                 "targeted": True, "trusted": True, "commandDriven": False,
             },
-            "transactionId": "operator-exposure-0",
+            "transactionId": "operator-density-0",
             "transactionIndex": 0,
             "transactionCount": 1,
             "sequence": 0,
@@ -138,16 +138,16 @@ with tempfile.TemporaryDirectory(prefix="kaminos-basin-session-store-") as tempo
     current_schema = serve._canonical_volume_basin_drive_control_schema()
     historical_schema = copy.deepcopy(current_schema)
     basin = [item for item in historical_schema["inventory"] if item["axis"] == "basin"]
-    removed_ids = {item["id"] for item in basin[192:]}
-    assert "volume-exposure" not in removed_ids
+    removed_ids = {item["id"] for item in basin[120:]}
+    assert "volume-density" not in removed_ids
     historical_schema["inventory"] = [item for item in historical_schema["inventory"]
                                        if item["id"] not in removed_ids]
-    historical_schema["basinControlCount"] = 192
+    historical_schema["basinControlCount"] = 120
     historical_schema["sha256"] = "a" * 64
     canonical = serve._canonical_volume_basin_drive_control_schema
     serve._canonical_volume_basin_drive_control_schema = lambda: historical_schema
     historical = session_document(session_store)
-    historical["sessionId"] = "synthetic-earlier-192-control-drive"
+    historical["sessionId"] = "synthetic-earlier-120-control-drive"
     historical_receipt = serve.write_volume_basin_drive_session(session_store, historical)
     serve._canonical_volume_basin_drive_control_schema = canonical
     read_historical = serve.read_volume_basin_drive_session(session_store, historical_receipt["effective"]["artifactId"])

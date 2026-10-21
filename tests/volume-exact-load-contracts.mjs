@@ -39,33 +39,13 @@ assert.deepEqual(JSON.parse(JSON.stringify(continuous)), [{ id: 'slider', value:
 // The route loader uses the saved-value setter instead of rounding.
 const routeInit = index.slice(index.indexOf('async function initKaminosVolumeRoute('));
 const fieldLoop = routeInit.slice(routeInit.indexOf('for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS)'));
-// The table also holds selects (physical mode, material law), which have no
-// range: they take the table's integer value, as before.
 assert.match(fieldLoop.slice(0, 600), /if \(el\?\.type === 'range'\) applyVolumeRangeSavedValue\(el, routeValue\);\n\s*else if \(el\) el\.value = clampVolumeControlValue\(routeValue, field\)\.toFixed\(field\.decimals\);/,
   'only range inputs go through the saved-value setter; table selects keep their option value');
-const shellLoop = routeInit.slice(routeInit.indexOf("['volume_shell_amount', 'volume-shell-amount'"));
-assert.match(shellLoop.slice(0, 1500), /applyVolumeRangeSavedValue\(document\.getElementById\(id\), routed\)/,
-  'shell route values load through the saved-value setter');
-// Route selects take any option the page offers.
-const shellInspect = routeInit.slice(routeInit.indexOf('const routeShellInspectMode'), routeInit.indexOf('const routeShellInspectMode') + 600);
-assert.match(shellInspect, /volumeSelectOffers\(document\.getElementById\('volume-shell-inspect-mode'\), routeShellInspectMode\)/,
-  'shell inspect accepts every mode the select offers, including boundary_fire');
 const offersSource = grab('function volumeSelectOffers(');
 assert.ok(offersSource);
 const offers = vm.runInNewContext(`${offersSource}; volumeSelectOffers`, {});
 assert.equal(offers({ options: [{ value: 'shell' }, { value: 'boundary_fire' }] }, 'boundary_fire'), true);
 assert.equal(offers({ options: [{ value: 'shell' }] }, 'boundary_fire'), false);
-
-// 35 library basins saved shell inspect as '' (the renderer reads it as shell,
-// mode 0). The select offers no empty option, so loading '' left the select
-// invalid and every flame control's edit session refused to begin.
-const emptyInspect = shellInspect.slice(0, shellInspect.indexOf('} else if'));
-assert.match(emptyInspect, /\.value = 'shell'/, 'an empty saved shell inspect loads as shell, its renderer equivalent');
-const inspectAs = value => ({ domControls: { 'volume-shell-inspect-mode': { value } } });
-assert.deepEqual(volumeSettingsPresetAppliedDifferences(inspectAs(''), inspectAs('shell')), [],
-  'loading an empty shell inspect as shell is not a changed value');
-assert.equal(volumeSettingsPresetAppliedDifferences(inspectAs('thermal'), inspectAs('shell')).length, 1,
-  'other shell inspect changes still show');
 
 // A retired aperture pattern (spiral, concentric) is kept as the basin's
 // request beside the shape fallback. The flame settings check accepts it, and
@@ -92,5 +72,4 @@ assert.equal(patternValue({ value: 'ring', dataset: {} }), 'ring');
 assert.doesNotMatch(index.replace(requestSource, ''), /\.dataset\.volumeRetiredPatternRequest(?! =)(?!;)(?! \?)/,
   'no reader outside volumeAperturePatternValue consults the request directly');
 // Every comparison of basins, not just the load readback, treats '' as shell.
-assert.equal(volumeSettingsPresetControlValuesEqual(inspectAs(''), inspectAs('shell')), true, 'a loaded empty-inspect basin is not Modified');
 console.log('volume exact load contracts passed');

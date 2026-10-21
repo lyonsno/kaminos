@@ -8,7 +8,7 @@ export function portableFlamePreset(preset, localScale) {
   if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
   const d=result.domControls['volume-immersed-radius'];
   const radius=Number(d.rawValue??d.value)*localScale;
-  if(!Number.isFinite(radius)||radius<.02-1e-12||radius>.5+1e-12)throw Error('Effective preset aperture must be within [0.02, 0.5]');
+  if(!Number.isFinite(radius)||radius<.02-1e-12)throw Error('Effective preset aperture must be finite and at least 0.02');
   if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
   if(Object.hasOwn(d,'value'))d.value=radius;
   const route=new URL(result.route);route.searchParams.set('volume_immersed_radius',String(radius));
@@ -90,6 +90,12 @@ export function flamePropertyInputType(source) {
 }
 const reflectedRangeBounds=new WeakMap();
 export function syncFlameRangeBounds(source,bounds) {
+  if(bounds.max===null) {
+    const value=source.value;
+    syncFlameRangeBounds(source,{min:bounds.min,max:Math.max(Number(source.max)||0,Number(value)||0,bounds.min)});
+    source.value=value;
+    return;
+  }
   const requested={min:String(bounds.min),max:String(bounds.max)},previous=reflectedRangeBounds.get(source);
   if(previous && previous.requested.min===requested.min && previous.requested.max===requested.max && source.min===previous.min && source.max===previous.max)return;
   // A browser range input can serialize a derived endpoint with fewer digits.
@@ -122,36 +128,18 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Appearance', view:'look', open:true, fields:[
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
     ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-temperature','Temperature (K)'], ['volume-physical-spread','Temperature spread'],
     ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
-    ['volume-reaction-boundary-fire-clean-color','Clean color'], ['volume-reaction-boundary-fire-soot-color','Soot color'],
-    ['volume-reaction-boundary-fire-luma','Flame brightness'], ['volume-reaction-boundary-fire-clean-blue','Clean blue'],
-    ['volume-reaction-boundary-fire-soot','Soot yield'], ['volume-reaction-boundary-fire-yellow','Soot yellowing'],
-    ['volume-reaction-boundary-fire-warmth','Thermal warmth'],
-  ] },
+    ] },
   { name:'Smoke', view:'look', open:true, fields:[
     ['volume-density','Density'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Albedo'], ['volume-physical-ambient','Ambient light'],
     ['volume-smoke','Smoke amount'],
   ] },
   { name:'Material', view:'look', fields:[
-    ['volume-physical-mode','Color model'], ['volume-physical-material-law','Material law'],
     ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-physical-soot-burnout-rate','Soot burnout rate'],
     ['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
-    ['volume-reaction-boundary-contrast','Contrast'], ['volume-reaction-boundary-gamma','Gamma'],
-    ['volume-reaction-boundary-opacity','Opacity'],
-  ] },
-  { name:'Front structure', view:'shape', open:true, fields:[
-    ['volume-reaction-boundary-fire-ridge','Ridge strength'], ['volume-reaction-boundary-fire-ridge-cut','Ridge threshold'],
-    ['volume-reaction-boundary-fire-tip','Tip breakup'], ['volume-reaction-boundary-fire-erosion','Erosion'],
-    ['volume-reaction-boundary-gradient','Gradient'], ['volume-reaction-boundary-cut','Cut'],
-    ['volume-reaction-boundary-softness','Softness'], ['volume-reaction-boundary-core-reject','Core rejection'],
-    ['volume-reaction-boundary-topology','Topology'], ['volume-reaction-boundary-curl','Curl'],
-    ['volume-reaction-boundary-divergence','Divergence'],
-  ] },
+    ] },
   { name:'Support & reconstruction', view:'shape', fields:[
-    ['volume-reaction-boundary-support-thermal','Thermal support'], ['volume-reaction-boundary-support-reaction','Reaction support'],
-    ['volume-reaction-boundary-support-front','Front support'], ['volume-reaction-boundary-support-interface','Interface support'],
     ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
@@ -202,9 +190,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-grid-overlay','Grid overlay'], ['volume-flow-debug','Flow display'],
   ] },
   { name:'Legacy appearance', view:'look', fields:[
-    ['volume-exposure','Legacy exposure'], ['volume-radiance','Radiance'],
-    ['volume-absorption','Absorption'], ['volume-glow','Glow'],
-  ] },
+    ['volume-absorption','Absorption'], ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
@@ -212,12 +198,12 @@ const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control
 export const FLAME_EMITTER_QUICK_GROUPS = [
   {name:'Flame appearance',quick:true,open:true,fields:[
     ['volume-physical-exposure','Exposure (EV)'],['volume-physical-kelvin-per-heat','Kelvin per heat'],
-    ['volume-physical-temperature','Temperature (K)'],['volume-physical-white','White balance (K)'],
+    ['volume-physical-white','White balance (K)'],
     ['volume-density','Density'],['volume-physical-smoke-extinction','Smoke extinction'],['volume-physical-smoke-albedo','Smoke albedo'],
-    ['volume-physical-clean','Blue / clean emission'],['volume-reaction-boundary-contrast','Contrast'],
+    ['volume-physical-clean','Blue / clean emission'],
   ]},
   {name:'Reaction & cooling',quick:true,open:true,fields:[
-    ['volume-reaction-law','Reaction law'],['volume-physical-material-law','Emission law'],
+    ['volume-reaction-law','Reaction law'],
     ['volume-reactant-mixing-time','Burn / mixing time'],['volume-reactant-cooling-time','Cooling time'],
     ['volume-physical-soot-burnout-rate','Soot burnout rate'],['volume-physical-soot-burnout-kelvin','Burnout temperature (K)'],
     ['volume-heat-release-expansion','Heat release expansion'],
@@ -228,19 +214,14 @@ export const FLAME_EMITTER_QUICK_GROUPS = [
     ['volume-wind-model','Wind model'],['volume-wind-strength','Wind amount'],
   ]},
 ];
-export function flameReactiveSelection(id,value) {
-  if((id==='volume-reaction-law'&&value==='reactant-v0')||(id==='volume-physical-material-law'&&String(value)==='2')) {
-    return {'volume-reaction-law':'reactant-v0','volume-physical-material-law':'2','volume-physical-mode':'2'};
-  }
-  return {};
-}
-export function flamePropertyApplies(id,{toneMapping,materialLaw,physicsActive=false}) {
+// Physics (soot x blackbody) is the material law (2026-10-18; the law select
+// is retired), so its calibration controls always apply.
+export function flamePropertyApplies(id,{toneMapping,physicsActive=false}) {
   if(id==='volume-physical-knee')return toneMapping==='custom';
-  if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return Number(materialLaw)===2;
+  if(['volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin'].includes(id))return true;
   return !physicsActive||!physicsUnused.has(id);
 }
-export function flameAppearanceStatus(materialLaw,physics) {
-  if(Number(materialLaw)!==2)return {state:'off',text:''};
+export function flameAppearanceStatus(physics) {
   if(physics?.requested!==true)return {state:'pending',text:'Physics material: awaiting runtime'};
   if(physics.effective?.render===true)return {state:'active',text:'Physics material active'};
   return {state:'inactive',text:'Physics material inactive: '+String(physics.reason||'unavailable').replace(/^physics-appearance-/,'').replaceAll('-',' ')};
@@ -279,7 +260,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   }
   sharedHost.append(empty);
   const basin = document.createElement('details'); basin.id='flame-basin-browser';basin.className='flame-inspector-section';
-  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><label class="flame-scope"><input type="checkbox" id="flame-basin-keep-size"> Keep current emitter size (legacy preset recovery)</label><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
+  basin.innerHTML='<summary>Preset</summary><p id="flame-basin-current" class="flame-scope"></p><input id="flame-basin-search" type="search" placeholder="Find a preset…" aria-label="Find a preset"><select id="flame-basin-select" aria-label="Fire preset"></select><div class="flame-basin-actions"><button type="button" class="btn" id="flame-basin-apply">Apply</button><button type="button" class="btn" id="flame-basin-refresh">Refresh</button></div><p id="flame-basin-status" role="status" class="flame-scope">Applying replaces flame settings. Undo restores settings; the fluid keeps evolving.</p>';
   panels.get('look').append(basin);
   const byId=id=>document.getElementById(id);
   let entries=[];
@@ -301,7 +282,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   byId('flame-basin-refresh').onclick=refresh;
   byId('flame-basin-apply').onclick=async()=>{
     const button=byId('flame-basin-apply');button.disabled=true;status('Loading basin…');
-    try {const keepSize=byId('flame-basin-keep-size').checked;await applyBasin(byId('flame-basin-select').value,{sourceSize:keepSize?'current':'preset'});status(`Applied${keepSize?' · current emitter size retained':''} · Undo restores the previous settings`);}
+    try {const applied=await applyBasin(byId('flame-basin-select').value);status(`Applied${applied?.source?.sourceSizeRecovery==='clamped-to-valid-range'?' · emitter radius clamped to valid range':''} · Undo restores the previous settings`);}
     catch(error){status(error.message);onError(error);}
     finally{button.disabled=!byId('flame-basin-select').value;sync();}
   };
@@ -343,7 +324,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         const bounds=readControlBounds(id);
         if(bounds)syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
-          if(source[key])field[key]=String(flameControlDisplayValue(id,source[key]));
+          field[key]=bounds?.[key]===null?'':source[key]?String(flameControlDisplayValue(id,source[key])):'';
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
@@ -375,11 +356,11 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   panels.get('look').append(basin);
   const geometry=[...sharedHost.querySelectorAll(':scope > .flame-domain-controls,:scope > .flame-collision-controls')];
   for(const panel of geometry)panels.get('quality').append(panel);
-  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,materialLaw:byId('volume-physical-material-law').value,
+  const mode=()=>({toneMapping:byId('volume-tone-mapping').value,
     physicsActive:readAppearanceRuntime()?.effective?.render===true});
   function syncVisibility(){
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
-    const status=flameAppearanceStatus(currentMode.materialLaw,readAppearanceRuntime());
+    const status=flameAppearanceStatus(readAppearanceRuntime());
     appearanceStatus.hidden=status.state==='off';appearanceStatus.dataset.state=status.state;appearanceStatus.textContent=status.text;
     const law=byId('volume-emitter-source-law').value;
     if(isSearching&&!searching)for(const item of sections)item.open=item.section.open;

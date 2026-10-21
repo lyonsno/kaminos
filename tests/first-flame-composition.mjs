@@ -4,7 +4,36 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from '../lib/three.core.js';
 import vm from 'node:vm';
+import {createFireShadowCasters} from '../fire-shadow-casters.mjs';
 const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+
+test('capture completion refreshes the visible reduced caster diagnostics once',()=>{
+  let statusKey='',syncs=0;
+  const state={casters:{level:'5k',targets:0,captureTriangles:0}},window={__kaminosSceneRadiance:{debugState:()=>state}},settings={sync(){syncs++;}},fireShadowSceneRoute=()=>({});
+  const start=source.indexOf('syncStatus(state){'),end=source.indexOf('\n        }};',start);
+  const syncStatus=eval('({'+source.slice(start,end)+'}}).syncStatus');
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,1);
+  state.casters.targets=1;state.casters.captureTriangles=5000;
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,2,'actual capture counts must replace pending zeros');
+  syncStatus({status:'submitted-awaiting-presentation'});assert.equal(syncs,2,'unchanged frame does not resync controls');
+});
+
+test('missing saved reduced caster keeps original lighting and recovery controls mounted',async()=>{
+  const elements=new Map(),casters=createFireShadowCasters({scene:new THREE.Scene(),load:async()=>{throw Error('fire caster 10k unavailable: HTTP 404');}});
+  const consumer={setShadowCasterLevel:v=>casters.setLevel(v),debugState:()=>({casters:casters.debugState()}),dispose(){throw Error('usable original consumer must not be disposed');}};
+  const document={getElementById(id){if(!elements.has(id))elements.set(id,{hidden:true,value:'1',replaceChildren(){},parentElement:{querySelector:()=>({})}});return elements.get(id);},querySelector:()=>({})};
+  let mounted=false;
+  const context={URLSearchParams,window:{},document,renderer:{},scene:{},volumePrototype:{setSceneVolumeSourceEnabled(){}},sharedGpu:{device:{}},
+    isFireLightFieldRoute:()=>true,renderingMode:'',readFireShadowSceneSettings:()=>({shadowCasterLevel:'10k'}),
+    importedModule:{mountDistributedSceneRadiance(){return consumer;}},bindSceneLightEditInteraction:()=>()=>{},workbenchSceneFrames:{onFrame(){}},
+    createFireShadowSettings:()=>({operations:{},sync(){},mount(){mounted=true;}}),organizeFireRenderingPanel(){},refreshRenderingControls(){}};
+  const start=source.indexOf('let sceneRadianceRouteTask='),end=source.indexOf('async function initKaminosVolumeRoute()',start);
+  vm.createContext(context);vm.runInContext(source.slice(start,end).replace(/await import\([^;]+\);/,'importedModule;'),context);
+  await context.syncSceneRadianceRoute(new URLSearchParams('volume_light_field_shared_source=1&volume_light_field_distributed=1&volume_light_field_hybrid=1&volume_light_field_hybrid_caster_level=10k'));
+  assert.equal(context.window.__kaminosSceneRadiance,consumer);assert.equal(mounted,true);assert.equal(elements.get('rendering-fire-shadows').hidden,false);
+  assert.equal(casters.debugState().requested,'10k');assert.equal(casters.debugState().level,'original');assert.match(casters.debugState().error,/HTTP 404/);
+  await consumer.setShadowCasterLevel('original');assert.equal(casters.debugState().error,null);casters.dispose();
+});
 
 test('late Add Flame passes the mounted opaque surface cache to the hybrid consumer',async()=>{
   const cache={},elements=new Map();let options;
@@ -39,10 +68,8 @@ test('ordinary Add Flame selects live four-source lighting without altering its 
   assert.equal(applied.route.volume_light_field_hybrid_shadow_resolution,'12');
   assert.equal(applied.route.volume_light_field_hybrid_shadow_grain,'screen-animated');
   assert.equal(applied.settings,settings,'do not replace or recolor the saved flame to light the scene');
-  context.activeSceneComposition=null;settings.domControls['volume-physical-mode'].value='0';
-  await context.addFirstFlameField('saved-basin');
-  assert.equal(applied.route.volume_light_field_shared_source,undefined,'a replay basin must not mount an unsupported emissive export');
-  assert.equal(applied.settings.domControls['volume-physical-mode'].value,'0');
+  // The physical mode select is retired (2026-10-18): every basin renders on
+  // the emissive route, so every Add Flame mounts the shared emissive export.
 });
 
 test('first-field writes await lighting synchronization before resuming, including undo',async()=>{

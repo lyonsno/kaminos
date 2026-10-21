@@ -177,13 +177,14 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 12 + 8, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape, the reactant combustion block, the joined boundary and wavelet turbulence');
+  assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS, 'open-boundary parameters follow the complete wavelet block');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.OPEN_WORLD_UNIFORM_OFFSET + 4, 'the open-boundary block occupies one final vec4');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 
 test('the shader carries the inflow as a face flux at the floor, a ghost state below it, and no sponge on the aperture', () => {
   const face = wgslFunction('compactFaceVelocity');
-  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'the ghost face below the floor carries the prescribed inflow, other lower faces none');
+  assert.match(face, /if \(c\[axis\] < 0\) \{\s*if \(joinedBoundary\(\) \|\| openWorldBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}\s*if \(axis == 1u\) \{\s*return inflowFaceVelocity\(c\);\s*\}\s*return 0\.0;/, 'joined/open faces use their projected boundary; legacy floor aperture retains prescribed inflow');
   // Slice 2: the aperture shape left the shader. The cell weight is read from
   // the CPU-built coverage map (volume-inflow-aperture.mjs: the family shape or
   // a pattern, averaged over a 4 x 4 footprint); mode 0 still turns it off.
@@ -274,7 +275,7 @@ test('the shader carries the inflow as a face flux at the floor, a ghost state b
     assert.match(body, /return mix\([a-zA-Z0-9_(), .]+, inflowGhostState\(slot, [a-zA-Z0-9_]+, cellCenter\), ghost\);/, `${sampler} returns the blended sample`);
   }
   const macCormack = wgslFunction('macCormackSlot');
-  assert.match(macCormack, /let predicted = readPredictSlot\(c, slot\);[\s\S]{0,600}if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}[\s\S]{0,400}if \(joinedGhosts\(\) && ghostOutsideAmount\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
+  assert.match(macCormack, /let predicted = readPredictSlot\(c, slot\);[\s\S]*if \(inflowGhostBlend\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}[\s\S]*if \(joinedGhosts\(\) && ghostOutsideAmount\(backCell\) > 0\.0\) \{\s*return predicted;\s*\}\s*let reversed = samplePredictSlot\(forwardCell, slot\);/, 'a floor cell fed by the ghost keeps the first-order prediction: the reverse trace cannot measure an error against a reservoir outside the domain (confirmation 1 of 22e2c61e: the corrector removed ~27 % of the entering fuel)');
   const extrema = wgslFunction('slotExtrema');
   assert.match(extrema, /inflowGhostState\(slot, lo, cellCenter\)/, 'the MacCormack limiter range admits the ghost state so the inflow is not reverted at the floor');
   const main = mainKernel();

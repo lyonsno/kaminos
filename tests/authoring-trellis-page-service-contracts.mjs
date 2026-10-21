@@ -108,3 +108,40 @@ test('the used-input description says what the page actually used, including a c
   assert.deepEqual({kind:thrown.kind,source:thrown.source,error:thrown.error},{kind:'cutout-unsaved',source:null,error:'encode failed'});
   assert.deepEqual(await describeTrellisInput({image:{source:'/alpha.png'},cutout:null,label:'a'}),{kind:'original-alpha',source:'/alpha.png'});
 });
+
+test('the run surfel asset travels with the mesh to persistence',async()=>{
+  const surfelGlb=new ArrayBuffer(16);let got;
+  const {s}=service({runPage:async()=>({glb,generation:{runId:'r'},label:'a',surfelGlb,surfels:{status:'built',count:7}}),
+    persist:async(g,gen,label,extra)=>{got=extra;return {name:'a · TRELLIS.glb'};}});
+  await s.run(input);
+  assert.equal(got?.surfelGlb,surfelGlb);assert.deepEqual(got?.surfels,{status:'built',count:7});
+});
+
+// A run whose decode succeeded and whose mesh finishing failed, carrying the surfels built before cleanup.
+const finishingFailure=(message='UV unwrap failed')=>Object.assign(Error(message),{trellisSurfelsRun:{surfelGlb:new ArrayBuffer(16),surfels:{status:'built',count:7},
+  label:'a',generation:{schema:'kaminos.asset-generation.v1',runId:'r',route:'trellis',input:{sha256:'b'.repeat(64)},meshFinishing:{status:'failed',error:message}}}});
+
+test('a mesh-finishing failure still saves the surfels built from the decoded field, and the failure stays visible',async()=>{
+  let saved;let runs=0;
+  const {s}=service({runPage:async()=>{runs++;throw finishingFailure();},persist:async(g,gen,label,extra)=>{saved={g,gen,label,extra};return {name:'a · TRELLIS surfels.glb'};}});
+  await assert.rejects(s.run(input),/UV unwrap failed/);
+  assert.equal(saved.g,null,'no mesh');assert.equal(saved.extra.surfels.count,7);assert.equal(saved.gen.input.source,input.source);
+  assert.equal(saved.gen.meshFinishing.status,'failed');
+  const view=s.read();assert.equal(view.status,'failed');assert.match(view.error,/UV unwrap failed/);assert.match(view.error,/surfels saved/);
+  assert.equal(view.results.length,1);assert.equal(runs,1);
+});
+
+test('if saving those surfels fails, they are retained and a retry saves them without running TRELLIS again',async()=>{
+  let fail=true,runs=0;
+  const {s}=service({runPage:async()=>{runs++;throw finishingFailure();},persist:async()=>{if(fail)throw Error('disk full');return {name:'a · TRELLIS surfels.glb'};}});
+  await assert.rejects(s.run(input),/UV unwrap failed/);
+  assert.equal(s.busy(),true,'the surfels wait to be saved');fail=false;
+  const saved=await s.retryPersistence();assert.equal(saved.name,'a · TRELLIS surfels.glb');assert.equal(runs,1);
+});
+
+test('a stopped run saves nothing, even with surfels attached',async()=>{
+  let persisted=0;
+  const {s}=service({runPage:async({signal})=>{await new Promise(r=>setTimeout(r,5));throw Object.assign(signal.reason??new DOMException('stopped','AbortError'),{trellisSurfelsRun:finishingFailure().trellisSurfelsRun});},
+    persist:async()=>{persisted++;return {};}});
+  const running=s.run(input);s.stop();assert.equal(await running,null);assert.equal(persisted,0);
+});

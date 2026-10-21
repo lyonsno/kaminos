@@ -132,11 +132,7 @@ assert.doesNotMatch(
   /querySelectorAll\(['"]#sidebar input\[id\^=[^\n]+#sidebar textarea/,
   'preset capture must not silently retain sidebar-only authority',
 );
-assert.match(
-  index,
-  /volume-reaction-boundary-support-thermal[\s\S]*volume-authored-mix-control-root/,
-  'the first recovered slice moves one authored-mix canary without cloning it',
-);
+assert.match(index, /volume-authored-mix-control-root/, 'the authored-mix surface stays as a root with no resident control after the painting retirement');
 
 const {
   VOLUME_AUTHORED_MIX_CONTROL_IDS,
@@ -148,7 +144,7 @@ assert.deepEqual(VOLUME_COCKPIT_CONTROL_ROOT_IDS, [
   'volume-primary-control-root',
   'volume-authored-mix-control-root',
 ]);
-assert.deepEqual(VOLUME_AUTHORED_MIX_CONTROL_IDS, ['volume-reaction-boundary-support-thermal']);
+assert.deepEqual(VOLUME_AUTHORED_MIX_CONTROL_IDS, [], 'the boundary support thermal canary was retired with the legacy material laws');
 assert.match(
   cockpitLayoutSource,
   /select\[data-volume-assay-control="emitter-family"\]/,

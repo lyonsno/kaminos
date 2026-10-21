@@ -87,7 +87,7 @@ async function standIn({hero, levels = []}) {
     if (req.url.startsWith('/api/read')) { res.writeHead(200); res.end(hero); return; }
     if (req.method === 'GET' && req.url.startsWith('/api/mesh-lods')) return json({levels});
     if (req.url.startsWith('/api/ingest-mesh')) { stored.push(body); return json({sha256: createHash('sha256').update(body).digest('hex')}); }
-    if (req.method === 'POST' && req.url.startsWith('/api/mesh-lods')) { registered.push(JSON.parse(body)); return json({retired: []}); }
+    if (req.method === 'POST' && req.url.startsWith('/api/mesh-lods')) { const r = JSON.parse(body); registered.push(r); return json({schema: 'kaminos.lod-set.v0', source: r.source, level: r.level, retired: []}); }
     res.writeHead(500); res.end('unexpected');
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
