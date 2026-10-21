@@ -21730,6 +21730,8 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
   // The applied controls may be remapped below; the immutable source receipt
   // must remain separate even when its preset shares the input control graph.
   state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.volumeSceneRequested=source?.serverProjection?.sceneMigration?.requested
+    ?? (arguments.length ? DEFAULT_VOLUME_SCENE : document.getElementById('volume-scene').dataset.volumeSceneRequest || DEFAULT_VOLUME_SCENE);
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
@@ -21858,7 +21860,7 @@ function checkFlameSettingsState(state) {
 }
 function writeFlameSettingsState(state) {
   supersedeVolumeRebuildHolds();
-  setVolumeControlValue('volume-scene', state.source?.serverProjection?.sceneMigration?.requested || DEFAULT_VOLUME_SCENE);
+  setVolumeControlValue('volume-scene', state.volumeSceneRequested ?? state.source?.serverProjection?.sceneMigration?.requested ?? DEFAULT_VOLUME_SCENE);
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
     const control=document.getElementById(id);
     if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));

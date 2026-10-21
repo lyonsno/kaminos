@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
+import nodeVm from 'node:vm';
+import { volumeSceneReceipt } from '../volume-scene-ontology.mjs';
+const vm = {
+  ...nodeVm,
+  runInNewContext: (code, context) => nodeVm.runInNewContext(code, {
+    volumeSceneReceipt, document: { getElementById: () => null }, ...context,
+  }),
+};
 
 // One invalid flame control makes the edit session refuse every flame-control
 // press (begin validates the whole state). The page lists every invalid control

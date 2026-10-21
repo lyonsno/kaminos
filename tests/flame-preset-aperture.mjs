@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
+import {DEFAULT_VOLUME_SCENE} from '../volume-scene-ontology.mjs';
 import * as aperture from '../flame-authoring.mjs';
 import {volumeSettingsPresetControlValuesEqual,volumeSettingsPresetAppliedDifferences} from '../volume-settings-preset-contract.mjs';
 import {flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusBounds} from '../scene-flame-emitter.mjs';
@@ -13,7 +14,7 @@ function load(radius,options={},space,scale=1){
  const preset={domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:radius,rawValue:String(radius)},...Object.fromEntries(['centre-x','centre-y','centre-z','yaw','pitch'].map(x=>['volume-immersed-'+x,{value:0}]))},rendererControls:{},presentationControls:{}};
  if(space)preset.sourceRadiusSpace=space;
  const current=structuredClone(preset);current.domControls['volume-immersed-radius']={value:.2/scale,rawValue:String(.2/scale)};
- const context={structuredClone,readVolumeSettingsValues:()=>current,activeVolumeSettingsPresetReceipt:null,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},flameDomainTranslation:[0,0,0],flameDomainScale:1,
+ const context={structuredClone,DEFAULT_VOLUME_SCENE,readVolumeSettingsValues:()=>current,activeVolumeSettingsPresetReceipt:null,flameEmitterPose:{position:[0,0,0],rotation:[0,0,0],scale:[scale,scale,scale]},flameDomainTranslation:[0,0,0],flameDomainScale:1,
  flamePoseToDomain,immersedControlsForFlamePose,immersedRadiusBounds,flamePresetRadius:aperture.flamePresetRadius,document:{getElementById:()=>({cloneNode:()=>({value:0})})}};
  vm.createContext(context);vm.runInContext(source+';this.run=flameSettingsState',context);return context.run(preset,{presetId:'legacy-test',label:'Original',preset},options);
 }
