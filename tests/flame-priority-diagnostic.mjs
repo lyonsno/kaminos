@@ -151,13 +151,15 @@ test('growth comparison changes widening only, with paired controls',async()=>{
   assert.equal(r.status,0,r.stdout+r.stderr);
   const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
   const arms=report.armPlan.filter(x=>x.allocation);
-  assert.equal(arms.length,6);
+  assert.equal(arms.length,10);
   for(const allocation of [1,2,3]){
-   const pair=arms.filter(x=>x.allocation===allocation);
+   const pair=arms.filter(x=>x.allocation===allocation&&x.budget<.1);
    assert.deepEqual(pair.map(x=>x.growth),[false,true]);
    const normalized=pair.map(({label,growth,...x})=>x);
    assert.deepEqual(normalized[0],normalized[1]);
   }
+  for(const allocation of [1,2])assert.deepEqual(arms.filter(x=>x.allocation===allocation&&x.budget===.1).map(x=>x.growth),[false,true]);
+  assert.deepEqual(report.armPlan.filter(x=>x.label.startsWith('cell-')).map(x=>[x.priority,x.growth]),[[.75,false],[.75,true]]);
   const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
   assert.match(optical,/if \(DIAG_GROWTH && any\(comparison > vec4<f32>\(tolerance \* 0.125\)\)\) \{ nextWidth = \(\*s\).width; \}/);
   assert.match(source,/assert.equal\(effective.DIAG_GROWTH,growth\)/);
