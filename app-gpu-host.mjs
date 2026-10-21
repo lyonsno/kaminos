@@ -14,7 +14,7 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
   // The frame owner's frames are requested through the app service; inside a model run
   // they wait for the run's duty boundaries, outside one they are served at once.
   const requester=request=>foreground.request({...request,run:service=>host.runForegroundFrame(()=>request.run(service))});
-  let session=null,installedOn=null;
+  let session=null,installedOn=null;const unsettled=new Set();
   async function ensureFrames(){
     const owner=frameOwner();
     if(!owner)throw Error('no frame owner for the app GPU host');
@@ -35,12 +35,17 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
       if(typeof routeId!=='string'||!routeId)throw Error('a model run needs its route id');
       await ensureFrames();
       const run=await foreground.beginRun(runId,{routeId});
-      // A rejected finish leaves the run latched, with no certified settlement: the GPU is not known free,
-      // so whoever holds it on the page's behalf (a Greenroom lease) must not hand it back.
-      // (The kit's run is frozen: the marked finish shadows it on a run that inherits everything else.)
-      const finish=(...args)=>run.finish(...args).catch(error=>{throw Object.assign(error instanceof Error?error:Error(String(error)),{gpuRouteHeld:true});});
+      // A run is unsettled from its start until its finish resolves. A rejected finish leaves it latched with no
+      // certified settlement, so it stays in the ledger: the GPU is not known free, and whoever holds it on the
+      // page's behalf (a Greenroom lease) must not hand it back, however the error is later wrapped.
+      // (The kit's run is frozen: the tracked finish shadows it on a run that inherits everything else.)
+      unsettled.add(runId);
+      const finish=(...args)=>run.finish(...args).then(receipt=>{unsettled.delete(runId);return receipt;},
+        error=>{throw Object.assign(error instanceof Error?error:Error(String(error)),{gpuRouteHeld:true});});
       return Object.freeze(Object.create(run,{finish:{value:finish,enumerable:true}}));
     },
+    // Model runs whose settlement is unresolved (active, or a finish that rejected).
+    unsettledRuns:()=>[...unsettled],
     // A different owner took the frames (e.g. a producer that installs its own requester).
     released(){installedOn=null;},
     snapshot:()=>({foreground:foreground.snapshot(),framesOn:installedOn?.foregroundGpuContext?.().renderer??null}),

@@ -1,12 +1,12 @@
 // A model run in the page holds a cooperative Greenroom lease (serve.py /api/gpu-lease), so Greenroom's
 // queued jobs and other lanes' leases wait for it, and it waits for them. Claims never block: while the GPU
 // is held the run waits and retries, naming the holder. While the run works the lease is renewed.
-// Release only follows settled GPU work: a run that reports its GPU route still held (error.gpuRouteHeld)
-// keeps Greenroom blocked. Renewal stops, so Greenroom moves the lease to ownership_unknown, and the error
+// Release only follows settled GPU work: unsettledWork() (the app GPU host's ledger) must be empty and the run
+// must not report its GPU route held (error.gpuRouteHeld); otherwise Greenroom stays blocked. Renewal stops, so Greenroom moves the lease to ownership_unknown, and the error
 // carries the recovery obligation. A failed release is reported, never swallowed. A server with no
 // Greenroom runs without a lease and says so. An unreachable server, or a broken Greenroom configuration,
 // fails the run: running unleased silently is what the lease exists to prevent.
-export async function withGreenroomLease({post,runId,route,signal=null,onWait=()=>{},
+export async function withGreenroomLease({post,runId,route,signal=null,onWait=()=>{},unsettledWork=async()=>[],
   retryMs=15000,sleep=ms=>new Promise(r=>setTimeout(r,ms)),setTimer=(fn,ms)=>setTimeout(fn,ms),clearTimer=id=>clearTimeout(id)},run){
   const stopped=()=>{if(signal?.aborted)throw Object.assign(Error('GPU wait stopped'),{name:'AbortError'});};
   let lease;
@@ -29,12 +29,16 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
   const stopRenewing=()=>{const t=timer;timer=null;clearTimer(t);};
   const release=()=>post({action:'release',leaseId:lease.leaseId,reason:'page run ended'}).then(()=>null,error=>String(error?.message||error));
   renew();
+  // Release needs positive settlement: no unsettled GPU work in the host's ledger, and no held-route marker.
+  const pending=async()=>{try{return await unsettledWork();}catch(error){return [`settlement unknown: ${error?.message||error}`];}};
   let result;
   try{result=await run(lease);}
   catch(error){
     stopRenewing();
-    if(error?.gpuRouteHeld){
-      error.greenroomHandback={leaseId:lease.leaseId,state:'kept-blocking',reason:`GPU work did not settle (${error.message}); the lease is left to Greenroom recovery`};
+    const unsettled=await pending();
+    if(error?.gpuRouteHeld||unsettled.length){
+      error.greenroomHandback={leaseId:lease.leaseId,state:'kept-blocking',
+        reason:`GPU work did not settle (${unsettled.length?`unsettled: ${unsettled.join(', ')}; `:''}${error.message}); the lease is left to Greenroom recovery`};
       throw error;
     }
     const releaseError=await release();
@@ -42,6 +46,9 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
     throw error;
   }
   stopRenewing();
+  const unsettled=await pending();
+  if(unsettled.length)return {result,lease:{...lease,state:'kept-blocking',...(renewError?{renewError}:{}),
+    releaseError:`not released: GPU work did not settle (${unsettled.join(', ')}); the lease is left to Greenroom recovery`}};
   const releaseError=await release();
   return {result,lease:{...lease,...(renewError?{renewError}:{}),...(releaseError?{releaseError}:{})}};
 }

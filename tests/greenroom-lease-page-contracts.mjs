@@ -94,3 +94,17 @@ test('a renewal that comes back not active (Greenroom moved the lease to ownersh
   const {lease}=await withGreenroomLease({post:s.post,runId:'r',route:'t',setTimer:clock.setTimer,clearTimer:clock.clearTimer},async()=>{await clock.fire();return 'mesh';});
   assert.match(lease.renewError,/ownership_unknown/);
 });
+
+test('GL-01-C2: however the error is wrapped, unsettled GPU work keeps Greenroom blocked',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'});
+  const unsettled=['trellis-frame-run'];
+  const error=await withGreenroomLease({post:s.post,runId:'r',route:'t',unsettledWork:async()=>unsettled},
+    async()=>{throw new AggregateError([Error('route registration failed'),Error('finish receipt clock failed')],'TRELLIS admission failed');}).catch(e=>e);
+  assert.equal(error.message,'TRELLIS admission failed');assert.deepEqual(s.actions(),['claim'],'no release while the host still has an unsettled run');
+  assert.equal(error.greenroomHandback.state,'kept-blocking');assert.match(error.greenroomHandback.reason,/trellis-frame-run/);
+});
+test('GL-01-C2: a run that ends with nothing unsettled releases as before',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'});
+  await assert.rejects(withGreenroomLease({post:s.post,runId:'r',route:'t',unsettledWork:async()=>[]},async()=>{throw Error('ordinary');}));
+  assert.deepEqual(s.actions(),['claim','release']);
+});

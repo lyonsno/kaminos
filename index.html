@@ -27032,6 +27032,8 @@ function setupAuthoringAssets(){
       let outcome;
       try{
         outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,
+          // The app GPU host's ledger of model runs whose settlement is unresolved (U2Net, TRELLIS).
+          unsettledWork:async()=>(await appGpuHost())?.unsettledRuns?.()??[],
           onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
           held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
             if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
@@ -27043,7 +27045,8 @@ function setupAuthoringAssets(){
         throw error;
       }
       const {result,lease}=outcome;trellisPageLease=null;
-      if(lease.releaseError){trellisPageReleaseOwed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
+      if(lease.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${lease.releaseError}. Release lease ${lease.leaseId} once this page's GPU work has stopped`);
+      else if(lease.releaseError){trellisPageReleaseOwed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
       if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),
         ...(lease.renewError?{renewError:lease.renewError}:{}),...(lease.releaseError?{releaseError:lease.releaseError}:{})};
       return result;

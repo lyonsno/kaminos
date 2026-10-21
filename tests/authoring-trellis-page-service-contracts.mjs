@@ -68,7 +68,7 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   const lease=await import('../greenroom-lease.mjs');
   const ctx={meshRunning,meshBusy:m=>meshRunning[m],redraw(){},authoringImageGenerator:{busy:()=>false},Error,JSON,URLSearchParams,setInfo(){},
     location:{search:''},crypto:{randomUUID:()=>'run-1'},addEventListener(){},navigator:{},Blob,setTimeout,clearTimeout,
-    loadModule:async()=>lease,
+    loadModule:async()=>lease,unsettled:[],appGpuHost:async()=>({unsettledRuns:()=>ctx.unsettled}),
     // The server's Greenroom lease: held for the run, released after it.
     fetch:async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-run-1',ttlSeconds:120}:{status:'released'}};},
     trellisPageRunInner:()=>{events.push('run');return new Promise((res,rej)=>{release=()=>fail?rej(Error('boom')):res({generation:{runId:'r'}});});}};
@@ -82,6 +82,9 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   fail=true;release=null;events.length=0;const second=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
   release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
   assert.deepEqual(events,['claim','run','release'],'and the lease is released on failure');
+  // A model run the app GPU host still counts unsettled keeps Greenroom blocked, whatever the error looks like.
+  fail=true;release=null;events.length=0;ctx.unsettled=['trellis-frame-run'];const held=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
+  release();await assert.rejects(held,/boom/);assert.deepEqual(events,['claim','run'],'no release while the host has an unsettled run');ctx.unsettled=[];
   // A server with no Greenroom: the run goes ahead unleased, and says so when it starts, not afterwards.
   const infos=[];ctx.setInfo=m=>infos.push(m);fail=false;release=null;events.length=0;
   ctx.fetch=async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>({status:'unconfigured'})};};
