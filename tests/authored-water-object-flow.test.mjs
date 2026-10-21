@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import * as THREE from '../lib/three.core.js';
 import {createLocalLiquidEmitterSceneRecord} from '../local-liquid-scene-object.mjs';
+import {FLAME_EMITTER_TYPE} from '../scene-flame-emitter.mjs';
 import {resolveAuthoredWaterSampling} from '../authored-water-drop.mjs';
 import {normalizeLocalLiquidSetup,defaultLocalLiquidSetup,LOCAL_LIQUID_EMITTER_TYPE,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
@@ -62,7 +63,7 @@ const beforeDuplicates=created.length;assert.throws(()=>c.duplicateSceneObject('
 
 // Initial particle/guide materials are preview state, never saved water
 // settings. Restoring an older scene can apply its legacy opacity to both.
-const serializer={THREE,LOCAL_LIQUID_EMITTER_TYPE,CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',structuredClone,
+const serializer={THREE,LOCAL_LIQUID_EMITTER_TYPE,FLAME_EMITTER_TYPE,CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'procedural-mesh',structuredClone,
  sceneObjectMetadataFor:o=>o.userData.kaminosSceneObject,sceneObjectTransformState:q.sceneObjectTransformState,canCollideWithFire:()=>false};
 vm.createContext(serializer);for(const name of ['getMaterialStateForObject','serializeSceneObject']){const a=html.indexOf('function '+name+'('),b=html.indexOf('\n}',a);vm.runInContext(html.slice(a,b+2),serializer);}
 const savedPreview=()=>JSON.parse(JSON.stringify(serializer.serializeSceneObject(row)));
