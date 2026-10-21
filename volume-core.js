@@ -4079,7 +4079,15 @@ fn waveletLowPassSample(p: vec3<f32>) -> vec3<f32> {
   let c10 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 1, 0)), waveletLowPassLoad(i0 + vec3<i32>(1, 1, 0)), f.x);
   let c01 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 0, 1)), waveletLowPassLoad(i0 + vec3<i32>(1, 0, 1)), f.x);
   let c11 = mix(waveletLowPassLoad(i0 + vec3<i32>(0, 1, 1)), waveletLowPassLoad(i0 + vec3<i32>(1, 1, 1)), f.x);
-  return mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
+  let sample = mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
+  // Measure the carried high-pass against the same ambient continuation as
+  // velocity transport. Otherwise an outside foot subtracts unattenuated bulk
+  // flow from attenuated transport and the one-sided closure replenishes that
+  // artificial deficit as turbulence. Interior and standalone reads are intact.
+  if (openWorldBoundary()) {
+    return sample * (1.0 - clamp(ghostOutsideAmount(p), 0.0, 1.0));
+  }
+  return sample;
 }
 // The closure. At the characteristic's foot the resolved band L3 − L4 gives the
 // Kolmogorov amplitude A of the 4-cell octave, times the operator's strength
