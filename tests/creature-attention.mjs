@@ -457,3 +457,19 @@ const turnAway=(c,yaw)=>{c.placement.rotation.y=yaw;c.scene.updateMatrixWorld(tr
  assert.equal(a.read().focus?.id,'prop');assert.equal(a.read().why?.cause,'moved');
 }
 console.log('Creatures attend, learn familiar states, interrupt on cessation, scan, and settle');
+
+{
+ // Turning the body while keeping a new look must not make that source's
+ // disappearance invisible: the turned head still has it in view.
+ const c=creature(),flame={id:'fire',point:[1,.5,-2.6],interest:1,active:true,restless:true};
+ const a=createCreatureAttention({THREE,rigFrame:frame,profile,options:{idleScan:false},interests:()=>[{...flame}]});
+ let t=watch(a,c,.4,0).t;
+ assert.equal(a.read().focus?.id,'fire','the look is newly acquired');
+ turnAway(c,.9);t=watch(a,c,1/30,t).t;
+ assert.ok(alignment(c.bones,flame.point)>Math.cos(1.9*.85),`the turned head still sees the source (${alignment(c.bones,flame.point)})`);
+ flame.active=false;flame.restless=false;run(a,c,1/30,t);
+ assert.equal(a.read().interruption?.cause,'light went out','cessation interrupts the ongoing look on its first observed frame');
+ assert.equal(a.read().focus,null,'minimum dwell does not retain the old focus');
+ assert.equal(a.read().arrested,true,'the stride check begins immediately');
+ assert.equal(a.motionSeconds(t,t+1/30),0,'locomotion consumes the interruption immediately');
+}

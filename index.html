@@ -21222,12 +21222,13 @@ async function initKaminosVolumeRoute() {
   });
   document.getElementById('volume-toggle').addEventListener('click', async () => {
     if (volumePrototype.debugState().active) {
-      volumePrototype.setActive(false);
+      await volumePrototype.setActive(false);
       setInfo('Volume renderer disabled');
     } else {
       await volumePrototype.setActive(true);
       setInfo('Volume renderer — native WebGPU compute fluid raymarch');
     }
+    window.dispatchEvent(new Event('kaminos-flame-controls-changed'));
     refreshVolumeReadout();
   });
   document.getElementById('volume-fit-camera').addEventListener('click', frameVolumeCamera);

@@ -75,7 +75,9 @@ try{
  await Promise.resolve();
  await walker.operations.action({kind:'wander'});
  const step=seconds=>{for(let i=0;i<Math.round(seconds*30);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});}};
- step(2);fire.active=true;notify();step(.5);fire.active=false;notify();step(1/30);
+ step(2);fire.active=true;notify();step(.1);
+ assert.equal(walker.read().attention.focus?.id,'flame-emitter','a fresh look has begun before cessation');
+ fire.active=false;notify();step(1/30);
  assert.equal(walker.read().attention.arrested,true,'the actual flame bridge requests an arrest');
  const before=walker.read(),poseBefore=walker.pose({bones:['pelvis','spine-chest','head']});
  step(.25);

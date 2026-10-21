@@ -74,6 +74,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
  let interruption=null,powerDropArmed=true,startle=null,onset=null,previousPower=null;
  const localLevels=new Map();
+ let gazeLocal=null;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -172,7 +173,13 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // or a source outside view is a gap, not an observed disappearance.
     if(source.restless!==undefined||source.active!==undefined){
      let known=states.get(source.id);if(!known){known={memory:createSignalFamiliarity({decaySeconds:o.familiarSeconds}),previous:null};states.set(source.id,known);}
-     if(source.sensed!==false&&sight(source.point,range).visible){
+     // An ongoing look turns the head independently of the walking body.
+     // Keep observing that source through the actual last presented gaze;
+     // memory or a requested aim alone is not evidence that it remains in view.
+     const gaze=gazeLocal?.clone().transformDirection(group.matrixWorld);
+     const toward=new THREE.Vector3(...source.point).sub(headAt);
+     const watched=focus?.id===source.id&&gaze&&toward.length()<range&&gaze.angleTo(toward)<o.fieldOfView*.85;
+     if(source.sensed!==false&&(sight(source.point,range).visible||watched)){
       const state=!active?'off':source.restless?'moving':'still',learned=known.memory.observe({time,value:state});
       known.familiarity=learned.familiarity;
       if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
@@ -287,6 +294,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     }
    }
    if(startle)applyStartlePose({THREE,bones,point:startle.point,strength:recoilAmount(startle,time)});
+   gazeLocal=new THREE.Vector3(...profile.forward).transformDirection(head.matrixWorld).transformDirection(group.matrixWorld.clone().invert());
    reticle.visible=Boolean(focus)&&weight>.2;
    if(reticle.visible&&placement){
     placement.updateMatrixWorld(true);
@@ -399,9 +407,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
- function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;return read();}
+ function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
  return Object.freeze({modify,sense,read,motionSeconds,setEnabled,setProfile,reticle,dispose});
 }
