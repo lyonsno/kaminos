@@ -547,7 +547,15 @@ try {
     }
     const routes = await Promise.all(tabs.map(tab => tab.evaluate(() => ({page: window.kaminosNotes?.pageId ?? null, route: window.kaminosNotes?.route?.() ?? null,
       vantage: window.kaminosAgentVantage?.pageId ?? null}))));
-    report.effective.sharedConnection = {routes};
+    // A tab not on the hub: what its notes requests did, so a stall can be told from a fallback.
+    const stuck = [];
+    for (const [index, item] of routes.entries()) {
+      if (item.route === 'hub') continue;
+      stuck.push({index, ...item, requests: await tabs[index].evaluate(() => performance.getEntriesByType('resource')
+        .filter(entry => /\/api\/(notes|vantage)/.test(entry.name))
+        .map(entry => ({url: entry.name.replace(location.origin, ''), start: Math.round(entry.startTime), waitedForConnection: Math.round(entry.requestStart - entry.startTime), total: Math.round(entry.duration)})))});
+    }
+    report.effective.sharedConnection = {routes, stuck};
     check('every tab takes its notes through the shared hub', routes.every(item => item.route === 'hub'), {routes});
     let listed = [];
     for (const deadline = Date.now() + 20000; Date.now() < deadline; await sleep(500)) {
