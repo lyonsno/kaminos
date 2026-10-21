@@ -4,11 +4,11 @@ Use an authored `.kaminos.json` scene as the shared editable input. A JavaScript
 
 ## First run
 
-Start `serve.py` from your feature worktree with your scene, generated-mesh and basin stores mounted. The scene refers to those mounted assets. Install Playwright in your tooling environment and supply its module path plus an independent Chromium or Chrome for Testing executable.
+The runner starts an isolated server from your feature worktree, mounts your scene and basin stores, and closes its server and browser after the comparison. Install Playwright in your tooling environment and supply its module path plus an independent Chromium or Chrome for Testing executable.
 
 ```sh
 node visual-work-run.mjs \
-  --origin http://127.0.0.1:8194 --repo "$PWD" \
+  --repo "$PWD" \
   --scene your-scene.kaminos.json \
   --scenes /absolute/path/to/scenes --basins /absolute/path/to/basins \
   --out /absolute/path/to/this-comparison \
@@ -17,7 +17,13 @@ node visual-work-run.mjs \
   --browser /absolute/path/to/independent/chromium
 ```
 
-The pose example moves the selected object +0.25 along X, checks the other objects and camera, exercises undo, and freshly reopens the second saved version. Optional `--inputs file.json` supplies `{ "objectId": "your-object", "deltaX": 0.25 }`. Use a separate output directory for each comparison you want to keep. `a.png` and `b.png` accompany the saved documents; `report.json` contains their exact server filenames and editable URLs, effective server/store identity, feature observations and any failure. `launch.json` records the executable and startup failures. The runner closes its own browser after the exercise; your server continues serving the handoff.
+The pose example moves the selected object +0.25 along X, checks the other objects and camera, exercises undo, and freshly reopens the second saved version. Optional `--inputs file.json` supplies `{ "objectId": "your-object", "deltaX": 0.25 }`. Use a separate output directory for each comparison you want to keep. `a.png` and `b.png` accompany the saved documents; `report.json` contains their exact server filenames and URLs at execution, effective server/store identity, feature observations and any failure. `launch.json` records the executable, server command and mounts, startup failures and cleanup. The files remain available after the owned server closes; those execution URLs become live again when that server is deliberately restored.
+
+Use `--assets /path/to/assets` and `--generated-meshes /path/to/meshes` for source assets. An omitted `--basins` creates an empty basin store under the output directory. `--python` selects the server interpreter. Stores stay caller-owned; the runner retains them intact. The server's private HOME and explicit mounts isolate it from another lane's ambient Kaminos environment.
+
+For an existing operator host, pass `--origin http://127.0.0.1:8194` and its matching store paths. The runner verifies that host's checkout and stores and closes only its own browser; the existing server keeps serving the editable handoff. Configure asset mounts on that host itself.
+
+SIGINT and SIGTERM mark the attempt `cancelled`, retain completed observations and last phase, and close the owned browser/server. An exercise receives an optional `signal` for its own cooperative waits; the shared runner interrupts its observation wait and releases its resources. A forcibly killed process remains incomplete in its last durable report. The queue continues to own job/process-group admission and terminal accounting.
 
 ## Cheap Execution And Escalation
 

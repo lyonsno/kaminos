@@ -80,34 +80,44 @@ export function assertMountedScene(document, actual, {authoredObjects=[],volume=
 
 // The caller supplies a Playwright page and feature operations. All edits and
 // persistence still run through the mounted editor's normal public operations.
-export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null,owner=null, out, exercise, execution=null }) {
+export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null,owner=null, out, exercise, execution=null, signal }) {
   await fs.mkdir(out, { recursive: true });
   const report = { status: 'running', phase: 'identity', startedAt: new Date().toISOString(),
     requested: { origin, repoRoot, sceneStore, basinStore, sceneFile, workspace }, observations: [], errors: [] };
   const reportPath = path.join(out, 'report.json');
-  const write = () => fs.writeFile(reportPath, JSON.stringify(report, null, 2));
+  let terminal=false, writes=Promise.resolve(), removeAbort=()=>{};
+  const write = () => {
+    if(terminal)return writes;
+    const content=JSON.stringify(report,null,2);
+    writes=writes.then(()=>fs.writeFile(reportPath,content));
+    return writes;
+  };
   const pageError = error => report.errors.push(error.message);
   page.on('pageerror', pageError);
   await write();
   const readScene = async filename => {
-    const response = await fetch(new URL(`/api/read?root=scenes&path=${encodeURIComponent(filename)}`, origin), { cache: 'no-store' });
+    signal?.throwIfAborted();
+    const response = await fetch(new URL(`/api/read?root=scenes&path=${encodeURIComponent(filename)}`, origin), { cache: 'no-store', signal });
     if (!response.ok) throw Error(`Scene read failed: ${filename}, HTTP ${response.status}`);
     return response.json();
   };
   try {
+    const run = async () => {
+    signal?.throwIfAborted();
     const output = execution === null ? null : visualWorkOutput(execution);
     report.execution = output;
-    report.serving = await verifyAuthoringServer({ origin, repoRoot });
+    report.serving = await verifyAuthoringServer({ origin, repoRoot, fetch:(url,options)=>fetch(url,{...options,signal}) });
     if (sceneStore) assert.equal(await fs.realpath(sceneStore), await fs.realpath(report.serving.sceneStore), 'Wrong scene store');
     if (basinStore) assert.equal(await fs.realpath(basinStore), await fs.realpath(report.serving.basinStore), 'Wrong basin store');
     const open = async filename => {
+      signal?.throwIfAborted();
       report.phase = 'open'; await write();
       let document = await readScene(filename);
       if (output) {
         const prepared = prepareVisualWorkScene(document, output);
         const sourceFilename = filename;
         // Save through the normal scene store; preserve the caller's source file.
-        const response = await fetch(new URL('/api/save-scene', origin), {method:'POST',
+        const response = await fetch(new URL('/api/save-scene', origin), {method:'POST',signal,
           headers:{'Content-Type':'application/json'},body:JSON.stringify(prepared.document)});
         if (!response.ok) throw Error(`Execution scene save failed: HTTP ${response.status}`);
         const saved = await response.json();
@@ -122,6 +132,7 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       // Leaving the document explicitly also exercises fresh restoration when
       // only the scene hash would otherwise change.
       await page.goto('about:blank');
+      signal?.throwIfAborted();
       await page.goto(url);
       await page.waitForFunction(() => {
         const failure = document.querySelector('#status.failed');
@@ -149,11 +160,15 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       return document;
     };
     const retain = async ({ name, capture = true, settle = async () => {}, observe = async () => null, owner: expectedOwner = owner }) => {
+      signal?.throwIfAborted();
       assert.ok(/^[a-z0-9][a-z0-9_-]*$/i.test(name), 'Observation name must be a path-safe filename');
       report.phase = `observe:${name}`; await write();
       await settle(page);
+      signal?.throwIfAborted();
       const effective = await observe(page);
+      signal?.throwIfAborted();
       const rendered = capture && output ? await page.evaluate(settings => window.kaminosRenderOutput.capture(settings), output.settings) : null;
+      signal?.throwIfAborted();
       const result = await page.evaluate(capture => capture
         ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture && !output);
       if (!result?.ok) throw Error(`Save failed: ${result?.error || 'no result'}`);
@@ -181,17 +196,28 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
     };
     const document = await open(sceneFile);
     report.phase = 'exercise'; await write();
-    report.result = await exercise({ page, document, open, retain });
+    report.result = await exercise({ page, document, open, retain, signal });
+    signal?.throwIfAborted();
     assert.deepEqual(report.errors, [], 'Uncaught browser error');
     report.status = 'passed'; report.phase = 'complete';
     return report;
+    };
+    if(!signal)return await run();
+    const cancelled=new Promise((_,reject)=>{
+      const abort=()=>reject(signal.reason);
+      signal.addEventListener('abort',abort,{once:true});
+      removeAbort=()=>signal.removeEventListener('abort',abort);
+      if(signal.aborted)abort();
+    });
+    return await Promise.race([run(),cancelled]);
   } catch (error) {
-    report.status = 'failed'; report.failure = error.stack || String(error);
-    try { await page.screenshot({ path: path.join(out, 'failed.png') }); }
+    report.status = signal?.aborted ? 'cancelled' : 'failed'; report.failure = error.stack || String(error);
+    try { if(!signal?.aborted)await page.screenshot({ path: path.join(out, 'failed.png') }); }
     catch (captureError) { report.failureCaptureError = String(captureError); }
     throw error;
   } finally {
-    report.finishedAt = new Date().toISOString(); await write();
+    report.finishedAt = new Date().toISOString(); const finalWrite=write();
+    terminal=true;removeAbort(); await finalWrite;
     page.off('pageerror', pageError);
   }
 }

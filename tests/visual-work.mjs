@@ -23,7 +23,7 @@ test('startup failure survives before the scene report exists', async () => {
     const report = JSON.parse(await fs.readFile(path.join(out, 'failure.json')));
     assert.equal(report.status, 'failed');
     assert.equal(report.phase, 'arguments');
-    assert.match(report.failure, /--origin required/);
+    assert.match(report.failure, /--repo required/);
   } finally { await fs.rm(out, { recursive: true }); }
 });
 test('malformed arguments with a supplied output path retain parser failure', async () => {
