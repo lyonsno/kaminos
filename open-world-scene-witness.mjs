@@ -80,13 +80,24 @@ try{
  await page.screenshot({path:out+'/reopened.png'});
  if(process.argv.includes('--profile')){
    report.phase='gpu-profile';report.profiles=[];
-   for(const mode of ['half','full']){
+   for(const mode of ['half','off']){
      await set('volume-pressure-resolution',mode);
      const profile=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSimGpuProfile({steps:8}));
      report.profiles.push({mode,profile});
+     assert.equal(profile.pressureResolution.effective,mode);
      assert.equal(profile.status,'sampled');assert.equal(profile.worldTimingStatus,'sampled');
      assert.equal(profile.validProjectionSteps,8);
    }
+   assert.deepEqual(report.errors,[]);report.phase='complete';
+ }
+ if(report.savedScene){
+   report.phase='saved-reopen';await page.goto(report.savedScene.url,{waitUntil:'domcontentloaded'});
+   await page.waitForFunction(()=>{const s=window.__kaminosVolumePrototype?.debugState?.();if(s?.error)throw Error(s.error);return s?.simStepCount>=50;});
+   report.reopened=await read();
+   assert.equal(report.reopened.openWorldBoundary.effective,'ambient-pressure-open-faces');
+   assert.equal(report.reopened.controls.physicalSmokeAlbedo,.7);
+   assert.equal(report.reopened.worldSmoke.raymarch.steps,32);
+   await page.screenshot({path:out+'/saved-reopened.png'});
    assert.deepEqual(report.errors,[]);report.phase='complete';
  }
 }catch(e){report.status='failed';report.error=e.stack;process.exitCode=1;if(page){report.final=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),body:document.body.innerText})).catch(()=>null);await page.screenshot({path:out+'/failure.png'}).catch(()=>{});}}
