@@ -89,7 +89,13 @@ export function createSam3Segmenter({ manifestUrl, baseUrl = globalThis.location
       try { await active; } catch { /* The invocation keeps its own failure. */ }
       device?.removeEventListener?.('uncapturederror', gpuError);
       device = null;
-      await runtime?.close();
+      try { await runtime?.close(); }
+      catch (error) {
+        // V8's lazy stack frames can retain the failed method's receiver.
+        if (error instanceof Error) void error.stack;
+        throw error;
+      }
+      finally { runtime = null; }
     })();
     return closing;
   }
