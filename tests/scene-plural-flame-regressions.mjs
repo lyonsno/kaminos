@@ -1,8 +1,8 @@
 // kaminos-test: node
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
-import {flamePoseToDomain} from '../scene-flame-emitter.mjs';
-import {fireControlOwner} from '../scene-fire-domain.mjs';
+import {normalizeFlameEmitterPose,flamePoseToDomain} from '../scene-flame-emitter.mjs';
+import {flameSourceInputs,fireControlOwner} from '../scene-fire-domain.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const fn=name=>{const a=html.indexOf(`function ${name}(`);if(name==='primaryAuthoredFlameSource')return html.slice(a).split('\n')[0];if(name==='applyVolumeEmitterFamilyRuntimeToCockpit')return html.slice(a,html.indexOf('  applyFlameEmitterPose =',a));return html.slice(a,html.indexOf('\n}',a)+2);};
 test('selected radius bounds follow scale without changing the shared cockpit range',()=>{
@@ -33,4 +33,22 @@ test('refusing a plural restore preserves the complete current scene and usable 
  const start=html.indexOf('async function loadSceneFile(');const prefix=html.slice(start,stop)+'\n}';const mutations=[];
  const original={name:'existing',route:{}},objects=[{id:'kept'}];const h={authoringBusy:false,vantageCaptureHeld:false,scenePlacementTools:null,sceneLoadRequests:{begin:()=>1,isCurrent:()=>true},currentSceneFile:'existing.json',getVolumePrimitiveState:()=>[],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,sceneSaveBlockedByFailedRestore:false,planSceneRestore:()=>({objects:[{id:'a',type:'flame-emitter'},{id:'b',type:'flame-emitter'}],composition:{name:'incoming',route:{}},flameSourcePresent:true}),assertSceneObjectsReloadable(){},isCompositionAuthoring:()=>true,window:{kaminosViewportSettings:{set:()=>mutations.push('display')},__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},viewportDisplay:{},activeSceneComposition:original,sceneObjects:objects,FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',setAnnularBurner:()=>mutations.push('burner'),setRimLight:()=>mutations.push('rim'),setInfo(){},volumePrototype:{},requirePluralFlameSourceRuntime:()=>{throw Error('This flame runtime does not yet support multiple authored sources');}};
  vm.createContext(h);vm.runInContext(prefix,h);await assert.doesNotReject(()=>h.loadSceneFile({text:async()=>JSON.stringify({})},{mounted:true}));assert.deepEqual(mutations,[]);assert.equal(h.activeSceneComposition,original);assert.equal(h.sceneObjects,objects);assert.equal(h.currentSceneFile,'existing.json');assert.equal(h.sceneSaveBlockedByFailedRestore,false);
+});
+
+for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`membership history restores distinct source poses and active publication after ${removed.length===1?'primary':'all-source'} deletion`,async()=>{
+ const poses=[{position:[-.3,-.5,0],rotation:[0,0,.1],scale:[1,1,1]},{position:[.35,-.5,0],rotation:[0,.2,0],scale:[1,1,1]}];
+ const make=(id,i)=>({id,type:'flame-emitter',source:'kaminos:analytic-flame',label:id,transform:structuredClone(poses[i]),emissionEnabled:true,emission:{domainId:'flame-field',settings:{'volume-immersed-fuel':{value:i?.8:.2}}},object:{pose:structuredClone(poses[i]),userData:{kaminosSceneObject:{}}}});
+ const a=make('flame-emitter',0),b=make('other',1),published=[];
+ const shared={emitterSourceLaw:'immersed-source',immersedRadius:.1,immersedPitch:90};
+ const h={structuredClone,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',CAMERA_TYPE:'camera',sceneObjects:[a,b],sceneGroups:[],scene:{remove(){}},sceneMembershipRetainedObjects:new Map(),sceneCameras:null,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,flameEmitterPose:structuredClone(poses[0]),flameEmitterInjectionSuspended:false,authoredFlamePresent:true,
+ sceneObjectTransformState:object=>structuredClone(object.pose),applySceneObjectTransformState:(object,pose)=>{object.pose=structuredClone(pose);},setSceneObjectMounted(){},setFlameDomainTranslation(){},serializeSceneObject:entry=>({...structuredClone({...entry,object:undefined}),transform:structuredClone(entry.object.pose)}),setSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},pruneSceneGroups(){},ensureAuthoredFlameEmitter(){},projectAuthoredFlameSourceControls(){},applyFlameEmitterPose(){},flamePoseInDomain:()=>true,effectiveFlameDomainControls:()=>({}),readVolumeControls:()=>shared,volumePrototype:{},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},setInfo(){}};
+ h.syncAuthoredFlameSources=()=>published.push(flameSourceInputs(h.sceneObjects.map(h.serializeSceneObject),{controls:shared}));
+ h.applyAuthoredScenePose=(id,p)=>h.applySceneObjectTransformState(h.sceneObjects.find(o=>o.id===id).object,p);
+ vm.createContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
+ const snapshot=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),groups:[],selection:{ids:[],activeId:null},domain:[0,0,0],domainFollowSource:false});
+ const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@members',{read:snapshot,write:h.writeSelectionMembershipUnchecked,check:v=>v});
+ const before=snapshot(),expected=flameSourceInputs(before.objects,{controls:shared});for(const id of removed)h.detachSelectionMember(id);edits.recordApplied('@members',before,snapshot(),'Remove sources');
+ await edits.undo();assert.equal(h.authoredFlamePresent,true,'Undo must restore source presence');assert.deepEqual(h.sceneObjects.map(o=>o.object.pose),poses,'Undo must restore each actual source pose');assert.deepEqual(published.at(-1),expected,'Undo must republish restored domain-space sources');
+ await edits.redo();assert.equal(h.sceneObjects.length,2-removed.length);assert.equal(h.authoredFlamePresent,removed.length===1);assert.equal(published.at(-1).length,2-removed.length);
+ await edits.undo();assert.deepEqual(published.at(-1),expected);
 });

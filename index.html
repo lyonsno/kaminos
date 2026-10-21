@@ -25858,7 +25858,12 @@ async function writeSelectionMembershipUnchecked(value){
   }
   sceneObjects=value.objects.map(record=>sceneObjects.find(entry=>entry.id===record.id));
   sceneGroups=structuredClone(value.groups);for(const group of sceneGroups)ensureGroupTarget(group);
-  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
+  const restoredFlameSource=primaryAuthoredFlameSource();
+  authoredFlamePresent=!!restoredFlameSource;
+  if(restoredFlameSource)flameEmitterPose=sceneObjectTransformState(restoredFlameSource.object);
+  setFlameDomainTranslation(value.domain,value.domainScale??1);flameDomainFollowSource=value.domainFollowSource??true;
+  if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
+  else syncAuthoredFlameSources();
   sceneCameras?.membershipChanged(value.activeCameraId??null);
   if(value.field&&!value.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
