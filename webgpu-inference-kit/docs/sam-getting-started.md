@@ -52,7 +52,7 @@ const wheels = await sam.segment(imageFile, 'wheel');
 await sam.close();
 ```
 
-No canvas is required. Instances are not renumbered: use their returned `index` values when selecting masks. `mask()` unions all retained instances; `mask([])` returns an all-zero mask. A successful no-match result has an empty `instances` array. Source masks interpolate logits before thresholding, rather than enlarging a coarse binary mask. Returned boxes use normalized image coordinates; logits use the detector's native mask grid.
+No canvas is required. Instances are not renumbered: use their returned `index` values when selecting masks. `mask()` unions all retained instances; `mask([])` returns an all-zero mask. A successful no-match result has an empty `instances` array. Source masks interpolate logits before thresholding, rather than enlarging a coarse binary mask. Returned boxes are `[x0, y0, x1, y1]` pixel coordinates in the model image resolution, given by `result.sourceImage.resolution`, not normalized coordinates or original-image pixels. To map a box to the source image, scale x coordinates by `result.sourceSize.width / result.sourceImage.resolution[0]` and y coordinates by the corresponding height ratio. Logits use the detector's native mask grid.
 
 The same segmenter retains model resources and cached image features between calls. Call it serially; overlapping calls fail explicitly. `close()` waits for an active invocation and releases the segmenter's resources. Results already returned remain ordinary CPU data. For a complete upload, overlay, transparent cutout and export UI, see the [SAM image example](sam-image-example.md).
 
