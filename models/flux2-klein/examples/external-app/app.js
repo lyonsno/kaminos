@@ -36,14 +36,15 @@ window.kleinConsumer = (async () => {
   const surface = activity.getContext('webgpu');
   surface.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: 'opaque' });
   let frames = 0, drawing = true, frameId = 0;
-  const draw = time => {
-    if (!drawing) return;
-    klein.foreground.request({ requestId: `activity:${++frameId}`, run(opportunity) {
+  const render = (opportunity, time) => {
       const encoder = device.createCommandEncoder();
       const pass = encoder.beginRenderPass({ colorAttachments: [{ view: surface.getCurrentTexture().createView(),
         loadOp: 'clear', storeOp: 'store', clearValue: [0.1, 0.3 + 0.2 * Math.sin(time / 200), 0.7, 1] }] });
       pass.end(); opportunity.submit([encoder.finish()]);
-    } }).completion.then(receipt => {
+  };
+  const draw = time => {
+    if (!drawing) return;
+    klein.foreground.request({ requestId: `activity:${++frameId}`, run: o => render(o, time) }).completion.then(receipt => {
       if (receipt.status === 'completed') frames++;
       if (drawing) requestAnimationFrame(draw);
     });
@@ -61,7 +62,7 @@ window.kleinConsumer = (async () => {
         if (seed === 1 && phase === 'denoise' && !pauseExercise) {
           pauseExercise = (async () => {
             record.paused = await klein.pause();
-            record.pausedFrame = await klein.foreground.request({ requestId: 'paused-check', run: o => o.submit([]) }).completion;
+            record.pausedFrame = await klein.foreground.request({ requestId: 'paused-check', run: o => render(o, performance.now()) }).completion;
             record.resumed = await klein.resume();
           })();
           pauseExercise.catch(() => {});

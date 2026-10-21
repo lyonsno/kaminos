@@ -5,6 +5,27 @@ FLUX.2 [klein] 4B text-to-image in the browser on WebGPU. The Qwen3-4B text enco
 ## Use
 
 ```js
+import { createKleinApp } from '@kaminos/flux2-klein';
+
+const klein = await createKleinApp(); // creates a device and loads hosted Mint weights
+const image = await klein.generate({ prompt: 'a blue tank engine on a branch line', seed: 7 });
+// image.rgba is a Uint8ClampedArray of width * height * 4 bytes
+await klein.destroy(); // releases the model and its owned device
+```
+
+Generation uses cooperative command duties. Pass `{ device }` or `{ session }` to borrow an existing host's resources; destruction leaves them open. A borrowed device must have `shader-f16` enabled. `pipelineOptions` forwards model constructor settings, including weights, level, residency and kernels. `generate()` preserves the pipeline's model options, callbacks and output.
+
+For a live renderer, create with `load: false`, attach the renderer through `app.foreground.request({ requestId, run(opportunity) { /* encode your frame, then opportunity.submit([commands]) */ } })`, then call `app.load(onProgress)`. This persistent service accepts frames before, during and after generation. An existing `foreground` service may be borrowed if it uses the same device and queue; it can have only one active model run. The installed external application example exercises this composition.
+
+`pause()` waits for admitted duties to settle and permits foreground frames while parked; `resume()` continues. `stop(reason)` or a generation's `signal` stops at cooperative model boundaries. Loading has no pause/stop contract; `pause()` returns `null` outside a controlled generation. `destroy()` closes admission, stops generation and waits for loading and submitted work before release. Concurrent `generate()` calls reject; sequential calls reuse weights and the prompt cache. A failed explicit `load()` releases its partial pipeline and permits a fresh retry. GPU loss and cleanup failures reject and prevent reuse.
+
+The app exposes `device`, `session`, `foreground`, `pipeline`, and `snapshot()` (ownership, load state, phase, control and fatal error). `scheduling` at creation or per generation forwards the command scheduler's policy options, such as `targetDutyMs` and `maxInFlight`; runtime, invocation, signal, control and foreground bindings belong to the app. `cooperative: false` explicitly selects unscheduled generation, without GPU pause or interruption. Default device creation requests the adapter's buffer/workgroup limits and `shader-f16`; `deviceDescriptor` can supply the host's requested descriptor.
+
+## Direct pipeline control
+
+`KleinPipeline` remains available for hosts that already own their invocation and scheduling. Use it directly instead of nesting an app generation inside an admitted job on the same session.
+
+```js
 import { KleinPipeline } from '@kaminos/flux2-klein';
 
 const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });

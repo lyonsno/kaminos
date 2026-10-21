@@ -56,6 +56,8 @@ try {
   await fsp.writeFile(path.join(outDir, 'first.png'), Buffer.from(record.first.png.split(',')[1], 'base64'));
   delete record.first.png;
   report.record = record;
+  const capture = await browser.send('Page.captureScreenshot', { format: 'png' });
+  await fsp.writeFile(path.join(outDir, 'page.png'), Buffer.from(capture.result.data, 'base64'));
 
   report.phase = 'check';
   const problems = checkExternalApp(record);
