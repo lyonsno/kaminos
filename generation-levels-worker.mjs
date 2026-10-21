@@ -1,7 +1,8 @@
 // Module worker for generation-levels-runner.mjs: prepareGenerationLevels with the page's own finisher,
 // UV unwrapper and same-origin fetch. Posts {kind:'phase'} progress and one {kind:'done', report}.
 import * as THREE from './lib/three.core.js';
-import {MeshBVH} from './node_modules/three-mesh-bvh/build/index.module.js';
+// three-mesh-bvh rebuilt to import ./three.core.js by URL (npm run build:three-mesh-bvh): workers have no import map.
+import {MeshBVH} from './lib/three-mesh-bvh.module.js';
 import {prepareGenerationLevels} from './lod-generation-levels.mjs';
 import {finishTrellisMesh} from './models/trellis2/trellis-material.js';
 import {createWasmXatlasUnwrapper} from './models/trellis2/wasm-xatlas.js';

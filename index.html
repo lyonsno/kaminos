@@ -26967,7 +26967,7 @@ function setupAuthoringAssets(){
       runGenerationLevels({...out.levelInputs,source:saved.sha256,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route})
         .then(report=>{window.__kaminosLastGenerationLevels={source:saved.sha256,...report};
           if(report.phase==='done')setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
-          else if(report.phase!=='skipped')console.warn('GI proxy levels did not finish',report);return report;});
+          else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);return report;});
       out.levelInputs=null;
     }
     return saved;

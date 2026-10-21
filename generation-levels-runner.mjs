@@ -13,7 +13,7 @@ export function runGenerationLevels({decode,materialFields,source,input=null,rou
       if(data?.kind==='phase')onPhase(data);
       else if(data?.kind==='done')finish(data.report);
     });
-    worker.addEventListener('error',event=>finish({phase:'worker',error:String(event?.data?.message||event?.message||'generation levels worker failed')}));
+    worker.addEventListener('error',event=>finish({phase:'worker',error:String(event?.data?.message||event?.message||'the levels worker failed to load or threw before reporting (a module load failure carries no message)')}));
     const message={decode,materialFields,source,input,route,...(targets?{targets}:{})};
     worker.postMessage(message,[decode.vertices.buffer,decode.triangles.buffer,materialFields.features.buffer,materialFields.coordinates.buffer]);
   });
