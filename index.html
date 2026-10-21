@@ -14275,7 +14275,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   const gpuState = applyFingerFluidAnalyticCarrierRuntimeEvidence(
     fingerFluidBenchSolver.getDebugState(),
   );
-  advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
+  // The pyro composition source moves with the fire volume's steps; a page without fire has no volume.
+  if (volumePrototype) advanceFingerFluidPyroCompositionSource(volumePrototype.debugState().simStepCount);
   gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
   gpuState.effectiveColorMode = gpuState.colorMode;
   gpuState.requestedTruthScene = fingerFluidBenchConfig.requestedTruthScene;
