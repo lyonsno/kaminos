@@ -8784,7 +8784,10 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
     let fullGridY = min(u32(floor(in.uv.y * f32(GRID_Y))), GRID_Y - 1u);
     let fullGridP = cellToWorld(vec3<f32>(f32(fullGridX), f32(fullGridY), f32(sampleIndex)) + vec3<f32>(0.5));
     let p = select(ro + rd * t, fullGridP, fullGridCapture);
-    if(worldActive && !worldInsideFine(p)){
+    // Own segments by the same ray interval used to clip their lengths. Testing
+    // the reconstructed position can round an exact entry back outside the box.
+    let fineRayInterval = nearHit.y > nearHit.x && t >= nearHit.x && t < nearHit.y;
+    if(worldActive && !fineRayInterval){
       let medium=worldSmokeDiagnostic(worldSmokeMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority),true);
       rayMaterialSamples += 1u;
       let sigma=medium.absorption+medium.scattering;
@@ -8894,7 +8897,8 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)
       * (0.020 + flameDetail * 0.035 + interfaceShred * 0.025 + microSmoke * 0.016);
     let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;
     let interest = raymarchInterest(density, smoke, heat, temp, max(flame, combustionFrontTopology * 0.10), flameDetail, microTextureSignal, velMag, fireLick, interfaceShred);
-    let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, endT - t));
+    let fineSegmentEnd = select(endT, min(endT, nearHit.y), worldActive);
+    let localDt = min(dtBase * adaptiveRayStepScale(interest, adaptiveRays), max(0.0001, fineSegmentEnd - t));
     let rayStepOpacity = localDt * 3.65;
     let transportedCurtainStructure = clamp(
       0.86
@@ -18347,9 +18351,9 @@ export function createKaminosVolumePrototype({
         'kaminos converged pressure projection pass',
         fluidBindGroup(),
         pressureReadBindGroups[0],
-        options.timestampWrites ? { timestampWrites: options.timestampWrites } : {},
+        options.timestampWrites ? { timestampWrites: open ? { querySet: options.timestampWrites.querySet, beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex } : options.timestampWrites } : {},
       );
-      if(open)openBoundary.encode(encoder,true);
+      if(open)openBoundary.encode(encoder,true,options.timestampWrites ? {querySet:options.timestampWrites.querySet,endOfPassWriteIndex:options.timestampWrites.endOfPassWriteIndex} : undefined);
       currentFluid = 1 - currentFluid;
       currentFront = 1 - currentFront;
       if (probe) finishPressureResidualProbe(encoder);

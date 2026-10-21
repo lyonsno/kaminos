@@ -42,9 +42,9 @@ export function createOpenBoundary(device,dims,texture) {
     prior=current;
     group=device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:params}},{binding:1,resource:{buffer:fluid}},{binding:2,resource:{buffer:pressure}},{binding:3,resource:solid.createView()},{binding:4,resource:texture.createView({dimension:'2d-array'})}]});
   }
-  function encode(encoder,project=false){
+  function encode(encoder,project=false,timestampWrites){
     if(!group)throw Error('Open boundary not prepared');
-    const pass=encoder.beginComputePass({label:project?'open lower-face projection':'open lower-face predictor'});
+    const pass=encoder.beginComputePass({label:project?'open lower-face projection':'open lower-face predictor',...(timestampWrites?{timestampWrites}:{})});
     pass.setPipeline(pipelines[project?1:0]);pass.setBindGroup(0,group);
     const n=Math.ceil(Math.max(...dims)/8);pass.dispatchWorkgroups(n,n,3);pass.end();
   }

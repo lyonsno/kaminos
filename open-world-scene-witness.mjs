@@ -1,6 +1,9 @@
 import {chromium} from '/Users/noahlyons/.local/state/kaminos/beaming-browser-deps-1007/node_modules/playwright/index.mjs';
 import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 const [origin,out]=process.argv.slice(2);
 const executablePath='/Users/noahlyons/Library/Caches/ms-playwright/chromium-1243/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const params=new URLSearchParams({kaminos_volume_smoke:'1',workspace:'authoring',authoring:'1',volume_resolution:'32',volume_steps:'8',volume_render_scale:'.5',volume_world_smoke:'on',volume_world_smoke_flow:'8',volume_world_smoke_material:'16',volume_world_smoke_extent:'2',volume_world_smoke_transition:'2',volume_wavelet_turbulence:'.2',volume_wavelet_strength:'6',volume_wavelet_octaves:'2',volume_wavelet_octave1_weight:'.1',volume_wavelet_octave2_weight:'1',volume_reaction_law:'reactant-v0',volume_emitter_source_law:'immersed-source',volume_physical_mode:'2',volume_physical_material_law:'2',volume_light_field:'1',volume_light_field_test_scene:'0',volume_collision:'off',volume_pressure_solver:'converged-open-top',volume_pressure_solver_iterations:'24',volume_reaction_live_view:'boundary_fire'});
@@ -8,6 +11,10 @@ const report={status:'failed',phase:'source',url:origin+'/?'+params+'#scene=scen
 await mkdir(out,{recursive:true});
 try{
  report.source=await(await fetch(origin+'/api/runtime-config')).json();assert.equal(report.source.source.repoRoot,process.cwd());
+ report.sourceHashes={};
+ for(const name of ['volume-core.js','volume-open-boundary.mjs','volume-pressure-resolution.mjs','volume-world-smoke.mjs','open-world-scene-witness.mjs'])
+   report.sourceHashes[name]=createHash('sha256').update(await readFile(name)).digest('hex');
+ report.revision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
  browser=await chromium.launch({executablePath,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
  page=await browser.newPage({viewport:{width:1100,height:800}});page.setDefaultTimeout(90000);
  page.on('pageerror',e=>report.errors.push(e.message));page.on('console',m=>{if(m.type()==='error')report.errors.push(m.text());});
@@ -31,10 +38,22 @@ try{
  report.phase='resize';await set('volume-world-smoke-material',32);await advance();report.states.push(await read());
  report.phase='world-off';await set('volume-world-smoke','off');await advance();report.states.push(await read());
  assert.equal(report.states.at(-1).openWorldBoundary.effective,'legacy-boundaries');
+ await page.screenshot({path:out+'/world-off.png'});
  report.phase='world-on';await set('volume-world-smoke','on');await advance();report.states.push(await read());
  assert.equal(report.states.at(-1).openWorldBoundary.effective,'ambient-pressure-open-faces');
  report.phase='settled-scene';await page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=100);
  report.states.push(await read());await page.screenshot({path:out+'/settled.png'});
+ report.fields=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleReactantFields());
+ report.phase='warm-fixture';
+ for(const [id,value] of [['volume-reactant-cooling-time',55],['volume-reactant-mixing-time',3],['volume-immersed-temperature',2],['volume-physical-smoke-albedo',.7]])await set(id,value);
+ const warmStart=(await read()).simStepCount;
+ await page.waitForFunction(n=>window.__kaminosVolumePrototype.debugState().simStepCount>=n+100,warmStart);
+ report.states.push(await read());await page.screenshot({path:out+'/warm.png'});
+ if(process.argv.includes('--save')){
+   report.savedScene=await page.evaluate(()=>window.saveSceneAs({result:true}));
+   assert.equal(report.savedScene.ok,true);
+   report.handoffUrl=page.url();
+ }
  report.phase='native-lower-face-fixture';
  report.lowerFaces=await page.evaluate(async()=>{
    const {createOpenBoundary}=await import('./volume-open-boundary.mjs');
@@ -59,5 +78,16 @@ try{
  for(let a=0;a<3;a++){assert.ok(Math.abs(report.lowerFaces.predicted[a]-(a+1)*.1)<1e-6);assert.ok(Math.abs(report.lowerFaces.projected[a]-((a+1)*.1-.125))<1e-6);assert.equal(report.lowerFaces.blocked[a],0);}
  assert.deepEqual(report.errors,[]);report.phase='complete';report.status='passed';
  await page.screenshot({path:out+'/reopened.png'});
-}catch(e){report.error=e.stack;process.exitCode=1;if(page){report.final=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),body:document.body.innerText})).catch(()=>null);await page.screenshot({path:out+'/failure.png'}).catch(()=>{});}}
+ if(process.argv.includes('--profile')){
+   report.phase='gpu-profile';report.profiles=[];
+   for(const mode of ['half','full']){
+     await set('volume-pressure-resolution',mode);
+     const profile=await page.evaluate(()=>window.__kaminosVolumePrototype.sampleSimGpuProfile({steps:8}));
+     report.profiles.push({mode,profile});
+     assert.equal(profile.status,'sampled');assert.equal(profile.worldTimingStatus,'sampled');
+     assert.equal(profile.validProjectionSteps,8);
+   }
+   assert.deepEqual(report.errors,[]);report.phase='complete';
+ }
+}catch(e){report.status='failed';report.error=e.stack;process.exitCode=1;if(page){report.final=await page.evaluate(()=>({state:window.__kaminosVolumePrototype?.debugState?.(),body:document.body.innerText})).catch(()=>null);await page.screenshot({path:out+'/failure.png'}).catch(()=>{});}}
 finally{await browser?.close();await writeFile(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify({status:report.status,phase:report.phase,error:report.error,out}));}
