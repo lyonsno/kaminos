@@ -142,6 +142,20 @@ try{
  }finally{await onsetWalker?.dispose();globalThis.setInterval=savedTimers.set;globalThis.clearInterval=savedTimers.clear;delete window.kaminosFireLightProbe;}
 
  }
+ // RC-1: editing a currently inspected source restarts pursuit through the
+ // real attention, live root and retained-gait consumer, without the old timer.
+ fire={active:true,paused:false};emitter.position.set(0,.4,-4);scene.updateMatrixWorld(true);
+ const curious=await createWalkingCreature({host,inputs:{...inputs,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+ try{
+  await curious.operations.action({kind:'wander'});
+  const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/30});};
+  let elapsed=0;while(elapsed<9&&curious.read().action.engagement.phase!=='inspecting'){tick();elapsed+=1/30;}
+  assert.equal(curious.read().action.engagement.phase,'inspecting','fixture reaches the observed source');
+  emitter.position.z-=1.5;
+  for(let i=0;i<66;i++)tick();
+  assert.equal(curious.read().action.engagement.phase,'approaching','RC-1: old inspection timer cannot end pursuit after an observed source edit');
+ }finally{await curious.dispose();}
+
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}
