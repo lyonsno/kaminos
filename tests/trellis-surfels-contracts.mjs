@@ -203,3 +203,9 @@ test('TS-01-C1: a fully transparent or hidden surfel object gives no navigation 
   for(const m of materials){m.transparent=false;m.opacity=1;m.visible=false;}
   assert.ok(Math.abs(z()+.3)<1e-6,'hidden surfel material too');
 });
+
+test('a surfel GLB names its frame: TRELLIS source space, placed by the same node matrix as the run\'s mesh GLB',()=>{
+  const field=buildSurfelField(fixture()),{extension,json}=readSurfelGLBExtension(encodeSurfelGLB(field));
+  assert.deepEqual(extension.frame,{name:'trellis-source',extent:[-.5,.5],cellSize:1/field.resolution,nodeMatrix:[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]});
+  assert.deepEqual(json.nodes[0].matrix,extension.frame.nodeMatrix,'the node carries the matrix the frame names');
+});

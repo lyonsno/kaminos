@@ -4,7 +4,8 @@
 //
 // Space: "source space" is the space of TRELLIS's raw extracted mesh, cells of size 1/resolution
 // spanning [-0.5, 0.5] on each axis, components in the decoder's coordinate order. Surfel GLBs
-// carry the same node matrix as TRELLIS mesh GLBs, so the two line up exactly.
+// carry the same node matrix as TRELLIS mesh GLBs, so the two line up exactly; the extension's `frame`
+// names this space and that matrix, for consumers that place derived geometry (GI proxies) beside surfels.
 //
 // Per surfel: cell (u32: 9 bits per axis), offset from the cell centre (3 x i8, units of 1/127 voxel,
 // within +-1 voxel as the dual-grid vertex is), octahedral normal (2 x u8), sRGB colour (3 x u8),
@@ -134,7 +135,7 @@ export function encodeSurfelGLB(field,{provenance={},fallbackFactor=4}={}){
   const chunks=[],views=[],accessors=[];let length=0;
   const add=(bytes,{target}={})=>{const pad=(4-length%4)%4;if(pad){chunks.push(new Uint8Array(pad));length+=pad;}
     views.push({buffer:0,byteOffset:length,byteLength:bytes.byteLength,...(target?{target}:{})});chunks.push(new Uint8Array(bytes.buffer,bytes.byteOffset,bytes.byteLength));length+=bytes.byteLength;return views.length-1;};
-  const ext={version:1,resolution:field.resolution,count:field.count,radiusVoxels:field.radiusVoxels,alpha:field.alpha,arrays:{}};
+  const ext={version:1,frame:{name:'trellis-source',extent:[-.5,.5],cellSize:1/field.resolution,nodeMatrix:MESH_NODE_MATRIX},resolution:field.resolution,count:field.count,radiusVoxels:field.radiusVoxels,alpha:field.alpha,arrays:{}};
   for(const [name] of FIELD_ARRAYS)ext.arrays[name]=add(field[name]);
   // fallback for viewers without the extension: the coarse merged level as plain coloured triangles
   const {field:coarse}=mergeSurfelLevel(field,fallbackFactor),tri=surfelTriangles(coarse);
