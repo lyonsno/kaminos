@@ -1,3 +1,4 @@
+import {localLiquidPresentationPlan} from './local-liquid-presentation.mjs';
 import * as THREE from './lib/three.webgpu.js';
 import {texture,vec4,positionView,pmremTexture,equirectDirection,uv,uniform} from './lib/three.tsl.js';
 import {
@@ -76,12 +77,18 @@ export function createFluidViewportHost({renderer,scene,camera,device,solver,get
       const size=renderer.getDrawingBufferSize(new THREE.Vector2()), width=size.x, height=size.y;
       for (const target of [colorTarget,depthTarget,outputTarget]) target.setSize(width,height);
       renderer.initRenderTarget(outputTarget);
-      renderEnvironment();
+      const plan=localLiquidPresentationPlan(renderOptions.presentation??'full');
+      if(plan.environment)renderEnvironment();
       scenePasses.update();
       renderer.setRenderTarget(colorTarget); scenePasses.capture.render();
       // The retained liquid pass overlays/discards; every destination pixel
       // must begin with this frame's host image, including no-water pixels.
       renderer.copyTextureToTexture(colorTarget.texture,outputTarget.texture);
+      if(!plan.liquidComposite){
+        renderer.setRenderTarget(previousTarget);scenePasses.presentation.render();
+        frameCount++;lastFrame={frameId:`${framePrefix}-${frameCount}`,width,height,presentation:renderOptions.presentation,submittedByHost:true,presentedByHost:true,displayTransform:scenePasses.state().camera.transform,simulationTimePolicy:'caller-owned-stepping'};
+        return;
+      }
       scene.overrideMaterial=depthMaterial; scene.background=null;
       renderer.setRenderObjectFunction((...args)=>{
         depthMaterial.side=args[4].side; renderer.renderObject(...args);

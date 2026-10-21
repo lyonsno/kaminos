@@ -29,6 +29,8 @@ export async function createAuthoredWaterHost(options) {
   createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
  return {...finite,
   get paused(){return finite.paused;},
+  get presentation(){return finite.presentation;},
+  get proxyStepEvery(){return finite.proxyStepEvery;},
   setEmitters(next){records=structuredClone(next);return false;},
   setSetup(next){pendingSetup=structuredClone(next);},
   state:()=>({...finite.state(),mode:'finite_drop',registered:true,mounted:true,sourceIds:initial.sourceIds,sourceGeneration:finite.capability.read().clock.generation,pendingSourceChanges:JSON.stringify(records.map(r=>[r.id,r.transform,r.localLiquidEmitter]))!==JSON.stringify(initial.sourceRecords??[])||JSON.stringify(pendingSetup)!==JSON.stringify(options.setup??{})}),
