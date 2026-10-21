@@ -2,7 +2,7 @@
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
-import {normalizeFlameDomainTranslation,normalizeFlameDomainScale} from './scene-flame-emitter.mjs';
+import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
 export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
@@ -49,9 +49,21 @@ export function checkedFireDomainRecord(record){
  r.transform=pose;return r;
 }
 export function fireDomainFrame(record){const r=checkedFireDomainRecord(record),s=r.transform.scale[0];return {translation:[r.transform.position[0],r.transform.position[1]-s,r.transform.position[2]],scale:s,followSource:r.simulation.followSource};}
+export function checkedFireSourceRecord(record){
+ if(record?.type!==FLAME_EMITTER_TYPE||record.source!==FLAME_EMITTER_SOURCE||typeof record.id!=='string'||!record.id.trim()||record.id===FIRE_DOMAIN_ID)throw Error('Unsupported flame source identity');
+ if(record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be a boolean');
+ const result={...clone(record),transform:normalizeFlameEmitterPose(record.transform),emissionEnabled:record.emissionEnabled!==false};
+ if(record.emission!==undefined){
+  if(record.emission?.domainId!==FIRE_DOMAIN_ID)throw Error('Invalid fire source domain reference');
+  const settings=controls(record.emission.settings,'source settings');
+  for(const id of Object.keys(settings))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
+  result.emission={...clone(record.emission),domainId:FIRE_DOMAIN_ID,settings};
+ }
+ return result;
+}
 export function authorFireObjects(objects,settings,frame){
  const domain=createFireDomainRecord({...frame,settings});
- const result=objects.filter(o=>o.type!==FIRE_DOMAIN_TYPE).map(o=>o.type==='flame-emitter'?{...clone(o),emission:{domainId:domain.id,settings:clone(domain.simulation.sourceTemplate)}}:clone(o));
+ const result=objects.filter(o=>o.type!==FIRE_DOMAIN_TYPE).map(o=>o.type==='flame-emitter'?checkedFireSourceRecord({...o,emission:o.emission??{domainId:domain.id,settings:clone(domain.simulation.sourceTemplate)}}):clone(o));
  // A template is retained only when the source is absent, so a source record is
  // the sole owner of active supply data. Re-add explicitly consumes the template.
  if(result.some(o=>o.type==='flame-emitter'))domain.simulation.sourceTemplate={};
@@ -62,14 +74,15 @@ export function readFireObjects(objects,renderSettings){
  if(domains.length!==1)throw Error('Current runtime requires one fire domain');
  const domain=checkedFireDomainRecord(domains[0]);
  const sources=objects.filter(o=>o.type==='flame-emitter');
- if(sources.length>1)throw Error('Current fire domain supports one authored source');
+ const ids=new Set();for(const source of sources){checkedFireSourceRecord(source);if(ids.has(source.id))throw Error('Duplicate flame source identity');ids.add(source.id);}
  if(sources.some(o=>o.emission?.domainId!==domain.id))throw Error('Invalid fire source domain reference');
- const supply=sources.length?controls(sources[0].emission.settings,'source settings'):domain.simulation.sourceTemplate;
+ const primary=sources.find(o=>o.id==='flame-emitter')??sources[0];
+ const supply=primary?controls(primary.emission.settings,'source settings'):domain.simulation.sourceTemplate;
  if(sources.length&&Object.keys(domain.simulation.sourceTemplate).length)throw Error('Active source has conflicting template authority');
  for(const id of Object.keys(supply))if(fireControlOwner(id)!=='source')throw Error(`Fire control ${id} conflicts with source owner`);
  const rendering=controls(renderSettings?.domControls??{},'scene rendering settings');
  for(const id of Object.keys(rendering))if(fireControlOwner(id)!=='scene')throw Error(`Fire control ${id} conflicts with scene rendering owner`);
- return {domain,frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
+ return {domain,sources:clone(sources),frame:fireDomainFrame(domain),settings:{domControls:{...rendering,...clone(domain.simulation.settings),...clone(domain.volumeMaterial.settings),...clone(supply)},rendererControls:controls(renderSettings?.rendererControls,'renderer settings'),presentationControls:controls(renderSettings?.presentationControls,'presentation settings')}};
 }
 
 // A saved fire record owns every existing value. Schema growth may only add
