@@ -2962,6 +2962,62 @@ def cancel_owned_gpu_job(job_id, *, queue_dir, greenroom_bin, runs_root):
     return {"schema": "kaminos.gpu-job-cancel.v0", "jobId": job_id, "status": "cancelled"}
 
 
+# A model run in the page (in-page TRELLIS) holds a cooperative Greenroom lease, so queued jobs and
+# other lanes' leases wait for it and it waits for them. The server claims for the page (holder pid:
+# this server). A page running inside a Greenroom job (an automated witness) names that job instead.
+# Only leases this route issued (kaminos-page-*) can be renewed or released through it.
+def greenroom_lease_config():
+    """The Greenroom this server's page leases go through: explicit environment, else the TRELLIS queue config."""
+    bin_path, queue_dir = os.environ.get("KAMINOS_GREENROOM_BIN"), os.environ.get("KAMINOS_GREENROOM_QUEUE_DIR")
+    if not (bin_path and queue_dir) and os.environ.get("KAMINOS_TRELLIS_CONFIG"):
+        try:
+            config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
+            bin_path, queue_dir = bin_path or config.get("greenroomBin"), queue_dir or config.get("queueDir")
+        except (OSError, ValueError):
+            pass
+    if not (bin_path and queue_dir and Path(bin_path).is_file() and Path(queue_dir).is_dir()):
+        return None
+    return {"greenroomBin": bin_path, "queueDir": queue_dir}
+
+
+def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_root, ttl_seconds=120):
+    action = payload.get("action")
+    def cli(*args):
+        return subprocess.run([str(greenroom_bin), "--queue-dir", str(queue_dir), "lease", *args],
+                              capture_output=True, text=True, timeout=30)
+    running = Path(queue_dir) / "running"
+    def running_jobs():
+        return sorted(p.name for p in running.iterdir() if p.is_dir()) if running.is_dir() else []
+    if action == "claim":
+        run_id = str(payload.get("runId") or "")
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
+            raise ValueError("a lease claim needs the run id")
+        inside = payload.get("insideJob")
+        if inside and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(inside)) and (running / str(inside)).is_dir():
+            return {"status": "inside-job", "jobId": str(inside)}
+        lease_id = f"kaminos-page-{run_id}"
+        done = cli("claim", "--lease-id", lease_id, "--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
+                   "--repo-root", str(repo_root), "--pid", str(server_pid), "--effective-route", str(payload.get("route") or "kaminos-page"),
+                   "--backend", "webgpu", "--device", "apple-gpu", "--profile", "interactive-generation", "--ttl-seconds", str(ttl_seconds))
+        if done.returncode == 0:
+            return {"status": "held", "leaseId": lease_id, "ttlSeconds": ttl_seconds}
+        return {"status": "waiting", "heldBy": running_jobs(), "reason": (done.stderr or done.stdout).strip()[-300:]}
+    lease_id = str(payload.get("leaseId") or "")
+    if not re.fullmatch(r"kaminos-page-[A-Za-z0-9._-]{1,96}", lease_id):
+        raise PermissionError("only a page lease can be renewed or released here")
+    if action == "renew":
+        done = cli("renew", lease_id, "--ttl-seconds", str(ttl_seconds))
+        if done.returncode != 0:
+            raise RuntimeError((done.stderr or done.stdout).strip()[-300:] or "lease renew failed")
+        return {"status": "held", "leaseId": lease_id, "ttlSeconds": ttl_seconds}
+    if action == "release":
+        done = cli("release", lease_id, "--released-by", "kaminos-page", "--reason", str(payload.get("reason") or "page run ended")[:200])
+        if done.returncode != 0:
+            raise RuntimeError((done.stderr or done.stdout).strip()[-300:] or "lease release failed")
+        return {"status": "released", "leaseId": lease_id}
+    raise ValueError("lease action must be claim, renew or release")
+
+
 def trellis_generation_availability():
     config_path = os.environ.get("KAMINOS_TRELLIS_CONFIG")
     if not config_path:
@@ -3986,6 +4042,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_preferences(write=True)
         elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
+        elif parsed.path == "/api/gpu-lease":
+            self.handle_gpu_lease()
         elif parsed.path == "/api/gpu-queue-cancel":
             self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
@@ -4787,6 +4845,23 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         _atomic_write_json(scene_path, data)
         self.send_json({"saved": filename, "path": str(scene_path)})
+
+    def handle_gpu_lease(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length)) if length > 0 else {}
+            config = greenroom_lease_config()
+            if config is None:
+                self.send_json({"status": "unconfigured", "message": "No Greenroom configured on this server; the run proceeds without a lease"})
+                return
+            self.send_json(greenroom_page_lease(payload, greenroom_bin=config["greenroomBin"], queue_dir=config["queueDir"],
+                                                server_pid=os.getpid(), repo_root=str(ROOT)))
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+        except ValueError as error:
+            self.send_json({"error": str(error)}, 400)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            self.send_json({"error": str(error)}, 503)
 
     def handle_gpu_queue_cancel(self):
         try:

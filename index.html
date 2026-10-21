@@ -27022,8 +27022,24 @@ function setupAuthoringAssets(){
   const trellisPageRun=async options=>{
     if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     meshRunning.trellisPage=true;redraw();
-    try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
+    try{
+      // The run holds a Greenroom lease (greenroom-lease.mjs) for its whole length, so queued GPU jobs wait
+      // for it and it waits for them. ?greenroom_job=<id> marks a page already running inside that job.
+      const {withGreenroomLease}=await loadModule('./greenroom-lease.mjs');
+      const post=async body=>{const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;};
+      const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',
+        insideJob:new URLSearchParams(location.search).get('greenroom_job'),signal:options?.signal,
+        onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
+        held=>{trellisPageLease=held.status==='held'?held.leaseId:null;return trellisPageRunInner(options);});
+      trellisPageLease=null;
+      if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),...(lease.jobId?{jobId:lease.jobId}:{}),...(lease.renewError?{renewError:lease.renewError}:{})};
+      return result;
+    }finally{trellisPageLease=null;meshRunning.trellisPage=false;redraw();}
   };
+  // A tab closed mid-run frees its GPU work: release the lease rather than leave Greenroom blocked.
+  let trellisPageLease=null;
+  addEventListener('pagehide',()=>{if(trellisPageLease)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId:trellisPageLease,reason:'page closed during the run'})],{type:'application/json'}));});
   // Witness hook: run in the page and save the GLB.
   window.kaminosTrellisPage=async options=>{
     let out;
