@@ -19,3 +19,18 @@ for(const completion of ['cancel','complete','stop'])test(`borrowed B navigation
  assert.deepEqual(f.objects(),before.objects,'borrowing B must not edit A or B');assert.equal(f.edits.state().undoCount,before.undo);assert.deepEqual(f.cameras.viewportState(),before.viewport);assert.deepEqual(f.cameras.frameLayout(),before.layout);assert.deepEqual(f.view(),before.view);
  f.navigate();assert.equal(f.edits.state().undoCount,before.undo+1,'normal locked-camera navigation resumes after recording');
 });
+
+for(const completion of ['cancel','complete','stop'])for(const quality of ['scene','full','preview'])test(`recording ${quality} preserves compiled emitter controls on ${completion}`,async()=>{
+ const f=fixture(),s=f.scope;
+ const source={inputRadius:.043,immersedRadius:.037,immersedCentreX:.18,immersedThickness:.022,resolution:32,emitterSourceLaw:'immersed-source',flowRate:.28};
+ let runtime={...source,raySteps:24,renderScale:.8,adaptiveRays:.5,occupancySkip:.25,viewportPreview:false};
+ const changes=[];s.volumePrototype={setControls(patch){changes.push(structuredClone(patch));Object.assign(runtime,patch);}};
+ s.readVolumeControls=({quality='full'}={})=>({...source,inputRadius:.4,immersedRadius:.3,immersedCentreX:0,immersedThickness:.15,resolution:96,flowRate:1,raySteps:quality==='preview'?12:24,renderScale:quality==='preview'?.5:.8,adaptiveRays:.5,occupancySkip:.25,viewportPreview:quality==='preview'});
+ const assertSource=()=>{for(const[key,value]of Object.entries(source))assert.equal(runtime[key],value,`recording changed ${key}`);};
+ const pending=s.rec.start({width:160,height:120,frames:2,fps:1,quality});await new Promise(setImmediate);assertSource();
+ // Ordinary source edits during recording stay authored after release too.
+ source.immersedRadius=.028;runtime.immersedRadius=.028;f.frame();
+ if(completion==='cancel'){s.rec.cancel();await assert.rejects(pending,e=>e.name==='AbortError');}else{completion==='stop'?s.rec.stop():f.frame();await pending;}
+ assertSource();assert.equal(runtime.viewportPreview,false);assert.equal(runtime.raySteps,24);assert.equal(runtime.renderScale,.8);
+ assert.ok(changes.every(p=>Object.keys(p).every(k=>['raySteps','renderScale','adaptiveRays','occupancySkip','viewportPreview'].includes(k))),'only rendering controls belong to output');
+});
