@@ -38,18 +38,21 @@ export default {
    frameWhole(){return frame(false);},
    setRepresentation(value){if(!surfels||!['mesh','surfels'].includes(value))throw Error('Unavailable representation');representation=value;asset.root.visible=value==='mesh';surfels.root.visible=value==='surfels';session.redraw();sync();record({kind:'generated-glass.representation',value});return read();},
    setMaterial(patch){glass.set(patch);surfels?.set(patch);session.redraw();sync();const effective=read();record({kind:'generated-glass.material',requested:patch,effective});return effective;},
+   setReconstruction(enabled){if(!surfels)throw Error('No surfel source');surfels.set({reconstruction:enabled});session.redraw();sync();record({kind:'generated-glass.reconstruction',enabled});return read();},
+   inspectSurface({x,y}){return surfels.inspectSurface(x,y);},
   },mount({root,document,invoke}){
    const text=document.createElement('p');text.textContent='TRELLIS supplied color and opacity. Glass mode interprets low opacity as transmission; IOR and thickness are authored. Screen-space refraction sees the opaque scene, not other glass layers.';root.append(text);
    const mode=document.createElement('select');mode.setAttribute('aria-label','Material view');
    for(const [value,label] of [['opaque','Original opaque'],['opacity','Generated opacity (dithered)'],['glass','Glass interpretation']]){const o=document.createElement('option');o.value=value;o.textContent=label;mode.append(o);}root.append(mode);
    const status=document.createElement('p');status.setAttribute('role','status');
    const update=patch=>invoke('setMaterial',patch).catch(e=>{status.textContent=e.message;sync();});
-   let representationSelect;
+   let representationSelect,reconstruction;
    if(surfels){
     const label=document.createElement('p');label.textContent='Same source: raw-field surfels (bottle-region crop) or finished mesh. No material channels were discarded.';root.append(label);
     representationSelect=document.createElement('select');representationSelect.setAttribute('aria-label','Surface representation');
     for(const [value,text] of [['surfels','Raw-field bottle surfels'],['mesh','Finished mesh']]){const o=document.createElement('option');o.value=value;o.textContent=text;representationSelect.append(o);}
     representationSelect.onchange=()=>invoke('setRepresentation',representationSelect.value).catch(e=>{status.textContent=e.message;});root.append(representationSelect);
+    const row=document.createElement('label');reconstruction=document.createElement('input');reconstruction.type='checkbox';reconstruction.setAttribute('aria-label','Reconstruct the nearest wall');reconstruction.onchange=()=>invoke('setReconstruction',reconstruction.checked).catch(e=>{status.textContent=e.message;});row.append(reconstruction,' Reconstruct the nearest wall');root.append(row);
    }
    mode.onchange=()=>update({mode:mode.value});
    const fields={};for(const [key,label,min,max,step] of [['ior','Refractive index',1,2.5,.01],['thickness','Thickness (scene units)',0,1,.01]]){
@@ -58,7 +61,7 @@ export default {
    for(const [operation,label] of [['frameBottle','Look closely at the bottle'],['frameWhole','Show the whole asset']]){
     const button=document.createElement('button');button.textContent=label;button.onclick=()=>invoke(operation).catch(e=>{status.textContent=e.message;});root.append(button);
    }
-   root.append(status);sync=()=>{const s=read();mode.value=s.mode;if(representationSelect)representationSelect.value=representation;for(const k of Object.keys(fields))fields[k].value=s[k];};sync();
+   root.append(status);sync=()=>{const s=read();mode.value=s.mode;if(representationSelect)representationSelect.value=representation;if(reconstruction)reconstruction.checked=s.surfels.reconstruction;for(const k of Object.keys(fields))fields[k].value=s[k];};sync();
   },async dispose(){surfels?.dispose();glass.dispose();await session.dispose();}};
  }
 };

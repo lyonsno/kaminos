@@ -1,0 +1,24 @@
+<!doctype html><meta charset="utf-8"><title>Surfel wall numeric witness</title><link rel="icon" href="data:,">
+<script type="importmap">{"imports":{"three":"/lib/three.core.js","three/webgpu":"/lib/three.webgpu.js","three/tsl":"/lib/three.tsl.js"}}</script>
+<script type="module">
+import {WebGPURenderer,Scene,OrthographicCamera,AmbientLight,DataUtils} from '/lib/three.webgpu.js';
+import {createSurfelGlass} from '/trellis-surfel-glass.mjs';
+window.runSurfaceWitness=async()=>{
+ const renderer=new WebGPURenderer();renderer.setSize(64,64);document.body.append(renderer.domElement);await renderer.init();
+ if(!renderer.backend.isWebGPUBackend)throw Error('Expected WebGPU, not fallback');
+ const camera=new OrthographicCamera(-.05,.05,.05,-.05,.01,10);camera.position.z=1;
+ const front=[0,0,0,0,0,1,1,0,0,0,.2,.25],behind=[0,0,-.1,0,0,1,0,1,0,1,.9,1];
+ const results=[];
+ try{for(const rows of [[front],[front,front],[front,front,behind]]){
+  const c=createSurfelGlass(new Float32Array(rows.flat()),{stride:12,count:rows.length,radius:.02}),scene=new Scene();scene.add(c.root,new AmbientLight(0xffffff,1));
+  c.set({mode:'opaque'});renderer.transparent=false;
+  try{
+   renderer.render(scene,camera);
+   const samples=await c.inspectSurface(32,32),decoded=samples.map(s=>s.values.map(v=>s.type===1016?DataUtils.fromHalfFloat(v):v));
+   const normalized=decoded.slice(1).map(v=>v.slice(0,3).map(x=>x/v[3]));
+   results.push({rows:rows.length,samples:decoded,normalized,state:c.read(),hostTransparent:renderer.transparent});
+  }finally{c.dispose();}
+ }}finally{renderer.dispose();renderer.domElement.remove();}
+ return {backend:'WebGPU',results};
+};
+</script>
