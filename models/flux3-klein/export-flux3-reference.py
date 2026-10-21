@@ -3,9 +3,11 @@
 Runs diffusers' Flux3Transformer2DModel (flow map, text-to-image) on CPU in float32 for chosen
 denoising steps, with every weight replaced by exactly what the browser reconstructs from
 pack-flux3-transformer.py's bundles: block linears through Klein's quantizer at --format, globals at
---globals-format, norm weights rounded to f16. The text features are real: the prompt goes through
-the shipped Qwen3-VL text encoder (bf16, CPU) with Flux3's own prompt-embedding function. Initial
-latents come from a seeded float32 normal draw.
+--globals-format, norm weights rounded to f16. The text features come from the shipped Qwen3-VL text
+encoder through Flux3's own prompt-embedding function, run in float32 with its packed layers' linears
+quantized like pack-text-encoder.py at --te-format (f16 norms and token embeddings), so the browser's
+text encoder can be compared too: token ids, mask, positions, every tapped hidden state and the stacked
+prompt embeddings are saved. Initial latents come from a seeded float32 normal draw.
 
 Writes raw little-endian float32 tensors beside manifest.json (shape, dtype, sha256, effective
 versions and weight identity), per step: inputs, the per-mode conditioning (timestep embeddings and
@@ -13,7 +15,7 @@ modulation vectors), embedder outputs, every block's output, the output norm and
 manifest.json is written even when a phase fails, naming it.
 
   python export-flux3-reference.py --model-dir <hf snapshot> --out <dir> --prompt-file <txt>
-      [--size 256] [--seed 9001] [--steps 16] [--at 0,15] [--format i4] [--globals-format i8]
+      [--size 256] [--seed 9001] [--steps 16] [--at 0,15] [--format i4] [--globals-format i8] [--te-format i4]
 """
 import argparse
 import hashlib
@@ -45,13 +47,14 @@ def main():
     ap.add_argument("--format", default="i4")
     ap.add_argument("--globals-format", default="i8")
     ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--te-format", default="i4")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     model_dir = Path(args.model_dir)
     manifest = {"schema": "kaminos.flux3-klein.transformer-reference.v0", "host": platform.node(), "phase": "import",
                 "size": args.size, "seed": args.seed, "steps": args.steps, "weights": {"format": args.format,
-                "globals_format": args.globals_format, "group": args.group}, "tensors": {}}
+                "globals_format": args.globals_format, "group": args.group, "te_format": args.te_format}, "tensors": {}}
 
     def write():
         (out / "manifest.json").write_text(json.dumps(manifest, indent=1))
@@ -81,10 +84,42 @@ def main():
 
         manifest["phase"] = "text"
         t0 = time.time()
-        te = Qwen3VLForConditionalGeneration.from_pretrained(model_dir / "text_encoder", dtype=torch.bfloat16).eval()
+        te = Qwen3VLForConditionalGeneration.from_pretrained(model_dir / "text_encoder", dtype=torch.float32).eval()
         proc = Qwen3VLProcessor.from_pretrained(model_dir / "text_encoder")
+        lm = te.model.language_model
+        taps_read = (4, 8, 12, 16, 20, 24, 28, 32)
+        te_q = {"quantized": 0, "f16": 0}
+        with torch.no_grad():
+            for i, layer in enumerate(lm.layers[:max(taps_read)]):
+                for name, param in layer.named_parameters():
+                    w = param.data.numpy()
+                    if w.ndim == 2 and w.shape[1] % args.group == 0 and args.te_format != "f16":
+                        param.data.copy_(torch.from_numpy(flux3_pack.quantize(w, args.te_format, args.group)[2]))
+                        te_q["quantized"] += 1
+                    else:
+                        param.data.copy_(torch.from_numpy(w.astype(np.float16).astype(np.float32)))
+                        te_q["f16"] += 1
+            lm.embed_tokens.weight.data.copy_(lm.embed_tokens.weight.data.half().float())
+        manifest["textEncoderTensors"] = te_q
+        # the framing the pipeline uses, saved for the browser tokenizer
+        text = proc.apply_chat_template([{"role": "user", "content": prompt}], tokenize=False, add_generation_prompt=True)
+        real = proc.tokenizer(text, return_tensors="pt", truncation=True, max_length=8192)["input_ids"].shape[1]
+        padded = min(-(-real // 80) * 80, 8192)
+        tok = proc.tokenizer(text, return_tensors="pt", padding="max_length", padding_side="right", truncation=True, max_length=padded)
+        manifest["chat_template_text"] = text
+        manifest["real_tokens"] = real
+        ids, mask = tok["input_ids"][0], tok["attention_mask"][0]
+        save("text/input_ids", ids.to(torch.float32))
+        save("text/attention_mask", mask.to(torch.float32))
+        save("text/position_ids", torch.arange(padded).masked_fill(mask == 0, 1).to(torch.float32))
+        hidden = {}
+        hooks_te = [lm.layers[k - 1].register_forward_hook(lambda _m, _i, o, k=k: hidden.__setitem__(k, o[0] if isinstance(o, tuple) else o)) for k in taps_read]
         with torch.no_grad():
             embeds = Flux3TextEncoderStep._get_qwen3_vl_prompt_embeds(te, proc, prompt, device=torch.device("cpu"))
+        for h in hooks_te:
+            h.remove()
+        for k in taps_read:
+            save(f"text/hidden{k:02d}", hidden[k][0])
         embeds = embeds.to(torch.float32)
         del te
         manifest["textSeconds"] = round(time.time() - t0, 1)

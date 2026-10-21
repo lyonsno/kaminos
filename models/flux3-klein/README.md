@@ -5,7 +5,7 @@ flow-map checkpoint), text-to-image only. Built on the FLUX.2 Klein port: every 
 LayerNorm feeding parallel attention and SwiGLU, so the packer fuses each into FLUX.2's single-stream
 layout and the GEMM, attention, norm and duty-scheduling kernels are reused unchanged.
 
-Present: the transformer.
+Present: the transformer and the text encoder.
 
 - `pack-flux3-transformer.py`: per-block bundles, int4 blocks and int8 globals by default (2.85 GB),
   leaving out the reference-image mode that text-to-image never runs.
@@ -17,11 +17,19 @@ Present: the transformer.
   against diffusers' own transformer in float32 on the same quantized weights and real text features,
   every block compared, then timing.
 
-Not yet: the text encoder (Qwen3-VL, layers 0-31), VAE decode (FLUX.2's), the page.
+- Text encoder: the Qwen3-VL text model has Qwen3-4B's shapes, so FLUX.2 Klein's encoder runs it.
+  `../flux2-klein/pack-text-encoder.py` with the layout options in its docstring packs layers 0-31
+  (hidden states 4, 8, ..., 32 are read) at int4, 1.82 GB plus the range-fetched f16 embedding table;
+  `flux3-prompt.js` frames the prompt (chat template without a think block, padded to a multiple of
+  80, padding at RoPE position 1, which `KleinTextEncoder.allocate` now accepts). With `--te` the
+  witness checks the framing, every tapped hidden state and the prompt embeddings, then runs the
+  transformer on the browser's own text features.
+
+Not yet: VAE decode (FLUX.2's), the page.
 
     python pack-flux3-transformer.py --model-dir <snapshot> --out <weights>
     python export-flux3-reference.py --model-dir <snapshot> --out <ref> --prompt-file <txt>
     node run-flux3-transformer-witness.mjs --chrome <Chrome for Testing> --weights <weights> --ref <ref> \
-        --out <report.json> [--timing-size 512] [--profile]
+        --out <report.json> [--te <text-encoder dir>] [--timing-size 512] [--profile]
 
 The reference export needs diffusers with FLUX.3 support (main after 0.41.0) and torchvision.

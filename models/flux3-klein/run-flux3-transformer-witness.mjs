@@ -1,6 +1,6 @@
 // Run the FLUX.3 Klein transformer parity witness in an independent Chrome for Testing.
 // Usage: node run-flux3-transformer-witness.mjs --chrome <exe> --weights <dir> --ref <dir> --out <report.json>
-//        [--tolerance 1e-3] [--timing-runs 1] [--timing-size 512] [--no-digests] [--profile]
+//        [--te <text-encoder dir>] [--tolerance 1e-3] [--timing-runs 1] [--timing-size 512] [--no-digests] [--profile]
 // Serves the repo root: the page imports FLUX.2 Klein's kernels and the inference kit.
 // Writes the report on success and failure, naming the last phase reached.
 import { spawn } from 'node:child_process';
@@ -25,11 +25,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const opt = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const chrome = opt('--chrome'), outPath = opt('--out');
-const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/': path.resolve(here, '../..') };
+const roots = { '/weights/': path.resolve(opt('--weights', '')), '/ref/': path.resolve(opt('--ref', '')), '/te/': path.resolve(opt('--te', '.')), '/': path.resolve(here, '../..') };
 const cfg = { tolerance: Number(opt('--tolerance', '1e-3')), timingRuns: Number(opt('--timing-runs', '1')),
   verifyDigests: !args.includes('--no-digests'), profile: args.includes('--profile'),
   gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f32'),
-  timingSize: Number(opt('--timing-size', '0')) || null };
+  timingSize: Number(opt('--timing-size', '0')) || null, textEncoder: Boolean(opt('--te')) };
 const report = { schema: 'kaminos.flux3-klein.transformer-witness-run.v0', requestedChrome: chrome, roots, config: cfg,
   host: os.hostname(), startedAt: new Date().toISOString(), source: sourceIdentity(here), phase: 'launch' };
 let child, server, ws;

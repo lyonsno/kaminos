@@ -12,6 +12,10 @@ uses with HTTP range requests. tokenizer.json is copied beside the manifest.
 prompt's rows are ever fetched.
 
   python pack-text-encoder.py --model-dir <hf snapshot> --out <dir> [--format f16|i8|i4]
+
+Other Qwen3-family encoders reuse it through the layout options: FLUX.3 Klein's Qwen3-VL text model is
+--layer-prefix model.language_model.layers. --embed-name model.language_model.embed_tokens.weight
+--config-key text_config --taps 4,8,12,16,20,24,28,32 --tokenizer text_encoder/tokenizer.json.
 """
 import argparse
 import hashlib
@@ -37,11 +41,20 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--format", default="f16", choices=["f16", "i8", "i4"])
     ap.add_argument("--group", type=int, default=GROUP, help="quantization group (multiple of 8)")
+    ap.add_argument("--taps", default=",".join(map(str, TAPS)), help="hidden states the pipeline reads")
+    ap.add_argument("--layer-prefix", default="model.layers.")
+    ap.add_argument("--embed-name", default="model.embed_tokens.weight")
+    ap.add_argument("--config-key", default=None, help="sub-config holding the text model (e.g. text_config)")
+    ap.add_argument("--tokenizer", default="tokenizer/tokenizer.json", help="tokenizer.json relative to --model-dir")
+    ap.add_argument("--schema", default="kaminos.flux2-klein.text-encoder-weights.v1")
     args = ap.parse_args()
+    taps = tuple(int(x) for x in args.taps.split(","))
     src = Path(args.model_dir) / "text_encoder"
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     config = json.loads((src / "config.json").read_text())
+    if args.config_key:
+        config = config[args.config_key]
     index = json.loads((src / "model.safetensors.index.json").read_text())["weight_map"]
     handles = {}
 
@@ -51,12 +64,12 @@ def main():
             handles[fname] = safe_open(str(src / fname), "pt")
         return handles[fname].get_tensor(name).to(torch.float32)
 
-    layers_needed = max(TAPS)
-    manifest = {"schema": "kaminos.flux2-klein.text-encoder-weights.v1", "source": source_identity(src), "config": config,
-                "taps": list(TAPS), "layers": layers_needed, "format": args.format, "group": args.group, "bundles": {}}
+    layers_needed = max(taps)
+    manifest = {"schema": args.schema, "source": source_identity(src), "config": config,
+                "taps": list(taps), "layers": layers_needed, "format": args.format, "group": args.group, "bundles": {}}
 
     for i in range(layers_needed):
-        p = f"model.layers.{i}."
+        p = f"{args.layer_prefix}{i}."
         tensors = [
             ("input_layernorm", t(p + "input_layernorm.weight")),
             ("qkv", torch.cat([t(p + "self_attn.q_proj.weight"), t(p + "self_attn.k_proj.weight"),
@@ -101,11 +114,11 @@ def main():
                                       "sha256": hashlib.sha256(blob).hexdigest(), "tensors": entries}
         print(bname, len(blob), flush=True)
 
-    emb = t("model.embed_tokens.weight").numpy().astype(np.float16)
+    emb = t(args.embed_name).numpy().astype(np.float16)
     (out / "te-embed.bin").write_bytes(emb.tobytes())
     manifest["embedding"] = {"file": "te-embed.bin", "shape": list(emb.shape), "row_bytes": emb.shape[1] * 2,
                              "sha256": hashlib.sha256(emb.tobytes()).hexdigest()}
-    tok_src = Path(args.model_dir) / "tokenizer" / "tokenizer.json"
+    tok_src = Path(args.model_dir) / args.tokenizer
     shutil.copyfile(tok_src, out / "tokenizer.json")
     manifest["tokenizer"] = {"file": "tokenizer.json", "sha256": hashlib.sha256((out / "tokenizer.json").read_bytes()).hexdigest()}
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))

@@ -1,10 +1,16 @@
-// FLUX.3 Klein transformer parity witness: for each step export-flux3-reference.py saved, one
-// transformer evaluation on the reference's inputs with every boundary (conditioning, embedders,
-// each block, output norm, velocity) compared to the CPU float32 oracle run on the same quantized
-// weights; then untapped timing runs, at the reference size and optionally at --timing-size.
-// Served by run-flux3-transformer-witness.mjs with /weights -> packed bundles, /ref -> reference.
+// FLUX.3 Klein parity witness. With --te, the text path first: tokenizer framing (ids, mask,
+// positions), every tapped Qwen3-VL hidden state and the stacked prompt embeddings, encoded in the
+// browser straight into the transformer's input. Then, for each step export-flux3-reference.py saved,
+// one transformer evaluation with every boundary (conditioning, embedders, each block, output norm,
+// velocity) compared to the CPU float32 oracle run on the same quantized weights; with --te the
+// transformer runs on the browser's own text features. Then untapped timing runs, at the reference
+// size and optionally at --timing-size. Served by run-flux3-transformer-witness.mjs with /weights,
+// /ref and (with --te) /te.
 import { Flux3Transformer, flux3ImageIds, flux3TextIds } from './flux3-transformer.js';
 import { flux3Schedule } from './flux3-schedule.js';
+import { flux3PromptIds } from './flux3-prompt.js';
+import { KleinTextEncoder, gatherEmbeddings } from '../flux2-klein/klein-text-encoder.js';
+import { QwenTokenizer } from '../flux2-klein/qwen-tokenizer.js';
 
 const state = { phase: 'init' };
 window.transformerWitnessState = state;
@@ -100,6 +106,55 @@ window.runTransformerWitness = async function (cfg) {
     };
     const imgTokens = grid * grid;
     model.allocate(imgTokens, txtTokens);
+    const check = (name, got, ref, tolerance = cfg.tolerance) => {
+      if (ref.length !== got.length) { report.boundaries.push({ name, pass: false, shapeMismatch: [got.length, ref.length] }); return; }
+      const row = { name, ...compare(got, ref) };
+      row.pass = row.nonFinite === 0 && row.relL2 <= tolerance;
+      report.boundaries.push(row);
+    };
+
+    if (cfg.textEncoder) {
+      state.phase = 'te-load';
+      const tm = await getJson('/te/manifest.json');
+      report.textEncoderWeights = { format: tm.format, group: tm.group, layers: tm.layers, taps: tm.taps, source: tm.source };
+      if (tm.format !== rm.weights.te_format) throw new Error(`reference text encoder ran ${rm.weights.te_format}, bundles are ${tm.format}`);
+      const tok = new QwenTokenizer(await getJson(`/te/${tm.tokenizer.file}`));
+      const framed = flux3PromptIds(tok, rm.prompt);
+      const [refIds, refMask, refPos] = await Promise.all(['text/input_ids', 'text/attention_mask', 'text/position_ids'].map(refTensor));
+      report.tokenizer = { textMatches: framed.text === rm.chat_template_text, length: framed.length, padded: framed.inputIds.length,
+        refLength: rm.real_tokens, idsMatch: framed.inputIds.length === refIds.length && framed.inputIds.every((v, i) => v === refIds[i]),
+        maskMatches: framed.attentionMask.every((v, i) => v === refMask[i]), positionsMatch: framed.positionIds.every((v, i) => v === refPos[i]) };
+      if (!report.tokenizer.textMatches || !report.tokenizer.idsMatch || !report.tokenizer.maskMatches || !report.tokenizer.positionsMatch) throw new Error('tokenizer framing mismatch');
+      const te = new KleinTextEncoder(device, tm);
+      te.gemmVersion = model.gemmVersion; te.sharedType = model.sharedType;
+      const t2 = performance.now();
+      await te.loadBundles(async (file, bundle) => {
+        const buf = await getBytes(`/te/${file}`);
+        if (buf.byteLength !== bundle.bytes) throw new Error(`bundle ${file} size mismatch`);
+        if (cfg.verifyDigests && await sha256(buf) !== bundle.sha256) throw new Error(`bundle digest mismatch ${file}`);
+        return buf;
+      }, name => { state.phase = `te-weights:${name}`; });
+      report.textEncoderLoadMs = performance.now() - t2;
+      const rowBytes = tm.embedding.row_bytes;
+      const fetchRows = async ids => new Map(await Promise.all(ids.map(async id => {
+        const r = await fetch(`/te/${tm.embedding.file}`, { headers: { Range: `bytes=${id * rowBytes}-${(id + 1) * rowBytes - 1}` } });
+        if (r.status !== 206) throw new Error(`embedding range request returned ${r.status}`);
+        const b = await r.arrayBuffer(); if (b.byteLength !== rowBytes) throw new Error('short embedding row');
+        return [id, b];
+      })));
+      state.phase = 'te-encode';
+      const emb = await gatherEmbeddings([...framed.inputIds], tm.config.hidden_size, fetchRows);
+      te.allocate(framed.inputIds.length, framed.positionIds);
+      const D = tm.config.hidden_size, L = framed.inputIds.length;
+      const t3 = performance.now();
+      await te.encode(emb, framed.attentionMask, model.act.promptEmbeds, async (layer, hidden) => {
+        const name = `text/hidden${String(layer).padStart(2, '0')}`;
+        if (rm.tensors[name]) check(name, await readback(hidden, L * D * 4), await refTensor(name));
+      });
+      report.textEncodeMs = performance.now() - t3;
+      check('text/prompt_embeds', await readback(model.act.promptEmbeds, L * tm.taps.length * D * 4), promptEmbeds);
+      te.destroy();
+    }
     const steps = Object.keys(rm.tensors).filter(n => /^step\d+\/latents_in$/.test(n)).map(n => Number(n.slice(4, n.indexOf('/'))));
     report.steps = steps;
     for (const step of steps) {
@@ -107,16 +162,12 @@ window.runTransformerWitness = async function (cfg) {
       const latents = await refTensor(`step${step}/latents_in`);
       const tModel = Math.fround((await refTensor(`step${step}/timestep`))[0] * 1000);
       const targetModel = Math.fround((await refTensor(`step${step}/target_timestep`))[0] * 1000);
-      model.prepare({ latents, promptEmbeds, imgIds, txtIds });
+      // With the text encoder, the transformer keeps the browser's own prompt embeddings.
+      model.prepare({ latents, promptEmbeds: cfg.textEncoder ? null : promptEmbeds, imgIds, txtIds });
       await model.forward({ tModel, targetModel }, async (name, buf, rows, cols, byteOffset) => {
         const refName = `step${step}/${name.replace(/^model\//, '')}`;
         if (!rm.tensors[refName]) { report.boundaries.push({ name: refName, pass: false, missingReference: true }); return; }
-        const ref = await refTensor(refName);
-        const got = await readback(buf, rows * cols * 4, byteOffset);
-        if (ref.length !== got.length) { report.boundaries.push({ name: refName, pass: false, shapeMismatch: [got.length, ref.length] }); return; }
-        const row = { name: refName, ...compare(got, ref) };
-        row.pass = row.nonFinite === 0 && row.relL2 <= cfg.tolerance;
-        report.boundaries.push(row);
+        check(refName, await readback(buf, rows * cols * 4, byteOffset), await refTensor(refName));
       });
     }
     report.parityPass = report.boundaries.length > 0 && report.boundaries.every(b => b.pass);
