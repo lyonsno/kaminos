@@ -15,7 +15,7 @@ export default {
     const hero=sha(inputs.hero),surfelSHA=sha(inputs.surfels),session=await host.scene.open();
     const before=host.rendering.readGI(),abort=new AbortController(),candidates={};
     let comparison,asset,disposed=false,generation=0,mergeFactor=factor(inputs.mergeFactor??16),worker=null,rejectWorker=null;
-    let selector,sourceView,mergeInput,status;
+    let selector,sourceView,mergeInput,status,numberDrag;
     const fetchJSON=async url=>{const r=await fetch(url,{signal:abort.signal});if(!r.ok)throw Error(`Asset catalog HTTP ${r.status}`);return r.json();};
     const prepare=(field,k)=>new Promise((resolve,reject)=>{
       if(worker){worker.terminate();rejectWorker?.(Error('Surfel preparation superseded'));}
@@ -31,12 +31,14 @@ export default {
       const root=new THREE.Group(),patches=createSurfelObject(THREE,coarse,{levels:[1],proxyFactor:1});
       patches.applyMatrix4(new THREE.Matrix4().fromArray(raw.extension.frame.nodeMatrix));root.add(patches);
       return {root,identity:{kind:'surfels',sha256:surfelSHA,mergeFactor:k,primitives:coarse.count,
-        radiusWorld:coarse.radiusVoxels/coarse.resolution,frame:raw.extension.frame.name}};
+        radiusSourceUnits:coarse.radiusVoxels/coarse.resolution,frame:raw.extension.frame.name}};
     };
     const cleanup=async()=>{
       disposed=true;generation++;abort.abort();worker?.terminate();rejectWorker?.(Error('Comparison closed'));worker=null;rejectWorker=null;
-      comparison?.dispose();for(const item of Object.values(candidates))release(item.root);
-      if(comparison)host.rendering.gi(before);
+      numberDrag?.dispose?.();comparison?.dispose();for(const item of Object.values(candidates))release(item.root);
+      // Only restore the mode this experiment changed; retain the operator's
+      // lighting edits made during the comparison.
+      if(comparison&&before.mode!=='combined'&&host.rendering.readGI().mode==='combined')host.rendering.gi({...host.rendering.readGI(),mode:before.mode});
       await session.dispose();
     };
     try {
@@ -66,11 +68,12 @@ export default {
       else session.setView({position:[scale*1.1,scale*.8,scale*1.2],target:[0,scale*.25,0]});
     }catch(error){await cleanup();throw error;}
     const read=()=>({hero,surfels:surfelSHA,detailedPrimitives:count(asset.root),mergeFactor,source:comparison.read(),
-      lighting:host.rendering.readGI(),view:session.readView(),receiverId:asset.id,
+      lighting:host.rendering.readGI(),backend:host.scene.renderer().backend.constructor.name,view:session.readView(),receiverId:asset.id,
       continuation:'Inputs restore the asset pair and merge factor; camera accepts inputs.view. Scene lighting uses the ordinary shared controls.'});
     const sync=()=>{
       if(!status)return;const s=read(),selected=s.source.candidates[s.source.selection];
       selector.value=s.source.selection;sourceView.checked=s.source.showSource;mergeInput.value=String(mergeFactor);
+      if(s.lighting.mode!=='combined'){status.textContent='Combined GI is inactive. Choose Combined AO + GI in Rendering to use this comparison.';return;}
       status.textContent=`${selected?selected.primitives.toLocaleString()+' source '+(selected.kind==='mesh'?'triangles':'surfels'):s.detailedPrimitives.toLocaleString()+' detailed triangles'} · Detailed receiver stays fixed. ${s.source.enabled?'One additional source capture; this comparison does not yet measure a saving.':'Original GI source.'}`;
     };
     const applied=kind=>{session.redraw();sync();const state=read();record({kind:'gi-source.'+kind,phase:'applied',effective:state});return state;};
@@ -93,12 +96,12 @@ export default {
         const viewLabel=document.createElement('label');sourceView=document.createElement('input');sourceView.type='checkbox';viewLabel.append(sourceView,' Show the GI source');
         const mergeLabel=document.createElement('label'),grip=document.createElement('span');grip.textContent='Surfel merge factor ';
         mergeInput=document.createElement('input');mergeInput.type='number';mergeInput.min='1';mergeInput.step='1';mergeInput.className='transform-input';mergeLabel.append(grip,mergeInput);
-        status=document.createElement('p');status.setAttribute('role','status');label.append(selector);root.append(label,viewLabel,mergeLabel,status);
+        status=document.createElement('p');status.className='small';status.setAttribute('role','status');label.append(selector);root.append(label,viewLabel,mergeLabel,status);
         const failed=error=>{sync();status.textContent=error.message;};
         selector.addEventListener('change',()=>invoke('select',selector.value).catch(failed));
         sourceView.addEventListener('change',()=>invoke('showSource',sourceView.checked).catch(failed));
         mergeInput.addEventListener('change',()=>{status.textContent='Preparing coarse surfels…';invoke('setMergeFactor',Number(mergeInput.value)).catch(failed);});
-        host.controls.installNumberDrag({input:mergeInput,grip,step:1});sync();
+        numberDrag=host.controls.installNumberDrag({input:mergeInput,grip,step:1});sync();
       },dispose:cleanup,
     };
   },
