@@ -35,7 +35,8 @@ try{
    const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);return window.kaminosCreatureFlesh.read({geometry:false});});
    if(state.steps!==i+1||state.error||!Number.isFinite(state.volume.volumeRatio)||!(state.volume.minJ>0))throw Error('Incomplete, stale or invalid physical step');
    const raw=await page.evaluate(()=>({state:window.kaminosCreatureFlesh.read(),...window.kaminosCreatureFlesh.physicalState()}));
-   const file=`frames/${String(i+1).padStart(4,'0')}.png`;await page.screenshot({path:path.join(out,file)});
+   const file=`frames/${String(i+1).padStart(4,'0')}.png`;await page.locator('#viewport').screenshot({path:path.join(out,file)});
+   const presented=await page.evaluate(()=>window.kaminosCreatureFlesh.read());if(presented.steps!==i+1||presented.deformer.pending)throw Error('Physical step has no matching presented skin');
    fs.writeFileSync(path.join(out,`frames/${String(i+1).padStart(4,'0')}.json`),JSON.stringify(raw));report.frames.push({file,step:state.steps,frame:state.frame,volume:state.volume});
   }
   report.phase='final-gpu-parity';save();

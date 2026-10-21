@@ -32,7 +32,7 @@ export default {
   const edges=new Set();for(const t of prepared.tetrahedra)for(let a=0;a<4;a++)for(let b=a+1;b<4;b++){const pair=[t[a],t[b]].sort((x,y)=>x-y);edges.add(pair.join(','));}
   const edgeIds=[...edges].map(s=>s.split(',').map(Number));guideGeometry.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(edgeIds.length*6),3));
   const nodeRest=Float32Array.from(prepared.positions.flat()),nodeWeights=Float32Array.from(prepared.nodeWeights),identity=new THREE.Matrix4().toArray();
-  const parameters={young:inputs.young??30,bulk:inputs.bulk??100};let volume=createFleshVolume(prepared,parameters),session,bodyAsset,probeAsset,unsubscribe,disposed=false,playing=false,motion=false,physical=true,frame=0,stepCount=0,poseKey='',palette,offsets=volume.offsets(),mirror=null,mirrorKey='',stroke=null,error=null,refresh=()=>{};
+  const parameters={young:inputs.young??30,bulk:inputs.bulk??100};let volume=createFleshVolume(prepared,parameters),session,bodyAsset,probeAsset,unsubscribe,disposed=false,playing=false,motion=false,physical=true,frame=0,stepCount=0,poseKey='',palette,offsets=volume.offsets(),mirror=null,mirrorKey='',stroke=null,error=null,groundHeight=null,restoreGround=()=>{},refresh=()=>{};
   const dt=1/60,profile=prepared.construction.profile[Math.floor(prepared.construction.sections/2)],radius=profile.radius[0]*.5;
   probe.scale.setScalar(radius);
   let localStart,pressDirection;
@@ -57,7 +57,7 @@ export default {
   const raycast=mesh.raycast;mesh.raycast=function(...args){const draw=mesh.geometry;try{mesh.geometry=currentGeometry();return raycast.apply(this,args);}finally{mesh.geometry=draw;}};
   registerExportGeometrySnapshot(mesh,currentGeometry);
   function read({geometry:includeGeometry=false}={}){
-   const result={route:'accepted-all-influences-dq-plus-torso-elastic-reference',source:data.source,preparedSha256:inputs.prepared_sha256,frame,steps:stepCount,physical,motion,playing,clock:{kind:'fixed-step-preview-not-wall-clock-performance',timeStep:dt,seconds:stepCount*dt},volume:volume.read(),deformer:deformer.read(),sphere:{id:probeAsset?.id,position:probe.position.toArray(),radius:probe.scale.x},body:{id:bodyAsset?.id,vertices:data.manifest.vertices,triangles:data.manifest.triangles},stroke:stroke&&{seconds:stroke.time},error,view:session?.readView()};
+   const result={route:'accepted-all-influences-dq-plus-torso-elastic-reference',source:data.source,preparedSha256:inputs.prepared_sha256,frame,steps:stepCount,physical,motion,playing,clock:{kind:'fixed-step-preview-not-wall-clock-performance',timeStep:dt,seconds:stepCount*dt},volume:volume.read(),deformer:deformer.read(),sphere:{id:probeAsset?.id,position:probe.position.toArray(),radius:probe.scale.x},body:{id:bodyAsset?.id,vertices:data.manifest.vertices,triangles:data.manifest.triangles},groundReference:{height:groundHeight,contactSolver:false},stroke:stroke&&{seconds:stroke.time},error,view:session?.readView()};
    if(includeGeometry){result.physicalPoints=volume.points();result.offsets=volume.offsets();result.vertices=Array.from(currentGeometry().attributes.position.array);}return result;
   }
   function advance(count=1){
@@ -74,12 +74,15 @@ export default {
    publish();refresh();return read();
   }
   function reset(){volume=createFleshVolume(prepared,parameters);volume.setEnabled(physical);poseKey='';stepCount=0;stroke=null;setPose(0);seatStroke();putProbe(localStart);publish();return read();}
-  async function dispose(){if(disposed)return;disposed=true;unsubscribe?.();refresh=()=>{};mirror?.dispose();deformer.dispose();if(session)await session.dispose();else{geometry.dispose();mesh.material.dispose();probe.geometry.dispose();probe.material.dispose();guideGeometry.dispose();guide.material.dispose();}if(globalThis.window?.kaminosCreatureFlesh===diagnostic)delete globalThis.window.kaminosCreatureFlesh;}
+  async function dispose(){if(disposed)return;disposed=true;unsubscribe?.();restoreGround();refresh=()=>{};mirror?.dispose();deformer.dispose();if(session)await session.dispose();else{geometry.dispose();mesh.material.dispose();probe.geometry.dispose();probe.material.dispose();guideGeometry.dispose();guide.material.dispose();}if(globalThis.window?.kaminosCreatureFlesh===diagnostic)delete globalThis.window.kaminosCreatureFlesh;}
   const diagnostic={read,advance,geometry:currentGeometry,physicalState:()=>({points:volume.points(),offsets:volume.offsets()}),gpu:()=>deformer.readback()};
   try{
    session=await host.scene.open();setPose(0);seatStroke();putProbe(localStart);publish();
    bodyAsset=await session.attach(placement,{owned:true,metadata:{label:placement.name,type:'glb',source:{...data.source,physicalPreparation:inputs.prepared_sha256}}});
    probeAsset=await session.attach(probe,{owned:true,metadata:{label:probe.name,type:'mesh',source:'kinematic-sphere-contact-control'}});
+   const ground=host.controls.document.getElementById('composition-ground-height');if(!ground)throw Error('Shared reference-ground control unavailable');
+   const previousGround=ground.value;groundHeight=currentGeometry().boundingBox.clone().applyMatrix4(mesh.matrixWorld).min.y-.01;const presentedGround=String(groundHeight);ground.value=presentedGround;ground.dispatchEvent(new Event('change'));
+   restoreGround=()=>{if(ground.value===presentedGround){ground.value=previousGround;ground.dispatchEvent(new Event('change'));}};
    const center=new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()),direction=new THREE.Vector3(...prepared.construction.right).multiplyScalar(5).add(new THREE.Vector3(0,1.4,2));session.setView(inputs.view??{position:center.clone().add(direction).toArray(),target:center.toArray()});if(!inputs.view)host.scene.frame([placement,probe]);
    unsubscribe=session.onFrame(()=>{if(!playing)return;try{advance();}catch(e){error=e.message;playing=false;record({kind:'creature-flesh.step',phase:'failed',message:e.message,state:read()});refresh();}});
    if(globalThis.window)globalThis.window.kaminosCreatureFlesh=diagnostic;
