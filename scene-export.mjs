@@ -1,4 +1,5 @@
 import { clone as cloneHierarchy } from 'three/addons/utils/SkeletonUtils.js';
+import { snapshotExportGeometry } from './scene-export-geometry.mjs';
 
 // Clone an object for GLB export, carrying its scene placement as the clone's
 // own transform and leaving editor helpers behind. The skeleton-aware clone
@@ -7,6 +8,7 @@ import { clone as cloneHierarchy } from 'three/addons/utils/SkeletonUtils.js';
 export function exportCloneInWorld(object) {
   object.updateWorldMatrix(true, true);
   const clone = cloneHierarchy(object);
+  snapshotExportGeometry(object, clone);
   const helpers = [];
   clone.traverse(child => { if (child !== clone && child.userData?.kaminosEditorHelper) helpers.push(child); });
   for (const helper of helpers) helper.removeFromParent();
