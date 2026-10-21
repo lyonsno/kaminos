@@ -305,17 +305,17 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
     if(next.prompt!==undefined&&next.prompt!==loaded.motion.prompt||next.seed!==undefined&&next.seed!==loaded.motion.seed)throw Error('Motion choice prompt or seed differs from retained source');
     const nextAdapter=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:data.frame}),nextWalking=createWalkingPoseAdapter({THREE,adapter:nextAdapter,radius:inputs.radius??10,blendFrames:inputs.blend_frames??6});
-    const prior={adapter,walking,wander,heldWander,source:structuredClone(source),chosen,chosenInputs,cycle,frame:player.read().frame,status:player.read().status};
+    const prior={adapter,walking,wander,heldWander,source:structuredClone(source),chosen,chosenInputs,assigned,cycle,frame:player.read().frame,status:player.read().status};
     const replaceSource=value=>{for(const key of Object.keys(source))delete source[key];Object.assign(source,value);};
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
      if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
      if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
-     player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
+     player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();
     }
     catch(error){
-     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;heldWander=prior.heldWander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
+     try{player?.dispose();adapter=prior.adapter;walking=prior.walking;wander=prior.wander;heldWander=prior.heldWander;chosen=prior.chosen;chosenInputs=prior.chosenInputs;assigned=prior.assigned;cycle=prior.cycle;replaceSource(prior.source);player=makePlayer();if(prior.frame!==null)player.seek(prior.frame);refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);}
      catch(rollback){throw new AggregateError([error,rollback],'Motion switch and prior-state restoration failed');}
      throw error;
     }
@@ -331,15 +331,17 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    const initialChoice=chosen??{id:'initial',label:data.motion.prompt??'Initial motion',motion:inputs.motion,motion_sha256:inputs.motion_sha256,motion_data:inputs.motion_data};
    if(!chosen){choices.push(initialChoice);chosen=initialChoice;}assigned=initialChoice;
    await sessionMotions.add(data.motion);
-   const applyRow=async row=>{
+   const applyRow=async(row,preview)=>{
     if(row.skeletonKey!==skeletonMotionKey(data.motion))throw Error('Motion belongs to another skeleton');
     let choice=choices.find(c=>c.motion_sha256===row.id);
     if(!choice){choice={id:row.id,label:row.motion.prompt??'Session motion',motion:'session:'+row.id,motion_sha256:row.id,motion_data:row.text,prompt:row.motion.prompt,seed:row.motion.seed};choices.push(choice);sessionChoices.set(row.id,choice);}
-    await operations.motion({id:choice.id});await operations.mode({mode:'source'});await operations.replay();return choice;
+    const requestId=motionRequest+1,result=await operations.motion({id:choice.id,preview});
+    if(result.status==='superseded'||requestId!==motionRequest)return {status:'superseded',effective:read()};
+    operations.mode({mode:'source'});operations.replay();return read();
    };
-   operations.previewMotion=operation('previewMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');await applyRow(row);return read();});
-   operations.assignMotion=operation('assignMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');assigned=await applyRow(row);return read();});
-   operations.restoreMotion=operation('restoreMotion',async()=>{await operations.motion({id:assigned.id});return read();});
+   operations.previewMotion=operation('previewMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');return applyRow(row,true);});
+   operations.assignMotion=operation('assignMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');return applyRow(row,false);});
+   operations.restoreMotion=operation('restoreMotion',async()=>{return operations.motion({id:assigned.id,preview:true});});
   }
   if(inputs.mode!==undefined&&!wander)operations.mode({mode:inputs.mode});
   if(inputs.cycle!==undefined&&!wander){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
