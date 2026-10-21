@@ -168,7 +168,7 @@ test('explicit domain framing uses its actual bounds without admitting editor he
   assert.deepEqual(camera.position.toArray(),before);
   guide.visible=false;
   assert.equal(runInNewContext(functionSource+'\nframeAuthoredSelection()',{
-    activeSceneFieldId:'flame-field',flameDomainGuide:guide,camera,controls,...bindings,
+    sceneSelection:{ids:['flame-field'],activeId:'flame-field'},activeSceneFieldId:'flame-field',flameDomainGuide:guide,camera,controls,...bindings,
   }),true,'explicit domain framing must not be filtered as helper content');
   assert.notDeepEqual(camera.position.toArray(),before);
   assert.deepEqual(controls.target.toArray(),box.getCenter(new THREE.Vector3()).toArray());

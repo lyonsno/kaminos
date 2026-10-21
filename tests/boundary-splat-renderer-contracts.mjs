@@ -13,13 +13,6 @@ assert.match(core, /BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY\s*=\s*'boundary-splat
 assert.deepEqual(featureCapture.BOUNDARY_SPLAT_FEATURE_ORDER, modelArtifact.features, 'live feature capture and compiled model preserve one exact feature order');
 assert.deepEqual(modelArtifact.outputs, ['color.r', 'color.g', 'color.b', 'opacity', 'radius.x', 'radius.y'], 'compiled live model preserves the declared output order');
 assert.match(core, /function normalizeBoundarySplatMode/, 'splat mode normalization is explicit');
-assert.match(page, /volume_boundary_splat_mode/, 'splat mode is routable from the browser URL');
-assert.match(page, /boundarySplatMode/, 'browser controls carry the splat mode into the renderer');
-assert.match(page, /id="volume-boundary-splat-radius"/, 'browser exposes a live learned-splat radius control');
-assert.match(page, /id="volume-boundary-splat-sharpness"/, 'browser exposes a live learned-splat kernel sharpness control');
-assert.match(page, /volume_boundary_splat_radius/, 'splat radius is preserved in basin URLs');
-assert.match(page, /volume_boundary_splat_sharpness/, 'splat sharpness is preserved in basin URLs');
-assert.match(page, /Splat authority:[\s\S]*support heat\/reaction\/front\/interface[\s\S]*Step width and boundary display\/color controls remain raymarch-only/, 'interface names the effective splat-control boundary instead of implying every neighboring raymarch control is live');
 
 assert.match(core, /boundarySplatCompactPipeline/, 'renderer owns a GPU splat compaction pipeline');
 assert.match(core, /boundarySplatFinalizePipeline/, 'renderer caps the indirect instance count after compaction');

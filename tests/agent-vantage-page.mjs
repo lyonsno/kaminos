@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import * as vantage from '../agent-vantage.mjs';
-import {createVantagePilot, createCommandPump, installAgentVantage} from '../agent-vantage.mjs';
+import {createVantagePilot, createCommandPump, installAgentVantage, connectVantageLink} from '../agent-vantage.mjs';
 import {poseAxes, poseLookingAt, rayThrough} from '../agent-vantage-core.mjs';
 import * as core from '../agent-vantage-core.mjs';
 import {createSceneCameras, cameraViewFromRecord} from '../scene-camera.mjs';
@@ -562,7 +562,7 @@ test('box selection cannot begin during a picture, and never from the sub panel'
   const scope = {document, window: {kaminosSelection: {}, addEventListener() {}}, polyEdit: null, vantageCaptureHeld: true, controls: {enabled: true},
     scenePlacementTools: {edits: {state: () => ({active: null})}, state: () => ({modal: null})}, viewPie: null,
     greenroomPreviewIsActive: () => false, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
-    objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, setSceneSelection: ids => { selection = ids; },
+    objectsInScreenBox: () => ['picked'], sceneSelection: {ids: []}, sceneSelectionHistory:{set:ids=>{selection=ids;}}, setSceneSelection: ids => { selection = ids; },
     renderer: {domElement: {getBoundingClientRect: () => ({left: 0, top: 0, width: 800, height: 600})}}};
   fromIndexLive('installSelectionInput', scope)();
   const fire = (type, values = {}) => {
@@ -590,9 +590,10 @@ test('click selection waits while a picture holds the viewport', () => {
   const scope = {polyEdit: null, vantageCaptureHeld: true, viewportEventHitsInteractiveOverlay: () => false, viewportEventIsInsideCanvas: () => true,
     viewportSuppressedClick: null, viewportPointerDown: null, greenroomPreviewIsActive: () => false, transformGizmoDragging: false, transformControls: null,
     pickFlameDomainFromViewportPointer: () => { calls.push('field'); return false; },
+    pickWaterDomainFromViewportPointer: () => false,
     pickSceneObjectFromViewportPointer: () => { calls.push('object'); return null; },
     sceneHitsFromViewportPointer: () => [], pickVisibleFlameFromViewportPointer: () => null,
-    clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {}};
+    clearActiveSceneObjectSelection: () => calls.push('clear'), selectedSplatRecord: () => null, window: {kaminosSelection:{clear:()=>calls.push('clear')}}};
   const event = type => ({type, button: 0, clientX: 40, clientY: 40, pointerId: 1, target: {closest: () => null}});
   fromIndexLive('handleViewportPointerDown', scope)(event('pointerdown'));
   fromIndexLive('handleViewportSelectionClick', scope)(event('click'));
@@ -651,7 +652,7 @@ test('a default picture of a very large scene still returns its picture and map'
 });
 
 // installAgentVantage over a fake page: the panel map refresh runs on a timer.
-function installedPage({subs = [], drawnAt = null, water = false, glance = null} = {}) {
+function installedPage({subs = [], drawnAt = null, water = false, glance = null, proxies = null} = {}) {
   const intervals = [], painted = [], classes = [];
   const element = tag => {
     const node = new FakeElement(tag), parts = {};
@@ -683,7 +684,7 @@ function installedPage({subs = [], drawnAt = null, water = false, glance = null}
     entries: () => entries, selection: () => [], readView: () => ({position: [0, 1, 6], target: [0, 1, 0], up: [0, 1, 0], fov: 50, near: 0.1, far: 1000}),
     writeView() {}, viewport, hostCanvas, busy: () => null, hold: () => () => {},
     cameraMatrices: () => projection, suspendEditorDrawing: () => () => {}, redraw() {}, frameState: () => ({layers: {}}), link: false,
-    idPass, glance, water: () => water});
+    idPass, glance, water: () => water, ...(proxies ? {proxies} : {})});
   const refresh = intervals.find(item => item.ms === 400).fn;
   return {vantage, refresh, painted, entries, idPass, intervals, classes, map: viewport.children[0].querySelector('canvas'), live: viewport.children[0].querySelector('.vantage-live'), picture: viewport.children[0].querySelector('img'), title: viewport.children[0].querySelector('.vantage-title'),
     get bounds() { return bounds; }, set bounds(value) { bounds = value; },
@@ -844,8 +845,8 @@ function fakeIdPass(entries, {drawnAt = null} = {}) {
   const numberOf = object => { if (!numbers.has(object)) { objects.push(object); numbers.set(object, objects.length); } return numbers.get(object); };
   return {
     calls,
-    draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false}) {
-      calls.push({optics, width, height, hide, region, depth});
+    draw({optics, width, height, hide = [], region = [0, 0, width, height], depth = false, withoutLayers = []}) {
+      calls.push({optics, width, height, hide, region, depth, withoutLayers});
       const [x0, y0, w, h] = region, ids = new Uint16Array(w * h), instances = new Uint16Array(w * h), depths = new Float32Array(w * h), drawn = new Set();
       const view = new THREE.Matrix4().fromArray(optics.viewInverse);
       const shown = entries().filter(entry => !hide.includes(entry.id)).map(entry => entry.object);
@@ -1593,4 +1594,603 @@ test('recheck answers unverified when the kept identity cannot support a compari
   mesh.geometry.attributes.position.setX(0, 5); mesh.geometry.attributes.position.needsUpdate = true;
   assert.deepEqual(await page.vantage.run('recheck', {id: 'box-1', path: [0], identity: partial}), {now: 'present', status: 'unverified'},
     'an identity missing what an edit would change cannot say same');
+});
+
+// --- watch: a film strip from the sub's own camera over a window --------------------------
+
+// A page clock the watch runs on: sleeping advances it, and each draw takes `drawMs`.
+function watchClock(host, state, {drawMs = 30, onSleep = null} = {}) {
+  let t = 0;
+  const renders = [], listeners = new Map();
+  host.now = () => t;
+  host.sleep = async ms => { t += ms; onSleep?.(t); };
+  host.renderView = options => {
+    renders.push({...copy(options), at: t, view: copy(state.view)});
+    const ms = typeof drawMs === 'function' ? drawMs(renders.length - 1, t) : drawMs;   // may itself advance the clock
+    t += ms;
+    return {ready: Promise.resolve({canvas: {watch: renders.length}, width: options.width, height: options.height})};
+  };
+  host.listen = (name, handler) => {
+    listeners.set(name, handler);
+    return () => listeners.delete(name);
+  };
+  return {renders, listeners, emit: (name, detail) => listeners.get(name)?.(detail), advance: ms => { t += ms; }};
+}
+
+test('watch draws a strip from the sub\'s own camera over its window, never borrowing the operator\'s view', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  const before = {holds: state.holds, writes: state.writes.length, composed: state.composed.length, view: copy(state.view)};
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false, frames: true, maxSize: 320});
+  assert.equal(strip.kind, 'watch');
+  assert.equal(strip.route, 'own-camera');
+  assert.equal(strip.ended, 'window');
+  assert.equal(state.holds, before.holds, 'nothing of the operator\'s is held');
+  assert.equal(state.writes.length, before.writes, 'the operator\'s view is never written');
+  assert.equal(state.composed.length, before.composed, 'nor is the viewport pictured');
+  assert.deepEqual(clock.renders.map(render => render.at), [0, 500, 1000, 1500], 'a frame at the start of each interval of the window');
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500]);
+  assert.equal(host.now(), 2000, 'the watch holds its whole window');
+  assert.ok(clock.renders.every(render => render.hide.includes('vantage-bebop')), 'the sub is not in its own view');
+  assert.ok(strip.frames.every(frame => frame.pickMap && frame.optics), 'every frame keeps its own pick map and camera');
+  assert.equal(strip.images[0].name, 'sheet');
+  assert.deepEqual(strip.images.slice(1).map(image => image.name), ['frame-1', 'frame-2', 'frame-3', 'frame-4']);
+  assert.ok(strip.omitted.some(item => /fire/.test(item)), 'it says what its frames leave out');
+});
+
+test('watch follows the sub as it moves, naming each frame from its own view', async () => {
+  const {state, host} = await launched();
+  const original = state.cameras[0].transform.position.slice();
+  watchClock(host, state, {onSleep: () => { state.cameras[0].transform.position[0] += 1; }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.view.position[0] - original[0]), [0, 1], 'each frame is drawn from where the sub was then');
+  assert.notDeepEqual(strip.frames[0].optics, strip.frames[1].optics);
+});
+
+test('watch ends at the named page event, after one more frame, and keeps what the event said', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {onSleep: t => { if (t >= 1000) clock.emit('cut-complete', {tool: 'saw', pieces: 2, element: {toJSON() { throw new Error('not data'); }}}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'cut-complete', map: false});
+  assert.equal(strip.ended, 'event');
+  assert.equal(strip.event.name, 'cut-complete');
+  assert.equal(strip.event.atMs, 1000);
+  assert.equal(strip.event.detail, null, 'a detail that is not plain data is not carried');
+  assert.equal(strip.event.detailError !== undefined, true);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000], 'the last frame is the one after the event');
+  assert.equal(clock.listeners.size, 0, 'the watch stops listening when it ends');
+});
+
+test('an event detail that is plain data is carried as it was sent', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', {body: 'arch', speed: 0.001}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+  assert.deepEqual(strip.event.detail, {body: 'arch', speed: 0.001});
+});
+
+test('a frame that draws past its tick delays the next one instead of stacking draws, and says how many ticks it missed', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state, {drawMs: 700});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false});
+  const starts = clock.renders.map(render => render.at);
+  assert.ok(starts.every((at, i) => i === 0 || at >= starts[i - 1] + 700), 'one draw at a time');
+  assert.ok(strip.missedTicks > 0, 'the strip says it fell behind');
+});
+
+test('watch stops listening even when a frame cannot be drawn', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  host.renderView = () => { throw new Error('device lost'); };
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1, fps: 2, until: 'settled'}), error => error.phase === 'watch');
+  assert.equal(clock.listeners.size, 0);
+});
+
+test('a page that cannot draw a second view, or listen for events, refuses a watch it cannot keep', async () => {
+  const {host} = await launched();
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1}), error => error.phase === 'watch');
+  host.renderView = () => ({ready: Promise.resolve({canvas: {}, width: 1, height: 1})});
+  await assert.rejects(() => createVantagePilot(host).run('watch', {seconds: 1, until: 'settled'}), error => error.phase === 'watch' && /listen/.test(error.message));
+});
+
+test('the installed page hears watch events as kaminos: window events', () => {
+  const source = readFileSync(new URL('../agent-vantage.mjs', import.meta.url), 'utf8');
+  assert.match(source, /addEventListener\(`kaminos:\$\{name\}`/, 'tools announce events with window.dispatchEvent(new CustomEvent(`kaminos:<name>`, {detail}))');
+});
+
+test('a window shorter than one frame interval is still watched to its end, and an event in it gets its frame', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  const quiet = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, map: false});
+  assert.deepEqual(quiet.frames.map(frame => frame.atMs), [0]);
+  assert.equal(quiet.ended, 'window');
+  assert.equal(host.now(), 1000, 'it listens until the deadline');
+  let clock;
+  clock = watchClock(host, state, {drawMs: 0});
+  host.sleep = async ms => { clock.advance(Math.min(ms, 500)); if (host.now() >= 500) clock.emit('settled', {}); };
+  const heard = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+  assert.equal(heard.ended, 'event', 'an event between the last tick and the deadline still ends the watch');
+  assert.deepEqual(heard.frames.map(frame => frame.atMs), [0, 500], 'with the frame after it');
+});
+
+test('a timer that wakes past the deadline draws nothing late, and counts the ticks it missed', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state);
+  let first = true;
+  host.sleep = async ms => { clock.advance(first ? ms + 3500 : ms); first = false; };
+  const strip = await createVantagePilot(host).run('watch', {seconds: 2, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0], 'no frame is drawn outside the window');
+  assert.equal(strip.missedTicks, 3, 'the ticks at 500, 1000 and 1500 ms were missed');
+  assert.equal(strip.ended, 'window');
+});
+
+test('each watch frame records its own size, which can change if the viewport is resized', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state, {onSleep: () => { state.size = {width: 900, height: 1600}; }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false, maxSize: 320});
+  assert.deepEqual(strip.frames.map(frame => [frame.image.width, frame.image.height]), [[320, 180], [180, 320]]);
+});
+
+test('an event detail that plain data cannot carry unchanged is reported, not altered', async () => {
+  for (const detail of [{pieces: 2, affected: new Map([['body', 'arch']])}, {speed: NaN}, {done() {}}, {when: new Date(0)}, [1, undefined], {big: 10n}]) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.equal(strip.event.name, 'settled');
+    assert.equal(strip.event.detail, null, `${String(Object.keys(detail))} is not carried`);
+    assert.equal(typeof strip.event.detailError, 'string');
+  }
+});
+
+test('an event at or after the deadline does not count, even while a draw is still finishing', async () => {
+  {
+    const {state, host} = await launched();
+    const clock = watchClock(host, state, {drawMs: 0});
+    host.sleep = async ms => { clock.advance(ms); if (host.now() >= 1000) clock.emit('settled', {}); };
+    const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+    assert.equal(strip.ended, 'window', 'an event exactly at the deadline is outside the window');
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0]);
+  }
+  {
+    const {state, host} = await launched();
+    const clock = watchClock(host, state, {drawMs: 0});
+    let release;
+    const draw = host.renderView;
+    host.renderView = options => {
+      const drawn = draw(options);
+      return {ready: new Promise(done => { release = () => done(drawn.ready); })};
+    };
+    const pending = createVantagePilot(host).run('watch', {seconds: 1, fps: 0.5, until: 'settled', map: false});
+    await new Promise(done => setImmediate(done));
+    clock.advance(1200);
+    clock.emit('settled', {pieces: 2});
+    release();
+    const strip = await pending;
+    assert.equal(strip.ended, 'window', 'an event heard after the deadline, while a readback was outstanding, does not count');
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0]);
+  }
+});
+
+test('event detail is copied once from its own data, and what cannot be copied is reported without losing the event', async () => {
+  let reads = 0;
+  const changing = {get pieces() { return ++reads === 1 ? 2 : () => 3; }};
+  const unsupported = [Object.assign([1, 2], {callback() {}}), changing, {pieces: 2, [Symbol('affected')]: new Map([['body', 'arch']])},
+    new Proxy({}, {ownKeys() { throw new Error('trap'); }})];
+  for (const detail of unsupported) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.equal(strip.ended, 'event', 'the event still ends the watch');
+    assert.equal(strip.event.atMs, 500);
+    assert.equal(strip.event.detail, null);
+    assert.equal(typeof strip.event.detailError, 'string');
+  }
+  const shared = {at: [1, 2]}, bare = Object.assign(Object.create(null), {pieces: 2});
+  for (const [detail, expected] of [[{a: shared, b: shared}, {a: {at: [1, 2]}, b: {at: [1, 2]}}], [bare, {pieces: 2}]]) {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false});
+    assert.deepEqual(strip.event.detail, expected);
+  }
+});
+
+test('event detail keeps an own __proto__ key as data, and rejects array keys and numbers JSON would drop or change', async () => {
+  const watchFor = async detail => {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {onSleep: t => { if (t >= 500) clock.emit('settled', detail); }});
+    return (await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'settled', map: false})).event;
+  };
+  for (const text of ['{"pieces":2,"__proto__":{"affected":"arch"}}', '{"nested":{"__proto__":{"affected":"arch"}}}']) {
+    const event = await watchFor(JSON.parse(text));
+    assert.equal(event.detailError, undefined);
+    assert.equal(JSON.stringify(event.detail), text, 'the detail serializes exactly as it was sent');
+    const holder = event.detail.nested ?? event.detail;
+    assert.ok(Object.hasOwn(holder, '__proto__'), 'as an own key');
+    assert.equal(Object.getPrototypeOf(holder), Object.prototype, 'without changing the copy\'s prototype');
+  }
+  for (const detail of [Object.assign([1, 2], {'-1': 'arch'}), Object.assign([1, 2], {'4294967295': 'arch'}), {speed: -0}]) {
+    const event = await watchFor(detail);
+    assert.equal(event.name, 'settled', 'the event still counts');
+    assert.equal(event.detail, null);
+    assert.equal(typeof event.detailError, 'string');
+  }
+});
+
+test('a page reader can see a watch in progress and how many frames it has drawn', async () => {
+  const {state, host} = await launched();
+  const pilot = createVantagePilot(host), seen = [];
+  watchClock(host, state, {onSleep: () => seen.push(pilot.watching())});
+  assert.equal(pilot.watching(), null);
+  await pilot.run('watch', {seconds: 1, fps: 2, until: 'settled', map: false});
+  assert.deepEqual(seen[0], {pilot: 'bebop', until: 'settled', frames: 1});
+  assert.equal(pilot.watching(), null, 'and that it has ended');
+  assert.match(readFileSync(new URL('../index.html', import.meta.url), 'utf8'), /watching:agentVantage\.watching/, 'window.kaminosAgentVantage.watching() is offered to page readers');
+});
+
+
+test('a second watch while one runs is refused as busy, from the page or the terminal, and the first keeps its own status', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state, {drawMs: 0});
+  const draw = host.renderView;
+  let release;
+  host.renderView = options => { const drawn = draw(options); return {ready: new Promise(done => { release = () => done(drawn.ready); })}; };
+  const pilot = createVantagePilot(host);
+  const first = pilot.run('watch', {seconds: 1, fps: 2, map: false});
+  await new Promise(done => setImmediate(done));
+  const refusedWithin = promise => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('not refused')), 200))]);
+  await assert.rejects(() => refusedWithin(pilot.run('watch', {seconds: 1, fps: 2, map: false})), error => error.phase === 'busy', 'from the page');
+  const replies = [];
+  const pump = createCommandPump({run: pilot.run, reply: async answer => { replies.push(answer); }});
+  await refusedWithin(pump.push({id: 'b1', command: 'watch', args: {seconds: 1, fps: 2, map: false}, expiresAt: Date.now() + 60000}));
+  assert.equal(replies[0]?.phase, 'busy', 'from the terminal');
+  assert.deepEqual(pilot.watching(), {pilot: 'bebop', until: null, frames: 0}, 'the running watch still reports itself');
+  host.renderView = draw;
+  release();
+  const strip = await first;
+  assert.equal(strip.kind, 'watch');
+  assert.equal(pilot.watching(), null, 'and clears its own status when it ends');
+});
+
+test('after an event, after keeps watching on the cadence for that many seconds', async () => {
+  const {state, host} = await launched();
+  let clock;
+  clock = watchClock(host, state, {drawMs: 0, onSleep: t => { if (t >= 1000) clock.emit('pulse-end', {}); }});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 2, until: 'pulse-end', after: 1.5, map: false});
+  assert.equal(strip.ended, 'event');
+  assert.equal(strip.event.atMs, 1000);
+  assert.equal(strip.requested.after, 1.5);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500, 1000, 1500, 2000], 'the frame at the event, then the cadence until 1.5 s after it');
+});
+
+test('a slow event frame does not reset the cadence: open intervals still get frames, and passed ones are counted missed', async () => {
+  // The event arrives during a sleep; its frame starts in the first interval and reads back slowly.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => (index === 1 ? 1200 : 0)});
+    host.sleep = async ms => { clock.advance(Math.min(ms, 100)); if (host.now() >= 100) clock.emit('pulse-end', {}); };
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 100, 1300, 1500, 2000], 'the 1000–1500 ms interval was still open when the event frame finished');
+    assert.equal(strip.missedTicks, 1, 'the 500–1000 ms interval passed during the event frame\'s readback');
+  }
+  // The event arrives during a slow draw; the event frame starts in an interval the cadence had not reached.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: (index, t) => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 800; } return index === 1 ? 400 : 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 900, 1300, 1500, 2000], 'the event frame at 900 ms stands for its own interval; the next open one still gets its frame');
+    assert.equal(strip.missedTicks, 0);
+  }
+});
+
+test('missed intervals are worked out from when frames started, on the same multiplied boundaries the cadence uses', () => {
+  const {watchMissedTicks} = vantage;
+  // A slow first readback spans two intervals before the event frame: both are missed.
+  assert.equal(watchMissedTicks({starts: [0, 1600, 2000], interval: 500, end: 2100}), 2);
+  // An owed event frame after the deadline stands for no interval.
+  assert.equal(watchMissedTicks({starts: [0, 900], interval: 500, end: 600}), 1);
+  // At 15 fps, 63 intervals multiply out to exactly 4200 ms: a frame there belongs to interval 63.
+  const interval = 1000 / 15, cadence = Array.from({length: 63}, (_, k) => k * interval);
+  assert.equal(watchMissedTicks({starts: [...cadence, 4200, 4300, 65 * interval, 66 * interval, 67 * interval], interval, end: 4490}), 0);
+  assert.equal(watchMissedTicks({starts: [...cadence, 64 * interval], interval, end: 4490}), 4, 'intervals 63, 65, 66 and 67 have no frame');
+  // A frame at the end starts in no interval; an empty last interval is missed.
+  assert.equal(watchMissedTicks({starts: [0, 1000], interval: 500, end: 1000}), 1);
+});
+
+test('the reviewed schedules count exactly the intervals that had no frame', async () => {
+  // The event comes at 100 ms during a first readback that finishes at 1600 ms.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 1500; } return 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 2, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 1600, 2000]);
+    assert.equal(strip.missedTicks, 2, '500–1000 and 1000–1500 ms had no frame');
+  }
+  // The same event with after: 0.5 puts the deadline at 600 ms; the owed event frame at 900 ms stands for no interval.
+  {
+    const {state, host} = await launched();
+    let clock;
+    clock = watchClock(host, state, {drawMs: index => { if (index === 0) { clock.advance(100); clock.emit('pulse-end', {}); return 800; } return 0; }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 5, fps: 2, until: 'pulse-end', after: 0.5, map: false});
+    assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 900]);
+    assert.equal(strip.missedTicks, 1);
+  }
+  // 15 fps: the event comes during the draw at tick 62 and its frame starts exactly at tick 63's boundary.
+  {
+    const {state, host} = await launched();
+    let clock;
+    const interval = 1000 / 15;
+    clock = watchClock(host, state, {drawMs: (index, t) => {
+      if (index === 62) { clock.advance(4190 - t); clock.emit('pulse-end', {}); return 63 * interval - host.now(); }
+      return index === 63 ? 100 : 0;
+    }});
+    const strip = await createVantagePilot(host).run('watch', {seconds: 10, fps: 15, until: 'pulse-end', after: 0.3, map: false});
+    assert.equal(strip.frames[63].atMs, 63 * interval, 'the event frame starts on the boundary');
+    assert.equal(strip.missedTicks, 0, 'every interval has a frame, so none is missed');
+  }
+});
+
+// --- the shared link: every tab of a browser rides one hub stream ------------------------------
+
+// A fake browser for the page's link: its EventSources, posts and timers, and
+// a SharedWorker whose port the test speaks for.
+function linkHarness({visible = true, shared = true} = {}) {
+  const sources = [], posts = [], timers = [], intervals = [], ports = [], listeners = {document: {}, window: {}};
+  class FakeEventSource {
+    static CLOSED = 2;
+    constructor(url) { this.url = String(url); this.readyState = 1; this.handlers = {}; this.closed = false; sources.push(this); }
+    addEventListener(type, fn) { (this.handlers[type] ??= []).push(fn); }
+    close() { this.closed = true; this.readyState = 2; }
+    emit(type, event = {}) { for (const fn of this.handlers[type] ?? []) fn(event); }
+  }
+  class FakeSharedWorker {
+    constructor(url, options) {
+      this.url = String(url); this.options = options;
+      const sent = [];
+      this.port = {sent, onmessage: null, started: false, start() { this.started = true; }, postMessage(message) { sent.push(message); },
+        receive(message) { this.onmessage?.({data: message}); }};
+      ports.push(this.port);
+    }
+  }
+  const on = bag => (type, fn) => { (bag[type] ??= []).push(fn); };
+  const off = bag => (type, fn) => { bag[type] = (bag[type] ?? []).filter(item => item !== fn); };
+  const document = {visibilityState: visible ? 'visible' : 'hidden', title: 'Kaminos', hasFocus: () => visible,
+    addEventListener: on(listeners.document), removeEventListener: off(listeners.document)};
+  const window = {EventSource: FakeEventSource, ...(shared ? {SharedWorker: FakeSharedWorker} : {}), location: {href: 'http://127.0.0.1:8484/index.html'},
+    fetch: async (url, init) => { posts.push({url: String(url), body: init?.body ? JSON.parse(init.body) : null}); return {status: 200, ok: true, json: async () => ({ok: true})}; },
+    setTimeout: (fn, ms) => timers.push({fn, ms}), clearTimeout() {}, setInterval: (fn, ms) => intervals.push({fn, ms}), clearInterval() {},
+    addEventListener: on(listeners.window), removeEventListener: off(listeners.window)};
+  const fire = (bag, type) => { for (const fn of [...(listeners[bag][type] ?? [])]) fn(); };
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  return {sources, posts, timers, intervals, ports, document, window, fire, settle};
+}
+const linked = (h, run = async command => ({kind: command})) => connectVantageLink({window: h.window, document: h.document, endpoint: '/api/vantage', pageId: 'page-tab', run});
+
+test('a tab joins the shared hub instead of opening its own stream, and stays linked while hidden', async () => {
+  const h = linkHarness({visible: false}), ran = [];
+  const link = linked(h, async command => { ran.push(command); return {kind: command}; });
+  assert.equal(h.sources.length, 0, 'the tab holds no connection of its own to the server');
+  assert.equal(h.ports.length, 1);
+  assert.ok(h.ports[0].started);
+  assert.deepEqual(h.ports[0].sent[0], {type: 'join', endpoint: '/api/vantage', page: 'page-tab',
+    facts: {page: 'page-tab', visible: false, focused: false, href: 'http://127.0.0.1:8484/index.html', title: 'Kaminos'}});
+  h.ports[0].receive({type: 'command', page: 'page-tab', message: {id: 'c1', command: 'status', args: {}, expiresAt: Date.now() + 60000}});
+  await h.settle();
+  assert.deepEqual(ran, ['status'], 'a command reaches the tab though it is hidden');
+  assert.ok(h.posts.some(post => post.url === '/api/vantage/reply' && post.body.id === 'c1' && post.body.page === 'page-tab'), 'and the tab answers it');
+  h.ports[0].receive({type: 'ping'});
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'pong', page: 'page-tab'}, 'it says it is alive when the hub asks');
+  const heartbeat = h.intervals.find(item => item.ms === 15000);
+  heartbeat.fn();
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'pong', page: 'page-tab', facts: {page: 'page-tab', visible: false, focused: false, href: 'http://127.0.0.1:8484/index.html', title: 'Kaminos'}},
+    'the tab also speaks up on its own heartbeat, so a hub that dropped it after a pause hears it again');
+  h.fire('window', 'pagehide');
+  assert.deepEqual(h.ports[0].sent.at(-1), {type: 'leave', page: 'page-tab'}, 'closing the tab leaves the hub');
+  link.close();
+});
+
+test('a tab falls back to its own stream when the server has no hub, and when the browser has no shared workers', async () => {
+  const h = linkHarness();
+  linked(h);
+  h.ports[0].receive({type: 'fallback'});
+  assert.equal(h.sources.length, 1, 'an older server without the hub gets the per-tab link');
+  assert.match(h.sources[0].url, /\/api\/vantage\/link\?page=page-tab/);
+  const plain = linkHarness({shared: false});
+  linked(plain);
+  assert.equal(plain.sources.length, 1, 'a browser without SharedWorker links per tab as before');
+  assert.equal(plain.ports.length, 0);
+});
+
+
+// --- fire and water proxies in the sub's own view ------------------------------------------
+
+test('a proxy source is drawn only when it is in the scene, shown, and its proxy holds a snapshot', () => {
+  const {proxyStatus} = vantage;
+  assert.equal(proxyStatus({present: false, visible: true, layer: {visible: true, count: 5}}), 'absent');
+  assert.equal(proxyStatus({present: true, visible: false, layer: {visible: true, count: 5}}), 'hidden');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: false}}), 'awaiting-snapshot', 'no proxy layer yet');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: true, count: 0}}), 'awaiting-snapshot', 'a layer with nothing in it');
+  assert.equal(proxyStatus({present: true, visible: true, layer: {visible: true, count: 12}}), 'drawn');
+  assert.equal(proxyStatus(null), 'absent');
+});
+
+test('what a glance drew and left out follows its proxies, never assumed', async () => {
+  const {describeProxies, GLANCE_OMITS} = await import('../agent-vantage-glance.mjs');
+  const drawn = describeProxies({fire: 'drawn', water: 'absent'});
+  assert.ok(drawn.layers.some(layer => /fire.*proxy.*heat-block splats/.test(layer)), 'fire drawn as its proxy');
+  assert.ok(!drawn.omitted.some(item => /fire/.test(item)), 'and not listed as left out');
+  assert.ok(!drawn.omitted.some(item => /water/.test(item)), 'water absent from the scene is not something the glance left out');
+  assert.ok(drawn.omitted.some(item => /ambient occlusion/.test(item)));
+  const waiting = describeProxies({fire: 'awaiting-snapshot', water: 'drawn'});
+  assert.ok(waiting.omitted.some(item => /fire/.test(item) && /snapshot/.test(item)), 'a proxy with no snapshot yet is said to be missing for that reason');
+  assert.ok(waiting.layers.some(layer => /water.*proxy/.test(layer)));
+  assert.deepEqual(describeProxies(null).omitted, [...GLANCE_OMITS], 'a page without proxies leaves out what it always did');
+});
+
+test('a single glance holds the proxies while it draws, waits briefly for a first snapshot, and lets go', async () => {
+  const {state, host} = await launched();
+  let t = 0, holds = 0, releases = 0, statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  const idProxies = [];
+  host.now = () => t;
+  host.sleep = async ms => { t += ms; if (t >= 300) statuses = {...statuses, fire: 'drawn'}; };
+  host.holdProxies = () => { holds++; return () => { releases++; }; };
+  host.proxyStatuses = () => ({...statuses});
+  host.renderView = options => ({proxies: {...statuses}, ready: Promise.resolve({canvas: {}, width: options.width, height: options.height})});
+  const drawIds = host.drawIds;
+  host.drawIds = options => { idProxies.push(options.proxies); return drawIds(options); };
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(shot.proxies.fire, 'drawn', 'the flame proxy had its snapshot by the time it was drawn');
+  assert.ok(t >= 300 && t < 2000, 'it waited for the snapshot, not for the whole allowance');
+  assert.ok(shot.layers.some(layer => /fire/.test(layer)));
+  assert.deepEqual(idProxies.at(-1), ['fire'], 'its pick map is told the proxy drawn outside it');
+  assert.deepEqual([holds, releases], [1, 1], 'held for the draw and let go');
+
+  statuses = {fire: 'awaiting-snapshot', water: 'absent'}; t = 0;
+  host.sleep = async ms => { t += ms; };
+  const late = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(late.proxies.fire, 'awaiting-snapshot', 'a proxy that never got a snapshot is reported so');
+  assert.ok(t >= 2000 && t < 2500, 'after a bounded wait, not forever');
+  assert.ok(late.omitted.some(item => /fire/.test(item)));
+  assert.deepEqual([holds, releases], [2, 2]);
+});
+
+test('a glance whose draw fails still lets go of the proxies', async () => {
+  const {host} = await launched();
+  let releases = 0;
+  host.holdProxies = () => () => { releases++; };
+  host.proxyStatuses = () => ({fire: 'absent', water: 'absent'});
+  host.renderView = () => { throw new Error('device lost'); };
+  await assert.rejects(() => createVantagePilot(host).run('glance', {map: false}), error => error.phase === 'glance');
+  assert.equal(releases, 1);
+});
+
+test('a watch holds the proxies once for its whole window, and every frame says what it drew', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  let holds = 0, releases = 0, n = 0;
+  host.holdProxies = () => { holds++; return () => { releases++; }; };
+  host.proxyStatuses = () => ({fire: 'awaiting-snapshot', water: 'absent'});
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {fire: n++ === 0 ? 'awaiting-snapshot' : 'drawn', water: 'absent'}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual([holds, releases], [1, 1]);
+  assert.deepEqual(strip.frames.map(frame => frame.proxies.fire), ['awaiting-snapshot', 'drawn'], 'a watch does not wait; each frame is honest');
+  assert.ok(strip.omitted.some(item => /fire/.test(item) && /1 of 2/.test(item)), 'the strip says how many frames showed the flame');
+});
+
+test('a picture pick through a drawn fire proxy is approximate, the proxy listed as what may cover it', async () => {
+  const page = installedPage(), optics = pictureOptics(), at = pictureFraction(PICTURE_VIEW, 16 / 9, [2, 0.1, 0.5]);
+  const pictured = {...picturedRow(page), depth: viewDepth(optics, [2, 0.1, 0.5])};
+  const picked = await page.vantage.run('pick', {optics, at, pictured, scene: {clouds: [], fields: [], water: false, proxies: ['fire']}});
+  assert.equal(picked.hit.authority, 'approximate');
+  assert.ok(picked.unresolved.some(item => item.id === 'fire-proxy' && /outside the pick map/.test(item.reason)));
+});
+
+test('the page holds each proxy once while any sub view needs it, draws the drawn ones, and lets go when none does', async () => {
+  const required = [], released = [];
+  const states = {fire: {present: true, visible: true, layer: {visible: true, count: 40}}, water: {present: false, visible: true, layer: {visible: false}}};
+  const proxies = {layers: {fire: 4, water: 3}, require: source => { required.push(source); return () => released.push(source); }, states: () => structuredClone(states)};
+  const drawn = [];
+  const glance = {draw(options) { drawn.push(options); return {ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})}; }};
+  const page = installedPage({subs: [BEBOP], glance, proxies});
+  await page.vantage.run('live', {on: true, fps: 4});
+  assert.deepEqual(required.sort(), ['fire', 'water']);
+  const shot = await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.deepEqual(required.sort(), ['fire', 'water'], 'a glance during live adds no second hold');
+  assert.deepEqual(drawn.at(-1).layers, [4], 'the glance camera sees the fire proxy layer, and not water, which is absent');
+  assert.equal(shot.proxies.fire, 'drawn');
+  assert.equal(shot.proxies.water, 'absent');
+  assert.deepEqual(shot.pickMap.proxies, ['fire'], 'and its pick map records the proxy drawn outside it');
+  await page.vantage.run('live', {on: false});
+  assert.deepEqual(released.sort(), ['fire', 'water'], 'no sub looking: nothing held');
+});
+
+
+test('a proxy source whose snapshot belongs to an earlier fire field is not drawn, but waits for a current one', () => {
+  const {proxyStatus} = vantage;
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: 2, layer: {visible: true, count: 30, snapshotFieldGeneration: 1}}), 'awaiting-snapshot');
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: 2, layer: {visible: true, count: 30, snapshotFieldGeneration: 2}}), 'drawn');
+  assert.equal(proxyStatus({present: true, visible: true, fieldGeneration: null, layer: {visible: true, count: 30, snapshotFieldGeneration: 1}}), 'drawn', 'a field without generations is not compared');
+});
+
+test('the sub\'s pictures set every proxy layer bit themselves, and its pick maps draw no proxy at all', async () => {
+  const states = {fire: {present: true, visible: false, layer: {visible: true, count: 40}}, water: {present: true, visible: true, layer: {visible: true, count: 9}}};
+  const proxies = {layers: {fire: 4, water: 3}, require: () => () => {}, states: () => structuredClone(states)};
+  const drawn = [];
+  const glance = {draw(options) { drawn.push(options); return {ready: Promise.resolve({width: options.width, height: options.height, pixels: new Uint8ClampedArray(options.width * options.height * 4)})}; }};
+  const page = installedPage({subs: [BEBOP], glance, proxies});
+  const shot = await page.vantage.run('glance', {map: false, maxSize: 64});
+  assert.deepEqual(drawn.at(-1).layers, [3], 'water shown and drawn');
+  assert.deepEqual([...drawn.at(-1).withoutLayers].sort(), [3, 4], 'every proxy bit cleared first, so a hidden fire stays out whatever the operator\'s view shows');
+  assert.deepEqual([...page.idPass.calls.at(-1).withoutLayers].sort(), [3, 4], 'the sub\'s pick map draws no proxy');
+  assert.equal(shot.proxies.fire, 'hidden');
+  await page.vantage.run('pick', {from: 'operator', at: [0.5, 0.5]});
+  assert.deepEqual(page.idPass.calls.at(-1).withoutLayers, [], 'an operator pick keeps the operator\'s own view, proxies included');
+});
+
+test('a glance clears inherited proxy bits before enabling the ones it draws', async () => {
+  const {createGlance} = await import('../agent-vantage-glance.mjs');
+  const W = await import('../lib/three.webgpu.js');
+  let seenMask = null;
+  const renderer = {coordinateSystem: W.WebGPUCoordinateSystem, toneMapping: 0, outputColorSpace: 'srgb', reversedDepthBuffer: false,
+    getRenderTarget: () => null, getMRT: () => null, autoClear: true, setMRT() {}, setRenderTarget() {},
+    render(scene, camera) { seenMask ??= camera.layers.mask; }, readRenderTargetPixelsAsync: async () => new Uint8Array(256 * 4)};
+  const glance = createGlance({THREE: W, TSL: W.TSL, renderer, scene: new W.Scene(), cameraLayers: () => (1 | (1 << 3) | (1 << 4))});
+  const optics = {projection: new W.Matrix4().toArray(), viewInverse: new W.Matrix4().toArray(), near: 0.1, far: 10, coordinateSystem: W.WebGPUCoordinateSystem};
+  try { glance.draw({optics, width: 4, height: 4, layers: [3], withoutLayers: [3, 4]}); } catch { /* the stand-in renderer stops at the output stage */ }
+  assert.equal(seenMask, 1 | (1 << 3), 'the scene is drawn with layer 4 cleared and layer 3 enabled');
+});
+
+test('a glance that waits for a proxy draws from where the sub is after the wait, and stops if the sub is gone', async () => {
+  const {state, host} = await launched();
+  let t = 0, statuses = {fire: 'awaiting-snapshot', water: 'absent'}, releases = 0;
+  const renders = [];
+  host.now = () => t;
+  host.holdProxies = () => () => { releases++; };
+  host.proxyStatuses = () => ({...statuses});
+  host.renderView = options => { renders.push(options); return {proxies: {...statuses}, ready: Promise.resolve({canvas: {}, width: options.width, height: options.height})}; };
+  host.sleep = async ms => { t += ms; state.cameras[0].transform.position[0] = 10; statuses = {...statuses, fire: 'drawn'}; };
+  const shot = await createVantagePilot(host).run('glance', {map: false, maxSize: 64});
+  assert.equal(shot.view.position[0], 10, 'the view is the sub\'s pose when it was drawn');
+  assert.equal(shot.sub.pose.position[0], 10);
+  statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  host.sleep = async ms => { t += ms; state.cameras.length = 0; };
+  await assert.rejects(() => createVantagePilot(host).run('glance', {map: false, maxSize: 64}), error => error.phase === 'no-sub');
+  assert.equal(releases, 2, 'the hold is let go either way');
+});
+
+test('each frame records which proxy snapshot it drew, so a strip shows whether the flame moved on', async () => {
+  const {state, host} = await launched();
+  watchClock(host, state);
+  let tick = 100;
+  host.holdProxies = () => () => {};
+  host.proxyStatuses = () => ({fire: 'drawn', water: 'absent'});
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {fire: 'drawn', water: 'absent'}, proxySnapshots: {fire: {writeTick: (tick += 16), fieldGeneration: 1}}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.deepEqual(strip.frames.map(frame => frame.proxySnapshots.fire.writeTick), [116, 132]);
+  assert.equal(strip.proxySnapshotsSeen.fire, 2, 'two different flame snapshots across the strip');
+});
+
+test('a watch warms its proxies up before its window starts, so its first frame is not lost to a cold proxy', async () => {
+  const {state, host} = await launched();
+  const clock = watchClock(host, state, {drawMs: 0});
+  let statuses = {fire: 'awaiting-snapshot', water: 'absent'};
+  host.holdProxies = () => () => {};
+  host.proxyStatuses = () => ({...statuses});
+  const sleep = host.sleep;
+  host.sleep = async ms => { await sleep(ms); if (host.now() >= 400) statuses = {...statuses, fire: 'drawn'}; };
+  const render = host.renderView;
+  host.renderView = options => ({...render(options), proxies: {...statuses}});
+  const strip = await createVantagePilot(host).run('watch', {seconds: 1, fps: 2, map: false});
+  assert.ok(strip.proxyWarmupMs >= 400 && strip.proxyWarmupMs < 1000, 'it waited for the snapshot, and says how long');
+  assert.deepEqual(strip.frames.map(frame => frame.proxies.fire), ['drawn', 'drawn']);
+  assert.deepEqual(strip.frames.map(frame => frame.atMs), [0, 500], 'the window starts after the warm-up');
+  assert.ok(clock.renders.length === 2);
 });

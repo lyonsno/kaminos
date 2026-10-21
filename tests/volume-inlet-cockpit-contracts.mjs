@@ -23,7 +23,7 @@ test('the six slice-3 inlet controls exist, are read, displayed, listened to, he
     const inside = index.slice(index.indexOf(`id="${id}"`), rowEnd);
     assert.doesNotMatch(inside, /slider-help/, `${id} has no help span nested inside the row`);
   }
-  assert.equal(schema.controlCount, 256);
+  assert.equal(schema.controlCount, 143);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveSinceControlCount), [228, 229, 230, 231, 232, 233]);
   assert.deepEqual(NEW.map(id => schema.controls.find(c => c.key === id)?.additiveDefault), [1, 0, 0, 6, 0, 3]);
 });
@@ -64,7 +64,7 @@ test('spiral and concentric are gone from the pattern select; retired-from-the-i
 });
 
 test('the older emitter dynamics and the boundary gradient / softness / cut hide while the inflow law is selected', () => {
-  assert.match(index, /const VOLUME_INFLOW_HIDDEN_CONTROL_IDS = \['volume-emitter-source-depth', 'volume-emitter-inlet-profile', 'volume-emitter-momentum-linked', 'volume-emitter-shear-width', 'volume-emitter-edge-entrainment', 'volume-reaction-boundary-gradient', 'volume-reaction-boundary-softness', 'volume-reaction-boundary-cut'\];/);
+  assert.match(index, /const VOLUME_INFLOW_HIDDEN_CONTROL_IDS = \['volume-emitter-source-depth', 'volume-emitter-inlet-profile', 'volume-emitter-momentum-linked', 'volume-emitter-shear-width', 'volume-emitter-edge-entrainment'\];/); // the boundary gradient / softness / cut were retired with the legacy material laws (2026-10-18)
   assert.match(index, /const hide = sourceLaw === 'inflow-boundary';/);
   assert.match(index, /applyVolumeInflowLawRowVisibility\(document\.getElementById\('volume-emitter-source-law'\)\?\.value\);/, 'applied on every receipt update, so a basin load re-evaluates it');
   assert.match(index, /\.slider-row\[data-volume-inflow-hidden="true"\] \{ display: none; \}/);

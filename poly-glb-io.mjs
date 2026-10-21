@@ -4,6 +4,7 @@ const MAGIC=0x46546c67,JSON_CHUNK=0x4e4f534a,BIN_CHUNK=0x004e4942;
 const COMPONENT={5120:Int8Array,5121:Uint8Array,5122:Int16Array,5123:Uint16Array,5125:Uint32Array,5126:Float32Array};
 const NORMALIZE={5120:v=>Math.max(v/127,-1),5121:v=>v/255,5122:v=>Math.max(v/32767,-1),5123:v=>v/65535};
 const WIDTH={SCALAR:1,VEC2:2,VEC3:3,VEC4:4,MAT2:4,MAT3:9,MAT4:16};
+const LITTLE_ENDIAN=new Uint8Array(new Uint16Array([1]).buffer)[0]===1;
 const GETTER={5120:'getInt8',5121:'getUint8',5122:'getInt16',5123:'getUint16',5125:'getUint32',5126:'getFloat32'};
 
 export function encodeGlb(json,bin=new Uint8Array()) {
@@ -45,6 +46,8 @@ export function readAccessor(json,bin,index) {
   if(!view||view.buffer!==0)throw Error('Only the embedded glTF binary buffer is supported');
   const size=Type.BYTES_PER_ELEMENT,stride=view.byteStride||size*width,base=(view.byteOffset??0)+(accessor.byteOffset??0);
   if(accessor.count&&base+stride*(accessor.count-1)+size*width>(view.byteOffset??0)+view.byteLength)throw Error(`glTF accessor ${index} overruns its buffer view`);
+  // Packed, aligned, unnormalized data on a little-endian platform copies as it lies.
+  if(LITTLE_ENDIAN&&!normalized&&stride===size*width&&(bin.byteOffset+base)%size===0){out.set(new Type(bin.buffer,bin.byteOffset+base,accessor.count*width));return out;}
   const data=new DataView(bin.buffer,bin.byteOffset,bin.byteLength),get=data[GETTER[accessor.componentType]].bind(data);
   for(let i=0;i<accessor.count;i++)for(let k=0;k<width;k++){const v=get(base+i*stride+k*size,true);out[i*width+k]=normalized?normalized(v):v;}
   return out;

@@ -6,7 +6,7 @@ function source(a,b){const start=html.indexOf(a),end=html.indexOf(b,start);asser
 test('a group membership write preserves the selection without cancelling its owned transaction',()=>{
  let selectionChanges=0;const context=vm.createContext({structuredClone,checkedSelection,changeSelection,
   sceneObjects:[{id:'a',object:{}},{id:'b',object:{}}],sceneGroups:[],sceneSelection:{ids:['a','b'],activeId:'b'},activeSceneObjectId:'b',activeSceneGroupId:null,activeSceneFieldId:null,
-  burnerGraphWriting:false,splatCorrectionMode:null,currentMesh:null,transformControls:null,authoringWorkspace:null,groupProxies:new Map(),window:{_kaminosDirty(){}},
+  activeSceneComposition:null,localLiquidSetup:null,burnerGraphWriting:false,splatCorrectionMode:null,currentMesh:null,transformControls:null,authoringWorkspace:null,groupProxies:new Map(),window:{_kaminosDirty(){}},
   selectedSceneObjectEntry:()=>context.sceneObjects.find(o=>o.id===context.activeSceneObjectId),selectedSceneGroupEntry:()=>null,groupProxy:()=>({}),selectionTransformProxy:()=>({}),
   renderSceneObjectList(){},updateTransformInspector(){},updateSelectionFeedback(){},clearActiveSceneObjectSelection(){context.sceneSelection={ids:[],activeId:null};},
   sceneSelectionMembers:()=>[...context.sceneSelection.ids],checkedSceneGroups:value=>structuredClone(value),setSceneGroupsFromRecords:value=>{context.sceneGroups=structuredClone(value);},

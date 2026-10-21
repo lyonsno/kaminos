@@ -9,11 +9,11 @@ import {pickFireSplats} from './fire-splat-picking.mjs';
 
 export function createFireProxySync({registry, createLayer, readDomain, now = () => performance.now(), onDirty = () => {}}) {
  let fireProxy = null;
- function sync({prototype, display: displayRequested, required, pickable=false, camera, layerId, canvas, bridge, stepEvery = 1}) {
+ function sync({prototype, display: displayRequested, visible=true, required, pickable=false, camera, layerId, canvas, bridge, stepEvery = 1}) {
   // A disabled volume shows no fire in any mode, so its proxy draws nothing;
   // pausing is different and keeps the held field on screen.
   const present = !!prototype && (prototype.isActive?.() ?? true);
-  const display = displayRequested && present, wanted = present && (display || required);
+  const display = displayRequested && present && visible, wanted = present && (display || required);
   camera?.layers[display ? 'enable' : 'disable'](layerId);
   if (fireProxy && fireProxy.prototype !== prototype) {
    fireProxy.prototype?.setResidualPartialsConsumer?.(null); fireProxy.prototype?.setCanvasPresentationSuppressed?.(false); fireProxy.prototype?.setProxyPacing?.(null);
@@ -55,11 +55,12 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   const snapshot = registry.latest('fire'), ready = display && !!snapshot && (snapshot.fieldGeneration == null || snapshot.fieldGeneration === fireProxy?.fieldGeneration);
   // Only the visibility this proxy set is touched: it hides the canvas when
   // the splats take over and restores exactly what it hid.
-  if (fireProxy && ready && !fireProxy.hiddenCanvas && canvas) { canvas.style.visibility = 'hidden'; fireProxy.hiddenCanvas = canvas; }
-  if (fireProxy?.hiddenCanvas && (!ready || fireProxy.hiddenCanvas !== canvas)) { fireProxy.hiddenCanvas.style.visibility = ''; fireProxy.hiddenCanvas = null; }
+  const hidden = !visible || ready;
+  if (fireProxy && hidden && !fireProxy.hiddenCanvas && canvas) { canvas.style.visibility = 'hidden'; fireProxy.hiddenCanvas = canvas; }
+  if (fireProxy?.hiddenCanvas && (!hidden || fireProxy.hiddenCanvas !== canvas)) { fireProxy.hiddenCanvas.style.visibility = ''; fireProxy.hiddenCanvas = null; }
   if (fireProxy) { fireProxy.awaitingSnapshot = display && !ready; fireProxy.ready = ready; }
   // While the splats stand in, the fire's own canvas raymarch is not drawn.
-  if (prototype && fireProxy && fireProxy.presentationSuppressed !== ready) fireProxy.presentationSuppressed = prototype.setCanvasPresentationSuppressed?.(ready) ?? false;
+  if (prototype && fireProxy && fireProxy.presentationSuppressed !== hidden) fireProxy.presentationSuppressed = prototype.setCanvasPresentationSuppressed?.(hidden) ?? false;
   // The scene light field is rebuilt only when a snapshot publishes, so the
   // lighting stays in step with the splats; the sim itself steps every
   // stepEvery frames (1 unless opted in).
@@ -70,7 +71,7 @@ export function createFireProxySync({registry, createLayer, readDomain, now = ()
   }
   // Routes that composite the fire through the canvas-texture bridge hide that
   // plane too; animate() stops refreshing it while Proxy is effective.
-  if (ready && bridge?.mesh) bridge.mesh.visible = false;
+  if (hidden && bridge?.mesh) bridge.mesh.visible = false;
  }
  return {
   sync,

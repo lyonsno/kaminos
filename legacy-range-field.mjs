@@ -1,14 +1,16 @@
 // Preserve the existing control, events, source identity and owner transactions.
 // Only its presentation changes; settings collectors can still find the range.
-export function bindRangeNumber(source,input) {
+export function bindRangeNumber(source,input,{unboundedMax=false}={}) {
   let owner=source,descriptor;
   while(owner&&!descriptor){descriptor=Object.getOwnPropertyDescriptor(owner,'value');owner=Object.getPrototypeOf(owner);}
   let value=source.value;
   const read=()=>descriptor?.get?descriptor.get.call(source):value;
   const sync=(force=false)=>{
+    if(unboundedMax)input.max='';
     if(force||input.ownerDocument?.activeElement!==input||input.readOnly)input.value=read();
   };
   Object.defineProperty(source,'value',{configurable:true,get:read,set(next){
+    if(unboundedMax&&Number.isFinite(Number(next)))source.max=String(Math.max(Number(source.max)||0,Number(next)));
     if(descriptor?.set)descriptor.set.call(source,next);else value=String(next);
     sync();
   }});
@@ -30,7 +32,7 @@ export function bindRangeNumber(source,input) {
   sync(true);
 }
 
-export function installLegacyRangeFields({root,installNumberDrag,beforeEdit=()=>{}}) {
+export function installLegacyRangeFields({root,installNumberDrag,beforeEdit=()=>{},unboundedMax=()=>false}) {
   const installed=[];
   for(const source of root.querySelectorAll('input[type="range"]')) {
     if(source.dataset.scrubField)continue;
@@ -49,14 +51,14 @@ export function installLegacyRangeFields({root,installNumberDrag,beforeEdit=()=>
     input.type='number';input.id='legacy-number-'+source.id;input.className='legacy-range-number';
     const label=row.querySelector('label'),labelText=label?.textContent?.trim()||source.getAttribute('aria-label')||source.id;
     input.setAttribute('aria-label',labelText);input.step='any';
-    for(const key of ['min','max','disabled'])input[key]=source[key];
-    source.before(input);bindRangeNumber(source,input);
+    const hasUnboundedMax=unboundedMax(source);
+    const reflect=()=>{for(const key of ['min','max','disabled'])input[key]=key==='max'&&hasUnboundedMax?'':source[key];};
+    reflect();
+    source.before(input);bindRangeNumber(source,input,{unboundedMax:hasUnboundedMax});
     const scrub=installNumberDrag({input,grip:label,step:Number(source.step)||.01,onStart:beforeEdit});
     source.style.display='none';source.dataset.scrubField=input.id;
     for(const output of row.querySelectorAll('output,.slider-val'))output.hidden=true;
-    new doc.defaultView.MutationObserver(()=>{
-      for(const key of ['min','max','disabled'])input[key]=source[key];
-    }).observe(source,{attributes:true,attributeFilter:['min','max','disabled']});
+    new doc.defaultView.MutationObserver(reflect).observe(source,{attributes:true,attributeFilter:['min','max','disabled']});
     installed.push({source,input,scrub});
   }
   return installed;

@@ -24,6 +24,17 @@ input.dispatchEvent(new Event('change'));assert.equal(input.value,'7');
 assert.equal(source.type,undefined,'the original control identity/type must be preserved');
 console.log('Legacy range field propagation and restoration pass');
 
+const aperture=new Input('0.2'),radiusField=new Input('');
+aperture.max='.5';
+let radius='.2';
+Object.defineProperty(aperture,'value',{configurable:true,get:()=>radius,set:v=>{radius=String(Math.min(Number(aperture.max),Number(v)));}});
+bindRangeNumber(aperture,radiusField,{unboundedMax:true});
+radiusField.value='200';radiusField.dispatchEvent(new Event('input'));radiusField.dispatchEvent(new Event('change'));
+assert.equal(aperture.value,'200','unbounded radius writes expand before native range clamping');
+assert.equal(radiusField.max,'','number field must not retain the slider extent as an authored limit');
+radiusField.value='250';radiusField.dispatchEvent(new Event('input'));
+assert.equal(aperture.value,'250');
+
 // Exercise the actual installer and canonical collector together: aliases must
 // not become an additional simulation/settings input or change the owner's role.
 const canonical=new Input('2');canonical.id='volume-physical-temperature';canonical.type='range';

@@ -7,11 +7,11 @@ import {createPolyEditMode} from './poly-edit-mode.mjs';
 
 const CLICK_DRIFT=5,MODE_KEYS={Digit1:'vertex',Digit2:'edge',Digit3:'face'},LABEL={vertex:'Vertex',edge:'Edge',face:'Face'};
 
-export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null}) {
-  let separating=false,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
+export function installPolyEditMode({document,viewport,canvas,camera,objectFor,selectedId,setInfo=()=>{},blocked=()=>false,gizmo=null,overlayHit=()=>false,redraw=()=>{},separate=null,slice=null,origin=null}) {
+  let separating=false,cutLine=null,objectId=null,gizmoState=null,box=null,pointer=null,hover=null;
   const hud=()=>{
     if(!edit.active())return;const s=edit.read();
-    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · Alt+Z x-ray`);
+    setInfo(`Edit Mode · ${LABEL[s.mode]} · ${s.counts.vertices} vertices, ${s.counts.edges} edges, ${s.counts.faces} faces selected${s.through?' · X-ray':''} · Tab exits · 1 2 3 modes · A all · drag or B box · L linked · P separate · K slice · Shift+S origin · Alt+Z x-ray`);
   };
   const edit=createPolyEditMode({camera,canvas,onChange:()=>{hud();redraw();}});
   const rect=document.createElement?.('div');
@@ -26,14 +26,27 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
     hud();redraw();return state;
   }
   function exit(){
-    cancelBox();const state=edit.exit();objectId=null;
+    cancelAll();const state=edit.exit();objectId=null;
     if(gizmo&&gizmoState){gizmo.visible=gizmoState.visible;gizmo.enabled=gizmoState.enabled;const helper=gizmo.getHelper?.();if(helper&&gizmoState.helperVisible!==undefined)helper.visible=gizmoState.helperVisible;gizmoState=null;}
     setInfo('Object Mode');redraw();return state;
   }
   // The edited object can leave the scene (undo of its insertion, scene load); leave Edit Mode with it.
   const live=()=>{if(edit.active()&&!objectFor(objectId))exit();return edit.active();};
-  function armBox(){box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
+  // The cut line for Slice (K): drawn like Blender's bisect line, shown as a dashed rule.
+  const line=document.createElement?.('div');
+  if(line){line.hidden=true;Object.assign(line.style,{position:'absolute',height:'0',borderTop:'2px dashed #ff9a1f',transformOrigin:'0 0',pointerEvents:'none',zIndex:20});viewport.appendChild?.(line);}
+  function armCut(){cancelBox();cutLine={start:null};setInfo('Slice · drag a line across the selected faces · Shift-drag from a joint\'s centre to its rim for a hinge circle · Escape cancels');}
+  function cancelCut(){cutLine=null;if(line)line.hidden=true;if(ring)ring.hidden=true;}
+  const ring=document.createElement?.('div');
+  if(ring){ring.hidden=true;Object.assign(ring.style,{position:'absolute',border:'2px dashed #ff9a1f',borderRadius:'50%',pointerEvents:'none',zIndex:20});viewport.appendChild?.(ring);}
+  function drawCut(x,y){
+    if(!cutLine?.start)return;const v=viewport.getBoundingClientRect(),dx=x-cutLine.start.x,dy=y-cutLine.start.y,r=Math.hypot(dx,dy);
+    if(cutLine.circle){if(ring){Object.assign(ring.style,{left:cutLine.start.x-r-v.left+'px',top:cutLine.start.y-r-v.top+'px',width:2*r+'px',height:2*r+'px'});ring.hidden=false;}return;}
+    if(line){Object.assign(line.style,{left:cutLine.start.x-v.left+'px',top:cutLine.start.y-v.top+'px',width:r+'px',transform:`rotate(${Math.atan2(dy,dx)}rad)`});line.hidden=false;}
+  }
+  function armBox(){cancelCut();box={start:null,mode:'extend'};setInfo('Box select · drag with the left button to add, the middle button to remove · Escape cancels');}
   function cancelBox(){box=null;pointer=null;if(rect)rect.hidden=true;}
+  function cancelAll(){cancelBox();cancelCut();}
   const insideCanvas=event=>{const r=canvas.getBoundingClientRect();return event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;};
   const isText=target=>target?.closest?.('input,textarea,select,[contenteditable="true"]');
   const scoped=()=>document.activeElement===document.body||viewport.contains?.(document.activeElement)||viewport.matches?.(':hover');
@@ -46,21 +59,26 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
       if(!scoped())return;steal(event);attempt(()=>edit.active()?exit():enter());return;
     }
     if(!live())return;
-    if(box&&event.key==='Escape'){steal(event);cancelBox();hud();return;}
+    if((box||cutLine)&&event.key==='Escape'){steal(event);cancelAll();hud();return;}
     if(event.ctrlKey||event.metaKey){if(event.code==='KeyL'){steal(event);attempt(()=>edit.linked());}return;}
     if(MODE_KEYS[event.code]&&!event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setMode(MODE_KEYS[event.code]));return;}
     if(event.code==='KeyA'&&!event.shiftKey){steal(event);attempt(()=>edit.selectAll(event.altKey?'deselect':'select'));return;}
     if(event.code==='KeyZ'&&event.altKey&&!event.shiftKey){steal(event);attempt(()=>edit.setThrough(!edit.read().through));return;}
+    // Shift+S: Origin to Selection. Blender's Shift+S snap pie puts the 3D cursor there first;
+    // Kaminos has no 3D cursor, so the origin goes straight to the selection's median.
+    if(event.code==='KeyS'&&event.shiftKey&&!event.altKey&&origin){steal(event);runOnce(origin);return;}
     if(event.altKey||event.shiftKey)return;
     if(event.code==='KeyB'){steal(event);armBox();return;}
     // P: Separate > Selection. The app owns the scene change and its history; one runs at a time.
-    if(event.code==='KeyP'&&separate){steal(event);runSeparate();return;}
+    if(event.code==='KeyP'&&separate){steal(event);runOnce(separate);return;}
+    if(event.code==='KeyK'&&slice){steal(event);armCut();return;}
     if(event.code==='KeyL'){steal(event);if(hover)attempt(()=>edit.linked({at:hover}));return;}
   },true);
 
   document.addEventListener('pointermove',event=>{
     if(!edit.active())return;
     if(insideCanvas(event))hover={x:event.clientX,y:event.clientY};
+    if(cutLine?.start){drawCut(event.clientX,event.clientY);return;}
     // A left drag past the click tolerance becomes a box, as Blender's Select Box tool.
     if(pointer&&!pointer.dragging&&event.pointerId===pointer.id&&Math.hypot(event.clientX-pointer.x,event.clientY-pointer.y)>CLICK_DRIFT)pointer.dragging=true;
     const start=box?.start??(pointer?.dragging?pointer:null);
@@ -72,11 +90,18 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   },true);
   document.addEventListener('pointerdown',event=>{
     if(!live()||!insideCanvas(event)||overlayHit(event))return;
+    // With Shift held, the drag is a circle from the joint's centre to its rim (a hinge cut).
+    if(cutLine){steal(event);if(event.button!==0){cancelCut();hud();return;}cutLine.start={x:event.clientX,y:event.clientY};cutLine.circle=event.shiftKey;return;}
     if(box){steal(event);if(event.button===2){cancelBox();hud();return;}box.start={x:event.clientX,y:event.clientY};box.mode=event.button===1?'subtract':'extend';return;}
     if(event.button===0)pointer={x:event.clientX,y:event.clientY,id:event.pointerId};
   },true);
   document.addEventListener('pointerup',event=>{
     if(!live())return;
+    if(cutLine?.start){
+      steal(event);const from=cutLine.start,circle=cutLine.circle;cancelCut();
+      const plane=attempt(()=>circle?edit.circleFromDrag(from.x,from.y,event.clientX,event.clientY):edit.planeFromLine(from.x,from.y,event.clientX,event.clientY));
+      if(plane)runOnce(()=>slice(plane));else hud();return;
+    }
     if(box?.start){steal(event);const r={x0:box.start.x,y0:box.start.y,x1:event.clientX,y1:event.clientY},mode=box.mode;cancelBox();attempt(()=>edit.box(r,{mode}));return;}
     if(!pointer||event.button!==0||event.pointerId!==pointer.id)return;
     const down=pointer;pointer=null;
@@ -91,17 +116,18 @@ export function installPolyEditMode({document,viewport,canvas,camera,objectFor,s
   // Object selection listens to clicks; in Edit Mode a click picks components instead.
   for(const type of ['click','dblclick'])document.addEventListener(type,event=>{if(edit.active()&&insideCanvas(event)&&!overlayHit(event))steal(event);},true);
 
-  function runSeparate(){
+  // Separate and Slice change the scene through the app; one runs at a time.
+  function runOnce(work){
     if(separating)return null;separating=true;
-    // Called now, so the app reads the selection as it was when P was pressed.
-    let running;try{running=Promise.resolve(separate());}catch(error){running=Promise.reject(error);}
+    // Called now, so the app reads the selection as it was when the key was pressed.
+    let running;try{running=Promise.resolve(work());}catch(error){running=Promise.reject(error);}
     return running.catch(error=>{setInfo(error.message);return null;}).finally(()=>{separating=false;});
   }
 
   const api=Object.freeze({
     active:()=>live(),read:()=>edit.read(),enter,exit,
     setMode:mode=>edit.setMode(mode),pickAt:(x,y)=>edit.pickAt(x,y),click:(x,y,options)=>edit.click(x,y,options),selectAll:action=>edit.selectAll(action),
-    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runSeparate(),
+    box:(r,options)=>edit.box(r,options),linked:options=>edit.linked(options),setThrough:on=>edit.setThrough(on),separate:()=>runOnce(separate),slice:plane=>runOnce(()=>slice(plane)),originToSelection:()=>runOnce(origin),selectionMedian:()=>edit.selectionMedian(),planeFromLine:(x0,y0,x1,y1)=>edit.planeFromLine(x0,y0,x1,y1),circleFromDrag:(x0,y0,x1,y1)=>edit.circleFromDrag(x0,y0,x1,y1),
     selectedFaceMask:()=>edit.selectedFaceMask(),geometry:()=>edit.geometry(),
     // Where a point in the edited mesh's own frame appears on screen, for agents aiming clicks.
     screenOf:point=>edit.screenOf(point),

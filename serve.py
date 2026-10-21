@@ -512,6 +512,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
     if payload.get("schemaIdentity") != schema.get("identity"):
         raise ValueError("settings preset schema identity mismatch")
     allowed_fields = set(schema.get("allowedNativePresetFields") or [])
+    if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
+        raise ValueError("Unknown preset source radius space")
     unexpected_fields = sorted(set(payload) - allowed_fields)
     if unexpected_fields:
         raise skew(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
@@ -717,6 +719,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
 
 
 def validate_volume_settings_preset_payload(payload, schema=None):
+    if "sourceRadiusSpace" in payload and payload["sourceRadiusSpace"] != "simulation-v1":
+        raise ValueError("Unknown preset source radius space")
     schema = _validate_settings_preset_schema(
         schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
     )
@@ -853,6 +857,8 @@ def _volume_settings_content_hash(payload, schema):
         "schemaIdentity": schema["identity"],
         "controls": _volume_settings_control_values(payload, schema),
     }
+    if "sourceRadiusSpace" in payload:
+        canonical["sourceRadiusSpace"] = payload["sourceRadiusSpace"]
     renderer_controls = _volume_settings_renderer_control_values(payload, schema)
     if renderer_controls is not None:
         canonical["rendererControls"] = renderer_controls
@@ -2295,6 +2301,9 @@ SCENES_DIR = Path(os.environ.get("KAMINOS_SCENES_DIR", ROOT / "scenes")).expandu
 SCENE_LIBRARY_DEFAULT_GLOBS = (
     "~/.local/state/kaminos/*/scenes",
     "~/.local/state/kaminos/*/consumer/scenes",
+    "~/.local/state/kaminos/*/state/scenes",
+    "~/.local/state/kaminos/*/human-authoring-look-*/state/scenes",
+    "~/.local/state/kaminos/*/native-consumer/scenes",
     "~/.local/share/kaminos/*/scenes",
     str(ROOT.parent / "*" / "scenes"),
 )
@@ -2703,6 +2712,133 @@ def save_mesh_generation_origin(result):
             finally:
                 temporary.unlink(missing_ok=True)
     return {'schema': 'kaminos.mesh-generation-origin.v1', 'result': result}
+
+
+_SHA256_HEX = re.compile(r'[a-f0-9]{64}')
+
+
+class MeshLodRecordError(Exception):
+    """A stored level-set record that cannot be read: a server-side fault, not a bad request."""
+
+
+def _lod_set_path(source):
+    if not isinstance(source, str) or not _SHA256_HEX.fullmatch(source):
+        raise ValueError('Source mesh sha256 required')
+    return Path(BROWSE_ROOTS['generated-meshes']).resolve() / ('.' + source + '.glb.lods.json')
+
+
+def read_mesh_lod_set(source):
+    """Coarse levels registered for a stored mesh; an empty set when none exist."""
+    path = _lod_set_path(source)
+    if not path.exists():
+        return {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': []}
+    try:
+        data = json.loads(path.read_text())
+    except ValueError as error:
+        raise MeshLodRecordError(f'Unreadable level-set record {path.name}: {error}') from error
+    if data.get('schema') != 'kaminos.lod-set.v0' or data.get('source') != source or not isinstance(data.get('levels'), list):
+        raise MeshLodRecordError(f'Invalid level-set record {path.name}')
+    return data
+
+
+def mesh_lod_level_index():
+    """Every registered level sha -> {source, faces}, read from the stores' level-set records."""
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    index = {}
+    for path in root.glob('.*.glb.lods.json'):
+        source = path.name[1:-len('.glb.lods.json')]
+        try:
+            record = read_mesh_lod_set(source)
+            for level in record['levels']:
+                index[level['sha256']] = {'source': source, 'faces': level['faces']}
+            for level in record.get('retired', []):
+                index[level['sha256']] = {'source': source, 'faces': level['faces'], 'retired': True}
+        except (ValueError, MeshLodRecordError, KeyError, OSError):
+            continue
+    return index
+
+
+def save_mesh_lod_level(payload):
+    """Register one coarse level of a stored source mesh. Levels are immutable by sha."""
+    source, level = payload.get('source'), payload.get('level')
+    path = _lod_set_path(source)
+    if not isinstance(level, dict) or not isinstance(level.get('sha256'), str) or not _SHA256_HEX.fullmatch(level['sha256']):
+        raise ValueError('Level sha256 required')
+    if type(level.get('faces')) is not int or level['faces'] < 1 or not isinstance(level.get('route'), str) or not level['route']:
+        raise ValueError('Level faces and route required')
+    if 'textureSize' in level and (type(level['textureSize']) is not int or level['textureSize'] < 1):
+        raise ValueError('Level textureSize must be a positive integer')
+    if level['sha256'] == source:
+        raise ValueError('A mesh cannot be its own level')
+    if 'error' in level:
+        relative = (level['error'] or {}).get('relative') if isinstance(level['error'], dict) else None
+        if not isinstance(relative, dict) or any(type(relative.get(k)) not in (int, float) or not math.isfinite(relative[k]) or relative[k] < 0
+                                                 for k in ('max', 'p95', 'mean')):
+            raise ValueError('Level error needs finite non-negative relative max, p95 and mean')
+    root = Path(BROWSE_ROOTS['generated-meshes']).resolve()
+    for sha in (source, level['sha256']):
+        if not (root / (sha + '.glb')).is_file():
+            raise ValueError('Mesh not stored: ' + sha)
+    with (root / ('.' + source + '.lods.lock')).open('a+b') as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        data = read_mesh_lod_set(source)
+        previous = next((l for l in data['levels'] if l['sha256'] == level['sha256']), None)
+        if previous is not None and previous != level:
+            raise ValueError('Registered level is immutable')
+        same_slot = next((l for l in data['levels'] if l['sha256'] != level['sha256']
+                          and l['faces'] == level['faces'] and l['route'] == level['route']), None)
+        retired_now = []
+        if any(r['sha256'] == level['sha256'] for r in data.get('retired', [])):
+            raise ValueError('That level was retired from this source')
+        if previous is None and same_slot is not None:
+            if payload.get('supersede') is not True:
+                raise ValueError(f"A {level['faces']}-face {level['route']} level is already registered: {same_slot['sha256']}")
+            # Replace with retire: the old level leaves the choice set but its record is kept.
+            data['levels'].remove(same_slot)
+            data.setdefault('retired', []).append({**same_slot, 'retiredBy': level['sha256'],
+                                                   'retiredAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())})
+            retired_now.append(same_slot['sha256'])
+        if previous is None:
+            data['levels'].append(level)
+            data['levels'].sort(key=lambda l: -l['faces'])
+            with tempfile.NamedTemporaryFile(mode='w', dir=root, prefix='.mesh-lods-', delete=False) as handle:
+                temporary = Path(handle.name)
+                json.dump(data, handle)
+            try:
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+    return {'schema': 'kaminos.lod-set.v0', 'source': source, 'level': level, 'retired': retired_now}
+
+
+def mesh_lod_choice(source, faces=None, max_error=None, stat='max'):
+    """All levels plus a choice: by face budget, the largest level within it (else the
+    smallest, flagged); by relative geometric error, the coarsest level whose `stat`
+    (max, p95 or mean) fits (else the finest measured level, flagged). Levels without a
+    measurement are never chosen by error."""
+    if faces is not None and max_error is not None:
+        raise ValueError('Choose by faces or by maxError, not both')
+    if stat not in ('max', 'p95', 'mean'):
+        raise ValueError('stat must be max, p95 or mean')
+    if max_error is not None and not (math.isfinite(max_error) and max_error >= 0):
+        raise ValueError('maxError must be a finite, non-negative relative error')
+    data = read_mesh_lod_set(source)
+    levels = [{**l, 'source': '/api/read?' + urlencode({'root': 'generated-meshes', 'path': l['sha256'] + '.glb'})} for l in data['levels']]
+    choice, within, unmeasured = None, None, None
+    if faces is not None and levels:
+        fitting = [l for l in levels if l['faces'] <= faces]
+        choice, within = (fitting[0], True) if fitting else (levels[-1], False)
+    if max_error is not None:
+        measured = [l for l in levels if isinstance(((l.get('error') or {}).get('relative') or {}).get(stat), (int, float))]
+        unmeasured = len(levels) - len(measured)
+        if measured:
+            fitting = [l for l in measured if l['error']['relative'][stat] <= max_error]
+            choice, within = (min(fitting, key=lambda l: l['faces']), True) if fitting else (max(measured, key=lambda l: l['faces']), False)
+    result = {'schema': 'kaminos.lod-set.v0', 'source': source, 'levels': levels, 'choice': choice, 'withinBudget': within,
+              'retired': data.get('retired', [])}
+    if unmeasured is not None:
+        result['unmeasured'] = unmeasured
+    return result
 
 
 def pipeline_manifest_payload():
@@ -3574,7 +3710,7 @@ def authoring_asset_catalog(collection):
     from authoring_asset_catalog import read_catalog
     return read_catalog(collection, roots=BROWSE_ROOTS,
         image_entries=lambda: list_asset_entries(kind='image'),
-        origins=read_mesh_generation_origins,
+        origins=read_mesh_generation_origins, levels=mesh_lod_level_index,
         output_resolver=resolve_greenroom_output_dir, label=_clean_label)
 
 
@@ -3759,6 +3895,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             report = sf3d_source_admission()
             report["requestId"] = parse_qs(parsed.query).get("requestId", [None])[0]
             self.send_json(report)
+        elif parsed.path == "/api/preferences":
+            self.handle_preferences()
         elif parsed.path == "/api/runtime-config":
             self.handle_runtime_config()
         elif parsed.path == "/api/gpu-queue-position":
@@ -3776,6 +3914,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_pipeline_manifest()
         elif parsed.path == "/api/browse":
             self.handle_browse(parse_qs(parsed.query))
+        elif parsed.path == "/api/mesh-lods":
+            query = parse_qs(parsed.query)
+            try:
+                faces, max_error = query.get("faces", [None])[0], query.get("maxError", [None])[0]
+                self.send_json(mesh_lod_choice(query.get("source", [None])[0], int(faces) if faces is not None else None,
+                                               float(max_error) if max_error is not None else None, query.get("stat", ["max"])[0]))
+            except MeshLodRecordError as error:
+                self.send_json({"error": str(error), "phase": "mesh-lods-record"}, 500)
+            except ValueError as error:
+                self.send_json({"error": str(error), "phase": "mesh-lods"}, 400)
         elif parsed.path == "/api/authoring-assets":
             try:
                 self.send_json(authoring_asset_catalog(parse_qs(parsed.query).get("collection", ["generated-meshes"])[0]))
@@ -3823,6 +3971,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_delete_scene(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/link":
             self.handle_vantage_link(parse_qs(parsed.query))
+        elif parsed.path == "/api/vantage/hub":
+            self.handle_vantage_hub(parse_qs(parsed.query))
         elif parsed.path == "/api/vantage/pages":
             self.handle_vantage_pages()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
@@ -3832,12 +3982,16 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == '/api/prepare-image':
+        if parsed.path == '/api/preferences':
+            self.handle_preferences(write=True)
+        elif parsed.path == '/api/prepare-image':
             self.handle_prepare_image(parse_qs(parsed.query))
         elif parsed.path == "/api/gpu-queue-cancel":
             self.handle_gpu_queue_cancel()
         elif parsed.path == "/api/mesh-generation-origin":
             self.handle_mesh_generation_origin()
+        elif parsed.path == "/api/mesh-lods":
+            self.handle_mesh_lods_register()
         elif parsed.path == "/api/ingest-mesh":
             self.handle_ingest_mesh()
         elif parsed.path == "/api/scene-library-import":
@@ -3870,10 +4024,41 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_vantage_reply()
         elif parsed.path == "/api/vantage/presence":
             self.handle_vantage_presence()
+        elif parsed.path == "/api/vantage/join":
+            self.handle_vantage_join()
+        elif parsed.path == "/api/vantage/leave":
+            self.handle_vantage_leave()
         elif parsed.path == "/api/notes" or parsed.path.startswith("/api/notes/"):
             notes_http().handle(self, "POST", self.path)
         else:
             self.send_json({"error": "Not found"}, 404)
+
+    def handle_preferences(self, write=False):
+        if write and not self._vantage_allowed():
+            return self.send_json({"error": "Preferences writes require this server’s local origin"}, 403)
+        from user_preferences import read_preferences, write_preferences, PreferencesConflict
+        try:
+            if write:
+                if (self.headers.get("Content-Type") or "").split(";")[0].strip().lower() != "application/json":
+                    return self.send_json({"error": "Send preferences as application/json"}, 415)
+                length = int(self.headers.get("Content-Length", "0"))
+                if length <= 0:
+                    raise ValueError("Preferences request is empty")
+                request = json.loads(self.rfile.read(length))
+                if not isinstance(request, dict) or "revision" not in request or "preferences" not in request:
+                    raise ValueError("Preferences request needs preferences and revision")
+                try:
+                    result = write_preferences(request["preferences"], request["revision"])
+                except PreferencesConflict as error:
+                    return self.send_json({"error": str(error)}, 409)
+            else:
+                result = read_preferences()
+            self.send_json(result)
+        except (ValueError, TypeError) as error:
+            # Existing malformed files are not request errors and must remain intact.
+            self.send_json({"error": str(error)}, 400 if write else 500)
+        except OSError as error:
+            self.send_json({"error": str(error)}, 500)
 
     def handle_runtime_config(self):
         self.send_json(runtime_config())
@@ -3928,7 +4113,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def handle_vantage_pages(self):
         if self._vantage_allowed():
             bridge, broker = vantage_bridge()
-            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "pages": broker.pages()})
+            # `hub`: pages may share one stream per browser (see handle_vantage_hub).
+            self.send_json({"schema": bridge.VANTAGE_SCHEMA, "hub": True, "pages": broker.pages()})
 
     def handle_vantage_link(self, query):
         if not self._vantage_allowed():
@@ -3943,6 +4129,45 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except bridge.VantageError as error:
             self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
             return
+        self._vantage_stream(bridge, broker, link)
+
+    # One stream for every Kaminos tab of a browser: its shared worker holds it,
+    # pages join it, and each command names its page.
+    def handle_vantage_hub(self, query):
+        if not self._vantage_allowed():
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            link = broker.attach_hub(query.get("hub", [None])[0])
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        self._vantage_stream(bridge, broker, link)
+
+    def handle_vantage_join(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is None:
+            return
+        bridge, broker = vantage_bridge()
+        try:
+            joined = broker.join(str(body.get("hub") or ""), body.get("page"), body, member=body.get("member"))
+        except bridge.VantageError as error:
+            self.send_json({"ok": False, "phase": error.phase, "error": str(error)}, error.status)
+            return
+        # ok false: an older membership than the page already has; nothing changed.
+        self.send_json({"ok": joined})
+
+    def handle_vantage_leave(self):
+        if not self._vantage_allowed():
+            return
+        body = self._vantage_body()
+        if body is not None:
+            left = vantage_bridge()[1].leave(str(body.get("hub") or ""), str(body.get("page") or ""), member=body.get("member"))
+            self.send_json({"ok": left})
+
+    def _vantage_stream(self, bridge, broker, link):
         self.close_connection = True
         message = None
         try:
@@ -4579,6 +4804,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         except (OSError, subprocess.SubprocessError) as error:
             self.send_json({"error": str(error)}, 503)
 
+    def handle_mesh_lods_register(self):
+        try:
+            length = int(self.headers.get('Content-Length', 0))
+            payload = json.loads(self.rfile.read(length)) if length > 0 else None
+            if not isinstance(payload, dict):
+                raise ValueError('Level registration must be an object')
+            self.send_json(save_mesh_lod_level(payload))
+        except MeshLodRecordError as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods-record'}, 500)
+        except (ValueError, KeyError, TypeError) as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 400)
+        except OSError as error:
+            self.send_json({'error': str(error), 'phase': 'mesh-lods'}, 500)
+
     def handle_mesh_generation_origin(self):
         try:
             length = int(self.headers.get('Content-Length', 0))
@@ -4847,7 +5086,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     entry["error"] = str(error)
                 scenes.append(entry)
             if scenes:
-                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name == "consumer" else path.parent.name, "path": str(path), "scenes": scenes})
+                stores.append({"id": store_id, "label": path.parent.parent.name if path.parent.name in ("consumer", "state", "native-consumer") else path.parent.name, "path": str(path), "scenes": scenes})
         self.send_json({"stores": stores})
 
     def handle_scene_library_read(self, params):
@@ -4864,6 +5103,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_browse(self, params):
         """List directory contents. ?root=scratch&path=subdir"""
+        lod_levels = None
         root_name = params.get("root", ["scratch"])[0]
         sub_path = params.get("path", [""])[0]
 
@@ -4958,6 +5198,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
                     size=info["size"],
                 )
             if root_name == 'generated-meshes' and entry.is_file() and re.fullmatch(r'[a-f0-9]{64}\.glb', entry.name):
+                if lod_levels is None:
+                    lod_levels = mesh_lod_level_index()
+                if entry.stem in lod_levels:
+                    info['lodOf'] = lod_levels[entry.stem]
                 try:
                     origins = read_mesh_generation_origins(entry.stem)
                     if origins:

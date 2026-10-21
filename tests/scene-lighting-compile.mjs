@@ -19,8 +19,34 @@ const compilation=compileSceneLighting(renderer,[pass]);
 assert.equal(calls,1);assert.equal(renderer.target,pass.renderTarget,'matching pass context survives across async compilation');
 release();await compilation;
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);
+// Live rebuild of combined GI can compile the filter under the receiving AO
+// context. A fullscreen producer must not sample the visibility it is writing.
+pass.contextNode=TSL.context({getAO:()=>TSL.float(.5)});
+renderer.compileAsync=async()=>{
+  const hook=renderer.contextNode.getFlowContextData().getAO,input=TSL.float(1);
+  assert.equal(hook(input,{object:{isQuadMesh:true},material:{}}),input,'fullscreen producer must bypass receiving AO');
+  assert.notEqual(hook(input,{object:{isMesh:true},material:{}}),input,'ordinary surface keeps receiving AO');
+};
+await compileSceneLighting(renderer,[pass]);
 assert.equal(camera.layers.mask,1);assert.equal(scene.name,'authored');assert.equal(scene.overrideMaterial,null);
 renderer.compileAsync=async()=>{throw Error('compile failed');};
 await assert.rejects(compileSceneLighting(renderer,[pass]),/compile failed/);
 for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key],'failure restores renderer state');
 console.log('PASS async compile matches MRT, draw flags, AO context and restores state on failure');
+
+// Native GI repro: the receiving getOutput hook must not flatten producer MRTs
+// while compileAsync builds their dependencies under the receiving context.
+let receivingCalls=0;
+pass.version++;
+pass.contextNode=TSL.context({getOutput(node){receivingCalls++;return {received:node};}});
+const nativeCache={version:pass.version,context:TSL.context({...initial.contextNode.getFlowContextData(),...pass.contextNode.getFlowContextData()})};
+pass._contextNodeCache=nativeCache;
+renderer.compileAsync=async()=>{
+  const hook=renderer.contextNode.getFlowContextData().getOutput;
+  const producer=TSL.outputStruct(TSL.vec4(1),TSL.vec4(2));
+  assert.equal(hook(producer,{}),producer,'preserve producer output attachments during lighting compilation');
+  const surface=TSL.vec4(1);assert.deepEqual(hook(surface,{}),{received:surface});
+};
+await compileSceneLighting(renderer,[pass]);assert.equal(receivingCalls,1);
+assert.equal(pass._contextNodeCache,nativeCache,'compilation must not take custody of the native pass context cache');
+for(const key of Object.keys(initial))assert.equal(renderer[key],initial[key]);

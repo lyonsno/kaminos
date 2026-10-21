@@ -366,6 +366,7 @@ export function finishPickMap(ids, rows, context = {}) {
   const unknown = [...shown.keys()].filter(n => !rows.some(row => row.n === n));
   return {schema: PICK_MAP_SCHEMA, width: ids.width, height: ids.height, runs: encodePickRuns(ids), objects,
     ...(unknown.length ? {unnumbered: unknown} : {}), clouds: context.clouds ?? [], fields: context.fields ?? [], water: !!context.water,
+    ...(context.proxies?.length ? {proxies: [...context.proxies]} : {}),
     ...(ids.depths ? {depth: {encoding: 'float32le-base64', unit: 'view-depth', width: ids.width, height: ids.height,
       data: bytesToBase64(littleEndianFloats(ids.depths))}} : {})};
 }
@@ -488,7 +489,9 @@ const sceneContextArg = context => {
   const boxes = list => Array.isArray(list) && list.every(item => item && typeof item.id === 'string' && item.bounds
     && Array.isArray(item.bounds.min) && Array.isArray(item.bounds.max));
   if (!context || !boxes(context.clouds ?? []) || !boxes(context.fields ?? [])) throw new Error('A picture pick needs the clouds and fields its picture recorded');
-  return {clouds: structuredClone(context.clouds ?? []), fields: structuredClone(context.fields ?? []), water: context.water === true};
+  const proxies = context.proxies ?? [];
+  if (!Array.isArray(proxies) || !proxies.every(source => source === 'fire' || source === 'water')) throw new Error('A picture pick\'s proxies are "fire" and "water"');
+  return {clouds: structuredClone(context.clouds ?? []), fields: structuredClone(context.fields ?? []), water: context.water === true, ...(proxies.length ? {proxies: [...new Set(proxies)]} : {})};
 };
 
 const COMMANDS = {
@@ -527,6 +530,22 @@ const COMMANDS = {
     const identity = args.identity ?? null;
     if (identity !== null && (typeof identity !== 'object' || Array.isArray(identity))) throw new Error('Recheck identity is the geometry identity object a pick recorded, or null');
     return {id: args.id, path: [...args.path], identity};
+  },
+  // A strip of glances over a window, ending early at the page event `until`
+  // (window event `kaminos:<until>`). The window is bounded only by how long
+  // the server will hold a command.
+  watch: args => {
+    const seconds = args.seconds ?? 5, fps = args.fps ?? 2, until = args.until ?? null;
+    if (!(Number.isFinite(seconds) && seconds > 0 && seconds <= 3600)) throw new Error('Watch seconds is more than 0 and at most 3600');
+    if (!(Number.isFinite(fps) && fps >= 0.5 && fps <= 15)) throw new Error('Watch fps is between 0.5 and 15');
+    if (until !== null && !(typeof until === 'string' && /^[a-z0-9][a-z0-9._:-]{0,63}$/i.test(until))) throw new Error('Watch --until names an event: letters, digits, . _ : -');
+    // How long to keep watching after the event: a drive pulse ending is not the plume it drove finishing.
+    const after = args.after ?? 0;
+    if (!(Number.isFinite(after) && after >= 0)) throw new Error('Watch after is a number of seconds, 0 or more');
+    if (after > 0 && until === null) throw new Error('Watch after needs an event to wait for (until)');
+    if (seconds + after > 3600) throw new Error('Watch seconds plus after is at most 3600');
+    return {pilot: pilotArg(args), seconds, fps, until, after, maxSize: count(args.maxSize, 'maxSize', 320, 64), cell: count(args.cell, 'cell', 240, 64),
+      frames: flag(args.frames), map: args.map !== false, depth: flag(args.depth)};
   },
   sketch: () => ({}),
   map: args => ({size: count(args.size, 'size', 480, 64)}),

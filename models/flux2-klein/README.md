@@ -75,7 +75,7 @@ Then open `http://localhost:18709/index.html?weights=` (an empty base loads from
 
 ## Using it in an application
 
-Klein installs as its own package, `@kaminos/flux2-klein`, alongside `@kaminos/webgpu-inference-kit`. `node pack-klein.mjs --out <dir>` builds the package tarball; its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs. Your application creates the WebGPU device and lends it to Klein:
+Klein is on npm as [`@kaminos/flux2-klein`](https://www.npmjs.com/package/@kaminos/flux2-klein), which brings `@kaminos/webgpu-inference-kit` with it: `npm install @kaminos/flux2-klein`. Its [README](package-README.md) covers the API, the weights options and the import map a page without a bundler needs; `node pack-klein.mjs --out <dir>` builds the same package from this checkout. Your application creates the WebGPU device and lends it to Klein:
 
 ```js
 import { KleinPipeline } from '@kaminos/flux2-klein';
@@ -92,4 +92,4 @@ To share the GPU with a renderer, pass a `schedule` with an inference-kit route 
 
 ## License
 
-FLUX.2 [klein] 4B is by Black Forest Labs and its text encoder, Qwen3-4B, is by the Qwen team; both are released under the Apache License 2.0, as are the converted weights.
+The code in this directory is MIT ([LICENSE](LICENSE)). FLUX.2 [klein] 4B is by Black Forest Labs and its text encoder, Qwen3-4B, is by the Qwen team; both are released under the Apache License 2.0, as are the converted weights.

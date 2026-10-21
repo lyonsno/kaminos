@@ -15,7 +15,9 @@ import { UniMateDenoiser } from './unimate-denoiser.js';
 import { WebGpuCommandDutyScheduler } from '../../webgpu-inference-kit/src/command-duty-scheduler.js';
 import { assertEvaluated } from './unimate-drift.js';
 
-const SU = GPUBufferUsage;
+// The WebGPU spec's buffer usage flags, so the module also loads where WebGPU is absent (bundling,
+// servers, workers); the browser's own constants are used when present.
+const SU = globalThis.GPUBufferUsage ?? { MAP_READ: 1, MAP_WRITE: 2, COPY_SRC: 4, COPY_DST: 8, INDEX: 16, VERTEX: 32, UNIFORM: 64, STORAGE: 128, INDIRECT: 256, QUERY_RESOLVE: 512 };
 const STORAGE = SU.STORAGE | SU.COPY_SRC | SU.COPY_DST;
 
 function estimateFlops(kernel, fields) {

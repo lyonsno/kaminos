@@ -47,8 +47,6 @@ const atlasSource = assertRetiredGroup({
     'volume-reaction-divergence-max',
     'volume-reaction-divergence-gain',
     'volume-reaction-curl-warp',
-    'volume-reaction-shell-gamma',
-    'volume-reaction-shell-contrast',
     'volume-reaction-atlas-capture',
     'volume-reaction-atlas-canvas',
     'volume-reaction-atlas-state',
@@ -68,30 +66,8 @@ for (const id of [
   assert.doesNotMatch(index, new RegExp(`id="${id}"`), `deleted raymarch control ${id} is absent from the cockpit`);
 }
 
-const shellSource = assertRetiredGroup({
-  name: 'topology-shell',
-  endNeedle: 'id="volume-oracle-activity-cue"',
-  ids: [
-    'volume-fire-render-mode',
-    'volume-shell-inspect-mode',
-    'volume-shell-amount',
-    'volume-shell-width',
-    'volume-shell-thermal',
-    'volume-shell-reaction',
-    'volume-shell-front',
-    'volume-shell-edge',
-    'volume-shell-curl',
-    'volume-shell-core-suppress',
-    'volume-shell-bite',
-    'volume-shell-heat',
-    'volume-shell-divergence',
-    'volume-shell-luma',
-    'volume-shell-exposure',
-    'volume-shell-soft-clip',
-    'volume-shell-smoke',
-  ],
-});
-assert.doesNotMatch(shellSource, /id="volume-oracle-activity-cue"/, 'Oracle cueing remains outside retired topology-shell state');
+// The Topology Lab Shell left the cockpit entirely on 2026-10-18 (retiredControls; see volume-retired-control-migration.mjs).
+assert.doesNotMatch(index, /data-volume-retired-control-state="topology-shell"/, 'the shell lab is retired through the schema, not kept as hidden state');
 
 assert.match(index, /id="volume-oracle-activity-cue"/, 'Oracle cueing remains in the operator cockpit');
 assert.match(index, /id="volume-pressure-mode"/, 'Pressure remains in the operator cockpit');

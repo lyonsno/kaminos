@@ -1,0 +1,295 @@
+{
+  "archive_sha256": "35fe2ce496a837186931acc5afedcdf53ef22d1aaf6d01ad1dcd416c5ff68cea",
+  "atlas_sha256": "0e23bc7ad1749825bcde37d2ff0560e84febd0316c537e1c8ef0eacfc428b136",
+  "operation": "lossless RGBA frame repack, row-major 8 columns; no resampling or value transform",
+  "frames": [
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_0.png",
+      "sha256": "aae9b39cfa7c2758b0247dc23286a7e2796996e9bbaa373a2fd8b9f027efe499",
+      "reference_red": [
+        149,
+        50,
+        209
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_1.png",
+      "sha256": "5d1cd4bef7c66b2d9cb410ddb5f8fc2d4b78516280fc680a3b70f5f204c8d14f",
+      "reference_red": [
+        75,
+        160,
+        52
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_2.png",
+      "sha256": "7a57cffce0833116daa9740af1dafa291c02e2604ce812cf417898b626b2c24a",
+      "reference_red": [
+        217,
+        224,
+        73
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_3.png",
+      "sha256": "f0829ea86f9cac93a69b299cd3de0df3b67187c78b589f84111d0aa0c08c1c71",
+      "reference_red": [
+        116,
+        6,
+        164
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_4.png",
+      "sha256": "108c3d66f7d5e1d0ae5e2f3a5dc89b98751388a82863fe11ad50cdc153cdee05",
+      "reference_red": [
+        183,
+        109,
+        243
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_5.png",
+      "sha256": "ad4cf1f568f6401752f0311efb01be83e2d857b736409e9548c2a3667c7bc311",
+      "reference_red": [
+        42,
+        75,
+        84
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_6.png",
+      "sha256": "470b211850af16cea206ef11fa70a598e9526aa34e45f9edf142697271f38917",
+      "reference_red": [
+        237,
+        241,
+        6
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_7.png",
+      "sha256": "40a17c08a0abeea354f7448c82d227c3b974a3c9de9e9aae855d4aaf60021798",
+      "reference_red": [
+        3,
+        129,
+        114
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_8.png",
+      "sha256": "921e25d29027cc89ee8c6966af1b632f21e90808363f083b3e0a2121c4214d26",
+      "reference_red": [
+        100,
+        211,
+        235
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_9.png",
+      "sha256": "0e08cea25618b055642482d71707b185bc5aa0c277474d8948709db4d59f010e",
+      "reference_red": [
+        251,
+        194,
+        170
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_10.png",
+      "sha256": "983a85d2c8068f863d70456311b33ac45f3cd6059b85745bbf17c3667d3860b7",
+      "reference_red": [
+        141,
+        97,
+        98
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_11.png",
+      "sha256": "70830d0483b0b94ce46754ec6b176a44ca1e5749d7585c613eaab33ff30f849f",
+      "reference_red": [
+        79,
+        21,
+        214
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_12.png",
+      "sha256": "3bc4fd93b41e21e272911d9f95b83a9faa383e55200f1dc12e1bbdc734ee5d7d",
+      "reference_red": [
+        198,
+        152,
+        27
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_13.png",
+      "sha256": "578fc5b3668268e522c518fa4ab57ec7e8295fb39218f1cebfbc97c1904710d1",
+      "reference_red": [
+        170,
+        58,
+        70
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_14.png",
+      "sha256": "bd58629d0263d9ac3df56507341960a755879ca0fc1d35f2748f03a331e84422",
+      "reference_red": [
+        32,
+        181,
+        148
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_15.png",
+      "sha256": "9794289e4f6027255625f7e9f3e714d14979320edb942c3b51f27a911b79957e",
+      "reference_red": [
+        123,
+        36,
+        185
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_16.png",
+      "sha256": "b59adc455c30fd9045eadec1668cb496f66e17b56396fca12640321f8b374277",
+      "reference_red": [
+        59,
+        227,
+        50
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_17.png",
+      "sha256": "c4fe4124bc4c592bda7e7435fabce117274147f7164a98906fe37a27c913c962",
+      "reference_red": [
+        214,
+        90,
+        232
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_18.png",
+      "sha256": "ed9ae98ff3e42073d07c23baf876c7596d809d6368e3e5bd65b17386e2998bcf",
+      "reference_red": [
+        154,
+        112,
+        22
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_19.png",
+      "sha256": "d8a7fa2fd4737e27c98b54e0d98dfc620a27aa781496e9fadb1e4cdcfa20980c",
+      "reference_red": [
+        20,
+        168,
+        115
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_20.png",
+      "sha256": "b35cdd6d90df646c67458d44a06c83998663c38dda57c02d2d44c15dec292450",
+      "reference_red": [
+        45,
+        24,
+        204
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_21.png",
+      "sha256": "a205e463d6416abdede28033ee168ac6d424f44d0626db6169acb5ab00335c06",
+      "reference_red": [
+        200,
+        204,
+        42
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_22.png",
+      "sha256": "657e0a189a2c440adaed7ac8b618855d75e82c8ea429058a34feb353f48993ae",
+      "reference_red": [
+        87,
+        138,
+        142
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_23.png",
+      "sha256": "97dece4478e5bd90a0b59120b858e67a59c54e7dd7881d07d4580f35cf974c67",
+      "reference_red": [
+        245,
+        238,
+        167
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_24.png",
+      "sha256": "4a68cc41ca6025564931f26721120fb90b5e9a16b196aa544886702fcce630d5",
+      "reference_red": [
+        136,
+        43,
+        252
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_25.png",
+      "sha256": "9b74f2ca13761ebab0845d73fd6898dd86870d83af79fd13f1c3754b0533c9ca",
+      "reference_red": [
+        52,
+        121,
+        103
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_26.png",
+      "sha256": "2c2f7e4416beba530eae93e1daf0487f13f90abfd278695d87b969fd1cd66751",
+      "reference_red": [
+        227,
+        10,
+        87
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_27.png",
+      "sha256": "50485324e48ee48e68a578e59d63b3cab7b46719cb9cdcc64a816b440c64c6fb",
+      "reference_red": [
+        190,
+        146,
+        12
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_28.png",
+      "sha256": "c9084e15ce45c7bf9cf6347a9ee3ded83fe9b90eccc5bfaf72cb7871d8d6d4ef",
+      "reference_red": [
+        64,
+        251,
+        201
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_29.png",
+      "sha256": "51a3bc31fdb6adfa47b7ca5f9674aa3e269a97912b9f19ce9f6973eccc8db1b6",
+      "reference_red": [
+        126,
+        98,
+        35
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_30.png",
+      "sha256": "bdcd1bd707a99d6cd9c234fa035ffa47bd65bf818d863903c582c1a9edecf30b",
+      "reference_red": [
+        17,
+        64,
+        144
+      ]
+    },
+    {
+      "file": "noise/real/temporal/exp/real_uniform_gauss1_0_exp0101_separate05_31.png",
+      "sha256": "56753d1aa9d59ed349a0f8b56d9596a0b124a56e85db709bd814b1c6856b2056",
+      "reference_red": [
+        173,
+        189,
+        133
+      ]
+    }
+  ]
+}

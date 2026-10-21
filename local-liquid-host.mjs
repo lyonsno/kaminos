@@ -111,7 +111,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       // Proxy presentation may refresh the sim every Nth frame (opt-in, default
       // every frame): the step is the solver's own fixed 1/60, so fewer steps
       // slow the water rather than coarsening it.
-      const stepThisFrame = plan.liquidComposite || proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0;
+      const stepThisFrame = presentationMode!=='proxy' || proxyStepEvery <= 1 || frameCount % proxyStepEvery === 0;
       if (advance && !paused && stepThisFrame) solver.step(1/60);
       if (plan.environment) renderEnvironment();
       // The host color attachment is linear HDR even if another consumer
@@ -126,7 +126,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
         // layer; present it without the depth render or liquid composite.
         renderer.setRenderTarget(previousTarget); presentation.render();
         frameCount++;
-        lastFrame={frameId:`local-liquid-${frameCount}`,width,height,presentation:'proxy',route:ROUTE,submittedByHost:true,presentedByHost:true,
+        lastFrame={frameId:`local-liquid-${frameCount}`,width,height,presentation:presentationMode,route:ROUTE,submittedByHost:true,presentedByHost:true,
           displayTransform:'host-render-pipeline',simulationTimePolicy:proxyStepEvery>1?`one-fixed-1/60-step-every-${proxyStepEvery}-rendered-frames`:'one-fixed-1/60-step-per-rendered-frame',simulationRewind:false};
         return;
       }

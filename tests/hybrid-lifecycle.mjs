@@ -24,7 +24,14 @@ const patterns=[],batches=[];
 let compileRelease,compileCalls=0,held=false;
 const rebuild={hold(value){held=value;},compile(){compileCalls++;return new Promise(resolve=>compileRelease=resolve);}};
 const mount=mountDistributedSceneRadiance({renderer,scene,prototype,device,volumeGrid:2,smokeRefinement:1,pointCount:2,createShadow:({filterPattern})=>{patterns.push(filterPattern);return {visibility:THREE.TSL.float(1),render(batch){batches.push(batch);},debugState:()=>({fixture:true}),dispose(){}};}});
+assert.equal(typeof mount.setSmokeShadowQuality,'function','live surface lighting must expose independent smoke transport quality');
 assert.equal(patterns[0].route,'uniform');assert.equal(patterns[0],patterns[1],'sources must share the same uniform node, not duplicate buffers');
+assert.equal(typeof mount.setSurfaceEnabled,'function');
+mount.setSurfaceEnabled(false);const offBatches=batches.length;
+consume(field);assert.equal(mount.canRender(),true);assert.equal(batches.length,offBatches,'off skips all surface shadow captures');
+assert.equal(mount.debugState().capturedPointCount,0);assert.equal(mount.debugState().evaluatedPointCount,0);assert.equal(mount.debugState().frame.pointRegions,null,'off skips point source reduction, not only brightness');
+assert(hostFrame,'distributed smoke remains live');assert.throws(()=>mount.readPointRegions(),/disabled/);
+mount.setSurfaceEnabled(true);
 consume(field);assert.equal(mount.canRender(),true);assert.equal(mesh.geometry,geometry,'hybrid must not clone/build surface receivers');
 assert.equal(batches[0],batches[1]);
 assert.equal(mount.debugState().frame.pointRegions.partition,'energy');
@@ -123,6 +130,22 @@ assert.throws(()=>consume(field),/injected source binding failure/);assert.equal
 failSource=null;consume(field);
 assert.equal(consumedSources.at(-1),'B','retry must consume the replacement source, not merely publish its generation');
 assert.equal(mount.canRender(),true);
+for(const ratio of [1,1.5,3,4,2]){
+ field.source.dimensions=[4,4*ratio,4];field.source.localMax=[1,-1+2*ratio,1];field.source.generation++;
+ consume(field);assert.equal(mount.canRender(),true,'source aspect changes must replace dependent smoke resources');
+ assert.deepEqual(hostFrame.sourceDomain.hi,field.source.localMax);
+ assert.deepEqual(hostFrame.smokeReconstruction.coarseDimensions,[2,2*ratio,2]);
+ assert.equal(hostFrame.volumeReceivers,8*ratio);
+ assert.equal(hostFrame.pointRegions.generation,field.source.generation);
+}
+const afterAspect=mount.debugState().geometryBuilds;
+field.source.dimensions=[8,16,8];field.source.generation++;consume(field);
+assert.equal(mount.debugState().geometryBuilds,afterAspect,'same-domain resolution changes reuse visibility and receivers');
+mount.setSmokeShadowQuality({steps:8,resolution:4});consume(field);
+assert.equal(mount.debugState().frame.smokeShadow.generation,field.source.generation);
+assert(passes.includes('live smoke shadow prefix integration'));
+mount.setSmokeShadowQuality({steps:0});consume(field);
+assert.equal(mount.debugState().frame.smokeShadow,null);
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);
 const asyncMount=mountDistributedSceneRadiance({renderer,scene,prototype,device,rebuild,volumeGrid:2,smokeRefinement:1,createShadow:()=>({visibility:THREE.TSL.float(1),render(){},debugState:()=>({}),dispose(){}})});
 consume(field);

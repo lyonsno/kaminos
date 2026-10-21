@@ -7,7 +7,14 @@ const route=fireShadowSceneRoute(state),restored=readFireShadowSceneSettings(new
 assert.deepEqual(restored,{pointCount:4,pointSampling:'paired',shadowResolution:36,blockerSamples:4,filterSamples:2,
   shadowSampling:'complementary',shadowSoftness:1.7,shadowComparison:{implementation:'shared',grain:'world',worldCellSize:.031}});
 assert.equal(readFireShadowSceneSettings(new URLSearchParams()).shadowComparison.worldCellSize,.02,'historical default unchanged');
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowCasterLevel:'10k'}))).shadowCasterLevel,'10k','caster choice round trips through the authored lighting route');
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_caster_level=500')),/caster level/);
 assert.deepEqual(fireShadowSceneRoute(null),{});
+const smoke=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,smokeShadowSteps:12,smokeShadowResolution:16})));
+assert.equal(smoke.smokeShadowSteps,12);assert.equal(smoke.smokeShadowResolution,16);
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_steps=-1')),/smoke shadow/);
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,surfaceEnabled:false}))).surfaceEnabled,false,'off persists through scene restore');
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowGrain:'screen-animated'}))).shadowComparison.grain,'screen-animated','animated grain survives authored scene serialization');
 for(const [key,value] of [['points','3'],['filter_samples','0'],['shadow_grain','bad'],['shadow_world_cell_size','0'],['shadow_softness','NaN']])
   assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams({...route,['volume_light_field_hybrid_'+key]:value})));
 console.log('PASS scene lighting settings preserve actual quality, quadrature, grain and softness');

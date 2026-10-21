@@ -4,7 +4,7 @@ import * as fire from '../scene-fire-domain.mjs';
 import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
-const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model'];
+const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength'];
 // Native74383 restore-diagnostic-r2 observed these three declared additions
 // absent from an otherwise intact saved fire record (249 controls).
 function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}
@@ -21,6 +21,8 @@ test('schema projection keeps authored reactant values and refuses holes or unkn
  const second=fire.projectFireSettingsToSchema(projected,schema);assert.equal(second.domControls['volume-reaction-law'].value,'reactant-v0');assert.equal(second.domControls['volume-reactant-mixing-time'].value,4.567);
  const hole=oldSettings();delete hole.domControls['volume-density'];assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-density/);
  const unknown=oldSettings();unknown.domControls['volume-not-declared']={value:1};assert.throws(()=>fire.projectFireSettingsToSchema(unknown,schema),/Unsupported authored fire control/);
+ // A hole is not history: a record that still carries wavelet strength (introduced at 259) cannot be missing the pressure solver (212).
+ const lateHole=oldSettings();delete lateHole.domControls['volume-pressure-solver'];assert.throws(()=>fire.projectFireSettingsToSchema(lateHole,schema),/Missing authored fire control volume-pressure-solver/);
 });
 
 test('a superseded scene cannot apply a late schema response',async()=>{
