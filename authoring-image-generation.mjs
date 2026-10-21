@@ -169,18 +169,18 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
     if(!device.features?.has?.('shader-f16'))return 'This GPU device was created without shader-f16, which FLUX.2 klein needs.';
     return blocked();
   }
-  async function load(){
+  async function load(level){
     const {sharedGpu}=context();
     const core=await kit(),device=sharedGpu.device,base=String(await weights()).replace(/\/$/,'');
     const app=appHost?await appHost():null;
     const session=app?await app.session():await core.createWebGpuInferenceSession({sessionId:`kaminos-klein:${crypto.randomUUID()}`,device,adapterName:sharedGpu.adapter?.info?.description||'kaminos-shared-device',deviceOwnership:'borrowed'});
     const foreground=app?null:core.createWebGpuForegroundService({routeId:KLEIN_AUTHORING_ROUTE_ID,device});
-    const pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/dit`,vaeUrl:`${base}/vae`});
+    const pipeline=await createPipeline(device,{textEncoderUrl:`${base}/te`,transformerUrl:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,vaeUrl:`${base}/vae`});
     await pipeline.load((part,name,{loadedBytes,totalBytes})=>{
       if(abort?.signal.aborted)return;
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading FLUX.2 klein weights (${part})`});
     });
-    return {core,session,foreground,pipeline,base,app,level:'4-bit'};
+    return {core,session,foreground,pipeline,base,app,level};
   }
   return {
     read(){
@@ -214,9 +214,12 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
       set({status:'loading',error:null,canStop:true,stage:null,percent:null,progress:loaded?'Starting…':'Loading FLUX.2 klein…'});
       try{
-        if(!loaded)loaded=await load();
+        if(!loaded)loaded=await load(level);
         if(abort.signal.aborted)throw abort.signal.reason;
         if(loaded.level!==level){
+          // The pipeline destroys the current transformer before loading the next, so until this resolves no level
+          // is loaded: a failed or stopped swap must make the next run load its level again.
+          loaded.level=null;
           set({stage:'Loading weights',percent:null,progress:`Loading the ${level} transformer…`});
           await loaded.pipeline.loadTransformer(`${loaded.base}/${KLEIN_WEIGHT_LEVELS[level]}`,(part,name,{loadedBytes,totalBytes})=>{
             if(!abort.signal.aborted)set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});});

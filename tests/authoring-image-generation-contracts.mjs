@@ -68,7 +68,8 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0}={}){
+ let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
  const log=[],delivered=[],prototype=prototypeDouble(),host={setForegroundServiceActive:value=>log.push(`active:${value}`),runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
@@ -78,15 +79,15 @@ function harness({features=['shader-f16'],gate=null,deliverFails=0}={}){
   context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:async()=>'/klein-weights',
-  createPipeline:(givenDevice,urls)=>{assert.equal(givenDevice,device,'klein must run on the host shared device');assert.deepEqual(urls,{textEncoderUrl:'/klein-weights/te',transformerUrl:'/klein-weights/dit',vaeUrl:'/klein-weights/vae'});
+  createPipeline:(givenDevice,urls)=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push(urls);assert.deepEqual({...urls,transformerUrl:undefined},{textEncoderUrl:'/klein-weights/te',transformerUrl:undefined,vaeUrl:'/klein-weights/vae'});
    return{load:async progress=>{loads++;progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
-    loadTransformer:async(url,progress)=>{swaps.push(url);progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
+    loadTransformer:async(url,progress)=>{swaps.push(url);if(swapFailures-->0)throw Error('bundle download failed');progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
     generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
   encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
   deliver:async(file,provenance)=>{if(deliverFailures-->0)throw Error('image inbox unavailable');delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
  });
- return {service,log,delivered,handoff,prototype,generations,swaps,loads:()=>loads};
+ return {service,log,delivered,handoff,prototype,generations,swaps,pipelines,loads:()=>loads};
 }
 
 test('a prompt becomes a saved image on the shared device while the kiln stays on the foreground service',async()=>{
@@ -255,4 +256,20 @@ test('the transformer level is chosen per run: 4-bit by default, 3-bit and 2-bit
  assert.equal(h.loads(),1,'the text encoder and decoder load once');
  await assert.rejects(h.service.run({prompt:'lantern',seed:6,level:'1-bit'}),/4-bit, 3-bit or 2-bit/);
  assert.equal(h.generations.length,5,'an unknown level is refused before GPU work');
+});
+
+test('KLO-01: a failed transformer swap is never taken for the level that was loaded before it',async()=>{
+ const h=harness({swapFails:1});
+ await h.service.run({prompt:'lantern',seed:1});
+ await assert.rejects(h.service.run({prompt:'lantern',seed:2,level:'3-bit'}),/bundle download failed/);
+ await h.service.run({prompt:'lantern',seed:3,level:'4-bit'});
+ assert.deepEqual(h.swaps,['/klein-weights/dit-q3','/klein-weights/dit'],'returning to 4-bit reloads it: the failed swap destroyed it');
+ assert.equal(h.delivered.at(-1).provenance.weightsLevel,'4-bit');
+});
+
+test('a first run at 3-bit loads the 3-bit transformer directly, without loading 4-bit first',async()=>{
+ const h=harness();
+ await h.service.run({prompt:'lantern',seed:1,level:'3-bit'});
+ assert.equal(h.pipelines[0].transformerUrl,'/klein-weights/dit-q3');assert.deepEqual(h.swaps,[]);
+ assert.equal(h.delivered[0].provenance.weightsLevel,'3-bit');
 });
