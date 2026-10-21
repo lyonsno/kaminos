@@ -74,3 +74,41 @@ test('release disposes the proxy and forgets the object',async()=>{
   let disposed=0;h.proxyRoot.traverse(m=>{if(m.isMesh)m.geometry.addEventListener('dispose',()=>disposed++);});
   registry.release(root);assert.equal(disposed,1);assert.equal(registry.get(root),null);assert.equal(registry.list().length,0);
 });
+
+const disposals=root=>{const seen=[];root.traverse(m=>{if(m.isMesh)m.geometry.addEventListener('dispose',()=>seen.push(m.userData.tag??'proxy'));});return seen;};
+test('GI-PROXY-02: changing the selection disposes the proxy it replaces, and release disposes the current one',async()=>{
+  const {registry}=world(),{root}=sceneObject(heroSource);
+  const first=await registry.attach(root);const firstDisposed=disposals(first.proxyRoot);
+  const second=await registry.select(root,{faces:500});assert.equal(firstDisposed.length,1,'the replaced 1000-face proxy is disposed');
+  const secondDisposed=disposals(second.proxyRoot);registry.release(root);assert.equal(secondDisposed.length,1);
+});
+test('GI-PROXY-03: after release and reattachment, a request from before the release can never win',async()=>{
+  let hold;const gate=new Promise(r=>{hold=r;});
+  const w=world(),{root}=sceneObject(heroSource);
+  const slowRegistry=createGiProxyRegistry({THREE,fetchJson:async url=>{if(/faces=1000/.test(url))await gate;return (await w.registry.attach(sceneObject(heroSource).root),{schema:'kaminos.lod-set.v0',levels:TIERS.map(t=>({...t,source:`/api/read?root=generated-meshes&path=${t.sha256}.glb`})),choice:{...TIERS.find(t=>t.faces===(/faces=1000/.test(url)?1000:500)),source:`/api/read?root=generated-meshes&path=${TIERS.find(t=>t.faces===(/faces=1000/.test(url)?1000:500)).sha256}.glb`},withinBudget:true});},
+    fetchBytes:async url=>tierBytes(TIERS.find(t=>url.includes(t.sha256)).faces),parseGlb:async()=>{const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial()));return g;}});
+  const old=slowRegistry.attach(root);slowRegistry.release(root);
+  const fresh=await slowRegistry.attach(root,{faces:500});hold();const stale=await old;
+  assert.equal(slowRegistry.get(root).effective.faces,500,'the newer selection stands');assert.equal(stale.superseded,true);assert.equal(fresh.effective.faces,500);
+});
+test('GI-PROXY-04: release disposes the proxy materials\' textures too',async()=>{
+  const textures=[];
+  const w=world(),registry=createGiProxyRegistry({THREE,fetchJson:async url=>{const s=await w.registry.attach(sceneObject(heroSource).root);return {schema:'kaminos.lod-set.v0',levels:[],choice:{...TIERS[1],source:`/api/read?root=generated-meshes&path=${TIERS[1].sha256}.glb`},withinBudget:true};},
+    fetchBytes:async()=>tierBytes(1000),parseGlb:async()=>{const map=new THREE.Texture(),normalMap=new THREE.Texture();for(const t of [map,normalMap])t.addEventListener('dispose',()=>textures.push(t));
+      const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshStandardMaterial({map,normalMap})));return g;}});
+  const {root}=sceneObject(heroSource);await registry.attach(root);registry.release(root);
+  assert.equal(textures.length,2,'map and normalMap are disposed');
+});
+test('GI-PROXY-01: clearing the registry (a cleared or reopened scene) disposes every proxy and ignores late results',async()=>{
+  const {registry}=world(),a=sceneObject(heroSource),b=sceneObject(heroSource);
+  const ha=await registry.attach(a.root);const da=disposals(ha.proxyRoot);const pending=registry.attach(b.root);
+  registry.clear();assert.equal(da.length,1);assert.equal(registry.list().length,0);
+  const late=await pending;assert.equal(late.superseded,true);assert.equal(registry.list().length,0,'a result arriving after the clear is not published');
+});
+
+test('GI-PROXY-01: the page clears the registry when it clears a scene, and releases a removed object',async()=>{
+  const fs=await import('node:fs'),html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const body=name=>{const a=html.indexOf(`function ${name}(`);let depth=0,i=html.indexOf(") {",a)+2;for(;i<html.length;i++){if(html[i]==='{')depth++;else if(html[i]==='}'&&--depth===0)break;}return html.slice(a,i);};
+  assert.match(body('clearScene'),/sceneGiProxies\.clear\(\)/);
+  assert.match(body('removeSceneObjectInternal'),/sceneGiProxies\.release\(entry\.object\)/);
+});

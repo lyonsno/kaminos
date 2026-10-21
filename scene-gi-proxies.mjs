@@ -15,11 +15,17 @@ const shaOf=source=>{
 };
 const surfelRootIn=root=>{let found=null;root.traverse(o=>{if(!found&&o.isTrellisSurfelRoot)found=o;});return found;};
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-const disposeTree=root=>root?.traverse(m=>{if(m.isMesh){m.geometry?.dispose();for(const a of Array.isArray(m.material)?m.material:[m.material])a?.dispose?.();}});
+// Geometry, materials and every texture a material holds (material disposal leaves its textures allocated).
+const disposeTree=root=>root?.traverse(m=>{if(!m.isMesh)return;m.geometry?.dispose();
+  for(const a of Array.isArray(m.material)?m.material:[m.material]){if(!a)continue;for(const v of Object.values(a))if(v?.isTexture)v.dispose();a.dispose?.();}});
 
 export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await fetch(url);const j=await r.json();if(!r.ok)throw Error(j.error||`HTTP ${r.status}`);return j;},
   fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,digest=digestHex}){
-  const handles=new Map(),versions=new Map();
+  // versions come from one sequence that never restarts, so a request from before a release, a clear or a newer
+  // selection can never pass as current; owned is the proxy each root holds, apart from the handle snapshots.
+  const handles=new Map(),versions=new Map(),owned=new Map();let sequence=0;
+  // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
+  const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);};
   function describe(root){
     const object=root.userData?.kaminosSceneObject,assetSha=shaOf(object?.source),surfels=surfelRootIn(root);
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
@@ -32,15 +38,15 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     return {representation:'mesh',assetSha,heroSha:assetSha};
   }
   async function resolve(root,selection){
-    const version=(versions.get(root)??0)+1;versions.set(root,version);
+    const version=++sequence;versions.set(root,version);
     const base={...describe(root),requested:{...selection},effective:null,levels:[],error:null,frame:'trellis-source',proxyRoot:null,
       placement:scene=>new THREE.Matrix4().copy(scene.matrixWorld).invert().multiply(root.updateWorldMatrix(true,false)??root.matrixWorld)};
     const settle=handle=>{
       if(versions.get(root)!==version){disposeTree(handle.proxyRoot);return {...handle,proxyRoot:null,superseded:true};}
-      const previous=handles.get(root);if(previous&&previous!==handle&&previous.proxyRoot!==handle.proxyRoot)disposeTree(previous.proxyRoot);
+      if(owned.get(root)!==handle.proxyRoot){disposeTree(owned.get(root));if(handle.proxyRoot)owned.set(root,handle.proxyRoot);else owned.delete(root);}
       handles.set(root,handle);return handle;};
     if(base.state)return settle(base);
-    handles.set(root,{...base,state:'resolving'});
+    handles.set(root,{...(handles.get(root)??base),state:'resolving'});
     try{
       const query=new URLSearchParams({source:base.heroSha});
       if(selection.faces!=null)query.set('faces',String(selection.faces));
@@ -61,6 +67,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     select(root,selection){return resolve(root,selection);},
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
-    release(root){versions.set(root,(versions.get(root)??0)+1);disposeTree(handles.get(root)?.proxyRoot);handles.delete(root);versions.delete(root);},
+    release(root){drop(root);},
+    // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
+    clear(){for(const root of new Set([...handles.keys(),...owned.keys(),...versions.keys()]))drop(root);},
   };
 }

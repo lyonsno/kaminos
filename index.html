@@ -12218,6 +12218,7 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidFailure = null;
   localLiquidPaused = false;
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
+  sceneGiProxies.clear();
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
