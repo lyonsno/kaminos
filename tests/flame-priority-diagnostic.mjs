@@ -72,7 +72,9 @@ test('floor repair preserves a separate baseline and clamps the actual child wid
   const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
   for(const p of [0,.00133,.001333,.1,.5,.75,1])assert.deepEqual(report.armPlan.filter(x=>x.priority===p&&x.label!=='zero-repeat').map(x=>x.repair),[false,true]);
   const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
+  assert.match(optical,/if \(\(\*s\)\.mask > 1u \|\| \(\*s\)\.floorRetry\) \{ return; \}/,'a floor retry must not be reset by guide/phase constraints');
   assert.match(optical,/DIAG_REPAIR_FLOOR && \(\*s\)\.positions\[2\] < \(\*s\)\.minimum/);
-  assert.match(optical,/\(\*s\)\.width = \(\*s\)\.minimum;\s*\(\*s\)\.mask = 1u;\s*opticalStepResetPositions\(s\);\s*return;/);
+  assert.match(optical,/\(\*s\)\.width = \(\*s\)\.minimum;\s*\(\*s\)\.mask = 1u;\s*\(\*s\)\.floorRetry = true;\s*opticalStepResetPositions\(s\);\s*return;/);
+  assert.match(optical,/\(\*s\)\.floorRetry = false;\s*\(\*s\)\.cursor = min/,'accepted interval must re-enable guidance');
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });

@@ -59,9 +59,13 @@ override DIAG_GUIDE: u32 = 0u;`);
  let core=bodies['volume-core.js'];
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_GUIDE: u32 = 0u;','override DIAG_GUIDE: u32 = 0u;\noverride DIAG_CONSTRAINTS: u32 = 0u;');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_CONSTRAINTS: u32 = 0u;','override DIAG_CONSTRAINTS: u32 = 0u;\noverride DIAG_REPAIR_FLOOR: bool = false;');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'  phase: f32,','  phase: f32,\n  floorRetry: bool,');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'if ((*s).mask > 1u) { return; }','if ((*s).mask > 1u || (*s).floorRetry) { return; }');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'  (*s).cursor = min','  (*s).floorRetry = false;\n  (*s).cursor = min');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'    (*s).width = (*s).positions[2];',`    if (DIAG_REPAIR_FLOOR && (*s).positions[2] < (*s).minimum) {
       (*s).width = (*s).minimum;
       (*s).mask = 1u;
+      (*s).floorRetry = true;
       opticalStepResetPositions(s);
       return;
     }
