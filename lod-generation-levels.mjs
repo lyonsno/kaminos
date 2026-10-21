@@ -107,10 +107,11 @@ export async function prepareGenerationLevels({decode: {vertices, triangles}, ma
       const level = {sha256: digest, faces: tier.faces, route: tier.route, textureSize: tier.textureSize,
         closed: tier.closed, boundaryEdges: tier.boundaryEdges, nonManifoldEdges: tier.nonManifoldEdges, frameDrift: tier.frameDrift,
         error: tier.error, errorAgainstRawDecode: tier.errorAgainstRawDecode, ...(tier.normalMap ? {normalMap: tier.normalMap} : {})};
-      let register;
-      try { register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})}); }
-      catch (error) { report.failedTier = tier.target; report.unconfirmedRegistration = digest; throw error; } // outcome unknown: stored, maybe registered
-      const registered = await receipt(register);
+      let register, registered;
+      // A request or response lost in transport leaves the outcome unknown: stored, maybe registered.
+      try { register = await fetch(`${server}/api/mesh-lods`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({source, level, supersede: replace})});
+        registered = await receipt(register); }
+      catch (error) { report.failedTier = tier.target; report.unconfirmedRegistration = digest; throw error; }
       if (!register.ok) { report.failedTier = tier.target; report.orphanedIngest = digest;
         throw Error(`register failed for ${tier.target} (HTTP ${register.status}): ${JSON.stringify(registered)}`); }
       if (registered.source !== source || registered.level?.sha256 !== digest) { report.failedTier = tier.target; report.orphanedIngest = digest;

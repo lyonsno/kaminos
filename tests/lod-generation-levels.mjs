@@ -121,3 +121,10 @@ test('review N1: an empty target list is refused, not a successful no-op', async
   const {report, calls} = await publishWith({ingest: goodIngest, register: goodRegister, targets: []});
   assert.notEqual(report.phase, 'done'); assert.match(report.error.message, /at least one target/); assert.equal(calls.length, 0);
 });
+
+test('confirmation review: a registration response whose body cannot be read keeps the ingested digest, unconfirmed', async () => {
+  const broken = () => new Response(new ReadableStream({start(c) { c.error(TypeError('connection reset while reading')); }}), {status: 200});
+  const {report} = await publishWith({ingest: goodIngest, register: broken});
+  assert.equal(report.phase, 'publish'); assert.match(report.error.message, /connection reset/);
+  assert.equal(report.failedTier, 200); assert.match(report.unconfirmedRegistration, /^[a-f0-9]{64}$/);
+});
