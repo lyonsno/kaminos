@@ -8,6 +8,19 @@ export default class SceneSurfaceLighting {
   constructor(source,camera,{enabled=true}={}){
     this.source=source;this.camera=camera;this.enabled=uniform(enabled,'bool');
     this.bindings=new WeakMap();this.materials=new Set();this.capture=null;
+    this.proxyRoots=new Set();this.proxyMaterialAdapter=null;
+  }
+  registerProxyRoot(root){
+    if(this.proxyRoots.has(root))throw Error('Lighting proxy is already registered');
+    this.proxyRoots.add(root);
+    try{this.proxyMaterialAdapter?.install(root);}catch(error){this.proxyMaterialAdapter?.release(root);this.proxyRoots.delete(root);throw error;}
+    return()=>{if(!this.proxyRoots.delete(root))return;this.proxyMaterialAdapter?.release(root);};
+  }
+  setProxyMaterialAdapter(adapter){
+    if(this.proxyMaterialAdapter)throw Error('A proxy material lighting adapter is already mounted');
+    this.proxyMaterialAdapter=adapter;
+    try{for(const root of this.proxyRoots)adapter.install(root);}catch(error){for(const root of this.proxyRoots)adapter.release(root);this.proxyMaterialAdapter=null;throw error;}
+    return()=>{if(this.proxyMaterialAdapter!==adapter)return;for(const root of this.proxyRoots)adapter.release(root);this.proxyMaterialAdapter=null;};
   }
   bind(material,raw,prepare=()=>{}){
     const value=raw.toVar('flameSurfaceIrradiance');
