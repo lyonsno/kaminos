@@ -62,3 +62,24 @@ test('source property edits publish only the target data and Undo keeps the othe
  await edits.undo();assert.equal(publications.at(-1)[1].controls.immersedSourceEnabled,true);
  assert.equal(edits.state().active,null);
 });
+
+
+test('moving a source in a plural field never relocates or restarts its shared gas',()=>{
+ const sources=[record('flame-emitter',-.3),record('other',.35)];
+ const h={sceneObjects:sources,FLAME_EMITTER_TYPE:'flame-emitter',flameDomainFollowSource:true,flameDomainTranslation:[0,0,0],flameDomainScale:1,flameEmitterInjectionSuspended:true,
+  flameDomainTranslationForAcceptedPose:()=>[9,0,0],readVolumeControls:()=>({}),effectiveFlameDomainControls:x=>x,volumePrototype:{},setInfo:()=>{},
+  setFlameDomainTranslation:()=>assert.fail('source move must leave the shared field in place'),writeAuthoredFlameEmitterPose:()=>assert.fail('no relocation rewrite')};
+ vm.createContext(h);vm.runInContext(block('settleFlameDomainForPose','writeAuthoredFlameEmitterPose'),h);
+ assert.equal(h.settleFlameDomainForPose(pose(9)),false);
+ assert.equal(h.settleFlameDomainForPose(pose(9),[1,0,0]),false,'source Undo must not relocate a plural field either');
+});
+
+
+test('compatibility state follows the remaining source after deleting the original',()=>{
+ const remaining={...record('other',.35),emissionEnabled:false};
+ const h={window:{},structuredClone,sceneObjects:[remaining],FLAME_EMITTER_ID:'flame-emitter',primaryAuthoredFlameSource:()=>remaining,authoredFlamePresent:true,
+ flameEmitterPose:remaining.transform,authoredFlameSourceRecords:()=>[remaining],flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:true,flameEmitterInjectionSuspended:false};
+ vm.createContext(h);vm.runInContext(html.slice(html.indexOf('window.kaminosFlameEmitterState ='),html.indexOf('function cloneTransformState(')),h);
+ assert.equal(h.window.kaminosFlameEmitterState().registered,true);
+ assert.equal(h.window.kaminosFlameEmitterState().emissionEnabled,false);
+});

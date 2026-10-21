@@ -5433,6 +5433,9 @@ function settleAuthoredFlameDomain(event) {
 }
 
 function settleFlameDomainForPose(pose, targetDomain = null) {
+  // Several sources share this gas. Releasing or undoing one source must not
+  // carry the field to that source and erase what the others already emitted.
+  if(sceneObjects.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1)return false;
   if(!targetDomain&&!flameDomainFollowSource)return false;
   const next = targetDomain || flameDomainTranslationForAcceptedPose(pose, flameDomainTranslation,
     { injectionSuspended: flameEmitterInjectionSuspended,scale:flameDomainScale,shape:effectiveFlameDomainControls(readVolumeControls(),volumePrototype) });
@@ -5496,9 +5499,9 @@ function writeAuthoredFlameEmitterPose(value,id=null) {
 }
 
 window.kaminosFlameEmitterState = () => ({
-  registered: sceneObjects.some(record => record.id === FLAME_EMITTER_ID),
+  registered: !!primaryAuthoredFlameSource(),
   authoredPresent: authoredFlamePresent,
-  emissionEnabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false,
+  emissionEnabled:primaryAuthoredFlameSource()?.emissionEnabled!==false,
   pose: structuredClone(flameEmitterPose),
   sources:authoredFlameSourceRecords(),
   domain: 'translated-world-aligned-volume',
@@ -12966,7 +12969,7 @@ async function installOwnerWorkbenchEntry() {
   fire:{add:id=>window.kaminosSceneAuthoring.addFlameEmitter(id),
     setEnabled:enabled=>scenePlacementTools.edits.apply('@flame-source-enabled',{enabled},enabled?'Enable fire source':'Disable fire source'),
     read:()=>window.kaminosFlameEmitterState(),settings:()=>window.kaminosFlameAuthoring.read(),
-    select:()=>window.selectSceneObject(FLAME_EMITTER_ID),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
+    select:()=>window.selectSceneObject(primaryAuthoredFlameSource()?.id),setVisible:visible=>{volumePrototype.canvasElement().style.opacity=visible?'1':'0';window._kaminosDirty?.();}},
   rendering:{gi:value=>setSceneGIControls(value),readGI:()=>({...sceneGISettings}),
     openGISourceComparison:(root,candidates)=>{if(!window.kaminosGISourceComparison)throw Error('Open this comparison with ?experiment=gi-source-study');return window.kaminosGISourceComparison.open(root,candidates);},
     readFireLighting:()=>window.kaminosFireLightFieldDebugState(),muteFireLighting:value=>window.kaminosFireLightFieldSetWitnessMute(value)},
@@ -12990,7 +12993,7 @@ function openFlameWorkbench() {
     return()=>{listeners.delete(listener);stopped();controls.removeEventListener('change',listener);window.removeEventListener('kaminos-flame-controls-changed',listener);document.removeEventListener('input',changed);document.removeEventListener('change',changed);};
   };
   const select=target=>{
-    if(target==='emitter'){if(!authoredFlamePresent)throw Error('No authored flame emitter');setActiveSceneObject(FLAME_EMITTER_ID);}
+    if(target==='emitter'){if(!authoredFlamePresent)throw Error('No authored flame emitter');setActiveSceneObject(primaryAuthoredFlameSource().id);}
     else if(target==='domain')window.selectSceneField('flame-field');
     else throw Error('Unknown flame target: '+target);
     for(const listener of listeners)listener();
@@ -20234,7 +20237,7 @@ async function initKaminosVolumeRoute() {
       frameId,
       externalRequest,
       ...(family !== 'cluster' ? { emitterPose: flamePoseToDomain(pose, flameDomainTranslation, flameDomainScale) } : {}),
-      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false && sourceEnabled } : {}),
+      ...(family !== 'cluster' ? { sourceEnabled: authoredFlamePresent && primaryAuthoredFlameSource()?.emissionEnabled!==false && sourceEnabled } : {}),
     });
     window.__kaminosVolumeEmitterReceipt = receipt;
     if (family !== 'cluster') {
@@ -21896,7 +21899,7 @@ function createFlameQuickFields() {
   const shared=document.createElement('section');shared.id='shared-flame-domain-properties';shared.innerHTML='<h3>Fire & smoke</h3><button type="button" class="btn" id="field-source-action">Select emitter</button>';document.getElementById('selected-flame-properties').after(shared);scenePlacementTools.addHistoryScope(shared);
   installFlameDomainControls(shared);
   installKilnCollisionControl(shared);
-  document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)window.selectSceneObject(FLAME_EMITTER_ID);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
+  document.getElementById('field-source-action').onclick=()=>{try{if(authoredFlamePresent)window.selectSceneObject(primaryAuthoredFlameSource().id);else window.kaminosBurnerAuthoring.add('flame-source');}catch(error){setInfo(error.message);}};
   const enabledRow=document.createElement('label');enabledRow.className='slider-row';enabledRow.innerHTML='<span class="slider-label">Emit gas</span><input type="checkbox" id="selected-flame-enabled">';document.getElementById('selected-flame-fields').prepend(enabledRow);
   enabledRow.querySelector('input').addEventListener('change',event=>{try{editAuthoredFlameSource(activeSceneObjectId,{enabled:event.target.checked});}catch(error){setInfo(error.message);}});
   authoringControlSessions.push(installSceneControlHistory({controls:[enabledRow.querySelector('input')],edits:scenePlacementTools.edits,id:()=>ensureFlameSourceDataTarget(activeSceneObjectId),label:'Toggle flame source',onError:error=>setInfo(error.message)}));
@@ -22211,10 +22214,10 @@ async function openFirstFlameFieldDialog() {
 function installAuthoringParameterEditing() {
   const edits=scenePlacementTools.edits;
   edits.register('@flame-source-enabled',{
-    read:()=>({enabled:sceneObjects.find(entry=>entry.id===FLAME_EMITTER_ID)?.emissionEnabled!==false}),
+    read:()=>({enabled:primaryAuthoredFlameSource()?.emissionEnabled!==false}),
     check:state=>{if(typeof state.enabled!=='boolean')throw Error('Flame source enabled must be boolean');return {enabled:state.enabled};},
     write:({enabled})=>{
-      const entry=sceneObjects.find(row=>row.id===FLAME_EMITTER_ID);if(!entry)throw Error('Flame source is not registered');
+      const entry=primaryAuthoredFlameSource();if(!entry)throw Error('Flame source is not registered');
       entry.emissionEnabled=enabled;entry.object.userData.kaminosSceneObject.emissionEnabled=enabled;
       writeAuthoredFlameEmitterPose(flameEmitterPose);window._kaminosDirty?.();
     },
