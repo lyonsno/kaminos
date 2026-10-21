@@ -1,3 +1,5 @@
+import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_WGSL,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
+export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
@@ -2869,7 +2871,15 @@ export function heatReleaseUniformValues(config) {
 // has to infer it from the controls at the time.
 // The shader subtracts one combined target: heat release plus the immersed
 // source supply, whichever are admitted (review IS-04). Both are named here.
-export function pressureResidualMeasurement(heatRelease, immersedSource) {
+export function pressureResidualMeasurement(heatRelease, immersedSource, collection=null) {
+  if(collection?.active){
+    const result=pressureResidualMeasurement(heatRelease,null),sources=collection.sources??[];
+    const admitted=sources.filter(source=>source.config.effective.admitted);
+    const sum=key=>admitted.reduce((total,source)=>total+(source.config.effective[key]??0),0);
+    result.immersedSource={admitted:admitted.length>0,count:sources.length,fluxRequested:sum('fluxRequested'),fluxEffectivePredicted:sum('fluxEffectivePredicted'),capPerCell:null,law:'sum of independently capped local source supply',predictionAuthority:sources.map(source=>({id:source.id,authority:source.config.effective.supplyPredictionAuthority}))};
+    if(admitted.length){result.targets.push('immersed-source');result.compact='divergence-minus-expansion-target';result.statement+=`; immersed collection adds the sum of ${admitted.length} independently capped source targets; predicted supply ${result.immersedSource.fluxEffectivePredicted} cells³/step (mask authority reported per source)`;}
+    return result;
+  }
   const e = heatRelease?.effective;
   const admitted = e?.admitted === true;
   const expansion = admitted && Number.isFinite(e.expansion) ? e.expansion : 0;
@@ -5251,6 +5261,8 @@ fn immersedPatternedWeight(cellCenter: vec3<f32>, slabWeight: f32) -> f32 {
   return slabWeight * coverage * max(0.0, 1.0 + u.immersed_source_e.w * perturbation);
 }
 
+${IMMERSED_COLLECTION_WGSL}
+
 fn blockedSceneFaceFluxAtCell(c: vec3<i32>) -> vec2<f32> {
   if (!sceneSolidEnabled()) { return vec2<f32>(0.0); }
   let solidHere = sceneSolidAt(c);
@@ -6728,9 +6740,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   let prev = fluidSrc[base];
   // Immersed source: one weight, one capped target; momentum and scalar entry
   // below derive from the same two numbers (report section 31).
-  let immersedSlabWeight = immersedSourceWeight(cell);
-  let immersedWeight = immersedPatternedWeight(cell, immersedSlabWeight);
-  let immersedTarget = min(u.immersed_source_d.y, immersedWeight * u.immersed_source_d.z);
+  let immersedSourcesAtCell = immersedContributions(cell);
+  let immersedSlabWeight = immersedSourcesAtCell.slab;
+  let immersedWeight = immersedSourcesAtCell.weight;
+  let immersedTarget = immersedSourcesAtCell.supply;
   let requestedSpeed = u.fire_smoke_curl_speed.w;
   let speed = dynamicsSpeed();
   let timeStep = timeStepScale();
@@ -6895,8 +6908,8 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     // The created volume brings the authored mixture, exactly as the floor flux does.
     let immersedEntry = clamp(immersedTarget * dynamicsBacktraceScale(), 0.0, 1.0);
     smoke = mix(smoke, 0.0, immersedEntry);
-    heat = mix(heat, u.immersed_source_c.w, immersedEntry);
-    fuel = mix(fuel, u.immersed_source_c.z, immersedEntry);
+    heat = mix(heat, immersedSourcesAtCell.mixture.y, immersedEntry);
+    fuel = mix(fuel, immersedSourcesAtCell.mixture.x, immersedEntry);
     oxidizer = mix(oxidizer, u.reactant_combustion_c.w, immersedEntry);
     materialDetail = mix(materialDetail, 0.0, immersedEntry);
     flame = mix(flame, 0.0, immersedEntry);
@@ -7171,7 +7184,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   // value under the staggered reading. Under face forces the centred
   // increment lands on top of the relaxed value in the pass.
   if (immersedWeight > 0.0) {
-    vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));
+    vel = mix(vel, immersedSourcesAtCell.velocity, stepBlend(immersedSourcesAtCell.relaxation));
   }
   // Reactant law: the single local burn. Fuel, oxidizer and heat change here;
   // under the candidate smokeFromHeat is the soot made this step per unit time
@@ -11725,6 +11738,14 @@ export function createKaminosVolumePrototype({
   // Inflow aperture coverage map (one f32 per floor cell), rebuilt with the grid
   // and rewritten when the admitted aperture or pattern changes.
   let inflowCoverageTexture = null;
+  let immersedCollectionTexture = null;
+  let immersedCollectionTextureKey = null;
+  let immersedCollectionRecords = null;
+  let immersedCollectionRevision = 0;
+  let immersedCollectionLegacyId = null;
+  const immersedCollectionCaches = new Map();
+  const immersedCollectionSignals = new Map();
+  let immersedCollectionPrepared = null;
   // Inlet turbulence field (one f32 per floor cell) and the puff signal: seeded,
   // step-locked processes; the field is rebuilt with the grid.
   let inflowPerturbationTexture = null;
@@ -11778,6 +11799,42 @@ export function createKaminosVolumePrototype({
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_DST,
     });
     device.queue.writeTexture({ texture: forceDeltaTexture }, new Float32Array(gridSize * gridHeight * gridSize * planes), { bytesPerRow: gridSize * Float32Array.BYTES_PER_ELEMENT, rowsPerImage: gridHeight }, [gridSize, gridHeight, gridSize * planes]);
+  }
+  function prepareImmersedCollectionTexture(packed=null) {
+    if(!device)return false;
+    const width=packed?.width??Math.max(6,gridSize),height=packed?.height??gridSize+1,layers=packed?.layers??1;
+    if(layers>device.limits.maxTextureArrayLayers)throw Error(`immersed-source-collection-capacity:requested=${layers-1}:supported=${device.limits.maxTextureArrayLayers-1}`);
+    const key=[width,height,layers].join('x'),changed=key!==immersedCollectionTextureKey;
+    if(changed){
+      const old=immersedCollectionTexture;
+      immersedCollectionTexture=device.createTexture({label:'authored immersed source collection',size:[width,height,layers],format:'rgba32float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST});
+      immersedCollectionTextureKey=key;
+      if(old)device.queue.onSubmittedWorkDone().then(()=>old.destroy());
+    }
+    device.queue.writeTexture({texture:immersedCollectionTexture},packed?.data??new Float32Array(width*height*layers*4),{bytesPerRow:width*16,rowsPerImage:height},[width,height,layers]);
+    return changed;
+  }
+  function sourcesAdmittedInCollection(){
+    // Admission names the source regime, not current supply. Removing or
+    // disabling every emitter must leave existing reactants evolving.
+    const pressure=resolvePressureSolverConfig(controlsSnapshot).effective;
+    return pressure.solver===PRESSURE_SOLVER_CONVERGED&&pressure.dispatch===PRESSURE_SOLVER_CONVERGED&&pressure.openTop;
+  }
+  function compileCurrentImmersedCollection(solidCells=null) {
+    return compileImmersedSourceCollection(immersedCollectionRecords,{controls:controlsSnapshot,grid:gridSize,gridHeight,solidCells,weightCaches:immersedCollectionCaches,
+      signalsFor:(id,local)=>{
+        let signal=immersedCollectionSignals.get(id);
+        if(!signal||signal.grid!==gridSize){
+          const legacy=id===immersedCollectionLegacyId;
+          signal={grid:gridSize,puff:legacy?inletPuffProcess:new StochasticSignalSet(2,1),field:legacy?inletPerturbationField:new InletPerturbationField({grid:gridSize,seed:1}),birthStep:legacy?0:state.simStepCount};
+          immersedCollectionSignals.set(id,signal);
+        }
+        const requested=resolveInletDynamicsConfig(local).requested,step=Math.max(0,state.simStepCount-signal.birthStep);
+        const puff=requested.puff>0?signal.puff.sampleAt(step,inletDynamicsTauSteps(local,requested.puffPeriod)):[0];
+        let turbulence=null;
+        if(requested.turbulence>0&&signal.field){signal.field.sampleAt({step,tauSteps:inletDynamicsTauSteps(local,INLET_TURBULENCE_CORRELATION_SECONDS),scaleCells:requested.turbulenceScaleCells});turbulence={rms:signal.field.rms,field:signal.field.cells};}
+        const signals={puff,turbulence};return {...signals,puffFactor:resolveInletDynamicsConfig(local,signals).effective.puffFactor};
+      }});
   }
   const inletPuffProcess = new StochasticSignalSet(2, 1);
   const windGustProcess = new WindGustProcess(1);
@@ -12438,6 +12495,7 @@ export function createKaminosVolumePrototype({
     for (const texture of waveletTextures) texture.destroy();
     waveletTextures = [];
     waveletSidecarFull = false;
+    immersedCollectionTexture?.destroy();immersedCollectionTexture=null;immersedCollectionTextureKey=null;immersedCollectionSignals.clear();
     inflowCoverageTexture?.destroy();
     inflowCoverageTexture = null;
     inflowCoverageSignature = '';
@@ -12594,6 +12652,7 @@ export function createKaminosVolumePrototype({
           { binding: 28, resource: joinedLowerFaceView() },
           { binding: 29, resource: joinedGhostView(0) },
           { binding: 30, resource: joinedGhostView(1) },
+        { binding: 33, resource: immersedCollectionTexture.createView({dimension:'2d-array'}) },
         { binding: 17, resource: inflowCoverageTexture.createView() },
         { binding: 18, resource: inflowPerturbationTexture.createView() },
         { binding: 19, resource: burnRateTexture.createView({ dimension: '3d' }) },
@@ -12745,6 +12804,14 @@ export function createKaminosVolumePrototype({
   // The immersed source's back wall for the current step, from the receipt the
   // uniform pack just resolved (empty when the law is off or the wall toggled off).
   function immersedBackWallForState() {
+    if(immersedCollectionRecords!==null){
+      const sources=immersedCollectionPrepared?.sources??[];
+      const keys=sources.filter(s=>s.config.effective.admitted&&s.config.effective.backWall?.requested).map(s=>s.config.effective);
+      const key=JSON.stringify([gridSize,gridHeight,keys.map(e=>[e.centreCells,e.direction,e.radiusCells,e.thickness,e.backWall.thicknessCells])]);
+      if(immersedWallCache?.key===key)return immersedWallCache;
+      const unique=new Map();for(const e of keys)for(const c of immersedBackWallCells(e,{grid:gridSize,gridHeight}))unique.set(c.x+gridSize*(c.y+gridHeight*c.z),c);
+      const cells=[...unique.values()];return immersedWallCache={key,cells,maskKey:JSON.stringify([gridSize,gridHeight,[...unique.keys()].sort((a,b)=>a-b)])};
+    }
     const e = state.immersedSource?.effective;
     if (!e?.admitted || !e.backWall?.requested) return { cells: [], key: 'none', maskKey: 'none' };
     // Exact physical inputs: rounding can hide a cell-boundary crossing.
@@ -13737,6 +13804,7 @@ export function createKaminosVolumePrototype({
     });
     ensureReactantSidecar(Boolean(state.reactantCombustion?.effective?.admitted));
     ensureWaveletCoordinates(Boolean(state.waveletTurbulence?.effective?.admitted));
+    prepareImmersedCollectionTexture();
     inflowCoverageTexture = device.createTexture({
       label: `kaminos inflow aperture coverage map ${gridSize}x${gridSize}`,
       size: [gridSize, gridSize, 1],
@@ -14726,6 +14794,7 @@ export function createKaminosVolumePrototype({
         { binding: 24, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: 'write-only', format: 'rg32float', viewDimension: '3d' } },
         { binding: 25, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float', viewDimension: '2d' } },
         { binding: 26, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'storage' } },
+        { binding: 33, visibility: GPUShaderStage.COMPUTE, texture: {sampleType:'unfilterable-float',viewDimension:'2d-array'} },
       ],
     });
     state.gpuInitStage = 'fluid-layout-created';
@@ -16219,8 +16288,16 @@ export function createKaminosVolumePrototype({
     // refresh in encodeSim is a no-op by key after this.
     const immersedPuffFactor = inflowBoundaryConfig.requested?.inletDynamics?.puffFactor ?? resolveInletDynamicsConfig(controlsSnapshot, inletSignals).effective.puffFactor;
     state.immersedSource = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, weightCache: immersedSourceWeightCache });
+    if(immersedCollectionRecords!==null)immersedCollectionPrepared=compileCurrentImmersedCollection();
     refreshSceneCollision();
     const immersedSourceConfig = resolveImmersedSourceConfig(controlsSnapshot, { grid: gridSize, gridHeight, puffFactor: immersedPuffFactor, inletSignals, solidCells: sceneSolidCellsCpu, weightCache: immersedSourceWeightCache });
+    if(immersedCollectionRecords!==null){
+      immersedCollectionPrepared=compileCurrentImmersedCollection(sceneSolidCellsCpu);
+      if(prepareImmersedCollectionTexture(immersedCollectionPrepared))rebuildFluidBindGroups();
+      const sources=immersedCollectionPrepared.sources;
+      if(sceneSolidGpu)for(const source of sources){source.config.effective.supplyPredictionAuthority='unmasked-projection-gpu-solid-field';source.config.effective.masked={cells:null,weight:null,weightShare:null,authority:'gpu-resident-unread'};}
+      Object.assign(state.immersedSources,{preparedRevision:immersedCollectionRevision,preparedStep:state.simStepCount,sources:structuredClone(sources),overlapLaw:'sum-local-capped-supply; bounded-supply-weighted-mixture; union-relaxation-weighted-momentum',aggregateSupplyCap:null,mixtureEntryCap:1});
+    }
     uniforms.set(immersedSourceUniformValues(immersedSourceConfig), IMMERSED_SOURCE_UNIFORM_OFFSET);
     uniforms.set(gridShapeUniformValues({ grid: gridSize, gridHeight, irradianceGrid: irradianceGridSize, irradianceGridHeight: gridHeightForSize(irradianceGridSize), sceneSourceGrid: EMISSIVE_LIGHT_GRID, sceneSourceGridHeight: gridHeightForSize(EMISSIVE_LIGHT_GRID) }), GRID_SHAPE_UNIFORM_OFFSET);
     state.immersedSource = immersedSourceConfig;
@@ -16234,7 +16311,7 @@ export function createKaminosVolumePrototype({
       grid: gridSize,
       transportCommonCharacteristic: resolveTransportConfig(controlsSnapshot).effective.commonCharacteristic,
       dt: resolveTimeStepConfig(controlsSnapshot).effective.dtScale,
-      sourceAdmitted: residentGasAdmitted || (String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true),
+      sourceAdmitted: residentGasAdmitted || (immersedCollectionRecords!==null?sourcesAdmittedInCollection():String(controlsSnapshot.emitterSourceLaw ?? 'legacy-volume') === 'immersed-source' ? immersedSourceConfig.effective.admitted === true : inflowBoundaryConfig.effective.admitted === true),
     });
     uniforms.set(reactantCombustionUniformValues(reactantCombustionConfig), REACTANT_COMBUSTION_UNIFORM_OFFSET);
     // Borrowed lane (reactant_combustion_d.z, otherwise unused): the quench field
@@ -16954,6 +17031,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeSim(encoder, options = {}) {
+    if(state.immersedSources?.active){state.immersedSources.consumedRevision=state.immersedSources.preparedRevision;state.immersedSources.consumedStep=state.simStepCount;}
     encodeFollowingDomain(encoder);
     // Transport ghosts must be this step's snapshots (Sexy stamps the
     // generation with the step they were written for).
@@ -17136,7 +17214,7 @@ export function createKaminosVolumePrototype({
     pressureResidualCopyCells = gridSize * gridHeight * gridSize;
     pressureResidualCopyFluidCells = pressureResidualCopyCells - (state.sceneCollision?.solidCellCount ?? 0);
     pressureResidualCopySolver = state.pressureSolver?.effective ? { ...state.pressureSolver.effective } : null;
-    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease, state.immersedSource);
+    pressureResidualCopyMeasurement = pressureResidualMeasurement(state.heatRelease, state.immersedSource, state.immersedSources);
   }
 
   async function resolvePressureResidualProbe() {
@@ -27381,6 +27459,17 @@ export function createKaminosVolumePrototype({
       }
       if (previousMode !== state.coreEmitterSourceMode) emitStatus({ phase: 'core-emitter-source' });
       return { ...source.coreEmitterSourceReceipt };
+    },
+    setImmersedSources(records) {
+      const checked=checkedImmersedSources(records);
+      const layers=checked.length+1;
+      if(device&&layers>device.limits.maxTextureArrayLayers)throw Error(`immersed-source-collection-capacity:requested=${checked.length}:supported=${device.limits.maxTextureArrayLayers-1}`);
+      if(JSON.stringify(checked)!==JSON.stringify(immersedCollectionRecords)){
+        immersedCollectionRecords=checked;immersedCollectionRevision++;
+        if(immersedCollectionLegacyId===null&&checked.length)immersedCollectionLegacyId=checked.some(s=>s.id==='flame-emitter')?'flame-emitter':checked[0].id;
+      }
+      state.immersedSources={...state.immersedSources,identity:IMMERSED_COLLECTION_IDENTITY,active:true,revision:immersedCollectionRevision,count:checked.length,requested:structuredClone(checked)};
+      return structuredClone(state.immersedSources);
     },
     setAnalyticEmitterDescriptor(descriptor = null) {
       const normalized = normalizeAnalyticEmitterDescriptor(descriptor);

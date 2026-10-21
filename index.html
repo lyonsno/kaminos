@@ -5315,9 +5315,10 @@ function requirePluralFlameSourceRuntime(){
 function syncAuthoredFlameSources(){
   const records=authoredFlameSourceRecords();
   authoredFlamePresent=records.length>0;
-  if(records.length>1)requirePluralFlameSourceRuntime();
+  if(records.length>1){requirePluralFlameSourceRuntime();if(records.some(record=>record.emission.settings['volume-emitter-source-law']?.value!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');flameDomainFollowSource=false;}
   if(typeof volumePrototype?.setImmersedSources==='function'){
-    const inputs=flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale});
+    const immersed=records.every(record=>(record.emission.settings['volume-emitter-source-law']?.rawValue??record.emission.settings['volume-emitter-source-law']?.value??readVolumeControls().emitterSourceLaw)==='immersed-source');
+    const inputs=immersed?flameSourceInputs(records,{controls:readVolumeControls(),translation:flameDomainTranslation,scale:flameDomainScale}):[];
     volumePrototype.setImmersedSources(inputs);
   }
   window._kaminosDirty?.();
@@ -5344,6 +5345,7 @@ function ensureFlameSourceDataTarget(id){
   return target;
 }
 function editAuthoredFlameSource(id,patch){
+  if(authoredFlameSourceRecords().length>1&&(patch['volume-emitter-source-law']!==undefined&&patch['volume-emitter-source-law']!=='immersed-source'||patch['emitter-assay-family']==='cluster'))throw Error('Multiple scene sources require the immersed source law');
   const target=ensureFlameSourceDataTarget(id),record=authoredFlameSourceRecords().find(record=>record.id===id);
   const value={emission:structuredClone(record.emission),enabled:record.emissionEnabled};
   for(const [key,raw] of Object.entries(patch)){
@@ -20219,6 +20221,7 @@ async function initKaminosVolumeRoute() {
   function applyVolumeEmitterFamilyRuntimeToCockpit(controlsSnapshot, pose = flameEmitterPose, { sourceEnabled = controlsSnapshot.emitterSourceLaw==='immersed-source'?flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype)):!flameEmitterInjectionSuspended } = {}) {
     if(controlsSnapshot.emitterSourceLaw==='immersed-source')sourceEnabled=sourceEnabled&&flamePoseInDomain(pose,flameDomainTranslation,flameDomainScale,effectiveFlameDomainControls(controlsSnapshot,volumePrototype));
     const family = document.getElementById('emitter-assay-family').value;
+    if(sceneObjects.filter(entry=>entry.type===FLAME_EMITTER_TYPE).length>1&&(family==='cluster'||controlsSnapshot.emitterSourceLaw!=='immersed-source'))throw Error('Multiple scene sources require the immersed source law');
     if (routeExternalEmitters && family !== 'cluster') {
       throw new Error(`volume emitter source conflict: volume_external_emitters=${routeExternalEmitters} cannot compose with volume_emitter_family=${family}`);
     }
@@ -21914,7 +21917,7 @@ function createFlameQuickFields() {
       modified:!volumeSettingsPresetControlValuesEqual(readVolumeSettingsValues(),flamePresetForLocalControls(activeVolumeSettingsPresetReceipt.preset,flamePoseToDomain(flameEmitterPose,flameDomainTranslation,flameDomainScale).scale[0]))} : null,
     readSourceControl:id=>fireControlOwner(id)==='source'&&selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE?authoredFlameSourceRecords().find(record=>record.id===activeSceneObjectId)?.emission.settings[id]:null,
     writeSourceControl:(id,value)=>{if(fireControlOwner(id)!=='source'||selectedSceneObjectEntry()?.type!==FLAME_EMITTER_TYPE)return false;editAuthoredFlameSource(activeSceneObjectId,{[id]:value});return true;},
-    readSourceRuntime:()=>{const state=volumePrototype?.debugState?.(),sources=state?.immersedSources;return Array.isArray(sources)?sources.find(source=>source.id===activeSceneObjectId):primaryAuthoredFlameSource()?.id===activeSceneObjectId?state?.immersedSource:null;},
+    readSourceRuntime:()=>{const state=volumePrototype?.debugState?.();if(state?.immersedSources?.active)return state.immersedSources.sources?.find(source=>source.id===activeSceneObjectId)?.config??null;return primaryAuthoredFlameSource()?.id===activeSceneObjectId?state?.immersedSource:null;},
     readAppearanceRuntime:()=>volumePrototype?.debugState?.().physicsAppearance,
     writeValue:(control,value)=>{if(control.type==='range')applyVolumeRangeSavedValue(control,Number(value));else control.value=String(value);},
     readControlBounds:id=>id==='volume-immersed-radius'?immersedRadiusBounds(flamePoseToDomain(selectedSceneObjectEntry()?.type===FLAME_EMITTER_TYPE?sceneObjectTransformState(selectedSceneObjectEntry().object):flameEmitterPose,flameDomainTranslation,flameDomainScale)):null,

@@ -139,7 +139,7 @@ test('the kernel samples the coverage map and the lattice at the slab-local cell
   assert.match(fn, /textureLoad\(inflowCoverage, slabCell, 0\)\.x/);
   assert.match(fn, /textureLoad\(inflowPerturbation, slabCell, 0\)\.x/);
   assert.match(fn, /max\(0\.0, 1\.0 \+ u\.immersed_source_e\.w \* perturbation\)/);
-  assert.match(main, /let immersedSlabWeight = immersedSourceWeight\(cell\);\n\s+let immersedWeight = immersedPatternedWeight\(cell, immersedSlabWeight\);/);
+  assert.match(main, /let immersedSourcesAtCell = immersedContributions\(cell\);\n\s+let immersedSlabWeight = immersedSourcesAtCell\.slab;\n\s+let immersedWeight = immersedSourcesAtCell\.weight;/);
   assert.match(main, /let wallFade = select\(max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\), 1\.0, joinedBoundary\(\)\);/, 'the whole disc stays exempt, gaps between jets included');
 });
 

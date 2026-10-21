@@ -82,13 +82,15 @@ test('the shader derives target, momentum and scalar entry from one weight and o
   assert.match(weight, /\(1\.0 - smoothstep\(radius - 0\.5, radius \+ 0\.5, radial\)\)/);
   assert.doesNotMatch(weight, /smoothstep\([a-zA-Z]+ \+ 0\.5, [a-zA-Z]+ - 0\.5/, 'no reversed-edge smoothstep');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
-  assert.match(main, /let immersedSlabWeight = immersedSourceWeight\(cell\);\n\s+let immersedWeight = immersedPatternedWeight\(cell, immersedSlabWeight\);/, 'one slab indicator, one patterned weight (slab inlet dynamics)');
-  assert.match(main, /let immersedTarget = min\(u\.immersed_source_d\.y, immersedWeight \* u\.immersed_source_d\.z\);/, 'target per cell = min(cap, w × Q/Σw)');
+  assert.match(main, /let immersedSourcesAtCell = immersedContributions\(cell\);/);
+  const collection=readFileSync(new URL('../volume-immersed-source-collection.mjs',import.meta.url),'utf8');
+  assert.match(collection,/let slab=immersedSourceWeight\(cell\);let w=immersedPatternedWeight\(cell,slab\);/);
+  assert.match(main,/let immersedTarget = immersedSourcesAtCell\.supply;/);assert.match(collection,/min\(u\.immersed_source_d.y,w\*u\.immersed_source_d.z\)/);
   assert.match(main, /textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* fuelBurned \/ max\(timeStep, 1e-6\) \+ immersedTarget, 0\.0, 0\.0, 0\.0\)\);/, 'stored beside heat release');
   assert.match(main, /let immersedEntry = clamp\(immersedTarget \* dynamicsBacktraceScale\(\), 0\.0, 1\.0\);/, 'scalar entry mirrors the floor law');
-  assert.match(main, /heat = mix\(heat, u\.immersed_source_c\.w, immersedEntry\);/);
-  assert.match(main, /fuel = mix\(fuel, u\.immersed_source_c\.z, immersedEntry\);/);
-  assert.match(main, /vel = mix\(vel, u\.immersed_source_c\.y \* immersedDirection\(\), stepBlend\(min\(1\.0, immersedWeight \* u\.immersed_source_d\.x\)\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
+  assert.match(main, /heat = mix\(heat, immersedSourcesAtCell\.mixture\.y, immersedEntry\);/);
+  assert.match(main, /fuel = mix\(fuel, immersedSourcesAtCell\.mixture\.x, immersedEntry\);/);
+  assert.match(main, /vel = mix\(vel, immersedSourcesAtCell\.velocity, stepBlend\(immersedSourcesAtCell\.relaxation\)\);/, 'momentum relaxes toward v·n through stepBlend (follows the step; velocity-dependent, so it stays local under the staggered reading)');
   assert.doesNotMatch(main, /centredForce = centredForce \+ [^\n]*immersed/, 'not averaged onto faces');
 });
 
@@ -179,7 +181,7 @@ test('IS-01: the momentum relaxation carries the time step once, after the fold'
   assert.ok(Math.abs(core.immersedMomentumModel({ transported: 0.04, target: 0.1, weight: 1, gain: 0.5, dt: 1 }) - 0.07) < 1e-9, 'partial gain relaxes halfway');
   const main = source.slice(source.indexOf('\nfn cs(@builtin'), source.indexOf('\nfn ', source.indexOf('\nfn cs(@builtin') + 10));
   const foldAt = main.indexOf('let forceIncrement = (vel - velTransported) * timeStep;');
-  const relaxAt = main.indexOf('vel = mix(vel, u.immersed_source_c.y * immersedDirection(), stepBlend(min(1.0, immersedWeight * u.immersed_source_d.x)));');
+  const relaxAt = main.indexOf('vel = mix(vel, immersedSourcesAtCell.velocity, stepBlend(immersedSourcesAtCell.relaxation));');
   // The reactant candidate opens the top through materialWallFade (equal to wallFade under the authored law).
   const spongeAt = Math.max(main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, wallFade));'), main.indexOf('vel = vel * stepRate(mix(0.55, 1.0, materialWallFade));'));
   assert.ok(foldAt > 0 && relaxAt > 0 && spongeAt > 0);
@@ -231,7 +233,7 @@ test('IS-04: the residual measurement names the combined target (heat release + 
   assert.deepEqual(core.pressureResidualMeasurement(hrOff, imOn).targets, ['immersed-source']);
   assert.equal(core.pressureResidualMeasurement(hrOff, imOn).compact, 'divergence-minus-expansion-target');
   assert.deepEqual(core.pressureResidualMeasurement(hrOn, imOff).targets, ['heat-release']);
-  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease, state\.immersedSource\);/, 'both contexts snapshotted at copy time');
+  assert.match(source, /pressureResidualCopyMeasurement = pressureResidualMeasurement\(state\.heatRelease, state\.immersedSource, state\.immersedSources\);/, 'both contexts snapshotted at copy time');
 });
 
 test('IS-05: the capture compares every immersed control an arm sets against the source receipt', () => {
@@ -276,7 +278,7 @@ test('IS-03-C: the source uniforms are packed against the mask the same step dis
   const shape = { grid: 64, gridHeight: 128 };
   const pose = { ...base, immersedSpeed: 0.01, immersedCapFraction: 1, immersedBackWall: 1 };
   const makeContext = () => {
-    const ctx = { device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
+    const ctx = { immersedCollectionRecords:null, device: {}, getSceneCollision: () => ({ requested: false }), gridSize: 64, gridHeight: 128, state: {}, controlsSnapshot: pose, sceneSolidRevisionKey: null, sceneSolidCellsCpu: null, sceneSolidGeometryCache: null, sceneSolidSupportCache: null, immersedWallCache: null, immersedBackWallCells: core.immersedBackWallCells, composeSolidField: core.composeSolidField, resolvePressureSolverConfig: core.resolvePressureSolverConfig, resolveTransportConfig: core.resolveTransportConfig, rebuildSceneSolidBindingViews() {} };
     ctx.installSceneSolidTexture = (field = null) => { ctx.sceneSolidCellsCpu = field?.cells ?? null; };
     ctx.sceneSolidGpu=null;vm.createContext(ctx);
     const from = source.indexOf('  function immersedBackWallForState()');
