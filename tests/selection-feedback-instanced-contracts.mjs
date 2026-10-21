@@ -32,3 +32,31 @@ test('when a chunk switches level, the outline switches with it',()=>{
   lod.levels.forEach((l,i)=>{l.object.visible=i===1;});feedback.update([{id:'s',object}],[]);
   assert.deepEqual(shown(),[lod.levels[1].object.instanceMatrix],'the newly drawn level is outlined, the hidden one is not');
 });
+
+test('after the instances change, the outline is culled with the source\'s current bounds, not stale ones',()=>{
+  const camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.z=5;camera.updateMatrixWorld();
+  const frustum=new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  const make=()=>{const source=new THREE.InstancedMesh(new THREE.BoxGeometry(.2,.2,.2),new THREE.MeshBasicMaterial(),2);
+    source.setMatrixAt(0,new THREE.Matrix4().makeTranslation(100,0,0));source.setMatrixAt(1,new THREE.Matrix4());source.count=1;source.computeBoundingSphere();return source;};
+  for(const change of ['count','matrix']){
+    const feedback=feedbackFor(),source=make();source.updateMatrixWorld(true);
+    feedback.update([{id:'s',object:source}],[]);const [proxy]=feedback.proxies();
+    assert.equal(frustum.intersectsObject(proxy),false,'initially both are off screen');
+    if(change==='count')source.count=2;else{source.instanceMatrix=new THREE.InstancedBufferAttribute(new Float32Array(new THREE.Matrix4().toArray()),16);source.count=1;}
+    source.computeBoundingSphere();feedback.update([{id:'s',object:source}],[]);
+    assert.equal(frustum.intersectsObject(source),true);
+    assert.equal(frustum.intersectsObject(proxy),true,`after a ${change} change the outline is drawn where its source is`);
+  }
+});
+
+test('an automatic LOD change is outlined in the same frame the renderer draws it',()=>{
+  const camera=new THREE.PerspectiveCamera(50,1,.1,100);camera.position.z=20;camera.updateMatrixWorld();
+  const scene=new THREE.Scene(),m=createSelectionMaskProxies(scene,{selected:new THREE.MeshBasicMaterial(),active:new THREE.MeshBasicMaterial(),camera});
+  const object=surfels();object.updateMatrixWorld(true);const lod=object.children.find(c=>c.isLOD);
+  const frame=()=>{m.update([{id:'s',object}],[]);lod.update(camera);};// page order: feedback update, then render (which updates LODs)
+  frame();frame();
+  camera.position.z=1;camera.updateMatrixWorld();frame();
+  const drawn=lod.levels.map(l=>l.object.visible),outlined=lod.levels.map(l=>m.pairs().find(p=>p.source===l.object).proxy.visible);
+  assert.notDeepEqual(drawn,[false,true],'the camera move crossed a level boundary');
+  assert.deepEqual(outlined,drawn);
+});

@@ -11,7 +11,7 @@ export function createSelectionFeedback(camera) {
   let dilation=mask.sample(screenUV).rg;
   for(const offset of [vec2(pixel.x,0),vec2(pixel.x.negate(),0),vec2(0,pixel.y),vec2(0,pixel.y.negate())])dilation=dilation.max(mask.sample(screenUV.add(offset)).rg);
   const edges=dilation.sub(mask.sample(screenUV).rg).clamp(0,1).mul(enabled).mul(opacity);
-  const pairs=[],masks=createSelectionMaskProxies(maskScene,{selected,active,pairs});
+  const pairs=[],masks=createSelectionMaskProxies(maskScene,{selected,active,pairs,camera});
   const update=masks.update;
   return{update,setStyle(style){width.value=style.width;opacity.value=style.opacity;},suspend(value){enabled.value=value?0:1;},output:base=>mix(mix(base,vec4(1,.38,.04,1),edges.x),vec4(1,.72,.22,1),edges.y),state:()=>({meshCount:pairs.length,activeCount:pairs.filter(p=>p.proxy.material===active).length,suspended:enabled.value===0})};
 }
@@ -19,7 +19,9 @@ export function createSelectionFeedback(camera) {
 // The mask scene's proxies: one per drawn mesh of each selected object, sharing its geometry (and, for an
 // instanced mesh such as a TRELLIS surfel chunk, its instance matrices). Proxies exist for hidden parts
 // too (LOD levels), and each frame a proxy shows only while its source and the source's ancestors are visible.
-function createSelectionMaskProxies(maskScene,{selected,active,pairs=[]}){
+// Instanced proxies cull with their source's bounding sphere (shared, so the owner's recompute reaches both),
+// and LODs are settled for the camera first, so the outline matches the level the render is about to draw.
+function createSelectionMaskProxies(maskScene,{selected,active,pairs=[],camera=null}){
   let roots=[];
   const shown=(source,root)=>{for(let o=source;o;o=o.parent){if(!o.visible)return false;if(o===root)return true;}return true;};
   function update(entries,activeIds){
@@ -33,9 +35,11 @@ function createSelectionMaskProxies(maskScene,{selected,active,pairs=[]}){
       });
     }
     for(const root of roots)root.updateWorldMatrix(true,true);
+    if(camera)for(const root of roots)root.traverse(o=>{if(o.isLOD&&o.autoUpdate)o.update(camera);});
     for(const pair of pairs){const {source,proxy}=pair;
       proxy.geometry=source.geometry;proxy.matrix.copy(source.matrixWorld);
-      if(source.isInstancedMesh){proxy.instanceMatrix=source.instanceMatrix;proxy.count=source.count;}
+      if(source.isInstancedMesh){proxy.instanceMatrix=source.instanceMatrix;proxy.count=source.count;
+        if(source.boundingSphere===null)source.computeBoundingSphere();proxy.boundingSphere=source.boundingSphere;}
       proxy.visible=shown(source,pair.root);proxy.material=activeSet.has(pair.id)?active:selected;}
   }
   return {update,pairs:()=>pairs,proxies:()=>pairs.map(p=>p.proxy)};
