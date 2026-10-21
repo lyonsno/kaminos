@@ -2,7 +2,7 @@
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
-import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
+import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDomain,flamePoseInDomain,immersedControlsForFlamePose,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
 export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
@@ -49,6 +49,24 @@ export function checkedFireDomainRecord(record){
  r.transform=pose;return r;
 }
 export function fireDomainFrame(record){const r=checkedFireDomainRecord(record),s=r.transform.scale[0];return {translation:[r.transform.position[0],r.transform.position[1]-s,r.transform.position[2]],scale:s,followSource:r.simulation.followSource};}
+// Source-owned descriptors retain the cockpit schema; only this adapter maps
+// them to solver control names. Pose is authoritative for centre/aim/scale.
+export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0],scale=1}={}){
+ const ids=new Set();
+ return records.map(raw=>{
+  const record=checkedFireSourceRecord(raw);if(ids.has(record.id))throw Error('Duplicate flame source identity');ids.add(record.id);
+  const controls={...shared};
+  for(const [id,descriptor] of Object.entries(record.emission?.settings??{})){
+   const param=descriptor.param??(id==='emitter-assay-family'?'volume_emitter_family':id.replaceAll('-','_'));
+   const key=param.replace(/^volume_/,'').replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase());
+   const value=descriptor.rawValue??descriptor.value;
+   controls[key]=descriptor.type==='checkbox'||typeof descriptor.value==='boolean' ? value===true||value==='true'||value==='1':descriptor.type==='select-one'||typeof descriptor.value==='string'&&!Number.isFinite(Number(value))?String(value):Number(value);
+  }
+  const pose=flamePoseToDomain(record.transform,translation,scale);
+  const inside=flamePoseInDomain(record.transform,translation,scale,shared);
+  return {id:record.id,controls:immersedControlsForFlamePose(controls,pose,inside&&record.emissionEnabled!==false,shared)};
+ });
+}
 export function checkedFireSourceRecord(record){
  if(record?.type!==FLAME_EMITTER_TYPE||record.source!==FLAME_EMITTER_SOURCE||typeof record.id!=='string'||!record.id.trim()||record.id===FIRE_DOMAIN_ID)throw Error('Unsupported flame source identity');
  if(record.emissionEnabled!==undefined&&typeof record.emissionEnabled!=='boolean')throw Error('Flame emission enabled must be a boolean');

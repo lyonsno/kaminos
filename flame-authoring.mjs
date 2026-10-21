@@ -211,7 +211,7 @@ export function authoredFlameShapeOptions(options) {
   return [...options].filter(option=>option.value!=='cluster');
 }
 
-export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readControlBounds = () => null, writeValue = (source,value) => {source.value=String(value);}, onError }) {
+export function createFlameInspector({ document, host, sharedHost = host, listBasins, applyBasin, readSource, readSourceRuntime = () => null, readAppearanceRuntime = () => null, readControlBounds = () => null, readSourceControl = () => null, writeSourceControl = () => false, writeValue = (source,value) => {source.value=String(value);}, onError }) {
   sharedHost.classList.add('flame-control-inspector');host.classList.add('flame-control-inspector');
   const navigation=document.createElement('div');navigation.className='flame-inspector-navigation';
   const search=document.createElement('input');search.type='search';search.placeholder='Find a flame setting';search.setAttribute('aria-label','Find a flame setting');
@@ -287,18 +287,21 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
       function syncField(force=false) {
         const bounds=readControlBounds(id);
-        if(bounds)syncFlameRangeBounds(source,bounds);
+        if(bounds&&!readSourceControl(id))syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
           field[key]=bounds?.[key]===null?'':source[key]?String(flameControlDisplayValue(id,source[key])):'';
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;
-        if(field.type==='checkbox')field.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else field.value=String(flameControlDisplayValue(id,source.value));
+        const descriptor=readSourceControl(id),value=descriptor?(descriptor.rawValue??descriptor.value):source.type==='checkbox'?source.checked:source.value;
+        if(field.type==='checkbox')field.checked=typeof value==='boolean'?value:Number(value)>=.5;else field.value=String(flameControlDisplayValue(id,value));
       }
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
         if(field.type==='number'&&(!field.value.trim()||!field.validity.valid))return;
+        const value=field.type==='checkbox'?(source.type==='checkbox'?field.checked:field.checked?1:0):source.tagName==='SELECT'?field.value:Number(flameControlSourceValue(id,field.value));
+        try{if(writeSourceControl(id,value)){syncVisibility();return;}}catch(error){syncField(true);onError(error);return;}
         if(field.type==='checkbox'){if(source.type==='checkbox')source.checked=field.checked;else source.value=field.checked?'1':'0';}
         else writeValue(source,flameControlSourceValue(id,field.value));
         source.dispatchEvent(new Event(eventName,{bubbles:true}));
@@ -324,7 +327,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
     const query=search.value.trim().toLowerCase(),isSearching=!!query,currentMode=mode();
     const status=flameAppearanceStatus(readAppearanceRuntime());
     appearanceStatus.hidden=status.state==='off';appearanceStatus.dataset.state=status.state;appearanceStatus.textContent=status.text;
-    const law=byId('volume-emitter-source-law').value;
+    const law=readSourceControl('volume-emitter-source-law')?.value??byId('volume-emitter-source-law').value;
     if(isSearching&&!searching)for(const item of sections)item.open=item.section.open;
     for(const item of rows){
       const retired=item.source.closest('[data-volume-ui-retired],[data-volume-retired-control-state]');
@@ -351,7 +354,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
   search.addEventListener('keydown',event=>{if(event.key==='Escape'){search.value='';syncVisibility();}});
   function sync(force=false) {
     aliases.forEach(sync=>sync(force));
-    const immersed=byId('volume-emitter-source-law').value==='immersed-source';
+    const immersed=(readSourceControl('volume-emitter-source-law')?.value??byId('volume-emitter-source-law').value)==='immersed-source';
     syncVisibility();
     runtimeStatus.hidden=!immersed;
     if(immersed) {
