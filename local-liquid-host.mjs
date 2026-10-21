@@ -11,6 +11,18 @@ import { localLiquidPresentationPlan } from './local-liquid-presentation.mjs';
 
 const PIPELINE = 'kaminos/local-liquid-authoring-v0';
 
+// Replacement hosts overlap until their admission succeeds. All owners retain
+// the ordinary scene transform, rather than snapshotting another host's mode.
+const pipelineOutputTransforms=new WeakMap();
+function retainLinearOutput(pipeline){
+ let state=pipelineOutputTransforms.get(pipeline);
+ if(!state){state={original:pipeline.outputColorTransform,owners:0};pipelineOutputTransforms.set(pipeline,state);}
+ state.owners++;pipeline.outputColorTransform=false;pipeline.needsUpdate=true;
+ let released=false;
+ return ()=>{if(released)return;released=true;if(--state.owners===0){pipeline.outputColorTransform=state.original;pipeline.needsUpdate=true;pipelineOutputTransforms.delete(pipeline);}};
+}
+
+
 function supportMesh() {
   const {boundsMin, boundsMax, obstacle} = fingerFluidAnalyticalSupportGeometry();
   // Same 64-cell surface sampling as the retained analytical presentation.
@@ -65,8 +77,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
   const depthMaterial = new THREE.NodeMaterial(); depthMaterial.fragmentNode=vec4(positionView.z.negate(),0,0,1);
   depthMaterial.blending=THREE.NoBlending; depthMaterial.toneMapped=false; depthMaterial.side=THREE.DoubleSide;
   const presentation = new THREE.RenderPipeline(renderer,texture(outputTarget.texture));
-  const originalOutputTransform=pipeline.outputColorTransform;
-  pipeline.outputColorTransform=false; pipeline.needsUpdate=true;
+  const releaseOutputTransform=retainLinearOutput(pipeline);
   const environmentRotation=uniform(new THREE.Matrix3()), environmentIntensity=uniform(1);
   let environmentTarget=null, environmentQuad=null, environmentSource=null, environmentKey=null, environmentGeneration=0;
   let frameCount=0, paused=false, failure=null, lastFrame=null, disposed=false, presentationMode='full', proxyStepEvery=1;
@@ -224,6 +235,6 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
       for(const material of materials)material.dispose();
       for(const target of [colorTarget,depthTarget,outputTarget,environmentTarget])target?.dispose();
       depthMaterial.dispose(); environmentQuad?.material.dispose(); presentation.dispose();
-      pipeline.outputColorTransform=originalOutputTransform; pipeline.needsUpdate=true;
+      releaseOutputTransform();
     }};
 }
