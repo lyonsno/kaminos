@@ -12,6 +12,24 @@ const activeBatches=new WeakSet();
 class RadialDistanceCubeNode extends THREE.CubeTextureNode {
   setupUV(builder,uvNode){return builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem?vec3(uvNode.x.negate(),uvNode.yz):uvNode;}
 }
+function renderShadowObject(renderer,scene,args,coverageMaterials){
+  if(!args[0].isMesh||!args[0].castShadow)return;
+  const material=scene.overrideMaterial,side=material.side,source=args[4];
+  try {
+    material.side=source.side;
+    if(coverageMaterials&&residentLightCoverage(args[0])){
+      let row=coverageMaterials.get(source);
+      if(!row||row.opacity!==source.opacityNode){
+        row?.material.dispose();
+        const replacement=material.clone(),radial=material.fragmentNode;
+        replacement.fragmentNode=THREE.TSL.Fn(()=>{THREE.TSL.If(source.opacityNode.lessThan(source.alphaTest),()=>THREE.TSL.Discard());return radial;})();
+        row={opacity:source.opacityNode,material:replacement};coverageMaterials.set(source,row);
+      }
+      row.material.side=source.side;scene.overrideMaterial=row.material;
+    }
+    renderer.renderObject(...args);
+  } finally {material.side=side;scene.overrideMaterial=material;}
+}
 function prepareShadowScene(scene) {
   scene.updateMatrixWorld(true);
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3(),casters=[];
@@ -50,9 +68,7 @@ export function renderFireShadowBatch({scene,shadows,casterScene=null,RendererUt
       for(const mesh of prepared.casters){culling.push([mesh,mesh.frustumCulled]);mesh.frustumCulled=false;}
       scene.matrixWorldAutoUpdate=false;
       renderer.setRenderObjectFunction((...args)=>{
-        if(!args[0].isMesh||!args[0].castShadow)return;
-        const material=scene.overrideMaterial,side=material.side;material.side=args[4].side;
-        try{renderer.renderObject(...args);}finally{material.side=side;}
+        renderShadowObject(renderer,scene,args,prepared.coverageMaterials);
       });
     }
     for(const shadow of shadows)shadow.render(prepared);
@@ -79,29 +95,14 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
     // still updates each face camera; only redundant scene walks are omitted.
     if(sharedPreparation)scene.matrixWorldAutoUpdate=false;
     scene.overrideMaterial=material;
+    if(batch)batch.coverageMaterials=coverageMaterials;
     renderer.setClearColor(new THREE.Color(far,far,far),1);
     if(!batch)renderer.setRenderObjectFunction((...args)=>{
-      if(!args[0].isMesh||!args[0].castShadow) return;
-      const side=material.side;
-      material.side=args[4].side;
-      const prior=scene.overrideMaterial,source=args[4];
-      try {
-        if(coverageMaterials&&residentLightCoverage(args[0])){
-          let row=coverageMaterials.get(source);
-          if(!row||row.opacity!==source.opacityNode){
-            row?.material.dispose();
-            const replacement=material.clone(),radial=material.fragmentNode;
-            replacement.fragmentNode=THREE.TSL.Fn(()=>{THREE.TSL.If(source.opacityNode.lessThan(source.alphaTest),()=>THREE.TSL.Discard());return radial;})();
-            row={opacity:source.opacityNode,material:replacement};coverageMaterials.set(source,row);
-          }
-          row.material.side=source.side;scene.overrideMaterial=row.material;
-        }
-        renderer.renderObject(...args);
-      }
-      finally {material.side=side;scene.overrideMaterial=prior;}
+      renderShadowObject(renderer,scene,args,coverageMaterials);
     });
     cubeCamera.update(renderer,scene);
   } finally {
+    if(batch)delete batch.coverageMaterials;
     scene.matrixWorldAutoUpdate=autoUpdate;
     for(const [object,frustumCulled] of culling) object.frustumCulled=frustumCulled;
     if(!batch)RendererUtils.restoreRendererAndSceneState(renderer,scene,state);
