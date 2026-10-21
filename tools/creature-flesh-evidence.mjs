@@ -1,8 +1,16 @@
-export function admitContactState(state,{steps=null,caseSha256,preparedSha256,presented=false}={}){
+export function admitContactState(state,{steps=null,caseSha256,preparedSha256,presented=false,mode=null,physical=true}={}){
  if(!state||state.error||state.deformer?.backend!=='webgpu-dense-dq'||state.deformer?.physicalBackend!=='cpu-tetrahedral-local-energy'||state.deformer?.allInfluences!==true||!Number.isSafeInteger(state.deformer.dispatches)||state.deformer.dispatches<1)throw Error('Missing actual GPU/physical owner or fallback backend');
- if(!Number.isSafeInteger(state.steps)||state.steps<0||!Number.isSafeInteger(state.volume?.steps)||state.volume.steps!==state.steps||(steps!==null&&state.steps!==steps))throw Error('Missing or stale physical steps');
+ if(!Number.isSafeInteger(state.steps)||state.steps<0||!Number.isSafeInteger(state.volume?.steps)||state.volume.steps!==(physical?state.steps:0)||(steps!==null&&state.steps!==steps))throw Error('Missing or stale physical steps');
  if(!Number.isSafeInteger(state.body?.vertices)||state.body.vertices<1||!Number.isSafeInteger(state.body?.triangles)||state.body.triangles<1||!(Number.isFinite(state.volume.minJ)&&state.volume.minJ>0)||!Number.isFinite(state.volume.volumeRatio))throw Error('Partial or invalid physical/skin output');
  if(caseSha256&&state.source?.caseSha256!==caseSha256||preparedSha256&&state.preparedSha256!==preparedSha256)throw Error('Wrong source case or physical preparation');
  if(presented&&state.deformer.pending!==false)throw Error('Physical step has no matching presented skin');
+ if(!physical&&(state.physical!==false||state.volume.maxDisplacement!==0))throw Error('Physics-off baseline contains physical displacement');
+ if(mode){
+  if(!['held','motion'].includes(mode)||state.motion!==(mode==='motion'))throw Error('Requested motion mode is not effective');
+  const {fps,frames}=state.clip??{},dt=state.clock?.timeStep;
+  if(!Number.isFinite(fps)||fps<=0||!Number.isSafeInteger(frames)||frames<2||!Number.isFinite(dt)||dt<=0)throw Error('Missing retained clip timing');
+  const phase=state.steps*dt*fps,expected=mode==='motion'?Math.min(frames-1,Math.floor(phase+4*Number.EPSILON*Math.max(1,phase))):0;
+  if(state.frame!==expected)throw Error(`Retained ${mode} frame mismatch: ${state.frame} != ${expected}`);
+ }
  return true;
 }

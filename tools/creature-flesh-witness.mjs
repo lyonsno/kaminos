@@ -3,12 +3,20 @@ import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {admitContactState} from './creature-flesh-evidence.mjs';
 const options=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,all)=>i%2?a:[...a,[v.replace(/^--/,''),all[i+1]]],[]));
-const out=path.resolve(options.out??'scratch/contact-witness');fs.mkdirSync(out,{recursive:true});
+const out=path.resolve(options.out??'scratch/contact-witness');
+if(fs.existsSync(out)&&(!fs.statSync(out).isDirectory()||fs.readdirSync(out).length)){
+ const refused={status:'failed',phase:'output-admission',requested:options,failure:{message:'Existing evidence retained; select a new output directory'}};
+ // Do not put even the failure report inside the occupied evidence. A new
+ // sibling keeps the refusal durable without changing any prior byte.
+ try{const leaf=fs.mkdtempSync(out+'-refused-'),file=path.join(leaf,'report.json');fs.writeFileSync(file,JSON.stringify(refused,null,2));console.error(JSON.stringify({...refused,report:file}));}catch(e){console.error(JSON.stringify({...refused,reportError:e.message}));}process.exit(1);
+}
+fs.mkdirSync(out,{recursive:true});
 const report={status:'running',phase:'arguments',requested:options,frames:[],pageErrors:[],consoleErrors:[],browserClosed:false};const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));save();
 let context,page;
 try{
  if(!options.url||!options.browser||!options.playwright||!options.root||!options.revision)throw Error('Explicit URL, independent browser, Playwright, root and revision required');
  if(!['static','probe','held','motion'].includes(options.mode))throw Error('Explicit static, probe, held or motion capture mode required');
+ if(options.physical&&!['on','off'].includes(options.physical))throw Error('Physical comparison must be on or off');
  if(/\/Applications\/Google Chrome\.app\//.test(options.browser)||!fs.existsSync(options.browser))throw Error('An existing independent automation browser is required');
  report.phase='source';save();const runtime=await(await fetch(new URL('/api/runtime-config',options.url))).json();report.runtime=runtime;
  if(runtime.source?.repoRoot!==options.root||runtime.source?.commit!==options.revision||runtime.source?.dirty!==false)throw Error('Wrong, stale or dirty source route');
@@ -24,8 +32,9 @@ try{
  },null,{timeout:0}),failure]);
  if(await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id)!=='creature-flesh/contact')throw Error(await page.locator('.owner-experiment-status').textContent());
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ if(options.physical==='off'){await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('physical',false));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
  report.initial=await page.evaluate(()=>window.kaminosCreatureFlesh.read());
- const admission={caseSha256:options['case-sha'],preparedSha256:options['prepared-sha']};admitContactState(report.initial,{...admission,steps:0,presented:true});
+ const admission={caseSha256:options['case-sha'],preparedSha256:options['prepared-sha'],physical:options.physical!=='off'};admitContactState(report.initial,{...admission,steps:0,presented:true});
  report.phase='initial-capture';await page.screenshot({path:path.join(out,'initial.png')});
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',true));await page.screenshot({path:path.join(out,'volume.png')});await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',false));
  if(options.mode==='probe'){
@@ -36,6 +45,7 @@ try{
   report.phase='contact-stroke';save();
   if(options.mode==='motion')await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('motion',true));
   await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('replay');await window.kaminosWorkbenchExperiments.invoke('play',false);});
+  admission.mode=options.mode;admitContactState(await page.evaluate(()=>window.kaminosCreatureFlesh.read()),{...admission,steps:0});
   fs.mkdirSync(path.join(out,'frames'),{recursive:true});
   for(let i=0;i<180;i++){
    const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);return window.kaminosCreatureFlesh.read({geometry:false});});

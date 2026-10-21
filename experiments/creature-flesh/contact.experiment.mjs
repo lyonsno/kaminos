@@ -57,14 +57,14 @@ export default {
   const raycast=mesh.raycast;mesh.raycast=function(...args){const draw=mesh.geometry;try{mesh.geometry=currentGeometry();return raycast.apply(this,args);}finally{mesh.geometry=draw;}};
   registerExportGeometrySnapshot(mesh,currentGeometry);
   function read({geometry:includeGeometry=false}={}){
-   const result={route:'accepted-all-influences-dq-plus-torso-elastic-reference',source:data.source,preparedSha256:inputs.prepared_sha256,frame,steps:stepCount,physical,motion,playing,clock:{kind:'fixed-step-preview-not-wall-clock-performance',timeStep:dt,seconds:stepCount*dt},volume:volume.read(),deformer:deformer.read(),sphere:{id:probeAsset?.id,position:probe.position.toArray(),radius:probe.scale.x},body:{id:bodyAsset?.id,vertices:data.manifest.vertices,triangles:data.manifest.triangles},groundReference:{height:groundHeight,contactSolver:false},stroke:stroke&&{seconds:stroke.time},error,view:session?.readView()};
+   const result={route:'accepted-all-influences-dq-plus-torso-elastic-reference',source:data.source,preparedSha256:inputs.prepared_sha256,frame,steps:stepCount,clip:{fps:adapter.fps,frames:adapter.frames},physical,motion,playing,clock:{kind:'fixed-step-preview-not-wall-clock-performance',timeStep:dt,seconds:stepCount*dt},volume:volume.read(),deformer:deformer.read(),sphere:{id:probeAsset?.id,position:probe.position.toArray(),radius:probe.scale.x},body:{id:bodyAsset?.id,vertices:data.manifest.vertices,triangles:data.manifest.triangles},groundReference:{height:groundHeight,contactSolver:false},stroke:stroke&&{seconds:stroke.time},error,view:session?.readView()};
    if(includeGeometry){result.physicalPoints=volume.points();result.offsets=volume.offsets();result.vertices=Array.from(currentGeometry().attributes.position.array);}return result;
   }
   function advance(count=1){
    if(!Number.isSafeInteger(count)||count<1)throw Error('Positive whole physical step count required');
    if(disposed)throw Error('Contact experiment disposed');
    for(let i=0;i<count;i++){
-    if(motion)setPose(Math.min(adapter.frames-1,Math.floor((stepCount+1)*dt*adapter.fps)));
+    if(motion){const phase=(stepCount+1)*dt*adapter.fps;setPose(Math.min(adapter.frames-1,Math.floor(phase+4*Number.EPSILON*Math.max(1,phase))));}
     if(stroke){stroke.time=++stroke.steps*dt;const t=stroke.time,amount=t<1?t:t<2?1:t<3?3-t:0;putProbe(localStart.map((v,a)=>v-pressDirection[a]*radius*.75*amount));if(t>=3){stroke=null;playing=false;}}
     placement.updateMatrixWorld(true);probe.updateMatrixWorld(true);const center=root.worldToLocal(probe.getWorldPosition(new THREE.Vector3())).toArray(),scale=probe.getWorldScale(new THREE.Vector3()),bodyScale=root.getWorldScale(new THREE.Vector3());
     if(Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5)throw Error('Contact primitive requires a uniformly scaled sphere');
