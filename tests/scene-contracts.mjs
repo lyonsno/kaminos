@@ -180,12 +180,9 @@ assert.match(index, /window\.kaminosHybridSplatOverlayDebugState/, 'browser witn
 assert.match(index, /function buildRenderHandoffV0\(/, 'Kaminos can build a minimal v0 render handoff for a registered scene object');
 assert.match(index, /window\.kaminosRenderHandoffDebugState/, 'browser witnesses can inspect the effective splat render handoff route');
 assert.match(index, /function createSplatSceneObjectPlaceholder\(/, 'Greenroom splats register through an explicit placeholder scene-object factory');
-assert.match(index, /function parsePlyPointCloud\(/, 'Kaminos has a local PLY point-cloud parser for cheap splat previews');
+assert.match(index, /import \{[^}]*\bparsePlyPointCloud\b[^}]*\} from '\.\/splat-point-cloud\.mjs'/, 'Kaminos parses PLY point clouds for cheap splat previews through splat-point-cloud.mjs; its parsing and crop frames are tested in tests/splat-point-cloud-contracts.mjs');
 assert.match(index, /function createSplatPointCloudObject\(/, 'parseable splats can render as a point-cloud preview instead of only a cube placeholder');
 assert.match(index, /function applySplatPointCloudCropPreview\(/, 'PLY point-cloud splat previews can hide cropped-away points');
-assert.match(index, /function splatCropPointCoordinates\(/, 'PLY point-cloud crop previews evaluate points in axis-flipped crop coordinates');
-assert.match(index, /function chooseSplatCropFrame\(/, 'PLY point-cloud crop previews can preserve legacy pivot-local crop sidecars without changing the canonical crop frame');
-assert.match(index, /pivot-local-minus-centroid/, 'crop preview debug names the legacy pivot-local sidecar frame when it is used');
 assert.match(index, /new THREE\.Points\(/, 'PLY splat previews render through Three Points, not the placeholder mesh only');
 assert.match(index, /new THREE\.PointsMaterial\([\s\S]*vertexColors:\s*true/, 'PLY point-cloud previews use per-point colors when available');
 assert.match(index, /previewKind:\s*'point-cloud'/, 'splat scene metadata records when the visible preview is a point cloud');
