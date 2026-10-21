@@ -5265,6 +5265,9 @@ function ensureAuthoredFlameEmitter(metadata = {}) {
   return entry?.object||null;
 }
 function primaryAuthoredFlameSource(){return sceneObjects.find(record=>record.id===FLAME_EMITTER_ID)??sceneObjects.find(record=>record.type===FLAME_EMITTER_TYPE)??null;}
+function projectAuthoredFlameSourceControls(entry=primaryAuthoredFlameSource()) {
+  for(const [key,descriptor] of Object.entries(entry?.emission?.settings??{}))setVolumeControlValue(key,descriptor.rawValue??descriptor.value);
+}
 
 function authoredFlameSourceRecords(){
   return sceneObjects.filter(record=>record.type===FLAME_EMITTER_TYPE).map(record=>{
@@ -5435,6 +5438,7 @@ function writeAuthoredFlameEmitterPose(value,id=null) {
     return;
   }
   const next = normalizeFlameEmitterPose(value);
+  projectAuthoredFlameSourceControls(entry);
   const wasSuspended = flameEmitterInjectionSuspended;
   if (!applyFlameEmitterPose) throw new Error('The ordinary flame source is not mounted');
   if (window.__kaminosVolumeEmitterReceipt?.effective?.family === 'cluster') {
@@ -25723,7 +25727,7 @@ function checkSelectionMembership(raw){
 }
 function detachSelectionMember(id){
   const source=sceneObjects.find(record=>record.id===id&&record.type===FLAME_EMITTER_TYPE);
-  if(source){scene.remove(source.object);sceneMembershipRetainedObjects.set(id,source);sceneObjects=sceneObjects.filter(record=>record!==source);authoredFlamePresent=sceneObjects.some(record=>record.type===FLAME_EMITTER_TYPE);const primary=primaryAuthoredFlameSource();if(primary)flameEmitterPose=sceneObjectTransformState(primary.object);applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:authoredFlamePresent});syncAuthoredFlameSources();for(const group of sceneGroups)group.objectIds=group.objectIds.filter(member=>member!==id);pruneSceneGroups();return;}
+  if(source){scene.remove(source.object);sceneMembershipRetainedObjects.set(id,source);sceneObjects=sceneObjects.filter(record=>record!==source);authoredFlamePresent=sceneObjects.some(record=>record.type===FLAME_EMITTER_TYPE);const primary=primaryAuthoredFlameSource();if(primary){flameEmitterPose=sceneObjectTransformState(primary.object);projectAuthoredFlameSourceControls(primary);}applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:authoredFlamePresent});syncAuthoredFlameSources();for(const group of sceneGroups)group.objectIds=group.objectIds.filter(member=>member!==id);pruneSceneGroups();return;}
   removeSceneObjectInternal(id,{recordHistory:false,preserveForMembershipHistory:true});
 }
 async function writeSelectionMembershipUnchecked(value){
@@ -26452,6 +26456,7 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   }
   const loadRequestId = sceneLoadRequests.begin();
   const previousSceneFile = currentSceneFile;
+  const previousSceneSaveBlockedByFailedRestore = sceneSaveBlockedByFailedRestore;
   const previousVolumePrimitiveState = getVolumePrimitiveState();
   const previousFlameDomainTranslation = [...flameDomainTranslation],previousFlameDomainScale=flameDomainScale,previousFlameDomainFollowSource=flameDomainFollowSource;
   sceneSaveBlockedByFailedRestore = true;
@@ -26478,10 +26483,11 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
 
   try {
     assertSceneObjectsReloadable(objectRecords);
+    if(objectRecords.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1&&typeof volumePrototype?.setImmersedSources!=='function')throw Error('This flame runtime does not yet support multiple authored sources');
   } catch (e) {
     if (!sceneLoadRequests.isCurrent(loadRequestId)) return;
-    sceneSaveBlockedByFailedRestore = true;
-    currentSceneFile = null;
+    sceneSaveBlockedByFailedRestore = previousSceneSaveBlockedByFailedRestore;
+    currentSceneFile = previousSceneFile;
     setInfo('Scene load failed: ' + e.message);
     return;
   }
@@ -26561,7 +26567,6 @@ async function loadSceneFile(file, { sceneFile = null, mounted = false, emptySet
   setRimLight(data.environment?.rimLight);
 
   const restoredFlame=objectRecords.find(record=>record.id===FLAME_EMITTER_ID)??objectRecords.find(record=>record.type===FLAME_EMITTER_TYPE);
-  if(objectRecords.filter(record=>record.type===FLAME_EMITTER_TYPE).length>1)requirePluralFlameSourceRuntime();
   setFlameDomainTranslation(restorePlan.flameDomainTranslation || [0, 0, 0],restorePlan.flameDomainScale);
   flameDomainFollowSource=restorePlan.flameDomainFollowSource;
   if (objectRecords.length > 0) {

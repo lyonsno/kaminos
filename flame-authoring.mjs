@@ -287,7 +287,8 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         const bounds=readControlBounds(id);
         if(bounds&&!readSourceControl(id))syncFlameRangeBounds(source,bounds);
         for(const key of ['min','max']) {
-          field[key]=bounds?.[key]===null?'':source[key]?String(flameControlDisplayValue(id,source[key])):'';
+          const bound=bounds&&Object.hasOwn(bounds,key)?bounds[key]:source[key];
+          field[key]=bound===null||bound===undefined||bound===''?'':String(flameControlDisplayValue(id,bound));
         }
         field.disabled=source.disabled;
         if(force!==true&&document.activeElement===field)return;

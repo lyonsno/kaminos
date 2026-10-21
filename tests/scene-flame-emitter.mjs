@@ -52,7 +52,7 @@ test('moving flame beyond analytic support keeps the authored pose and suspends 
       if(sourceEnabled && next.position[0]>1.5)throw Error('generated emitter support exceeds volume-local analytic bounds [-1.5, 1.5]');
     },
     window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring',sourceMode:'analytic-fixed'}}},
-    primaryAuthoredFlameSource:()=>null,syncAuthoredFlameSources:()=>{},sceneObjects:[],ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
+    primaryAuthoredFlameSource:()=>null,projectAuthoredFlameSourceControls:()=>{},syncAuthoredFlameSources:()=>{},sceneObjects:[],ensureAuthoredFlameEmitter:()=>{},setInfo:()=>{},renderSceneObjectList:()=>{},
     get flameEmitterPose(){return pose;},set flameEmitterPose(next){pose=next;},
     get flameEmitterInjectionSuspended(){return suspended;},set flameEmitterInjectionSuspended(next){suspended=next;}};
   vm.runInNewContext(html.slice(start,end)+'\nthis.writeFlame=writeAuthoredFlameEmitterPose;',context);
