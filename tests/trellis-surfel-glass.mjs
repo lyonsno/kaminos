@@ -18,3 +18,13 @@ test('missing or corrupt rows cannot become a plausible surfel asset',()=>{
  assert.throws(()=>createSurfelGlass(new Float32Array(12),{count:2,stride:12,radius:.01}));
  assert.throws(()=>createSurfelGlass(new Float32Array(12).fill(NaN),{count:1,stride:12,radius:.01}));
 });
+test('surface reconstruction is reversible without changing source opacity',()=>{
+ const c=createSurfelGlass(new Float32Array([0,0,0,0,0,1,1,.5,0,.1,.2,.3]),{count:1,stride:12,radius:.01});
+ c.set({reconstruction:true});
+ assert.equal(c.read().reconstruction,true);
+ assert.ok(c.root.children[0].material.normalNode);
+ c.set({reconstruction:false});
+ assert.equal(c.root.children[0].material.normalNode,null);
+ assert.throws(()=>c.set({reconstruction:'yes'}));
+ c.dispose();
+});
