@@ -5273,7 +5273,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
 
         # For images, serve directly
         ext = target.suffix.lower()
-        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz"):
+        if ext in (".png", ".jpg", ".jpeg", ".webp", ".exr", ".glb", ".gltf", ".ply", ".spz", ".f32", ".u32"):
             body = target.read_bytes()
             self.send_response(200)
             content_types = {
