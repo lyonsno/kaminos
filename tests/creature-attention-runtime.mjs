@@ -117,12 +117,13 @@ try{
  // Actual timer -> source-state onset -> retained motion consumer. The light
  // probe deliberately keeps its cached lit output while the source is off,
  // matching the native volume-toggle observation from the room.
+ for(const engage of [false,true]){
  let onsetWalker,onsetPoll;const savedTimers={set:globalThis.setInterval,clear:globalThis.clearInterval};
  globalThis.setInterval=fn=>{onsetPoll=fn;return {};};globalThis.clearInterval=()=>{};
  try{
   fire={active:false,paused:false};
   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.08}))})};
-  onsetWalker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
+  onsetWalker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{engage,interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
   await onsetWalker.operations.action({kind:'wander'});
   const advance=seconds=>{for(let i=0;i<Math.round(seconds*60);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});}};
   advance(.1); // OS-1: source transition precedes the first successful poll.
@@ -133,9 +134,14 @@ try{
   assert.equal(onsetWalker.read().playback.frame,before.playback.frame,'startle holds retained stride');
   assert.deepEqual(onsetWalker.pose({bones:['pelvis']}).bones,pose.bones.slice(0,1),'root does not slide during recoil');
   assert.notDeepEqual(onsetWalker.pose({bones:['spine-chest']}).bones,pose.bones.slice(1),'chest expresses the pulse while stride is held');
-  advance(3);assert.equal(onsetWalker.read().attention.startle,null);assert.notEqual(onsetWalker.read().playback.frame,before.playback.frame,'autonomous walking resumes');
+  advance(3);assert.equal(onsetWalker.read().attention.startle,null);
+  if(engage){assert.equal(onsetWalker.read().action.engagement.phase,'cautious','strong native light bridge onset extends caution beyond recoil');advance(5);}
+  assert.ok(onsetWalker.read().action.motion.elapsed>before.action.motion.elapsed,'autonomous walking resumes');
+  if(engage){onsetWalker.operations.pause();onsetWalker.operations.engagement({enabled:false});assert.equal(onsetWalker.read().action.engagement.phase,'wandering');assert.equal(onsetWalker.read().action.motion.path.status,'wandering');assert.equal(onsetWalker.read().recipe.attention.engage,false);}
+
  }finally{await onsetWalker?.dispose();globalThis.setInterval=savedTimers.set;globalThis.clearInterval=savedTimers.clear;delete window.kaminosFireLightProbe;}
 
+ }
  // Wander held-endpoint and removed-area cases return with the Wander action
  // (not on this host yet).
 }finally{if(oldWindow===undefined)delete globalThis.window;else globalThis.window=oldWindow;}
