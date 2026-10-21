@@ -18,6 +18,11 @@ try{
   for(const s of r.samples.slice(1))assert.ok(Number.isFinite(s[3])&&s[3]>0,'missing weighted samples');
   for(const [actual,expected] of [[r.normalized[0],[1,0,0]],[r.normalized[1],[0,0,1]],[r.normalized[2],[.25,0,.2]]])actual.forEach((v,i)=>assert.ok(Number.isFinite(v)&&Math.abs(v-expected[i])<.002,`got ${actual}, expected ${expected}`));
  }
+ report.glass=await page.evaluate(()=>window.runGlassWitness());
+ assert.equal(report.glass.length,4);
+ assert.deepEqual(report.glass[0].pixel,report.glass[1].pixel,'equal reconstructed walls must shade equally across source opacity threshold');
+ assert.deepEqual(report.glass[2].pixel,report.glass[3].pixel,'duplicate wall samples must not change final glass');
+ assert.ok(report.glass[0].pixel[0]>0,'blank final glass');
  assert.equal(report.errors.length,0);report.ok=true;
 }catch(error){report.ok=false;report.error=String(error);}finally{await browser?.close();writeFileSync(resolve(output,'report.json'),JSON.stringify(report,null,2));}
 console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;

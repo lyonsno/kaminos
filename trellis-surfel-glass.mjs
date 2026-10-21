@@ -39,7 +39,8 @@ export function createSurfelGlass(data,meta){
   material.metalnessNode=state.reconstruction?surface.metallic:attribute('surfelMetallic','float');
   material.roughnessNode=state.reconstruction?surface.roughness:attribute('surfelRoughness','float');
   const opacity=state.reconstruction?surface.opacity:attribute('surfelOpacity','float');
-  material.transmission=state.mode==='glass'&&transmissive?1:0;
+  // Reconstructed opacity belongs to the wall, not the source-row population.
+  material.transmission=state.mode==='glass'&&(state.reconstruction||transmissive)?1:0;
   material.transmissionNode=material.transmission?opacity.oneMinus():null;
   material.opacityNode=state.mode==='opacity'?opacity:null;
   material.alphaHash=state.mode==='opacity';material.ior=state.ior;material.thickness=state.thickness;material.needsUpdate=true;
