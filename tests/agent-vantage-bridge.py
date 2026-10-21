@@ -89,6 +89,48 @@ class FakePage:
         self.connection.close()
 
 
+class FakeHub(FakePage):
+    """Reads a hub stream the way the shared worker does, and answers each command for the page it names."""
+
+    def __init__(self, port, hub_id):
+        self.port, self.page_id, self.answer = port, None, True
+        self.commands = queue.Queue()
+        self.connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+        self.connection.connect()
+        self.sock = self.connection.sock
+        self.connection.request("GET", f"/api/vantage/hub?hub={hub_id}")
+        self.response = self.connection.getresponse()
+        self.status = self.response.status
+        self.content_type = self.response.getheader("Content-Type")
+        self.thread = threading.Thread(target=self.read, daemon=True)
+        if self.status == 200:
+            self.thread.start()
+
+    def read(self):
+        event, data = None, []
+        try:
+            while True:
+                line = self.response.fp.readline()
+                if not line:
+                    return
+                line = line.decode().rstrip("\r\n")
+                if line.startswith("event:"):
+                    event = line[6:].strip()
+                elif line.startswith("data:"):
+                    data.append(line[5:].strip())
+                elif line == "":
+                    if event == "command" and data:
+                        message = json.loads("\n".join(data))
+                        self.commands.put(message)
+                        call(self.port, "POST", "/api/vantage/reply", {
+                            "page": message["page"], "id": message["id"], "ok": True,
+                            "result": {"echo": message["command"], "page": message["page"]},
+                        })
+                    event, data = None, []
+        except (OSError, ValueError):
+            return
+
+
 def wait_until(predicate, message, seconds=8):
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -142,6 +184,92 @@ def broker_contracts():
     assert broker.reply("page-aaaaaaaa", message["id"], {"ok": True}) is False, "a late reply is not attributed"
     broker.detach(link)
     assert broker.pages() == [], "a closed page leaves no routing record"
+
+    hub_contracts(bridge)
+
+
+def hub_contracts(bridge):
+    """One hub stream carries many pages: every tab of a browser shares it, so
+    open tabs never use up the browser's few connections to the server."""
+    broker = bridge.VantageBroker()
+    hub = broker.attach_hub("hub-aaaaaaaa")
+    assert broker.join("hub-aaaaaaaa", "page-hhhhhhh1", {"visible": True, "focused": True}) is True
+    assert broker.join("hub-aaaaaaaa", "page-hhhhhhh2", {"visible": False}) is True
+    try:
+        broker.join("hub-unknown0", "page-hhhhhhh3", {})
+        raise AssertionError("a page cannot join a hub that is not linked")
+    except bridge.VantageError as error:
+        assert error.phase == "hub", error.phase
+    described = {page["id"]: page for page in broker.pages()}
+    assert described["page-hhhhhhh1"]["connected"] and described["page-hhhhhhh2"]["connected"], described
+    assert described["page-hhhhhhh2"]["hub"] == "hub-aaaaaaaa"
+
+    outcomes = {}
+
+    def submit_as(name, page):
+        try:
+            outcomes[name] = broker.submit("status", {}, page=page, timeout=5)
+        except bridge.VantageError as error:
+            outcomes[name] = error
+
+    workers = [threading.Thread(target=submit_as, args=(name, page)) for name, page in (("first", "page-hhhhhhh1"), ("second", "page-hhhhhhh2"))]
+    for worker in workers:
+        worker.start()
+        time.sleep(0.05)
+    delivered = []
+    deadline = time.monotonic() + 3
+    while len(delivered) < 2 and time.monotonic() < deadline:
+        message = broker.next_message(hub, 0.05)
+        if message:
+            delivered.append(message)
+    assert [message["page"] for message in delivered] == ["page-hhhhhhh1", "page-hhhhhhh2"], "each command names its page, in the order sent"
+    assert broker.reply("page-hhhhhhh1", delivered[0]["id"], {"ok": True, "result": {"kind": "status"}}) is True
+    assert broker.leave("hub-aaaaaaaa", "page-hhhhhhh2") is True, "a tab that closes leaves its hub"
+    for worker in workers:
+        worker.join(3)
+    assert outcomes["first"]["ok"] is True, outcomes["first"]
+    assert isinstance(outcomes["second"], bridge.VantageError) and outcomes["second"].phase == "disconnected", "only the page that left fails"
+    assert [page["id"] for page in broker.pages()] == ["page-hhhhhhh1"], "and only it is forgotten"
+    assert broker.leave("hub-aaaaaaaa", "page-hhhhhhh1") is True and broker.leave("hub-aaaaaaaa", "page-hhhhhhh1") is False
+
+    # Memberships are numbered: a late leave, or a late older join, cannot undo a newer join.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is True
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=2) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm1", member=1) is False, "a leave for an older membership changes nothing"
+    assert any(page["id"] == "page-mmmmmmm1" for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is False, "nor does a late older join"
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm1", member=2) is True
+    assert not any(page["id"] == "page-mmmmmmm1" for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm1", {}, member=1) is False, "a join older than the membership that left cannot bring the page back"
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm2", member=1) is False
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm2", {}, member=1) is False, "nor can a join that arrives after its own leave"
+    assert not any(page["id"] in ("page-mmmmmmm1", "page-mmmmmmm2") for page in broker.pages())
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm3", {}, member=3) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm3", member=3) is True
+    broker.attach_hub("hub-aaaaaaaa")
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm3", {}, member=2) is False, "a reconnected hub still knows what left"
+    hub = broker._hubs["hub-aaaaaaaa"]
+    # A newer membership leaving before its own join arrived retires the older registration too.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm4", {}, member=1) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm4", member=2) is True
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm4", {}, member=2) is False
+    assert not any(page["id"] == "page-mmmmmmm4" for page in broker.pages()), "a departed tab is not advertised"
+    # A newer responsive membership survives an older departure.
+    assert broker.join("hub-aaaaaaaa", "page-mmmmmmm5", {}, member=5) is True
+    assert broker.leave("hub-aaaaaaaa", "page-mmmmmmm5", member=4) is False
+    assert any(page["id"] == "page-mmmmmmm5" for page in broker.pages())
+
+    broker.join("hub-aaaaaaaa", "page-hhhhhhh4", {})
+    replaced = broker.attach_hub("hub-aaaaaaaa")
+    assert broker.pages() == [], "a hub that links again starts empty: its pages join it again"
+    try:
+        broker.next_message(hub, 0.01)
+        raise AssertionError("the replaced hub stream is closed")
+    except bridge.LinkClosed:
+        pass
+    broker.join("hub-aaaaaaaa", "page-hhhhhhh5", {})
+    broker.detach(replaced)
+    assert broker.pages() == [], "a hub that closes takes its pages with it"
 
 
 def main():
@@ -232,6 +360,20 @@ def main():
             wait_until(lambda: len(connected_pages(port)) == 2, "closed page still listed as connected")
             status, body = call(port, "GET", "/api/vantage/pages")
             assert len(body["pages"]) == 2, "closed pages are forgotten rather than accumulating"
+
+            assert body.get("hub") is True, "the server says it can carry pages on a shared hub stream"
+            hub = FakeHub(port, "hub-httptest")
+            pages.append(hub)
+            assert hub.status == 200 and hub.content_type.startswith("text/event-stream")
+            wait_until(lambda: call(port, "POST", "/api/vantage/join", {"hub": "hub-httptest", "page": "page-hubbbbb1", "visible": False})[0] == 200,
+                       "a page could not join the hub")
+            status, body = call(port, "POST", "/api/vantage/join", {"hub": "hub-missing", "page": "page-hubbbbb2"})
+            assert status == 409 and body["phase"] == "hub", (status, body)
+            status, body = call(port, "POST", "/api/vantage/command", {"command": "move", "args": {"forward": 1}, "page": "page-hubbbbb1"})
+            assert status == 200 and body["ok"] is True and body["result"]["page"] == "page-hubbbbb1", (status, body)
+            status, body = call(port, "POST", "/api/vantage/leave", {"hub": "hub-httptest", "page": "page-hubbbbb1"})
+            assert status == 200 and body["ok"] is True
+            assert not any(page["id"] == "page-hubbbbb1" for page in connected_pages(port)), "a page that left is not listed"
         finally:
             for page in pages:
                 page.close()

@@ -4,10 +4,34 @@
 // (tone mapping and colour space) then writes an 8-bit picture, which is read
 // back. Layers the page draws from its main camera only (the fire volume, water
 // from the local water host, ambient occlusion and global illumination) are not
-// in it; `snap` remains the picture with every layer.
+// in it; `snap` remains the picture with every layer. Where the page keeps a
+// proxy of the fire or the water (heat-block splats, surfels) on its own layer,
+// a glance draws that proxy instead, and says so (describeProxies).
 import {cameraFromOptics} from './agent-vantage-ids.mjs';
 
 export const GLANCE_OMITS = Object.freeze(['the fire and smoke volume', 'water drawn by the local water host', 'ambient occlusion and global illumination']);
+const PROXY_SOURCES = Object.freeze({
+  fire: {omitted: GLANCE_OMITS[0], drawn: 'fire and smoke (proxy: heat-block splats)'},
+  water: {omitted: GLANCE_OMITS[1], drawn: 'water (proxy: surfels)'},
+});
+
+// What a glance drew and left out, from each proxy source's status at the draw
+// ('drawn', 'awaiting-snapshot', 'hidden', 'absent'). For a strip, `frames`
+// lists every frame's statuses: a source drawn in only some frames is left out
+// with a count. A source hidden or absent from the scene is not something the
+// glance left out. Without proxy statuses, what a glance always left out.
+export function describeProxies(proxies, frames = proxies ? [proxies] : null) {
+  if (!frames?.length) return {layers: ['scene'], omitted: [...GLANCE_OMITS]};
+  const layers = ['scene'], omitted = [];
+  for (const [source, words] of Object.entries(PROXY_SOURCES)) {
+    const statuses = frames.map(item => item?.[source] ?? 'absent'), drawn = statuses.filter(status => status === 'drawn').length;
+    if (drawn === statuses.length) layers.push(words.drawn);
+    else if (drawn > 0) omitted.push(`${words.omitted} (drawn as its proxy in ${drawn} of ${statuses.length} frames)`);
+    else if (statuses.includes('awaiting-snapshot')) omitted.push(`${words.omitted} (its proxy had no snapshot yet)`);
+  }
+  omitted.push(GLANCE_OMITS[2]);
+  return {layers, omitted};
+}
 
 export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = () => () => {}, cameraLayers = () => null}) {
   let output = null;
@@ -29,10 +53,15 @@ export function createGlance({THREE, TSL, renderer, scene, hideEditorObjects = (
   };
 
   // Draw the view from `optics` at width×height, with editor drawing and the
-  // `hide` entries left out. The drawing happens in this call; `ready` resolves
-  // to the picture's RGBA bytes, rows from the top.
-  function draw({optics, width, height, hide = []}) {
+  // `hide` entries left out. The camera sees the page's layers, minus
+  // `withoutLayers` (every proxy layer), plus `layers` (the proxies drawn now),
+  // so what the operator's own view shows changes nothing here. The drawing
+  // happens in this call; `ready` resolves to the picture's RGBA bytes, rows
+  // from the top.
+  function draw({optics, width, height, hide = [], layers = [], withoutLayers = []}) {
     const camera = cameraFromOptics({THREE, renderer, optics, layers: cameraLayers()});
+    for (const layer of withoutLayers) camera.layers.disable(layer);
+    for (const layer of layers) camera.layers.enable(layer);
     const hdr = new THREE.RenderTarget(width, height, {type: THREE.HalfFloatType, depthBuffer: true});
     const picture = new THREE.RenderTarget(width, height, {type: THREE.UnsignedByteType, colorSpace: THREE.NoColorSpace, depthBuffer: false});
     const stage = outputStage(), {source, quad} = stage;

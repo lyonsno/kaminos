@@ -10,7 +10,9 @@ import { fluidBrowserLaunch } from './finger-fluid-browser-launch.mjs';
 import { countChangedVisibleWaterPixels, countVisibleWaterPixels, decodeScreenshotPngRgb, meanAbsolutePixelDifference } from './screenshot-png-rgb.mjs';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 import { waterCadenceWindowAdmission } from './proxy-evidence-admission.mjs';
+import { createAgentLiveBudget } from './agent-live-budget.mjs';
 import { ambientGpuLabel, createGpuUtilizationSampler, windowUtilization } from './gpu-utilization.mjs';
+import {verifyAuthoringServer} from './scene-authoring-witness-identity.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) {
@@ -26,6 +28,9 @@ let browserLaunch = null;
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-scene-object-witness-profile-${port}-${process.pid}`;
 const settleMs = Number(args.get('--settle-ms') || 3500);
 const scenario = args.get('--scenario') || 'append-select-remove-keyboard';
+// The live budget agent runs stay within (agent-live-budget.mjs); opt in only when the question needs an offline look.
+const liveBudget = createAgentLiveBudget({ allowed: Boolean(args.get('--allow-over-live-budget')) });
+let liveBudgetTimer = null;
 const expectedServerRoot = args.get('--expected-server-root') ? resolve(args.get('--expected-server-root')) : null;
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
 const hybridModuleUrl = args.get('--hybrid-module-url') || null;
@@ -68,6 +73,7 @@ function writeReport(report) {
     phase,
     browserVersion,
     stderrTail: stderr.slice(-2000),
+    liveBudget: liveBudget.report(),
     ...report,
   }, null, 2));
 }
@@ -146,6 +152,7 @@ function waitForWebSocketOpen(ws) {
 }
 
 async function evaluate(ws, expression, options = {}) {
+  if (!options.liveBudgetRemedy) liveBudget.check();
   const result = await wsRequest(ws, 'Runtime.evaluate', {
     awaitPromise: true,
     returnByValue: true,
@@ -155,6 +162,30 @@ async function evaluate(ws, expression, options = {}) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
+}
+
+// After loading a saved flame basin (several are authored at 160 steps), drop
+// its raymarch to a live tier unless the run opted into the authored look.
+async function applyLiveFireSteps(ws, steps = 8) {
+  if (args.get('--allow-over-live-budget')) return null;
+  const effective = await setLiveFireSteps(ws, steps);
+  liveBudget.observe({ fireRaySteps: effective });
+  return effective;
+}
+
+async function setLiveFireSteps(ws, steps) {
+  // A flame scene's settings belong to its edit session, so the change goes
+  // through kaminosFlameAuthoring.edit (retrying while the runtime starts).
+  return evaluate(ws, `(async () => { const s = document.getElementById('volume-steps'); if (!s) return null;
+    const set = () => { s.value = '${steps}'; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); };
+    let lastError = null;
+    for (let i = 0; i < 100; i++) {
+      try { if (window.kaminosFlameAuthoring) window.kaminosFlameAuthoring.edit(set, 'Agent live tier'); else set(); lastError = null; break; }
+      catch (error) { lastError = String(error?.message || error); await new Promise(r => setTimeout(r, 100)); }
+    }
+    if (lastError) throw new Error('could not set the live fire tier: ' + lastError);
+    await new Promise(r => setTimeout(r, 300));
+    return window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? Number(s.value); })()`, { timeoutMs: 30000, liveBudgetRemedy: true });
 }
 
 async function runMeshAssetLinkScenario(ws) {
@@ -395,6 +426,7 @@ async function runViewportWireframeFireShadowScenario(ws) {
   await evaluate(ws, `(() => { window.__wireframeWitnessErrors = []; addEventListener('error', event => window.__wireframeWitnessErrors.push(String(event.message || event.error))); const original = console.error; console.error = (...items) => { window.__wireframeWitnessErrors.push(items.map(String).join(' ')); return original.apply(console, items); }; })()`);
   phase = 'scenario-viewport-wireframe-fire-shadow-add-flame';
   evidence.added = await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(presetId)}).then(() => true)`, { timeoutMs: 120000 });
+  evidence.liveFireSteps = await applyLiveFireSteps(ws);
   phase = 'scenario-viewport-wireframe-fire-shadow-wait-shadow';
   let shadow = null;
   for (let i = 0; i < 240; i++) { shadow = (await evaluate(ws, 'window.kaminosFireLightFieldDebugState?.()?.shadow ?? null')); if (shadow?.effective && shadow.renderCount > 0) break; await delay(250); }
@@ -686,6 +718,7 @@ async function runFireProxySplatsScenario(ws) {
     const rect = document.getElementById('kaminos-host-renderer-canvas').getBoundingClientRect();
     return { canvas: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
   })`, { timeoutMs: 180000 });
+  evidence.liveFireSteps = await applyLiveFireSteps(ws);
   for (let i = 0; i < 1200; i++) { const d = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (d >= settleSteps) break; await delay(250); }
   evidence.camera = await evaluate(ws, `(() => {
     window.kaminosSelection?.clear?.();
@@ -911,6 +944,7 @@ async function runViewportWireCostScenario(ws) {
   const evidence = lastEvidence.viewportWireCost = { windows: [] };
   if (args.get('--with-flame')) {
     await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
+    await applyLiveFireSteps(ws);
   }
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   if (args.get('--fire-proxy')) {
@@ -953,6 +987,7 @@ async function runPreviewCostScenario(ws) {
   const evidence = lastEvidence.previewCost = { windows: [], arms: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   if (args.get('--with-water')) await evaluate(ws, 'window.kaminosSceneAuthoring.addWaterEmitter()', { timeoutMs: 180000 });
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
@@ -1025,6 +1060,7 @@ async function runFireSlowMotionProbeScenario(ws) {
   const evidence = lastEvidence.fireSlowMotion = { windows: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 120) break; await delay(250); }
   const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { speed: Number(document.getElementById('volume-speed').value), timeStep: window.__kaminosVolumePrototype.joinedProducerState?.()?.timeStep ?? null, resets: d.fluidStateResetCount, steps: d.simStepCount, frames: d.frameCount, simTime: d.simTimeSeconds ?? null }; })()`);
@@ -1056,6 +1092,7 @@ async function runViewportPreviewQualityScenario(ws) {
   const evidence = lastEvidence.viewportPreviewQuality = { failures, rates: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws, 40);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.camera = await evaluate(ws, `(() => { const domain = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
@@ -1137,6 +1174,7 @@ async function runPreviewBoundScenario(ws) {
   const evidence = lastEvidence.previewBound = { windows: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.identity = await evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { gridDims: window.__kaminosVolumeGridDimensions ?? null, gridSize: d.gridSize ?? null,
@@ -1186,6 +1224,7 @@ async function runFireCadencePanelScenario(ws) {
   const evidence = lastEvidence.fireCadencePanel = { failures, steps: [] };
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   for (let i = 0; i < 480; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 60) break; await delay(250); }
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: "preview" }); window.kaminosSelection?.clear?.(); true');
   const read = () => evaluate(ws, `(() => { const d = window.__kaminosVolumePrototype.debugState(); return { pacing: d.proxyPacing ?? null, simSpeed: d.controls?.speed ?? null,
@@ -1284,6 +1323,7 @@ async function runFireDecoupledCadenceScenario(ws) {
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   const quality = args.get('--quality') === 'full' ? 'full' : 'preview';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws, 40);
   await evaluate(ws, `window.kaminosViewportSettings.set({ overlays: false, gizmos: false, quality: '${quality}' }); window.kaminosSelection?.clear?.(); true`);
   for (let i = 0; i < 240; i++) { const n = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0'); if (n >= 150) break; await delay(250); }
   evidence.display = await displayIdentity(ws);
@@ -1402,6 +1442,7 @@ async function runGpuLedgerScenario(ws) {
   await snap('page, no flame');
   const flame = args.get('--with-flame') || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
   await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(flame)})`, { timeoutMs: 180000 });
+  await applyLiveFireSteps(ws);
   await evaluate(ws, 'window.kaminosViewportSettings.set({ overlays: false, gizmos: false }); window.kaminosSelection?.clear?.(); true');
   await snap('flame basin as saved (Full)');
   await evaluate(ws, `window.kaminosViewportSettings.set({ quality: 'preview' }); true`);
@@ -2840,6 +2881,199 @@ async function runLocalLiquidPerformanceScenario(ws) {
       || reopened.backend!=='WebGPUBackend' || reopened.effectiveRoute!==e.after.effectiveRoute
       || JSON.stringify(reopened.emitters)!==JSON.stringify(e.after.emitters)) throw Error('Fresh reopen did not restore live Draft budget and emitter identity');
   await evaluate(ws,`document.getElementById('local-liquid-performance').scrollIntoView({block:'center'})`);
+}
+
+async function runAuthoredWaterPreviewScenario(ws) {
+  phase='authored-water-initial-preview';
+  lastEvidence.waterPreview=await evaluate(ws,`(async()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    for(let i=0;i<240&&!window.kaminosWaterSources;i++)await wait(125);
+    const api=window.kaminosWaterSources;if(!api)throw Error('Water source API missing');
+    document.getElementById('scene-add-menu-trigger').click();document.querySelector('[data-scene-add="water-emitter"]').click();
+    for(let i=0;i<240&&!api.read().selected;i++)await wait(125);
+    const first=api.read();if(!first.selected||first.runtime)throw Error('Add must start with unallocated particles');
+    if(first.selected.initialPreview?.kind!=='initial_particles'||!first.selected.initialPreview.visible)throw Error('Actual initial particle rendering is missing');
+    const fields=document.getElementById('water-source-property-slot'),width=fields.querySelector('[data-width]'),samples=fields.querySelector('[data-samples]');
+    if(fields.querySelector('[data-apply]')||document.querySelector('[data-simulation-apply]'))throw Error('Water properties still require Apply');
+    samples.value='12';samples.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&api.read().selected.initialPreview.particleCount!==1728;i++)await wait(50);
+    if(api.read().selected.initialPreview.particleCount!==1728)throw Error('Input did not automatically rebuild all initial particles');
+    const accepted=structuredClone(api.read().selected);
+    width.value='0';width.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&!fields.querySelector('[data-source-error]').textContent;i++)await wait(50);
+    if(!fields.querySelector('[data-source-error]').textContent||api.read().selected.settings.drop.width!==accepted.settings.drop.width)throw Error('Invalid draft changed the accepted source');
+    width.value='.6';width.dispatchEvent(new Event('input',{bubbles:true}));
+    for(let i=0;i<80&&api.read().selected.settings.drop.width!==.6;i++)await wait(50);
+    const edited=api.read();if(edited.selected.settings.drop.width!==.6||edited.selected.initialPreview.particleCount!==1728||fields.querySelector('[data-source-error]').textContent)throw Error('Automatic edit did not recover');
+    await window.kaminosSceneEdits.undo();
+    if(api.read().selected.settings.drop.width!==accepted.settings.drop.width)throw Error('Automatic edit did not enter ordinary Undo');
+    await window.kaminosSceneEdits.redo();if(api.read().selected.settings.drop.width!==.6)throw Error('Redo did not restore edited preview');
+    window.kaminosSetCameraDebugPose({position:[1.4,1.8,1.5],target:[0,1,0]});window.selectSceneObject(first.selected.id);window.kaminosFrameSelected();
+    const final=api.read();if(final.runtime)throw Error('Preview allocated or stepped water');
+    return {first,accepted,edited,final,source:await(await fetch('/api/runtime-config')).json()};
+  })()`,{timeoutMs:60000});
+}
+
+async function runAuthoredWaterDropScenario(ws) {
+  phase='authored-water-ordinary-add';
+  lastEvidence.authoredWater=await evaluate(ws,`(async()=>{
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));
+    for(let i=0;i<240;i++){if(window.kaminosWaterSources&&document.querySelector('.authored-water-controls'))break;await wait(125);}
+    if(!window.kaminosWaterSources)throw Error('Authored water instruments did not mount');
+    document.getElementById('scene-add-menu-trigger').click();
+    document.querySelector('[data-scene-add="water-emitter"]').click();
+    for(let i=0;i<240;i++){if(window.kaminosWaterSources.read().selected)break;await wait(125);}
+    const initial=window.kaminosWaterSources.read(),id=initial.selected?.id;
+    if(initial.selected?.settings.mode!=='finite_drop'||initial.runtime)throw Error('Ordinary Add did not create an editable finite preview');
+    const chooser=document.querySelector('[aria-label="Workbench tool"]');
+    if(chooser?.value!=='finger-fluid-bench')throw Error('Ordinary Add did not expose the Fluid tool chooser');
+    const properties=document.getElementById('selected-water-properties'),fields=document.getElementById('water-source-property-slot');
+    if(properties.hidden||!document.getElementById('authoring-inspector').contains(properties)||!fields.querySelector('[data-width]'))throw Error('Selected source properties are missing from the shared inspector');
+    window.kaminosSetSceneObjectTransform(id,{position:[.3,1,0],rotation:[0,.5,0],scale:[1.2,1.2,1.2]});
+    const width=fields.querySelector('[data-width]'),samples=fields.querySelector('[data-samples]');
+    width.value='.6';width.dispatchEvent(new Event('input',{bubbles:true}));samples.value='24';samples.dispatchEvent(new Event('input',{bubbles:true}));
+    await new Promise(r=>setTimeout(r,400));
+    const current=window.kaminosWaterSources.read();if(current.selected.settings.drop.width!==.6)throw Error('Source property edit was not applied');
+    if(current.runtime)throw Error('Editing the initial preview allocated a solver');
+    const mode=fields.querySelector('[data-mode]');mode.value='continuous';mode.onchange();
+    if(fields.querySelector('[data-flow]').hidden)throw Error('Continuous source properties did not appear');
+    mode.value='finite_drop';mode.onchange();await new Promise(r=>setTimeout(r,400));
+    window.kaminosWaterSources.selectSimulation();
+    if(document.getElementById('selected-water-simulation-properties').hidden)throw Error('Water simulation selection has no properties');
+    const simulationFields=document.getElementById('water-simulation-property-slot');
+    if(!simulationFields?.querySelector('[data-passes]')||!document.getElementById('authoring-inspector').contains(simulationFields))throw Error('Editable simulation settings are missing from right inspector');
+    simulationFields.querySelector('[data-passes]').value='2';simulationFields.querySelector('[data-passes]').dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));
+    if(window.kaminosWaterSources.read().simulation.settings.densityIterations!==2)throw Error('Right simulation Apply did not edit accepted passes');
+    window.selectSceneObject(id);window.kaminosFrameSelected();
+    const before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
+    return {id,before,source:await(await fetch('/api/runtime-config')).json(),initial:window.kaminosWaterSources.read(),propertiesParent:properties.parentElement.id,chooser:chooser.value};
+  })()`,{timeoutMs:60000});
+  lastEvidence.authoredWater.rejections=[];
+  for(const context of ['assets','authoring']){
+    phase='authored-water-rejected-properties-'+context;
+    const rejection=await evaluate(ws,`(async()=>{
+      window.__kaminosSetActiveTab('assets');
+      if(${JSON.stringify(context)}==='authoring')document.querySelector('[data-workspace-mode="authoring"]').click();
+      const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]'),before=window.kaminosWaterSources.read().selected.settings;
+      bound.value='4';bound.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));
+      const alert=fields.querySelector('[data-source-error]');
+      if(!alert?.textContent.includes('positive extents')||!alert.getClientRects().length)throw Error('Source rejection explanation is not visible beside properties');
+      if(JSON.stringify(window.kaminosWaterSources.read().selected.settings)!==JSON.stringify(before))throw Error('Rejected source changed accepted settings');
+      alert.scrollIntoView({block:'center'});return {context:${JSON.stringify(context)},error:alert.textContent,visible:true,accepted:before};
+    })()`);lastEvidence.authoredWater.rejections.push(rejection);
+    await capturePngScreenshot(ws,siblingPngPath('-error-'+context));
+    await evaluate(ws,`(async()=>{const fields=document.getElementById('water-source-property-slot'),bound=fields.querySelector('[data-bound=min][data-axis="1"]');bound.value='-1';bound.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>setTimeout(r,400));if(fields.querySelector('[data-source-error]').textContent)throw Error('Valid source Apply did not clear rejection');})()`);
+  }
+  await evaluate(ws,`window.kaminosWaterSources.selectSimulation()`);
+  await capturePngScreenshot(ws,siblingPngPath('-simulation'));
+  await evaluate(ws,`window.selectSceneObject(${JSON.stringify(lastEvidence.authoredWater.id)});window.__kaminosSetActiveTab('finger-fluid-bench')`);
+  await delay(600);await capturePngScreenshot(ws,siblingPngPath('-preview'));
+  phase='authored-water-drop-release';
+  const id=lastEvidence.authoredWater.id,fixtureName='hotwet-authored-water-native-'+port;
+  lastEvidence.authoredWater.released=await evaluate(ws,`(async()=>{
+    const fields=document.getElementById('water-source-property-slot'),run=document.querySelector('#tab-finger-fluid-bench .authored-water-controls');
+    await run.querySelector('[data-release]').onclick();window.kaminosPauseLocalLiquid(true);
+    if(!window.kaminosWaterSources.read().runtime)throw Error('Release button did not allocate water');
+    const initialParticles=await window.kaminosWaterSources.requestParticleState();
+    const mode=fields.querySelector('[data-mode]');mode.value='continuous';mode.onchange();
+    await run.querySelector('[data-pause]').onclick();await run.querySelector('[data-pause]').onclick();
+    if(mode.value!=='continuous'||fields.querySelector('[data-flow]').hidden)throw Error('Playback lost the pending mode controls');
+    mode.value='finite_drop';mode.onchange();
+    await window.kaminosWaterSources.advanceTo(12);
+    const releasedParticles=await window.kaminosWaterSources.requestParticleState();
+    await new Promise(r=>setTimeout(r,700));
+    const water=window.kaminosLocalLiquidState();
+    if(water.failure||water.solver?.solver_backend!=='webgpu_compute'||!water.lastFrame?.presentedByHost)throw Error('Finite water did not render on shared WebGPU: '+JSON.stringify(water));
+    const saved=await window.saveSceneAs({name:${JSON.stringify(fixtureName)},result:true});if(!saved)throw Error('Native scene save failed');
+    return {water,saved,initialParticles,releasedParticles,scene:window.kaminosSceneObjectDebugState(),ui:run.textContent};
+  })()`,{timeoutMs:90000});
+  const e=lastEvidence.authoredWater;
+  assert.equal(e.released.water.solver.particleCount,13824);assert.equal(e.released.water.paused,true);
+  assert.match(e.released.ui,/Paused · tick 12/);
+  await capturePngScreenshot(ws,siblingPngPath('-released'));
+  const files=await evaluate(ws,`(async()=>{const r=await(await fetch('/api/browse?root=scenes&path=')).json();return r.entries.map(e=>e.name).filter(n=>n.includes(${JSON.stringify(fixtureName)})&&n.endsWith('.json'));})()`);
+  assert.equal(files.length,1);
+  const document=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
+  e.savedDocument=document;e.savedFile=files[0];
+  const restoredUrl=compositionRestoreUrl(document.composition,files[0],new URL(url).origin,'workbench');
+  phase='authored-water-drop-fresh-reopen';
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(300);await wsRequest(ws,'Page.navigate',{url:restoredUrl});
+  for(let i=0;i<240;i++){
+    await delay(125);try{const current=await evaluate(ws,`({scene:window.kaminosSceneObjectDebugState?.(),water:window.kaminosWaterSources?.read(),info:document.getElementById('info-bar')?.textContent})`);
+      if(current.water?.selected?.id===id&&current.scene?.some(r=>r.id===id)&&!current.water.runtime){e.reopened=current;break;}
+    }catch{}
+  }
+  assert.ok(e.reopened,'Fresh document must restore editable initial water');
+  assert.equal(e.reopened.water.simulation.particleCount,13824);assert.equal(e.reopened.water.runtime,null);
+  assert.deepEqual(e.reopened.water.selected.settings,e.released.water.emitters[0].localLiquidEmitter);
+  phase='authored-water-reopened-placement';
+  e.reopenedPlacement=await evaluate(ws,`(()=>{
+    const id=${JSON.stringify(id)},before=window.kaminosSceneObjectDebugState().find(r=>r.id===id);
+    window.kaminosSetSceneObjectTransform(id,{position:[.6,1.1,0],rotation:[0,.2,0],scale:[1,1,1]});
+    const after=window.kaminosSceneObjectDebugState().find(r=>r.id===id),runtime=window.kaminosWaterSources.read().runtime;
+    if(runtime||Math.abs((after.worldBounds.min[0]+after.worldBounds.max[0])/2-.6)>1e-6)throw Error('Moving the restored initial source moved only its pivot');
+    window.kaminosFrameSelected();return {before,after,runtime};
+  })()`);
+}
+
+async function runAuthoredWaterObjectsScenario(ws) {
+  await runAuthoredWaterDropScenario(ws);
+  phase='authored-water-second-object';
+  const first=lastEvidence.authoredWater.id;
+  lastEvidence.waterObjects=await evaluate(ws,`(async()=>{
+    const first=${JSON.stringify(first)},api=window.kaminosWaterSources;
+    window.kaminosSetSceneObjectTransform(first,{position:[.3,1,0],scale:[1.2,1.2,1.2]});
+    const firstSettings=api.read().selected.settings;
+    await document.querySelector('#tab-finger-fluid-bench [data-add]').onclick();
+    const added=api.read().selected;
+    if(!added||added.id===first||JSON.stringify(added.settings)!==JSON.stringify(firstSettings))throw Error('Add another did not retain the edited water settings');
+    if(document.querySelector('[data-scene-field-id="water-field"]'))throw Error('Finite water objects still appear beneath a simulation field row');
+    if(document.getElementById('selected-water-properties').hidden||document.getElementById('selected-water-simulation-properties').hidden)throw Error('Selected water is missing its contextual properties');
+    const duplicate=document.getElementById('object-duplicate');if(duplicate.disabled)throw Error('Ordinary Duplicate is disabled for water');
+    duplicate.click();
+    return {first,second:added.id,duplicate:api.read().selected?.id,settings:firstSettings};
+  })()`);
+  await wsRequest(ws,'Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+  await wsRequest(ws,'Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,nativeVirtualKeyCode:13});
+  await delay(400);
+  const objects=lastEvidence.waterObjects;
+  objects.placed=await evaluate(ws,`(()=>{
+    const id=${JSON.stringify(objects.duplicate)};
+    if(!id||id===${JSON.stringify(objects.second)})throw Error('Duplicate did not create a third water object');
+    window.kaminosSetSceneObjectTransform(id,{position:[-1,1,1.1]});
+    window.kaminosSetCameraDebugPose({position:[4,3.5,5],target:[0,.8,0]});
+    return {water:window.kaminosWaterSources.read(),scene:window.kaminosSceneObjectDebugState()};
+  })()`);
+  assert.equal(objects.placed.water.sources.length,3);
+  await capturePngScreenshot(ws,siblingPngPath('-three-previews'));
+  phase='authored-water-multiple-release';
+  objects.released=await evaluate(ws,`(async()=>{
+    const api=window.kaminosWaterSources,run=document.querySelector('#tab-finger-fluid-bench .authored-water-controls');
+    await run.querySelector('[data-release]').onclick();window.kaminosPauseLocalLiquid(true);
+    if(run.querySelector('[data-run-error]').textContent)throw Error(run.querySelector('[data-run-error]').textContent);
+    const state=api.read();if(state.runtime?.particleCount!==41472)throw Error('All three accepted drops were not allocated');
+    if(!document.getElementById('water-simulation-summary').textContent.includes('Current simulation'))throw Error('Water settings still report the initial setup after release');
+    await api.advanceTo(12);
+    return {water:api.read(),host:window.kaminosLocalLiquidState(),scene:window.kaminosSceneObjectDebugState(),saved:await window.saveSceneAs({name:'hotwet-water-objects-'+${JSON.stringify(port)},result:true})};
+  })()`,{timeoutMs:90000});
+  assert.equal(objects.released.water.runtime.particleCount,41472);
+  assert.equal(objects.released.host.emitters.length,3);
+  assert.equal(objects.released.host.solver.particleCount,41472);
+  assert.equal(objects.released.host.solver.solver_backend,'webgpu_compute');
+  assert.equal(objects.released.host.failure,null);
+  assert.equal(objects.released.host.lastFrame.presentedByHost,true);
+  await capturePngScreenshot(ws,siblingPngPath('-three-released'));
+  const files=await evaluate(ws,`fetch('/api/browse?root=scenes&path=').then(r=>r.json()).then(r=>r.entries.map(e=>e.name).filter(n=>n.includes('hotwet-water-objects-'+${JSON.stringify(port)})&&n.endsWith('.json')))`);
+  assert.equal(files.length,1);objects.savedFile=files[0];
+  const doc=await evaluate(ws,`fetch('/api/read?root=scenes&path='+encodeURIComponent(${JSON.stringify(files[0])})).then(r=>r.json())`);
+  phase='authored-water-multiple-reopen';
+  await wsRequest(ws,'Page.navigate',{url:'about:blank'});await delay(300);
+  await wsRequest(ws,'Page.navigate',{url:compositionRestoreUrl(doc.composition,files[0],new URL(url).origin,'workbench')});
+  for(let i=0;i<240;i++){
+    await delay(125);try{const state=await evaluate(ws,'window.kaminosWaterSources?.read()');if(state?.sources.length===3&&!state.runtime){objects.reopened=state;break;}}catch{}
+  }
+  assert.ok(objects.reopened,'Fresh reopen must retain three independently editable initial water objects');
+  assert.equal(objects.reopened.simulation.particleCount,41472);
 }
 
 async function runLocalLiquidLiveHostScenario(ws) {
@@ -7266,6 +7500,11 @@ try {
     await wsRequest(ws, 'Page.addScriptToEvaluateOnNewDocument', { source: GPU_LEDGER_SOURCE });
   }
   await wsRequest(ws,'Page.navigate',{url},{timeoutMs:60000});
+  // Observe the fire's effective ray steps once a second for the live budget.
+  liveBudgetTimer = setInterval(() => {
+    wsRequest(ws, 'Runtime.evaluate', { returnByValue: true, expression: 'window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null' }, { timeoutMs: 5000 })
+      .then(result => liveBudget.observe({ fireRaySteps: result?.result?.value ?? null })).catch(() => {});
+  }, 1000);
   for (let attempt=0;attempt<240;attempt++) {
     effectiveUrl = await evaluate(ws, 'location.href').catch(()=>null);
     if (effectiveUrl && effectiveUrl !== 'about:blank') break;
@@ -7279,9 +7518,12 @@ try {
   }
   phase = 'checking-server-root';
   effectiveServerRoots = await fetchServerRoots(effectiveHref);
-  assertExpectedServerRoot(effectiveServerRoots);
+  if(['authored-water-preview','authored-water-drop','authored-water-objects'].includes(scenario)&&expectedServerRoot)lastEvidence.serving=await verifyAuthoringServer({origin:new URL(effectiveHref).origin,repoRoot:expectedServerRoot});
+  else assertExpectedServerRoot(effectiveServerRoots);
 
-  if (scenario === 'startup-empty') {
+  if (scenario === 'authored-water-preview') {
+    await runAuthoredWaterPreviewScenario(ws);
+  } else if (scenario === 'startup-empty') {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
@@ -7299,6 +7541,11 @@ try {
     await runFireProxyBridgeRouteScenario(ws);
   } else if (scenario === 'gpu-ledger') {
     await runGpuLedgerScenario(ws);
+  } else if (scenario === 'live-budget-probe') {
+    // Lets the page run for a few seconds so the live budget can judge it.
+    phase = 'scenario-live-budget-probe';
+    if (args.get('--with-flame')) await evaluate(ws, `window.kaminosSceneAuthoring.addFlameEmitter(${JSON.stringify(args.get('--with-flame'))})`, { timeoutMs: 180000 });
+    for (let i = 0; i < 12; i++) { lastEvidence.liveBudgetProbe = { steps: await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()?.controls?.raySteps ?? null') }; await delay(1000); }
   } else if (scenario === 'preview-bound') {
     await runPreviewBoundScenario(ws);
   } else if (scenario === 'fire-cadence-panel') {
@@ -7359,6 +7606,10 @@ try {
     await runSaveLoadRoundtripScenario(ws);
   } else if (scenario === 'local-liquid-performance') {
     await runLocalLiquidPerformanceScenario(ws);
+  } else if (scenario === 'authored-water-objects') {
+    await runAuthoredWaterObjectsScenario(ws);
+  } else if (scenario === 'authored-water-drop') {
+    await runAuthoredWaterDropScenario(ws);
   } else if (scenario === 'local-liquid-live-host') {
     await runLocalLiquidLiveHostScenario(ws);
   } else if (scenario === 'local-liquid-selection-continuity') {
@@ -7445,6 +7696,7 @@ try {
   });
   throw error;
 } finally {
+  if (liveBudgetTimer) clearInterval(liveBudgetTimer);
   try { ws?.close?.(); } catch {}
   chromeProcess?.kill('SIGTERM');
   await gpuSampler?.stop();

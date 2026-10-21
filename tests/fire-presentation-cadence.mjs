@@ -20,11 +20,19 @@ test('no phase without opted-in advection or with the sim stepping every frame',
 test('the raymarch carries each sample point forward by the phase, clipped against scene solids, and the frame writes the phase', () => {
  const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
  const fn = /fn presentationAdvect\([\s\S]*?\n}\n/.exec(source)?.[0] ?? '';
- assert.match(fn, /u\.occupancy_controls\.z/, 'the phase rides a free occupancy lane');
+ assert.match(fn, /u\.heat_release\.y/, 'the phase rides an unread heat_release lane');
  assert.match(fn, /sceneClipCharacteristic\(/, 'the carried point stops at scene solids like the sim backtrace');
  assert.match(fn, /dynamicsBacktraceScale\(\)/, 'one real step carries as far as the sim transport does');
  assert.match(source, /let p = presentationAdvect\(select\(ro \+ rd \* t, fullGridP, fullGridCapture\)/);
- assert.match(source, /uniforms\[42\] = presentationPhase\(/);
+ assert.match(source, /state\.presentationCarryPhase = presentationPhase\(/);
+ assert.match(source, /uniforms\[HEAT_RELEASE_UNIFORM_OFFSET \+ 1\] = state\.presentationCarryPhase/, 'written after the heat-release block so it is not overwritten');
+});
+
+test('cadence uniforms stay off the lanes ray noise, flame priority and quadrature jitter own', () => {
+ const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+ assert.doesNotMatch(source, /uniforms\[4[1-3]\] = (presentation|frameDetail)/);
+ assert.match(source, /uniforms\[42\] = clampFinite\(controlsSnapshot\.flamePriority/);
+ assert.doesNotMatch(/fn waveletCoordinatesCarried\(\)[\s\S]*?\n}\n/.exec(source)?.[0] ?? '', /occupancy_controls/);
 });
 
 test('blend shows the previous real state on a step frame and moves toward the new one between steps', () => {
@@ -37,7 +45,8 @@ test('blend shows the previous real state on a step frame and moves toward the n
 
 test('the frame blends the previous and current fluid state into the buffer the raymarch reads', () => {
  const source = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
- assert.match(source, /uniforms\[41\] = presentationBlendPhase\(/);
+ assert.match(source, /state\.presentationBlendPhase = presentationBlendPhase\(/);
+ assert.match(source, /phase: state\.presentationBlendPhase \?\? 0/, 'the blend pass reads the phase from frame state, not a shared uniform lane');
  assert.match(source, /copyBufferToBuffer\(fluidBuffers\[currentFluid\], 0, fluidPrevBuffer, 0/);
  assert.match(source, /pass\.setBindGroup\(0, options\.bindGroup \|\| presentationBindGroup\(\)\)/);
 });

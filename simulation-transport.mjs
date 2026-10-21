@@ -25,6 +25,7 @@ export function createSimulationTransport(adapter){
   read,state:()=>({busy,disposed}),
   toggle:()=>run(async()=>{await adapter.pause(!read().paused);return read();}),
   rate:value=>run(async()=>{if(!Number.isFinite(value)||value<=0)throw Error('Playback rate must be finite and positive');await adapter.rate(value);return read();}),
+  cadence:value=>run(async()=>{if(!adapter.cadence)throw Error('Playback cadence capability unavailable');await adapter.cadence(value);return read();}),
   step:direction=>run(()=>{if(![-1,1].includes(direction))throw Error('Step direction must be -1 or 1');return seekStep(Math.max(0,read().step+direction));}),
   seek:seconds=>run(()=>{if(!Number.isFinite(seconds)||seconds<0)throw Error('Seek requires nonnegative simulated seconds');const n=Math.round(seconds/read().dt);if(!Number.isSafeInteger(n))throw Error('Target tick is not representable');return seekStep(n);}),
   replay:()=>run(async()=>{await adapter.pause(true);await adapter.restart();await adapter.pause(true);return read();}),
@@ -60,6 +61,12 @@ export function mountSimulationTransport({document,root,transport,exportSequence
   let task;try{task=exportSequence({request,signal:abort.signal,onProgress:p=>{if(!disposed)progress.textContent=p.completedFrames+'/'+p.requestedFrames+' frames · '+p.timeSeconds.toFixed(4)+' s';}});}catch(e){task=Promise.reject(e);}
   Promise.resolve(task).then(result=>{if(!disposed)progress.textContent=String(result);},e=>{if(!disposed)progress.textContent=e.message;}).finally(()=>{exporting=false;abort=null;if(!disposed){render.disabled=false;cancel.disabled=true;controls.update();}});
  };
- const timer=setInterval(controls.update,250);
- return {node:controls.node,update:controls.update,async dispose(){disposed=true;clearInterval(timer);abort?.abort();controls.dispose();await transport.dispose();}};
+ const cadenceLabel=make('label','Playback cadence '),cadence=make('select'),meaning=make('span');
+ cadence.setAttribute('aria-label','Playback cadence');
+ for(const [value,label] of [['wall_time','Wall-time playback'],['render_cadence','Ticks per drawn frame']]){const option=make('option',label);option.value=value;cadence.append(option);}
+ cadenceLabel.append(cadence,meaning);controls.elements.more.append(cadenceLabel);
+ const update=()=>{controls.update();try{const s=transport.read();cadenceLabel.hidden=!s.cadence;cadence.disabled=transport.state().busy||exporting;if(s.cadence)cadence.value=s.cadence;meaning.textContent=s.cadence==='render_cadence'?'ticks / drawn frame':'simulated / wall time';controls.elements.rate.setAttribute('title',meaning.textContent);}catch{cadence.disabled=true;}};
+ cadence.onchange=async()=>{try{await transport.cadence(cadence.value);}catch(e){controls.elements.error.textContent=e.message;}finally{update();}};
+ update();const timer=setInterval(update,250);
+ return {node:controls.node,update,async dispose(){disposed=true;clearInterval(timer);abort?.abort();controls.dispose();await transport.dispose();}};
 }

@@ -31,6 +31,17 @@ function fixture(castShadow=true) {
   return {mesh,mount,geometry,material,uploads,device,statuses,passes,copies,buffers,field,emitter,prepare(){consume(field);}};
 }
 const selected=process.argv[2];
+if(!selected||selected==='domain'){
+ const f=fixture();f.prepare();
+ for(const ratio of [1,1.5,3,4,2]){
+  f.field.source.dimensions=[32,32*ratio,32];f.field.source.localMax=[1,-1+2*ratio,1];f.field.source.generation++;
+  f.prepare();const s=f.mount.debugState();
+  assert.deepEqual(s.frame.sourceDomain.hi,f.field.source.localMax);
+  assert.deepEqual(s.frame.smokeReconstruction.coarseDimensions,[2,2*ratio,2]);
+  assert.equal(s.frame.volumeReceivers,8*ratio);
+ }
+ f.mount.dispose();
+}
 if(!selected||selected==='initial-coarse-frame'){
  const f=fixture();f.mount.setReceiverSpacing(.16);f.mount.setDirections(8);f.mount.setAngularPattern('guided');
  let hostDrawn=false,volumeEncoderCreated=false;

@@ -7,6 +7,7 @@ const limits = {
   maxBufferSize: 2147483648, maxStorageBufferBindingSize: 1073741824,
   maxStorageBuffersPerShaderStage: 12,
   maxStorageBuffersInFragmentStage: 8, maxStorageBuffersInVertexStage: 8,
+  maxSampledTexturesPerShaderStage: 48,
 };
 let nativeRequests = 0, destroys = 0, acquisitionCalls = 0;
 const device = {
@@ -33,6 +34,11 @@ assert.equal(shared.device, device);
 assert.equal(shared.device.guardInstalledBeforeExposure, true);
 assert.deepEqual(observedDescriptor.requiredLimits, shared.requiredLimits);
 assert.deepEqual(observedDescriptor.requiredFeatures, shared.requiredFeatures);
+assert.equal(observedDescriptor.requiredLimits.maxSampledTexturesPerShaderStage,48,
+  'composed material and authored shadow maps must receive the adapter texture capacity, not default16');
+await assert.rejects(requestKaminosSharedWebGpuDevice({adapter,acquireDevice:async()=>({
+  ...device,limits:{...limits,maxSampledTexturesPerShaderStage:16},
+})}),/effective.*maxSampledTexturesPerShaderStage/,'effective default capacity cannot masquerade as requested capacity');
 
 nativeRequests = 0;
 await assert.rejects(requestKaminosSharedWebGpuDevice({adapter, acquireDevice: async () => {

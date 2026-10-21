@@ -1,6 +1,6 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.57",
+  "version": "0.1.58",
   "private": false,
   "type": "module",
   "description": "WebGPU inference runtime for responsive browser AI: shared GPU devices, model loading, cooperative scheduling, and image, 3D, segmentation, and motion model ports.",
@@ -11,7 +11,7 @@
     "depth-estimation", "image-segmentation", "motion-generation",
     "moge", "sharp", "stable-fast-3d", "kimodo", "sam3", "trellis", "flux", "supermat", "unimate"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lyonsno/kaminos.git",
@@ -21,6 +21,8 @@
     "access": "public"
   },
   "files": [
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.txt",
     "README.md",
     "docs",
     "examples",

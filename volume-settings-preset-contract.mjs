@@ -337,6 +337,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetRe
     if (Object.hasOwn(preset, field)) throw new Error(`settings preset contains forbidden runtime or replay state: ${field}`);
   }
   const allowedFields = schema.allowedNativePresetFields;
+  if(preset.sourceRadiusSpace!==undefined && preset.sourceRadiusSpace!=='simulation-v1')throw new Error('Unknown preset source radius space');
   const unexpectedPresetFields = Object.keys(preset).filter(field => !allowedFields?.includes(field));
   if (unexpectedPresetFields.length > 0) {
     throw new Error(`settings preset contains fields outside its canonical schema: ${unexpectedPresetFields.join(',')}`);

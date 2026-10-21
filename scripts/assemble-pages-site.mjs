@@ -65,6 +65,18 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
     "models/supermat/supermat-kernels.js","models/supermat/supermat-preprocess.js","models/supermat/supermat-maps.js","models/supermat/supermat-cpu-worker.js"]){
     const target=path.join(out,file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(repoRoot,file),target);
   }
+  // The solver is shared by Material Photograph. Preserve its static module
+  // graph as the numerical owner splits reusable browser components.
+  const pending=["finger-fluid-webgpu-core.js"],seen=new Set();
+  while(pending.length){
+    const file=pending.pop();if(seen.has(file))continue;seen.add(file);
+    const source=fs.readFileSync(path.join(repoRoot,file),"utf8");
+    for(const [,specifier] of source.matchAll(/(?:import|export)\s[^'"]*?from\s*['"](\.{1,2}\/[^'"]+)['"]/g)){
+      const relative=path.normalize(path.join(path.dirname(file),specifier));
+      if(relative.startsWith("..")||path.isAbsolute(relative)||!/[.](?:mjs|js)$/.test(relative))throw Error("Invalid browser dependency: "+specifier);
+      const target=path.join(out,relative);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(repoRoot,relative),target);pending.push(relative);
+    }
+  }
   fs.cpSync(path.join(repoRoot,"assets","hdr"),path.join(out,"assets","hdr"),{recursive:true});
 }
 

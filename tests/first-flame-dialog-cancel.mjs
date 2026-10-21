@@ -35,6 +35,7 @@ function fixture({ holdActivation = false, coldBoot = false } = {}) {
   const settings = {
     source: { presetId: 'saved-immersed-basin', label: 'Whole saved basin' },
     domControls: {
+      'volume-physical-mode': { value: '2' },
       'volume-emitter-source-law': { value: 'immersed-source' },
       'volume-pressure-solver': { value: 'converged-open-top' },
       'volume-advection-scheme': { value: 'maccormack' },

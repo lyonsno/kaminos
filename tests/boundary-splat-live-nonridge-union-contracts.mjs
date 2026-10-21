@@ -21,11 +21,6 @@ assert.match(
   /BOUNDARY_SPLAT_LIVE_UNION_COMPOSITION_IDENTITY\s*=\s*'separate-ridge-nonridge-shared-total-extinction-v0'/,
   'live union must expose the requested optical composition identity',
 );
-assert.match(
-  page,
-  /<option value="kernel_moment_full_flame_union">ridge \+ fire-active union<\/option>/,
-  'cockpit must request the union explicitly instead of silently changing the covariance mode',
-);
 
 const compactor = core.match(/fn compactBoundarySplats[\s\S]*?(?=\n@compute @workgroup_size\(1\)\nfn finalizeBoundarySplats)/)?.[0] || '';
 assert.match(

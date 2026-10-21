@@ -21,6 +21,8 @@ test('schema projection keeps authored reactant values and refuses holes or unkn
  const second=fire.projectFireSettingsToSchema(projected,schema);assert.equal(second.domControls['volume-reaction-law'].value,'reactant-v0');assert.equal(second.domControls['volume-reactant-mixing-time'].value,4.567);
  const hole=oldSettings();delete hole.domControls['volume-density'];assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-density/);
  const unknown=oldSettings();unknown.domControls['volume-not-declared']={value:1};assert.throws(()=>fire.projectFireSettingsToSchema(unknown,schema),/Unsupported authored fire control/);
+ // A hole is not history: a record that still carries wavelet strength (introduced at 259) cannot be missing the pressure solver (212).
+ const lateHole=oldSettings();delete lateHole.domControls['volume-pressure-solver'];assert.throws(()=>fire.projectFireSettingsToSchema(lateHole,schema),/Missing authored fire control volume-pressure-solver/);
 });
 
 test('a superseded scene cannot apply a late schema response',async()=>{

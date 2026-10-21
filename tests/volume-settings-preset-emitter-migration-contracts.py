@@ -177,9 +177,9 @@ def main():
             preset = serve.read_volume_settings_preset(target, alias, schema)["preset"]
             assert preset["controlCount"] == schema["controlCount"]
             assert preset["domControls"]["emitter-assay-family"]["value"] == "cluster"
-            assert preset["domControls"]["volume-exposure"]["value"] == 1
-            assert preset["domControls"]["volume-reaction-boundary-fire-clean-color"]["value"] == "#4a86ff"
-            assert preset["domControls"]["volume-reaction-boundary-fire-soot-color"]["value"] == "#ffc460"
+            assert preset["domControls"]["volume-wavelet-strength"]["value"] == 1
+            assert preset["domControls"]["volume-appearance-model"]["value"] == "authored"
+            assert "volume-exposure" not in preset["domControls"], "retired controls are stripped on migration"
             assert preset["domControls"]["volume-artistic-swirl"]["value"] is True
             assert preset["domControls"]["volume-phased-sway"]["value"] is True
             assert preset["presentationControls"]["raymarch-smoke-presentation"]["value"] == "on"

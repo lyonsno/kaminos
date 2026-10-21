@@ -1,48 +1,51 @@
 // Fixed, progressive volume-point quadrature induces a known angular density.
 // A sample selects a DIRECTION, not a point light: integrate its whole visible
 // chord. Neighboring receivers share source points; nothing rotates per vertex.
-export const SOURCE_LO=[-1,-1,-1], SOURCE_HI=[1,3,1], SOURCE_VOLUME=16;
+import {sceneSourceDomain} from './scene-volume-source.mjs';
+const DEFAULT_DOMAIN=sceneSourceDomain();
+export const SOURCE_LO=DEFAULT_DOMAIN.lo, SOURCE_HI=DEFAULT_DOMAIN.hi, SOURCE_VOLUME=DEFAULT_DOMAIN.volume;
 function radicalInverse(index,base) {
   let value=0,scale=1/base;
   while(index){value+=(index%base)*scale;index=Math.floor(index/base);scale/=base;}
   return value;
 }
-export function progressiveSourcePoint(index,rotation=0) {
+export function progressiveSourcePoint(index,rotation=0,domain=DEFAULT_DOMAIN) {
   if(!Number.isSafeInteger(index)||index<0||!Number.isFinite(rotation))throw new Error('finite progressive source index and rotation required');
   return [2,3,5].map((base,a)=>{
     const v=radicalInverse(index+1,base)+rotation/(2*Math.PI);
-    return SOURCE_LO[a]+(SOURCE_HI[a]-SOURCE_LO[a])*(v-Math.floor(v));
+    return domain.lo[a]+(domain.hi[a]-domain.lo[a])*(v-Math.floor(v));
   });
 }
-export function sourceInterval(p,d,limit=Infinity) {
+export function sourceInterval(p,d,limit=Infinity,domain=DEFAULT_DOMAIN) {
   let near=0,far=limit;
   for(let a=0;a<3;a++){
-    if(d[a]===0){if(p[a]<SOURCE_LO[a]||p[a]>SOURCE_HI[a])return [0,0];}
-    else {const x=(SOURCE_LO[a]-p[a])/d[a],y=(SOURCE_HI[a]-p[a])/d[a];near=Math.max(near,Math.min(x,y));far=Math.min(far,Math.max(x,y));}
+    if(d[a]===0){if(p[a]<domain.lo[a]||p[a]>domain.hi[a])return [0,0];}
+    else {const x=(domain.lo[a]-p[a])/d[a],y=(domain.hi[a]-p[a])/d[a];near=Math.max(near,Math.min(x,y));far=Math.min(far,Math.max(x,y));}
   }
   return far>near?[near,far]:[0,0];
 }
-export function sourceRaySample(p,index,rotation=0) {
-  const point=progressiveSourcePoint(index,rotation);
+export function sourceRaySample(p,index,rotation=0,domain=DEFAULT_DOMAIN) {
+  const point=progressiveSourcePoint(index,rotation,domain);
   const v=point.map((x,a)=>x-p[a]),length=Math.hypot(...v);
   // A volume receiver coinciding with a quadrature point is measure zero. Use
   // a declared deterministic direction, retaining its actual angular PDF.
   const direction=length>0?v.map(x=>x/length):[0,1,0];
-  const span=sourceInterval(p,direction),[a,b]=span;
-  const pdf=(b-a)*(b*b+b*a+a*a)/(3*SOURCE_VOLUME);
+  const span=sourceInterval(p,direction,Infinity,domain),[a,b]=span;
+  const pdf=(b-a)*(b*b+b*a+a*a)/(3*domain.volume);
   return {point,direction,pdf,span};
 }
 // Independent CPU reference for the production piecewise-constant-cell model.
 export function integrateCellRay(sample,dimensions,p,d,limit=Infinity) {
-  const [near,far]=sourceInterval(p,d,limit),out=[0,0,0];
+  const domain=sceneSourceDomain(dimensions);
+  const [near,far]=sourceInterval(p,d,limit,domain),out=[0,0,0];
   if(far<=near)return out;
-  const pitch=dimensions.map((n,a)=>(SOURCE_HI[a]-SOURCE_LO[a])/n);
+  const pitch=dimensions.map((n,a)=>(domain.hi[a]-domain.lo[a])/n);
   const cell=p.map((x,a)=>{
-    const u=(x+d[a]*near-SOURCE_LO[a])/pitch[a];
+    const u=(x+d[a]*near-domain.lo[a])/pitch[a];
     return Math.max(0,Math.min(dimensions[a]-1,d[a]<0?Math.ceil(u)-1:Math.floor(u)));
   });
   const step=d.map(Math.sign);
-  const crossing=()=>cell.map((c,a)=>d[a]===0?Infinity:(SOURCE_LO[a]+(c+(d[a]>0?1:0))*pitch[a]-p[a])/d[a]);
+  const crossing=()=>cell.map((c,a)=>d[a]===0?Infinity:(domain.lo[a]+(c+(d[a]>0?1:0))*pitch[a]-p[a])/d[a]);
   let t=near,transmission=1;
   while(t<far&&cell.every((c,a)=>c>=0&&c<dimensions[a])){
     const next=crossing(),end=Math.min(far,...next),ds=Math.max(0,end-t);
@@ -60,18 +63,23 @@ export function integrateCellRay(sample,dimensions,p,d,limit=Infinity) {
 }
 
 export const SOURCE_AWARE_BODY_WGSL=`
+fn sourceDomainHi()->vec3<f32> {
+  let dims=textureDimensions(coefficients);
+  return vec3<f32>(-1.0)+vec3<f32>(dims)*(2.0/f32(dims.x));
+}
 fn sourceDirection(p:vec3<f32>,a:u32)->vec3<f32> {
   let v=directions[a].xyz-p;
   if(dot(v,v)==0.0){return vec3<f32>(0.0,1.0,0.0);}
   return normalize(v);
 }
 fn uniformSourcePdf(p:vec3<f32>,d:vec3<f32>)->f32 {
-  let span=interval(p,d,vec3<f32>(-1.0),vec3<f32>(1.0,3.0,1.0),1e30);
+  let hi=sourceDomainHi();let extent=hi+vec3<f32>(1.0);
+  let span=interval(p,d,vec3<f32>(-1.0),hi,1e30);
   if(span.y<=span.x){return 0.0;}
-  return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/48.0;
+  return (span.y-span.x)*(span.y*span.y+span.y*span.x+span.x*span.x)/(3.0*extent.x*extent.y*extent.z);
 }
 fn integrateCells(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec3<f32> {
-  let lo=vec3<f32>(-1.0);let hi=vec3<f32>(1.0,3.0,1.0);
+  let lo=vec3<f32>(-1.0);let hi=sourceDomainHi();
   let span=interval(p,d,lo,hi,limit);
   if(span.y<=span.x){return vec3<f32>(0.0);}
   let dims=vec3<i32>(textureDimensions(coefficients));

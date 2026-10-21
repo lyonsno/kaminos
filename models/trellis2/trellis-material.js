@@ -148,7 +148,7 @@ export function rasterizeTrellisMaterialUV({vertices,triangles,uvs,textureSize=1
 
 // Exact Euclidean nearest-covered extension, not OpenCV Telea. Equal-distance
 // ties choose the earlier row/column. Every pixel is filled; no radius/cap.
-function nearestCovered(mask,size){
+export function nearestCovered(mask,size){
   const count=size*size,rowDistance=new Float64Array(count),rowSeed=new Int32Array(count),
     seeds=new Int32Array(count),v=new Int32Array(size),z=new Float64Array(size+1),
     cost=new Float64Array(size),distance=new Float64Array(size),arg=new Int32Array(size);

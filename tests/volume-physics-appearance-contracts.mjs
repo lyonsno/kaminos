@@ -34,19 +34,27 @@ test('the physics law is a third material law, requested by material law 2', () 
   assert.deepEqual(resolved.effective, { render: true, sootBurnout: false }, 'burnout is off at its default rate 0');
   assert.equal(resolved.reason, null);
   assert.equal(resolved.kelvinPerHeat, PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat);
-  assert.equal(resolvePhysicsAppearance({ physicalMaterialLaw: 1 }, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, false);
-  assert.equal(resolvePhysicsAppearance({}, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, false, 'saved basins without the field stay on their law');
+  // Physics is the one material law (the law select is retired, 2026-10-18): no saved field selects it.
+  assert.equal(resolvePhysicsAppearance({}, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, true, 'the law is not read from a retired control');
+  assert.equal(resolvePhysicsAppearance({ physicalMaterialLaw: 1 }, { reactantAdmitted: true, emissiveRouteEffective: true }).requested, true, 'a stale saved law value cannot reinstate a retired law');
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(core, /controlsSnapshot\.physicalColorMode|controlsSnapshot\.physicalMaterialLaw/, 'the colour route and material law are not read from retired controls (a snapshot without them rendered the legacy transfer: no emission)');
+  assert.match(core, /const physicalColorMode = 2;/, 'emissive transport is the one colour route');
 });
 
-test('it needs the reactant law; the soot burnout does not depend on which view draws the frame', () => {
-  const noLaw = resolvePhysicsAppearance({ physicalMaterialLaw: 2, physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: false, emissiveRouteEffective: true });
-  assert.deepEqual(noLaw.effective, { render: false, sootBurnout: false });
-  assert.equal(noLaw.reason, 'physics-appearance-requires-the-reactant-law');
-  const offRoute = resolvePhysicsAppearance({ physicalMaterialLaw: 2, physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: true, emissiveRouteEffective: false });
+test('it draws under every reaction law; the soot burnout still follows the reactant law, never the view', () => {
+  // Physics is the one material law (operator, 2026-10-18): there is no stand-in
+  // for the authored reaction law any more, so the view draws Physics there too.
+  const authored = resolvePhysicsAppearance({ physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: false, emissiveRouteEffective: true });
+  assert.deepEqual(authored.effective, { render: true, sootBurnout: false }, 'the authored law renders Physics; burnout needs the reactant oxidizer field');
+  assert.equal(authored.reason, null);
+  const offRoute = resolvePhysicsAppearance({ physicalSootBurnoutRate: 0.4 }, { reactantAdmitted: true, emissiveRouteEffective: false });
   assert.deepEqual(offRoute.effective, { render: false, sootBurnout: true }, 'a diagnostic view must not change the simulation');
   assert.equal(offRoute.reason, 'physics-appearance-draws-only-on-the-emissive-transport-route');
-  assert.deepEqual(physicsAppearanceUniformValues(noLaw), [0, noLaw.kelvinPerHeat, 0, noLaw.sootBurnoutKelvin]);
+  assert.deepEqual(physicsAppearanceUniformValues(authored), [1, authored.kelvinPerHeat, 0, authored.sootBurnoutKelvin]);
   assert.deepEqual(physicsAppearanceUniformValues(offRoute), [0, offRoute.kelvinPerHeat, 0.4, offRoute.sootBurnoutKelvin]);
+  const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(core, /transportedEmissiveMaterial|transported-heat-soot-v1|mixed-carrier-soot-floor-v2/, 'the transported and mixed-carrier stand-ins are gone from the core');
 });
 
 test('controls are clamped to their ranges and non-finite input falls back to the defaults', () => {
@@ -111,18 +119,20 @@ test('the kernel and the renderer carry the same laws as these references', () =
 
 test('the uncoupled-control list names real cockpit controls and the switch lives in the Emissive transport group', () => {
   const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length > 50);
+  // The paintings were retired with the legacy material laws (2026-10-18); only the carrier drivers remain uncoupled.
+  assert.equal(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.length, 4);
+  assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.every(c => c.reason === 'carriers-only'));
   for (const { id, reason } of PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS) {
     assert.ok(index.includes(`id="${id}"`), `${id} exists in the cockpit`);
     assert.ok(['unused', 'carriers-only'].includes(reason), `${id}: ${reason}`);
   }
-  for (const id of ['volume-physical-temperature', 'volume-physical-spread', 'volume-fire-licks', 'volume-reaction-boundary-support-thermal']) {
+  for (const id of ['volume-fire-licks', 'volume-interface-shred', 'volume-microdetail', 'volume-detail-scale']) {
     assert.ok(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.some(c => c.id === id), `${id} is marked`);
   }
   for (const id of ['volume-physical-exposure', 'volume-physical-white', 'volume-physical-smoke-extinction', 'volume-density', 'volume-reactant-mixing-time']) {
     assert.ok(!PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.some(c => c.id === id), `${id} still couples`);
   }
-  assert.match(index, /<option value="2">Physics: soot × blackbody \(no carriers\)<\/option>/);
+  assert.doesNotMatch(index, /id="volume-physical-material-law"/, 'the material law select is retired: Physics is the law');
   for (const id of ['volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin']) {
     assert.ok(index.includes(`id="${id}"`), `${id} is in the cockpit`);
   }
@@ -143,7 +153,7 @@ test('in a saved layout the new controls join the material law; an existing plac
   const placed = structuredClone(layout); placed.groups[0].controlIds.push(...physicsIds);
   assert.deepEqual(reconcileVolumeCockpitLayoutDocument({ document: placed, authorableControlIds: ids }).document, placed);
   const emissive = { effective: 'emissive-transport-v2' };
-  const base = { fireRenderMode: 'inspect', shellInspectMode: 'boundary_fire', physicalColorMode: 2 };
-  assert.equal(volumeCockpitModeAvailability({ ...base, physicalMaterialLaw: 2 }, [], emissive)['volume-physical-kelvin-per-heat'], '');
-  assert.match(volumeCockpitModeAvailability({ ...base, physicalMaterialLaw: 1 }, [], emissive)['volume-physical-soot-burnout-rate'], /Physics only/);
+  // The Physics law is the only material law (legacy laws retired 2026-10-18); the renderer receipt decides.
+  assert.equal(volumeCockpitModeAvailability({}, [], emissive)['volume-physical-kelvin-per-heat'], '');
+  assert.match(volumeCockpitModeAvailability({}, [], { effective: 'legacy' })['volume-physical-soot-burnout-rate'], /emissive transport route/);
 });

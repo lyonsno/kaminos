@@ -5,6 +5,12 @@ import {validateShadowSampling} from './fire-shadow-sampling.mjs';
 const {cameraProjectionMatrix,cameraViewMatrix,positionWorld,cubeTexture,float,vec3,vec4,uniform,step,mix}=THREE.TSL;
 
 const activeBatches=new WeakSet();
+// Radial-distance cube sampled without environment rotation at the class level,
+// so copies made by .level() (and compute builds) never pull in the
+// material/scene environment rotation, which has no frame in a compute pass.
+class RadialDistanceCubeNode extends THREE.CubeTextureNode {
+  setupUV(builder,uvNode){return builder.renderer.coordinateSystem===THREE.WebGPUCoordinateSystem?vec3(uvNode.x.negate(),uvNode.yz):uvNode;}
+}
 function prepareShadowScene(scene) {
   scene.updateMatrixWorld(true);
   const bounds=new THREE.Box3(),objectBounds=new THREE.Box3(),casters=[];
@@ -21,34 +27,57 @@ function prepareShadowScene(scene) {
     Math.max(Math.abs(bounds.min.x),Math.abs(bounds.max.x)),
     Math.max(Math.abs(bounds.min.y),Math.abs(bounds.max.y)),
     Math.max(Math.abs(bounds.min.z),Math.abs(bounds.max.z)));
-  return {scene,casters,extent};
+  return {scene,casters,extent,triangleCount:casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0)};
 }
 
 // Synchronous and frame-local: reuse preparation, never reuse old captures or
 // let a retained snapshot authorize a later frame's geometry.
-export function renderFireShadowBatch({scene,shadows}) {
+export function renderFireShadowBatch({scene,shadows,casterScene=null,RendererUtils=THREE.RendererUtils}) {
+  if(casterScene)return casterScene.withCapture(()=>renderFireShadowBatch({scene,shadows,RendererUtils}));
+  if(shadows.some(shadow=>shadow.batchScene&&shadow.batchScene!==scene))throw Error('fire-shadow-inactive-or-foreign-batch');
   const prepared=prepareShadowScene(scene);
+  const renderer=shadows[0]?.batchRenderer;
+  const shared=renderer&&shadows.every(shadow=>shadow.batchRenderer===renderer);
+  const state=shared?RendererUtils.resetRendererAndSceneState(renderer,scene):null;
+  const culling=[],autoUpdate=scene.matrixWorldAutoUpdate;
   activeBatches.add(prepared);
-  try {for(const shadow of shadows)shadow.render(prepared);}
-  finally {activeBatches.delete(prepared);}
+  try {
+    if(shared){
+      prepared.batchRenderer=renderer;
+      for(const mesh of prepared.casters){culling.push([mesh,mesh.frustumCulled]);mesh.frustumCulled=false;}
+      scene.matrixWorldAutoUpdate=false;
+      renderer.setRenderObjectFunction((...args)=>{
+        if(!args[0].isMesh||!args[0].castShadow)return;
+        const material=scene.overrideMaterial,side=material.side;material.side=args[4].side;
+        try{renderer.renderObject(...args);}finally{material.side=side;}
+      });
+    }
+    for(const shadow of shadows)shadow.render(prepared);
+  } finally {
+    scene.matrixWorldAutoUpdate=autoUpdate;
+    for(const [mesh,culled] of culling)mesh.frustumCulled=culled;
+    activeBatches.delete(prepared);
+    if(shared)RendererUtils.restoreRendererAndSceneState(renderer,scene,state);
+  }
 }
 
 // CPU frustum tests cannot see the GPU source used by vertexNode. Restore all
 // temporary state even when a face fails, and keep actual material sidedness.
-export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,sharedPreparation=true,RendererUtils=THREE.RendererUtils}) {
-  const state=RendererUtils.resetRendererAndSceneState(renderer,scene);
+export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters=null,sharedPreparation=true,batch=null,RendererUtils=THREE.RendererUtils}) {
+  if(batch&&(!activeBatches.has(batch)||batch.scene!==scene||batch.batchRenderer!==renderer))throw Error('fire-shadow-inactive-or-foreign-batch');
+  const state=batch?null:RendererUtils.resetRendererAndSceneState(renderer,scene);
   const culling=[],autoUpdate=scene.matrixWorldAutoUpdate;
   try {
     const disableCulling=object=>{
       if(object.isMesh&&object.castShadow) {culling.push([object,object.frustumCulled]);object.frustumCulled=false;}
     };
-    if(casters)casters.forEach(disableCulling);else scene.traverseVisible(disableCulling);
+    if(!batch){if(casters)casters.forEach(disableCulling);else scene.traverseVisible(disableCulling);}
     // Caller has updated world matrices for this capture batch. CubeCamera
     // still updates each face camera; only redundant scene walks are omitted.
     if(sharedPreparation)scene.matrixWorldAutoUpdate=false;
     scene.overrideMaterial=material;
     renderer.setClearColor(new THREE.Color(far,far,far),1);
-    renderer.setRenderObjectFunction((...args)=>{
+    if(!batch)renderer.setRenderObjectFunction((...args)=>{
       if(!args[0].isMesh||!args[0].castShadow) return;
       const side=material.side;
       material.side=args[4].side;
@@ -59,7 +88,7 @@ export function renderFireShadowCube({renderer,scene,cubeCamera,material,far,cas
   } finally {
     scene.matrixWorldAutoUpdate=autoUpdate;
     for(const [object,frustumCulled] of culling) object.frustumCulled=frustumCulled;
-    RendererUtils.restoreRendererAndSceneState(renderer,scene,state);
+    if(!batch)RendererUtils.restoreRendererAndSceneState(renderer,scene,state);
   }
 }
 
@@ -111,11 +140,23 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
   const filterDifferential=screenAligned?THREE.TSL.dFdx(direction).toVar():null;
   const filtered=sourceSizeNode===null?hardVisibility:radialSoftVisibility({sampleDepth,delta,normal:normalNode,distance,bias,sourceRadius:sourceSizeNode,softness,hardVisibility,complementary,filterCoordinates,filterDifferential,screenAligned,blockerSamples,filterSamples,filterPattern});
   const visibility=mix(float(1),filtered,enabled.mul(effective));
+  // Hard visibility of the same cube from any world point (no screen
+  // derivatives), for world-point light probes such as creature senses.
+  const visibilityAt=(pointNode,pointNormalNode)=>{
+    const toSource=sourceNode.sub(pointNode),sign=mix(float(-1),float(1),step(float(0),pointNormalNode.dot(toSource)));
+    const offset=pointNormalNode.mul(sign).mul(toSource.length().mul(2/resolution).max(.001));
+    const pointDelta=pointNode.add(offset).sub(sourceNode),pointDistance=pointDelta.length();
+    const radial=THREE.TSL.nodeObject(new RadialDistanceCubeNode(target.texture,pointDelta.div(pointDistance.max(.00001)))).level(0).r;
+    const hard=step(pointDistance.sub(pointDistance.mul(2/resolution).max(.001)),radial);
+    return mix(float(1),hard,enabled.mul(effective));
+  };
   const status={identity:'gpu-centroid-cube-fire-visibility-v0',requested,effective:false,reason:'not-rendered',resolution,source:'live-gpu-emission-centroid',approximation:'single-center-opaque-static-mesh',renderCount:0,filter:sourceSizeNode===null||shadowSoftness===0?'hard':'radial-pcss',shadowSoftness,shadowSampling,blockerSamples,filterSamples};
   return {
+    batchRenderer:sharedPreparation?renderer:null,
+    batchScene:scene,
     prepareSampling(){filterDifferential?.toStack();},
     setSampling(value){validateShadowSampling(value);complementary.value=value==='complementary';status.shadowSampling=value;},
-    visibility,
+    visibility,visibilityAt,
     resource() {
       return {texture:status.effective ? renderer.backend.get(target.texture).texture : null,
         effective:status.effective, resolution, colorTexture:target.texture};
@@ -137,9 +178,10 @@ export function createFireLightFieldShadow({renderer,scene,sourceNode,receiverNo
         const radius=sourceRadius();if(!Number.isFinite(radius)||radius<0)throw new Error('finite source radius required');
         const far=extent.length()+radius+.01;
         for(const camera of cubeCamera.children)if(!sharedPreparation||camera.far!==far){camera.far=far;camera.updateProjectionMatrix();}
-        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation});
+        renderFireShadowCube({renderer,scene,cubeCamera,material,far,casters:sharedPreparation?casters:null,sharedPreparation,batch:prepared?.batchRenderer===renderer?prepared:null});
         effective.value=1;status.effective=true;status.reason=null;
         status.renderCount++;status.meshCount=casters.length;status.far=far;
+        status.triangleCount=casters.reduce((sum,m)=>sum+(m.geometry.index?.count??m.geometry.attributes.position.count)/3,0);
       } catch(error) {status.reason=String(error.message);throw error;}
     },
     setEnabled(value) {enabled.value=value?1:0;status.requested=!!value;return {...status};},

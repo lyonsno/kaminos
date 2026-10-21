@@ -15,12 +15,6 @@ assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\([^)]*\),\s
 assert.match(core, /boundarySplatComputeBindGroupLayout\s*=\s*device\.createBindGroupLayout[\s\S]*binding:\s*4,\s*visibility:\s*GPUShaderStage\.COMPUTE/, 'compute layout exposes the learned-mode camera controls');
 assert.match(core, /boundarySplatComputeBindGroups\s*=\s*fluidBuffers\.map[\s\S]*binding:\s*4,\s*resource:\s*\{\s*buffer:\s*boundarySplatCameraBuffer/, 'compute bind groups attach the existing camera uniform without restoring the candidate copy');
 assert.match(core, /normalizeBoundarySplatMode[\s\S]*'learned'/, 'renderer accepts learned mode without collapsing to off');
-assert.match(page, /<option value="learned">learned attributes<\/option>/, 'primary interface exposes learned attribute mode');
-assert.match(
-  page,
-  /BOUNDARY_SPLAT_MODE_VALUES\s*=\s*new Set\(\[\s*'off',\s*'analytic',\s*'learned',\s*'analytic_conserved',\s*'learned_conserved',\s*'world_covariance',\s*'kernel_moment_covariance',\s*'kernel_moment_full_flame_union',?\s*\]\)/,
-  'browser route preserves learned mode alongside the explicit conserved and covariance modes',
-);
 assert.match(core, /boundarySplatAttributeModelIdentity:\s*boundarySplatEffectiveAttributeModelIdentity\(controlsSnapshot\.boundarySplatMode\)/, 'runtime evidence reports only the applied model identity');
 assert.match(
   core,

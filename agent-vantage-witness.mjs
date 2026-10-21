@@ -13,6 +13,7 @@ import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {decodeScreenshotPngRgb} from './screenshot-png-rgb.mjs';
 import {poseLookingAt} from './agent-vantage-core.mjs';
+import {sharedTabsVerdict, fireStripVerdict, proxyFreePickMapVerdict} from './agent-vantage-witness-checks.mjs';
 
 const repo = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(repo, 'tools/vantage.mjs');
@@ -68,6 +69,109 @@ function colors(file) {
   return {width, height, red: red / total, blue: blue / total, yellow: yellow / total, varied};
 }
 const imageOf = (record, name) => record.result.images.find(image => image.name === name)?.path;
+// Hot, flame-coloured pixels: bright, red over blue, with some green (orange to yellow).
+function hotShare(file) {
+  const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+  let hot = 0;
+  for (let i = 0; i < pixels.length; i += channels) {
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    if (r > 150 && g > 60 && r > 1.4 * b) hot++;
+  }
+  return hot / (width * height);
+}
+
+// --fire: the fire proxy in the sub's own view. A real flame from a stored
+// preset settles; the sub looks at it; a glance with the flame hidden is the
+// baseline, then glances, a watch and the live view are drawn with it shown.
+// Each must draw the flame proxy and say so, and nothing may stay held after.
+async function fireWitness(page) {
+  report.phase = 'fire-add'; save();
+  const presetId = options['flame-preset'] || 'vsp-9ed37dbdd11c7d5da7820aa4c5526a5f37928370b1c5aa03826e72536c40d457';
+  const settleSteps = Number(options['settle-steps'] || 150);
+  await page.evaluate(() => window.kaminosViewportSettings.set({overlays: false, gizmos: false}));
+  await page.evaluate(id => window.kaminosSceneAuthoring.addFlameEmitter(id).then(() => true), presetId);
+  let steps = 0;
+  for (const until = Date.now() + 300000; steps < settleSteps && Date.now() < until; await page.waitForTimeout(250)) {
+    steps = await page.evaluate(() => window.__kaminosVolumePrototype?.debugState()?.simStepCount ?? 0);
+  }
+  check('a real flame settles from its stored preset', steps >= settleSteps, {presetId, steps, settleSteps});
+  const domain = await page.evaluate(() => {
+    const d = window.kaminosFlameDomain.read(), dims = window.__kaminosVolumeGridDimensions;
+    const topY = Array.isArray(dims) && dims[0] > 0 ? -1 + 2 * dims[1] / dims[0] : 3, t = d.translation, k = d.scale;
+    const min = [t[0] - k, t[1] - k, t[2] - k], max = [t[0] + k, t[1] + topY * k, t[2] + k];
+    return {target: min.map((v, i) => (v + max[i]) / 2), size: max.map((v, i) => v - min[i])};
+  });
+  report.effective.fire = {presetId, steps, domain};
+
+  report.phase = 'fire-aim'; save();
+  await vantageOk('launch');
+  const distance = Math.max(domain.size[1], domain.size[0]) * 1.55, [tx, ty, tz] = domain.target;
+  await vantageOk('goto', String(tx + distance * 0.35), String(ty + domain.size[1] * 0.12), String(tz + distance));
+  await vantageOk('look', String(tx), String(ty), String(tz));
+  const required = () => page.evaluate(() => window.kaminosProxyPreview.required());
+
+  report.phase = 'fire-glance'; save();
+  await page.evaluate(() => window.kaminosViewportSettings.set({hiddenIds: ['flame-field']}));
+  await page.waitForTimeout(500);
+  const hidden = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-hidden');
+  await page.evaluate(() => window.kaminosViewportSettings.set({hiddenIds: []}));
+  await page.waitForTimeout(500);
+  const shown = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-shown');
+  const heldAfterGlance = await required();
+  const hot = {hidden: hotShare(imageOf(hidden, 'glance')), shown: hotShare(imageOf(shown, 'glance'))};
+  report.effective.fire.glance = {hidden: hidden.result.proxies, shown: shown.result.proxies, layers: shown.result.layers, omitted: shown.result.omitted, hot};
+  check('with the flame hidden in the scene, a glance says so and draws no flame proxy', hidden.result.proxies?.fire === 'hidden'
+    && !hidden.result.layers.some(layer => /fire/.test(layer)), {proxies: hidden.result.proxies, layers: hidden.result.layers});
+  check('shown, a glance draws the flame as its proxy and says so', shown.result.proxies?.fire === 'drawn'
+    && shown.result.layers.some(layer => /fire.*proxy/.test(layer)) && !shown.result.omitted.some(item => /fire/.test(item)),
+    {proxies: shown.result.proxies, layers: shown.result.layers, omitted: shown.result.omitted});
+  check('and the flame is visible in its picture', hot.shown > hot.hidden + 0.002, hot);
+  check('a glance holds the proxies only while it draws', Object.keys(heldAfterGlance).length === 0, {required: heldAfterGlance});
+
+  report.phase = 'fire-pick'; save();
+  const picked = await vantageOk('pick', '320', String(Math.round(shown.result.image.height / 2)), '--picture', shown.recordPath);
+  check('a pick on that picture lists the flame proxy as what may cover the point', picked.result.unresolved.some(item => item.id === 'fire-proxy'),
+    {unresolved: picked.result.unresolved, hit: picked.result.hit});
+
+  report.phase = 'fire-proxy-display'; save();
+  // The operator's own view showing the fire as Proxy must change nothing in the sub's picture or its pick map.
+  await page.evaluate(() => window.kaminosViewportSettings.set({fire: 'proxy'}));
+  await page.waitForTimeout(800);
+  const underProxy = await vantageOk('glance', '--max-size', '640', '--no-map', '--name', 'fire-operator-proxy');
+  await page.evaluate(() => window.kaminosViewportSettings.set({fire: 'full'}));
+  await page.waitForTimeout(500);
+  const mapVerdict = proxyFreePickMapVerdict({pickMap: underProxy.result.pickMap, pickMapError: underProxy.result.pickMapError ?? null, image: underProxy.result.image});
+  check('with the operator viewing the fire as Proxy, the sub\'s picture still has a pick map that draws no proxy', underProxy.result.proxies?.fire === 'drawn' && mapVerdict.ok,
+    {proxies: underProxy.result.proxies, verdict: mapVerdict});
+
+  report.phase = 'fire-watch'; save();
+  const watched = await vantageOk('watch', '--seconds', '3', '--fps', '3', '--frames', '--max-size', '320', '--name', 'fire-watch');
+  const heldAfterWatch = await required();
+  report.effective.fire.watch = {frames: watched.result.frames.map(frame => ({proxies: frame.proxies, snapshots: frame.proxySnapshots})),
+    seen: watched.result.proxySnapshotsSeen, layers: watched.result.layers, omitted: watched.result.omitted};
+  check('every watch frame draws the flame proxy and says so', watched.result.frames.length >= 3 && watched.result.frames.every(frame => frame.proxies?.fire === 'drawn'),
+    report.effective.fire.watch);
+  const strip = fireStripVerdict({frames: watched.result.frames.map((frame, i) => ({...frame,
+    image: readFileSync(imageOf(watched, `frame-${i + 1}`)).toString('base64')}))});
+  report.effective.fire.watch.verdict = strip;
+  check('the strip drew more than one fire snapshot and its pictures change (plume development after a pulse is not tested here)', strip.ok, strip);
+  const sheet = imageOf(watched, 'sheet');
+  report.effective.fire.watchSheet = sheet;
+  check('a watch lets go of the proxies when it ends', Object.keys(heldAfterWatch).length === 0, {required: heldAfterWatch});
+
+  report.phase = 'fire-live'; save();
+  await vantageOk('live', 'on', '--fps', '4');
+  await page.waitForTimeout(1500);
+  const heldLive = await required();
+  const panel = path.join(out, 'fire-live-panel.png');
+  await page.locator('#agent-vantage-hud').screenshot({path: panel});
+  report.artifacts.push(panel);
+  await vantageOk('live', 'off');
+  const heldOff = await required();
+  check('the live view holds each proxy once while on, and nothing once off', heldLive.fire === 1 && heldLive.water === 1 && Object.keys(heldOff).length === 0,
+    {on: heldLive, off: heldOff});
+  await vantageOk('remove');
+}
 // Where a picture's red pixels are and where its pick map says the red box was
 // drawn: how much they overlap, and how far apart their centres lie.
 function mapAgreement(file, pickMap, n) {
@@ -149,6 +253,9 @@ try {
     if (!linked) await new Promise(resolve => setTimeout(resolve, 200));
   }
   check('page links to the server', linked, {pageId: report.effective.pageId});
+
+  if (options.fire) await fireWitness(page);
+  else {
 
   report.phase = 'arrange'; save();
   const scene = await page.evaluate(() => {
@@ -310,6 +417,63 @@ try {
   check('the live view puts frames from the sub\'s camera in its panel', liveOn.result.live.on && liveFrame.shown && liveFrame.frame >= 8 && liveFrame.red > 0.02, liveFrame);
   check('and the operator\'s frame rate holds while it runs', fpsOn >= 0.8 * fpsOff, {fpsOff, fpsOn});
   check('live off stops it and reports what it cost', liveOff.result.live.on === false && liveOff.result.live.frames >= 8 && Number.isFinite(liveOff.result.live.drawMs), liveOff.result.live);
+
+  report.phase = 'watch'; save();
+  // A film strip from the sub's own camera while the red box moves, ended by a page event. The strip must show the
+  // motion, end one frame after the event, and leave the operator's frame rate where it was.
+  const redCentre = file => {
+    const {width, height, channels, pixels} = decodeScreenshotPngRgb(readFileSync(file));
+    let sx = 0, sy = 0, n = 0;
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * channels, r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      if (r > 70 && r > 1.6 * g && r > 1.6 * b) { sx += x; sy += y; n++; }
+    }
+    return n ? {x: sx / n / width, y: sy / n / height, share: n / (width * height)} : null;
+  };
+  const watching = vantage('watch', '--seconds', '10', '--fps', '4', '--until', 'witness-fell', '--after', '0.75', '--frames', '--name', 'watch');
+  const during = await page.evaluate(async id => {
+    // Begin moving the box once the watch has drawn its first frame, however long the command took to arrive.
+    const begun = performance.now() + 30000;
+    while (!(window.kaminosAgentVantage.watching()?.frames >= 1)) {
+      if (performance.now() > begun) throw new Error('The watch never started');
+      await new Promise(done => setTimeout(done, 20));
+    }
+    let frames = 0;
+    const start = performance.now();
+    await new Promise(done => {
+      const step = () => {
+        frames++;
+        const t = Math.min(1, (performance.now() - start) / 1500);
+        window.kaminosSetSceneObjectTransform(id, {position: [1.2 * t, 0.5, 0]});
+        if (t < 1) requestAnimationFrame(step); else done();
+      };
+      requestAnimationFrame(step);
+    });
+    const fps = frames / ((performance.now() - start) / 1000);
+    window.dispatchEvent(new CustomEvent('kaminos:witness-fell', {detail: {box: id, x: 1.2}}));
+    return {fps};
+  }, scene.red);
+  const watched = await watching;
+  if (watched.code !== 0 || !watched.record) throw new Error(`vantage watch exited ${watched.code}: ${watched.stderr}`);
+  for (const image of watched.record.result?.images ?? []) report.artifacts.push(image.path);
+  report.artifacts.push(watched.record.recordPath);
+  await page.evaluate(id => window.kaminosSetSceneObjectTransform(id, {position: [0, 0.5, 0]}), scene.red);
+  const strip = watched.record.result, stripFrames = strip.images.filter(image => /^frame-/.test(image.name));
+  const centres = stripFrames.map(image => redCentre(image.path));
+  const firstRed = centres[0], lastRed = centres.at(-1);
+  report.effective.watch = {ended: strip.ended, event: strip.event, missedTicks: strip.missedTicks, frames: strip.frames.map(frame => frame.atMs),
+    centres, fpsDuring: during.fps, fpsOff, image: strip.image};
+  const afterEvent = strip.frames.filter(frame => frame.atMs >= strip.event?.atMs);
+  check('watch ends on the page event, carrying what it said, and keeps watching for --after past it', strip.ended === 'event' && strip.event?.name === 'witness-fell'
+    && strip.event.detail?.box === scene.red && afterEvent.length >= 3 && afterEvent.at(-1).atMs >= strip.event.atMs + 400
+    && afterEvent.every(frame => frame.atMs < strip.event.atMs + 750 + 250), {...report.effective.watch, afterEvent: afterEvent.map(frame => frame.atMs)});
+  check('its frames come from the sub\'s own camera and each keeps a pick map', strip.route === 'own-camera' && strip.frames.length >= 6
+    && strip.frames.every(frame => frame.pickMap && frame.optics), {frames: strip.frames.length});
+  check('the strip shows the red box moving', !!firstRed && !!lastRed && Math.hypot(lastRed.x - firstRed.x, lastRed.y - firstRed.y) > 0.05, {firstRed, lastRed});
+  check('and the operator\'s frame rate holds while it watches', during.fps >= 0.8 * fpsOff, {fpsOff, fpsDuring: during.fps});
+  const windowed = await vantageOk('watch', '--seconds', '1', '--fps', '2', '--name', 'watch-window');
+  check('without --until a watch ends at the end of its window', windowed.result.ended === 'window' && windowed.result.frames.length === 2
+    && windowed.result.frames.every((frame, i) => Math.abs(frame.atMs - i * 500) < 250), windowed.result.frames.map(frame => frame.atMs));
 
   report.phase = 'map'; save();
   const snapMap = mapColors(imageOf(snapRed, 'map'));
@@ -522,11 +686,51 @@ try {
   const recheckGone = await vantageOk('recheck', '--anchor', redAnchor);
   check('and a recheck of its anchor says it is no longer in the scene', recheckGone.result.now === 'missing' && recheckGone.result.status === null, recheckGone.result);
 
+  report.phase = 'shared-link'; save();
+  // Tabs in one browser profile share its few connections to a server (six over HTTP/1.1). Eight tabs,
+  // half of them hidden, then one more page: every one must be linked by its own id on the shared hub,
+  // and an agent must reach a hidden tab. Notes are off here, so only the vantage link is measured.
+  const shared = await browser.newContext({viewport: {width: 800, height: 600}});
+  const tabUrl = new URL('/index.html?notes=0', options.origin).href;
+  const vantageId = tab => tab.waitForFunction(() => window.kaminosAgentVantage?.pageId, null, {timeout: 30000}).then(handle => handle.jsonValue(), () => null);
+  const hide = () => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
+    Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+  };
+  try {
+    const tabIds = [], hiddenIds = [];
+    for (let i = 0; i < 8; i++) {
+      const tab = await shared.newPage();
+      if (i % 2) await tab.addInitScript(hide);
+      await tab.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 30000});
+      const id = await vantageId(tab);
+      tabIds.push(id);
+      if (i % 2) hiddenIds.push(id);
+    }
+    const fresh = await shared.newPage(), started = Date.now();
+    const loaded = await fresh.goto(tabUrl, {waitUntil: 'domcontentloaded', timeout: 15000}).then(() => true, () => false);
+    const loadMs = Date.now() - started, freshId = loaded ? await vantageId(fresh) : null;
+    const pagesNow = async () => (await (await fetch(new URL('/api/vantage/pages', options.origin))).json()).pages;
+    let pages = await pagesNow(), verdict = sharedTabsVerdict({tabIds, freshId, pages});
+    for (const until = Date.now() + 20000; !verdict.ok && Date.now() < until; verdict = sharedTabsVerdict({tabIds, freshId, pages})) {
+      await new Promise(done => setTimeout(done, 250));
+      pages = await pagesNow();
+    }
+    const reach = hiddenIds[0] ? await vantage('status', '--page', hiddenIds[0]) : {code: null};
+    report.effective.sharedLink = {tabIds, hiddenIds, loaded, loadMs, freshId, verdict,
+      pages: pages.filter(page => [...tabIds, freshId].includes(page.id)).map(({id, connected, hub, visible}) => ({id, connected, hub, visible})),
+      hiddenCommand: {code: reach.code, page: reach.record?.page?.id ?? null, stderr: reach.stderr || null}};
+    check('eight tabs, half hidden, and one more page all load and link by their own ids on one shared hub',
+      loaded && verdict.ok, report.effective.sharedLink);
+    check('an agent command reaches a hidden tab and is answered', reach.code === 0 && reach.record?.page?.id === hiddenIds[0], report.effective.sharedLink.hiddenCommand);
+  } finally { await shared.close(); }
+
   report.phase = 'remove'; save();
   await vantageOk('remove');
   const remaining = await page.evaluate(() => window.kaminosSceneObjectDebugState().some(object => object.id === 'vantage-bebop'));
   check('remove takes the sub out of the scene', !remaining);
 
+  }
   report.phase = 'complete';
   report.status = report.pageErrors.length ? 'passed-with-page-errors' : 'passed';
 } catch (error) {

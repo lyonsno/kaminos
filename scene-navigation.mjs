@@ -69,7 +69,8 @@ function restoreRaycast(mesh) {
 export function prepareNavigationGeometry(root) {
   const pending = [];
   root.traverse(object => {
-    if (!object.isMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
+    // An instanced mesh's triangles sit at its instance transforms, which a geometry index cannot see.
+    if (!object.isMesh || object.isInstancedMesh || object.isSkinnedMesh || object.morphTargetInfluences?.length) return;
     const geometry = object.geometry;
     if (!geometry?.getAttribute('position') || geometry.getAttribute('position').isInterleavedBufferAttribute) return;
     let entry = depthIndexes.get(geometry);
@@ -136,7 +137,7 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
   const cosine = cast.ray.direction.dot(forward);
   cast.near = camera.near / cosine;
   cast.far = camera.far / cosine;
-  const meshes = new Set();
+  const meshes = new Set(), wholes = new Set();
   let indexing = false, failed = false;
   for (const root of roots.filter(Boolean)) {
     root.updateWorldMatrix(true, true);
@@ -144,6 +145,18 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
     let visible = true;
     for (let p = root; p; p = p.parent) if (!p.visible) visible = false;
     if (visible) root.traverseVisible(o => {
+      // An object that raycasts as a whole (a TRELLIS surfel field) answers for itself; its parts never do.
+      if (o.userData?.raycastsAsWhole && o.layers.test(camera.layers)) {
+        // It answers only while something it draws is actually visible.
+        let drawn = false;
+        o.traverseVisible(part => {
+          if (drawn || !part.isMesh) return;
+          const materials = Array.isArray(part.material) ? part.material : [part.material];
+          drawn = materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
+        });
+        if (drawn) wholes.add(o);
+        return;
+      }
       if (o.isMesh && o.layers.test(camera.layers)) {
         const materials = Array.isArray(o.material) ? o.material : [o.material];
         if (!materials.some(material => material?.visible && (!material.transparent || material.opacity > 0))) return;
@@ -155,16 +168,20 @@ export function navigationPivot(camera, target, ndc, roots, {retainedPivot = tar
     });
   }
   const candidates = [...meshes].filter(mesh => {
+    for (let p = mesh.parent; p; p = p.parent) if (wholes.has(p)) return false;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.some(material => material?.visible && (!material.transparent || material.opacity > 0));
   });
+  candidates.push(...wholes);
   const visibleOccluders = occluders.filter(mesh => mesh?.visible && mesh.layers.test(camera.layers));
   for (const mesh of visibleOccluders) mesh.updateWorldMatrix(true, true);
   cast.firstHitOnly = candidates.every(mesh => {
+    if (wholes.has(mesh)) return true;
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     return materials.every(material => material?.visible && (!material.transparent || material.opacity > 0));
   });
   const first = cast.intersectObjects(candidates, false).find(hit => {
+    if (wholes.has(hit.object)) return true;
     const material = Array.isArray(hit.object.material)
       ? hit.object.material[hit.face.materialIndex] : hit.object.material;
     return material?.visible && (!material.transparent || material.opacity > 0);

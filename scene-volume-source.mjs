@@ -3,6 +3,19 @@
 // relative linear RGB, before either consumer's camera transform.
 // Queue ordering is sufficient; no CPU readback or completion wait is needed.
 // The host's scene render submits between preparation and the volume draw.
+export function sceneSourceDomain(dimensions=[1,2,1]) {
+  if(!Array.isArray(dimensions)||dimensions.length!==3||!dimensions.every(n=>Number.isSafeInteger(n)&&n>0)||dimensions[0]!==dimensions[2])
+    throw Error('source dimensions require positive integer width, height and matching depth');
+  const lo=[-1,-1,-1],hi=dimensions.map(n=>-1+2*n/dimensions[0]);
+  return {dimensions:[...dimensions],lo,hi,volume:hi.reduce((v,x,a)=>v*(x-lo[a]),1)};
+}
+export function sceneLightingDomain(field) {
+  const domain=sceneSourceDomain(field.dimensions);
+  for(const [name,expected] of [['localMin',domain.lo],['localMax',domain.hi]])
+    if(field[name]&&(!Array.isArray(field[name])||field[name].length!==3||field[name].some((x,a)=>x!==expected[a])))throw Error('source domain bounds disagree with dimensions');
+  return domain;
+}
+
 export function validateScenePointSource(source) {
   if (!Array.isArray(source?.position) || source.position.length !== 3 || !source.position.every(Number.isFinite)) throw new Error('scene source position must be finite XYZ');
   if (!Array.isArray(source?.intensity) || source.intensity.length !== 3 || !source.intensity.every(x=>Number.isFinite(x)&&x>=0)) throw new Error('scene source intensity must be nonnegative finite linear RGB');

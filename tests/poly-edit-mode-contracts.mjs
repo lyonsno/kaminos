@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from '../lib/three.core.js';
 import {createPolyEditMode} from '../poly-edit-mode.mjs';
+const {BufferGeometry,Group,Mesh,MeshStandardMaterial}=THREE;
 
 function seamCube(){
   const sides=[[[1,0,0],[0,1,0],[0,0,1]],[[-1,0,0],[0,0,1],[0,1,0]],[[0,1,0],[0,0,1],[1,0,0]],[[0,-1,0],[1,0,0],[0,0,1]],[[0,0,1],[1,0,0],[0,1,0]],[[0,0,-1],[0,1,0],[1,0,0]]];
@@ -75,6 +76,17 @@ const faceMask=edit.selectedFaceMask();assert.equal(faceMask.length,12);assert.e
 assert.ok(faceMask[8]||faceMask[9],'the clicked front face');
 const picked=edit.geometry();assert.deepEqual([...picked.indices],[...mesh.geometry.index.array]);assert.equal(picked.positions.length,mesh.geometry.attributes.position.count*3);
 
+// A line drawn on screen becomes the plane through it along the view, in the mesh's own frame.
+{
+  const flat=edit.planeFromLine(0,200,400,200),n=flat.normal,dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+  assert.ok(Math.abs(Math.abs(n[1])-1)<1e-6,'a horizontal line through the middle cuts horizontally');
+  assert.ok(Math.abs(dot(n,flat.point))<1e-6,'and through the middle of the view');
+  const upright=edit.planeFromLine(mx,0,mx,400);
+  assert.ok(Math.abs(upright.normal[1])<1e-6,'a vertical line cuts vertically (tilted toward the eye in perspective)');
+  assert.ok(Math.abs(dot(upright.normal,[0,0,1])-dot(upright.normal,upright.point))<1e-6,'through the front-face centre the line was drawn over');
+  assert.throws(()=>edit.planeFromLine(10,10,12,11),/longer line/);
+}
+
 // Exit removes everything Edit Mode added and leaves the object's material alone.
 state=edit.exit();
 assert.equal(state.editing,false);
@@ -82,3 +94,74 @@ assert.equal(mesh.children.length,0);
 assert.equal(mesh.material,material);assert.equal(material.transparent,false);
 assert.throws(()=>edit.setMode('face'),/Edit Mode/);
 assert.throws(()=>edit.enter(new THREE.Group(),{objectId:'empty'}),/triangle mesh/);
+
+// A mesh split across primitives (a derived part with its cut cap in a second material) edits
+// as one face set, primitives in order, so faces line up with the GLB's merged primitives.
+{
+  const whole=seamCube(),index=[...whole.index.array],front=index.slice(24,30),rest=[...index.slice(0,24),...index.slice(30)];
+  const part=indices=>{const g=new BufferGeometry();for(const name of ['position','normal','uv'])g.setAttribute(name,whole.getAttribute(name));g.setIndex(indices);return g;};
+  const capMaterial=new MeshStandardMaterial(),bodyMaterial=new MeshStandardMaterial(),group=new Group();
+  group.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));group.updateMatrixWorld(true);
+  const two=createPolyEditMode({camera,canvas});
+  two.enter(group,{objectId:'two'});two.setMode('face');
+  let picked=two.click(200,200);
+  assert.ok([10,11].includes(picked.active.index),`the front face is the second primitive's, merged after the first's 10 faces; got ${picked.active.index}`);
+  assert.equal(two.selectAll('select').counts.faces,12,'all twelve faces, across both primitives');
+  assert.deepEqual([...two.geometry().indices],[...rest,...front.map(i=>i+24)],'indices in primitive order, each primitive with its own vertex block');
+  // L stops where the material changes, so a cut cap can be picked on its own (Blender's Delimit: Material).
+  two.selectAll('deselect');two.click(200,200);
+  assert.equal(two.linked({at:{x:200,y:200}}).counts.faces,2,'L on the cap selects the cap, not the body it is welded to');
+  two.selectAll('deselect');two.click(200,200);
+  assert.equal(two.linked().counts.faces,2,'Ctrl+L from the cap face too');
+  assert.deepEqual(two.selectionMedian().map(v=>Math.round(v*1e6)/1e6),[0,0,1],'the median of the cap is the centre of the front face, in the mesh frame');
+  two.selectAll('deselect');assert.throws(()=>two.selectionMedian(),/Select something/);
+  // X-ray must not change the object's own materials: renderers such as the fire-light shadow pass
+  // reject transparent casters. Seeing and selecting through come from the overlays instead.
+  const versions=[bodyMaterial.version,capMaterial.version];
+  two.setThrough(true);
+  assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent,bodyMaterial.opacity,capMaterial.opacity,bodyMaterial.depthWrite],[false,false,1,1,true],'x-ray leaves the materials opaque');
+  assert.deepEqual([bodyMaterial.version,capMaterial.version],versions,'and does not touch them at all');
+  assert.ok(two.selectAll('select')&&true);
+  two.exit();assert.deepEqual([bodyMaterial.transparent,capMaterial.transparent],[false,false]);
+  const apart=new Group();apart.add(new Mesh(part(rest),bodyMaterial),new Mesh(part(front),capMaterial));apart.children[1].position.x=1;apart.updateMatrixWorld(true);
+  assert.throws(()=>two.enter(apart,{objectId:'apart'}),/share one placement/);
+}
+
+// Tabbing back into the same object reuses its prepared kernel; a geometry change rebuilds it.
+{
+  const again=createPolyEditMode({camera,canvas});
+  again.enter(root,{objectId:'cache'});const first=again.kernel();again.exit();
+  again.enter(root,{objectId:'cache'});assert.equal(again.kernel(),first,'re-entering reuses the kernel');again.exit();
+  mesh.geometry.attributes.position.needsUpdate=true;
+  again.enter(root,{objectId:'cache'});assert.notEqual(again.kernel(),first,'an edited geometry is prepared afresh');
+  again.setMode('face');assert.equal(again.selectAll('select').counts.faces,12);again.exit();
+}
+
+// Orthographic views: occlusion looks along the view direction, not from a point.
+{
+  // Off to the left, looking straight down -z: from this eye the back-left corners are reached
+  // without entering the cube, but in an orthographic view they sit behind the front-left ones.
+  const ortho=new THREE.OrthographicCamera(-6,6,6,-6,.01,100);ortho.position.set(-4,0,5);ortho.updateMatrixWorld(true);
+  const cube=new THREE.Group();cube.add(new THREE.Mesh(seamCube(),new THREE.MeshStandardMaterial()));cube.updateMatrixWorld(true);
+  const flat=createPolyEditMode({camera:ortho,canvas});flat.enter(cube,{objectId:'ortho'});
+  assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,4,'only the four front corners are visible');
+  flat.setThrough(true);assert.equal(flat.box({x0:0,y0:0,x1:400,y1:400}).counts.vertices,8);flat.setThrough(false);
+  // Clicks and slice lines go through the pixel in an orthographic view too.
+  // A circle dragged from a centre to a rim: a cylinder along the view, at the selection's depth.
+  {
+    const centre=flat.screenOf([0,0,0]),rim=flat.screenOf([.5,0,0]);
+    const cyl=flat.circleFromDrag(centre.x,centre.y,rim.x,rim.y);
+    assert.equal(cyl.kind,'cylinder');
+    assert.ok(Math.abs(Math.abs(cyl.axis[2])-1)<1e-9,'the axis runs along the view');
+    assert.ok(Math.hypot(cyl.point[0],cyl.point[1])<1e-6&&Math.abs(cyl.point[2])<1e-6,'through the centre, at the mesh\'s depth');
+    assert.ok(Math.abs(cyl.radius-.5)<1e-6,`radius as dragged, got ${cyl.radius}`);
+    assert.throws(()=>flat.circleFromDrag(centre.x,centre.y,centre.x+2,centre.y),/Drag out further/);
+  }
+  flat.setMode('face');const front=flat.screenOf([0,0,1]);
+  const hit=flat.click(front.x,front.y);assert.ok([8,9].includes(hit.active.index),`the front face under the cursor, got ${hit.active.index}`);
+  const level=flat.planeFromLine(front.x-50,front.y,front.x+50,front.y);
+  assert.ok(Math.abs(Math.abs(level.normal[1])-1)<1e-9,'a level line cuts level');
+  assert.ok(Math.abs(level.normal[1]*level.point[1])<1e-9,'through the height the line was drawn at');
+  flat.exit();
+}
+

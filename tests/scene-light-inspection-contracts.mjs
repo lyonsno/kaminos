@@ -2,10 +2,25 @@ import assert from 'node:assert/strict';
 import {progressiveSourcePoint,sourceRaySample,integrateCellRay} from '../scene-source-aware.mjs';
 import {inspectSourceRays,validateInspectionSnapshot} from '../scene-light-inspection.mjs';
 import {deriveSourceGuide,sourceGuideRaySample} from '../scene-source-guide.mjs';
+// Analytic chord/PDF, independent of the sampler being replayed.
+for(const [height,pdf,output,guidedMode] of [[2,13/12,24/13,false],[6,19/4,24/19,true]]){
+ const dimensions=[2,height,2],sourceDomain={lo:[-1,-1,-1],hi:[1,height-1,1]};
+ const guide={lo:sourceDomain.lo,hi:sourceDomain.hi};
+ const inputs={directions:2,generation:7,points:[[0,0,0],[0,.5,0]],rows:[{position:[0,-2,0],normal:[0,1,0],twoSided:false,firstHits:[1e20,1e20],front:[output,0,0],back:[0,0,0]}],...(guidedMode?{sourceGuide:guide}:{})};
+ const field={dimensions,data:Array.from({length:dimensions.reduce((a,b)=>a*b,1)},()=>[1,0,0,0]).flat()};
+ const metadata={generation:7,directions:2,sourceDomain,surfaceGainFactor:1,angularPattern:guidedMode?'guided':'source',samplingLaw:guidedMode?'emitter-envelope-mixture-solid-angle-v1':'progressive-volume-induced-solid-angle-v1',...(guidedMode?{sourceGuide:guide}:{})};
+ const replay=inspectSourceRays({inputs,field,metadata});
+ assert.equal(replay.status,'matched','correct non2:1 receiver output must replay against its actual domain');
+ assert.ok(Math.abs(replay.rows[0].rays[0].pdf-pdf)<1e-12);
+ const snapshot={status:'captured',metadata,inputs,sourceGeneration:7,fields:{gatherSource:field}};
+ validateInspectionSnapshot(snapshot);
+ assert.throws(()=>inspectSourceRays({inputs,field,metadata:{...metadata,sourceDomain:{...sourceDomain,hi:[1,99,1]}}}),/domain/,'conflicting metadata cannot impersonate the source domain');
+ assert.throws(()=>validateInspectionSnapshot({...snapshot,metadata:{...metadata,sourceDomain:{...sourceDomain,hi:[1,99,1]}}}),/domain/);
+}
 const n=12,p=[0,0,0],normal=[0,1,0],front=[0,0,0],back=[0,0,0];
-for(let a=0;a<n;a++){const s=sourceRaySample(p,a),cos=s.direction[1],value=integrateCellRay(()=>[1,1,1,0],[1,1,1],p,s.direction);for(let c=0;c<3;c++)(cos<0?back:front)[c]+=value[c]*Math.abs(cos)/(n*s.pdf);}
+for(let a=0;a<n;a++){const s=sourceRaySample(p,a),cos=s.direction[1],value=integrateCellRay(()=>[1,1,1,0],[1,2,1],p,s.direction);for(let c=0;c<3;c++)(cos<0?back:front)[c]+=value[c]*Math.abs(cos)/(n*s.pdf);}
 const input={directions:n,generation:3,points:Array.from({length:n},(_,i)=>progressiveSourcePoint(i)),rows:[{id:0,position:p,normal,twoSided:true,firstHits:Array(n).fill(1e20),front,back}]};
-const field={dimensions:[1,1,1],data:[1,1,1,0]},metadata={directions:n,generation:3,angularPattern:'source',samplingLaw:'progressive-volume-induced-solid-angle-v1',surfaceGainFactor:1};
+const field={dimensions:[1,2,1],data:[1,1,1,0,1,1,1,0]},metadata={directions:n,generation:3,angularPattern:'source',samplingLaw:'progressive-volume-induced-solid-angle-v1',surfaceGainFactor:1};
 const result=inspectSourceRays({inputs:input,field,metadata});assert.equal(result.status,'matched');assert.equal(result.rows[0].rays.length,n);
 assert.throws(()=>inspectSourceRays({inputs:input,field,metadata:{...metadata,surfaceGainFactor:undefined}}),/finite.*gain/);
 assert.equal(inspectSourceRays({inputs:input,field,metadata:{...metadata,surfaceReconstruction:{passes:4}}}).status,'reconstructed','filtered receiver output is not direct-ray parity evidence');
@@ -19,7 +34,7 @@ assert.throws(()=>inspectSourceRays({inputs:input,field:{dimensions:[1,1,1],data
 const guide=deriveSourceGuide({position:[0,-.76,0],radius:.19,height:2.2,depth:.24}),guided=structuredClone(input);
 guided.sourceGuide=guide;guided.points=Array.from({length:n},(_,i)=>sourceGuideRaySample(p,i,guide,n).point);
 guided.rows[0].front=[0,0,0];guided.rows[0].back=[0,0,0];
-for(let a=0;a<n;a++){const s=sourceGuideRaySample(p,a,guide,n),cos=s.direction[1],v=integrateCellRay(()=>[1,1,1,0],[1,1,1],p,s.direction);for(let c=0;c<3;c++)(cos<0?guided.rows[0].back:guided.rows[0].front)[c]+=v[c]*Math.abs(cos)/(n*s.pdf);}
+for(let a=0;a<n;a++){const s=sourceGuideRaySample(p,a,guide,n),cos=s.direction[1],v=integrateCellRay(()=>[1,1,1,0],[1,2,1],p,s.direction);for(let c=0;c<3;c++)(cos<0?guided.rows[0].back:guided.rows[0].front)[c]+=v[c]*Math.abs(cos)/(n*s.pdf);}
 const gm={...metadata,angularPattern:'guided',samplingLaw:'emitter-envelope-mixture-solid-angle-v1',sourceGuide:guide};
 assert.equal(inspectSourceRays({inputs:guided,field,metadata:gm}).status,'matched','actual guided rays must replay with their angular mixture');
 for(const mutate of [s=>delete s.metadata.sourceGuide,s=>delete s.inputs.sourceGuide,s=>s.inputs.sourceGuide.hi[0]+=.01]){

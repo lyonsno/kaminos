@@ -99,8 +99,12 @@ for (const control of additionsSinceFineBreakup) {
   legacyFineBreakupRoute.searchParams.delete(control.param);
 }
 legacyFineBreakupArtifact.preset.route = legacyFineBreakupRoute.href;
-legacyFineBreakupArtifact.controlCount = 209;
-legacyFineBreakupArtifact.preset.controlCount = 209;
+// A record saved before count 210 carried the (now retired) legacy-law controls;
+// this fixture omits them, so its inventory is simply everything older than 210.
+const legacyFineBreakupCount = Object.keys(legacyFineBreakupArtifact.preset.domControls).length;
+assert.ok(legacyFineBreakupCount < 210, 'the fixture predates the Fine Breakup localization addition');
+legacyFineBreakupArtifact.controlCount = legacyFineBreakupCount;
+legacyFineBreakupArtifact.preset.controlCount = legacyFineBreakupCount;
 const legacyFineBreakupReceipt = validateVolumeSettingsPresetDocument(
   legacyFineBreakupArtifact,
   legacyFineBreakupArtifact.presetId,
@@ -125,8 +129,10 @@ for (const control of additionsSinceCommonGas) {
   legacyTransportRoute.searchParams.delete(control.param);
 }
 legacyTransportArtifact.preset.route = legacyTransportRoute.href;
-legacyTransportArtifact.controlCount = 210;
-legacyTransportArtifact.preset.controlCount = 210;
+const legacyTransportCount = Object.keys(legacyTransportArtifact.preset.domControls).length;
+assert.ok(legacyTransportCount < 211 && legacyTransportCount > legacyFineBreakupCount, 'the fixture predates common gas transport and follows the Fine Breakup addition');
+legacyTransportArtifact.controlCount = legacyTransportCount;
+legacyTransportArtifact.preset.controlCount = legacyTransportCount;
 const legacyTransportReceipt = validateVolumeSettingsPresetDocument(legacyTransportArtifact, legacyTransportArtifact.presetId, schema);
 assert.deepEqual(legacyTransportReceipt.retirementMigration?.addedControlIds, additionsSinceCommonGas.map(control => control.key));
 assert.equal(legacyTransportReceipt.preset.domControls[commonGasTransport.key].value, false);
@@ -138,7 +144,20 @@ assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), paren
 const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength']
   .map(key => schema.controls.find(control => control.key === key));
 assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259],
-  'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio, the reaction-law controls the physics-appearance controls the appearance model select and the wavelet turbulence controls declare successive additive counts after common gas transport');
+  'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio, the reaction-law controls and the physics-appearance controls and the appearance model declare successive additive counts after common gas transport');
+// A hole is not history: a record that still carries a control introduced later
+// (wavelet strength, 259) cannot be missing one introduced earlier (pressure solver, 212).
+{
+  const holed = currentPresetArtifact();
+  const holedRoute = new URL(holed.preset.route);
+  delete holed.preset.domControls['volume-pressure-solver'];
+  holedRoute.searchParams.delete('volume_pressure_solver');
+  holed.preset.route = holedRoute.href;
+  holed.controlCount -= 1; holed.preset.controlCount -= 1;
+  assert.throws(() => validateVolumeSettingsPresetDocument(holed, holed.presetId, schema),
+    /cannot bridge additive control history at volume-pressure-solver/,
+    'a current record missing an early additive control while carrying a later one is a hole, not a historical record');
+}
 const legacySolverArtifact = currentPresetArtifact();
 const legacySolverRoute = new URL(legacySolverArtifact.preset.route);
 for (const control of schema.controls.filter(control => control.additiveSinceControlCount >= 212)) {
@@ -146,8 +165,10 @@ for (const control of schema.controls.filter(control => control.additiveSinceCon
   legacySolverRoute.searchParams.delete(control.param);
 }
 legacySolverArtifact.preset.route = legacySolverRoute.href;
-legacySolverArtifact.controlCount = 211;
-legacySolverArtifact.preset.controlCount = 211;
+const legacySolverCount = Object.keys(legacySolverArtifact.preset.domControls).length;
+assert.ok(legacySolverCount < 212 && legacySolverCount > legacyTransportCount, 'the fixture predates the pressure solver and follows common gas transport');
+legacySolverArtifact.controlCount = legacySolverCount;
+legacySolverArtifact.preset.controlCount = legacySolverCount;
 const legacySolverReceipt = validateVolumeSettingsPresetDocument(legacySolverArtifact, legacySolverArtifact.presetId, schema);
 assert.deepEqual(legacySolverReceipt.retirementMigration?.addedControlIds, flameDoctorControls.map(control => control.key));
 assert.equal(legacySolverReceipt.preset.domControls['volume-pressure-solver'].value, 'legacy', 'a 211-control basin keeps the legacy Jacobi solver');

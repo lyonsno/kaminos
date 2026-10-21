@@ -6,7 +6,7 @@ export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = 
   return {mode, value: modes.indexOf(mode), tolerance,
     authority: 'experimental nested quadrature; estimated E/T error, not a continuous-field bound',
     floor: 'four integration panels per authored base step',
-    jitter: 'off in both comparison arms; current renderer unchanged'};
+    jitter: 'spatiotemporal partition phase and weighted interior strata; both clipped endpoints retained'};
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
@@ -37,6 +37,7 @@ override OPTICAL_STEP_TOLERANCE: f32 = 0.001;
 
 struct OpticalStepState {
   probes: array<vec4<f32>, 5>,
+  positions: array<f32, 5>,
   mask: u32,
   origin: f32,
   cursor: f32,
@@ -46,6 +47,11 @@ struct OpticalStepState {
   maximum: f32,
   transfer: vec4<f32>,
   unresolved: u32,
+  phased: u32,
+  phase: f32,
+}
+fn opticalStepResetPositions(s: ptr<function, OpticalStepState>) {
+  for (var i = 0u; i < 5u; i++) { (*s).positions[i] = (*s).width * f32(i) * 0.25; }
 }
 fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   var s: OpticalStepState;
@@ -58,23 +64,56 @@ fn opticalStepInit(start: f32, end: f32, base: f32) -> OpticalStepState {
   s.maximum = s.minimum * select(1.0, 4.0, OPTICAL_STEP_MODE == 2u);
   s.width = min(s.maximum, s.end);
   s.transfer = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+  opticalStepResetPositions(&s);
   return s;
+}
+fn opticalStepInitPhased(start: f32, end: f32, base: f32, phase: f32) -> OpticalStepState {
+  var s = opticalStepInit(start, end, base);
+  if (phase >= 0.0) {
+    // Randomize the first partition, not the ray entry. Coarse and fine
+    // quadrature share its phase, including the leading and trailing slabs.
+    s.width = min(s.end, s.maximum * (0.25 + 0.75 * phase));
+    s.phased = 1u;
+    s.phase = phase;
+    opticalStepResetPositions(&s);
+  }
+  return s;
+}
+fn opticalStepConstrain(s: ptr<function, OpticalStepState>, minimum: f32, maximum: f32, stop: f32) {
+  if ((*s).mask > 1u) { return; }
+  (*s).minimum = minimum;
+  (*s).maximum = maximum;
+  (*s).width = min((*s).end - (*s).cursor, min(stop, clamp((*s).width, minimum, maximum)));
+  if ((*s).phased == 1u) {
+    (*s).width = min((*s).end - (*s).cursor, min(stop, maximum * (0.25 + 0.75 * (*s).phase)));
+  }
+  opticalStepResetPositions(s);
 }
 fn opticalStepIndex(mask: u32) -> u32 {
   for (var i = 0u; i < 5u; i++) { if ((mask & (1u << i)) == 0u) { return i; } }
   return 4u;
 }
 fn opticalStepPosition(s: OpticalStepState) -> f32 {
-  return s.origin + min(s.end, s.cursor + s.width * f32(opticalStepIndex(s.mask)) * 0.25);
+  return s.origin + min(s.end, s.cursor + s.positions[opticalStepIndex(s.mask)]);
+}
+fn opticalStepPositionJittered(s: ptr<function, OpticalStepState>, noise: f32) -> f32 {
+  let i = opticalStepIndex((*s).mask);
+  if (i == 1u || i == 3u) {
+    // Keep nested anchors intact. Stay in the middle half of each stratum so
+    // refinement cannot collapse an interval to a nearly coincident pair.
+    (*s).positions[i] = mix((*s).positions[i-1u], (*s).positions[i+1u], 0.25 + 0.5 * noise);
+  }
+  return opticalStepPosition(*s);
 }
 fn opticalCompose(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> {
   return vec4<f32>(a.xyz + a.w * b.xyz, a.w * b.w);
 }
 fn opticalPanel(q: vec4<f32>, h: f32) -> vec4<f32> {
   let tau = max(0.0, q.w) * h;
-  // The series avoids cancellation in nearly transparent air.
-  var integral = h * (1.0 - tau * 0.5 + tau * tau / 6.0);
-  if (tau > 0.001) { integral = (1.0 - exp(-tau)) / q.w; }
+  // Arbitrary phased widths expose cancellation in 1-exp(-tau). The fourth
+  // order series stays below f32 rounding error throughout this interval.
+  var integral = h * (1.0 - tau * 0.5 + tau * tau * (1.0 / 6.0 - tau * (1.0 / 24.0 - tau / 120.0)));
+  if (tau > 0.05) { integral = (1.0 - exp(-tau)) / q.w; }
   return vec4<f32>(q.xyz * integral, exp(-tau));
 }
 fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f32>, tolerance: f32) {
@@ -85,28 +124,35 @@ fn opticalStepObserveWithTolerance(s: ptr<function, OpticalStepState>, q: vec4<f
   var fine = vec4<f32>(0.0, 0.0, 0.0, 1.0);
   var coarse = fine;
   for (var i = 0u; i < 4u; i++) {
-    fine = opticalCompose(fine, opticalPanel(((*s).probes[i] + (*s).probes[i+1u]) * 0.5, (*s).width * 0.25));
+    fine = opticalCompose(fine, opticalPanel(((*s).probes[i] + (*s).probes[i+1u]) * 0.5, (*s).positions[i+1u] - (*s).positions[i]));
   }
   for (var i = 0u; i < 4u; i += 2u) {
-    coarse = opticalCompose(coarse, opticalPanel(((*s).probes[i] + (*s).probes[i+2u]) * 0.5, (*s).width * 0.5));
+    coarse = opticalCompose(coarse, opticalPanel(((*s).probes[i] + (*s).probes[i+2u]) * 0.5, (*s).positions[i+2u] - (*s).positions[i]));
   }
   // Same local incoming-transmission weighting as the retained-probe controller.
   // No suffix-light bound is claimed; missed between-probe sheets remain possible.
   let disagreement = abs(fine - coarse) * (*s).transfer.w;
   let refine = any(disagreement > vec4<f32>(tolerance));
   if (OPTICAL_STEP_MODE == 2u && refine && (*s).width > (*s).minimum * 1.001) {
-    (*s).width *= 0.5;
+    (*s).width = (*s).positions[2];
     (*s).probes[4] = (*s).probes[2];
     (*s).probes[2] = (*s).probes[1];
+    (*s).positions[4] = (*s).positions[2];
+    (*s).positions[2] = (*s).positions[1];
+    (*s).positions[1] = (*s).positions[2] * 0.5;
+    (*s).positions[3] = ((*s).positions[2] + (*s).positions[4]) * 0.5;
     (*s).mask = 21u;
     return;
   }
   if (refine) { (*s).unresolved += 1u; }
   (*s).transfer = opticalCompose((*s).transfer, fine);
   (*s).cursor = min((*s).end, (*s).cursor + (*s).width);
-  (*s).width = min((*s).end - (*s).cursor, min((*s).maximum, (*s).width * 2.0));
+  let nextWidth = select((*s).width * 2.0, (*s).maximum, (*s).phased == 1u);
+  (*s).phased = 0u;
+  (*s).width = min((*s).end - (*s).cursor, min((*s).maximum, nextWidth));
   (*s).probes[0] = (*s).probes[4];
   (*s).mask = 1u;
+  opticalStepResetPositions(s);
 }
 fn opticalStepObserve(s: ptr<function, OpticalStepState>, q: vec4<f32>) {
   opticalStepObserveWithTolerance(s, q, OPTICAL_STEP_TOLERANCE);
