@@ -15,7 +15,7 @@ export default {
     const hero=sha(inputs.hero),surfelSHA=sha(inputs.surfels),session=await host.scene.open();
     const before=host.rendering.readGI(),abort=new AbortController(),candidates={};
     let comparison,asset,disposed=false,generation=0,mergeFactor=factor(inputs.mergeFactor??16),worker=null,rejectWorker=null;
-    let selector,sourceView,mergeInput,status,numberDrag;
+    let selector,sourceView,mergeInput,status,numberDrag,lightingView;
     const fetchJSON=async url=>{const r=await fetch(url,{signal:abort.signal});if(!r.ok)throw Error(`Asset catalog HTTP ${r.status}`);return r.json();};
     const prepare=(field,k)=>new Promise((resolve,reject)=>{
       if(worker){worker.terminate();rejectWorker?.(Error('Surfel preparation superseded'));}
@@ -72,7 +72,7 @@ export default {
       continuation:'Inputs restore the asset pair and merge factor; camera accepts inputs.view. Scene lighting uses the ordinary shared controls.'});
     const sync=()=>{
       if(!status)return;const s=read(),selected=s.source.candidates[s.source.selection];
-      selector.value=s.source.selection;sourceView.checked=s.source.showSource;mergeInput.value=String(mergeFactor);
+      selector.value=s.source.selection;sourceView.checked=s.source.showSource;mergeInput.value=String(mergeFactor);lightingView.value=s.lighting.view;
       if(s.lighting.mode!=='combined'){status.textContent='Combined GI is inactive. Choose Combined AO + GI in Rendering to use this comparison.';return;}
       status.textContent=`${selected?selected.primitives.toLocaleString()+' source '+(selected.kind==='mesh'?'triangles':'surfels'):s.detailedPrimitives.toLocaleString()+' detailed triangles'} · Detailed receiver stays fixed. ${s.source.enabled?'One additional source capture; this comparison does not yet measure a saving.':'Original GI source.'}`;
     };
@@ -81,6 +81,10 @@ export default {
       operations:{
         select(value){comparison.select(value);return applied('select');},
         showSource(value){comparison.show(value);return applied('view');},
+        lightingView(value){
+          if(!['scene','ao','gi','incoming'].includes(value))throw Error('Unknown lighting view');
+          comparison.show(false);host.rendering.gi({...host.rendering.readGI(),view:value});return applied('lighting-view');
+        },
         async setMergeFactor(value){
           const k=factor(value),next=await buildSurfels(k),previous=candidates.surfels;
           candidates.surfels=next;mergeFactor=k;
@@ -88,18 +92,22 @@ export default {
         },
       },
       mount({root,document,invoke}){
-        const label=document.createElement('label');label.textContent='GI geometry ';
+        const label=document.createElement('label');label.textContent='AO + GI source geometry ';
         selector=document.createElement('select');
         for(const [key,text] of [['detailed','Detailed source'],...Object.entries(candidates).map(([key,item])=>[key,item.identity.kind==='mesh'?`Mesh · ${item.identity.primitives.toLocaleString()} triangles`:'Coarse surfels'])]){
           const option=document.createElement('option');option.value=key;option.textContent=text;selector.append(option);
         }
         const viewLabel=document.createElement('label');sourceView=document.createElement('input');sourceView.type='checkbox';viewLabel.append(sourceView,' Show the GI source');
+        const lightingLabel=document.createElement('label');lightingLabel.textContent='Lighting view ';lightingView=document.createElement('select');
+        for(const [value,text] of [['scene','Shaded scene'],['ao','Ambient occlusion'],['incoming','Incoming bounce'],['gi','Received bounce']]){const option=document.createElement('option');option.value=value;option.textContent=text;lightingView.append(option);}
+        lightingLabel.append(lightingView);
         const mergeLabel=document.createElement('label'),grip=document.createElement('span');grip.textContent='Surfel merge factor ';
         mergeInput=document.createElement('input');mergeInput.type='number';mergeInput.min='1';mergeInput.step='1';mergeInput.className='transform-input';mergeLabel.append(grip,mergeInput);
-        status=document.createElement('p');status.className='small';status.setAttribute('role','status');label.append(selector);root.append(label,viewLabel,mergeLabel,status);
+        status=document.createElement('p');status.className='small';status.setAttribute('role','status');label.append(selector);root.append(label,lightingLabel,viewLabel,mergeLabel,status);
         const failed=error=>{sync();status.textContent=error.message;};
         selector.addEventListener('change',()=>invoke('select',selector.value).catch(failed));
         sourceView.addEventListener('change',()=>invoke('showSource',sourceView.checked).catch(failed));
+        lightingView.addEventListener('change',()=>invoke('lightingView',lightingView.value).catch(failed));
         mergeInput.addEventListener('change',()=>{status.textContent='Preparing coarse surfels…';invoke('setMergeFactor',Number(mergeInput.value)).catch(failed);});
         numberDrag=host.controls.installNumberDrag({input:mergeInput,grip,step:1});sync();
       },dispose:cleanup,
