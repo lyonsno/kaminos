@@ -78,7 +78,8 @@ function frameStats(gaps, marks = []) {
 // limits 'baseline' requests only WebGPU's default limits (128 MiB per storage binding, 256 MiB per
 // buffer, 16 KB of workgroup memory), which every WebGPU device supports, to test phone-class
 // devices on a desktop: anything beyond them becomes a validation error, collected in gpuErrors.
-export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true, limits = 'adapter' }) {
+// Pipeline: the pipeline class (KleinPipeline, or a model built on it such as FLUX.3's Flux3Pipeline).
+export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = () => {}, load = true, limits = 'adapter', Pipeline = KleinPipeline }) {
   const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter?.features.has('shader-f16')) throw new Error('WebGPU with shader-f16 is required');
   const features = ['shader-f16', ...(adapter.features.has('timestamp-query') ? ['timestamp-query'] : [])];
@@ -102,7 +103,7 @@ export async function createKleinDemo({ canvas, urls, kernels = {}, onStatus = (
   };
   const session = await createWebGpuInferenceSession({ sessionId: `flux2-klein:${crypto.randomUUID()}`, device, adapterName: 'browser-primary-adapter' });
   const foreground = createWebGpuForegroundService({ routeId: KLEIN_ROUTE_ID, device });
-  const pipeline = new KleinPipeline(device, { ...urls, ...kernels });
+  const pipeline = new Pipeline(device, { ...urls, ...kernels });
 
   // Live scene through the foreground service.
   const surface = canvas.getContext('webgpu');

@@ -5,7 +5,7 @@ flow-map checkpoint), text-to-image only. Built on the FLUX.2 Klein port: every 
 LayerNorm feeding parallel attention and SwiGLU, so the packer fuses each into FLUX.2's single-stream
 layout and the GEMM, attention, norm and duty-scheduling kernels are reused unchanged.
 
-Present: the transformer and the text encoder.
+Present: text-to-image end to end. On an M4 Max a 512 × 512 image takes about 23 s (16 steps at about 1.35 s each with the product kernels, text 0.2 s, decode 0.4 s), with a 5.4 GB GPU peak.
 
 - `pack-flux3-transformer.py`: per-block bundles, int4 blocks and int8 globals by default (2.85 GB),
   leaving out the reference-image mode that text-to-image never runs.
@@ -25,7 +25,14 @@ Present: the transformer and the text encoder.
   witness checks the framing, every tapped hidden state and the prompt embeddings, then runs the
   transformer on the browser's own text features.
 
-Not yet: VAE decode (FLUX.2's), the page.
+- Decoder: FLUX.3 ships FLUX.2's VAE at higher precision (rounded to bf16, every tensor equals
+  FLUX.2's), so FLUX.2 Klein's f16 VAE pack decodes FLUX.3 latents.
+- `flux3-pipeline.js`: `Flux3Pipeline` extends `KleinPipeline`, overriding only its model hooks
+  (transformer class, prompt framing, RoPE ids, schedule); weight caching, lean residency,
+  precompile, prompt reuse, live previews (same latent space) and decoding are Klein's. FLUX.2 Klein's
+  `generate.html` runs it with `?model=flux3`, and `run-generate.mjs --model flux3 --steps 16` batches it.
+
+Not yet: hosted weights and a public page.
 
     python pack-flux3-transformer.py --model-dir <snapshot> --out <weights>
     python export-flux3-reference.py --model-dir <snapshot> --out <ref> --prompt-file <txt>

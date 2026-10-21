@@ -192,7 +192,7 @@ export class KleinPipeline {
       await this.textEncoder.loadBundles(fetchBundle(te, 'text-encoder'), (n, b) => { bytes += b; });
       this.residentBytes.textEncoder = bytes;
     }
-    this.transformer = new KleinTransformer(this.device, this.ditManifest);
+    this.transformer = this.createTransformer(this.ditManifest);
     Object.assign(this.transformer, this.kernels); this.transformer.sched = this.sched;
     bytes = 0;
     await this.transformer.loadBundles(fetchBundle(dit, 'transformer'), (n, b) => { bytes += b; });
@@ -223,7 +223,7 @@ export class KleinPipeline {
     this.transformer?.destroy(); this.transformer = null; this.residentBytes.transformer = 0;
     // Lean residency never holds the text encoder and a transformer together.
     if (this.residency === 'lean' && this.textEncoder?.weightsResident) { this.textEncoder.unloadWeights(); this.residentBytes.textEncoder = 0; }
-    const next = new KleinTransformer(this.device, manifest);
+    const next = this.createTransformer(manifest);
     Object.assign(next, this.kernels); next.sched = this.sched;
     let loadedBytes = 0, bytes = 0;
     try {
@@ -248,6 +248,30 @@ export class KleinPipeline {
     // The decoder's attention scores are chunked by query rows (at least 64 at a time).
     const decoderFits = width * height * 256 * vaeAct <= cap && 64 * latentPixels * 4 <= cap;
     return { maxTextTokens, fits: decoderFits && maxTextTokens >= 32, cap };
+  }
+
+  // Model hooks: FLUX.2 Klein's choices here; another model on the same kernels and decoder (FLUX.3
+  // Klein's Flux3Pipeline) overrides them.
+  createTransformer(manifest) { return new KleinTransformer(this.device, manifest); }
+  // The text length a generation asks for before device limits: the reference's padding (512) or
+  // 'fitN', the prompt's own length plus N padding tokens.
+  requestedTextTokens(prompt, textLength) {
+    return /^fit\d*$/.test(String(textLength))
+      ? Math.min(512, this.framePrompt(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+  }
+  // { inputIds, attentionMask, length[, positionIds] } padded to maxLength (default the model's own padding).
+  framePrompt(prompt, maxLength) { return this.tokenizer.kleinPromptIds(prompt, maxLength); }
+  // Transformer RoPE ids for the latent grid and the text tokens.
+  tokenIds(latH, latW, txtTokens) {
+    const imgIds = new Float64Array(latH * latW * 4), txtIds = new Float64Array(txtTokens * 4);
+    for (let h = 0; h < latH; h++) for (let w = 0; w < latW; w++) { const r = (h * latW + w) * 4; imgIds[r + 1] = h; imgIds[r + 2] = w; }
+    for (let l = 0; l < txtTokens; l++) txtIds[l * 4 + 3] = l;
+    return { imgIds, txtIds };
+  }
+  // { sigmas: [steps + 1], forwardArgs(i) }: the Euler sigmas and the transformer's per-step inputs.
+  denoiseSchedule(imgTokens, steps) {
+    const sched = kleinSchedule(imgTokens, steps);
+    return { sigmas: sched.sigmas, forwardArgs: i => ({ tModel: transformerTime(sched.timesteps[i]) }) };
   }
 
   // Encode a live preview of the current step (before the Euler update, which overwrites the
@@ -382,24 +406,23 @@ export class KleinPipeline {
     if (!this.transformer) throw new Error('no transformer is loaded');
     const dev = this.device, t = {};
     const latH = height / 16, latW = width / 16, imgTokens = latH * latW;
-    const fit = /^fit\d*$/.test(String(textLength));
-    const requestedLength = fit ? Math.min(512, this.tokenizer.kleinPromptIds(prompt).length + Number(String(textLength).slice(3) || 0)) : Number(textLength);
+    const requestedLength = this.requestedTextTokens(prompt, textLength);
     // Padding is capped where the device's buffer limits require it (better lettering on phones).
     const limits = this.sizeLimits(width, height);
     if (!limits.fits) throw new Error(`${width} × ${height} needs larger GPU buffers than this device allows (${Math.round(limits.cap / 2 ** 20)} MiB per buffer)`);
     const maxLength = Math.min(requestedLength, limits.maxTextTokens);
-    if (this.tokenizer.kleinPromptIds(prompt).length > maxLength) throw new Error(`the prompt is too long for this device's GPU buffers at ${width} × ${height}; shorten it or pick a smaller size`);
+    if (this.framePrompt(prompt).length > maxLength) throw new Error(`the prompt is too long for this device's GPU buffers at ${width} × ${height}; shorten it or pick a smaller size`);
     if (maxLength < requestedLength) t.textPaddingRequested = requestedLength;
-    const framed = this.tokenizer.kleinPromptIds(prompt, maxLength);
+    const framed = this.framePrompt(prompt, maxLength);
     const txtTokens = framed.inputIds.length;
     // Sequential residency: transformer activations exist from here until the decoder's input is
     // prepared, decoder activations from then until the image is read back, so peak activation
     // memory is the larger stage rather than the sum (about 3 GB plus 5 GB at 1024²).
     this.transformer.allocate(imgTokens, txtTokens);
-    if (this.textEncoderTokens !== txtTokens) { this.textEncoder.allocate(txtTokens); this.textEncoderTokens = txtTokens; }
-    const imgIds = new Float64Array(imgTokens * 4), txtIds = new Float64Array(txtTokens * 4);
-    for (let h = 0; h < latH; h++) for (let w = 0; w < latW; w++) { const r = (h * latW + w) * 4; imgIds[r + 1] = h; imgIds[r + 2] = w; }
-    for (let l = 0; l < txtTokens; l++) txtIds[l * 4 + 3] = l;
+    // Per-row RoPE positions (when the model places its padding specially) depend on the prompt's length.
+    const teKey = framed.positionIds ? `${txtTokens}:${framed.length}` : txtTokens;
+    if (this.textEncoderTokens !== teKey) { this.textEncoder.allocate(txtTokens, framed.positionIds ?? null); this.textEncoderTokens = teKey; }
+    const { imgIds, txtIds } = this.tokenIds(latH, latW, txtTokens);
     this.transformer.prepare({ latents: gaussianNoise(imgTokens * 128, seed), promptEmbeds: null, imgIds, txtIds });
 
     // The text encoding depends only on the prompt and its padding, so a re-roll with a new seed reuses
@@ -435,12 +458,12 @@ export class KleinPipeline {
     }
 
     if (lean && !this.transformer.weightsResident) { onPhase?.('weights'); t.swapMs = (t.swapMs ?? 0) + await this.useWeights('transformer'); }
-    const sched = kleinSchedule(imgTokens, steps);
+    const sched = this.denoiseSchedule(imgTokens, steps);
     onPhase?.('denoise');
     t.stepMs = [];
     for (let i = 0; i < steps; i++) {
       t0 = performance.now();
-      await this.transformer.forward({ tModel: transformerTime(sched.timesteps[i]) });
+      await this.transformer.forward(sched.forwardArgs(i));
       if (onPreview || dry) await this.encodePreview(sched.sigmas[i], latH, latW, i + 1, steps, onPreview);
       await this.transformer.eulerStep(Math.fround(sched.sigmas[i + 1] - sched.sigmas[i]));
       t.stepMs.push(performance.now() - t0);
