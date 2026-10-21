@@ -29,3 +29,6 @@ assert.equal(inspect.update({time:3,position:[4,0,0],observed:[target],focus:tar
 assert.equal(inspect.update({time:6,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'wandering');
 assert.equal(inspect.update({time:6.1,position:[4,0,0],observed:[target],focus:target}).phase,'wandering','Completed inspection must not immediately restart');
 console.log('Observed interest approaches, arrives, inspects and releases; alarm and cessation interrupt it');
+const standing=createWanderPath({area,position:[0,0],direction:[0,1]});
+standing.setDestination([0,0]);assert.equal(standing.read().status,'arrived');
+assert.deepEqual(createWanderPath({snapshot:standing.snapshot()}).read().position,[0,0]);
