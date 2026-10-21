@@ -15,7 +15,7 @@ test('server log handle is closed explicitly after spawning the child',async()=>
  const calls=[];
  await vm.runInNewContext(`(async()=>{${block}})()`,{
   fs:{open:async()=>({fd:13,close:async()=>calls.push('close')})},out:'/unused',root,home:'/unused',process:{env:{}},
-  spawn:()=>{calls.push('spawn');return {};},
+  spawn:()=>{calls.push('spawn');return {once:()=>{}};},
  });
  assert.deepEqual(calls,['spawn','close']);
  calls.length=0;
@@ -40,6 +40,21 @@ test('missing browser dependency leaves a durable failure report',async()=>{
   const exists=await fs.stat(out+'/report.json').then(()=>true,()=>false);
   assert.ok(exists,'dependency failure must preserve report.json');
   const report=JSON.parse(await fs.readFile(out+'/report.json'));assert.equal(report.ok,false);assert.equal(report.phase,'browser-dependency');assert.match(report.error,/priority-playwright/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('asynchronous server spawn failure leaves a terminal failure report',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-spawn-negative-'));
+ try{
+  const text=source.replace("spawn('python3',['serve.py'", "spawn('/nonexistent-priority-python3',['serve.py'");
+  assert.notEqual(text,source);
+  const script=dir+'/witness.mjs',out=dir+'/output';await fs.writeFile(script,text);
+  const r=spawnSync(process.execPath,[script,root,out],{encoding:'utf8'});
+  assert.notEqual(r.status,0);
+  const report=JSON.parse(await fs.readFile(out+'/report.json'));
+  assert.equal(report.ok,false);
+  assert.match(report.error||'',/ENOENT/,'real asynchronous child error must reach the report');
+  assert.equal(report.phase,'server-launch');
+  assert.doesNotMatch(r.stderr,/Unhandled 'error' event|closed during garbage collection/);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
 test('prepared count shader covers domain misses and scene clipping',async()=>{

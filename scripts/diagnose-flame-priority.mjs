@@ -131,10 +131,12 @@ override DIAG_GUIDE: u32 = 0u;`);
  bodies['volume-core.js']=replaceOne(core,'state.opticalStepping = { ...optical, effective: optical.mode,','state.opticalStepping = { ...optical, effective: optical.mode, diagnosticConstants:{...opticalConstants},');
  for(const [name,body] of Object.entries(bodies)){report.source[name].effectiveSha256=sha(body);await fs.writeFile(out+'/effective-'+name,body);}
  if(flags.has('--prepare-only')){report.ok=true;report.phase='prepared';await save();process.exit(0);}
+ report.phase='server-launch';await save();
  const log=await fs.open(out+'/server.log','a');
- try{server=spawn('python3',['serve.py','18724'],{cwd:root,env:{...process.env,KAMINOS_SHARED_BASIN_STORE:home+'/basins',KAMINOS_VOLUME_SETTINGS_STORE:home+'/presets',KAMINOS_VOLUME_COCKPIT_LAYOUT_STORE:home+'/layouts',KAMINOS_SCENES_DIR:home+'/scenes'},stdio:['ignore',log.fd,log.fd]});}
+ let serverError;
+ try{server=spawn('python3',['serve.py','18724'],{cwd:root,env:{...process.env,KAMINOS_SHARED_BASIN_STORE:home+'/basins',KAMINOS_VOLUME_SETTINGS_STORE:home+'/presets',KAMINOS_VOLUME_COCKPIT_LAYOUT_STORE:home+'/layouts',KAMINOS_SCENES_DIR:home+'/scenes'},stdio:['ignore',log.fd,log.fd]});server.once('error',error=>{serverError=error;});}
  finally{await log.close();}
- await new Promise((resolve,reject)=>{server.once('error',reject);const check=async()=>{if(server.exitCode!==null)return reject(Error('server exited'));try{await fetch(origin+'/api/roots');resolve();}catch{setTimeout(check,100);}};check();});
+ await new Promise((resolve,reject)=>{if(serverError)return reject(serverError);server.once('error',reject);const check=async()=>{if(serverError)return reject(serverError);if(server.exitCode!==null)return reject(Error('server exited'));try{await fetch(origin+'/api/roots');resolve();}catch{setTimeout(check,100);}};check();});
  const {verifyAuthoringServer}=await import(root+'/scene-authoring-witness-identity.mjs');
  report.serving=await verifyAuthoringServer({origin,repoRoot:root});
  context=await chromium.launchPersistentContext(out+'/profile',{executablePath:executable,headless:true,args:['--use-mock-keychain','--password-store=basic','--enable-unsafe-webgpu'],viewport:{width:1100,height:950}});
