@@ -1,0 +1,48 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import vm from 'node:vm';
+import {spawnSync} from 'node:child_process';
+
+const root=path.resolve(import.meta.dirname,'..');
+const source=await fs.readFile(root+'/scripts/diagnose-flame-priority.mjs','utf8');
+const validate=vm.runInNewContext(`(${source.match(/function validateArm\([\s\S]*?\n\}/)[0]})`,{assert});
+test('requested jitter cannot stand in for effective jitter',()=>{
+ const state={backend:'WebGPU:apple',simStepCount:96,opticalStepping:{effective:'numerical',tolerance:.01,quadratureJitter:false},controls:{flamePriority:0,raySteps:1,quadratureJitter:true,rayStartNoise:false}};
+ assert.throws(()=>validate(state,0,true,96),/jitter|noise|false|true/);
+});
+test('missing browser dependency leaves a durable failure report',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-negative-'));
+ try{
+  const dependency='/does-not-exist/priority-playwright/index.mjs';
+  const text=source.replace('/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs',dependency);
+  const script=dir+'/witness.mjs',out=dir+'/output';await fs.writeFile(script,text);
+  const r=spawnSync(process.execPath,[script,root,out],{encoding:'utf8'});
+  assert.notEqual(r.status,0);
+  const exists=await fs.stat(out+'/report.json').then(()=>true,()=>false);
+  assert.ok(exists,'dependency failure must preserve report.json');
+  const report=JSON.parse(await fs.readFile(out+'/report.json'));assert.equal(report.ok,false);assert.equal(report.phase,'browser-dependency');assert.match(report.error,/priority-playwright/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('prepared count shader covers domain misses and scene clipping',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-prepare-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stderr);
+  const core=await fs.readFile(dir+'/output/effective-volume-core.js','utf8');
+  const miss=core.slice(core.indexOf('if (!fullGridCapture && min(hit.y, sceneDepthEndT)'),core.indexOf('let steps = select(clamp(u.viewport_steps_density.z'));
+  assert.match(miss,/if \(DIAG_COUNTS\)/,'miss must explicitly emit zero counts');
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('retention includes the observed reactant sidecar API and fails closed',()=>{
+ assert.match(source,/await[^;]*sampleReactantFields\(/,'live guide input must be retained');
+ assert.match(source,/assert\.ok\(report\.fieldExport\.ok/,'required export failure cannot become success');
+});
+test('complete blank beauty and count buffers are rejected',()=>{
+ const condition=source.match(/if\((!s\.ok[^\n]+?)\)throw Error/)[1];
+ const blank={ok:true,image:{width:1,height:1,rgba:[0,0,0,255]}};
+ assert.equal(vm.runInNewContext(condition,{s:blank}),true);
+ assert.equal(vm.runInNewContext(condition,{s:{...blank,image:{...blank.image,rgba:[5,0,0,255]}}}),false);
+});

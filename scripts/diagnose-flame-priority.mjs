@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {execFileSync, spawn} from 'node:child_process';
 import {once} from 'node:events';
 import {createHash} from 'node:crypto';
-import {chromium} from '/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs';
 
 const root=process.argv[2], out=process.argv[3];
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -14,9 +13,11 @@ function validateArm(s,priority,jitter,step){
  assert.equal(s.opticalStepping.effective,'numerical');assert.equal(s.opticalStepping.tolerance,.01);
  assert.equal(s.controls.flamePriority,priority);assert.equal(s.controls.raySteps,1);
  assert.equal(s.controls.quadratureJitter,jitter);
+ assert.equal(s.controls.rayStartNoise,true,'ray-start noise must be enabled');
+ assert.equal(s.opticalStepping.quadratureJitter,jitter,'effective jitter');
 }
 if(root==='--self-test'){
- const good={backend:'WebGPU:apple',simStepCount:96,opticalStepping:{effective:'numerical',tolerance:.01},controls:{flamePriority:.001333,raySteps:1,quadratureJitter:true}};
+ const good={backend:'WebGPU:apple',simStepCount:96,opticalStepping:{effective:'numerical',tolerance:.01,quadratureJitter:true},controls:{flamePriority:.001333,raySteps:1,quadratureJitter:true,rayStartNoise:true}};
  validateArm(good,.001333,true,96);
  for(const bad of [{...good,backend:'fallback'},{...good,simStepCount:97},{...good,controls:{...good.controls,flamePriority:0}},{...good,opticalStepping:{effective:'fixed',tolerance:.01}}])assert.throws(()=>validateArm(bad,.001333,true,96));
  assert.throws(()=>replaceOne('x x','x','y'));assert.throws(()=>replaceOne('z','x','y'));
@@ -32,7 +33,9 @@ const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 let server,context,page;
 process.on('SIGTERM',async()=>{report.error='terminated';await save();await context?.close();server?.kill();process.exit(1);});
 try{
- await save();await fs.copyFile(new URL(import.meta.url),out+'/witness.mjs');
+ report.phase='browser-dependency';await save();
+ const {chromium}=await import('/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs');
+ report.phase='prepare';await save();await fs.copyFile(new URL(import.meta.url),out+'/witness.mjs');
  report.revision=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
  report.worktreeDiff=execFileSync('git',['diff'],{cwd:root,encoding:'utf8'}); // retained, not served for the three files below
  for(const dir of ['basins','layouts','scenes'])await fs.cp(peer+'/'+dir,home+'/'+dir,{recursive:true,force:false,errorOnExist:false});
@@ -46,6 +49,10 @@ try{
 override DIAG_COUNTS: bool = false;
 override DIAG_GUIDE: u32 = 0u;`);
  let core=bodies['volume-core.js'];
+ core=replaceOne(core,'let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);',`if (DIAG_COUNTS) {
+      return makeRaymarchResult(vec4<f32>(0.0, 0.0, 0.0, 1.0), 1.0, vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0));
+    }
+    let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);`);
  core=replaceOne(core,'let guide = flameGuideSegmentPadded(', 'var guide = flameGuideSegmentPadded(');
  core=replaceOne(core,'let cellWidth = 2.0 / f32(GRID);\n        let nearby', 'if (DIAG_GUIDE == 1u) { guide = vec2<f32>(0.0, 1.0); }\n        let cellWidth = 2.0 / f32(GRID);\n        let nearby');
  core=replaceOne(core,'const opticalConstants = {OPTICAL_STEP_MODE:optical.value,RAY_STEP_STATS:rayStepTelemetry.active};',
@@ -94,11 +101,11 @@ override DIAG_GUIDE: u32 = 0u;`);
  report.held=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());report.phase='capture';await save();
  async function arm(label,priority,jitter,guide=0){
   const row={label,priority,jitter,guide};
-  await step(page.evaluate(async({priority,jitter})=>{await window.kaminosWorkbenchExperiments.invoke('setControls',{'volume-flame-priority':priority,'volume-quadrature-jitter':jitter,'volume-ray-noise-animated':false});window.__kaminosVolumePrototype.setControls({rayNoiseFrame:0});},{priority,jitter}));
+  await step(page.evaluate(async({priority,jitter})=>{await window.kaminosWorkbenchExperiments.invoke('setControls',{'volume-flame-priority':priority,'volume-quadrature-jitter':jitter,'volume-ray-noise-animated':false});window.__kaminosVolumePrototype.setControls({rayStartNoise:true,rayNoiseFrame:0});},{priority,jitter}));
   for(const counts of [false,true]){
    const data=await step(page.evaluate(async({counts,guide})=>{
     window.__priorityDiagnostic={counts,guide};const r=window.__kaminosVolumePrototype;
-    const s=await r.sampleFrame({advanceSim:false,includeRgba:true,now:12000});if(!s.ok||s.image?.rgba?.length!==s.image.width*s.image.height*4)throw Error('missing/partial frame');
+    const s=await r.sampleFrame({advanceSim:false,includeRgba:true,now:12000});if(!s.ok||s.image?.rgba?.length!==s.image.width*s.image.height*4||!s.image.rgba.some((v,i)=>i%4!==3&&v>0))throw Error('missing/partial/blank frame');
     const c=document.createElement('canvas');c.width=s.image.width;c.height=s.image.height;const ctx=c.getContext('2d');ctx.putImageData(new ImageData(new Uint8ClampedArray(s.image.rgba),c.width,c.height),0,0);
     return{png:c.toDataURL().split(',')[1],state:r.debugState(),width:c.width,height:c.height};
    },{counts,guide}));
@@ -113,14 +120,23 @@ override DIAG_GUIDE: u32 = 0u;`);
  await arm('uniform-guide',.75,false,1);
  await arm('zero-repeat',0,true);
  assert.equal(report.arms[0].image.sha256,report.arms.at(-1).image.sha256,'frozen/noise return mismatch');
+ assert.equal(report.arms[0].counts.sha256,report.arms.at(-1).counts.sha256,'frozen count return mismatch');
  report.phase='field-retention';await save();
  report.fieldExport=await step(page.evaluate(()=>window.__kaminosVolumePrototype.beginDebugFullFieldExport({})));
+ assert.ok(report.fieldExport.ok,'required full-field retention failed');
  if(report.fieldExport.ok){
   for(const kind of ['fluid','front','boundary','boundarySplat']){
    const file=await fs.open(out+'/'+kind+'.f32','w');let startFloat=0;
    try{for(;;){const chunk=await page.evaluate(({kind,startFloat})=>window.__kaminosVolumePrototype.readDebugFullFieldExportChunk({kind,startFloat}),{kind,startFloat});assert.ok(chunk.ok);await file.write(Buffer.from(chunk.base64,'base64'));startFloat+=chunk.floatCount;if(chunk.isFinal)break;assert.ok(chunk.floatCount>0);}}finally{await file.close();}
   }
  }
+ report.phase='reactant-retention';await save();
+ const reactant=await step(page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleReactantFields();delete r.fluidBase64;return r;}));
+ assert.ok(reactant.ok,'required reactant readback failed');
+ const {reactantBase64,...metadata}=reactant;report.reactantExport=metadata;
+ if(report.held.controls.reactionLaw==='reactant-v0')assert.ok(reactantBase64,'active law has no retained reactant sidecar');
+ if(reactantBase64){const bytes=Buffer.from(reactantBase64,'base64');assert.equal(bytes.length,reactant.grid.reduce((a,b)=>a*b,1)*8);await fs.writeFile(out+'/reactant.f32',bytes);report.reactantExport.byteLength=bytes.length;report.reactantExport.sha256=sha(bytes);}
+ assert.equal(await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount),report.held.simStepCount);
  report.ok=true;report.phase='complete';
 }catch(error){report.error=String(error.stack);process.exitCode=1;await page?.screenshot({path:out+'/failed.png'}).catch(()=>{});}
 finally{await context?.close();if(server&&server.exitCode===null){const stopped=once(server,'exit');server.kill();await stopped;}await save();console.log(JSON.stringify({ok:report.ok,phase:report.phase,error:report.error?.split('\n')[0],out}));}
