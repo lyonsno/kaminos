@@ -10371,7 +10371,11 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   }
 
   let absorptionLoss = vec3<f32>(1.0) - absorption;
-  let waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
+  // Match the shared host on main: clear/thin water must not add a fixed haze.
+  var waterScatter = vec3<f32>(0.055, 0.30, 0.42) * absorptionLoss;
+  if (params.hostFrameControls.x <= 0.5) {
+    waterScatter = vec3<f32>(0.055, 0.30, 0.42) * (vec3<f32>(0.42) + absorptionLoss * 0.58);
+  }
   let directRoughness = select(
     0.0,
     clamp(interfaceNormal.variance * interfaceNormal.denseBodyConfidence, 0.0, 0.48),
