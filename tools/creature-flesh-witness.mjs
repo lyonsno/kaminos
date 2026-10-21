@@ -34,7 +34,7 @@ try{
   for(let i=0;i<180;i++){
    const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);return window.kaminosCreatureFlesh.read({geometry:false});});
    if(state.steps!==i+1||state.error||!Number.isFinite(state.volume.volumeRatio)||!(state.volume.minJ>0))throw Error('Incomplete, stale or invalid physical step');
-   const raw=await page.evaluate(()=>({state:window.kaminosCreatureFlesh.read(),points:window.kaminosCreatureFlesh.read({geometry:true}).physicalPoints,offsets:window.kaminosCreatureFlesh.read({geometry:true}).offsets}));
+   const raw=await page.evaluate(()=>({state:window.kaminosCreatureFlesh.read(),...window.kaminosCreatureFlesh.physicalState()}));
    const file=`frames/${String(i+1).padStart(4,'0')}.png`;await page.screenshot({path:path.join(out,file)});
    fs.writeFileSync(path.join(out,`frames/${String(i+1).padStart(4,'0')}.json`),JSON.stringify(raw));report.frames.push({file,step:state.steps,frame:state.frame,volume:state.volume});
   }

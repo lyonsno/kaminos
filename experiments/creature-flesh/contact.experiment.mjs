@@ -59,8 +59,8 @@ export default {
    if(!Number.isSafeInteger(count)||count<1)throw Error('Positive whole physical step count required');
    if(disposed)throw Error('Contact experiment disposed');
    for(let i=0;i<count;i++){
-    if(motion)setPose(Math.floor((stepCount+1)*dt*adapter.fps)%adapter.frames);
-    if(stroke){stroke.time+=dt;const t=stroke.time,amount=t<1?t:t<2?1:t<3?3-t:0;putProbe(localStart.map((v,a)=>v-prepared.construction.right[a]*radius*.75*amount));if(t>=3){stroke=null;playing=false;}}
+    if(motion)setPose(Math.min(adapter.frames-1,Math.floor((stepCount+1)*dt*adapter.fps)));
+    if(stroke){stroke.time=++stroke.steps*dt;const t=stroke.time,amount=t<1?t:t<2?1:t<3?3-t:0;putProbe(localStart.map((v,a)=>v-prepared.construction.right[a]*radius*.75*amount));if(t>=3){stroke=null;playing=false;}}
     placement.updateMatrixWorld(true);probe.updateMatrixWorld(true);const center=root.worldToLocal(probe.getWorldPosition(new THREE.Vector3())).toArray(),scale=probe.getWorldScale(new THREE.Vector3()),bodyScale=root.getWorldScale(new THREE.Vector3());
     if(Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5)throw Error('Contact primitive requires a uniformly scaled sphere');
     if(!(bodyScale.x>0)||Math.max(bodyScale.x,bodyScale.y,bodyScale.z)-Math.min(bodyScale.x,bodyScale.y,bodyScale.z)>1e-5)throw Error('Physical body requires positive uniform authored scale');
@@ -70,7 +70,7 @@ export default {
   }
   function reset(){volume=createFleshVolume(prepared,parameters);volume.setEnabled(physical);poseKey='';stepCount=0;stroke=null;setPose(0);putProbe(localStart);publish();return read();}
   async function dispose(){if(disposed)return;disposed=true;unsubscribe?.();refresh=()=>{};mirror?.dispose();deformer.dispose();if(session)await session.dispose();else{geometry.dispose();mesh.material.dispose();probe.geometry.dispose();probe.material.dispose();guideGeometry.dispose();guide.material.dispose();}if(globalThis.window?.kaminosCreatureFlesh===diagnostic)delete globalThis.window.kaminosCreatureFlesh;}
-  const diagnostic={read,advance,geometry:currentGeometry,gpu:()=>deformer.readback()};
+  const diagnostic={read,advance,geometry:currentGeometry,physicalState:()=>({points:volume.points(),offsets:volume.offsets()}),gpu:()=>deformer.readback()};
   try{
    session=await host.scene.open();setPose(0);putProbe(localStart);publish();
    bodyAsset=await session.attach(placement,{owned:true,metadata:{label:placement.name,type:'glb',source:{...data.source,physicalPreparation:inputs.prepared_sha256}}});
@@ -87,12 +87,12 @@ export default {
    physical:action('physical',value=>{if(typeof value!=='boolean')throw Error('Boolean physical response required');physical=value;volume.setEnabled(value);publish();}),
    volume:action('volume',value=>{if(typeof value!=='boolean')throw Error('Boolean proxy visibility required');guide.visible=value;}),
    sphere:action('sphere',p=>{if(p?.length!==3||!p.every(Number.isFinite))throw Error('Finite sphere position required');probe.position.fromArray(p);host.scene.refreshPresentation?.(probeAsset);}),
-   replay:action('replay',()=>{reset();stroke={time:0};playing=true;}),
+   replay:action('replay',()=>{reset();stroke={time:0,steps:0};playing=true;}),
    material:action('material',p=>{if(!p||!['young','bulk'].every(k=>Number.isFinite(p[k]))||p.young<=0||p.bulk<0)throw Error('Positive stiffness and nonnegative bulk resistance required');Object.assign(parameters,p);reset();}),
   },mount({root:panel,document,invoke}){
    const status=document.createElement('div'),failure=e=>{status.textContent=e.message;};
    const checkbox=(label,operation,initial)=>{const line=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=initial;input.addEventListener('change',()=>invoke(operation,input.checked).catch(failure));line.append(input,document.createTextNode(label));panel.append(line);return input;};
-   const physicalInput=checkbox(' Physical response','physical',physical),motionInput=checkbox(' Retained walk','motion',motion),playInput=checkbox(' Simulate','play',playing);checkbox(' Show provisional volume','volume',false);
+   const physicalInput=checkbox(' Physical response','physical',physical),motionInput=checkbox(' Retained clip · holds at end','motion',motion),playInput=checkbox(' Simulate','play',playing);checkbox(' Show provisional volume','volume',false);
    for(const [title,op] of [['Replay press / release','replay'],['Reset','reset']]){const b=document.createElement('button');b.textContent=title;b.onclick=()=>invoke(op).catch(failure);panel.append(b);}
    const help=document.createElement('p');help.textContent='Move the blue sphere with the scene gizmo. Physics off is the unchanged skinning control. This is a fixed-step material preview, not real-time performance evidence.';panel.append(help,status);
    refresh=()=>{playInput.checked=playing;motionInput.checked=motion;physicalInput.checked=physical;status.textContent=error??`Frame ${frame} · step ${stepCount} · volume ${(volume.read().volumeRatio*100).toFixed(1)}%`;};refresh();
