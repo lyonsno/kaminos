@@ -32,7 +32,7 @@ for(const route of ['residual','splats','proxy'])test('leaving ordinary beauty f
     encodeBoundarySplatPresentation:()=>true,boundarySplatRenderPipeline:{},boundarySplatPresentationRenderPipeline:{},
     recordSelectiveHeadLivePassReceipt:x=>x,recordVolumePresentationApplication:noop,recordBrowserResidualCost:noop,
     ensureFrameTexture:noop,ensureBrowserResidualFeatureTexture:noop,frameTexture:{createView:()=>({})},browserResidualFeatureTexture:{createView:()=>({})},
-    encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,canvasPresentationSuppressed:route==='proxy',
+    encodeBrowserResidualSourcePass:noop,encodeBrowserResidualPass:()=>true,sceneTransportConsumer:null,canvasPresentationSuppressed:route==='proxy',
     appearanceDecompositionActive:()=>false,encodeBoundarySplatTelemetry:noop,boundarySplatTelemetryCopyPending:false,pressureResidualCopyPending:false,
     selectiveHeadLiveExactPause:null,recordVolumeFrameTiming:noop,requestAnimationFrame:()=>1,render:noop,cancelAnimationFrame:noop,
     canvas:{classList:{remove:noop}},emitStatus:noop,

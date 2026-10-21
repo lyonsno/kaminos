@@ -205,7 +205,7 @@ export async function createLocalLiquidHost({renderer, scene, camera, pipeline, 
     }
   }
 
-  return {group,render,
+  return {group,render,supportsVolumeTransport:true,
     setSceneCamera(requested,physical) {
       const state=displayCamera.update(requested,physical);
       applySceneEmissiveCamera(presentation,linearOutput,displayCamera.outputNode,state.effective);

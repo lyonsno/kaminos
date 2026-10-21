@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
+import {createFiniteFluidHost} from '../finite-fluid-host.mjs';
 import {createFireProxySync} from '../fire-proxy-sync.mjs';
 import {createProxySnapshotRegistry} from '../proxy-snapshot.mjs';
 
@@ -18,7 +19,7 @@ for(const unregister of ['depth','water','request','hidden-water','hidden-fire']
   const proxy=createFireProxySync({registry,readDomain:()=>({translation:[0,0,0],scale:1}),
     createLayer:()=>({setSnapshot(){},dispose(){},clear(){},state:()=>({}),group:{visible:true}})});
   registry.publish('fire',{fieldGeneration:1,count:0});
-  const context={volumePrototype:prototype,localLiquidHost:{presentation:'full'},viewportDisplay:{fire:'full'},
+  const context={volumePrototype:prototype,localLiquidHost:{presentation:'full',supportsVolumeTransport:true},viewportDisplay:{fire:'full'},
     hidden:new Set(),isSceneItemVisible:id=>!context.hidden.has(id),syncWaterProxy(){},
     ordinaryDepthEnabled:true,requested:true,transportPrototype:null,transportCanvasVisibility:'',
     authoredWaterFlameTransportActive:false,consumeSceneTransportFrame(){},fireProxySync:proxy};
@@ -50,3 +51,23 @@ for(const unregister of ['depth','water','request','hidden-water','hidden-fire']
   }
 }
 console.log('native transport / fire proxy presentation ownership passed');
+
+// The actual finite facade does not encode volume segments. Never transfer
+// presentation ownership merely because its Full/Proxy UI matches continuous.
+const finite=await createFiniteFluidHost({setup:{dt:1/240,playbackMode:'render_cadence',support:{kind:'invisible_box'},solver:{particleCount:8,diagnosticPopulation:{},diagnosticBox:{},rendererMode:'screen_space_refraction'}},device:{},
+ createSolver:async()=>({available:true,step(){},getDebugState:()=>({}),destroy(){}}),
+ createPresentation:()=>({render(){},state:()=>({}),dispose(){}})});
+for(const replacing of [false,true]){
+ const canvas={style:{visibility:''}};let consumer=null;
+ const prototype={isActive:()=>true,canvasElement:()=>canvas,setSceneTransportConsumer:fn=>consumer=fn};
+ const scope={volumePrototype:prototype,localLiquidHost:replacing?{presentation:'full',supportsVolumeTransport:true}:finite,viewportDisplay:{fire:'full'},
+  ordinaryDepthEnabled:true,transportPrototype:null,transportCanvasVisibility:'',authoredWaterFlameTransportActive:false,
+  fireLightFieldRouteParams:()=>new URLSearchParams({volume_light_field_water_transport:'1'}),isSceneItemVisible:()=>true,syncWaterProxy(){},syncFireProxy(){},consumeSceneTransportFrame(){},fireProxySync:null};
+ runInNewContext(source.slice(start,end),scope);
+ if(replacing){scope.syncAuthoredWaterFlameTransport();assert.ok(consumer);assert.equal(canvas.style.visibility,'hidden');scope.localLiquidHost=finite;}
+ scope.syncAuthoredWaterFlameTransport();
+ assert.equal(consumer,null,'unsupported finite presenter retains ordinary flame ownership');
+ assert.equal(scope.authoredWaterFlameTransportActive,false);
+ assert.equal(canvas.style.visibility,'','initial/replacement finite host must not hide the only flame');
+}
+finite.dispose();

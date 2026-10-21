@@ -33,7 +33,7 @@ const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const start=html.indexOf('    if(sceneEmissiveCamera && (sceneGISettings.mode');
 const end=html.indexOf('    syncWaterProxy();',start);assert(start>=0&&end>start);
 const status={hidden:true,textContent:''},settings={mode:'combined',view:'scene'};
-const scope={sceneEmissiveCamera:{update:()=>({effective:false,reason:'inactive-material'})},sceneGISettings:settings,
+const scope={localLiquidHost:null,sceneEmissiveCamera:{update:()=>({effective:false,reason:'inactive-material'})},sceneGISettings:settings,
  document:{getElementById:id=>id==='rendering-match-flame-camera'?{checked:true}:status},window:{},
  renderPipeline:{},outlinedSceneOutput:{},outlinedCameraOutput:{},applySceneEmissiveCamera(){}};
 runInNewContext('let sceneCameraStatusText="";function draw(){'+html.slice(start,end)+'}draw();sceneGISettings.view="ao";draw();sceneGISettings.view="scene";draw();',scope);

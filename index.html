@@ -11746,7 +11746,7 @@ async function initScene() {
     const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
       &&ordinaryDepthEnabled
       &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
-      &&!!localLiquidHost&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
+      &&localLiquidHost?.supportsVolumeTransport===true&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
       &&prototype?.isActive?.()===true;
     if(transportPrototype&&(!wanted||transportPrototype!==prototype)) {
       transportPrototype.setSceneTransportConsumer(null);
