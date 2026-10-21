@@ -6,6 +6,8 @@ This image-plus-text demo runs the SAM 3 image detector, using `mlx-community/sa
 
 ## Prepare And Serve
 
+For ordinary application use, follow [SAM 3 in your application](sam-getting-started.md). Its Node-only preparation command installs the native-resolution model without a Python or MLX environment. The export recipe below is the advanced numerical-reference path.
+
 Prepare a model package once using `tools/sam-detr-stack-mlx-packet.py` from an environment with the compatible MLX-VLM SAM implementation, MLX, NumPy, and Pillow. The default model is `mlx-community/sam3-bf16`. Model access and download are the caller's responsibility.
 
 ```sh
@@ -43,7 +45,7 @@ Run a text prompt, then select all retained instances or one instance. Source, O
 
 Use the native-1008 package above for the detailed image workflow (288-by-288 native mask logits). Model preparation remains an offline step. Unload Model releases SAM's route and model leases without destroying Kaminos's shared rendering device.
 
-This host integration and the APIs below are source-checkout additions, not a claim about the currently published npm version. The native isolated-workbench evidence below remains the accepted regression baseline. The Kaminos consumer also exercises persisted image-to-scene import and same-device, input-driven source rendering during inference; this establishes cooperative submissions at model phase boundaries, not display-frame cadence or frame-budget quality.
+The host integration belongs to the Kaminos application; the SAM runtime and source-mask APIs below also ship through the npm package's `./sam` entrypoint. The native isolated-workbench evidence below remains the accepted regression baseline. The Kaminos consumer also exercises persisted image-to-scene import and same-device, input-driven source rendering during inference; this establishes cooperative submissions at model phase boundaries, not display-frame cadence or frame-budget quality.
 
 ### Caller-Owned Image Runtime
 

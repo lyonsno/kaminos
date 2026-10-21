@@ -4,6 +4,8 @@
 
 ## Serve
 
+For an installed-package integration, start with [SAM 3 in your application](sam-getting-started.md). The Node-only `kaminos-sam-model` command produces the same full image model package without MLX. The advanced exporter below remains useful for numerical-reference work.
+
 Prepare an existing **full image-FPN-neck SAM3 serving package** using the offline recipe in [sam-semantic-demo.md](sam-semantic-demo.md). Model access and preparation remain the caller's responsibility. A downstream-only diagnostic packet is not an image-and-text model. This example does not download a model from a third-party host or substitute a demo mask.
 
 From the Kaminos repository root, mount that package using the existing server:
