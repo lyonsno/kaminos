@@ -208,4 +208,5 @@ test('a surfel GLB names its frame: TRELLIS source space, placed by the same nod
   const field=buildSurfelField(fixture()),{extension,json}=readSurfelGLBExtension(encodeSurfelGLB(field));
   assert.deepEqual(extension.frame,{name:'trellis-source',extent:[-.5,.5],cellSize:1/field.resolution,nodeMatrix:[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]});
   assert.deepEqual(json.nodes[0].matrix,extension.frame.nodeMatrix,'the node carries the matrix the frame names');
+  assert.equal(extension.occupancy,'surface','the cells are the decoded surface shell, not filled mass');
 });

@@ -9,7 +9,8 @@
 //
 // Per surfel: cell (u32: 9 bits per axis), offset from the cell centre (3 x i8, units of 1/127 voxel,
 // within +-1 voxel as the dual-grid vertex is), octahedral normal (2 x u8), sRGB colour (3 x u8),
-// metallic and roughness (2 x u8). Alpha is recorded as a range only.
+// metallic and roughness (2 x u8). Alpha is recorded as a range only. The cells are the decoded field's
+// surface shell (TRELLIS decodes no interior), declared as occupancy 'surface' so no consumer reads them as mass.
 
 export const SURFEL_EXTENSION='KAMINOS_trellis_surfels';
 const MESH_NODE_MATRIX=[1,0,0,0, 0,0,-1,0, 0,1,0,0, 0,0,0,1]; // as encodeTrellisGeometryGLB: (x,y,z) -> (x,z,-y)
@@ -135,7 +136,7 @@ export function encodeSurfelGLB(field,{provenance={},fallbackFactor=4}={}){
   const chunks=[],views=[],accessors=[];let length=0;
   const add=(bytes,{target}={})=>{const pad=(4-length%4)%4;if(pad){chunks.push(new Uint8Array(pad));length+=pad;}
     views.push({buffer:0,byteOffset:length,byteLength:bytes.byteLength,...(target?{target}:{})});chunks.push(new Uint8Array(bytes.buffer,bytes.byteOffset,bytes.byteLength));length+=bytes.byteLength;return views.length-1;};
-  const ext={version:1,frame:{name:'trellis-source',extent:[-.5,.5],cellSize:1/field.resolution,nodeMatrix:MESH_NODE_MATRIX},resolution:field.resolution,count:field.count,radiusVoxels:field.radiusVoxels,alpha:field.alpha,arrays:{}};
+  const ext={version:1,frame:{name:'trellis-source',extent:[-.5,.5],cellSize:1/field.resolution,nodeMatrix:MESH_NODE_MATRIX},occupancy:'surface',resolution:field.resolution,count:field.count,radiusVoxels:field.radiusVoxels,alpha:field.alpha,arrays:{}};
   for(const [name] of FIELD_ARRAYS)ext.arrays[name]=add(field[name]);
   // fallback for viewers without the extension: the coarse merged level as plain coloured triangles
   const {field:coarse}=mergeSurfelLevel(field,fallbackFactor),tri=surfelTriangles(coarse);
