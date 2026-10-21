@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkExternalApp } from './external-app-checks.mjs';
 import { startServer, launchChrome, sourceIdentity } from './cdp-harness.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -57,16 +58,7 @@ try {
   report.record = record;
 
   report.phase = 'check';
-  const problems = [];
-  if (record.gpuErrors.length) problems.push(`WebGPU errors: ${record.gpuErrors[0]}`);
-  if (!/no-weights-here/.test(record.failedLoad ?? '')) problems.push(`a load from a base without weights should fail naming it, got ${record.failedLoad}`);
-  if (!(record.first.greenStd > 5)) problems.push(`the first image looks blank (green std ${record.first.greenStd})`);
-  if (!/multiples of 16/.test(record.invalidRequest ?? '')) problems.push(`a 100 x 100 request should fail, got ${record.invalidRequest}`);
-  if (!(record.second.greenStd > 5)) problems.push('the second image looks blank');
-  if (!record.second.textCached) problems.push('the second generation should reuse the cached prompt encoding');
-  if (!/destroyed/.test(record.afterDestroy ?? '')) problems.push(`a destroyed pipeline should refuse, got ${record.afterDestroy}`);
-  if (record.deviceAfterDestroy?.join() !== '1,2,3,4') problems.push('the device should still work after destroy');
-  for (const event of ['step', 'preview']) if (!record.events.some(e => event in e)) problems.push(`no ${event} progress reported`);
+  const problems = checkExternalApp(record);
   report.problems = problems;
   report.phase = problems.length ? 'failed-checks' : 'done';
 } catch (error) {
