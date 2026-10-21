@@ -92,3 +92,21 @@ test('continuous weighting is isolated from the original support lookahead',asyn
   assert.match(sampling,/let support = flameGuideAtPadded\(point, padding\)/,'original lookahead must remain unchanged');
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+test('fixed reference changes quadrature width without changing material footprint',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-reference-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--reference'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  assert.deepEqual(report.armPlan.filter(x=>x.reference).map(x=>x.reference),[2,4,8,16]);
+  assert.ok(report.armPlan.filter(x=>x.reference).every(x=>x.priority===0&&!x.jitter));
+  const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
+  assert.match(optical,/s.minimum = base \/ f32\(DIAG_REFERENCE_PANELS\);\s*s.maximum = s.minimum;/);
+  assert.match(optical,/DIAG_REFERENCE_PANELS == 0u && OPTICAL_STEP_MODE == 2u && refine/);
+  const core=await fs.readFile(dir+'/output/effective-volume-core.js','utf8');
+  const original=await fs.readFile(dir+'/output/original-volume-core.js','utf8');
+  assert.equal(core.match(/let dtBase = [^;]+;/)[0],original.match(/let dtBase = [^;]+;/)[0]);
+  assert.deepEqual(core.match(/boundarySidecarStepFootprintWidth = [^;]+;/g),original.match(/boundarySidecarStepFootprintWidth = [^;]+;/g));
+  assert.match(source,/assert.equal\(effective.DIAG_REFERENCE_PANELS,reference\)/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
