@@ -35,12 +35,13 @@ report.armPlan=flags.has('--constraints')
  ? [baseline,...Array.from({length:8},(_,constraints)=>({label:'constraints-'+constraints,priority:.75,jitter:false,guide:0,constraints})),{...baseline,label:'zero-repeat'}]
  : [ ...[true,false].flatMap(jitter=>[['zero',0],['below',.00133],['above',.001333],['high',.75]].map(([name,priority])=>({label:name+'-j'+Number(jitter),priority,jitter,guide:0,constraints:0}))),{label:'uniform-guide',priority:.75,jitter:false,guide:1,constraints:0},{...baseline,label:'zero-repeat'} ];
 if(flags.has('--repair-floor'))report.armPlan=[...[0,.00133,.001333,.1,.5,.75,1].flatMap(priority=>[false,true].map(repair=>({label:(repair?'floor-':'original-')+priority,priority,jitter:false,guide:0,constraints:0,repair}))),{label:'zero-repeat',priority:0,jitter:false,guide:0,constraints:0,repair:false}];
+if(flags.has('--smooth-floor'))report.armPlan=[{...baseline,jitter:false},...[.001333,.1,.75,1].flatMap(priority=>[false,true].flatMap(smooth=>[false,true].map(repair=>({label:(smooth?'smooth-':'cell-')+(repair?'floor-':'original-')+priority,priority,jitter:false,guide:0,constraints:0,repair,smooth})))),{...baseline,label:'zero-repeat',jitter:false}];
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 let server,context,page;
 process.on('SIGTERM',async()=>{report.error='terminated';await save();await context?.close();server?.kill();process.exit(1);});
 try{
- for(const flag of flags)assert.ok(['--prepare-only','--constraints','--repair-floor'].includes(flag),'unknown diagnostic option: '+flag);
- assert.ok(!(flags.has('--constraints')&&flags.has('--repair-floor')),'choose one diagnostic comparison');
+ for(const flag of flags)assert.ok(['--prepare-only','--constraints','--repair-floor','--smooth-floor'].includes(flag),'unknown diagnostic option: '+flag);
+ assert.ok(['--constraints','--repair-floor','--smooth-floor'].filter(flag=>flags.has(flag)).length<=1,'choose one diagnostic comparison');
  report.phase='browser-dependency';await save();
  const {chromium}=await import('/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs');
  report.phase='prepare';await save();await fs.copyFile(new URL(import.meta.url),out+'/witness.mjs');
@@ -57,8 +58,15 @@ try{
 override DIAG_COUNTS: bool = false;
 override DIAG_GUIDE: u32 = 0u;`);
  let core=bodies['volume-core.js'];
+ const sampling=bodies['volume-raymarch-sampling.mjs'];
+ const guideFunction=sampling.slice(sampling.indexOf('fn flameGuideAtPadded('),sampling.indexOf('fn flameGuideSegment('));
+ let continuous=replaceOne(guideFunction,'fn flameGuideAtPadded(p: vec3<f32>, padding: i32) -> f32 {','fn flameGuideContinuousAt(p: vec3<f32>) -> f32 {\n  let padding = 0;\n  let fraction = fract(worldToCell(p) - vec3<f32>(0.5));');
+ continuous=replaceOne(continuous,'    support = max(support, cue);','    let weight = mix(vec3<f32>(1.0) - fraction, fraction, vec3<f32>(f32(x), f32(y), f32(z)));\n    support += cue * weight.x * weight.y * weight.z;');
+ bodies['volume-raymarch-sampling.mjs']=replaceOne(sampling,'fn flameGuideAt(p:',continuous+'\nfn flameGuideAt(p:');
+ core=replaceOne(core,'let support = select(0.0, guide.y, nearby);','var support = select(0.0, guide.y, nearby);\n        if (DIAG_SMOOTH_GUIDE) { support = flameGuideContinuousAt(ro + rd * (opticalStep.origin + opticalStep.cursor)); }');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_GUIDE: u32 = 0u;','override DIAG_GUIDE: u32 = 0u;\noverride DIAG_CONSTRAINTS: u32 = 0u;');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_CONSTRAINTS: u32 = 0u;','override DIAG_CONSTRAINTS: u32 = 0u;\noverride DIAG_REPAIR_FLOOR: bool = false;');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_REPAIR_FLOOR: bool = false;','override DIAG_REPAIR_FLOOR: bool = false;\noverride DIAG_SMOOTH_GUIDE: bool = false;');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'  phase: f32,','  phase: f32,\n  floorRetry: bool,');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'if ((*s).mask > 1u) { return; }','if ((*s).mask > 1u || (*s).floorRetry) { return; }');
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'  (*s).cursor = min','  (*s).floorRetry = false;\n  (*s).cursor = min');
@@ -89,6 +97,7 @@ override DIAG_GUIDE: u32 = 0u;`);
   }`);
  bodies['volume-core.js']=core;
  core=replaceOne(core,'DIAG_CONSTRAINTS:globalThis.__priorityDiagnostic?.constraints||0','DIAG_CONSTRAINTS:globalThis.__priorityDiagnostic?.constraints||0, DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair');
+ core=replaceOne(core,'DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair','DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair, DIAG_SMOOTH_GUIDE:!!globalThis.__priorityDiagnostic?.smooth');
  bodies['volume-core.js']=replaceOne(core,'state.opticalStepping = { ...optical, effective: optical.mode,','state.opticalStepping = { ...optical, effective: optical.mode, diagnosticConstants:{...opticalConstants},');
  for(const [name,body] of Object.entries(bodies)){report.source[name].effectiveSha256=sha(body);await fs.writeFile(out+'/effective-'+name,body);}
  if(flags.has('--prepare-only')){report.ok=true;report.phase='prepared';await save();process.exit(0);}
@@ -125,20 +134,21 @@ override DIAG_GUIDE: u32 = 0u;`);
  await step(page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=96));
  await step(page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setPaused',true)));
  report.held=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());report.phase='capture';await save();
- async function arm({label,priority,jitter,guide=0,constraints=0,repair=false}){
-  const row={label,priority,jitter,guide,constraints,repair};
+ async function arm({label,priority,jitter,guide=0,constraints=0,repair=false,smooth=false}){
+  const row={label,priority,jitter,guide,constraints,repair,smooth};
   await step(page.evaluate(async({priority,jitter})=>{await window.kaminosWorkbenchExperiments.invoke('setControls',{'volume-flame-priority':priority,'volume-quadrature-jitter':jitter,'volume-ray-noise-animated':false});window.__kaminosVolumePrototype.setControls({rayStartNoise:true,rayNoiseFrame:0});},{priority,jitter}));
   for(const counts of [false,true]){
-   const data=await step(page.evaluate(async({counts,guide,constraints,repair})=>{
-    window.__priorityDiagnostic={counts,guide,constraints,repair};const r=window.__kaminosVolumePrototype;
+   const data=await step(page.evaluate(async({counts,guide,constraints,repair,smooth})=>{
+    window.__priorityDiagnostic={counts,guide,constraints,repair,smooth};const r=window.__kaminosVolumePrototype;
     const s=await r.sampleFrame({advanceSim:false,includeRgba:true,now:12000});if(!s.ok||s.image?.rgba?.length!==s.image.width*s.image.height*4||!s.image.rgba.some((v,i)=>i%4!==3&&v>0))throw Error('missing/partial/blank frame');
     const c=document.createElement('canvas');c.width=s.image.width;c.height=s.image.height;const ctx=c.getContext('2d');ctx.putImageData(new ImageData(new Uint8ClampedArray(s.image.rgba),c.width,c.height),0,0);
     return{png:c.toDataURL().split(',')[1],state:r.debugState(),width:c.width,height:c.height,diagnostic:{...window.__priorityDiagnostic}};
-   },{counts,guide,constraints,repair}));
-   assert.deepEqual(data.diagnostic,{counts,guide,constraints,repair},'diagnostic specialization request changed');
+   },{counts,guide,constraints,repair,smooth}));
+   assert.deepEqual(data.diagnostic,{counts,guide,constraints,repair,smooth},'diagnostic specialization request changed');
    const effective=data.state.opticalStepping.diagnosticConstants;
    assert.equal(effective.DIAG_COUNTS,counts);assert.equal(effective.DIAG_GUIDE,guide);assert.equal(effective.DIAG_CONSTRAINTS,constraints);
    assert.equal(effective.DIAG_REPAIR_FLOOR,repair);
+   assert.equal(effective.DIAG_SMOOTH_GUIDE,smooth);
    validateArm(data.state,priority,jitter,report.held.simStepCount);
    const name=label+(counts?'-counts':'');const bytes=Buffer.from(data.png,'base64');await fs.writeFile(out+'/'+name+'.png',bytes);
    row[counts?'counts':'image']={sha256:sha(bytes),width:data.width,height:data.height};row.state=data.state;

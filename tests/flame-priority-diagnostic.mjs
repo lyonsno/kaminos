@@ -78,3 +78,17 @@ test('floor repair preserves a separate baseline and clamps the actual child wid
   assert.match(optical,/\(\*s\)\.floorRetry = false;\s*\(\*s\)\.cursor = min/,'accepted interval must re-enable guidance');
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+test('continuous weighting is isolated from the original support lookahead',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-smooth-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--smooth-floor'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  for(const p of [.001333,.1,.75,1])assert.deepEqual(report.armPlan.filter(x=>x.priority===p).map(x=>[x.repair,x.smooth]),[[false,false],[true,false],[false,true],[true,true]]);
+  const core=await fs.readFile(dir+'/output/effective-volume-core.js','utf8');
+  assert.match(core,/if \(DIAG_SMOOTH_GUIDE\) \{ support = flameGuideContinuousAt/);
+  const sampling=await fs.readFile(dir+'/output/effective-volume-raymarch-sampling.mjs','utf8');
+  assert.match(sampling,/support \+= cue \* weight.x \* weight.y \* weight.z/);
+  assert.match(sampling,/let support = flameGuideAtPadded\(point, padding\)/,'original lookahead must remain unchanged');
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
