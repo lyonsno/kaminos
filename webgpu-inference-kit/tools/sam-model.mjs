@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream, realpathSync } from 'node:fs';
 import { mkdir, open, readFile, writeFile, rename } from 'node:fs/promises';
 import { resolve, join, basename } from 'node:path';
@@ -95,8 +95,10 @@ export async function prepareSamModel({ recipe, outDir, checkpoint, cacheDir,
   const output = resolve(outDir);
   await mkdir(output, { recursive: true });
   const report = { schema: 'kaminos.sam3-model-prepare-report.v1', status: 'running', phase: 'checkpoint',
+    runId: randomUUID(), startedAt: new Date().toISOString(),
     modelPackageId: recipe.modelPackage?.packageId, checkpointSha256: recipe.checkpoint?.sha256, artifacts: [] };
   try {
+    await writeJson(join(output, 'prepare-report.json'), report);
     if (recipe.schema !== 'kaminos.sam3-portable-model-recipe.v1') throw new Error('unsupported SAM model recipe');
     for (const row of [...recipe.modelPackage.weights, ...recipe.assets]) outputPath(output, row.file);
     let source = checkpoint;
@@ -110,6 +112,7 @@ export async function prepareSamModel({ recipe, outDir, checkpoint, cacheDir,
     if (!await matches(source, recipe.checkpoint.sha256)) throw new Error('checkpoint SHA mismatch');
     const header = await readSafetensorsHeader(source);
     report.phase = 'convert-weights';
+    await writeJson(join(output, 'prepare-report.json'), report);
     for (const weight of recipe.modelPackage.weights) {
       const path = outputPath(output, weight.file);
       if (!await matches(path, weight.sha256)) {
@@ -123,11 +126,13 @@ export async function prepareSamModel({ recipe, outDir, checkpoint, cacheDir,
       onProgress(`Verified ${report.artifacts.length}/${recipe.modelPackage.weights.length} weights`);
     }
     report.phase = 'assets';
+    await writeJson(join(output, 'prepare-report.json'), report);
     for (const asset of recipe.assets) {
       await download(asset.url, outputPath(output, asset.file), asset.sha256, fetchImpl);
       report.artifacts.push({ file: asset.file, sha256: asset.sha256 });
     }
     report.phase = 'manifest';
+    await writeJson(join(output, 'prepare-report.json'), report);
     const modelPackage = await writeJson(join(output, 'sam3-model-package.json'), recipe.modelPackage);
     const invocation = await writeJson(join(output, 'sam3-invocation.json'), recipe.invocation);
     await writeJson(join(output, 'tensor-manifest.json'), { ...recipe.root, modelPackage, invocation });

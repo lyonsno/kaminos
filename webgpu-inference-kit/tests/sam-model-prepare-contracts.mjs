@@ -54,6 +54,16 @@ try {
     outDir: join(directory, 'escape') }), /path/);
   const token = Buffer.from('tokenizer fixture');
   const withAsset = { ...recipe, assets: [{ file: 'vocab.json', sha256: digest(token), url: 'https://model.test/vocab' }] };
+  let releaseAsset, assetStarted;
+  const assetAdmission = new Promise(resolve => { assetStarted = resolve; });
+  const rerun = prepareSamModel({ recipe: withAsset, checkpoint: input, outDir: out,
+    fetch: async () => { assetStarted(); return new Promise(resolve => { releaseAsset = resolve; }); } });
+  await assetAdmission;
+  const duringRerun = JSON.parse(await readFile(join(out, 'prepare-report.json')));
+  releaseAsset(new Response(token));
+  await rerun;
+  assert.equal(duringRerun.status, 'running', 'a new preparation must replace an old completion before doing work');
+  assert.equal(duringRerun.phase, 'assets');
   const fetched = [];
   await prepareSamModel({ recipe: withAsset, outDir: join(directory, 'download'),
     fetch: async url => { fetched.push(url); return new Response(url.endsWith('/vocab') ? token : checkpoint); } });

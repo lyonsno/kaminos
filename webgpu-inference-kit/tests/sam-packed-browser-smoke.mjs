@@ -1,7 +1,7 @@
 // kaminos-test: manual - needs prepared native SAM weights and an independent WebGPU browser
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream, openSync, closeSync } from 'node:fs';
 import { mkdir, readFile, writeFile, realpath, copyFile, readdir } from 'node:fs/promises';
 import { resolve, join, sep } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -12,7 +12,8 @@ import { hashFile } from '../tools/sam-model.mjs';
 import { resolveSamWitnessBrowser } from '../../sam-image-witness.mjs';
 
 const { values: args } = parseArgs({ options: { out: { type: 'string' }, model: { type: 'string' },
-  image: { type: 'string' }, baseline: { type: 'string' }, chrome: { type: 'string' }, playwright: { type: 'string' } } });
+  image: { type: 'string' }, baseline: { type: 'string' }, checkpoint: { type: 'string' },
+  chrome: { type: 'string' }, playwright: { type: 'string' } } });
 assert.ok(args.out, '--out required');
 const output = resolve(args.out), root = fileURLToPath(new URL('../', import.meta.url));
 await mkdir(output, { recursive: true });
@@ -22,7 +23,7 @@ const save = () => writeFile(join(output, 'report.json'), JSON.stringify(report,
 let server, context;
 await save();
 try {
-  for (const key of ['model', 'image', 'baseline', 'chrome', 'playwright']) assert.ok(args[key], `--${key} required`);
+  for (const key of ['model', 'image', 'baseline', 'checkpoint', 'chrome', 'playwright']) assert.ok(args[key], `--${key} required`);
   const packed = JSON.parse(execFileSync('npm', ['pack', root, '--ignore-scripts', '--json', '--pack-destination', output],
     { encoding: 'utf8' }))[0];
   const tarball = join(output, packed.filename);
@@ -33,8 +34,23 @@ try {
   execFileSync('npm', ['install', '--ignore-scripts', '--no-package-lock', '--no-audit', '--no-fund', tarball],
     { cwd: consumer, stdio: 'pipe' });
   const installed = await realpath(join(consumer, 'node_modules/@kaminos/webgpu-inference-kit'));
+  await mkdir(resolve(args.model), { recursive: true });
   const model = await realpath(args.model);
   report.packageRoot = installed;
+  report.phase = 'installed-cli-prepare';
+  report.cli = { stdout: join(output, 'prepare-stdout.log'), stderr: join(output, 'prepare-stderr.log') };
+  await save();
+  const stdout = openSync(report.cli.stdout, 'w'), stderr = openSync(report.cli.stderr, 'w');
+  try {
+    execFileSync(process.execPath, [join(consumer, 'node_modules/.bin/kaminos-sam-model'), '--out', model,
+      '--checkpoint', resolve(args.checkpoint)], { cwd: consumer, stdio: ['ignore', stdout, stderr] });
+  } finally { closeSync(stdout); closeSync(stderr); }
+  const prepared = JSON.parse(await readFile(join(model, 'prepare-report.json'), 'utf8'));
+  const recipe = JSON.parse(await readFile(join(installed, 'models/sam3-native.json'), 'utf8'));
+  assert.equal(prepared.status, 'complete');
+  assert.equal(prepared.modelPackageId, recipe.modelPackage.packageId);
+  report.preparation = { modelPackageId: prepared.modelPackageId, checkpointSha256: prepared.checkpointSha256,
+    artifactCount: prepared.artifacts.length, report: join(model, 'prepare-report.json') };
   report.model = { root: model, manifestSha256: await hashFile(join(model, 'tensor-manifest.json')) };
   await copyFile(args.image, join(output, 'input.jpg'));
   report.input = { path: join(output, 'input.jpg'), sha256: await hashFile(args.image) };
@@ -99,7 +115,10 @@ try {
         if (!response.ok) throw new Error(`output store failed ${response.status}`);
       };
       await store(`${label}-source.u8`, mask);
-      for (const instance of result.instances) await store(`${label}-${instance.index}.u8`, new Uint8Array(instance.mask));
+      for (const instance of result.instances) {
+        await store(`${label}-${instance.index}.u8`, new Uint8Array(instance.mask));
+        await store(`${label}-${instance.index}.f32`, instance.logits);
+      }
       const bitmap = await createImageBitmap(image), canvas = document.getElementById('mask');
       canvas.width = bitmap.width; canvas.height = bitmap.height;
       const ctx = canvas.getContext('2d'); ctx.drawImage(bitmap, 0, 0); bitmap.close();
@@ -134,7 +153,21 @@ try {
       }).sort((a, b) => a - b);
       assert.deepEqual(result.instances.map(row => row.index).sort((a, b) => a - b), expectedIndices,
         'missing or extra native instances');
+      report.runs.at(-1).nativeNumerics = [];
       for (const instance of result.instances) {
+        const logits = await readFile(join(output, `wheel-${instance.index}.f32`));
+        const baseline = await readFile(join(args.baseline, `cold-wheel-${instance.index}-logits.f32`));
+        assert.equal(logits.length, baseline.length);
+        let maxAbsDiff = 0, sumSquared = 0;
+        for (let i = 0; i < logits.length; i += 4) {
+          const a = logits.readFloatLE(i), b = baseline.readFloatLE(i);
+          assert.ok(Number.isFinite(a) && Number.isFinite(b));
+          const diff = Math.abs(a - b); maxAbsDiff = Math.max(maxAbsDiff, diff); sumSquared += diff * diff;
+        }
+        report.runs.at(-1).nativeNumerics.push({ index: instance.index, elements: logits.length / 4,
+          maxAbsDiff, rootMeanSquare: Math.sqrt(sumSquared / (logits.length / 4)),
+          baseline: join(args.baseline, `cold-wheel-${instance.index}-logits.f32`) });
+        await save();
         assert.deepEqual(await readFile(join(output, `wheel-${instance.index}.u8`)),
           await readFile(join(args.baseline, `cold-wheel-${instance.index}-mask.u8`)), 'native mask drift from accepted baseline');
       }
