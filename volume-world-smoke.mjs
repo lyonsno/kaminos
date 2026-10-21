@@ -180,7 +180,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
   let v=0,m=0,p=0,steps=0;const groups=new Map();let lastFine,lastReaction,lastSolid;
   const values=new Float32Array(44);
   return {optical,plan,anchor,
-    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null}){
+    encode(encoder,{fineBuffer,reactionTexture,fineDims,fineVelocityMode='collocated',transform,time,reactant,physics,iterations=16,buoyancy=.002,transitionCells=0,solids=solidTexture??fallback,collisionSource=null,timing=null}){
       if(!Number.isInteger(iterations)||iterations<0)throw Error('Invalid world pressure iterations');
       if(![0,1,2].includes(transitionCells))throw Error('Invalid world transition collar');
       if(!['collocated','staggered'].includes(fineVelocityMode))throw Error('Unknown fine velocity convention');
@@ -193,7 +193,7 @@ export function createWorldSmoke(device,plan,anchor,{solidTexture}={}){
       device.queue.writeBuffer(uniform,0,values);
       if(lastFine!==fineBuffer||lastReaction!==reactionTexture||lastSolid!==solids){groups.clear();lastFine=fineBuffer;lastReaction=reactionTexture;lastSolid=solids;}
       const group=()=>{const key=`${v}:${m}:${p}`;if(!groups.has(key))groups.set(key,device.createBindGroup({layout,entries:[{binding:0,resource:{buffer:uniform}},...[fineBuffer,flows[v],flows[1-v],materials[m],materials[1-m],pressures[p],pressures[1-p]].map((buffer,i)=>({binding:i+1,resource:{buffer}})),{binding:8,resource:reactionTexture.createView()},{binding:9,resource:solids.createView()},{binding:10,resource:optical.createView()}]}));return groups.get(key);};
-      const run=(name,dims)=>{const pass=encoder.beginComputePass({label:'world smoke '+name});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group());pass.dispatchWorkgroups(...dims.map(n=>Math.ceil(n/4)));pass.end();};
+      const run=(name,dims)=>{const timestampWrites=timing?{querySet:timing.querySet,...(name==='transportFlow'?{beginningOfPassWriteIndex:timing.flowStart}:name==='project'?{endOfPassWriteIndex:timing.flowEnd}:name==='transportMaterial'?{beginningOfPassWriteIndex:timing.materialStart,endOfPassWriteIndex:timing.materialEnd}:{})}:null;const pass=encoder.beginComputePass({label:'world smoke '+name,...(timestampWrites&&name!=='pressure'?{timestampWrites}:{})});pass.setPipeline(pipelines[name]);pass.setBindGroup(0,group());pass.dispatchWorkgroups(...dims.map(n=>Math.ceil(n/4)));pass.end();};
       run('transportFlow',plan.flowDims);v=1-v;
       for(let i=0;i<iterations;i++){run('pressure',plan.flowDims);p=1-p;}
       run('project',plan.flowDims);v=1-v;

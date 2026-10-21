@@ -21,8 +21,9 @@ test('uniform block: joined boundary after the reactant block, off by default', 
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_OFFSET, core.REACTANT_COMBUSTION_UNIFORM_OFFSET + core.REACTANT_COMBUSTION_UNIFORM_FLOATS, 'after the reactant combustion block');
   assert.equal(core.JOINED_BOUNDARY_UNIFORM_FLOATS, 12);
   assert.equal(core.WAVELET_TURBULENCE_UNIFORM_OFFSET, core.JOINED_BOUNDARY_UNIFORM_OFFSET + core.JOINED_BOUNDARY_UNIFORM_FLOATS, 'wavelet turbulence follows the joined boundary');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
-  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n\}/);
+  assert.equal(core.OPEN_WORLD_UNIFORM_OFFSET, core.WAVELET_TURBULENCE_UNIFORM_OFFSET + core.WAVELET_TURBULENCE_UNIFORM_FLOATS);
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.OPEN_WORLD_UNIFORM_OFFSET + 4);
+  assert.match(shader, /  reactant_combustion_d: vec4<f32>,\n  joined_boundary: vec4<f32>,\n  joined_ghost_geometry: vec4<f32>,\n  joined_ghost_dims: vec4<f32>,\n  wavelet_turbulence: vec4<f32>,\n  wavelet_octave_weights: vec4<f32>,\n  open_world_boundary: vec4<f32>,\n\}/);
   assert.match(shader, /fn joinedBoundary\(\) -> bool \{\n  return u\.joined_boundary\.x > 0\.5;\n\}/);
   const m = core.JOINED_GHOST_MARGIN_CELLS;
   assert.deepEqual(core.joinedBoundaryUniformValues(null), [0, 0, 0, m, 0, 0, 0, 0, 0, 0, 0, 0]);
@@ -55,20 +56,20 @@ test('lower planes: a three-layer texture in Sexy\'s plane ordering', () => {
 
 test('compactFaceVelocity: joined lower faces read the planes; joined far upper faces are open', () => {
   const fn = shader.slice(shader.indexOf('fn compactFaceVelocity('), shader.indexOf('\n}\n', shader.indexOf('fn compactFaceVelocity(')));
-  assert.match(fn, /  if \(c\[axis\] < 0\) \{\n    if \(joinedBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}/);
-  assert.match(fn, /    if \(joinedBoundary\(\) \|\| \(axis == 1u && pressureSolverOpenTop\(\)\)\) \{\n      return readSlot\(c, 0u\)\[axis\];\n    \}/);
+  assert.match(fn, /  if \(c\[axis\] < 0\) \{\n    if \(joinedBoundary\(\) \|\| openWorldBoundary\(\)\) \{ return joinedLowerFace\(c, axis\); \}/);
+  assert.match(fn, /    if \(joinedBoundary\(\) \|\| openWorldBoundary\(\) \|\| \(axis == 1u && pressureSolverOpenTop\(\)\)\) \{\n      return readSlot\(c, 0u\)\[axis\];\n    \}/);
 });
 
 test('walls: the in-kernel sponges, top fades and floor clamp are off in joined mode', () => {
-  assert.match(shader, /let wallFade = select\(max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\), 1\.0, joinedBoundary\(\)\);/);
+  assert.match(shader, /let wallFade = select\(max\(1\.0 - smoothstep\(0\.86, 1\.0, wall\), clamp\(immersedSlabWeight, 0\.0, 1\.0\)\), 1\.0, joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
   for (const name of ['smokeTopFade', 'heatTopFade', 'fireTopFade']) {
     assert.match(shader, new RegExp(`let ${name} = select\\(${name}Standalone, 1\\.0, joinedBoundary\\(\\)\\);`), `${name} off in joined mode`);
   }
-  assert.match(shader, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, max\(bonfireScene, select\(0\.0, 1\.0, joinedBoundary\(\)\)\)\);/);
+  assert.match(shader, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, max\(bonfireScene, select\(0\.0, 1\.0, joinedBoundary\(\) \|\| openWorldBoundary\(\)\)\)\);/);
   const face = shader.slice(shader.indexOf('fn csFaceForces('), shader.indexOf('\n}\n', shader.indexOf('fn csFaceForces(')));
-  assert.match(face, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
-  assert.match(face, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\)\);/);
-  assert.match(face, /let openY = select\(sceneFaceOpen\(c, 1u\), pressureSolverOpenTop\(\) \|\| joinedBoundary\(\), topRow\);/);
+  assert.match(face, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
+  assert.match(face, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
+  assert.ok(face.includes('let openY = sceneFaceOpen(c, 1u) && (!topRow || pressureSolverOpenTop() || joinedBoundary() || openWorldBoundary());'));
   assert.match(face, /let upX = select\(here\.x, forceDeltaLoad\(c \+ vec3<i32>\(1, 0, 0\), 0\), openX && !topRowX\);/);
   assert.match(face, /let upZ = select\(here\.z, forceDeltaLoad\(c \+ vec3<i32>\(0, 0, 1\), 2\), openZ && !topRowZ\);/);
 });
@@ -184,7 +185,7 @@ test('ghost reads: one exterior sample per transport call, blended beyond the la
   // appearance model); the ghost blend wraps it in the same function.
   const masked = shader.slice(shader.indexOf('fn sampleFluidSlotMaskedWith('), shader.indexOf('\n}\n', shader.indexOf('fn sampleFluidSlotMaskedWith(')));
   assert.match(shader, /fn sampleFluidSlotMasked\(cellCenter: vec3<f32>, slot: u32\) -> vec4<f32> \{\n  return sampleFluidSlotMaskedWith\(cellCenter, slot, false\);\n\}/);
-  assert.match(masked, /fine = weighted \/ max\(weightSum, 1e-12\);\n  \}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  let outside = ghostOutsideAmount\(cellCenter\);\n  if \(outside <= 0\.0\) \{ return fine; \}\n  return mix\(fine, ghostSlotAt\(cellCenter, slot\), clamp\(outside \* 2\.0, 0\.0, 1\.0\)\);/);
+  assert.match(masked, /fine = weighted \/ max\(weightSum, 1e-12\);\n  \}\n  if \(openWorldBoundary\(\)\) \{ return openWorldAmbient\(cellCenter, slot, fine\); \}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  let outside = ghostOutsideAmount\(cellCenter\);\n  if \(outside <= 0\.0\) \{ return fine; \}\n  return mix\(fine, ghostSlotAt\(cellCenter, slot\), clamp\(outside \* 2\.0, 0\.0, 1\.0\)\);/);
   // The general samplers are untouched (the raymarch uses them; no ghost
   // texture reaches a fragment stage).
   for (const fn of ['sampleFluidSlot', 'slotExtrema', 'samplePredictSlot']) {
@@ -273,7 +274,7 @@ test('JG-02-C: settlement requires the join admitted, the ghosts bound and the r
 });
 
 test('JG-03: the front-topology field blends to the exterior appearance (0) beyond the box like the appearance slots', () => {
-  assert.match(shader, /fn sampleFrontFieldTransport\(p: vec3<f32>\) -> f32 \{\n  let fine = sampleFrontFieldMasked\(p\);\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  return mix\(fine, 0\.0, clamp\(ghostOutsideAmount\(p\) \* 2\.0, 0\.0, 1\.0\)\);\n\}/);
+  assert.match(shader, /fn sampleFrontFieldTransport\(p: vec3<f32>\) -> f32 \{\n  let fine = sampleFrontFieldMasked\(p\);\n  if \(openWorldBoundary\(\)\) \{[^\n]+\}\n  if \(!joinedGhosts\(\)\) \{ return fine; \}\n  return mix\(fine, 0\.0, clamp\(ghostOutsideAmount\(p\) \* 2\.0, 0\.0, 1\.0\)\);\n\}/);
   assert.match(shader, /var combustionFrontTopology = sampleFrontFieldTransport\(backCell\) \* stepRate\(0\.936\);/);
 });
 
