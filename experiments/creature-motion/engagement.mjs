@@ -12,7 +12,7 @@ export function createEngagement(){
   if(caution&&time<caution.until){state={phase:'cautious',id:caution.id,hold:true,destination:null,standOff:1+2*caution.strength};return read();}
   if(current){
    const seen=observed.find(x=>x.id===current.id);
-   if(seen){current.point=[...seen.point];current.lastSeen=time;}
+   if(seen){if(distance(seen.point,current.point)>.1){arrived=false;delete current.inspectAt;}current.point=[...seen.point];current.lastSeen=time;}
    if(time-current.lastSeen>2||time-current.since>10||(current.inspectAt!==undefined&&time-current.inspectAt>=2)){
     cooldowns.set(current.id,time+12);current=null;state={phase:'wandering',hold:false,destination:null};return read();
    }
