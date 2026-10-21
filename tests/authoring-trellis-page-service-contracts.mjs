@@ -82,6 +82,12 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   fail=true;release=null;events.length=0;const second=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
   release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
   assert.deepEqual(events,['claim','run','release'],'and the lease is released on failure');
+  // A server with no Greenroom: the run goes ahead unleased, and says so when it starts, not afterwards.
+  const infos=[];ctx.setInfo=m=>infos.push(m);fail=false;release=null;events.length=0;
+  ctx.fetch=async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>({status:'unconfigured'})};};
+  const third=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
+  assert.ok(infos.some(m=>/without a Greenroom lease/.test(m)),'announced before the run finishes');
+  release();assert.equal((await third).generation.gpuLease.status,'unconfigured');assert.deepEqual(events,['claim','run']);
 });
 
 test('the service prepares its own input and shows the cutout it used',async()=>{

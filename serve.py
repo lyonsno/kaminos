@@ -13,6 +13,7 @@ import os
 import queue
 import re
 import select
+import shutil
 import socket
 import socketserver
 import subprocess
@@ -2967,17 +2968,26 @@ def cancel_owned_gpu_job(job_id, *, queue_dir, greenroom_bin, runs_root):
 # this server). A page running inside a Greenroom job (an automated witness) names that job instead.
 # Only leases this route issued (kaminos-page-*) can be renewed or released through it.
 def greenroom_lease_config():
-    """The Greenroom this server's page leases go through: explicit environment, else the TRELLIS queue config."""
-    bin_path, queue_dir = os.environ.get("KAMINOS_GREENROOM_BIN"), os.environ.get("KAMINOS_GREENROOM_QUEUE_DIR")
-    if not (bin_path and queue_dir) and os.environ.get("KAMINOS_TRELLIS_CONFIG"):
+    """The Greenroom this server's page leases go through, and where that came from: explicit environment,
+    else the TRELLIS queue config, else this machine's installed gpu-greenroom with its own default queue
+    (the queue the CLI uses with no --queue-dir). None only when the machine has no Greenroom."""
+    def usable(bin_path, queue_dir):
+        return bool(bin_path and queue_dir and Path(bin_path).is_file() and Path(queue_dir).is_dir())
+    env = os.environ
+    if usable(env.get("KAMINOS_GREENROOM_BIN"), env.get("KAMINOS_GREENROOM_QUEUE_DIR")):
+        return {"greenroomBin": env["KAMINOS_GREENROOM_BIN"], "queueDir": env["KAMINOS_GREENROOM_QUEUE_DIR"], "source": "environment"}
+    if env.get("KAMINOS_TRELLIS_CONFIG"):
         try:
-            config = json.loads(Path(os.environ["KAMINOS_TRELLIS_CONFIG"]).read_text())
-            bin_path, queue_dir = bin_path or config.get("greenroomBin"), queue_dir or config.get("queueDir")
+            config = json.loads(Path(env["KAMINOS_TRELLIS_CONFIG"]).read_text())
+            if usable(config.get("greenroomBin"), config.get("queueDir")):
+                return {"greenroomBin": config["greenroomBin"], "queueDir": config["queueDir"], "source": "trellis-config"}
         except (OSError, ValueError):
             pass
-    if not (bin_path and queue_dir and Path(bin_path).is_file() and Path(queue_dir).is_dir()):
-        return None
-    return {"greenroomBin": bin_path, "queueDir": queue_dir}
+    installed = shutil.which("gpu-greenroom") or str(Path.home() / ".local/bin/gpu-greenroom")
+    default_queue = str(Path.home() / ".local/state/gpu-greenroom")
+    if usable(installed, default_queue):
+        return {"greenroomBin": installed, "queueDir": default_queue, "source": "installed-default"}
+    return None
 
 
 def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_root, ttl_seconds=120):
@@ -4854,8 +4864,9 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             if config is None:
                 self.send_json({"status": "unconfigured", "message": "No Greenroom configured on this server; the run proceeds without a lease"})
                 return
-            self.send_json(greenroom_page_lease(payload, greenroom_bin=config["greenroomBin"], queue_dir=config["queueDir"],
-                                                server_pid=os.getpid(), repo_root=str(ROOT)))
+            result = greenroom_page_lease(payload, greenroom_bin=config["greenroomBin"], queue_dir=config["queueDir"],
+                                          server_pid=os.getpid(), repo_root=str(ROOT))
+            self.send_json({**result, "greenroom": {"queueDir": config["queueDir"], "source": config["source"]}})
         except PermissionError as error:
             self.send_json({"error": str(error)}, 403)
         except ValueError as error:

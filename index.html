@@ -27031,7 +27031,9 @@ function setupAuthoringAssets(){
       const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',
         insideJob:new URLSearchParams(location.search).get('greenroom_job'),signal:options?.signal,
         onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
-        held=>{trellisPageLease=held.status==='held'?held.leaseId:null;return trellisPageRunInner(options);});
+        held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
+          if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
+          return trellisPageRunInner(options);});
       trellisPageLease=null;
       if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),...(lease.jobId?{jobId:lease.jobId}:{}),...(lease.renewError?{renewError:lease.renewError}:{})};
       return result;

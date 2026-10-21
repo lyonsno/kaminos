@@ -58,3 +58,27 @@ class GreenroomPageLease(unittest.TestCase):
         with self.assertRaises(PermissionError):self.call({'action':'renew','leaseId':'../x'})
 
 if __name__=='__main__':unittest.main()
+
+
+class GreenroomLeaseConfig(unittest.TestCase):
+    """Which Greenroom a page lease goes through; a server with nothing set still finds this machine's Greenroom."""
+    def resolve(self,env,home,which=None):
+        fn=function('greenroom_lease_config',{'os':__import__('types').SimpleNamespace(environ=env),'json':json,'Path':Path,
+            'shutil':__import__('types').SimpleNamespace(which=lambda name:which)})
+        old=Path.home;Path.home=staticmethod(lambda:Path(home))
+        try:return fn()
+        finally:Path.home=old
+    def machine(self):
+        home=Path(tempfile.mkdtemp());(home/'.local/bin').mkdir(parents=True);(home/'.local/state/gpu-greenroom').mkdir(parents=True)
+        cli=home/'.local/bin/gpu-greenroom';cli.write_text('#!/bin/sh\n');self.addCleanup(shutil.rmtree,home,True);return home,cli
+    def test_explicit_environment_wins(self):
+        home,cli=self.machine();q=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,q,True)
+        got=self.resolve({'KAMINOS_GREENROOM_BIN':str(cli),'KAMINOS_GREENROOM_QUEUE_DIR':str(q)},home)
+        self.assertEqual((got['queueDir'],got['source']),(str(q),'environment'))
+    def test_a_server_with_nothing_set_uses_this_machines_installed_greenroom_and_its_default_queue(self):
+        home,cli=self.machine()
+        got=self.resolve({},home)
+        self.assertEqual((got['greenroomBin'],got['queueDir'],got['source']),(str(cli),str(home/'.local/state/gpu-greenroom'),'installed-default'))
+    def test_no_greenroom_on_the_machine_is_unconfigured(self):
+        home=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,home,True)
+        self.assertIsNone(self.resolve({},home))
