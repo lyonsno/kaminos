@@ -16,6 +16,16 @@ test('inspector modified state compares current values without building a captur
 test('history reads retain exact editable values without creating an unused capture route',()=>{
  const start=html.indexOf('function flameSettingsState('),code=html.slice(start,html.indexOf('\n}\n',start)+3);const ctx=context();vm.runInContext(code,ctx);const state=ctx.flameSettingsState();assert.deepEqual(JSON.parse(JSON.stringify(state.domControls)),values.domControls);assert.equal(state.source.label,'Accepted');
 });
+test('history snapshots retain migration provenance independently of editable state',()=>{
+ const start=html.indexOf('function flameSettingsState('),code=html.slice(start,html.indexOf('\n}\n',start)+3),ctx=context();
+ const projection={sceneMigration:{requested:'canonical_plume',effective:'flame',migrated:true,migrationNote:'Canonical retired; Flame dynamics'}};
+ ctx.activeVolumeSettingsPresetReceipt.serverProjection=projection;
+ vm.runInContext(code,ctx);const state=ctx.flameSettingsState();
+ assert.deepEqual(state.source.serverProjection,projection);
+ assert.notStrictEqual(state.source.serverProjection,projection);
+ state.source.serverProjection.sceneMigration.requested='changed';
+ assert.equal(projection.sceneMigration.requested,'canonical_plume');
+});
 test('interactive pose writes do not scan precise bounds for every object in the scene',()=>{
  const start=html.indexOf('function applyAuthoredScenePose('),code=html.slice(start,html.indexOf('\n}\n',start)+3);let applied;
  const ctx=vm.createContext({sceneObjects:[{id:'source',type:'flame'}],CAMERA_TYPE:'camera',FLAME_EMITTER_TYPE:'flame',LOCAL_LIQUID_EMITTER_TYPE:'water',

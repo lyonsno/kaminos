@@ -10915,7 +10915,7 @@ export function createKaminosVolumePrototype({
       authority: 'off',
     },
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
-    volumeSceneAuthority: volumeSceneReceipt(controlsSnapshot.volumeScene),
+    volumeSceneAuthority: volumeSceneReceipt(controlsSnapshot.volumeSceneRequested ?? controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
     simulationPaused: false,
@@ -16469,7 +16469,7 @@ export function createKaminosVolumePrototype({
       predictorBufferBytes: fluidPredictBufferBytes,
       predictorAllocated: fluidPredictBufferBytes === fluidBufferBytes(gridSize),
     };
-    state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
+    state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeSceneRequested ?? controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];

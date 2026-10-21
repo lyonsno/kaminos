@@ -52,6 +52,23 @@ vm.runInContext(setter, context);
 context.setVolumeControlValue('volume-scene', 'bonfire_plume');
 assert.equal(select.value, 'flame', 'legacy programmatic assignment retains the effective simulator');
 assert.equal(select.dataset.volumeSceneRequest, 'bonfire_plume', 'legacy assignment preserves its requested identity');
+const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
+const controlsPrefix = html.slice(html.indexOf('function readVolumeControls() {'), html.indexOf('  const params =', html.indexOf('function readVolumeControls() {')));
+const receiptExpression = core.match(/state.volumeSceneAuthority = ([^;]+);/)[1];
+const describe = html.match(/function describeFlameSettingsProblems\([^]*?\n\}/)[0];
+Object.assign(context,{window:{},volumeSceneReceipt,volumePressureConfigForMode:()=>({})});
+vm.runInContext(describe,context);
+for(const requested of ['canonical_plume','bonfire_plume','tall_plume','flame']){
+ context.setVolumeControlValue('volume-scene',requested);
+ const controlsSnapshot=vm.runInContext(controlsPrefix+"return {volumeScene,volumeSceneRequested:typeof volumeSceneRequested==='undefined'?undefined:volumeSceneRequested};} readVolumeControls()",context);
+ const receipt=vm.runInNewContext(receiptExpression,{controlsSnapshot,volumeSceneReceipt});
+ assert.equal(receipt.requested,requested,'controls-to-core receipt retains the legacy request');
+ assert.equal(receipt.effective,'flame');
+ assert.equal(controlsSnapshot.volumeScene,'flame','pressure admission stays on the effective simulator');
+ const status=context.describeFlameSettingsProblems();
+ if(requested==='flame')assert.equal(status.text,'','native Flame clears stale migration');
+ else assert.ok(status.text.includes(requested)&&status.text.includes('Flame'),'legacy route explains migration without a basin');
+}
 
 const retired = { closest: selector => selector.includes('data-volume-schema-retired') ? {} : null };
 const active = { closest: () => null };

@@ -17256,7 +17256,8 @@ function describeFlameSettingsProblems() {
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
   const basin = window.__kaminosFlameBasinClampReport;
   if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
-  const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration;
+  const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration
+    || volumeSceneReceipt(document.getElementById('volume-scene')?.dataset.volumeSceneRequest);
   if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
   return { text: parts.join(' || '), warning: parts.length > 0 };
 }
@@ -18349,6 +18350,7 @@ function linkedVolumeEmitterInletVelocity() {
 
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
+  const volumeSceneRequested = document.getElementById('volume-scene').dataset.volumeSceneRequest || volumeScene;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const params = new URLSearchParams(window.location.search);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
@@ -18392,6 +18394,7 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    volumeSceneRequested,
     ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
@@ -21726,7 +21729,7 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
     sourcePose:flameEmitterPose});
   // The applied controls may be remapped below; the immutable source receipt
   // must remain separate even when its preset shares the input control graph.
-  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
@@ -21855,6 +21858,7 @@ function checkFlameSettingsState(state) {
 }
 function writeFlameSettingsState(state) {
   supersedeVolumeRebuildHolds();
+  setVolumeControlValue('volume-scene', state.source?.serverProjection?.sceneMigration?.requested || DEFAULT_VOLUME_SCENE);
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
     const control=document.getElementById(id);
     if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));
