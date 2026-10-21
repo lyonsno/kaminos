@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { volumeSceneReceipt } from '../volume-scene-ontology.mjs';
 import { flamePresetForLocalControls } from '../flame-authoring.mjs';
 import { flamePoseToDomain } from '../scene-flame-emitter.mjs';
 import * as contract from '../volume-settings-preset-contract.mjs';
@@ -127,8 +128,8 @@ assert.equal(reasonsView.statuses.at(-1)[1], true);
   for (const order of [['index', 'readback'], ['readback', 'index']]) {
     for (const applied of [0.44, 0.4]) {
       let status = null;
-      const select = { options: [], value: '', replaceChildren(...o) { this.options = o; }, add(o) { this.options.push(o); } };
-      const context = vm.createContext({ ...contract, window: {}, console, flamePresetForLocalControls, flamePoseToDomain,
+      const select = { options: [], value: '', dataset: {}, replaceChildren(...o) { this.options = o; }, add(o) { this.options.push(o); } };
+      const context = vm.createContext({ ...contract, volumeSceneReceipt, window: {}, console, flamePresetForLocalControls, flamePoseToDomain,
         flameEmitterPose: {position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}, flameDomainTranslation:[0,0,0], flameDomainScale:1,
         volumeSettingsPresetIndex: null, volumeSettingsPresetIndexSummary: null,
         activeVolumeSettingsPresetReceipt: receipt, activeVolumeSettingsPresetApplied: Object.freeze([]),
