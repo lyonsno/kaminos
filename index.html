@@ -11812,19 +11812,19 @@ async function initScene() {
       const physical=window.__kaminosVolumePrototype?.emissiveCameraState();
       const state=sceneEmissiveCamera.update(requested,physical);
       matchedCameraEffective=state.effective;
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:!!localLiquidHost});
-      localLiquidHost?.setSceneCamera(requested,physical);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
+      localLiquidHost?.setSceneCamera?.(requested,physical);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!requested||state.effective;
       if(text!==sceneCameraStatusText){cameraStatus.textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:!!localLiquidHost});
-      localLiquidHost?.setSceneCamera(false);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
+      localLiquidHost?.setSceneCamera?.(false);
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!document.getElementById('rendering-match-flame-camera').checked;
       cameraStatus.textContent=sceneCameraStatusText='Flame camera matching is inactive while inspecting indirect lighting.';
-    } else localLiquidHost?.setSceneCamera(false);
+    } else localLiquidHost?.setSceneCamera?.(false);
     syncWaterProxy();
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees

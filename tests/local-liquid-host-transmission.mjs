@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
-// Execute the production shader's final transmission selection. The shared
-// host supplies the actual scene image; its disabled private scene query can
-// only return an environment sample and must not replace that image.
+// Execute the production shader's final transmission selection. Current main supplies a camera depth/radiance
+// query for the host as well as the standalone world query. Valid exits use
+// that result; absent exits retain the bound scene image.
 const source=readFileSync(new URL('../finger-fluid-webgpu-core.js',import.meta.url),'utf8');
 const start=source.indexOf('  let refractedRadiance = mix('),end=source.indexOf('\n  );',start)+5;
 assert.ok(start>0&&end>start);
@@ -15,9 +15,10 @@ function evaluate(host,validity,body){return Array.from(runInNewContext(selectio
  bodyTransportMode:body,queryValidity:validity,params:{hostFrameControls:{x:host?1:0}},
  select:(a,b,c)=>c?b:a,mix:(a,b,w)=>a.map((v,i)=>v*(1-w)+b[i]*w),
 }));}
-for(const validity of [0,.5,1])for(const body of [0,1])assert.deepEqual(evaluate(true,validity,body),scene,'host bowl color must survive valid water exit without a scene-ray query');
-for(const body of [0,1]){
- assert.deepEqual(evaluate(false,0,body),scene,'standalone missing exit retains scene fallback');
- assert.deepEqual(evaluate(false,1,body),body?robust:query,'standalone world query remains authoritative when available');
+for(const host of [true,false])for(const body of [0,1]){
+ assert.deepEqual(evaluate(host,0,body),scene,'missing exit retains actual scene fallback');
+ assert.deepEqual(evaluate(host,1,body),body?robust:query,'valid exit selects the available optical query');
+ const half=evaluate(host,.5,body),target=body?robust:query;
+ half.forEach((v,i)=>assert.ok(Math.abs(v-(scene[i]+target[i])*.5)<1e-12));
 }
-console.log('host scene transmission survives disabled private world query');
+console.log('host camera-depth radiance and standalone world queries retain exit-validity selection');

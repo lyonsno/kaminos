@@ -10,15 +10,16 @@ const start=source.indexOf('    fireLightFieldPass?.renderShadows();',frame);
 const end=source.indexOf('    // Copy the surface records',start);
 assert.ok(start>frame&&end>start);
 const production=source.slice(start,end);
-for(const matching of [true,false])for(const mountTransform of [true,false]) {
+for(const matching of [true,false])for(const mountTransform of [true,false])for(const hasCameraSetter of [true,false]) {
   const raw={},matched={},draws=[];
   const pipeline={outputNode:matched,outputColorTransform:mountTransform,
     render(){draws.push({node:this.outputNode,transform:this.outputColorTransform});}};
   const host={setSceneCamera(){},render(){throw Error('GPU frame failed');},
     dispose(){pipeline.outputColorTransform=mountTransform;}};
+  if(!hasCameraSetter)delete host.setSceneCamera;
   const fields={'rendering-match-flame-camera':{checked:matching},'rendering-camera-status':{textContent:''}};
   runInNewContext(production,{
-    fireLightFieldPass:null,sceneExposureControls:null,sceneGISettings:{mode:'gtao',view:'scene'},
+    fireLightFieldPass:null,sceneExposureControls:null,authoredWaterControls:null,sharedWorkbench:null,sceneGISettings:{mode:'gtao',view:'scene'},
     document:{getElementById:id=>fields[id]},window:{__kaminosVolumePrototype:{emissiveCameraState:()=>({})}},
     sceneEmissiveCamera:{update:()=>({effective:matching,toneMapping:'agx',whiteBalanceKelvin:6500,exposureEV:0})},
     applySceneEmissiveCamera,renderPipeline:pipeline,outlinedSceneOutput:raw,outlinedCameraOutput:matched,

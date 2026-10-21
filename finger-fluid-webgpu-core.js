@@ -10528,9 +10528,7 @@ fn fs_refraction(@builtin(position) fragmentPosition: vec4<f32>) -> CompositeOut
   let refractedRadiance = mix(
     refractedScene.rgb,
     select(transmissionQuadratureRadiance, robustBodyRadiance, bodyTransportMode == 1),
-    // Host mode has no private scene-ray query. Preserve its actual scene image
-    // instead of replacing visible geometry with the query's environment fallback.
-    select(queryValidity, 0.0, params.hostFrameControls.x > 0.5),
+    queryValidity,
   );
   if (opticalDebugMode == 21) {
     let fallbackDelta = abs(refractedRadiance - refractedScene.rgb);
