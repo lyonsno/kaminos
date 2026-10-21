@@ -4556,10 +4556,12 @@ fn sampleFluidSlotMaskedWith(cellCenter: vec3<f32>, slot: u32, stored: bool) -> 
   return mix(fine, ghostSlotAt(cellCenter, slot), clamp(outside * 2.0, 0.0, 1.0));
 }
 
-// One-way ambient reservoir: extrapolate momentum, admit clean gas when a
-// characteristic enters the box. This is not world-to-fine feedback.
+// One-way ambient reservoir: incoming characteristics carry clean, still air,
+// not a copy of the boundary cell's momentum. Extrapolating that momentum can
+// let an accidental bulk drift supply its own external wind. Interior/backtraced
+// outflow remains unchanged; pressure still projects every open boundary face.
+// Explicit wind forces still apply in the domain. This is not world feedback.
 fn openWorldAmbient(p: vec3<f32>, slot: u32, sample: vec4<f32>) -> vec4<f32> {
-  if (slot == 0u) { return sample; }
   return sample * (1.0 - clamp(ghostOutsideAmount(p), 0.0, 1.0));
 }
 
@@ -12429,7 +12431,7 @@ export function createKaminosVolumePrototype({
     const open=resolvePressureSolverConfig(controlsSnapshot).effective.solver===PRESSURE_SOLVER_CONVERGED
       && controlsSnapshot.emitterSourceLaw===IMMERSED_SOURCE_LAW && !state.joinedBoundary?.admitted;
     uniforms[OPEN_WORLD_UNIFORM_OFFSET]=open?1:0;
-    state.openWorldBoundary={effective:open?'ambient-pressure-open-faces':'legacy-boundaries',reason:open?null:'requires-converged-immersed-nonjoined',feedback:'one-way',material:'clean-ambient-inflow'};
+    state.openWorldBoundary={effective:open?'ambient-pressure-open-faces':'legacy-boundaries',reason:open?null:'requires-converged-immersed-nonjoined',feedback:'one-way',material:'clean-ambient-inflow',momentum:'still-ambient-inflow-interior-outflow'};
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const key=JSON.stringify(plan);
     if(!worldSmoke||worldSmokeKey!==key){
