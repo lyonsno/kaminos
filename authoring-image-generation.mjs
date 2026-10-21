@@ -6,7 +6,10 @@
 export const KLEIN_AUTHORING_ROUTE_ID='flux2-klein.text-to-image.authoring-shared-device.v0';
 export const KLEIN_PUBLISHED_WEIGHTS='https://huggingface.co/BasinShapers/flux2-klein-4b-webgpu/resolve/main';
 // The sizes klein's own demo offers and its README times.
-export const KLEIN_IMAGE_SIZES=[512,768,1024];
+export const KLEIN_IMAGE_SIZES=[256,384,512,768,1024];
+// Transformer weight levels (models/flux2-klein package): the text encoder, decoder and tokenizer are shared,
+// so a level change swaps only the transformer. 4-bit is the package's full level ("Mint").
+export const KLEIN_WEIGHT_LEVELS=Object.freeze({'4-bit':'dit','3-bit':'dit-q3','2-bit':'dit-q2'});
 const KLEIN_LIMITS=['maxBufferSize','maxStorageBufferBindingSize','maxStorageBuffersPerShaderStage','maxComputeWorkgroupStorageSize'];
 
 // Klein's kernels need f16 and the adapter's own buffer and workgroup limits (as its demo
@@ -177,7 +180,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(abort?.signal.aborted)return;
       set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading FLUX.2 klein weights (${part})`});
     });
-    return {core,session,foreground,pipeline,base,app};
+    return {core,session,foreground,pipeline,base,app,level:'4-bit'};
   }
   return {
     read(){
@@ -200,11 +203,12 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512}){
+    async run({prompt,seed,size=512,level='4-bit'}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
-      if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 512, 768 or 1024');
+      if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
+      if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
@@ -212,6 +216,13 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       try{
         if(!loaded)loaded=await load();
         if(abort.signal.aborted)throw abort.signal.reason;
+        if(loaded.level!==level){
+          set({stage:'Loading weights',percent:null,progress:`Loading the ${level} transformer…`});
+          await loaded.pipeline.loadTransformer(`${loaded.base}/${KLEIN_WEIGHT_LEVELS[level]}`,(part,name,{loadedBytes,totalBytes})=>{
+            if(!abort.signal.aborted)set({stage:'Loading weights',percent:totalBytes?Math.min(100,loadedBytes/totalBytes*100):null,progress:`Loading the ${level} transformer`});});
+          loaded.level=level;
+          if(abort.signal.aborted)throw abort.signal.reason;
+        }
         ({session}=loaded);const {core,foreground,pipeline,base,app}=loaded;
         // The kiln of the scene loaded now; a reloaded scene has a new prototype and handoff.
         const current=context();handoff=current.handoff;const host=current.host;
@@ -235,7 +246,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const image=completion.output;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,timings:image.timings};
+        const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
         pendingImage={image,provenance,text,seed};state.pending={name:kleinImageName(text,seed),provenance};
         return await savePending();
       }catch(error){
@@ -257,7 +268,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · FLUX.2 klein</p><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
+    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
@@ -278,7 +289,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value)}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});
