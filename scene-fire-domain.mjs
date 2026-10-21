@@ -58,9 +58,12 @@ export function flameSourceInputs(records,{controls:shared={},translation=[0,0,0
   const controls={...shared};
   for(const [id,descriptor] of Object.entries(record.emission?.settings??{})){
    const param=descriptor.param??(id==='emitter-assay-family'?'volume_emitter_family':id.replaceAll('-','_'));
+   if(typeof param!=='string'||fireControlOwner(param.replaceAll('_','-'))!=='source')throw Error(`Fire source parameter ${id} conflicts with source owner`);
    const key=param.replace(/^volume_/,'').replace(/_([a-z])/g,(_,letter)=>letter.toUpperCase());
    const value=descriptor.rawValue??descriptor.value;
-   controls[key]=descriptor.type==='checkbox'||typeof descriptor.value==='boolean' ? value===true||value==='true'||value==='1':descriptor.type==='select-one'||typeof descriptor.value==='string'&&!Number.isFinite(Number(value))?String(value):Number(value);
+   const numeric=descriptor.type==='range'||descriptor.type==='number';
+   controls[key]=descriptor.type==='checkbox'||typeof descriptor.value==='boolean' ? value===true||value==='true'||value==='1':descriptor.type==='select-one'||!numeric&&typeof descriptor.value==='string'&&!Number.isFinite(Number(value))?String(value):Number(value);
+   if(typeof controls[key]==='number'&&!Number.isFinite(controls[key]))throw Error(`Fire source value ${id} must be finite`);
   }
   const pose=flamePoseToDomain(record.transform,translation,scale);
   const inside=flamePoseInDomain(record.transform,translation,scale,shared);

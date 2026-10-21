@@ -21,3 +21,14 @@ test('outside and disabled sources stop supply independently, and the empty coll
  assert.deepEqual(inputs.map(o=>o.controls.immersedSourceEnabled),[false,false,true]);
  assert.deepEqual(source.flameSourceInputs([],{controls:{}}),[]);
 });
+
+
+test('source descriptors cannot overwrite field-owned controls through a mismatched parameter',()=>{
+ const a=record('a',0,.4);a.emission.settings['volume-immersed-fuel'].param='volume_resolution';
+ assert.throws(()=>source.flameSourceInputs([a],{controls:{resolution:32}}),/source.*owner|field.*control/i);
+});
+test('a non-finite source value is rejected before publishing a partly mapped collection',()=>{
+ const a=record('a',0,.4),b=record('b',.3,.6);
+ b.emission.settings['volume-immersed-fuel']={value:.6,rawValue:'NaN',type:'range'};
+ assert.throws(()=>source.flameSourceInputs([a,b],{controls:{resolution:32}}),/finite/i);
+});
