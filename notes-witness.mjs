@@ -615,6 +615,7 @@ try {
     // A tab the browser freezes (as long-background tabs can be) answers nothing; it
     // leaves presence rather than being shown reachable, and once thawed it rejoins
     // and catches up on what arrived meanwhile.
+    await back.evaluate(() => { window.__notesWitnessFroze = false; document.addEventListener('freeze', () => { window.__notesWitnessFroze = true; }); });
     const cdp = await context.newCDPSession(back);
     await cdp.send('Page.setWebLifecycleState', {state: 'frozen'});
     let gone = false;
@@ -629,8 +630,11 @@ try {
       back_in = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
       caught = await back.evaluate(id => !!window.kaminosNotes?.session?.state?.notes?.has(id), frozenId);
     }
-    report.effective.frozenTab = {page: ids.page, leftPresence: gone, rejoined: back_in, caughtUp: caught};
-    check('a frozen tab leaves presence, and once thawed rejoins and catches up', gone && back_in && caught, report.effective.frozenTab);
+    const froze = await back.evaluate(() => window.__notesWitnessFroze === true);
+    report.effective.frozenTab = {page: ids.page, froze, leftPresence: gone, rejoined: back_in, caughtUp: caught};
+    // The browser freezes only hidden pages; a page it kept visible was never frozen.
+    if (!froze) report.notExercised.push({phase: 'frozen-tab', reason: 'the browser did not freeze the page (no freeze event; it freezes only hidden pages, and headless keeps them visible)'});
+    else check('a frozen tab leaves presence, and once thawed rejoins and catches up', gone && back_in && caught, report.effective.frozenTab);
     await back.close();
   }
 
