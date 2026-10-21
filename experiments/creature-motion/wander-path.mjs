@@ -21,7 +21,8 @@ function inside(point,area) {return length(localPoint(point,area))<=1+1e-12;}
 // Bound both arc/chord length error and nonlinear parameter speed. Flatness
 // alone misses a straight quadratic whose control point is off its midpoint.
 // No source motion samples or travelled route segments are discarded.
-function curveTable(points,area) {
+function curveTable(points,area,allowStill=false) {
+ if(allowStill&&points.every(p=>p.every((v,i)=>v===points[0][i])))return {table:[{t:0,d:0},{t:1,d:0}],length:0};
  const table=[{t:0,d:0}];let distance=0;
  const scale=Math.max(...points.flat().map(Math.abs),...area.radii,1);
  const tolerance=Math.max(Math.min(...area.radii)*1e-5,Number.EPSILON*scale*64);
@@ -54,7 +55,7 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
   if(snapshot.destination!==undefined&&snapshot.destination!==null&&!finitePair(snapshot.destination))throw Error('Invalid destination snapshot');destination=snapshot.destination?pair(snapshot.destination):null;
   area=validateArea(snapshot.area);rng=snapshot.rng;points=copy(snapshot.points);offset=snapshot.offset;total=snapshot.distance;entry=snapshot.entry;segments=snapshot.segments;fallback=normalized(snapshot.direction);
   if(snapshot.areas!==undefined){areas=validateAreas(snapshot.areas);zoneId=snapshot.zoneId;if(!areas.some(row=>row.id===zoneId))throw Error('Snapshot has an unknown zone');}
-  lookup=curveTable(points,area);if(offset>lookup.length)throw Error('Wander snapshot distance exceeds current curve');
+  lookup=curveTable(points,area,Boolean(destination));if(offset>lookup.length)throw Error('Wander snapshot distance exceeds current curve');
  } else {
   area=validateArea(area);if(!finitePair(position))throw Error('Wander position must be finite');
   fallback=normalized(direction);if(!Number.isInteger(seed)||seed<0||seed>0xffffffff)throw Error('Wander random seed must be an unsigned integer');rng=seed;
@@ -125,8 +126,8 @@ export function createWanderPath({area,areas,position,direction,seed=1,snapshot}
    // Reuse the in-area tangent handle, shortened for a nearby destination.
    const reach=length(minus(end,current.position)),handle=length(minus(points[1],points[0]));
    points=[pair(current.position),current.position.map((v,i)=>v+current.direction[i]*Math.min(handle,reach*.4)),end];
-   if(reach<1e-9){points=[pair(current.position),current.position.map((v,i)=>v+current.direction[i]*1e-8),end];}
-   lookup=curveTable(points,area);offset=reach<1e-9?lookup.length:0;
+   if(reach<1e-9){points=[pair(current.position),pair(current.position),pair(current.position)];}
+   lookup=curveTable(points,area,true);offset=reach<1e-9?lookup.length:0;
   }
   segments++;return read();
  }
