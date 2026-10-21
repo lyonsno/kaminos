@@ -618,8 +618,10 @@ try {
     await back.evaluate(() => { window.__notesWitnessFroze = false; document.addEventListener('freeze', () => { window.__notesWitnessFroze = true; }); });
     const cdp = await context.newCDPSession(back);
     await cdp.send('Page.setWebLifecycleState', {state: 'frozen'});
+    // A frozen page cannot answer; one that still answers was never frozen, so do not wait on it.
+    const answering = await Promise.race([back.evaluate(() => window.__notesWitnessFroze === false).then(() => true), sleep(2000).then(() => false)]);
     let gone = false;
-    for (const deadline = Date.now() + 100000; !gone && Date.now() < deadline; await sleep(2000)) {
+    for (const deadline = Date.now() + (answering ? 0 : 100000); !gone && Date.now() < deadline; await sleep(2000)) {
       gone = !(await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
     }
     const whileFrozen = await notes(['post', 'arrived while frozen', '--to', PERSON, '--as', 'hub-check-agent']);
