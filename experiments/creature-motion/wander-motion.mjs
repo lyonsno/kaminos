@@ -43,9 +43,17 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
  function read(){const t=timing();return {elapsed,cycle:t.cycle,frame:heldFrame??t.frame,period,sourceDistance,sourceKey,travel:structuredClone(transport),path:path.read()};}
  function advance(delta) {
   if(!Number.isFinite(delta)||delta<0)throw Error('Wander time delta must be finite and nonnegative');
-  const before=timing().distance;elapsed+=delta;heldFrame=null;
+  const previousElapsed=elapsed,before=timing().distance,pathBefore=path.read().distance;elapsed+=delta;heldFrame=null;
   const distance=timing().distance-before;if(distance< -1e-8)throw Error('Wander source distance moved backwards');
-  path.advance(Math.max(0,distance));return read();
+  path.advance(Math.max(0,distance));
+  const consumed=path.read().distance-pathBefore;
+  if(consumed<distance-1e-10){
+   // Stop the retained gait at the same travelled distance as the root.
+   let low=previousElapsed,high=elapsed;
+   for(let i=0;i<48;i++){const mid=(low+high)/2;if(timing(mid).distance-before<consumed)low=mid;else high=mid;}
+   elapsed=(low+high)/2;
+  }
+  return read();
  }
  function frame(index) {
   const pose=walking.frame(index,{mode:'cycle',cycle:0}),state=path.read(),point=roots[index];
@@ -58,5 +66,5 @@ export function createWanderMotion({THREE,adapter,walking,sourceKey,area,positio
   elapsed=timing().cycle*period+index/adapter.fps;heldFrame=index;return read();
  }
  function save(){return {schema:'kaminos.creature-wander-motion.v1',sourceKey,elapsed,heldFrame,travel,path:path.snapshot()};}
- return Object.freeze({frame,read,advance,seek,setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
+ return Object.freeze({frame,read,advance,seek,setDestination:next=>path.setDestination(next),setArea:next=>path.setArea(next),setAreas:next=>path.setAreas(next),snapshot:save});
 }
