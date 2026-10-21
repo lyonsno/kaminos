@@ -2992,7 +2992,8 @@ def greenroom_lease_config():
             bin_path, queue_dir = check(config.get("greenroomBin"), config.get("queueDir"), "KAMINOS_TRELLIS_CONFIG")
             return {"greenroomBin": bin_path, "queueDir": queue_dir, "source": "trellis-config"}
     installed = shutil.which("gpu-greenroom") or str(Path.home() / ".local/bin/gpu-greenroom")
-    default_queue = str(Path.home() / ".local/state/gpu-greenroom")
+    # The CLI's own default queue (gpu_queue DEFAULT_QUEUE_DIR): GPU_GREENROOM_DIR, else ~/.local/state/gpu-greenroom.
+    default_queue = env.get("GPU_GREENROOM_DIR") or str(Path.home() / ".local/state/gpu-greenroom")
     if Path(installed).is_file() and Path(default_queue).is_dir():
         return {"greenroomBin": installed, "queueDir": default_queue, "source": "installed-default"}
     return None

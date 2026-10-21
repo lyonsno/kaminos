@@ -34,3 +34,16 @@ test('without a shared device there is no app host',()=>{
  const f=fixture();
  assert.throws(()=>createAppGpuHost({sharedGpu:null,host:f.host,kit:f.kit,frameOwner:()=>f.owner}),/shared GPU device/);
 });
+
+test('a model run whose finish rejects is marked as still holding the GPU (a Greenroom lease must not be handed back)',async()=>{
+ const f=fixture();
+ const failing={...f.kit,createWebGpuForegroundService:options=>{const real=createWebGpuForegroundService(options);
+   let failed=0;return {...real,beginRun:async(...args)=>{const run=await real.beginRun(...args);
+     return {...run,finish:async()=>{const receipt=await run.finish();if(failed++===0)throw Error('finish receipt clock failed');return receipt;}};}};}};
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:failing,frameOwner:()=>f.owner});
+ const run=await app.beginRun('u2net:1',{routeId:'u2net.foreground-removal'});
+ const error=await run.finish().catch(e=>e);
+ assert.match(error.message,/finish receipt clock failed/);assert.equal(error.gpuRouteHeld,true);
+ const ok=await app.beginRun('klein:1',{routeId:'flux2-klein'}).catch(e=>e);
+ if(ok?.finish){const settled=await ok.finish();assert.ok(!settled?.gpuRouteHeld);}
+});

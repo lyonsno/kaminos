@@ -34,7 +34,12 @@ export function createAppGpuHost({sharedGpu,host,kit,frameOwner,install=null,ses
     async beginRun(runId,{routeId}={}){
       if(typeof routeId!=='string'||!routeId)throw Error('a model run needs its route id');
       await ensureFrames();
-      return foreground.beginRun(runId,{routeId});
+      const run=await foreground.beginRun(runId,{routeId});
+      // A rejected finish leaves the run latched, with no certified settlement: the GPU is not known free,
+      // so whoever holds it on the page's behalf (a Greenroom lease) must not hand it back.
+      // (The kit's run is frozen: the marked finish shadows it on a run that inherits everything else.)
+      const finish=(...args)=>run.finish(...args).catch(error=>{throw Object.assign(error instanceof Error?error:Error(String(error)),{gpuRouteHeld:true});});
+      return Object.freeze(Object.create(run,{finish:{value:finish,enumerable:true}}));
     },
     // A different owner took the frames (e.g. a producer that installs its own requester).
     released(){installedOn=null;},

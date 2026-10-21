@@ -94,6 +94,10 @@ class GreenroomLeaseConfig(unittest.TestCase):
     def test_a_trellis_config_without_greenroom_keys_falls_through_to_the_installed_greenroom(self):
         home,cli=self.machine();cfg=Path(tempfile.mkdtemp())/'trellis.json';cfg.write_text('{}')
         self.assertEqual(self.resolve({'KAMINOS_TRELLIS_CONFIG':str(cfg)},home)['source'],'installed-default')
+    def test_PGLC1_the_installed_default_queue_follows_GPU_GREENROOM_DIR_like_the_cli(self):
+        home,cli=self.machine();q=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,q,True)
+        got=self.resolve({'GPU_GREENROOM_DIR':str(q)},home)
+        self.assertEqual((got['queueDir'],got['source']),(str(q),'installed-default'))
     def test_no_greenroom_on_the_machine_is_unconfigured(self):
         home=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,home,True)
         self.assertIsNone(self.resolve({},home))
