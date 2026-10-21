@@ -545,7 +545,8 @@ try {
       if (index % 2 === 0) await hide(tab);
       tabs.push(tab);
     }
-    const routes = await Promise.all(tabs.map(tab => tab.evaluate(() => ({page: window.kaminosNotes?.pageId ?? null, route: window.kaminosNotes?.route?.() ?? null}))));
+    const routes = await Promise.all(tabs.map(tab => tab.evaluate(() => ({page: window.kaminosNotes?.pageId ?? null, route: window.kaminosNotes?.route?.() ?? null,
+      vantage: window.kaminosAgentVantage?.pageId ?? null}))));
     report.effective.sharedConnection = {routes};
     check('every tab takes its notes through the shared hub', routes.every(item => item.route === 'hub'), {routes});
     let listed = [];
@@ -553,6 +554,14 @@ try {
       listed = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.map(entry => entry.id);
       if (routes.every(item => listed.includes(item.page))) break;
     }
+    // The vantage link rides the same hub; every tab must still be linked by its own id.
+    let linkedIds = [];
+    for (const deadline = Date.now() + 20000; Date.now() < deadline; await sleep(500)) {
+      linkedIds = (await (await fetch(`${origin}/api/vantage/pages`)).json()).pages.filter(entry => entry.connected).map(entry => entry.id);
+      if (routes.every(item => item.vantage && linkedIds.includes(item.vantage))) break;
+    }
+    check('every tab has its vantage page linked too', routes.every(item => item.vantage && linkedIds.includes(item.vantage)),
+      {missing: routes.filter(item => !linkedIds.includes(item.vantage)).map(item => item.vantage)});
     check('every tab, hidden or not, is in notes presence', routes.every(item => listed.includes(item.page)), {missing: routes.filter(item => !listed.includes(item.page)).map(item => item.page)});
     const extra = await context.newPage();
     const started = Date.now();
