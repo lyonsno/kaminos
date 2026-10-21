@@ -36,7 +36,20 @@ export function sampleSmokePrefix({far,tau},distance){
   return (i===0?0:tau[i-1])*(1-f)+(tau[Math.min(i,tau.length-1)]??0)*f;
 }
 
-const cubeCoordinates=THREE.TSL.wgslFn(/* wgsl */`
+// Binomial 3x3 directional footprint, reprojecting off-face taps onto their
+// actual cube face. Average transmission, then store equivalent optical depth.
+// Subtracting the minimum avoids underflow even for fully opaque neighborhoods.
+export function filterSmokeDirectionReference({face,x,y,resolution,read}){
+  const taps=[];
+  for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+    const p=smokeCubeCoordinates(smokeCubeDirection(face,(x+.5+dx)/resolution,(y+.5+dy)/resolution));
+    taps.push({tau:read(p.face,...p.uv.map(v=>Math.max(0,Math.min(resolution-1,Math.floor(v*resolution))))),weight:(dx===0?2:1)*(dy===0?2:1)/16});
+  }
+  const minimum=Math.min(...taps.map(t=>t.tau));
+  return minimum-Math.log(taps.reduce((sum,t)=>sum+t.weight*Math.exp(minimum-t.tau),0));
+}
+
+const CUBE_COORDINATES_WGSL=/* wgsl */`
 fn smokeCubeUV(d:vec3<f32>)->vec3<f32>{
  let a=abs(d);var face=0.0;var uv=vec2<f32>(0);
  if(a.x>=a.y && a.x>=a.z){
@@ -50,20 +63,25 @@ fn smokeCubeUV(d:vec3<f32>)->vec3<f32>{
   else {face=5.0;uv=vec2<f32>(-d.x,-d.y)/a.z;}
  }
  return vec3<f32>(uv*.5+vec2<f32>(.5),face);
-}`);
+}`;
+const cubeCoordinates=THREE.TSL.wgslFn(CUBE_COORDINATES_WGSL);
 
 // Per-light radial optical-depth prefixes, not an opaque first-hit depth.
 // Four prefix endpoints per RGBA texel keep angular filtering to two reads.
 // All coordinates and extinction lengths stay volume-local; world scale is
 // applied only when transforming the receiver into that same coefficient space.
-export function createFireSmokeShadow(device,{points,resolution=16,steps=16,count=4}={}){
+export function createFireSmokeShadow(device,{points,resolution=16,steps=16,count=4,filter=false}={}){
+  if(typeof filter!=='boolean')throw Error('smoke shadow filter must be boolean');
   const plan=smokeShadowPlan({resolution,steps,count},device.limits);
   const gpu=device.createTexture({label:'live smoke radial optical-depth prefixes',size:plan.size,format:'rgba16float',
     usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC});
   const params=device.createBuffer({label:'smoke shadow atlas layout',size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   device.queue.writeBuffer(params,0,new Uint32Array([resolution,steps,count,plan.groups]));
   const pipeline=device.createComputePipeline({label:'smoke optical-depth prefix rays',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_SHADOW_WGSL}),entryPoint:'integrate'}});
-  const external=new THREE.ExternalTexture(gpu);external.image={width:plan.size[0],height:plan.size[1]};
+  const filtered=filter?device.createTexture({label:'direction-filtered smoke prefixes',size:plan.size,format:'rgba16float',usage:GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.COPY_SRC}):null;
+  const filterPipeline=filter?device.createComputePipeline({label:'smoke neighboring-direction transmission filter',layout:'auto',compute:{module:device.createShaderModule({code:FIRE_SMOKE_FILTER_WGSL}),entryPoint:'filterDirections'}}):null;
+  const filterGroup=filter?device.createBindGroup({layout:filterPipeline.getBindGroupLayout(0),entries:[{binding:0,resource:gpu.createView()},{binding:1,resource:filtered.createView()},{binding:2,resource:{buffer:params}}]}):null;
+  const external=new THREE.ExternalTexture(filtered??gpu);external.image={width:plan.size[0],height:plan.size[1]};
   external.type=THREE.HalfFloatType;external.format=THREE.RGBAFormat;external.colorSpace=THREE.NoColorSpace;
   external.minFilter=external.magFilter=THREE.LinearFilter;external.generateMipmaps=false;external.flipY=false;
   const {uniform,vec2,vec3,float,int,texture,Fn,If,mix}=THREE.TSL;
@@ -100,13 +118,18 @@ export function createFireSmokeShadow(device,{points,resolution=16,steps=16,coun
       }
       const encoder=device.createCommandEncoder({label:'current smoke shadow prefixes'}),pass=encoder.beginComputePass({label:'live smoke shadow prefix integration'});
       pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(Math.ceil(resolution/8),Math.ceil(resolution/8),count*6);pass.end();
+      if(filter){
+        const filterPass=encoder.beginComputePass({label:'current smoke directional filter'});
+        filterPass.setPipeline(filterPipeline);filterPass.setBindGroup(0,filterGroup);
+        filterPass.dispatchWorkgroups(Math.ceil(resolution/8),Math.ceil(resolution/8),count*6*plan.groups);filterPass.end();
+      }
       device.queue.submit([encoder.finish()]);
       metadata={identity:'gpu-radial-smoke-optical-depth-v1',generation:field.generation,frame:field.frame,...plan,
-        coefficientSource:'raw-live-emission-extinction-alpha',sampling:'clipped-radial-midpoint',receiverSampling:'angular-bilinear-radial-linear',lengthSpace:'volume-local'};
+        coefficientSource:'raw-live-emission-extinction-alpha',sampling:'clipped-radial-midpoint',receiverSampling:'angular-bilinear-radial-linear',directionFilter:filter?'binomial-3x3-transmission':'off',lengthSpace:'volume-local'};
       return {...metadata};
     },
     debugState(){return metadata?{...metadata}:null;},
-    dispose(renderer){disposed=true;metadata=null;if(renderer)delete renderer.backend.get(external).texture;external.dispose();gpu.destroy();params.destroy();},
+    dispose(renderer){disposed=true;metadata=null;if(renderer)delete renderer.backend.get(external).texture;external.dispose();gpu.destroy();filtered?.destroy();params.destroy();},
   };
 }
 
@@ -156,4 +179,31 @@ fn integrate(@builtin(global_invocation_id) id:vec3<u32>){
   packed[i%4u]=min(tau,65504.0);
   if(i%4u==3u){textureStore(output,vec2<i32>(i32(id.z*resolution+id.x),i32((i/4u)*resolution+id.y)),packed);}
  }
+}`;
+
+export const FIRE_SMOKE_FILTER_WGSL=/* wgsl */`
+@group(0) @binding(0) var prefixes:texture_2d<f32>;
+@group(0) @binding(1) var output:texture_storage_2d<rgba16float,write>;
+@group(0) @binding(2) var<uniform> atlas:vec4<u32>;
+${CUBE_COORDINATES_WGSL}
+${FIRE_SMOKE_SHADOW_WGSL.slice(FIRE_SMOKE_SHADOW_WGSL.indexOf('fn direction('),FIRE_SMOKE_SHADOW_WGSL.indexOf('@compute'))}
+@compute @workgroup_size(8,8,1)
+fn filterDirections(@builtin(global_invocation_id) id:vec3<u32>){
+ let resolution=atlas.x;let faces=atlas.z*6u;
+ if(id.x>=resolution||id.y>=resolution||id.z>=faces*atlas.w){return;}
+ let group=id.z/faces;let face=id.z%6u;let light=(id.z%faces)/6u;
+ var values:array<vec4<f32>,9>;var weights:array<f32,9>;
+ var minimum=vec4<f32>(65504);var i=0u;
+ for(var y=-1;y<=1;y++){for(var x=-1;x<=1;x++){
+  let uv=(vec2<f32>(id.xy)+vec2<f32>(.5)+vec2<f32>(f32(x),f32(y)))/f32(resolution);
+  let neighbor=smokeCubeUV(direction(face,uv));
+  let cell=clamp(vec2<u32>(floor(neighbor.xy*f32(resolution))),vec2<u32>(0),vec2<u32>(resolution-1u));
+  let coord=vec2<i32>(i32((light*6u+u32(neighbor.z))*resolution+cell.x),i32(group*resolution+cell.y));
+  values[i]=textureLoad(prefixes,coord,0);minimum=min(minimum,values[i]);
+  weights[i]=select(1.0,2.0,x==0)*select(1.0,2.0,y==0)/16.0;i++;
+ }}
+ var transmission=vec4<f32>(0);
+ for(var j=0u;j<9u;j++){transmission+=weights[j]*exp(minimum-values[j]);}
+ let tau=minimum-log(transmission);
+ textureStore(output,vec2<i32>(i32((light*6u+face)*resolution+id.x),i32(group*resolution+id.y)),tau);
 }`;

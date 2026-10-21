@@ -15,7 +15,7 @@ export default {
 export function createFireShadowSettings({session,document,inputs={},record=()=>{},updateInputs=()=>{},applyInitial=true,installNumberDrag,diagnostics=false}) {
     const win=document.defaultView;
     let requested=validateShadowSampling(inputs.sampling??'complementary');
-    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch;
+    let selector,pointSelector,status,implementationSelector,grainSelector,cellInput,cellRow,retry,casterSelector,casterStatus,surfaceSwitch,smokeFilterSwitch;
     let requestedComparison=inputs.shadowComparison===undefined?null:validateShadowComparison(inputs.shadowComparison);
     let requestedQuality=inputs.shadowQuality===undefined?null:validateShadowQuality(inputs.shadowQuality);
     const qualityControls=[],mediumControls=[],numberScrubs=[];
@@ -30,6 +30,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
       const value=(control,next)=>{if(control&&(force||shown.get(control)!==String(next))){control.value=String(next);shown.set(control,String(next));}};
       const state=read();
       const medium=win.__kaminosSceneRadiance?.debugState();
+      if(smokeFilterSwitch)smokeFilterSwitch.checked=medium?.smokeShadowFilter===true;
       for(const {key,number} of mediumControls)value(number,medium?.[key]??(key==='smokeShadowSteps'?0:16));
       if(surfaceSwitch)surfaceSwitch.checked=win.__kaminosSceneRadiance?.debugState().surfaceEnabled!==false;
       const comparison=state.shadowComparison??requestedComparison??validateShadowComparison();
@@ -154,6 +155,11 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           mediumControls.push({key,number});row.append(number);panel.append(row);numberScrubs.push(installRenderingNumberControl(number,installNumberDrag));
         }
         const restore=document.createElement('button');restore.type='button';restore.textContent='Restore 256 / 9 / 16';
+        const smokeFilterLabel=document.createElement('label');smokeFilterLabel.textContent='Smooth smoke shadow directions';
+        smokeFilterLabel.title='Experimental 3×3 neighboring-direction transmission filter. Softens angular smoke-shadow detail without extra raymarch steps or temporal history. Off restores the unfiltered map.';
+        smokeFilterSwitch=document.createElement('input');smokeFilterSwitch.type='checkbox';smokeFilterSwitch.setAttribute('aria-label','Smooth smoke shadow directions');
+        smokeFilterSwitch.addEventListener('change',()=>invoke('setSmokeShadowQuality',{filter:smokeFilterSwitch.checked}).catch(failed));
+        smokeFilterLabel.append(smokeFilterSwitch);panel.append(smokeFilterLabel);
         restore.addEventListener('click',()=>invoke('restoreShadowQuality').catch(failed));
         const help=document.createElement('p');help.textContent='Applies on release. GPU pipelines compile asynchronously while the last image is held; JavaScript shader graph preparation still runs cooperatively on the main thread. All source cubes update each rendered frame. The viewport and flame resolution are unchanged.';
         retry=document.createElement('button');retry.type='button';retry.textContent='Retry lighting compilation';

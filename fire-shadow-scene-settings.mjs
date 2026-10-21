@@ -14,6 +14,11 @@ export function readFireShadowSceneSettings(params) {
   const points=number('points',4),pointSampling=params.get(prefix+'point_sampling')??'all';
   validateSourceQuadrature(points,pointSampling);
   const smoke={};
+  const smokeFilter=params.get(prefix+'smoke_shadow_filter');
+  if(smokeFilter!==null){
+    if(!['0','1'].includes(smokeFilter))throw Error('smoke shadow filter must be 0 or 1');
+    smoke.smokeShadowFilter=smokeFilter==='1';
+  }
   if(params.has(prefix+'smoke_shadow_steps')||params.has(prefix+'smoke_shadow_resolution')){
     smoke.smokeShadowSteps=number('smoke_shadow_steps',0);smoke.smokeShadowResolution=number('smoke_shadow_resolution',16);
     if(!Number.isSafeInteger(smoke.smokeShadowSteps)||smoke.smokeShadowSteps<0)throw Error('smoke shadow steps must be nonnegative integer');
@@ -32,6 +37,10 @@ export function fireShadowSceneRoute(state) {
     shadow_softness:state.shadowSoftness,shadow_implementation:state.shadowImplementation,
     shadow_grain:state.shadowGrain,shadow_world_cell_size:state.shadowWorldCellSize,...(state.shadowCasterLevel===undefined?{}:{caster_level:validateCasterLevel(state.shadowCasterLevel)})};
   const route=Object.fromEntries(Object.entries(values).map(([key,value])=>[prefix+key,String(value)]));
+  if(state.smokeShadowFilter!==undefined){
+    if(typeof state.smokeShadowFilter!=='boolean')throw Error('smoke shadow filter must be boolean');
+    route[prefix+'smoke_shadow_filter']=state.smokeShadowFilter?'1':'0';
+  }
   readFireShadowSceneSettings(new URLSearchParams(route));
   return route;
 }

@@ -144,6 +144,14 @@ assert.equal(mount.debugState().geometryBuilds,afterAspect,'same-domain resoluti
 mount.setSmokeShadowQuality({steps:8,resolution:4});consume(field);
 assert.equal(mount.debugState().frame.smokeShadow.generation,field.source.generation);
 assert(passes.includes('live smoke shadow prefix integration'));
+mount.setSmokeShadowQuality({filter:true});consume(field);
+assert.equal(mount.debugState().smokeShadowFilter,true);
+assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'binomial-3x3-transmission');
+assert(passes.includes('current smoke directional filter'));
+assert.throws(()=>mount.setSmokeShadowQuality({filter:1}),/boolean/);
+mount.setSmokeShadowQuality({filter:false});const unfilteredPasses=passes.length;consume(field);
+assert.equal(mount.debugState().frame.smokeShadow.directionFilter,'off');
+assert(!passes.slice(unfilteredPasses).includes('current smoke directional filter'));
 mount.setSmokeShadowQuality({steps:0});consume(field);
 assert.equal(mount.debugState().frame.smokeShadow,null);
 mesh.material.color.setHex(0xff0000);mount.dispose();assert.equal(mesh.material.color.getHex(),0xff0000);assert.equal(mesh.geometry,geometry);assert.equal(mount.canRender(),false);assert.equal(hostFrame,null);

@@ -12,6 +12,9 @@ assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_
 assert.deepEqual(fireShadowSceneRoute(null),{});
 const smoke=readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,smokeShadowSteps:12,smokeShadowResolution:16})));
 assert.equal(smoke.smokeShadowSteps,12);assert.equal(smoke.smokeShadowResolution,16);
+assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,smokeShadowSteps:12,smokeShadowResolution:16,smokeShadowFilter:true}))).smokeShadowFilter,true,'direction filter survives scene save/reopen');
+assert.equal(readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_filter=0')).smokeShadowFilter,false);
+assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_filter=yes')),/smoke shadow filter/);
 assert.throws(()=>readFireShadowSceneSettings(new URLSearchParams('volume_light_field_hybrid_smoke_shadow_steps=-1')),/smoke shadow/);
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,surfaceEnabled:false}))).surfaceEnabled,false,'off persists through scene restore');
 assert.equal(readFireShadowSceneSettings(new URLSearchParams(fireShadowSceneRoute({...state,shadowGrain:'screen-animated'}))).shadowComparison.grain,'screen-animated','animated grain survives authored scene serialization');
