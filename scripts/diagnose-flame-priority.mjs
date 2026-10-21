@@ -38,12 +38,13 @@ if(flags.has('--repair-floor'))report.armPlan=[...[0,.00133,.001333,.1,.5,.75,1]
 if(flags.has('--smooth-floor'))report.armPlan=[{...baseline,jitter:false},...[.001333,.1,.75,1].flatMap(priority=>[false,true].flatMap(smooth=>[false,true].map(repair=>({label:(smooth?'smooth-':'cell-')+(repair?'floor-':'original-')+priority,priority,jitter:false,guide:0,constraints:0,repair,smooth})))),{...baseline,label:'zero-repeat',jitter:false}];
 if(flags.has('--reference'))report.armPlan=[{...baseline,jitter:false},...[1,2,4,8,16].map(reference=>({...baseline,label:'reference-'+reference,jitter:false,reference})),...[false,true].flatMap(smooth=>[false,true].map(repair=>({...baseline,label:(smooth?'smooth-':'cell-')+(repair?'floor':'original'),priority:.75,jitter:false,smooth,repair}))),...[.1,.5,.75,1].map(priority=>({...baseline,label:'uniform-floor-'+priority,priority,jitter:false,guide:1,constraints:6})),{...baseline,label:'zero-repeat',jitter:false}];
 if(flags.has('--allocation'))report.armPlan=[{...baseline,jitter:false},{...baseline,label:'cell-original',priority:.75,jitter:false},...[1,2,8,16,32].map(reference=>({...baseline,label:'reference-'+reference,jitter:false,reference})),...[1,2,3].flatMap(allocation=>[.01,.03,.1].map(budget=>({...baseline,label:['','relative','guided-relative','absolute'][allocation]+'-'+budget,priority:allocation===2?.75:0,jitter:false,repair:true,allocation,budget}))),{...baseline,label:'zero-repeat',jitter:false}];
+if(flags.has('--growth'))report.armPlan=[{...baseline,jitter:false},...[2,8,32].map(reference=>({...baseline,label:'reference-'+reference,jitter:false,reference})),...[1,2,3].flatMap(allocation=>[false,true].map(growth=>({...baseline,label:['','relative','guided-relative','absolute'][allocation]+(growth?'-guarded':'-doubling'),priority:allocation===2?.75:0,jitter:false,repair:true,allocation,budget:allocation===2?.01:.03,growth}))),{...baseline,label:'zero-repeat',jitter:false}];
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 let server,context,page;
 process.on('SIGTERM',async()=>{report.error='terminated';await save();await context?.close();server?.kill();process.exit(1);});
 try{
- for(const flag of flags)assert.ok(['--prepare-only','--constraints','--repair-floor','--smooth-floor','--reference','--allocation'].includes(flag),'unknown diagnostic option: '+flag);
- assert.ok(['--constraints','--repair-floor','--smooth-floor','--reference','--allocation'].filter(flag=>flags.has(flag)).length<=1,'choose one diagnostic comparison');
+ for(const flag of flags)assert.ok(['--prepare-only','--constraints','--repair-floor','--smooth-floor','--reference','--allocation','--growth'].includes(flag),'unknown diagnostic option: '+flag);
+ assert.ok(['--constraints','--repair-floor','--smooth-floor','--reference','--allocation','--growth'].filter(flag=>flags.has(flag)).length<=1,'choose one diagnostic comparison');
  report.phase='browser-dependency';await save();
  const {chromium}=await import('/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs');
  report.phase='prepare';await save();await fs.copyFile(new URL(import.meta.url),out+'/witness.mjs');
@@ -80,6 +81,10 @@ override DIAG_GUIDE: u32 = 0u;`);
     comparison = vec4<f32>(disagreement.xyz / (vec3<f32>(1.0) + max(abs(projectedFine), abs(projectedCoarse))), disagreement.w);
   }
   let refine = any(comparison > vec4<f32>(tolerance));`);
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_ALLOCATION: u32 = 0u;','override DIAG_ALLOCATION: u32 = 0u;\noverride DIAG_GROWTH: bool = false;');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'  let nextWidth = select((*s).width * 2.0, (*s).maximum, (*s).phased == 1u);',`  var nextWidth = select((*s).width * 2.0, (*s).maximum, (*s).phased == 1u);
+  // A provisional growth guard, not a bound on unseen variation ahead.
+  if (DIAG_GROWTH && any(comparison > vec4<f32>(tolerance * 0.125))) { nextWidth = (*s).width; }`);
  core=replaceOne(core,'if (OPTICAL_STEP_MODE == 2u && priority > 0.0','if (DIAG_ALLOCATION == 0u && OPTICAL_STEP_MODE == 2u && priority > 0.0');
  core=replaceOne(core,'opticalStepObserveWithTolerance(&opticalStep, vec4<f32>(emission, sigma), u.reserved_render_controls.y);',`var allocationTolerance = u.reserved_render_controls.y;
         if (DIAG_ALLOCATION > 0u) { allocationTolerance = DIAG_ALLOCATION_BUDGET; }
@@ -122,11 +127,13 @@ override DIAG_GUIDE: u32 = 0u;`);
  core=replaceOne(core,'DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair','DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair, DIAG_SMOOTH_GUIDE:!!globalThis.__priorityDiagnostic?.smooth');
  core=replaceOne(core,'DIAG_SMOOTH_GUIDE:!!globalThis.__priorityDiagnostic?.smooth','DIAG_SMOOTH_GUIDE:!!globalThis.__priorityDiagnostic?.smooth, DIAG_REFERENCE_PANELS:globalThis.__priorityDiagnostic?.reference||0');
  core=replaceOne(core,'DIAG_REFERENCE_PANELS:globalThis.__priorityDiagnostic?.reference||0','DIAG_REFERENCE_PANELS:globalThis.__priorityDiagnostic?.reference||0, DIAG_ALLOCATION:globalThis.__priorityDiagnostic?.allocation||0, DIAG_ALLOCATION_BUDGET:globalThis.__priorityDiagnostic?.budget??0.01');
+ core=replaceOne(core,'DIAG_ALLOCATION:globalThis.__priorityDiagnostic?.allocation||0','DIAG_ALLOCATION:globalThis.__priorityDiagnostic?.allocation||0, DIAG_GROWTH:!!globalThis.__priorityDiagnostic?.growth');
  bodies['volume-core.js']=replaceOne(core,'state.opticalStepping = { ...optical, effective: optical.mode,','state.opticalStepping = { ...optical, effective: optical.mode, diagnosticConstants:{...opticalConstants},');
  for(const [name,body] of Object.entries(bodies)){report.source[name].effectiveSha256=sha(body);await fs.writeFile(out+'/effective-'+name,body);}
  if(flags.has('--prepare-only')){report.ok=true;report.phase='prepared';await save();process.exit(0);}
  const log=await fs.open(out+'/server.log','a');
- server=spawn('python3',['serve.py','18724'],{cwd:root,env:{...process.env,KAMINOS_SHARED_BASIN_STORE:home+'/basins',KAMINOS_VOLUME_SETTINGS_STORE:home+'/presets',KAMINOS_VOLUME_COCKPIT_LAYOUT_STORE:home+'/layouts',KAMINOS_SCENES_DIR:home+'/scenes'},stdio:['ignore',log.fd,log.fd]});
+ try{server=spawn('python3',['serve.py','18724'],{cwd:root,env:{...process.env,KAMINOS_SHARED_BASIN_STORE:home+'/basins',KAMINOS_VOLUME_SETTINGS_STORE:home+'/presets',KAMINOS_VOLUME_COCKPIT_LAYOUT_STORE:home+'/layouts',KAMINOS_SCENES_DIR:home+'/scenes'},stdio:['ignore',log.fd,log.fd]});}
+ finally{await log.close();}
  await new Promise((resolve,reject)=>{server.once('error',reject);const check=async()=>{if(server.exitCode!==null)return reject(Error('server exited'));try{await fetch(origin+'/api/roots');resolve();}catch{setTimeout(check,100);}};check();});
  const {verifyAuthoringServer}=await import(root+'/scene-authoring-witness-identity.mjs');
  report.serving=await verifyAuthoringServer({origin,repoRoot:root});
@@ -158,17 +165,17 @@ override DIAG_GUIDE: u32 = 0u;`);
  await step(page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=96));
  await step(page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setPaused',true)));
  report.held=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());report.phase='capture';await save();
- async function arm({label,priority,jitter,guide=0,constraints=0,repair=false,smooth=false,reference=0,allocation=0,budget=.01}){
-  const row={label,priority,jitter,guide,constraints,repair,smooth,reference,allocation,budget};
+ async function arm({label,priority,jitter,guide=0,constraints=0,repair=false,smooth=false,reference=0,allocation=0,budget=.01,growth=false}){
+  const row={label,priority,jitter,guide,constraints,repair,smooth,reference,allocation,budget,growth};
   await step(page.evaluate(async({priority,jitter})=>{await window.kaminosWorkbenchExperiments.invoke('setControls',{'volume-flame-priority':priority,'volume-quadrature-jitter':jitter,'volume-ray-noise-animated':false});window.__kaminosVolumePrototype.setControls({rayStartNoise:true,rayNoiseFrame:0});},{priority,jitter}));
   for(const counts of [false,true]){
-   const data=await step(page.evaluate(async({counts,guide,constraints,repair,smooth,reference,allocation,budget})=>{
-    window.__priorityDiagnostic={counts,guide,constraints,repair,smooth,reference,allocation,budget};const r=window.__kaminosVolumePrototype;
+   const data=await step(page.evaluate(async({counts,guide,constraints,repair,smooth,reference,allocation,budget,growth})=>{
+    window.__priorityDiagnostic={counts,guide,constraints,repair,smooth,reference,allocation,budget,growth};const r=window.__kaminosVolumePrototype;
     const s=await r.sampleFrame({advanceSim:false,includeRgba:true,now:12000});if(!s.ok||s.image?.rgba?.length!==s.image.width*s.image.height*4||!s.image.rgba.some((v,i)=>i%4!==3&&v>0))throw Error('missing/partial/blank frame');
     const c=document.createElement('canvas');c.width=s.image.width;c.height=s.image.height;const ctx=c.getContext('2d');ctx.putImageData(new ImageData(new Uint8ClampedArray(s.image.rgba),c.width,c.height),0,0);
     return{png:c.toDataURL().split(',')[1],state:r.debugState(),width:c.width,height:c.height,diagnostic:{...window.__priorityDiagnostic}};
-   },{counts,guide,constraints,repair,smooth,reference,allocation,budget}));
-   assert.deepEqual(data.diagnostic,{counts,guide,constraints,repair,smooth,reference,allocation,budget},'diagnostic specialization request changed');
+   },{counts,guide,constraints,repair,smooth,reference,allocation,budget,growth}));
+   assert.deepEqual(data.diagnostic,{counts,guide,constraints,repair,smooth,reference,allocation,budget,growth},'diagnostic specialization request changed');
    const effective=data.state.opticalStepping.diagnosticConstants;
    assert.equal(effective.DIAG_COUNTS,counts);assert.equal(effective.DIAG_GUIDE,guide);assert.equal(effective.DIAG_CONSTRAINTS,constraints);
    assert.equal(effective.DIAG_REPAIR_FLOOR,repair);
@@ -176,6 +183,7 @@ override DIAG_GUIDE: u32 = 0u;`);
    assert.equal(effective.DIAG_REFERENCE_PANELS,reference);
    assert.equal(effective.DIAG_ALLOCATION,allocation);
    assert.equal(effective.DIAG_ALLOCATION_BUDGET,budget);
+   assert.equal(effective.DIAG_GROWTH,growth);
    validateArm(data.state,priority,jitter,report.held.simStepCount);
    const name=label+(counts?'-counts':'');const bytes=Buffer.from(data.png,'base64');await fs.writeFile(out+'/'+name+'.png',bytes);
    row[counts?'counts':'image']={sha256:sha(bytes),width:data.width,height:data.height};row.state=data.state;

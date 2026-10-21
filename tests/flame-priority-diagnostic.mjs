@@ -10,6 +10,21 @@ import {spawnSync} from 'node:child_process';
 const root=path.resolve(import.meta.dirname,'..');
 const source=await fs.readFile(root+'/scripts/diagnose-flame-priority.mjs','utf8');
 const validate=vm.runInNewContext(`(${source.match(/function validateArm\([\s\S]*?\n\}/)[0]})`,{assert});
+test('server log handle is closed explicitly after spawning the child',async()=>{
+ const block=source.slice(source.indexOf("const log=await fs.open(out+'/server.log'"),source.indexOf('await new Promise((resolve,reject)'));
+ const calls=[];
+ await vm.runInNewContext(`(async()=>{${block}})()`,{
+  fs:{open:async()=>({fd:13,close:async()=>calls.push('close')})},out:'/unused',root,home:'/unused',process:{env:{}},
+  spawn:()=>{calls.push('spawn');return {};},
+ });
+ assert.deepEqual(calls,['spawn','close']);
+ calls.length=0;
+ await assert.rejects(vm.runInNewContext(`(async()=>{${block}})()`,{
+  fs:{open:async()=>({fd:13,close:async()=>calls.push('close')})},out:'/unused',root,home:'/unused',process:{env:{}},
+  spawn:()=>{calls.push('spawn');throw Error('spawn failed');},
+ }),/spawn failed/);
+ assert.deepEqual(calls,['spawn','close']);
+});
 test('requested jitter cannot stand in for effective jitter',()=>{
  const state={backend:'WebGPU:apple',simStepCount:96,opticalStepping:{effective:'numerical',tolerance:.01,quadratureJitter:false},controls:{flamePriority:0,raySteps:1,quadratureJitter:true,rayStartNoise:false}};
  assert.throws(()=>validate(state,0,true,96),/jitter|noise|false|true/);
@@ -127,5 +142,24 @@ test('allocation compares error policies without spatial width constraints',asyn
   assert.match(core,/allocationTolerance \/= 1.0 \+ 3.0 \* clamp\(u.occupancy_controls.z, 0.0, 1.0\) \* flameGuideContinuousAt\(midpoint\)/);
   assert.match(source,/assert.equal\(effective.DIAG_ALLOCATION,allocation\)/);
   assert.match(source,/assert.equal\(effective.DIAG_ALLOCATION_BUDGET,budget\)/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
+test('growth comparison changes widening only, with paired controls',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-growth-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--growth'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  const arms=report.armPlan.filter(x=>x.allocation);
+  assert.equal(arms.length,6);
+  for(const allocation of [1,2,3]){
+   const pair=arms.filter(x=>x.allocation===allocation);
+   assert.deepEqual(pair.map(x=>x.growth),[false,true]);
+   const normalized=pair.map(({label,growth,...x})=>x);
+   assert.deepEqual(normalized[0],normalized[1]);
+  }
+  const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
+  assert.match(optical,/if \(DIAG_GROWTH && any\(comparison > vec4<f32>\(tolerance \* 0.125\)\)\) \{ nextWidth = \(\*s\).width; \}/);
+  assert.match(source,/assert.equal\(effective.DIAG_GROWTH,growth\)/);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
