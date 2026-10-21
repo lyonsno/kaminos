@@ -37,3 +37,10 @@ movingInterest.update({time:0,position:[0,0,0],observed:[target],focus:target});
 movingInterest.update({time:2,position:[0,0,0],observed:[target],focus:target});
 const moved={...target,point:[10,0,0]};
 assert.equal(movingInterest.update({time:3,position:[4,0,0],observed:[moved],focus:moved,arrived:true}).phase,'approaching','Arrival at an old place is not arrival at a newly observed position');
+
+const revisiting=createEngagement();
+revisiting.update({time:0,position:[0,0,0],observed:[target],focus:target});
+revisiting.update({time:2,position:[0,0,0],observed:[target],focus:target});
+assert.equal(revisiting.update({time:3,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'inspecting');
+assert.equal(revisiting.update({time:4,position:[4,0,0],observed:[moved],focus:moved}).phase,'approaching');
+assert.equal(revisiting.update({time:5.2,position:[4.2,0,0],observed:[moved],focus:moved}).phase,'approaching','The old inspection deadline cannot complete a new approach');
