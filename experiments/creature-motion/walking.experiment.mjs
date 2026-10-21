@@ -1,5 +1,6 @@
 import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
 import {mountMotionWorkspace} from './motion-workspace.mjs';
+import {createEngagement} from './engagement.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
@@ -27,7 +28,7 @@ function checkRecipeInputs(inputs){
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
  if(inputs.wander_travel!==undefined&&!['source','stance'].includes(inputs.wander_travel))throw Error('Unknown wander travel policy');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
- if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
+ if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.engage!==undefined&&typeof a.engage!=='boolean')throw Error('Attention engagement must be boolean');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
  if(inputs.rate!==undefined&&(!Number.isFinite(inputs.rate)||inputs.rate<=0))throw Error('Playback rate must be finite and positive');
  if(inputs.mode!==undefined&&!['source','cycle','path'].includes(inputs.mode))throw Error('Unknown walking mode');
@@ -74,6 +75,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
  const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ const engagement=createEngagement();
  let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
  let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
@@ -91,8 +93,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
   motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
-  action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
+  action:{engagement:engagement.read(),kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
   recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
@@ -138,7 +141,20 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  }
  function presentWander(delta,playing){
   if(!syncArea())return read();
-  const state=wander.advance(delta);cycle=state.cycle;source.presentation.cycle=cycle;
+  let moving=delta;
+  if(attention&&chosenInputs.attention.engage===true){
+   const a=attention.read(),frame=authoredPlacement();frame.updateMatrixWorld(true);
+   const path=wander.read().path,position=new THREE.Vector3(path.position[0],0,path.position[1]).applyMatrix4(frame.matrixWorld).toArray();
+   const prior=engagement.read();
+   const intent=a.enabled?engagement.update({time:clock/1000,position,observed:a.perceived,focus:a.focus,alarm:a.startle,interrupted:Boolean(a.interruption),arrived:prior.phase==='approaching'&&path.status==='arrived'}):engagement.reset();
+   attention.setEngagement(['approaching','inspecting','cautious'].includes(intent.phase)?intent.id:null);
+   if(intent.destination){
+    const local=frame.worldToLocal(new THREE.Vector3(...intent.destination)),next=[local.x,local.z],old=wander.snapshot().path.destination;
+    if(!old||Math.hypot(...next.map((v,i)=>v-old[i]))>.25)wander.setDestination(next);
+   }else if(intent.phase!=='inspecting')wander.setDestination(null);
+   if(intent.hold)moving=0;
+  }
+  const state=wander.advance(moving);cycle=state.cycle;source.presentation.cycle=cycle;
   player.seek(state.frame);if(playing)player.play();
   if(guideSegment!==state.path.segments)refreshGuide();refresh();return read();
  }
