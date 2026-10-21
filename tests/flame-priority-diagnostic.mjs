@@ -111,3 +111,21 @@ test('fixed reference changes quadrature width without changing material footpri
   assert.match(source,/assert.equal\(effective.DIAG_REFERENCE_PANELS,reference\)/);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+test('allocation compares error policies without spatial width constraints',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-allocation-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--allocation'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  for(const allocation of [1,2,3])assert.deepEqual(report.armPlan.filter(x=>x.allocation===allocation).map(x=>x.budget),[.01,.03,.1]);
+  const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
+  assert.match(optical,/if \(DIAG_ALLOCATION > 0u\) \{ s.minimum = base \/ 16.0; \}/);
+  assert.match(optical,/disagreement.xyz \/ \(vec3<f32>\(1.0\) \+ max\(abs\(projectedFine\), abs\(projectedCoarse\)\)\)/);
+  assert.match(optical,/DIAG_ALLOCATION == 1u \|\| DIAG_ALLOCATION == 2u/);
+  const core=await fs.readFile(dir+'/output/effective-volume-core.js','utf8');
+  assert.match(core,/if \(DIAG_ALLOCATION == 0u && OPTICAL_STEP_MODE == 2u && priority > 0.0/);
+  assert.match(core,/allocationTolerance \/= 1.0 \+ 3.0 \* clamp\(u.occupancy_controls.z, 0.0, 1.0\) \* flameGuideContinuousAt\(midpoint\)/);
+  assert.match(source,/assert.equal\(effective.DIAG_ALLOCATION,allocation\)/);
+  assert.match(source,/assert.equal\(effective.DIAG_ALLOCATION_BUDGET,budget\)/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
