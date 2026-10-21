@@ -580,6 +580,37 @@ try {
     for (const tab of [...tabs, extra]) await tab.close();
   }
 
+  report.phase = 'background-tab'; save();
+  // A tab the browser itself has put in the background (another tab brought to the
+  // front; no faked visibility), kept there past the hub's and the server's 60 s
+  // silence limits, is still present, still linked, and still gets a new note.
+  {
+    const back = await context.newPage();
+    back.on('pageerror', error => { report.pageErrors.push(`background tab: ${error}`); });
+    await back.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 60000});
+    await back.waitForFunction(() => window.kaminosNotes?.session?.author && window.kaminosNotes.route?.() === 'hub', null, {timeout: 60000}).catch(() => {});
+    const ids = await back.evaluate(() => ({page: window.kaminosNotes?.pageId, vantage: window.kaminosAgentVantage?.pageId}));
+    const front = await context.newPage();
+    await front.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 60000});
+    await front.bringToFront();
+    const visibility = await back.evaluate(() => document.visibilityState);
+    report.effective.backgroundTab = {...ids, visibility, waitedMs: 75000};
+    await sleep(75000);
+    const present = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
+    const linked = (await (await fetch(`${origin}/api/vantage/pages`)).json()).pages.some(entry => entry.id === ids.vantage && entry.connected);
+    const sent = await notes(['post', 'background tab check', '--to', PERSON, '--as', 'hub-check-agent']);
+    const sentId = (sent.stdout.match(/kn-[0-9a-z]+/) ?? [])[0] ?? null;
+    let has = false;
+    for (const deadline = Date.now() + 15000; !has && Date.now() < deadline; await sleep(500)) {
+      has = await back.evaluate(id => !!window.kaminosNotes?.session?.state?.notes?.has(id), sentId);
+    }
+    report.effective.backgroundTab = {...report.effective.backgroundTab, present, linked, received: has, stillHidden: await back.evaluate(() => document.visibilityState)};
+    check('a tab the browser put in the background stays present and linked past the 60 s limits, and gets a new note',
+      present && linked && has, report.effective.backgroundTab);
+    await front.close();
+    await back.close();
+  }
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});

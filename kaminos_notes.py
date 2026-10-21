@@ -531,6 +531,9 @@ class NotesHttp:
     def __init__(self, log, *, source, directory=lambda: [], notify=None, clock=time.monotonic):
         self.log, self.source, self.directory, self.notify = log, source, directory, notify
         self._pages, self._hubs, self._lock, self._clock = {}, {}, threading.Lock(), clock
+        # The newest report number from each hub, kept after it retires or falls silent, so a
+        # delayed older report cannot bring back pages a newer one took away. One per browser hub.
+        self._hub_revs = {}
 
     def handle(self, handler, method, path):
         parsed = urlparse(path)
@@ -751,9 +754,9 @@ class NotesHttp:
         if not isinstance(pages, list) or not all(isinstance(page, str) and PAGE_ID.match(page) for page in pages):
             raise NotesError(400, "request", "pages is a list of page ids")
         with self._lock:
-            held = self._hubs.get(hub_id)
-            if held is not None and rev < held["rev"]:
+            if rev < self._hub_revs.get(hub_id, -1):
                 return {"schema": NOTES_SCHEMA, "accepted": False}
+            self._hub_revs[hub_id] = rev
             if pages:
                 self._hubs[hub_id] = {"rev": rev, "pages": sorted(set(pages)), "seen": self._clock()}
                 for page_id in pages:

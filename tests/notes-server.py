@@ -259,6 +259,19 @@ def hub_clock_contracts(notes):
         now[0] += notes.HUB_SILENCE_SECONDS
         assert http._pages_now() == [] and not http.page_token_live("page-hubbbbbb", token), "a silent hub's pages lapse"
 
+    # A hub's last report retires its pages; a delayed older report must not bring them back.
+    with tempfile.TemporaryDirectory() as tmp:
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        http = notes.NotesHttp(log, source=lambda: {}, clock=lambda: now[0])
+        token = http.hello_page("page-aaaaaaaa")["token"]
+        assert http.hub_presence({"hub": "hub-aaaaaaaa", "rev": 2, "pages": ["page-aaaaaaaa"]})["accepted"]
+        assert http.hub_presence({"hub": "hub-aaaaaaaa", "rev": 3, "pages": []})["accepted"]
+        now[0] += notes.PAGE_TOKEN_GRACE_SECONDS + 1
+        assert not http.hub_presence({"hub": "hub-aaaaaaaa", "rev": 2, "pages": ["page-aaaaaaaa"]})["accepted"], "an older report after retirement is old news"
+        assert http._pages_now() == [] and not http.page_token_live("page-aaaaaaaa", token), "the departed page stays departed"
+        assert http.hub_presence({"hub": "hub-aaaaaaaa", "rev": 4, "pages": ["page-aaaaaaaa"]})["accepted"], "a newer report attaches again"
+        assert [row["id"] for row in http._pages_now()] == ["page-aaaaaaaa"]
+
 
 def free_port():
     with socket.socket() as server:
