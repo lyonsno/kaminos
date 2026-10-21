@@ -44,3 +44,17 @@ revisiting.update({time:2,position:[0,0,0],observed:[target],focus:target});
 assert.equal(revisiting.update({time:3,position:[4,0,0],observed:[target],focus:target,arrived:true}).phase,'inspecting');
 assert.equal(revisiting.update({time:4,position:[4,0,0],observed:[moved],focus:moved}).phase,'approaching');
 assert.equal(revisiting.update({time:5.2,position:[4.2,0,0],observed:[moved],focus:moved}).phase,'approaching','The old inspection deadline cannot complete a new approach');
+
+// Small consecutive edits must invalidate inspection once pursuit resumes.
+const dragged=createEngagement();
+const observe=(time,point,position=[4,0,0])=>dragged.update({time,position,observed:[{...target,point}],focus:target});
+observe(0,target.point,[0,0,0]);
+assert.equal(observe(3,target.point).phase,'inspecting');
+for(let i=1;i<=50;i++)observe(3+i/30,[5+.03*i,0,0]);
+assert.equal(observe(5.2,[6.5,0,0]).phase,'approaching','A gradual drag cannot expire the inspection that pursuit interrupted');
+assert.equal(observe(6,[6.5,0,0],[5.5,0,0]).phase,'inspecting');
+assert.equal(observe(7.9,[6.5,0,0],[5.5,0,0]).phase,'inspecting','New arrival receives its own inspection interval');
+assert.equal(observe(8.1,[6.5,0,0],[5.5,0,0]).phase,'wandering','Renewed inspection still finishes');
+const bounded=createEngagement();
+for(const time of [0,3,5,7,9])bounded.update({time,position:[0,0,0],observed:[{...target,point:[5+time,0,0]}],focus:target});
+assert.equal(bounded.update({time:10.1,position:[0,0,0],observed:[{...target,point:[16,0,0]}],focus:target}).phase,'wandering','Moving interests retain the independent overall engagement timeout');

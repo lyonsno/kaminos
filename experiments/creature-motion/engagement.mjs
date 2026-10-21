@@ -13,7 +13,7 @@ export function createEngagement(){
   if(current){
    const seen=observed.find(x=>x.id===current.id);
    if(seen){if(distance(seen.point,current.point)>.1){arrived=false;delete current.inspectAt;}current.point=[...seen.point];current.lastSeen=time;}
-   if(time-current.lastSeen>2||time-current.since>10||(current.inspectAt!==undefined&&time-current.inspectAt>=2)){
+   if(time-current.lastSeen>2||time-current.since>10){
     cooldowns.set(current.id,time+12);current=null;state={phase:'wandering',hold:false,destination:null};return read();
    }
   }
@@ -23,7 +23,14 @@ export function createEngagement(){
   const extra=caution?.id===current.id?2*caution.strength*Math.exp(-(time-caution.until)/10):0;
   const standOff=current.standOff+extra,d=distance(position,current.point);
   if(time-current.since<1){state={phase:'watching',id:current.id,hold:false,destination:null,standOff};return read();}
-  if(arrived||d<=standOff+.1){current.inspectAt??=time;state={phase:'inspecting',id:current.id,hold:true,destination:null,standOff,point:[...current.point]};return read();}
+  if(arrived||d<=standOff+.1){
+   current.inspectAt??=time;
+   if(time-current.inspectAt>=2){cooldowns.set(current.id,time+12);current=null;state={phase:'wandering',hold:false,destination:null};return read();}
+   state={phase:'inspecting',id:current.id,hold:true,destination:null,standOff,point:[...current.point]};return read();
+  }
+  // Inspection measures time spent stopped at an interest, not time spent
+  // catching up after it moves (including many small consecutive edits).
+  delete current.inspectAt;
   const destination=[current.point[0]+(position[0]-current.point[0])/d*standOff,current.point[1],current.point[2]+(position[2]-current.point[2])/d*standOff];
   state={phase:'approaching',id:current.id,hold:false,destination,point:[...current.point],standOff};return read();
  }
