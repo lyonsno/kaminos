@@ -3,11 +3,11 @@ import * as THREE from './lib/three.webgpu.js';
 const hasMorph = mesh => Array.isArray(mesh.morphTargetInfluences)
   || Object.values(mesh.geometry?.morphAttributes || {}).some(attributes => attributes.length);
 
-export function staticSceneGeometryRevision(scene) {
+export function staticSceneGeometryRevision(scene,{exclude=()=>false}={}) {
   scene.updateMatrixWorld(true);
   const items = [];
   scene.traverseVisible(mesh => {
-    if (!mesh.isMesh || !mesh.castShadow) return;
+    if (!mesh.isMesh || !mesh.castShadow || exclude(mesh)) return;
     if (mesh.isSkinnedMesh || mesh.isInstancedMesh || hasMorph(mesh)) {
       throw new Error(`static-light-dynamic-caster:${mesh.name || mesh.uuid}:morph-skinned-instanced`);
     }

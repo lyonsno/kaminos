@@ -1,3 +1,5 @@
+import {describeAuthoredWaterDrop} from './authored-water-drop.mjs';
+import {createFingerFluidBoxReference} from './finger-fluid-box-fixtures.mjs';
 import {
   LOCAL_LIQUID_EMITTER_SCHEMA,
   LOCAL_LIQUID_EMITTER_SOURCE,
@@ -49,7 +51,7 @@ export function isLocalLiquidEmitterSceneRecord(record) {
     && !!record.id;
 }
 
-export function createLocalLiquidEmitterObject(THREE, input) {
+export function createLocalLiquidEmitterObject(THREE, input, {sampling=null}={}) {
   if (!THREE?.Group || !THREE?.Mesh || !THREE?.CylinderGeometry || !THREE?.MeshStandardMaterial) {
     throw new Error('Water emitter scene objects require the current host Three.js constructors');
   }
@@ -71,6 +73,25 @@ export function createLocalLiquidEmitterObject(THREE, input) {
   object.position.fromArray(record.transform.position);
   object.rotation.set(...record.transform.rotation);
   object.scale.fromArray(record.transform.scale);
+
+  if(record.localLiquidEmitter.mode==='finite_drop'){
+    const d=describeAuthoredWaterDrop(record.localLiquidEmitter.drop,record.transform,sampling),n=d.samplesAcross,width=d.representedWidth/record.transform.scale[0];
+    // The owner's release lattice, without a GPU solver or any simulation ticks.
+    // One instanced draw; transient source data is released after construction.
+    const {population}=createFingerFluidBoxReference({resolution:n,blockWidth:1});
+    const preview=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(width/n*.35,0),new THREE.MeshBasicMaterial({color:0x68d4e3,transparent:true,opacity:.55,depthWrite:false}),population.particleCount);
+    const matrix=new THREE.Matrix4(),data=population.particleData;
+    for(let i=0;i<population.particleCount;i++){const o=i*16;matrix.makeTranslation(data[o]*width,(data[o+1]-.9)*width,data[o+2]*width);preview.setMatrixAt(i,matrix);}
+    preview.instanceMatrix.needsUpdate=true;preview.computeBoundingSphere();
+    preview.name='Initial water particles';preview.userData.kaminosWaterPreview=true;
+    preview.userData.initialParticleCount=population.particleCount;preview.userData.initialStateOnly=true;
+    preview.userData.glyphRadius=width/n*.35;preview.userData.spacing=width/n;preview.userData.requestedVolume=d.requestedVolume;preview.userData.representedVolume=d.worldVolume;preview.userData.relativeVolumeError=d.relativeVolumeError;
+    object.add(preview);
+    const guide=new THREE.Mesh(new THREE.BoxGeometry(record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width,record.localLiquidEmitter.drop.width),new THREE.MeshBasicMaterial({color:0xe4bd76,wireframe:true,transparent:true,opacity:.7,depthWrite:false}));
+    guide.name='Water initial volume';guide.userData.kaminosWaterSourceGuide=true;guide.visible=false;object.add(guide);
+    object.userData.kaminosSceneObject={...record,localLiquidEmitter:clone(record.localLiquidEmitter)};
+    return {object,record};
+  }
 
   const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4a8588, metalness: 0.22, roughness: 0.42 });
   const nozzleMaterial = new THREE.MeshStandardMaterial({ color: 0xd0e7e4, metalness: 0.12, roughness: 0.28 });

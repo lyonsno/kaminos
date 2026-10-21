@@ -1,0 +1,33 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import {normalizeLocalLiquidEmitter,LOCAL_LIQUID_EMITTER_SCHEMA} from '../local-liquid-setup.mjs';
+const settings={schema:LOCAL_LIQUID_EMITTER_SCHEMA,baseRadius:.08,strength:1.15,rate:1200,mode:'finite_drop',drop:{width:.5,samplesPerUnit:32,container:{min:[-2,-1,-2],max:[2,3,2]}}};
+const result=normalizeLocalLiquidEmitter(settings);
+assert.equal(result.mode,'finite_drop','Saved water source must retain finite-drop mode instead of silently becoming a continuous nozzle');
+assert.deepEqual(result.drop,settings.drop,'Saved initial amount, sampling and container must survive emitter normalization');
+assert.throws(()=>normalizeLocalLiquidEmitter({...settings,mode:'unknown'}),/mode/i);
+assert.throws(()=>normalizeLocalLiquidEmitter({...settings,drop:{...settings.drop,width:-1}}),/width/i);
+assert.equal(normalizeLocalLiquidEmitter({...settings,drop:{...settings.drop,width:.513}}).drop.width,.513,'Arbitrary requested sizes survive automatic quantization');
+assert.equal(normalizeLocalLiquidEmitter({...settings,mode:'continuous'}).mode,'continuous');
+console.log('Authored water source mode and finite setup persist');
+const {createAuthoredWaterDrop,describeAuthoredWaterDrop}=await import('../authored-water-drop.mjs');
+const pose={position:[.7,.5,-.3],rotation:[0,Math.PI/2,0],scale:[2,2,2]};
+const a=createAuthoredWaterDrop(settings.drop,pose);
+assert.equal(a.particleCount,4096);assert.equal(a.worldVolume,1);assert.equal(a.spacing,1/16);
+let center=[0,0,0];for(let i=0;i<a.particleCount;i++){const p=Array.from(a.population.particleData.slice(i*16,i*16+3));for(let k=0;k<3;k++)center[k]+=p[k]/a.particleCount;assert.deepEqual(Array.from(a.population.particleData.slice(i*16+4,i*16+7)),p);}
+for(let k=0;k<3;k++)assert.ok(Math.abs(center[k]-pose.position[k])<1e-7,'released population is centered at actual source pose');
+const coarse=describeAuthoredWaterDrop({...settings.drop,samplesPerUnit:48},pose);assert.ok(Math.abs(coarse.worldVolume-a.worldVolume)<1e-12);assert.equal(coarse.particleCount,13824);
+assert.throws(()=>createAuthoredWaterDrop(settings.drop,{...pose,position:[50,0,0]}),/container bounds/);
+const unclipped=createAuthoredWaterDrop({...settings.drop,container:null,worldBounds:settings.drop.container},pose);assert.equal(unclipped.box.collisions,false);
+const {createFiniteFluidHost}=await import('../finite-fluid-host.mjs');
+let ticks=0,retired=0,draws=0,nextAvailable=true;
+const dt=1/240,setup={dt,playbackMode:'render_cadence',support:{kind:'invisible_box'},solver:{rendererMode:'screen_space_refraction',particleCount:4096,diagnosticPopulation:a.population,diagnosticBox:a.box}};
+const host=await createFiniteFluidHost({setup,device:{queue:{onSubmittedWorkDone:async()=>{}}},createSolver:async()=>({available:nextAvailable,reason:'allocation refused',step:d=>{assert.equal(d,dt);ticks++;},getDebugState:()=>({particleCount:4096}),destroy:()=>retired++}),createPresentation:()=>({render:()=>draws++,state:()=>({frameCount:draws}),dispose:()=>{}})});
+assert.equal(host.paused,true);host.render({timestampMs:0});assert.equal(ticks,0);host.capability.setPaused(false);host.render({timestampMs:1});host.render({timestampMs:10001});assert.equal(ticks,1,'slow draw must advance one tick, not catch up ten seconds');
+await host.capability.advanceTo(5);assert.equal(host.capability.read().clock.step,5);assert.equal(host.paused,true);
+nextAvailable=false;await assert.rejects(()=>host.restart(),/allocation refused/);assert.equal(host.capability.read().clock.step,5,'failed replacement retains actual water');
+nextAvailable=true;await host.capability.restart();assert.equal(host.capability.read().clock.step,0);assert.equal(host.capability.read().clock.generation,2);host.dispose();host.dispose();assert.equal(retired,3);assert.throws(()=>host.capability.read(),/generation/);
+console.log('Actual source pose, fixed amount, finite clock, renewal and failed replacement invariants pass');
+const diagnosticSignal={stepCount:0,particleSnapshot:{words:[1,2,3]}};
+const inspectingHost=await createFiniteFluidHost({setup,device:{queue:{onSubmittedWorkDone:async()=>{}}},createSolver:async()=>({available:true,getDebugState:()=>({particleCount:4096}),requestParticleState:async()=>diagnosticSignal,destroy(){}}),createPresentation:()=>({state:()=>({}),dispose(){}})});
+assert.equal(await inspectingHost.requestParticleState(),diagnosticSignal,'Native inspection must retain the actual solver payload');inspectingHost.dispose();

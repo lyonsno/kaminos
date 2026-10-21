@@ -15,3 +15,19 @@ export function collisionVoxelInstances({cells,dimensions,transform}) {
   }
   return {centres,size};
 }
+
+export function createGpuCollisionVoxelMesh(THREE,renderer,{texture,dimensions,transform}) {
+  const [nx,ny,nz]=dimensions,pitch=2*transform.scale/nx,T=THREE.TSL;
+  const wrapper=new THREE.ExternalTexture(texture);wrapper.is3DTexture=true;wrapper.isData3DTexture=true;
+  wrapper.image={width:nx,height:ny,depth:nz};wrapper.format=THREE.RedIntegerFormat;wrapper.type=THREE.UnsignedIntType;
+  wrapper.minFilter=THREE.NearestFilter;wrapper.magFilter=THREE.NearestFilter;wrapper.generateMipmaps=false;
+  const i=T.instanceIndex,c=T.uvec3(i.mod(nx),i.div(nx).mod(ny),i.div(nx*ny));
+  const material=new THREE.MeshBasicNodeMaterial({color:0x46d7dd,transparent:true,opacity:.35,alphaTest:.01,depthWrite:false,depthTest:false});
+  material.positionNode=T.positionLocal.add(T.vec3(c).add(.5).mul(pitch).add(T.vec3(...transform.translate.map(v=>v-transform.scale))));
+  material.opacityNode=T.texture3DLoad(wrapper,c).r.toFloat().mul(.35);
+  const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(pitch*.94,pitch*.94,pitch*.94),material,nx*ny*nz);
+  mesh.frustumCulled=false;mesh.userData.kaminosEditorOnly=true;mesh.renderOrder=999;
+  mesh.userData.gpuSolidTexture=texture;mesh.userData.gpuSolidFrame=JSON.stringify([dimensions,transform]);
+  mesh.userData.disposeGpuSolid=()=>{delete renderer.backend.get(wrapper).texture;wrapper.dispose();};
+  return mesh;
+}

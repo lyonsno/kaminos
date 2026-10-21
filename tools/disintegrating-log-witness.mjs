@@ -1,0 +1,177 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {checkDisintegrationEvidence} from './disintegration-contracts.mjs';
+import {waitSceneFrame} from './scene-frame-wait.mjs';
+const [origin,out,experiment='disintegrating-log']=process.argv.slice(2);if(!origin||!out||!['disintegrating-log','bear-altar'].includes(experiment))throw Error('Usage: disintegrating-log-witness.mjs <origin> <out> [disintegrating-log|bear-altar]');
+await fs.mkdir(out,{recursive:true});
+const report={status:'running',phase:'launch',repoRoot:path.resolve(import.meta.dirname,'..'),errors:[],httpFailures:[],inputs:[],frames:[],claim:'Finite coarse consumable log and char residue; no calibrated burn, rigid fracture or room-smoke claim'};
+const save=()=>fs.writeFile(path.join(out,'report.json'),JSON.stringify(report,null,2));let browser,rejectError;
+const errorSignal=new Promise((_,reject)=>{rejectError=reject;});errorSignal.catch(()=>{});
+const guarded=p=>Promise.race([p,errorSignal]);
+try{
+ await save();report.commit=execFileSync('git',['rev-parse','HEAD'],{cwd:report.repoRoot,encoding:'utf8'}).trim();
+ report.executable=process.env.CHROME_EXECUTABLE;assert.ok(report.executable&&!report.executable.includes('/Applications/Google Chrome.app/'));
+ const {chromium}=await import(process.env.PLAYWRIGHT_MODULE);
+ browser=await chromium.launch({executablePath:report.executable,headless:true,args:['--enable-unsafe-webgpu','--use-angle=metal','--use-mock-keychain','--password-store=basic']});
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});page.setDefaultTimeout(0);
+ const fail=e=>{report.errors.push(String(e));rejectError(Error(String(e)));};page.on('pageerror',fail);page.on('console',m=>{if(m.type()==='error')fail(m.text());});
+ page.on('response',r=>{if(r.status()>=400)report.httpFailures.push({url:r.url(),status:r.status()});});
+ report.phase='kernel';await save();await guarded(page.goto(origin+'/tools/moving-volume-fixture.html'));
+ report.kernel=await guarded(page.evaluate(async()=>{const {runLogDebrisFixture}=await import('/tools/log-debris-fixture.mjs');return runLogDebrisFixture();}));await save();assert.equal(report.kernel.status,'passed');
+ report.coverage=await guarded(page.evaluate(async()=>{const {runResidentLightFixture}=await import('/tools/resident-light-fixture.mjs');return runResidentLightFixture();}));await save();assert.equal(report.coverage.status,'passed');
+ report.experiment=experiment;report.url=origin+'/volume-settings-preset.html?preset=vsp-5d3c953814884ed597721350fde28d275a00af04a087d8bb5ec8127984c92bcc#experiment='+experiment+'&volume_light_field=1&volume_light_field_scene_depth=1&volume_light_field_test_scene=0&volume_collision=kiln';report.phase='startup';await save();
+ await guarded(page.goto(report.url));await guarded(page.waitForFunction(id=>window.kaminosWorkbenchExperiments?.state().id===id||window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed'),experiment));
+ const startup=await page.evaluate(()=>({state:window.kaminosWorkbenchExperiments?.state(),error:window.kaminosWorkbenchExperimentError||document.querySelector('#status.failed')?.textContent}));assert.equal(startup.error,undefined,JSON.stringify(startup));
+ // The volume records some fatal errors internally, without emitting a page
+ // exception. Observe that channel throughout exact-step and frame waits.
+ page.waitForFunction(()=>window.__kaminosVolumePrototype?.debugState().error).then(async handle=>{const message=await handle.jsonValue();await handle.dispose();fail('Volume runtime: '+message);}).catch(()=>{});
+ const invoke=async(name,input)=>{report.inputs.push({name,input});return guarded(page.evaluate(({name,input})=>window.kaminosWorkbenchExperiments.invoke(name,input),{name,input}));};
+ const advance=async target=>{report.inputs.push({advanceTo:target});const r=await guarded(page.evaluate(target=>window.__kaminosVolumePrototype.pauseSelectiveHeadLiveAtSimStep(target),target));assert.equal(r.ok,true,JSON.stringify(r));assert.equal(r.effectiveSimStepCount,target);await invoke('pause');};
+ report.effective=await page.evaluate(()=>({backend:window.__kaminosVolumePrototype.debugState().backend,grid:window.__kaminosVolumePrototype.debugState().simGrid,gi:window.kaminosSceneGIDebugState(),rays:Number(document.getElementById('volume-steps').value),radius:Number(document.getElementById('volume-immersed-radius').value)}));
+ assert.match(report.effective.backend,/WebGPU/);assert.equal(report.effective.grid,32);assert.equal(report.effective.rays,28);assert.equal(report.effective.radius,.1);assert.equal(report.effective.gi.steps,4);assert.equal(report.effective.gi.slices,3);
+ report.sources=[];for(const name of ['index.html','volume-core.js','live-log-experiment.mjs','live-log-heat-core.mjs','live-log-heat-gpu.mjs','live-log-surface-mask.mjs','burn-table-material.mjs','scene-solid-gpu.mjs','scene-resident-coverage.mjs','scene-local-visibility.mjs','scene-bvh-reproject.mjs','scene-light-visibility.mjs','scene-light-geometry.mjs','fire-light-field-shadow.mjs','scene-persistence-core.js','log-consumption.mjs','log-debris-gpu.mjs','workbench-scene-host.mjs','burnable-target.mjs','burnable-selection.mjs','bear-altar.mjs','experiments/sinter/live-log-heat.experiment.mjs','experiments/sinter/disintegrating-log.experiment.mjs','experiments/sinter/bear-altar.experiment.mjs']){
+  const served=await(await page.request.get(origin+'/'+name)).body(),local=await fs.readFile(path.join(report.repoRoot,name));const sha=b=>createHash('sha256').update(b).digest('hex');assert.equal(sha(served),sha(local),name);report.sources.push({name,sha256:sha(served)});
+ }
+ let lastSnapshot;
+ async function sample(name){
+  report.phase='sample:'+name;await save();
+  const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),snapshots=await invoke('snapshot');assert.equal(snapshots.length,1);
+  const collision=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:r.cells?Array.from(r.cells):null};});
+  await fs.writeFile(path.join(out,name+'-raw.json'),JSON.stringify({state,snapshots,collision}));
+  const snapshot=snapshots[0];lastSnapshot=snapshot;let attached=0,detached=0,gas=0,attachedFuel=0,residue=0;const ids=[];
+  for(let i=0;i<snapshot.initial.length;i++)if(snapshot.initial[i]){
+   const fuel=snapshot.material[i*8+5],active=snapshot.particles[i*16+11];assert.ok(Number.isFinite(fuel));
+   if(active>.5){detached++;residue+=snapshot.particles[i*16+13];ids.push(snapshot.particles[i*16+12]);assert.equal(snapshot.particles[i*16+12],i);assert.ok(fuel<=.150002);}else{attached++;attachedFuel+=fuel;}
+   gas+=1-fuel;
+  }
+  assert.ok(Math.abs(gas+attachedFuel+residue-snapshot.initial.reduce((a,b)=>a+b,0))<.002,'Gas/attached/residue accounting');
+  assert.ok(snapshot.particles.every(Number.isFinite)&&snapshot.material.every(Number.isFinite));assert.equal(new Set(ids).size,ids.length);
+  await page.evaluate(()=>window.__kaminosVolumePrototype.setSelectiveHeadLiveCapturePaused(false));await invoke('frame');
+  const frame=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);await guarded(waitSceneFrame(page,frame));
+  await page.screenshot({path:path.join(out,name+'.png')});
+  const row={name,attached,detached,gas,attachedFuel,residue,solidCells:collision.cells?.reduce((a,b)=>a+b,0),state};report.frames.push(row);await save();return row;
+ }
+ const cold=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(cold.paused,true);assert.equal(cold.burner,false);
+ if(experiment==='bear-altar'){
+  await page.screenshot({path:path.join(out,'altar.png')});
+  const toggle=page.getByRole('checkbox',{name:'Burnable wood',exact:true});
+  await toggle.uncheck();await page.waitForFunction(async()=>!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
+  await toggle.check();await page.waitForFunction(async()=>!!(await window.kaminosWorkbenchExperiments.read()).burnable);await page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled);
+  assert.equal(await page.getByRole('button',{name:'Run',exact:true}).isVisible(),true,'Selected burnable must expose its actual Run control');
+  const rebound=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());assert.equal(rebound.objectId,cold.objectId);assert.equal(rebound.altarBearId,cold.objectId);
+  const undo=await guarded(page.evaluate(async()=>{
+   const id=(await window.kaminosWorkbenchExperiments.read()).objectId;
+   window.removeSceneObject(id);const removed=!window.kaminosSceneObjectDebugState().some(row=>row.id===id);
+   await new Promise(requestAnimationFrame);await window.kaminosSceneEdits.undo();window.selectSceneObject(id);
+   await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+   return {id,removed,restored:window.kaminosSceneObjectDebugState().some(row=>row.id===id),checkboxes:document.querySelectorAll('[aria-label="Burnable wood"]').length};
+  }));assert.equal(undo.removed,true);assert.equal(undo.restored,true);assert.equal(undo.checkboxes,1);assert.equal(await page.getByRole('button',{name:'Run',exact:true}).isVisible(),true,'Undo must restore active combustion controls');report.lifecycle={undo};
+  report.selection=await page.evaluate(()=>({objects:window.kaminosSceneObjectDebugState(),active:window.kaminosSelection.read()}));
+  assert.equal(report.selection.objects.some(row=>row.label==='Char residue'),false,'Residue cannot be an authored transform target');
+  report.inputs.push({inspectorBurnableToggle:'off/on',objectId:cold.objectId});
+ }
+ const initial=await sample('cold');assert.equal(initial.detached,0);
+ if(process.env.BURN_INJECT_RUNTIME_FAILURE==='1'){
+  report.phase='negative:recorded-volume-error';report.injectedFailure='recorded-volume-error-without-console';await save();
+  await page.evaluate(()=>{const api=window.__kaminosVolumePrototype,read=api.debugState.bind(api);api.debugState=()=>({...read(),error:'witness-injected-recorded-volume-error'});});
+  await guarded(waitSceneFrame(page,Number.MAX_SAFE_INTEGER));throw Error('Recorded runtime error did not fail the witness');
+ }
+ await invoke('run');report.phase='ignition';await save();await advance(600);await sample('hot');
+ await invoke('burnerOff');await invoke('pause');await advance(900);await sample('burner-off');
+ report.phase='consumption';await save();await invoke('move',{position:[.7,0,0]});await invoke('pause');await advance(1500);await sample('shedding');
+ report.phase='paused-edit';await save();await invoke('view',{mode:'char'});const pausedBefore=await sample('paused-before'),priorParticles=structuredClone(lastSnapshot.particles);
+ if(experiment==='bear-altar'){
+  report.inputs.push({viewportDisplay:{emitters:false}});await page.evaluate(()=>window.kaminosViewportSettings.set({emitters:false}));
+  await page.evaluate(()=>window.kaminosSelection.clear());
+  const rect=await page.locator('#viewport').boundingBox();await page.mouse.click(rect.x+rect.width/2,rect.y+rect.height/2);
+  report.pausedPick=await page.evaluate(()=>window.kaminosSelection.read());assert.equal(report.pausedPick.activeId,pausedBefore.state.objectId,'Picking the remaining body must select the source object');
+ }
+ report.inputs.push({ordinaryEditorTransform:{position:[.7,.15,.1],rotation:[.2,1.1,0]}});
+ const frameBefore=await page.evaluate(()=>window.kaminosSceneGIDebugState().sceneFrames);
+ await page.evaluate(async()=>{const state=await window.kaminosWorkbenchExperiments.read();if(typeof state.objectId!=='string')throw Error('Experiment has no authored object id');window.kaminosSetSceneObjectTransform(state.objectId,{position:[.7,.15,.1],rotation:[.2,1.1,0]});});
+  await guarded(waitSceneFrame(page,frameBefore));
+ const pausedAfter=await sample('paused-after');assert.equal(pausedAfter.state.fields[0].steps,pausedBefore.state.fields[0].steps);assert.deepEqual(lastSnapshot.particles,priorParticles,'Paused edit cannot move independent GPU residue');
+ const pose=pausedAfter.state.debris[0];assert.ok(pose.attachedWorld.every((v,i)=>Math.abs(v-pose.sourceWorld[i])<1e-5),'Paused attached caps must follow ordinary editor transform');report.pausedEdit={status:'passed',materialSteps:pausedAfter.state.fields[0].steps,particlesUnchanged:true,sourceWorld:pose.sourceWorld,attachedWorld:pose.attachedWorld};
+ await invoke('view',{mode:'beauty'});
+ await invoke('pause');await advance(2400);const consumed=await sample('consumed');assert.ok(consumed.detached>0,'Burning must release finite residue');assert.ok(consumed.attached<initial.attached);assert.ok(consumed.solidCells<initial.solidCells,'Consumed geometry must lose obstruction');
+ await invoke('view',{mode:'char'});await sample('consumed-char');await invoke('view',{mode:'beauty'});
+ if(process.env.BURN_GRID_RESIZE==='1'){
+  report.phase='grid-resize';await save();
+  report.gridChanges=[];
+  for(const grid of [48,32]){
+   const retained=await invoke('snapshot');
+   report.inputs.push({flameSettings:{resolution:grid}});
+   await guarded(page.evaluate(grid=>{const api=window.kaminosFlameAuthoring,next=api.read();next.domControls['volume-resolution'].value=String(grid);delete next.domControls['volume-resolution'].rawValue;return api.apply(next,'Change fire grid');},grid));
+   await guarded(page.waitForFunction(grid=>window.__kaminosVolumePrototype.debugState().simGrid===grid,grid));
+   const state=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read()),frozen=await invoke('snapshot');
+   assert.deepEqual(state.gasSource.dimensions,[grid,grid,grid]);
+   assert.deepEqual(frozen[0].material,retained[0].material,'Grid edits must retain burned material');
+   assert.deepEqual(frozen[0].particles,retained[0].particles,'Paused grid edits must retain independent residue');
+   report.gridChanges.push({grid,state});await fs.writeFile(path.join(out,'grid-'+grid+'-raw.json'),JSON.stringify({state,snapshots:frozen}));
+   await invoke('pause');
+   const before=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().simStepCount);
+   await advance(before+60);
+   const stepped=await page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
+   assert.equal(stepped.fluid.active,true);assert.equal(stepped.fluid.error,null);assert.equal(stepped.fluid.grid,grid);
+   assert.ok(stepped.fields[0].steps>state.fields[0].steps,'Material must actually step after grid resize');
+   assert.notEqual(stepped.fields[0].lastSource.allocationId,state.fields[0].lastSource.allocationId,'Material must bind the new fluid allocation');
+   report.gridChanges.at(-1).stepped=stepped;await sample('grid-'+grid);
+  }
+  await save();
+ }
+ await invoke('reset');const reset=await sample('reset');assert.equal(reset.detached,0);assert.equal(reset.attached,initial.attached);assert.equal(reset.gas,0);
+ await page.setViewportSize({width:390,height:844});await invoke('frame');await page.screenshot({path:path.join(out,'mobile.png')});
+ if(process.env.BURN_COLLISION_NEGATIVES==='1'){
+  report.phase='collision-status-negatives';report.collisionNegatives=[];await save();
+  await invoke('run');await invoke('pause');
+  report.collisionNegativeConfiguration=await page.evaluate(async()=>{
+   const api=window.kaminosFlameAuthoring,next=api.read();
+   next.domControls['volume-emitter-source-law'].value='legacy-volume';delete next.domControls['volume-emitter-source-law'].rawValue;
+   next.domControls['volume-input-radius'].value=.1;delete next.domControls['volume-input-radius'].rawValue;
+   await api.apply(next,'Collision diagnostic analytic source');
+   const origin=window.__kaminosVolumePrototype.debugState().followingDomain.translation;
+   window.kaminosSetSceneObjectTransform('flame-emitter',{position:origin});
+   return {purpose:'Analytic-support rejection diagnostic, separate from accepted immersed burn configuration',sourceLaw:'legacy-volume',inputRadius:.1,origin};
+  });
+  const blocker=await page.evaluate(async()=>{
+   const api=window.kaminosSceneAuthoring,id=(await window.kaminosWorkbenchExperiments.read()).objectId;
+   api.setCollision(id,false);const blocker=api.addMesh('box',{width:.5,height:.5,depth:.5});api.setCollision(blocker,true);return blocker;
+  });
+  for(const [name,position,scale,reason] of [['outside',[100,0,0],[1,1,1],'authored-solid-does-not-intersect-volume'],['occluded',null,[2,2,2],'authored-solid-occludes-emitter-source-support']]){
+   const before=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision);
+   await page.evaluate(({blocker,position,scale})=>{const state=window.__kaminosVolumePrototype.debugState();window.kaminosSetSceneObjectTransform(blocker,{position:position??state.followingDomain.translation,scale});}, {blocker,position,scale});
+   await guarded(page.waitForFunction(before=>window.__kaminosVolumePrototype.debugState().sceneCollision.geometryRevision!==before,before));
+   const submitted=await page.evaluate(()=>window.kaminosSceneCollision.read().runtime);
+   const evidence={name,submitted};report.collisionNegatives.push(evidence);await save();
+   assert.equal(submitted.validation,'gpu-resident-unread');
+   assert.notEqual(submitted.geometryRevision,undefined);
+   const sampled=await page.evaluate(async()=>{const r=await window.__kaminosVolumePrototype.sampleSceneCollisionMask();return {...r,cells:Array.from(r.cells)};});
+   evidence.sampled=sampled;await save();
+   assert.equal(sampled.valid,false);assert.equal(sampled.runtime.reason,reason);assert.ok(sampled.cells.every(x=>x===0));
+   evidence.beforeReadoutRefresh=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
+   await guarded(page.waitForFunction(({revision,reason})=>window.kaminosSceneCollision.read().runtime.geometryRevision!==revision||document.getElementById('kiln-collision-status').textContent==='Unavailable · '+reason,{revision:submitted.geometryRevision,reason}));
+   const ordinary=evidence.ordinary=await page.evaluate(()=>({runtime:window.kaminosSceneCollision.read().runtime,text:document.getElementById('kiln-collision-status').textContent}));await save();
+   assert.equal(ordinary.runtime.geometryRevision,submitted.geometryRevision,'Collision revision changed while awaiting ordinary inspector publication');
+   assert.equal(ordinary.runtime.reason,reason);assert.equal(ordinary.text,'Unavailable · '+reason);
+  }
+  await page.evaluate(async blocker=>{window.removeSceneObject(blocker);window.kaminosSceneAuthoring.setCollision((await window.kaminosWorkbenchExperiments.read()).objectId,true);},blocker);
+  await invoke('burnerOff');await invoke('reset');
+ }
+ if(experiment==='bear-altar'){
+  report.phase='lifecycle-switch';await save();await page.setViewportSize({width:1440,height:1000});
+  await page.getByRole('checkbox',{name:'Burnable wood',exact:true}).uncheck();
+  await guarded(page.waitForFunction(()=>!document.querySelector('[aria-label="Burnable wood"]').disabled));
+  report.lifecycle.switch=await guarded(page.evaluate(async()=>{
+   const toggle=document.querySelector('[aria-label="Burnable wood"]');toggle.click();const pending=toggle.disabled;
+   await window.kaminosWorkbenchExperiments.open('material-study',{roughness:.4});
+   await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);
+   return {pending,id:window.kaminosWorkbenchExperiments.state().id,consumer:window.__kaminosVolumePrototype.thermalConsumerState(),active:window.__kaminosVolumePrototype.debugState().active};
+  }));assert.equal(report.lifecycle.switch.pending,true);assert.equal(report.lifecycle.switch.id,'material-study');assert.equal(report.lifecycle.switch.consumer,null);assert.equal(report.lifecycle.switch.active,false);
+  await page.screenshot({path:path.join(out,'after-switch.png')});
+ }
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.close());checkDisintegrationEvidence(report);report.status='passed';report.phase='complete';
+}catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
+finally{await browser?.close();await save();}

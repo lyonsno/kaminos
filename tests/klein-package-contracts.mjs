@@ -29,6 +29,14 @@ try {
   assert.deepEqual(manifest.publishConfig, { access: 'public' });
   assert.deepEqual(manifest.repository, { type: 'git', url: 'git+https://github.com/lyonsno/kaminos.git', directory: 'models/flux2-klein' });
   assert.ok(manifest.files.includes('LICENSE'), 'LICENSE must ship');
+  // Klein reimplements behaviour from Apache-2.0 Hugging Face libraries and the Qwen tokenizer, and
+  // GPT-2's byte mapping (Modified MIT); their notices ship with the package.
+  assert.ok(manifest.files.includes('THIRD_PARTY_NOTICES.txt'), 'THIRD_PARTY_NOTICES.txt must ship');
+  const notices = fs.readFileSync(path.join(staged, 'THIRD_PARTY_NOTICES.txt'), 'utf8');
+  for (const source of ['huggingface/diffusers', 'huggingface/transformers', 'huggingface/tokenizers', 'Qwen', 'openai/gpt-2',
+    'Apache License', 'Version 2.0, January 2004', 'Modified MIT License', 'Software Copyright (c) 2019 OpenAI']) {
+    assert.ok(notices.includes(source), `THIRD_PARTY_NOTICES.txt must name ${source}`);
+  }
   assert.match(fs.readFileSync(path.join(staged, 'LICENSE'), 'utf8'), /^MIT License\n\nCopyright \(c\) 2026 Noah Lyons\n[\s\S]*Permission is hereby granted, free of charge/);
   assert.ok(manifest.dependencies['@kaminos/webgpu-inference-kit'], 'Klein must depend on the kit package');
   const files = fs.readdirSync(staged).filter(f => f.endsWith('.js')).sort();

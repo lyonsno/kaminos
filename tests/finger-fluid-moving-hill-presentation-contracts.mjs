@@ -155,7 +155,7 @@ assert.match(
 );
 assert.match(
   source,
-  /const drawAnalyticSupport = safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE/,
+  /const drawAnalyticSupport = !safeDiagnosticBox && safePresentationMode === KAMINOS_FINGER_FLUID_ANALYTIC_PRESENTATION_MODE/,
   'analytic support presentation must be explicitly gated by the effective presentation mode',
 );
 assert.match(

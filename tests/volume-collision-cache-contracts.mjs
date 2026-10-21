@@ -17,7 +17,7 @@ function collision(){
  ctx.immersedBackWallCells=(...args)=>{counts.walls++;return core.immersedBackWallCells(...args);};
  ctx.installSceneSolidTexture=(field=null)=>{counts.uploads++;ctx.sceneSolidCellsCpu=field?.cells??null;return true;};
  ctx.rebuildSceneSolidBindingViews=()=>{counts.bindings++;};
- vm.createContext(ctx);const from=source.indexOf('  function immersedBackWallForState()');
+ ctx.sceneSolidGpu=null;vm.createContext(ctx);const from=source.indexOf('  function immersedBackWallForState()');
  vm.runInContext(source.slice(from,source.indexOf('  function fluidBindGroup(',from)),ctx);
  const refresh=patch=>{Object.assign(ctx.controlsSnapshot,patch);ctx.state.immersedSource=core.resolveImmersedSourceConfig(ctx.controlsSnapshot,{grid:ctx.gridSize,gridHeight:ctx.gridHeight});vm.runInContext('refreshSceneCollision()',ctx);assert.equal(ctx.state.sceneCollision.reason,null);};
  return {ctx,counts,mesh,refresh};

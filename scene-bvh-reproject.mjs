@@ -10,6 +10,8 @@ export function createBvhReproject(device,{geometry,nodes,triangles}) {
   const matrices=upload(geometry.matrices??identity);
   const params=device.createBuffer({size:16,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});owned.push(params);
   const limit=device.limits.maxComputeWorkgroupsPerDimension;
+  const coverage=geometry.coverage;
+  if(coverage&&coverage.device!==device)throw Error('Resident light coverage must use the lighting device');
   const module=device.createShaderModule({label:'world BVH to moving source coordinates',code:`
 struct Node {lo:vec4<f32>,hi:vec4<f32>,range:vec4<u32>}
 struct Triangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
@@ -20,6 +22,7 @@ struct Triangle {a:vec4<f32>,e1:vec4<f32>,e2:vec4<f32>}
 @group(0) @binding(4) var<uniform> transform:vec4<f32>;
 @group(0) @binding(5) var<storage,read> owners:array<u32>;
 @group(0) @binding(6) var<storage,read> matrices:array<mat4x4<f32>>;
+${coverage?'@group(0) @binding(7) var remaining:texture_3d<f32>;':''}
 @compute @workgroup_size(64)
 fn reproject(@builtin(global_invocation_id) gid:vec3<u32>){
  let i=gid.x+gid.y*${limit*64}u;
@@ -31,15 +34,16 @@ fn reproject(@builtin(global_invocation_id) gid:vec3<u32>){
  if(i<${geometry.triangleCount}u){
   let t=worldTriangles[i];let m=matrices[owners[${geometry.nodeCount}u+i]];
   localTriangles[i]=Triangle(vec4<f32>(((m*vec4<f32>(t.a.xyz,1.0)).xyz-transform.xyz)/transform.w,t.a.w),vec4<f32>((m*vec4<f32>(t.e1.xyz,0.0)).xyz/transform.w,t.e1.w),vec4<f32>((m*vec4<f32>(t.e2.xyz,0.0)).xyz/transform.w,t.e2.w));
+  ${coverage?`if(t.a.w>0.0){let cell=u32(t.a.w)-1u;let n=textureDimensions(remaining).x;let c=vec3<i32>(i32(cell%n),i32((cell/n)%n),i32(cell/(n*n)));if(textureLoad(remaining,c,0).w<0.5){localTriangles[i].e1=vec4<f32>(0.0);localTriangles[i].e2=vec4<f32>(0.0);}}`:''}
  }
 }`});
   const pipeline=device.createComputePipeline({layout:'auto',compute:{module,entryPoint:'reproject'}});
-  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[worldNodes,worldTriangles,nodes,triangles,params,owners,matrices].map((buffer,binding)=>({binding,resource:{buffer}}))});
+  const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[...([worldNodes,worldTriangles,nodes,triangles,params,owners,matrices].map((buffer,binding)=>({binding,resource:{buffer}}))),...(coverage?[{binding:7,resource:coverage.texture.createView()}]:[])]});
   let key=null,pending=null;
   return {encode(encoder,value,meshMatrices=geometry.matrices??identity){
     pending=null; // A skipped/reverted retry must not commit an abandoned pose.
     if(meshMatrices.length!==(geometry.matrices??identity).length||!meshMatrices.every(Number.isFinite))throw Error('BVH matrix upload shape or values invalid');
-    const t=validateSceneSourceTransform(value),next=JSON.stringify([t,Array.from(meshMatrices)]);if(next===key)return false;
+    const t=validateSceneSourceTransform(value),next=JSON.stringify([t,Array.from(meshMatrices),geometry.coverage?.revision]);if(next===key)return false;
     const groups=Math.ceil(Math.max(geometry.nodeCount,geometry.triangleCount)/64);
     if(groups>limit*limit)throw new Error('BVH reproject exceeds device dispatch capacity');
     device.queue.writeBuffer(params,0,new Float32Array([...t.translate,t.scale]));

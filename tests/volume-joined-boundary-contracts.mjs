@@ -116,7 +116,7 @@ test('admission tracks control changes through the real API (JH-02)', () => {
 
 test('the fine step stops before its own projection in joined mode; the producer state is exposed', () => {
   const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
-  assert.match(sim, /    encodeAnalyticEmitterInjection\(encoder\);\n    if \(state\.joinedBoundary\?\.admitted\) \{\n      state\.simStepCount \+= 1;\n      updateSimCostLedger\(\);\n      return false;\n    \}\n    const finalTimestampWritten = encodePressureProjection\(encoder, \{/);
+  assert.match(sim, /    encodeAnalyticEmitterInjection\(encoder\);\n    if \(state\.joinedBoundary\?\.admitted\) \{\n      state\.simStepCount \+= 1;\n      encodeGpuThermalConsumer\(encoder\);\n      updateSimCostLedger\(\);\n      return false;\n    \}\n    const finalTimestampWritten = encodePressureProjection\(encoder, \{/);
   assert.match(source, /    setJoinedBoundary\(request = \{\}\) \{/);
   assert.match(source, /    joinedProducerState\(\) \{/);
   const api = source.slice(source.indexOf('    joinedProducerState() {'), source.indexOf('    joinedProducerState() {') + 2400);

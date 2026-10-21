@@ -1,4 +1,5 @@
 import * as THREE from './lib/three.core.js';
+import {currentGeometrySnapshot} from './scene-export-geometry.mjs';
 export function sceneObjectsForFraming(entries,selectedId=null) {
   return entries.filter(entry=>selectedId===null||entry.id===selectedId).map(entry=>entry.object).filter(Boolean);
 }
@@ -16,8 +17,9 @@ export function sceneContentBounds(object,box=new THREE.Box3()) {
       if(node.boundingBox===null)node.computeBoundingBox();
       if(node.boundingBox)box.union(node.boundingBox.clone().applyMatrix4(node.matrixWorld));
     }else if(node.geometry){
-      if(!node.geometry.boundingBox)node.geometry.computeBoundingBox();
-      if(node.geometry.boundingBox)box.union(node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld));
+      const geometry=currentGeometrySnapshot(node)??node.geometry;
+      if(!geometry.boundingBox)geometry.computeBoundingBox();
+      if(geometry.boundingBox)box.union(geometry.boundingBox.clone().applyMatrix4(node.matrixWorld));
     }
     for(const child of node.children)visit(child);
   }

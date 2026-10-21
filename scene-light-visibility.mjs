@@ -117,6 +117,7 @@ export function buildTriangleVisibility(triangles) {
     const nodes = new Float32Array(Math.max(1,nodeCount)*12);
     const words = new Uint32Array(nodes.buffer);
     const triangles = new Float32Array(Math.max(1,records.length)*12);
+    const triangleIndices = new Uint32Array(records.length);
     let nextNode=0, nextTriangle=0;
     function write(node) {
       const id=nextNode++, at=id*12;
@@ -124,7 +125,8 @@ export function buildTriangleVisibility(triangles) {
       if(node.items) {
         words[at+9]=nextTriangle; words[at+10]=node.items.length;
         for(const t of node.items) {
-          const offset=nextTriangle++*12;
+          const offset=nextTriangle*12;
+          triangleIndices[nextTriangle++]=t.triangleIndex;
           triangles.set(t.points[0],offset);
           triangles.set(t.edge1,offset+4);triangles.set(t.edge2,offset+8);
         }
@@ -132,7 +134,7 @@ export function buildTriangleVisibility(triangles) {
       words[at+8]=nextNode;
     }
     if(root) write(root);
-    return {nodes,triangles,nodeCount,triangleCount:records.length};
+    return {nodes,triangles,nodeCount,triangleCount:records.length,triangleIndices};
   }
   return Object.freeze({ trace, packGpu, triangleCount: records.length, nodeCount });
 }

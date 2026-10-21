@@ -53,4 +53,4 @@ By default the pipeline loads the hosted weights (`KLEIN_HOSTED_WEIGHTS`, about 
 
 ## License
 
-The code is MIT (see `LICENSE`). The weights it downloads are FLUX.2 [klein] 4B by Black Forest Labs and its Qwen3-4B text encoder by the Qwen team, both released under the Apache License 2.0, as are the converted weights.
+The code is MIT (see `LICENSE`); `THIRD_PARTY_NOTICES.txt` credits the projects whose behaviour it reimplements. The weights it downloads are FLUX.2 [klein] 4B by Black Forest Labs and its Qwen3-4B text encoder by the Qwen team, both released under the Apache License 2.0, as are the converted weights.

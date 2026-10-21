@@ -2,6 +2,7 @@ import { Vector2, Vector3, Raycaster, Plane } from './lib/three.core.js';
 import { beginContinuousPointer } from './continuous-pointer.mjs';
 import { installRelativeNumberDrag } from './scene-control-history.mjs';
 import { createSceneEdits, transformPose, axisVector } from './scene-edit-session.mjs';
+import {sceneObjectPoseHistory} from './scene-object-pose-history.mjs';
 
 export function getPivotViewState(camera, point, width, height) {
   camera.updateMatrixWorld(true);
@@ -52,7 +53,7 @@ export function installScenePlacementTools({
     gizmo.enabled = prior.gizmo;
     gizmo.getHelper().visible = prior.helper;
   };
-  const edits = createSceneEdits({ read, write, settled, captureContext,
+  const edits = createSceneEdits({ read, write, settled, captureContext,history:id=>sceneObjectPoseHistory(object(id)),
     changed: () => { refresh(); draw(); }, admit: () => {
     if (!allowed()) throw new Error('Finish preview or correction before editing placement');
     if (busy()) throw new Error('Wait for the current authoring action before editing placement');
