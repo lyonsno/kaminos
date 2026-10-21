@@ -34,10 +34,12 @@ try {
   const prepared = name => ({ b: { schema: 'kaminos.unimate.demo-bundle.v0',
     skeleton: { name, jointNames: ['root', 'foot'], parents: [-1, 0], joints: 2, frames: 2, fps: 30 },
     outputTimes: [0, 1], prompts: [] }, a: { restPositions: new Float32Array([0,1,0,0,0,0]) } });
-  const consumer = createUniMateConsumer({ device: {}, session: {}, beginRun() {} });
+  const resolvedSession={registerRoute(){}};
+  const consumer = createUniMateConsumer({ device: {}, session: () => Promise.resolve(resolvedSession), beginRun() {} });
   const first = prepared('edited cat');
   first.restFrame = { yaw: 0, scale: 2, offset: [1, 3, 0], rotation: [[1,0,0],[0,1,0],[0,0,1]] };
   const result = await consumer.run({ asset: { skeletonData: first }, prompt: 'A cat walks.' });
+  assert.equal(calls[0].options.session,resolvedSession,'asynchronous app session is resolved before model creation');
   assert.equal(calls[0].options.skeletonData, first, 'cold start uses edited conditioning directly');
   assert.equal(calls[0].options.bundleBase, null, 'cold start has no hidden stock skeleton dependency');
   assert.equal(result.skeleton.name, 'edited cat');

@@ -50,7 +50,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
   async function ensureModel(skeletonData = null) {
     if (generator) return generator;
     set('loading', 'download', 'model and text encoder');
-    generator = await createUniMateGenerator({ device, session, beginRun, weightsBase, t5Base, skeletonData,
+    generator = await createUniMateGenerator({ device, session: await session, beginRun, weightsBase, t5Base, skeletonData,
       bundleBase: skeletonData ? null : `${skeletonsBase}${defaultSkeleton}/`,
       onStatus: s => { if (s.phase === 'load') set('loading', 'download', s.detail, state.progress); },
       onBytes: (loaded, total) => set('loading', 'download', 'model and text encoder', { bytes: loaded, totalBytes: total }) });
