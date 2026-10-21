@@ -21,7 +21,7 @@ const mask = result.mask(); // source-resolution Uint8Array: 0 or 1 per pixel
 await sam.close();
 ```
 
-No Python, MLX, diagnostic server or Kaminos application is needed. Model setup downloads a pinned checkpoint and verifies every converted weight. The model files are about 3.32 GB and use Meta's SAM License. [Start with SAM](./docs/sam-getting-started.md) for setup, instance selection, resource ownership and shared-session integration.
+No Python, MLX, diagnostic server or Kaminos application is needed. Model setup downloads a pinned checkpoint and verifies every converted weight. The model files are about 3.4 GB and use Meta's SAM License. [Start with SAM](./docs/sam-getting-started.md) for setup, instance selection, resource ownership and shared-session integration.
 
 ## Turn A Photograph Into A Surface You Can Relight
 

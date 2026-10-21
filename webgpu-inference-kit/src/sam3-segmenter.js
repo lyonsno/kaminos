@@ -19,9 +19,21 @@ export function createSam3Segmenter({ manifestUrl, baseUrl = globalThis.location
   const makeRuntime = services.createRuntime || createSam3BrowserImageRuntime;
   const hash = async bytes => `sha256:${Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)),
     value => value.toString(16).padStart(2, '0')).join('')}`;
-  let runtime, active = null, closing = null, closed = false;
+  let runtime, active = null, closing = null, closed = false, device = null, fatal = null;
+  const gpuError = event => { fatal = new Error(`SAM WebGPU error: ${event.error.message}`); };
+  function observeExecution(context) {
+    if (device === context.device) return;
+    device?.removeEventListener?.('uncapturederror', gpuError);
+    device = context.device;
+    const observed = device;
+    device.addEventListener?.('uncapturederror', gpuError);
+    device.lost.then(info => {
+      if (device === observed) fatal = new Error(`SAM WebGPU device lost: ${info.reason}: ${info.message}`);
+    });
+  }
   async function segment(image, prompt) {
     if (closed) throw new Error('SAM segmenter is closed');
+    if (fatal) throw fatal;
     if (active) throw new Error('SAM segmentation already in flight');
     if (!(image instanceof Blob) || !image.size) throw new Error('SAM image must be a non-empty Blob or File');
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('SAM text prompt is required');
@@ -34,9 +46,11 @@ export function createSam3Segmenter({ manifestUrl, baseUrl = globalThis.location
         const request = { invocationId: crypto.randomUUID(), promptText: prompt.trim(),
           promptSha256: await hash(new TextEncoder().encode(prompt.trim())), verificationMode: 'execution-only',
           sourceImage: { url, sha256, artifactId: `image:${sha256.slice(7)}`, encodedResolution: [width, height] } };
+        if (fatal) throw fatal;
         runtime ||= makeRuntime({ baseUrl, inferenceSession, yield: yieldToBrowser,
-          onStatus: onProgress });
+          onStatus: onProgress, onExecutionContext: observeExecution });
         const output = await runtime.run(model.href, request);
+        if (fatal) throw fatal;
         if (output?.invocationId !== request.invocationId) throw new Error('SAM output invocation mismatch');
         if (output.promptText !== request.promptText || output.promptSha256 !== request.promptSha256) {
           throw new Error('SAM output prompt mismatch');
@@ -73,6 +87,8 @@ export function createSam3Segmenter({ manifestUrl, baseUrl = globalThis.location
     closed = true;
     closing = (async () => {
       try { await active; } catch { /* The invocation keeps its own failure. */ }
+      device?.removeEventListener?.('uncapturederror', gpuError);
+      device = null;
       await runtime?.close();
     })();
     return closing;

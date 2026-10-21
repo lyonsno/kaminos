@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, readFile, writeFile, realpath, copyFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, realpath, copyFile, readdir } from 'node:fs/promises';
 import { resolve, join, sep } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -13,7 +13,7 @@ import { resolveSamWitnessBrowser } from '../../sam-image-witness.mjs';
 
 const { values: args } = parseArgs({ options: { out: { type: 'string' }, model: { type: 'string' },
   image: { type: 'string' }, baseline: { type: 'string' }, chrome: { type: 'string' }, playwright: { type: 'string' } } });
-for (const key of ['out', 'model', 'image', 'baseline', 'chrome', 'playwright']) assert.ok(args[key], `--${key} required`);
+assert.ok(args.out, '--out required');
 const output = resolve(args.out), root = fileURLToPath(new URL('../', import.meta.url));
 await mkdir(output, { recursive: true });
 const report = { schema: 'kaminos.sam-packed-consumer-smoke.v1', status: 'running', phase: 'pack',
@@ -22,6 +22,7 @@ const save = () => writeFile(join(output, 'report.json'), JSON.stringify(report,
 let server, context;
 await save();
 try {
+  for (const key of ['model', 'image', 'baseline', 'chrome', 'playwright']) assert.ok(args[key], `--${key} required`);
   const packed = JSON.parse(execFileSync('npm', ['pack', root, '--ignore-scripts', '--json', '--pack-destination', output],
     { encoding: 'utf8' }))[0];
   const tarball = join(output, packed.filename);
@@ -81,6 +82,7 @@ try {
         window.segmenter = api.createSam3Segmenter({ manifestUrl: '/model/tensor-manifest.json', services: {
           createRuntime(options) {
             window.runtime = api.createSam3BrowserImageRuntime({ ...options, onExecutionContext(context) {
+              options.onExecutionContext(context);
               window.execution = { fallback: context.adapter.isFallbackAdapter ?? context.adapter.info?.isFallbackAdapter,
                 adapter: { vendor: context.adapter.info?.vendor, architecture: context.adapter.info?.architecture,
                   device: context.adapter.info?.device, description: context.adapter.info?.description } };
@@ -123,8 +125,15 @@ try {
     assert.deepEqual(result.sourceSize, { width: 1800, height: 1200 });
     const bytes = await readFile(join(output, `${label}-source.u8`));
     assert.equal(bytes.length, 1800 * 1200);
+    assert.ok(bytes.every(n => n === 0 || n === 1));
+    assert.equal(bytes.reduce((a, b) => a + b, 0), result.foreground);
     if (label === 'wheel') {
       assert.ok(result.foreground > 0 && result.instances.length > 0);
+      const expectedIndices = (await readdir(args.baseline)).flatMap(name => {
+        const match = /^cold-wheel-(\d+)-mask\.u8$/.exec(name); return match ? [Number(match[1])] : [];
+      }).sort((a, b) => a - b);
+      assert.deepEqual(result.instances.map(row => row.index).sort((a, b) => a - b), expectedIndices,
+        'missing or extra native instances');
       for (const instance of result.instances) {
         assert.deepEqual(await readFile(join(output, `wheel-${instance.index}.u8`)),
           await readFile(join(args.baseline, `cold-wheel-${instance.index}-mask.u8`)), 'native mask drift from accepted baseline');

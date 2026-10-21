@@ -87,4 +87,26 @@ await composed.segment(blob, 'wheel');
 assert.equal(borrowedOptions.inferenceSession, borrowed);
 assert.equal(borrowedOptions.yield, service);
 await composed.close();
+for (const kind of ['uncapturederror', 'device-loss']) {
+  let listener, lost;
+  const device = { lost: new Promise(resolve => { lost = resolve; }),
+    addEventListener(_event, callback) { listener = callback; },
+    removeEventListener(_event, callback) { assert.equal(callback, listener); listener = null; } };
+  const failing = createSam3Segmenter({ manifestUrl: '/model.json', baseUrl: 'https://app.test/', crypto: webcrypto,
+    services: { decodeImage: async () => ({ width: 3, height: 1 }), createObjectURL: () => 'blob:https://app.test/input',
+      revokeObjectURL() {}, createRuntime(options) {
+        assert.equal(typeof options.onExecutionContext, 'function', 'segmenter must observe errors on its effective device');
+        return { async run(_url, input) {
+          await options.onExecutionContext({ device });
+          if (kind === 'uncapturederror') listener({ error: { message: 'GPU fixture failure' } });
+          else { lost({ reason: 'unknown', message: 'GPU fixture failure' }); await Promise.resolve(); }
+          return { ...output(), invocationId: input.invocationId, promptSha256: input.promptSha256,
+            sourceImage: input.sourceImage, instances: [] };
+        }, async close() {} };
+      } } });
+  await assert.rejects(failing.segment(blob, 'wheel'), /GPU fixture failure/);
+  await assert.rejects(failing.segment(blob, 'wheel'), /GPU fixture failure/);
+  await failing.close();
+  assert.equal(listener, null, 'close removes the exact error listener');
+}
 console.log('SAM segmenter contracts passed (orchestration fixture, not GPU evidence)');

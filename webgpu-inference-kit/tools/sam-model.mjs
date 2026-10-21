@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { parseArgs } from 'node:util';
+import { homedir } from 'node:os';
 
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 export async function hashFile(path) {
@@ -149,7 +150,8 @@ async function main() {
   if (!values.out) throw new Error('--out directory is required');
   const recipe = JSON.parse(await readFile(new URL('../models/sam3-native.json', import.meta.url), 'utf8'));
   const result = await prepareSamModel({ recipe, outDir: values.out, checkpoint: values.checkpoint,
-    cacheDir: values.cache, onProgress: message => process.stderr.write(`${message}\n`) });
+    cacheDir: values.cache || join(process.env.XDG_CACHE_HOME || join(homedir(), '.cache'), 'kaminos', 'sam3'),
+    onProgress: message => process.stderr.write(`${message}\n`) });
   console.log(JSON.stringify(result, null, 2));
 }
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
