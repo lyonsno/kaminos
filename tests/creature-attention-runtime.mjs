@@ -123,7 +123,7 @@ try{
   onsetWalker=await createWalkingCreature({host,inputs:{...inputs,choices:[],attention:{interests:[],flame:{interest:1}}}},dependencies);await Promise.resolve();
   await onsetWalker.operations.action({kind:'wander'});
   const advance=seconds=>{for(let i=0;i<Math.round(seconds*60);i++){scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});}};
-  advance(.5);await onsetPoll();advance(.25);await onsetPoll();
+  advance(.1); // OS-1: source transition precedes the first successful poll.
   fire.active=true;notify();advance(.1);await onsetPoll();advance(1/60);
   assert.ok(onsetWalker.read().attention.startle,'real timer bridge reads onset despite cached light while off');
   const before=onsetWalker.read(),pose=onsetWalker.pose({bones:['pelvis','spine-chest']});

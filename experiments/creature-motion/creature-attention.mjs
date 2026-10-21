@@ -117,9 +117,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
   remember('interrupt',time,structuredClone(interruption));
  }
+ function recoilAmount(response,time){
+  if(!response)return 0;
+  const elapsed=time-response.since,attack=.09,release=Math.max(.01,response.until-response.since-attack);
+  return elapsed<attack?response.initialStrength+(response.strength-response.initialStrength)*Math.sin(Math.max(0,elapsed)/attack*Math.PI/2):response.strength*Math.pow(Math.max(0,1-(elapsed-attack)/release),2);
+ }
  function recoil({id,point,strength,familiarity,evidence},time){
   const duration=.4+strength*(.9-.6*familiarity);
-  startle={id,point:[...point],strength,familiarity,since:time,until:time+duration,holdUntil:time+.15+.3*strength,evidence};
+  startle={id,point:[...point],initialStrength:recoilAmount(startle,time),strength,familiarity,since:time,until:time+duration,holdUntil:time+.15+.3*strength,evidence};
   remember('startle',time,structuredClone(startle));
  }
  const motionSeconds=(from,to)=>{
@@ -173,7 +178,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
       if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='still'&&state==='moving'){m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.familiarity*=.4;m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='movement resumed';}
-      if(known.previous==='off'&&state!=='off')onset={id:source.id,since:time,familiarity:learned.familiarity};
+      if(known.previous==='off'&&state!=='off')onset={id:source.id,since:time,observedOver:dt,familiarity:learned.familiarity};
       if(state==='off'&&onset?.id===source.id)onset=null;
       known.previous=state;
      }else{known.memory.gap();known.previous=null;if(onset?.id===source.id)onset=null;}
@@ -281,11 +286,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      bones.get('neck').updateMatrixWorld(true);
     }
    }
-   if(startle){
-    const elapsed=time-startle.since,attack=.09,release=Math.max(.01,startle.until-startle.since-attack);
-    const pulse=elapsed<attack?Math.sin(Math.max(0,elapsed)/attack*Math.PI/2):Math.pow(Math.max(0,1-(elapsed-attack)/release),2);
-    applyStartlePose({THREE,bones,point:startle.point,strength:startle.strength*pulse});
-   }
+   if(startle)applyStartlePose({THREE,bones,point:startle.point,strength:recoilAmount(startle,time)});
    reticle.visible=Boolean(focus)&&weight>.2;
    if(reticle.visible&&placement){
     placement.updateMatrixWorld(true);
@@ -316,11 +317,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   const contrasts=samples.flatMap(x=>{const key=x.point.join(','),before=priorLevels.get(key);localLevels.set(key,x.luminance);return before===undefined?[]:[Math.log((x.luminance+o.lightFloor)/(before+o.lightFloor))];}).sort((a,b)=>a-b);
   const contrast=litOnset?Math.log1p(local/o.lightFloor):contrasts.length?contrasts[Math.floor(contrasts.length/2)]:0;
   const sourceRise=Number.isFinite(sourcePower)&&previousPower!==null?Math.log((sourcePower+1e-6)/(previousPower+1e-6)):0;
-  if(source&&known?.previous!=='off'&&contrast>.7&&(litOnset||sourceRise>.5)&&dt>0){
-   const rate=contrast/Math.max(dt,.05),strength=(1-Math.exp(-(contrast-.7)/2))*rate/(rate+2);
-   if(rate>1&&!startle){
+  const riseSeconds=litOnset?Math.max(dt,time-onset.since+onset.observedOver):dt;
+  if(source&&known?.previous!=='off'&&contrast>.7&&(litOnset||sourceRise>.5)&&riseSeconds>0){
+   const rate=contrast/riseSeconds,strength=(1-Math.exp(-(contrast-.7)/2))*rate/(rate+2);
+   if(rate>1&&strength>recoilAmount(startle,time)){
     const familiarity=litOnset?onset.familiarity:known?.familiarity??0;
-    recoil({id:source.id,point:source.point,strength,familiarity,evidence:{kind:litOnset?'observed-onset':'measured-rise',local,contrast,sourceRise,dt,sourcePower}},time);
+    recoil({id:source.id,point:source.point,strength,familiarity,evidence:{kind:litOnset?'observed-onset':'measured-rise',local,contrast,sourceRise,dt,riseSeconds,sourcePower}},time);
    }
   }
   if(litOnset)onset=null;

@@ -52,4 +52,11 @@ assert.ok(known.until-known.since<large.until-large.since,'familiar destination 
  c.a.sense({time:c.time(),status:'unavailable',samples:null});c.seconds(.25);c.sample(.4);c.step();
  assert.equal(c.a.read().startle,null,'an old onset cannot survive a sensory gap and startle late');
 }
+{
+ const c=animal();c.step();c.seconds(3);c.sample(0);c.fire.active=true;c.fire.restless=true;c.step(.25);c.sample(.01);c.step();
+ const first=c.a.read().startle;assert.ok(first);c.step(.25);c.sample(.4);
+ const next=c.a.read().startle;assert.ok(next.strength>first.strength,'a stronger burst during recovery intensifies recoil');
+ assert.ok(next.initialStrength>0,'intensification starts from the ongoing recoil, not zero');
+ c.step();assert.ok(c.a.read().arrested,'stronger follow-up checks stride again');
+}
 console.log('Magnitude-scaled bodily startle, planted feet, familiarity recovery, and sensory continuity');
