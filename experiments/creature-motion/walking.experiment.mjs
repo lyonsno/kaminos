@@ -1,3 +1,5 @@
+import {sessionMotions,skeletonMotionKey} from './motion-collection.mjs';
+import {mountMotionWorkspace} from './motion-workspace.mjs';
 import * as THREE from '../../lib/three.core.js';
 import {loadFullBodySources} from './full-body-source.mjs';
 import {createFullBodyRuntime} from './full-body-runtime.mjs';
@@ -51,8 +53,9 @@ async function checkRecipeView(view,current){
 
 export async function createWalkingCreature({host,inputs={},record=()=>{}},{loadSources=loadFullBodySources,loadSkin=loadFullBodySkin,publishInspector=true,mountProperties=mountCreatureProperties,zoneProvider=null,loadGpuDeformer=async()=>(await import('./gpu-skin-deformer.mjs')).createGpuSkinDeformer}={}) {
  if(typeof host?.scene?.open!=='function'||!host.controls?.document)throw Error('Walking creature requires the actual shared Workbench host');
- const choices=checkRecipeInputs(inputs);
+ const choices=[...checkRecipeInputs(inputs)];
  const data=await loadSources(inputs),document=host.controls.document;
+ let workspace=null,assigned=null;const sessionChoices=new Map();
  const deformation=inputs.deformation??'cpu',deformerFactory=deformation==='gpu'?await loadGpuDeformer():null;
  if(deformation==='gpu'&&typeof deformerFactory!=='function')throw Error('GPU deformation factory is unavailable');
  let adapter=createGivenPaletteMotion({THREE,motion:data.motion,rigFrame:data.frame});
@@ -86,10 +89,10 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   // syncArea refreshes presentation, so guard its nested state reads.
   if(zoneProvider&&wander&&!readingZoneState){readingZoneState=true;try{syncArea();}finally{readingZoneState=false;}}
   const playback=player.read();return {mode,cycle,rate,currentSkin:skinSelection?.read()??null,source:structuredClone(source),host:{id:playback.status==='removed'?null:asset.id,route:'shared-owner-scene',scene:globalThis.window?.kaminosWorkbenchSceneState?.()??null},
-  skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?structuredClone(chosen):null,motions:structuredClone(choices),
+  motionWorkspace:workspace?.read()??null,assignedMotion:assigned?{id:assigned.id,sha256:assigned.motion_sha256}:null,skin:runtime.read(),deformation:{requested:deformation,effective:runtime.read().deformation.backend},playback,view:session.readView(),motion:chosen?Object.fromEntries(Object.entries(chosen).filter(([k])=>k!=='motion_data')):null,motions:choices.map(({motion_data,...c})=>c),
   transform:transformOf(placement),actorRoot:{requested:inputs.actor_root??'spawn',effective:liveRoot?'live-pelvis':'authored-spawn',authoredTransform:authoredTransform()},
   action:{kind:wander?'wander':'preview',error:actionError,motion:wander?.read()??null,area:areaRoot?{id:areaAsset?.id,transform:transformOf(areaRoot),mounted:Boolean(areaRoot.parent)}:null,support:'authored flat plane; no foot/contact solver'},
-  recipe:{...structuredClone(chosenInputs),motions:structuredClone(choices),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
+  recipe:{...structuredClone(Object.fromEntries(Object.entries(chosenInputs).filter(([k])=>k!=='motion_data'))),motions:choices.map(({motion_data,...c})=>c),transform:authoredTransform(),mode,cycle,rate,sample:player.read().frame??0,play:player.read().status==='playing',view:session.readView(),action:wander?'wander':'preview',wander:wander?{area:transformOf(areaRoot),motion:wander.snapshot()}:undefined,held_wander:heldWander?.snapshot(),held_wander_area:heldWander&&areaRoot?transformOf(areaRoot):inputs.held_wander_area},
   display:{castsShadows:runtime.mesh.castShadow,receivesShadows:runtime.mesh.receiveShadow,boneMarkers:[...runtime.bones.values()].flatMap(b=>b.children.filter(c=>c.userData.kaminosHelperKind==='bones')).map(c=>({visible:c.visible}))},
   attention:attention?{...attention.read(),interests:structuredClone(chosenInputs.attention.interests),profileCaseSha256:attentionSkin}:null,
   pathGuide:pathGuide?{mode,kind:wander?'wander-current-segment':mode==='path'?'complete-circular-rail':'source-root-travel',visible:pathGuide.visible,points:pathGuide.geometry.attributes.position.count,bounds:{min:pathGuide.geometry.boundingBox.min.toArray(),max:pathGuide.geometry.boundingBox.max.toArray()},radius:walking.identity.radius,sourceDistance:walking.identity.sourceDistance,sourceUnitsPerSecond:walking.identity.sourceDistance/((adapter.frames-1)/adapter.fps)}:null,
@@ -163,7 +166,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   if(disposal)return disposal;disposed=true;motionRequest++;
   disposal=Promise.resolve().then(async()=>{
    const errors=[],attempt=action=>{try{action();}catch(e){errors.push(e);}};
-   attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
+   attempt(()=>workspace?.dispose());attempt(unsubscribe);refresh=()=>{};attempt(()=>seating?.dispose());attempt(()=>presentation?.dispose());attempt(()=>skinSelection?.dispose());attempt(()=>player?.dispose());attempt(()=>clearInterval(lightTimer));attempt(()=>attention?.dispose());attempt(()=>flames?.dispose());attempt(releaseHistory);attempt(()=>instruments.remove());attempt(restoreGround);attempt(restoreGizmos);
    try{if(session)await session.dispose();}catch(e){errors.push(e);}attempt(()=>{if(runtime&&!asset)runtime.dispose();});attempt(()=>{if(floor&&!floorAsset){floor.geometry.dispose();floor.material.dispose();}});
    if(globalThis.window?.kaminosWalkingCreature===inspect)delete globalThis.window.kaminosWalkingCreature;
    if(errors.length)throw new AggregateError(errors,'Walking creature cleanup failed');
@@ -296,7 +299,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
    motion:operation('motion',async input=>{
     const requestId=++motionRequest;
     const next=choices.find(c=>c.id===input?.id);if(!next)throw Error('Unknown retained motion');
-    const request={...chosenInputs,motion:next.motion,motion_sha256:next.motion_sha256,prefix:next.prefix,prefix_sha256:next.prefix_sha256};
+    const request={...chosenInputs,motion:next.motion,motion_sha256:next.motion_sha256,motion_data:next.motion_data,prefix:next.prefix,prefix_sha256:next.prefix_sha256};
     let loaded;try{loaded=await loadSources(request);}catch(error){active();if(requestId!==motionRequest)return {status:'superseded',effective:read()};throw error;}
     active();if(requestId!==motionRequest)return {status:'superseded',effective:read()};
     if(loaded.source.motionSha256!==next.motion_sha256||loaded.source.caseSha256!==source.caseSha256||loaded.source.frameSha256!==data.source.frameSha256||loaded.motion.assetCondSha256!==data.motion.assetCondSha256)throw Error('Motion choice changed the source, body, bind frame or rig conditioning');
@@ -324,6 +327,20 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     return read();}),
    floor:operation('floor',input=>{if(!floor)throw Error('No walking reference floor is mounted');if(typeof input?.visible!=='boolean')throw Error('Reference floor visibility must be boolean');floor.visible=input.visible;session.redraw();return read();}),
   };
+  if(inputs.motion_generation){
+   const initialChoice=chosen??{id:'initial',label:data.motion.prompt??'Initial motion',motion:inputs.motion,motion_sha256:inputs.motion_sha256,motion_data:inputs.motion_data};
+   if(!chosen){choices.push(initialChoice);chosen=initialChoice;}assigned=initialChoice;
+   await sessionMotions.add(data.motion);
+   const applyRow=async row=>{
+    if(row.skeletonKey!==skeletonMotionKey(data.motion))throw Error('Motion belongs to another skeleton');
+    let choice=choices.find(c=>c.motion_sha256===row.id);
+    if(!choice){choice={id:row.id,label:row.motion.prompt??'Session motion',motion:'session:'+row.id,motion_sha256:row.id,motion_data:row.text,prompt:row.motion.prompt,seed:row.motion.seed};choices.push(choice);sessionChoices.set(row.id,choice);}
+    await operations.motion({id:choice.id});await operations.mode({mode:'source'});await operations.replay();return choice;
+   };
+   operations.previewMotion=operation('previewMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');await applyRow(row);return read();});
+   operations.assignMotion=operation('assignMotion',async({id})=>{const row=sessionMotions.get(id);if(!row)throw Error('Unknown session motion');assigned=await applyRow(row);return read();});
+   operations.restoreMotion=operation('restoreMotion',async()=>{await operations.motion({id:assigned.id});return read();});
+  }
   if(inputs.mode!==undefined&&!wander)operations.mode({mode:inputs.mode});
   if(inputs.cycle!==undefined&&!wander){if(!Number.isSafeInteger(inputs.cycle)||inputs.cycle<0)throw Error('Invalid authored repeat cycle');cycle=inputs.cycle;source.presentation.cycle=cycle;player.seek(0);}
   if(inputs.sample!==undefined&&!wander)operations.seek({frame:inputs.sample});
@@ -337,7 +354,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   }}){
    seating?.dispose();presentation?.dispose();
    presentation=mountProperties({document,read,invoke,
-    save(recipe){const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
+    save(recipe){if(assigned)recipe={...recipe,motion:assigned.motion,motion_sha256:assigned.motion_sha256,motion_data:assigned.motion_data,motions:choices,sample:0,play:false};const url=URL.createObjectURL(new Blob([JSON.stringify(recipe,null,2)+'\n'],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='creature.setup.json';link.click();URL.revokeObjectURL(url);},
     async open(recipe){
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
      const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
@@ -346,9 +363,15 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      active();await reopen(recipe);
     }});
    refresh=presentation.update;
+   if(inputs.motion_generation){
+    workspace?.dispose();workspace=mountMotionWorkspace({document,reference:data.motion,spec:inputs.motion_generation,options:inputs.motion_generation.options??{},onFrame:fn=>session.onFrame(fn),onPreview:row=>operations.previewMotion({id:row.id}),onApply:row=>operations.assignMotion({id:row.id}),onRestore:()=>operations.restoreMotion()});
+    const button=document.createElement('button');button.type='button';button.textContent='Make motion…';button.onclick=()=>workspace.open();presentation.properties.append(button);
+    const dock=document.createElement('div');dock.className='creature-motion-dock';const css=document.createElement('style');css.textContent='.creature-motion-dock>.playback-controls{position:relative}.creature-motion-dock{display:flex;flex-direction:column}';dock.append(css,workspace.node);if(presentation.playback)dock.append(presentation.playback);presentation.playback=dock;
+    operations.openMotionWorkspace=()=>workspace.open();operations.generateMotion=input=>workspace.generate(input);operations.stopMotionGeneration=()=>workspace.stop();
+   }
    if(host.controls.mountObject)seating=host.controls.mountObject({asset,relatedAssets,properties:presentation.properties,playback:presentation.playback,onSelected:refresh});
    else {root.append(presentation.properties);if(presentation.playback)root.append(presentation.playback);}
-   refresh();return {dispose(){seating?.dispose();presentation?.dispose();refresh=()=>{};}};
+   refresh();return {dispose(){workspace?.dispose();seating?.dispose();presentation?.dispose();refresh=()=>{};}};
   }};
  }catch(error){await dispose();throw error;}
 }

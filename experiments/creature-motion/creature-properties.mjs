@@ -28,7 +28,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
  const setup=el('details'),setupBody=el('div');setup.append(el('summary','Save / open creature'),setupBody);properties.append(setup,error);
  const saveButton=el('button','Save creature setup');saveButton.type='button';saveButton.onclick=()=>save(read().recipe);setupBody.append(saveButton);
  const fileLabel=el('label','Open creature setup'),file=el('input');file.type='file';file.accept='.json,application/json';file.setAttribute('aria-label','Open creature setup');fileLabel.append(file);setupBody.append(fileLabel);
- let disposed=false,lastVariants='';const requests=new Map(),failures=new Map();
+ let disposed=false,lastVariants='',motionKey=JSON.stringify(initial.motions.map(c=>[c.id,c.label]));const requests=new Map(),failures=new Map();
  const perform=async(name,action)=>{if(disposed)return;const current=(requests.get(name)??0)+1;requests.set(name,current);failures.delete(name);try{const pending=action();update();await pending;}catch(e){if(!disposed&&requests.get(name)===current&&name!=='skin')failures.set(name,e.message);}finally{if(!disposed)update();}};
  const call=(name,input)=>perform(name,()=>invoke(name,input));
  action.onchange=()=>call('action',{kind:action.value});editArea.onclick=()=>call('selectArea');
@@ -77,7 +77,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
    const variants=skins.filter(c=>c.cast===s.current.cast),key=variants.map(c=>c.attachment).join('|');
    if(key!==lastVariants){for(const child of [...attachment.children])child.remove();for(const c of variants){const o=el('option',c.attachmentLabel??c.attachment);o.value=c.attachment;attachment.append(o);}lastVariants=key;}attachment.value=s.current.attachment;
   }
-  motion.value=r.motion?.id??'';mode.value=r.mode;
+  const nextKey=JSON.stringify(r.motions.map(c=>[c.id,c.label]));if(nextKey!==motionKey){motionKey=nextKey;for(const child of [...motion.children])child.remove();for(const c of r.motions){const o=el('option',c.label);o.value=c.id;motion.append(o);}motion.hidden=!r.motions.length;}motion.value=r.motion?.id??'';mode.value=r.mode;
   travel.hidden=r.mode!=='path';travel.textContent=r.pathGuide?`Radius ${r.pathGuide.radius} · ${r.pathGuide.sourceDistance.toFixed(3)} scene units per cycle · source-paced travel`:'';
   const a=r.attention;attentionBox.hidden=!a;
   if(a){
