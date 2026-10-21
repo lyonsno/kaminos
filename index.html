@@ -3282,6 +3282,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
+import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
@@ -3961,6 +3962,15 @@ window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneNavigation = null;
+// GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
+// loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
+const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
+window.kaminosGiProxies = {
+  handleFor: root => sceneGiProxies.get(root),
+  select: (root, selection) => sceneGiProxies.select(root, selection),
+  state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
+    proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
+};
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
 const sceneMembershipDisposers = new WeakMap();
@@ -7050,6 +7060,7 @@ function registerSceneObject(object, metadata = {}) {
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
   sceneNavigation?.prepare(object);
+  if (record.type === 'glb') sceneGiProxies.attach(object);
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -10332,6 +10343,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     transformControls.visible = false;
   }
   scene.remove(entry.object);
+  sceneGiProxies.release(entry.object);
   if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
   const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
