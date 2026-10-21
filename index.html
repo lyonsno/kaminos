@@ -3970,6 +3970,12 @@ window.kaminosGiProxies = {
   select: (root, selection) => sceneGiProxies.select(root, selection),
   state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
     proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
+  // On demand: each loaded proxy's world bounds as placed, beside the drawn object's (should agree to tier error).
+  alignment: () => { scene.updateMatrixWorld(true); return sceneGiProxies.list().filter(h => h.proxyRoot).map(({ root, proxyRoot, placement }) => {
+    const box = o => { const b = new THREE.Box3().setFromObject(o, true); return { min: b.min.toArray(), max: b.max.toArray() }; };
+    const placed = new THREE.Group(); placed.matrixAutoUpdate = false; placed.matrix.copy(scene.matrixWorld).multiply(placement(scene)); placed.add(proxyRoot);
+    placed.updateMatrixWorld(true); const proxy = box(placed); placed.remove(proxyRoot);
+    return { id: root.userData?.kaminosSceneObject?.id ?? null, object: box(root), proxy }; }); },
 };
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
