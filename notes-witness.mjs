@@ -581,9 +581,10 @@ try {
   }
 
   report.phase = 'background-tab'; save();
-  // A tab the browser itself has put in the background (another tab brought to the
+  // A tab the browser itself puts in the background (another tab brought to the
   // front; no faked visibility), kept there past the hub's and the server's 60 s
-  // silence limits, is still present, still linked, and still gets a new note.
+  // limits, stays present and linked and gets a new note. Headless browsers may
+  // keep every tab visible; then this is recorded as not exercised, not passed.
   {
     const back = await context.newPage();
     back.on('pageerror', error => { report.pageErrors.push(`background tab: ${error}`); });
@@ -594,20 +595,42 @@ try {
     await front.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 60000});
     await front.bringToFront();
     const visibility = await back.evaluate(() => document.visibilityState);
-    report.effective.backgroundTab = {...ids, visibility, waitedMs: 75000};
-    await sleep(75000);
-    const present = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
-    const linked = (await (await fetch(`${origin}/api/vantage/pages`)).json()).pages.some(entry => entry.id === ids.vantage && entry.connected);
-    const sent = await notes(['post', 'background tab check', '--to', PERSON, '--as', 'hub-check-agent']);
-    const sentId = (sent.stdout.match(/kn-[0-9a-z]+/) ?? [])[0] ?? null;
-    let has = false;
-    for (const deadline = Date.now() + 15000; !has && Date.now() < deadline; await sleep(500)) {
-      has = await back.evaluate(id => !!window.kaminosNotes?.session?.state?.notes?.has(id), sentId);
+    report.effective.backgroundTab = {...ids, visibility};
+    if (visibility !== 'hidden') {
+      report.notExercised.push({phase: 'background-tab', reason: `the browser kept the tab ${visibility} when another was brought to the front (headless); real backgrounding needs a headed browser`});
+    } else {
+      await sleep(75000);
+      const present = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
+      const linked = (await (await fetch(`${origin}/api/vantage/pages`)).json()).pages.some(entry => entry.id === ids.vantage && entry.connected);
+      const sent = await notes(['post', 'background tab check', '--to', PERSON, '--as', 'hub-check-agent']);
+      const sentId = (sent.stdout.match(/kn-[0-9a-z]+/) ?? [])[0] ?? null;
+      let has = false;
+      for (const deadline = Date.now() + 15000; !has && Date.now() < deadline; await sleep(500)) has = await back.evaluate(id => !!window.kaminosNotes?.session?.state?.notes?.has(id), sentId);
+      Object.assign(report.effective.backgroundTab, {present, linked, received: has});
+      check('a tab the browser put in the background stays present and linked past the 60 s limits, and gets a new note', present && linked && has, report.effective.backgroundTab);
     }
-    report.effective.backgroundTab = {...report.effective.backgroundTab, present, linked, received: has, stillHidden: await back.evaluate(() => document.visibilityState)};
-    check('a tab the browser put in the background stays present and linked past the 60 s limits, and gets a new note',
-      present && linked && has, report.effective.backgroundTab);
     await front.close();
+
+    report.phase = 'frozen-tab'; save();
+    // A tab the browser freezes (as long-background tabs can be) answers nothing; it
+    // leaves presence rather than being shown reachable, and once thawed it rejoins
+    // and catches up on what arrived meanwhile.
+    const cdp = await context.newCDPSession(back);
+    await cdp.send('Page.setWebLifecycleState', {state: 'frozen'});
+    let gone = false;
+    for (const deadline = Date.now() + 100000; !gone && Date.now() < deadline; await sleep(2000)) {
+      gone = !(await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
+    }
+    const whileFrozen = await notes(['post', 'arrived while frozen', '--to', PERSON, '--as', 'hub-check-agent']);
+    const frozenId = (whileFrozen.stdout.match(/kn-[0-9a-z]+/) ?? [])[0] ?? null;
+    await cdp.send('Page.setWebLifecycleState', {state: 'active'});
+    let back_in = false, caught = false;
+    for (const deadline = Date.now() + 30000; !(back_in && caught) && Date.now() < deadline; await sleep(1000)) {
+      back_in = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.some(entry => entry.id === ids.page);
+      caught = await back.evaluate(id => !!window.kaminosNotes?.session?.state?.notes?.has(id), frozenId);
+    }
+    report.effective.frozenTab = {page: ids.page, leftPresence: gone, rejoined: back_in, caughtUp: caught};
+    check('a frozen tab leaves presence, and once thawed rejoins and catches up', gone && back_in && caught, report.effective.frozenTab);
     await back.close();
   }
 
