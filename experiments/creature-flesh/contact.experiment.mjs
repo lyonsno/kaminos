@@ -26,7 +26,7 @@ export default {
   const root=new THREE.Group();root.name='Retained rig motion';placement.add(root);
   const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:0xd6b17c,roughness:.72,side:THREE.DoubleSide}));mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;mesh.userData.kaminosDynamicGeometry=true;root.add(mesh);
   const deformer=createGpuSkinDeformer({geometry,...data,channels:data.manifest.channels.length,physical:prepared});mesh.onBeforeRender=renderer=>deformer.flush(renderer);
-  const probe=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.MeshStandardMaterial({color:0x497f9b,roughness:.6,transparent:true,opacity:.75}));probe.name='Contact sphere · move into flank';probe.castShadow=true;probe.receiveShadow=true;
+  const probe=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),new THREE.MeshStandardMaterial({color:0x497f9b,roughness:.6,transparent:true,opacity:.35}));probe.name='Contact sphere · move into flank';probe.castShadow=true;probe.receiveShadow=true;
   const guideGeometry=new THREE.BufferGeometry(),guide=new THREE.LineSegments(guideGeometry,new THREE.LineBasicMaterial({color:0x30ced4,transparent:true,opacity:.55,depthTest:false}));
   guide.name='Physical volume · provisional proxy';Object.assign(guide.userData,{kaminosEditorHelper:true,kaminosEditorOnly:true});guide.visible=false;root.add(guide);
   const edges=new Set();for(const t of prepared.tetrahedra)for(let a=0;a<4;a++)for(let b=a+1;b<4;b++){const pair=[t[a],t[b]].sort((x,y)=>x-y);edges.add(pair.join(','));}
