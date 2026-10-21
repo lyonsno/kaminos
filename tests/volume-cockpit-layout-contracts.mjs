@@ -184,10 +184,10 @@ assert.throws(
 );
 
 const duplicate = schemaRecords();
-duplicate.push({ ...duplicate.find(record => record.id === 'volume-scene'), rootId: 'volume-authored-mix-control-root' });
+duplicate.push({ ...duplicate.find(record => record.id === 'volume-resolution'), rootId: 'volume-authored-mix-control-root' });
 assert.throws(
   () => validateVolumeCockpitControlInventory({ schema, controlRecords: duplicate }),
-  /duplicate=volume-scene/,
+  /duplicate=volume-resolution/,
   'a cloned control across roots fails loud',
 );
 

@@ -207,7 +207,7 @@ test('the diagnostic separates burning, too cold, no contact, depleted and ambie
   assert.equal(rc.reactantDiagnosticFromField({ fuel: 0.3, oxidizer: 0.8, heat: lo * 0.5, freshBurnRate: 0 }), 'too-cold');
 });
 
-test('the reactant law is admitted only for the tall plume with an inflow or immersed source', () => {
+test('the single simulator admits the reactant law with an inflow or immersed source', () => {
   const off = rc.resolveReactantCombustionConfig({});
   assert.equal(off.requested.law, rc.REACTION_LAW_AUTHORED);
   assert.equal(off.effective.admitted, false);
@@ -219,7 +219,9 @@ test('the reactant law is admitted only for the tall plume with an inflow or imm
   assert.equal(on.effective.coolingTimeSteps, rc.REACTANT_CONTROL_DEFAULTS.coolingTimeSteps);
   close(on.effective.exchange.requested, M.exchangeDiffusivity / (2 / 32) ** 2, 1e-15, 'exchange weight per reference step for this grid');
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, emitterSourceLaw: 'immersed-source' }, { grid: 32 }).effective.admitted, true);
-  assert.equal(rc.resolveReactantCombustionConfig({ ...base, volumeScene: 'bonfire' }, { grid: 32 }).effective.reason, 'reactant-law-requires-tall-plume-scene');
+  for (const volumeScene of ['flame', 'tall_plume', 'bonfire_plume', 'canonical_plume', undefined]) {
+    assert.equal(rc.resolveReactantCombustionConfig({ ...base, volumeScene }, { grid: 32 }).effective.admitted, true);
+  }
   assert.equal(rc.resolveReactantCombustionConfig({ ...base, emitterSourceLaw: 'legacy-volume' }, { grid: 32 }).effective.reason, 'reactant-law-requires-inflow-or-immersed-source');
   assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: false }).effective.reason, 'reactant-law-requires-common-gas-transport', 'the oxidizer must ride the fuel characteristic');
   assert.equal(rc.resolveReactantCombustionConfig(base, { grid: 32, transportCommonCharacteristic: true }).effective.admitted, true);

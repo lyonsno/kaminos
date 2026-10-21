@@ -254,19 +254,19 @@ test('runtime receipt and cost ledger name the converged strategy', () => {
 
 // --- Review repairs for eda557c5 (M1 gain/clamp identity, M2 map freshness, M3 Bonfire ablation) ---
 
-test('converged mode reports partial versus full projection and folds Bonfire ablation into its gain', () => {
+test('converged mode reports partial versus full projection and ignores retired scene ablations', () => {
   const partial = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 0.65 });
   assert.equal(partial.effective.projectionGain, 0.65);
   assert.equal(partial.effective.projection, 'partial', 'gain below 1 is reported as partial projection');
   const full = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1 });
   assert.equal(full.effective.projection, 'full');
   const bonfireHalf = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0.5 });
-  assert.equal(bonfireHalf.effective.projectionGain, 0.5, 'Bonfire ablation scales the converged gain');
-  assert.equal(bonfireHalf.effective.projection, 'partial');
+  assert.equal(bonfireHalf.effective.projectionGain, 1, 'retired Bonfire ablation cannot scale the converged gain');
+  assert.equal(bonfireHalf.effective.projection, 'full');
   const bonfireZero = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0 });
-  assert.equal(bonfireZero.effective.projectionGain, 0);
+  assert.equal(bonfireZero.effective.projectionGain, 1);
   const tallIgnoresAblation = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'tall_plume', bonfireProjection: 0.5 });
-  assert.equal(tallIgnoresAblation.effective.projectionGain, 1, 'ablation applies only to the Bonfire scene');
+  assert.equal(tallIgnoresAblation.effective.projectionGain, 1, 'old Tall input preserves the same projection gain');
   const legacy = core.resolvePressureSolverConfig({ projection: 0.65 });
   assert.equal(legacy.effective.projection, null);
   assert.match(index, /partial/, 'cockpit label vocabulary names partial projection');
@@ -367,7 +367,7 @@ test('the receipt reports disabled dispatch and the dispatch gate uses the same 
   assert.equal(zeroProjection.effective.projection, 'disabled');
   assert.equal(zeroProjection.effective.disabledReason, 'projection-zero');
   const bonfireZero = core.resolvePressureSolverConfig({ pressureSolver: 'converged', projection: 1, volumeScene: 'bonfire_plume', bonfireProjection: 0 });
-  assert.equal(bonfireZero.effective.dispatch, 'disabled');
+  assert.equal(bonfireZero.effective.dispatch, 'converged');
   const legacyOff = core.resolvePressureSolverConfig({ pressureIterations: 0, projection: 0.65 });
   assert.equal(legacyOff.effective.dispatch, 'disabled');
   assert.equal(legacyOff.effective.projection, null);

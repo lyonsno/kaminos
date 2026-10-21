@@ -2331,7 +2331,7 @@ async function main() {
         throw new Error(`liquid/fire effective route mismatch: ${compositionWitness?.effectiveRoute}`);
       }
       if (compositionWitness?.requestedVolumeScene !== 'tall_plume') throw new Error(`liquid/fire requested volume scene mismatch: ${compositionWitness?.requestedVolumeScene}`);
-      if (compositionWitness?.effectiveVolumeScene !== 'tall_plume') throw new Error(`liquid/fire effective volume scene mismatch: ${compositionWitness?.effectiveVolumeScene}`);
+      if (compositionWitness?.effectiveVolumeScene !== 'flame') throw new Error(`liquid/fire effective volume scene mismatch: ${compositionWitness?.effectiveVolumeScene}`);
       if (compositionWitness?.contactTransferEnabled !== true) throw new Error('physical liquid/fire transfer was not continuously enabled');
       if (compositionWitness?.sourcePrimitiveId !== 'finger-fluid-downstream-burner') throw new Error(`unexpected composition source geometry: ${compositionWitness?.sourcePrimitiveId}`);
       if (compositionWitness?.sameDevice !== true) throw new Error('liquid/fire composition did not preserve the same GPUDevice');

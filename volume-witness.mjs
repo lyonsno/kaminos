@@ -351,7 +351,7 @@ function expectedBonfireScalarNeighborhoodReadsPerCell(volumeScene) {
 }
 
 function expectedTallPlumeDetailCoherenceStrategy(volumeScene) {
-  return volumeScene === 'tall_plume'
+  return volumeScene === 'flame'
     ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
     : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
 }
@@ -361,7 +361,7 @@ function expectedTallPlumeDetailCoherenceExtraReadsPerCell() {
 }
 
 function expectedTallPlumeTransitionBandStrategy(volumeScene) {
-  return volumeScene === 'tall_plume'
+  return volumeScene === 'flame'
     ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
     : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
 }
@@ -485,19 +485,18 @@ function buildBoundaryFireReadbackEvidence(sample = {}, state = {}) {
 }
 
 function defaultPressureIterationsForScene(volumeScene) {
-  if (volumeScene === 'tall_plume') return 2;
-  return volumeScene === 'bonfire_plume' ? 8 : 4;
+  return 2;
 }
 
 function expectedTallPlumePressureIterationStrategy(volumeScene, pressureIterations) {
-  return volumeScene === 'tall_plume' && Number(pressureIterations) === 2
+  return volumeScene === 'flame' && Number(pressureIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
 }
 
 function normalizePressureStrategy(value, volumeScene) {
   const requested = String(value || 'global').toLowerCase();
-  return volumeScene === 'tall_plume' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
+  return volumeScene === 'flame' && requested === 'spatial_tiers' ? 'spatial_tiers' : 'global';
 }
 
 function normalizeVolumePressureMode(value) {
@@ -509,7 +508,7 @@ function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIter
   const normalized = normalizeVolumePressureMode(mode);
   switch (normalized) {
     case 'spatial-tiers':
-      return { pressureStrategy: volumeScene === 'tall_plume' ? 'spatial_tiers' : 'global', pressureIterations: volumeScene === 'tall_plume' ? 3 : fallbackIterations };
+      return { pressureStrategy: volumeScene === 'flame' ? 'spatial_tiers' : 'global', pressureIterations: volumeScene === 'flame' ? 3 : fallbackIterations };
     case 'global-p3':
       return { pressureStrategy: 'global', pressureIterations: 3 };
     case 'global-p2':
@@ -522,7 +521,7 @@ function pressureConfigForMode(mode, volumeScene, fallbackStrategy, fallbackIter
 }
 
 function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
-  return volumeScene === 'tall_plume' && pressureStrategy === 'spatial_tiers'
+  return volumeScene === 'flame' && pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
@@ -1438,7 +1437,7 @@ function canonicalSourceDefaults(mode) {
 const shouldApplyDefaultVolumeSmokeTallPreset =
   routeParams.get('kaminos_volume_smoke') === '1' &&
   !routeParams.has('settings_preset') &&
-  (!routeParams.has('volume_scene') || routeParams.get('volume_scene') === 'tall_plume') &&
+  (!routeParams.has('volume_scene') || ['flame', 'tall_plume'].includes(routeParams.get('volume_scene'))) &&
   !routeParams.has('volume_tall_preset') &&
   !routeParams.has('volume_canonical_preset');
 const defaultVolumeBasin = shouldApplyDefaultVolumeSmokeTallPreset
@@ -1452,9 +1451,7 @@ const expectedTallPlumePreset = Object.hasOwn(TALL_PLUME_OPERATOR_PRESETS, reque
 const tallPlumePreset = TALL_PLUME_OPERATOR_PRESETS[expectedTallPlumePreset]
   || (defaultVolumeBasin ? volumeBasinScenePreset(defaultVolumeBasin) : {});
 const requestedVolumeScene = routeParams.get('volume_scene') || tallPlumePreset.volumeScene || 'compact_plume';
-const expectedVolumeScene = Object.hasOwn(VOLUME_SCENE_PRESETS, requestedVolumeScene)
-  ? requestedVolumeScene
-  : 'compact_plume';
+const expectedVolumeScene = 'flame';
 const expectsCanonicalPlumeProof = expectedVolumeScene === 'canonical_plume';
 const fieldSliceOut = args.has('--field-slice')
   ? resolve(args.get('--field-slice') || out.replace(/\.png$/i, '.field-slice.png'))
@@ -1462,8 +1459,8 @@ const fieldSliceOut = args.has('--field-slice')
     ? resolve(out.replace(/\.png$/i, '.field-slice.png'))
     : '';
 const scenePreset = {
-  ...(VOLUME_SCENE_PRESETS[expectedVolumeScene] || {}),
-  ...(tallPlumePreset.volumeScene === expectedVolumeScene ? tallPlumePreset : {}),
+  ...VOLUME_SCENE_PRESETS.tall_plume,
+  ...tallPlumePreset,
 };
 const requestedCanonicalMacroPreset = routeParams.get('volume_canonical_preset') || '';
 const expectedCanonicalMacroPreset = Object.hasOwn(CANONICAL_VOLUME_MACRO_PRESETS, requestedCanonicalMacroPreset)
@@ -1538,7 +1535,7 @@ let expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : ex
 let expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-let expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+let expectedTallPlumePressureTarget = expectedVolumeScene === 'flame' && !expectedSpatialPressureTiers ? 2 : 0;
 let expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
 let expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
@@ -1669,7 +1666,7 @@ const expectedQuenchVaporStrength = expectedLifecycleEffect === 'snuff'
   : 0;
 const expectedFlameQuenchModel = expectedQuenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
 const expectsSnuffVisualEvidence = expectedLifecycleEffect === 'snuff' && expectedQuenchVaporStrength > 0;
-const expectsFuelStarvedTallPlume = expectedVolumeScene === 'tall_plume' && expectedReactionFuelScale <= 0.001;
+const expectsFuelStarvedTallPlume = expectedVolumeScene === 'flame' && expectedReactionFuelScale <= 0.001;
 function expectedBonfireAblationParam(name, fallback = 1, max = 1.5) {
   const requested = Number(routeParams.get(name));
   return routeParams.has(name) && Number.isFinite(requested)
@@ -1715,12 +1712,12 @@ expectedPressureProjectionIterations = expectedSpatialPressureTiers ? 3 : expect
 expectedTallPlumePressureStrategy = expectedSpatialPressureTiers
   ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE
   : expectedTallPlumePressureIterationStrategy(expectedVolumeScene, expectedPressureIterations);
-expectedTallPlumePressureTarget = expectedVolumeScene === 'tall_plume' && !expectedSpatialPressureTiers ? 2 : 0;
+expectedTallPlumePressureTarget = expectedVolumeScene === 'flame' && !expectedSpatialPressureTiers ? 2 : 0;
 expectedTallPlumePressureTierStrategyValue = expectedTallPlumePressureTierStrategy(expectedVolumeScene, expectedPressureStrategy);
 expectedPressureProjectionReadStrategy = expectedSpatialPressureTiers
   ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
   : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'tall_plume' ? 1 : 0;
+const expectedDetailScaleArtifactQuarantine = expectedVolumeScene === 'flame' ? 1 : 0;
 const expectedVisibleDetailOverlayGain = expectedDetailScaleArtifactQuarantine ? 0.35 : 1;
 const expectedExternalEmitterMode = routeParams.get('volume_external_emitters') || '';
 
@@ -2841,7 +2838,7 @@ async function main() {
     assert.ok(Math.abs((state.detailScale ?? 0) - expectedDetailScale) < 0.001, 'effective detail scale state did not match route/control');
     assert.ok(Math.abs((state.detailScaleArtifactQuarantine ?? 0) - expectedDetailScaleArtifactQuarantine) < 0.001, 'detail-scale artifact quarantine state did not match volume scene');
     assert.ok(Math.abs((state.visibleDetailOverlayGain ?? 0) - expectedVisibleDetailOverlayGain) < 0.001, 'visible detail overlay gain did not match detail quarantine policy');
-    if (expectedVolumeScene === 'tall_plume') {
+    if (expectedVolumeScene === 'flame') {
       assert.equal(state.tallPlumeDetailFrequencySource, 'fire-scale-decoupled-v0', 'tall-plume detail frequency was not decoupled from Fire Scale');
       assert.equal(state.tallPlumeFlameCutoffContract, 'tall-plume-speed-cutoff-decoupled-v0', 'tall-plume flame cutoff/speed contract was not active');
       assert.equal(state.tallPlumeFlowShelfContract, 'tall-plume-flow-shelf-mitigated-v0', 'tall-plume flow-rate shelf mitigation contract was not active');
@@ -3176,7 +3173,7 @@ async function main() {
         boundaryFireReadbackEvidence,
       })}`);
     }
-    if (expectedVolumeScene === 'tall_plume') {
+    if (expectedVolumeScene === 'flame') {
       if (
         !Number.isFinite(sample.simReadback.fuelMean) ||
         !Number.isFinite(sample.simReadback.reactionMean) ||

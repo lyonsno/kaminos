@@ -11,13 +11,11 @@
 /* Horizontal trackpad gestures belong to the editor, never browser history. */
 html, body { overscroll-behavior-x: none; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
-
 /* Sidebar */
 #sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; contain: layout paint; overscroll-behavior: contain; scrollbar-gutter: stable; isolation: isolate; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
 h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #fff; letter-spacing: -0.3px; }
 .subtitle { font-size: 11px; color: #555; margin-bottom: 16px; font-family: 'SF Mono', 'Fira Code', monospace; }
 h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
@@ -1299,15 +1297,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div id="basin-drive-state" role="status" aria-live="polite">idle</div>
       </div>
     </div>
-    <div class="slider-row">
-      <span class="slider-label">Scene</span>
+    <div class="slider-row" data-volume-ui-retired="volume-scene" data-volume-schema-retired hidden>
+      <span class="slider-label">Simulator</span>
       <select id="volume-scene" class="select-input">
-        <option value="tall_plume" selected>Tall plume (prototype)</option>
-        <option value="compact_plume">Compact plume (superseded)</option>
-        <option value="canonical_plume">Canonical plume (superseded)</option>
-        <option value="bonfire_plume">Bonfire plume (superseded)</option>
+        <option value="flame" selected>Flame</option>
       </select>
-      <span class="slider-val" id="volume-scene-val">prototype</span>
+      <span class="slider-val" id="volume-scene-val">Flame</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Freeze</span>
@@ -2258,17 +2253,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-pressure-tier-hero-max" min="0.02" max="0.98" step="0.01" value="0.22">
       <span class="slider-val" id="volume-pressure-tier-hero-max-val">0.22</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-spread" data-volume-schema-retired hidden>
       <span class="slider-label">Can Spread</span>
       <input type="range" id="volume-canonical-spread" min="0" max="1.6" step="0.05" value="1">
       <span class="slider-val" id="volume-canonical-spread-val">1.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-centerline" data-volume-schema-retired hidden>
       <span class="slider-label">Can Center</span>
       <input type="range" id="volume-canonical-centerline" min="0" max="1.8" step="0.05" value="1">
       <span class="slider-val" id="volume-canonical-centerline-val">1.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-body-balance" data-volume-schema-retired hidden>
       <span class="slider-label">Can Body</span>
       <input type="range" id="volume-canonical-body-balance" min="0" max="1.5" step="0.05" value="0">
       <span class="slider-val" id="volume-canonical-body-balance-val">0.00</span>
@@ -2943,7 +2938,7 @@ import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contra
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
-import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
+import { DEFAULT_VOLUME_SCENE, normalizeVolumeScene, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   describeVolumeSettingsPresetAppliedDifferences,
   describeVolumeSettingsPartialSave,
@@ -13910,15 +13905,15 @@ async function activateFingerFluidPyroComposition() {
   };
   compositionSourcePrimitive.simulation = {
     ...compositionSourcePrimitive.simulation,
-    sourceRadius: VOLUME_SCENE_PRESETS.tall_plume.inputRadius,
-    flowRate: VOLUME_SCENE_PRESETS.tall_plume.flowRate,
+    sourceRadius: VOLUME_SCENE_PRESETS.flame.inputRadius,
+    flowRate: VOLUME_SCENE_PRESETS.flame.flowRate,
   };
   volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
   volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
   setFingerFluidPyroCompositionPilotEnabled(false);
   volumePrototype.setControls({
     volumeScene: 'tall_plume',
-    ...VOLUME_SCENE_PRESETS.tall_plume,
+    ...VOLUME_SCENE_PRESETS.flame,
     resolution: 96,
     renderScale: 0.85,
     fireRenderMode: 'stock',
@@ -15436,60 +15431,8 @@ const FIRESIM_LOOK_FIELDS = [
 ];
 
 const VOLUME_SCENE_PRESETS = {
-  canonical_plume: {
-    label: 'simple',
-    density: 5.40,
-    fire: 0.00,
-    radiance: 0.00,
-    absorption: 1.35,
-    glow: 0.00,
-    smoke: 2.60,
-    curl: 0.90,
-    microdetail: 0.00,
-    interfaceShred: 0.00,
-    fireLicks: 0.00,
-    projection: 0.65,
-    speed: 4.20,
-    inputRadius: 0.12,
-    flowRate: 0.45,
-    fireScale: 0.86,
-    detailScale: 0.75,
-    plumeHeight: 1.45,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  compact_plume: {
-    label: 'compact',
-    density: 4.20,
-    fire: 1.40,
-    radiance: 1.65,
-    absorption: 0.85,
-    glow: 1.15,
-    smoke: 2.80,
-    curl: 2.65,
-    microdetail: 2.50,
-    interfaceShred: 2.50,
-    fireLicks: 1.65,
-    projection: 0.65,
-    speed: 5.00,
-    inputRadius: 0.12,
-    flowRate: 0.15,
-    fireScale: 0.86,
-    detailScale: 1.75,
-    plumeHeight: 1.45,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  tall_plume: {
-    label: 'tall',
+  flame: {
+    label: 'Flame',
     density: 6.00,
     fire: 1.15,
     radiance: 3.00,
@@ -15506,32 +15449,6 @@ const VOLUME_SCENE_PRESETS = {
     flowRate: 0.45,
     fireScale: 0.35,
     detailScale: 3.20,
-    plumeHeight: 2.20,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  bonfire_plume: {
-    label: 'bonfire',
-    density: 4.80,
-    fire: 0.95,
-    radiance: 1.90,
-    absorption: 1.45,
-    glow: 1.05,
-    smoke: 2.80,
-    curl: 3.40,
-    microdetail: 2.50,
-    interfaceShred: 1.85,
-    fireLicks: 4.25,
-    projection: 0.85,
-    speed: 5.00,
-    inputRadius: 0.16,
-    flowRate: 0.24,
-    fireScale: 0.78,
-    detailScale: 2.75,
     plumeHeight: 2.20,
     windStrength: 0.00,
     windAngle: 0,
@@ -16654,10 +16571,7 @@ function normalizeVolumePressureMode(value) {
 }
 
 function defaultVolumePressureIterationsForScene(scene) {
-  const normalized = String(scene || '').toLowerCase();
-  if (normalized === 'tall_plume') return 2;
-  if (normalized === 'bonfire_plume') return 8;
-  return 4;
+  return 2;
 }
 
 function volumePressureModeFromRoute(strategy, iterations) {
@@ -16748,6 +16662,7 @@ function volumeAperturePatternValue(select) {
 }
 
 function setVolumeControlValue(id, value) {
+  if (id === 'volume-scene') value = normalizeVolumeScene(value);
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
     return;
@@ -16902,21 +16817,6 @@ function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
   }
 }
 
-function syncCanonicalVolumeControlVisibility(volumeScene) {
-  const canonical = volumeScene === 'canonical_plume';
-  for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
-    const row = volumeControlRow(id);
-    if (row) row.style.display = canonical ? 'none' : '';
-  }
-  for (const id of NON_CANONICAL_VOLUME_HIDDEN_CONTROLS) {
-    const row = volumeControlRow(id);
-    if (row) row.style.display = canonical ? '' : 'none';
-  }
-  for (const id of CANONICAL_VOLUME_HIDDEN_SECTIONS) {
-    const section = document.getElementById(id);
-    if (section) section.style.display = canonical ? 'none' : '';
-  }
-}
 
 function volumeSceneControlId(key) {
   const explicit = {
@@ -16934,7 +16834,7 @@ function volumeSceneControlId(key) {
 
 function applyVolumeScenePreset(scene, options = {}) {
   supersedeVolumeRebuildHolds();
-  const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : DEFAULT_VOLUME_SCENE;
+  const normalizedScene = DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
   setVolumeControlValue('volume-scene', normalizedScene);
   for (const [key, value] of Object.entries(preset)) {
@@ -18863,7 +18763,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
-  document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
+  document.getElementById('volume-scene-val').textContent = 'Flame';
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
@@ -19016,7 +18916,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
-  syncCanonicalVolumeControlVisibility(c.volumeScene);
   syncVolumeCockpitControlVisibility(document);
   syncRayBudgetGamutFromControls();
 }
@@ -19304,9 +19203,7 @@ function refreshVolumeReadout() {
   const sceneReceipt = s.volumeSceneAuthority || volumeSceneReceipt(s.volumeScene);
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-scene-state').textContent = sceneReceipt.effective;
-  document.getElementById('volume-scene-authority').textContent = sceneReceipt.status === 'prototype'
-    ? `${sceneReceipt.status} / ${sceneReceipt.authority}`
-    : `${sceneReceipt.status} -> ${sceneReceipt.supersededBy}`;
+  document.getElementById('volume-scene-authority').textContent = sceneReceipt.migrationNote || sceneReceipt.authority;
   const settingsPresetButton = document.getElementById('settings-preset-save');
   if (settingsPresetButton) {
     settingsPresetButton.disabled = false;
@@ -19364,8 +19261,7 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
-  const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
-  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  const frame = DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
   controls.update();
@@ -19591,7 +19487,7 @@ async function initKaminosVolumeRoute() {
   const shouldApplyDefaultVolumeSmokeTallPreset =
     params.get('kaminos_volume_smoke') === '1' &&
     !params.has('settings_preset') &&
-    (!params.get('volume_scene') || params.get('volume_scene') === 'tall_plume') &&
+    (!params.get('volume_scene') || ['flame', 'tall_plume'].includes(params.get('volume_scene'))) &&
     !params.get('volume_tall_preset') &&
     !params.get('volume_canonical_preset');
   if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
@@ -19611,7 +19507,7 @@ async function initKaminosVolumeRoute() {
   const routeVolumeScene = params.get('volume_scene');
   const routeTallPlumeOperatorPreset = params.get('volume_tall_preset');
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
-  if (routeVolumeScene && !(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume')) {
+  if (routeVolumeScene && !shouldApplyDefaultVolumeSmokeTallPreset) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
   }
   if (routeTallPlumeOperatorPreset) {

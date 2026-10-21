@@ -37,9 +37,8 @@ export function detailForceContributionReceipt(controls = {}) {
   };
   const requestedMask = detailForceContributionMask(requested);
   const masterEnabled = controls.proceduralDetailForces !== false;
-  const detailSuppressedByScene = controls.volumeScene === 'tall_plume';
-  const sceneGain = controls.volumeScene === 'bonfire_plume'
-    ? Math.max(0, Math.min(1.5, controls.bonfireDetailForces ?? 1)) : 1;
+  const detailSuppressedByScene = true;
+  const sceneGain = 1;
   return {
     requested, terms: [...TERMS], requestedMask, masterEnabled, detailSuppressedByScene, sceneGain,
     effectiveMask: requestedMask.map((gain, i) => masterEnabled && !(i === 0 && detailSuppressedByScene) ? gain * sceneGain : 0),

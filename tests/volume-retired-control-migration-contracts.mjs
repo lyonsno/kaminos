@@ -18,7 +18,7 @@ assert.deepEqual(retired, {
   type: 'checkbox',
 });
 
-const activeDescriptor = schema.controls.find(control => control.key === 'volume-scene');
+const activeDescriptor = schema.controls.find(control => control.key === 'emitter-assay-family');
 const hash = '7'.repeat(64);
 function parentPresetArtifact(retiredEntry = {}) {
   return {
@@ -32,7 +32,7 @@ function parentPresetArtifact(retiredEntry = {}) {
       kind: 'settings-preset',
       schemaIdentity: schema.identity,
       savedAt: '2026-09-05T18:00:00Z',
-      route: 'http://kaminos.invalid/?kaminos_volume_smoke=1&volume_scene=bonfire&volume_procedural_transport_slip=true',
+      route: 'http://kaminos.invalid/?kaminos_volume_smoke=1&volume_emitter_family=bonfire&volume_procedural_transport_slip=true',
       domControls: {
         [activeDescriptor.key]: { ...activeDescriptor, id: activeDescriptor.key, value: 'bonfire' },
         [retired.key]: { ...retired, id: retired.key, value: true, ...retiredEntry },

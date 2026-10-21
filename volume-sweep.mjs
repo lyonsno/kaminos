@@ -657,16 +657,16 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedTallPlumePressureIterationStrategy = effective.volumeScene === 'tall_plume' && Number(effective.pressureProjectionIterations) === 2
+  const expectedTallPlumePressureIterationStrategy = effective.volumeScene === 'flame' && Number(effective.pressureProjectionIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
-  const expectedTallPlumePressureTierStrategy = effective.volumeScene === 'tall_plume' && effective.pressureStrategy === 'spatial_tiers'
+  const expectedTallPlumePressureTierStrategy = effective.volumeScene === 'flame' && effective.pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
   const expectedPressureProjectionReadStrategy = expectedTallPlumePressureTierStrategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
     : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'tall_plume' && expectedTallPlumePressureTierStrategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY ? 2 : 0;
+  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'flame' && expectedTallPlumePressureTierStrategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY ? 2 : 0;
   if (
     ledger.tallPlumePressureIterationStrategy !== expectedTallPlumePressureIterationStrategy ||
     Number(ledger.tallPlumePressureIterationTarget) !== expectedTallPlumePressureIterationTarget ||
@@ -832,7 +832,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedDetailCoherenceStrategy = effective.volumeScene === 'tall_plume'
+  const expectedDetailCoherenceStrategy = effective.volumeScene === 'flame'
     ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
     : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
   if (
@@ -856,7 +856,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedTransitionBandStrategy = effective.volumeScene === 'tall_plume'
+  const expectedTransitionBandStrategy = effective.volumeScene === 'flame'
     ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
     : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
   if (

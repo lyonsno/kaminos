@@ -161,7 +161,6 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Motion', view:'motion', open:true, fields:[
     ['volume-speed','Speed'], ['volume-plume-height','Plume height'],
     ['volume-curl','Vorticity'], ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Phased sway'],
-    ['volume-canonical-spread','Spread'], ['volume-canonical-centerline','Centerline'], ['volume-canonical-body-balance','Body balance'],
   ] },
   { name:'Wind', view:'motion', open:true, fields:[
     ['volume-wind-model','Wind model'], ['volume-wind-strength','Wind strength'],

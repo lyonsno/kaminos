@@ -320,7 +320,7 @@ export function collectVolumeCockpitControlElements(documentRef) {
     const root = documentRef.getElementById(rootId);
     if (!root) throw new Error(`volume-cockpit-control-root-missing:${rootId}`);
     elements.push(...[...root.querySelectorAll(VOLUME_CONTROL_SELECTOR)]
-      .filter(control => !control.closest('[data-volume-cockpit-layout-ui]')));
+      .filter(control => !control.closest('[data-volume-cockpit-layout-ui], [data-volume-schema-retired]')));
   }
   return elements;
 }

@@ -22,9 +22,9 @@ assert.deepEqual(detailForceContributionMask({ micro: false, shred: true, fine: 
 assert.deepEqual(detailForceContributionMask({ micro: false, shred: false, fine: false }), [1, 0, 0, 0]);
 assert.deepEqual(detailForceContributionReceipt({ proceduralDetailForces: false }).effectiveMask, [0, 0, 0, 0]);
 assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'tall_plume' }).effectiveMask, [0, 1, 1, 1]);
-assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'bonfire_plume', bonfireDetailForces: 0 }).effectiveMask, [0, 0, 0, 0]);
-assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'bonfire_plume', bonfireDetailForces: 0.5 }).effectiveMask, [0.5, 0.5, 0.5, 0.5]);
-assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'bonfire_plume' }).effectiveMask, [1, 1, 1, 1]);
+for (const bonfireDetailForces of [0, 0.5, 1]) {
+  assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'bonfire_plume', bonfireDetailForces }).effectiveMask, [0, 1, 1, 1], 'retired scene ablations cannot change the surviving simulator');
+}
 assert.equal(normalizeFineBreakupLocalization(), 0, 'the default preserves the legacy broad Fine Breakup path');
 assert.equal(normalizeFineBreakupLocalization(-1), 0);
 assert.equal(normalizeFineBreakupLocalization(0.625), 0.625);
@@ -55,7 +55,7 @@ assert.match(
 );
 assert.match(
   core,
-  /fn fieldDerivedFineScaleBreakup\([\s\S]*?fineBreakupLocalization: f32[\s\S]*?materialInterfaceGradient\(c\)[\s\S]*?bonfireReferenceFrontGradient\(c\)[\s\S]*?readFrontField\(c\)[\s\S]*?curlShearSupport[\s\S]*?mix\(1\.0, localizedSupport, fineBreakupLocalization\)/,
+  /fn fieldDerivedFineScaleBreakup\([\s\S]*?fineBreakupLocalization: f32[\s\S]*?materialInterfaceGradient\(c\)[\s\S]*?combustionFrontGradient\(c\)[\s\S]*?readFrontField\(c\)[\s\S]*?curlShearSupport[\s\S]*?mix\(1\.0, localizedSupport, fineBreakupLocalization\)/,
   'localized Fine Breakup support must be built from reaction-front, material-interface, and curl-shear evidence before blending with the untouched broad control',
 );
 assert.doesNotMatch(

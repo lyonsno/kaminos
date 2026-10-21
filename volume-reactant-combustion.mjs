@@ -302,7 +302,6 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   };
   const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: REACTION_LAW_AUTHORED } });
   if (lawRequested !== REACTION_LAW_REACTANT) return off('reaction-law-is-authored');
-  if (requested.volumeScene !== 'tall_plume') return off('reactant-law-requires-tall-plume-scene');
   if (!['inflow-boundary', 'immersed-source'].includes(requested.emitterSourceLaw)) return off('reactant-law-requires-inflow-or-immersed-source');
   // The oxidizer rides the fuel's characteristic, which exists only under the
   // common-gas (or MacCormack) transport; legacy per-layer lifts would carry
