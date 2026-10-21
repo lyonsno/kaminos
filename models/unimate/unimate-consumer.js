@@ -12,7 +12,9 @@
 //
 // asset is a rigged .glb ({ bytes, name, source?, restRotation?, labels? }; prepared as UniMate's rig_preprocess
 // would, labels from UniMate's own rule labeller unless given) or a published skeleton ({ skeleton:
-// 'dog' }). The result's glb is the animated asset: the skeleton at UniMate's canonical rest, the
+// 'dog' }), or prepared conditioning ({ skeletonData: { b, a, mesh? } }, the same bundle accepted
+// by createUniMateGenerator). Prepared conditioning lets an editor retain its named graph and
+// refresh geometry without exporting and relabelling a GLB. The result's glb is the animated asset: the skeleton at UniMate's canonical rest, the
 // motion's rotation and root tracks at 30 fps, and for a rig its skinned mesh, materials and
 // textures bound to that skeleton (unimate-export-glb.js). Stages report what they are doing, with
 // no invented percentages: download (bytes), label, encode, solve (evaluations and solver time t),
@@ -45,10 +47,11 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
   const set = (phase, stage = null, detail = null, progress = null) => Object.assign(state, { phase, stage, detail, progress });
   let generator = null, labeler = null, running = null;
 
-  async function ensureModel() {
+  async function ensureModel(skeletonData = null) {
     if (generator) return generator;
     set('loading', 'download', 'model and text encoder');
-    generator = await createUniMateGenerator({ device, session, beginRun, weightsBase, t5Base, bundleBase: `${skeletonsBase}${defaultSkeleton}/`,
+    generator = await createUniMateGenerator({ device, session, beginRun, weightsBase, t5Base, skeletonData,
+      bundleBase: skeletonData ? null : `${skeletonsBase}${defaultSkeleton}/`,
       onStatus: s => { if (s.phase === 'load') set('loading', 'download', s.detail, state.progress); },
       onBytes: (loaded, total) => set('loading', 'download', 'model and text encoder', { bytes: loaded, totalBytes: total }) });
     return generator;
@@ -57,6 +60,9 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
   async function run({ asset, prompt, seed = 1, onProgress = () => {} } = {}) {
     if (running) throw new Error('UniMate is already running');
     if (!prompt) throw new Error('a prompt is needed');
+    const prepared = asset != null && Object.hasOwn(asset, 'skeletonData');
+    if (prepared && (asset.bytes != null || asset.glb != null || asset.skeleton != null)) throw new Error('skeletonData must be the only skeleton input');
+    if (prepared && (!asset.skeletonData?.b?.skeleton || !asset.skeletonData?.a)) throw new Error('skeletonData needs a bundle index b and arrays a');
     const report = (phase, stage, detail = null, progress = null) => { set(phase, stage, detail, progress); onProgress({ ...state }); };
     running = { stopped: false };
     state.error = null;
@@ -67,10 +73,15 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       if (memoryBudgetBytes !== null && estimate.total > memoryBudgetBytes) refuse(`the budget is ${Math.floor(memoryBudgetBytes / 1e6)} MB`);
       // The largest single tensor (the T5 shared embedding) must fit one buffer binding.
       if (device.limits && device.limits.maxBufferSize < estimate.largestBuffer) refuse(`this device's largest buffer is ${Math.floor(device.limits.maxBufferSize / 1e6)} MB`);
-      const gen = await ensureModel();
+      const wasLoaded = Boolean(generator);
+      const gen = await ensureModel(prepared ? asset.skeletonData : null);
       let rig = null, labels = null, data = null;
       const bytes = asset?.bytes ?? asset?.glb ?? null;
-      if (bytes) {
+      if (prepared) {
+        data = asset.skeletonData;
+        report('running', 'encode', `prepared skeleton ${data.b.skeleton.name}`);
+        if (wasLoaded) await gen.useSkeletonData(data);
+      } else if (bytes) {
         report('running', 'label', asset.name ?? 'rig');
         rig = turnRest(readRig(bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
           asset.restRotation ?? null);
@@ -93,7 +104,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
         motion: result.motion, mesh: data?.mesh ?? null,
         extras: { generator: 'UniMate WebGPU (Kaminos)', prompt, seed, skeleton: sk.name, model: 'UniMate v3 (CC BY-NC 4.0)' } });
       const out = {
-        glb, motion: result.motion, skeleton: sk,
+        glb, motion: result.motion, skeleton: sk, restFrame: data?.restFrame ? structuredClone(data.restFrame) : null,
         rig: rig ? { names: rig.names, pruned: rig.pruned, labels: labels.clean, face: labels.face, restRotation: rig.restRotation ?? null, mesh: Boolean(data?.mesh) } : null,
         report: { prompt, seed, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
       };

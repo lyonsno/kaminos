@@ -8,7 +8,7 @@ export { createUniMateGenerator, UNIMATE_ROUTE_ID, gaussianNoise, fetchBytes } f
 export { createUniMateConsumer, unimateMemoryEstimate, HUB } from './unimate-consumer.js';
 export { requestUniMateDevice } from './unimate-denoiser.js';
 export { decodeUniMateMotion, groundedOffsets } from './unimate-decode.js';
-export { readRig, turnRest, buildSkeletonBundle, quatFromTurns } from './unimate-rig-import.js';
+export { readRig, turnRest, buildSkeletonBundle, reconditionSkeletonBundle, quatFromTurns } from './unimate-rig-import.js';
 export { parseGlb, importRig, readSkeleton } from './unimate-rig-glb.js';
 export { createLabeler, LABELER_URL, PYODIDE_URL, PYODIDE_VERSION } from './unimate-rig-labels.js';
 export { skeletonConditioning, canonicalizeRest, canonicalTransform, bfsOrder, topology, spectralFeatures, UNIMATE_STATS } from './unimate-rig-features.js';

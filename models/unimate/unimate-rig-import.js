@@ -91,3 +91,37 @@ export async function buildSkeletonBundle(rig, labels, { embed, motion, name = '
     jointRelations: c.jointRelations, mean: c.mean, std: c.std, restPositions: c.restPositions };
   return { b, a, mesh };
 }
+
+// Refresh an edited rest pose with the SAME named graph as a prepared source bundle.
+// Preserve its observed spectral basis and text embeddings: changing proportions does not
+// require relabelling or another T5 pass. positions are local authoring-space heads, Y up;
+// scene object placement is the caller's presentation state and is not an input here.
+// A changed graph goes through buildSkeletonBundle instead.
+export function reconditionSkeletonBundle(source, { jointNames, parents, positions, name = source.b.skeleton.name,
+  facing = { forward: [0, 0, 1] } }) {
+  const sk = source.b.skeleton, J = sk.joints;
+  if (!Array.isArray(jointNames) || !Array.isArray(parents) || jointNames.length !== J || parents.length !== J ||
+      jointNames.some((n,j) => n !== sk.jointNames[j]) || parents.some((p,j) => p !== sk.parents[j])) {
+    throw new Error('edited rest must retain the source joint names, order and parents');
+  }
+  if (J < 2 || J > MAX_JOINTS || parents.some((p,j) => !Number.isInteger(p) || (j === 0 ? p !== -1 : p < 0 || p >= j))) {
+    throw new Error('source skeleton needs a root-first tree within the model joint capacity');
+  }
+  if (!Array.isArray(positions) || positions.length !== J || positions.some(p => !Array.isArray(p) || p.length !== 3 || !p.every(Number.isFinite))) {
+    throw new Error('edited rest needs one finite XYZ head per joint');
+  }
+  const transform = canonicalTransform(positions, parents, facing);
+  if (!Number.isFinite(transform.scale) || transform.scale <= 0 || !Number.isFinite(transform.yaw)) throw new Error('edited rest has no finite canonical frame');
+  const features = skeletonConditioning({ rest: canonicalizeRest(positions, parents, facing), parents });
+  for (const [key, length] of [['spectral', J * 8], ['jointNamesEmb', J * 768]]) {
+    const values = source.a[key];
+    if (!(values instanceof Float32Array) || values.length !== length || !values.every(Number.isFinite)) throw new Error(`source ${key} is incomplete`);
+    features[key] = values.slice();
+  }
+  const { apply, ...restFrame } = transform;
+  return {
+    b: { schema: 'kaminos.unimate.demo-bundle.v0', skeleton: { ...structuredClone(sk), name },
+      motionLength: source.b.motionLength, outputTimes: structuredClone(source.b.outputTimes), prompts: [] },
+    a: features, restFrame,
+  };
+}
