@@ -272,7 +272,7 @@ assert.throws(
 );
 
 const indexedPackedAuthority = core.replace(
-  'u.canonical_render_motion_controls.x',
+  'u.canonical_render_motion_controls.w',
   'u.canonical_render_motion_controls[1]',
 );
 assert.notEqual(indexedPackedAuthority, core, 'the indexed packed-component false-closure mutation must alter source');

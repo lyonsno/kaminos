@@ -235,3 +235,27 @@ assert.match(save, /result\.partial[\s\S]*describeVolumeSettingsPartialSave\(res
 assert.match(save, /result\.partial[\s\S]*await refreshVolumeSettingsPresetList\(result\.sharedPublication\.presetId\)[\s\S]*partialSave = true/, 'after a partial save the picker shows what the library now holds');
 assert.match(save, /error\.partialSave \? 'PRESET SAVE PARTIAL' : 'PRESET SAVE FAILED'/, 'the status distinguishes a partial save');
 console.log('volume settings projection receipt contracts passed');
+
+for (const requested of ['tall_plume', 'canonical_plume', 'bonfire_plume']) {
+  for (const serverProjected of [true, false]) {
+    const source = currentDocument(serverProjected ? {
+      retiredControlsStripped: [{ axis: 'basin', id: 'volume-scene', param: 'volume_scene', value: requested }],
+    } : null);
+    if (!serverProjected) {
+      source.preset.domControls['volume-scene'] = { id: 'volume-scene', param: 'volume_scene', tagName: 'SELECT', type: 'select-one', value: requested };
+      source.preset.route += '&volume_scene=' + requested;
+      source.preset.controlCount++;
+      source.controlCount++;
+    }
+    const original = JSON.stringify(source);
+    const migrated = validateVolumeSettingsPresetDocument(source, null, schema);
+    assert.equal(migrated.serverProjection.sceneMigration?.requested, requested);
+    assert.equal(migrated.serverProjection.sceneMigration?.effective, 'flame');
+    const status = describeVolumeSettingsPresetProjection(migrated.serverProjection);
+    assert.match(status.text, new RegExp(requested + '.*Flame'));
+    assert.equal(status.warning, requested !== 'tall_plume');
+    if (requested !== 'tall_plume') assert.match(status.text, /Flame dynamics/);
+    assert.deepEqual(migrated.preset.domControls, currentDocument(null).preset.domControls);
+    assert.equal(JSON.stringify(source), original, 'loading never rewrites the source basin');
+  }
+}

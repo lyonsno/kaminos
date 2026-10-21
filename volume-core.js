@@ -16664,7 +16664,7 @@ export function createKaminosVolumePrototype({
     const mainFluidKernelStrategy = fireLickBreakupEnabled
       ? MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP
       : MAIN_FLUID_KERNEL_STRATEGY_ZERO_FIRE_LICK_BYPASS;
-    const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 2 : 0;
+    const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled ? 1 : 0;
     const mainFluidLocalProjectionStrategy = MAIN_FLUID_LOCAL_PROJECTION_STRATEGY_STAGED_PRESSURE_ONLY;
     const mainFluidLocalProjectionDivergenceEvaluationsPerCell = 0;
     const bonfireCombustionFieldActive = scene === 'bonfire_plume';

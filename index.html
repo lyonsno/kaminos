@@ -16662,7 +16662,13 @@ function volumeAperturePatternValue(select) {
 }
 
 function setVolumeControlValue(id, value) {
-  if (id === 'volume-scene') value = normalizeVolumeScene(value);
+  if (id === 'volume-scene') {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.dataset.volumeSceneRequest = String(value);
+    select.value = normalizeVolumeScene(value);
+    return;
+  }
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
     return;
@@ -16836,7 +16842,7 @@ function applyVolumeScenePreset(scene, options = {}) {
   supersedeVolumeRebuildHolds();
   const normalizedScene = DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
-  setVolumeControlValue('volume-scene', normalizedScene);
+  setVolumeControlValue('volume-scene', scene);
   for (const [key, value] of Object.entries(preset)) {
     if (key === 'label') continue;
     setVolumeControlValue(volumeSceneControlId(key), typeof value === 'number' ? value.toFixed(2) : value);
@@ -17250,6 +17256,8 @@ function describeFlameSettingsProblems() {
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
   const basin = window.__kaminosFlameBasinClampReport;
   if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
+  const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration;
+  if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
   return { text: parts.join(' || '), warning: parts.length > 0 };
 }
 

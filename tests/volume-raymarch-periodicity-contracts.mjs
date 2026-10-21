@@ -59,7 +59,7 @@ assert.match(
 );
 assert.match(
   raymarch,
-  /let\s+visibleDetailOverlayGain\s*=\s*mix\(1\.0, 0\.35, detailScaleArtifactQuarantine\);/,
+  /let\s+visibleDetailOverlayGain\s*=\s*\(0\.35\);/,
   'transported detail must preserve the inherited tall-plume amplitude quarantine',
 );
 assert.match(

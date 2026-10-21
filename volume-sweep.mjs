@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { normalizeVolumeScene } from './volume-scene-ontology.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -115,28 +116,18 @@ const COMPACT_MATRIX_SCENARIOS = [
   {
     id: 'tall-plume-scale',
     label: 'Tall Plume Scale',
-    volumeScene: 'tall_plume',
+    volumeScene: 'flame',
     simGrid: 128,
     raySteps: 96,
     renderScale: 0.85,
     adaptiveRays: 0.65,
     occupancySkip: 0.50,
   },
-  {
-    id: 'bonfire-plume-scale',
-    label: 'Bonfire Plume Scale',
-    volumeScene: 'bonfire_plume',
-    simGrid: 128,
-    raySteps: 96,
-    renderScale: 0.85,
-    adaptiveRays: 0.65,
-    occupancySkip: 0.45,
-  },
 ];
 
 const TALL_PLUME_PERFORMANCE_BASE = {
   performanceMatrixId: PERFORMANCE_MATRIX_ID,
-  volumeScene: 'tall_plume',
+  volumeScene: 'flame',
   tallPreset: 'operator_fire_0622',
   reactionFuel: 1,
   density: 3.05,
@@ -496,7 +487,8 @@ function checkNumber(checks, run, effective, runKey, effectiveKey = runKey, epsi
 
 function checkExact(checks, run, effective, runKey, effectiveKey = runKey) {
   if (run[runKey] === undefined) return;
-  if (String(effective[effectiveKey]) !== String(run[runKey])) {
+  const expected = runKey === 'volumeScene' ? normalizeVolumeScene(run[runKey]) : run[runKey];
+  if (String(effective[effectiveKey]) !== String(expected)) {
     throwSweepFailure('stale-default-config', 'validation', `${runKey} requested ${run[runKey]} but effective ${effectiveKey} was ${effective[effectiveKey]}`, {
       scenarioId: run.id,
       runKey,

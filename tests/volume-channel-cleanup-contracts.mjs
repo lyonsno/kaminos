@@ -19,7 +19,7 @@ test('density is derived from the material and micro slots by one shared law, an
   assert.match(body, /return clamp\(max\(material\.x \* 1\.08 \+ microLayer\.x \* 0\.08, material\.y \* 0\.42 \+ material\.w \* 0\.18 \+ microLayer\.y \* 0\.20 \+ microLayer\.z \* 0\.05 \+ material\.z \* 0\.10\), 0\.0, 2\.2\);/, 'the formula the step kernel used to store');
   assert.match(mainKernel, /fluidDst\[base\] = vec4<f32>\(select\(boundVelocity\(vel\), vel, faceForcesOn\(\)\), 0\.0\);/, 'the step kernel writes the lane as zero');
   assert.doesNotMatch(mainKernel, /let density = clamp\(max\(smoke \* 1\.08/, 'no stored density is computed in the step kernel');
-  assert.match(mainKernel, /let canonicalDensityDelta = derivedDensityFromSlots\(readSlot\(cellI, 1u\), readSlot\(cellI, 3u\)\) - derivedDensityFromSlots\(material, microLayer\);/, 'the canonical entrainment derives its density delta');
+  assert.doesNotMatch(mainKernel, /canonicalDensityDelta/, 'retired canonical entrainment must not restore a stored density delta');
 });
 
 test('every reader of the old lane derives density instead; the converged projection passes the lane through', () => {

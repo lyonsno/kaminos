@@ -17,8 +17,8 @@ assert.doesNotMatch(
   'Basin Atlas recording must not turn panel scrolling into control-state capture work',
 );
 assert.doesNotMatch(index, /Structure size, not render resolution:/, 'Detail Scale does not add explanatory prose to the driving surface');
-assert.match(core, /let physicalDetailScale = mix\(detailScale, 1\.0, detailScaleArtifactQuarantine\);/);
-assert.match(core, /let visibleDetailOverlayGain = mix\(1\.0, 0\.35, detailScaleArtifactQuarantine\);/);
+assert.match(core, /let physicalDetailScale = \(1\.0\);/);
+assert.match(core, /let visibleDetailOverlayGain = \(0\.35\);/);
 
 assert.match(
   index,

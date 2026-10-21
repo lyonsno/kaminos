@@ -288,7 +288,7 @@ function expectedMainFluidKernelStrategy(fireLicks) {
 }
 
 function expectedFireLickBreakupEvaluationsPerCell(fireLicks) {
-  return expectedMainFluidKernelStrategy(fireLicks) === MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP ? 2 : 0;
+  return expectedMainFluidKernelStrategy(fireLicks) === MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP ? 1 : 0;
 }
 
 function assertNoPlaceholderTopologyClaim(primitives = []) {

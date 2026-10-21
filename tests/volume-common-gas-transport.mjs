@@ -40,7 +40,7 @@ const helpers = ['transportBacktraceScale', 'thermalAdvection', 'fireLayerAdvect
 const mainKernelStart = core.indexOf('\nfn cs(@builtin(global_invocation_id) gid: vec3<u32>) {');
 assert.notEqual(mainKernelStart, -1, 'main sim kernel is located');
 const mainStart = core.indexOf('  let backtraceScale = transportBacktraceScale(speed)', mainKernelStart);
-const mainEnd = core.indexOf('  if (bonfireScene > 0.5)', mainStart);
+const mainEnd = core.indexOf('  // Reactant law (', mainStart);
 assert.ok(mainStart >= 0 && mainEnd > mainStart, 'production advection block is located');
 const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const calls = [];
@@ -49,6 +49,8 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   const backtrace = (c,v,s) => vec(c.x-v.x*s, c.y-v.y*s, c.z-v.z*s);
   const clamp = (v,lo,hi) => Math.min(hi, Math.max(lo,v));
   const cellI = cell;
+  const sceneClipCharacteristic = (_cell, target) => target;
+  const waveletOn = () => false;
   // transport_controls.x = 0 selects the legacy scheme, so this exercises the
   // first-order branch that the common-gas switch routes.
   const u = {reserved_source_extension_2:{y:enabled ? 1 : 0}, transport_controls:{x:0}};
@@ -62,7 +64,9 @@ const run = new Function('cell', 'advectVelocity', 'speed', 'heat', 'enabled', `
   // The inflow law's transport sampler is the plain sampler plus a ghost below
   // the floor; inactive in this block (no inflow), so it is the same sample.
   const sampleFluidSlotInflow = sampleFluidSlot;
+  const sampleFluidSlotMasked = sampleFluidSlot;
   const sampleFrontField = p => {calls.push({slot:'front',p:[p.x,p.y,p.z]}); return 0.5;};
+  const sampleFrontFieldTransport = sampleFrontField;
   ${translate(helpers)}
   ${translate(core.slice(mainStart, mainEnd))}
   return calls;

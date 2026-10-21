@@ -13,19 +13,9 @@ function sourceBetween(source, startMarker, endMarker) {
 }
 
 function assertEntrainmentSwayBoundary(source, page) {
-  const canonicalRegion = sourceBetween(source, '  let canonicalLiftGate =', '  let bonfireLiftImpulse =');
-  assert.doesNotMatch(canonicalRegion, /\b(?:sin|cos|tan)\s*\(/, 'Canonical entrainment must not use a periodic cell');
-  assert.doesNotMatch(canonicalRegion, /\b(?:time|canonicalPhaseTime)\b/, 'Canonical entrainment must not retain a hidden clock');
-  assert.doesNotMatch(canonicalRegion, /canonicalEntrainmentCell/, 'the named analytic entrainment cell must be retired');
-  assert.match(
-    canonicalRegion,
-    /var canonicalEntrainmentVelocity = vec3<f32>\(0\.0\);[\s\S]*if \(canonicalPlumeScene > 0\.5 && canonicalEntrainmentBand > 0\.0005\) \{[\s\S]*let canonicalTransportDelta = prev\.xyz - advected\.xyz;/,
-    'Canonical entrainment must derive from transported flow only inside its scene gate',
-  );
-  const canonicalGate = canonicalRegion.indexOf('if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {');
-  assert.doesNotMatch(canonicalRegion.slice(0, canonicalGate), /canonicalTransportDelta/, 'Canonical transported-state work must not run before its scene gate');
+  assert.doesNotMatch(source, /canonicalEntrainmentCell|canonicalEntrainmentVelocity|canonicalTransportDelta/, 'retired Canonical entrainment stays absent');
 
-  const swayRegion = sourceBetween(source, '  let columnLiftImpulse =', '  let bonfireNonWindLateralDampingTarget =');
+  const swayRegion = sourceBetween(source, '  let columnLiftImpulse =', '  let windMaterialCoupling =');
   assert.doesNotMatch(swayRegion, /\b(?:sin|cos|tan)\s*\(/, 'optional lateral excitation must not preserve phased oscillation');
   assert.match(
     swayRegion,
@@ -47,18 +37,8 @@ const falseClosureMutations = [
     'restored Canonical periodic cell',
     (source, page) => [
       source.replace(
-        'var canonicalEntrainmentVelocity = vec3<f32>(0.0);',
-        'let canonicalEntrainmentCell = vec3<f32>(sin(p.y), cos(p.x), sin(p.z));\n  var canonicalEntrainmentVelocity = canonicalEntrainmentCell;',
-      ),
-      page,
-    ],
-  ],
-  [
-    'Canonical transport work moved before scene gate',
-    (source, page) => [
-      source.replace(
-        'var canonicalEntrainmentVelocity = vec3<f32>(0.0);\n  if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {\n    let canonicalTransportDelta = prev.xyz - advected.xyz;',
-        'let canonicalTransportDelta = prev.xyz - advected.xyz;\n  var canonicalEntrainmentVelocity = vec3<f32>(0.0);\n  if (canonicalPlumeScene > 0.5 && canonicalEntrainmentBand > 0.0005) {',
+        '  let columnLiftImpulse =',
+        'let canonicalEntrainmentCell = vec3<f32>(sin(p.y), cos(p.x), sin(p.z));\n  var canonicalEntrainmentVelocity = canonicalEntrainmentCell;\n  let columnLiftImpulse =',
       ),
       page,
     ],

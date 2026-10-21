@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { assertTimeFreeWgslCallGraph } from './helpers/wgsl-time-free-callgraph.mjs';
 
 const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
+const witness = readFileSync(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+assert.match(witness, /function expectedFireLickBreakupEvaluationsPerCell\(fireLicks\) \{\s*return expectedMainFluidKernelStrategy\(fireLicks\) === MAIN_FLUID_KERNEL_STRATEGY_FIRE_LICK_BREAKUP \? 1 : 0;/, 'witness expects the single active breakup call');
 
 function wgslFunctionBody(source, name) {
   const start = source.indexOf(`fn ${name}(`);
@@ -63,13 +65,13 @@ const allowedFireLickCallees = new Set([
 function assertFireLickPeriodicityBoundary(source) {
   assertTimeFreeWgslCallGraph(
     source,
-    ['fireLickBreakup', 'bonfireFireLickBreakup'],
+    ['fireLickBreakup'],
     {
       label: 'Fire Lick transported-breakup call graph',
       forbiddenCallees: ['hash31'],
     },
   );
-  for (const name of ['fireLickBreakup', 'bonfireFireLickBreakup']) {
+  for (const name of ['fireLickBreakup']) {
     const signature = wgslFunctionSignature(source, name);
     const body = wgslFunctionBody(source, name);
     assert.doesNotMatch(
@@ -118,15 +120,14 @@ function assertFireLickPeriodicityBoundary(source) {
 
   const guardedBreakup = braceBodyAfter(source, '  if (fireLickBreakupEnabled) {');
   const expectedGuardedCalls = [
-    'columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);',
-    'bonfireLickBirth = bonfireFireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, source);',
+    'columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, flameFireLickSource);',
   ];
   assert.deepEqual(
     guardedBreakup.trim().split('\n').map(line => line.trim()).filter(Boolean),
     expectedGuardedCalls,
     'the Fire Licks enable guard owns exactly one evaluation of each breakup operator',
   );
-  for (const name of ['fireLickBreakup', 'bonfireFireLickBreakup']) {
+  for (const name of ['fireLickBreakup']) {
     assert.equal(
       [...source.matchAll(new RegExp(`\\b${name}\\s*\\(`, 'g'))].length,
       2,
@@ -135,7 +136,7 @@ function assertFireLickPeriodicityBoundary(source) {
   }
   assert.match(
     source,
-    /const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled \? 2 : 0;/,
+    /const fireLickBreakupEvaluationsPerCell = fireLickBreakupEnabled \? 1 : 0;/,
     'the cost ledger still records zero periodic-breakup work when Fire Licks are disabled',
   );
   assert.match(
@@ -183,7 +184,7 @@ const falseClosureMutations = [
     'unguarded extra breakup evaluation',
     source => source.replace(
       '  if (fireLickBreakupEnabled) {',
-      `  columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, tallPlumeFireLickSource);\n  if (fireLickBreakupEnabled) {`,
+      `  columnLickBirth = fireLickBreakup(cellI, fireLickOperatorGain, heat, fuel, flame, flameDetail, flameFireLickSource);\n  if (fireLickBreakupEnabled) {`,
     ),
   ],
   [

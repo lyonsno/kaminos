@@ -26,49 +26,49 @@ function sourceBetween(source, startMarker, endMarker) {
 }
 
 function assertSourceBirthAuthorityBoundary(source) {
-const commonTallCanonicalSourceBirth = sourceBetween(
+const flameSourceBirth = sourceBetween(
   source,
   '  let sourceCenter = p - u.primitive_source.xyz;',
-  '  let bonfireSourceY = 0.62;',
+  '  let rawDetailCarrier =',
 );
 
 assert.doesNotMatch(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /\b(?:sin|cos)\s*\(/,
   'common, Tall Plume, and Canonical source birth must not paint animated periodic waves into transported material',
 );
 assert.doesNotMatch(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /\b(?:time|canonicalPhaseTime)\b/,
   'source-breakup irregularity must not advance from a hidden presentation clock',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /let\s+transportedSourceStructure\s*=\s*clamp\(/,
   'source breakup must respond to transported material, fire, interface, and combustion-front topology',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /let\s+sourceSpatialDephase\s*=\s*hash31\(/,
   'empty-field source startup may retain low-authority static spatial dephasing',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /let\s+sourceStartupAuthority\s*=\s*1\.0\s*-\s*smoothstep\([^;]*transportedSourceStructure[^;]*\);/,
   'static source dephasing must explicitly relinquish authority as transported structure develops',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /let\s+sourceStartupDephase\s*=\s*sourceSpatialDephase\s*\*\s*sourceStartupAuthority\s*\*\s*fixedSourceDephase;/,
   'the first static dephasing channel must pass through transported-state startup authority and its explicit ablation gate',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   /let\s+sourceStartupDephaseB\s*=\s*sourceSpatialDephaseB\s*\*\s*sourceStartupAuthority\s*\*\s*fixedSourceDephase;/,
   'the second static dephasing channel must pass through transported-state startup authority and its explicit ablation gate',
 );
 const staticDephaseDefinitions = sourceBetween(
-  commonTallCanonicalSourceBirth,
+  flameSourceBirth,
   '  let sourceSpatialDephase = hash31(',
   '  let breakup = clamp(',
 );
@@ -77,8 +77,8 @@ assert.doesNotMatch(
   /\b(?:time|frame|canonicalPhaseTime)\b/,
   'static source dephasing must not become animated source choreography',
 );
-const sourceBirthConsumers = commonTallCanonicalSourceBirth.slice(
-  commonTallCanonicalSourceBirth.indexOf('  let breakup = clamp('),
+const sourceBirthConsumers = flameSourceBirth.slice(
+  flameSourceBirth.indexOf('  let breakup = clamp('),
 );
 assert.doesNotMatch(
   sourceBirthConsumers,
@@ -96,25 +96,21 @@ assert.match(
   'source birth must consume the authority-decayed second startup channel',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
-  /let\s+tallPlumeSmokeSourceBreakup\s*=\s*clamp\(/,
+  flameSourceBirth,
+  /let\s+flameSmokeSourceBreakup\s*=\s*clamp\(/,
   'Tall Plume smoke birth must own an explicit transported/static breakup law',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
-  /let\s+tallPlumeFrontPacketBreakup\s*=\s*clamp\(/,
+  flameSourceBirth,
+  /let\s+flameFrontPacketBreakup\s*=\s*clamp\(/,
   'Tall Plume front birth must retain bounded nonperiodic irregularity',
 );
 assert.match(
-  commonTallCanonicalSourceBirth,
-  /let\s+tallPlumeEmitterBreakup\s*=\s*clamp\(/,
+  flameSourceBirth,
+  /let\s+flameEmitterBreakup\s*=\s*clamp\(/,
   'Tall Plume emitter birth must retain bounded nonperiodic irregularity',
 );
-assert.match(
-  commonTallCanonicalSourceBirth,
-  /let\s+canonicalSourceBreakup\s*=\s*clamp\(/,
-  'Canonical source birth must retain bounded nonperiodic irregularity',
-);
+
 }
 
 assertSourceBirthAuthorityBoundary(core);
