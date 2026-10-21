@@ -1,3 +1,4 @@
+import {localLiquidPresentationPlan} from './local-liquid-presentation.mjs';
 import {createFixedStepPlayback} from './finger-fluid-box-clock.mjs';
 import {createOwnerWaterCapability,applyFluidOwnerSetup} from './fluid-owner-host.mjs';
 
@@ -6,6 +7,7 @@ import {createOwnerWaterCapability,applyFluidOwnerSetup} from './fluid-owner-hos
 export async function createFiniteFluidHost({setup,device,createSolver,createPresentation,redraw=()=>{},isCurrent=()=>true}) {
  applyFluidOwnerSetup({},setup);
  let currentSetup=setup,solver=null,presentation=null,closed=false,generation=0,step=0,paused=true;
+ let presentationMode='full',proxyStepEvery=1,drawFrame=0;
  const lifetime={},clock=createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate??1,mode:setup.playbackMode??'render_cadence'});
  async function install(next) {
   applyFluidOwnerSetup({},next);
@@ -22,14 +24,19 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
  const assertActive=()=>{if(closed||!isCurrent())throw Error('Finite water lifetime changed');};
  const state=()=>({available:!closed&&isCurrent(),generation,step,timeSeconds:step*currentSetup.dt,frameTimeStepSeconds:currentSetup.dt,paused,playbackRate:clock.state().rate,playbackMode:clock.state().mode});
  const host={
-  render({advance=true,timestampMs=performance.now()}={}){assertActive();const tick=clock.advance(timestampMs,{paused:paused||!advance});for(let i=0;i<tick.steps;i++){solver.step(currentSetup.dt);step++;}presentation.render();},
+  render({advance=true,timestampMs=performance.now()}={}){assertActive();const stepThisFrame=presentationMode!=='proxy'||drawFrame%proxyStepEvery===0;drawFrame++;const tick=clock.advance(timestampMs,{paused:paused||!advance||!stepThisFrame});for(let i=0;i<tick.steps;i++){solver.step(currentSetup.dt);step++;}presentation.render({presentation:presentationMode});},
   setPaused(value){assertActive();paused=Boolean(value);clock.reset();redraw();return paused;},
   get paused(){return paused;},
+  setPresentation(mode){assertActive();localLiquidPresentationPlan(mode);presentationMode=mode;return mode;},
+  get presentation(){return presentationMode;},
+  setProxyStepEvery(value){assertActive();if(!Number.isInteger(value)||value<1)throw Error('Proxy step interval must be a positive integer');proxyStepEvery=value;return value;},
+  get proxyStepEvery(){return proxyStepEvery;},
+  interfaceRecordDescriptor:()=>closed?null:solver.getInterfaceRecordDescriptor(),
   setPlaybackRate(value){assertActive();clock.setRate(value);redraw();return state();},
   setPlaybackMode(value){assertActive();clock.setMode(value);redraw();return state();},
   async advanceTo(target){assertActive();if(!Number.isSafeInteger(target)||target<step)throw Error('Reset before advancing backwards');paused=true;clock.reset();for(;step<target;step++)solver.step(currentSetup.dt);await device.queue.onSubmittedWorkDone();assertActive();redraw();return state();},
   restart:()=>install(currentSetup),
-  state:()=>({...presentation.state(),clock:state(),setup:currentSetup,solver:solver.getDebugState()}),
+  state:()=>({...presentation.state(),clock:state(),presentation:presentationMode,proxyStepEvery,setup:currentSetup,solver:solver.getDebugState()}),
   getMaterialControls:()=>solver.getMaterialControls?.()??{available:false},
   setMaterialControls(patch){assertActive();const receipt=solver.setMaterialControls(patch);currentSetup={...currentSetup,solver:{...currentSetup.solver,...receipt.effective}};redraw();return receipt;},
   readSceneColor:region=>presentation.readSceneColor(region),
