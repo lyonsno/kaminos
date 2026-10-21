@@ -19,6 +19,7 @@ export async function createKleinApp({ device, session, foreground, gpu = global
   Pipeline = KleinPipeline, load = true, onProgress, scheduling = {},
   routeId = `${KLEIN_ROUTE_ID}:${crypto.randomUUID()}` } = {}) {
   const ownsDevice = !device && !session, ownsSession = !session, ownsForeground = !foreground;
+  if (session && !foreground) throw new Error('a shared Klein session requires its host foreground service');
   if (session && device && device !== session.device) throw new Error('Klein session and device must match');
   device ??= session?.device;
   if (device && !device.features?.has('shader-f16')) throw new Error('Klein requires shader-f16 on the effective device');
@@ -95,69 +96,80 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     const cancelPending = () => run.job?.cancel('Klein stopped');
     abort.signal.addEventListener('abort', cancelPending, { once: true });
     run.promise = Promise.resolve().then(async () => {
-      let frameRun, route, result, failure;
-      const cleanupErrors = [];
+      let admissionRoute;
       try {
         stopped(abort.signal);
         await loadWeights();
         stopped(abort.signal);
-        if (cooperative) {
-          frameRun = await foreground.beginRun(`klein:${crypto.randomUUID()}`, { routeId });
-          stopped(abort.signal);
-          route = await session.registerRoute({ routeId, runtimeOptions: {
-            runtimeLabel: 'klein-app', foregroundOpportunities: frameRun.foregroundOpportunities } });
-          stopped(abort.signal);
-          // A pause can arrive during a lean-residency weight reload. Both permit frames,
-          // but the foreground service admits one CPU window at a time. Park behind the
-          // current reload; the control has already sealed admission for the next GPU duty.
-          let windowTail = Promise.resolve();
-          const withForeground = (phase, work) => {
-            const window = windowTail.then(() => frameRun.withForeground(phase, work));
-            windowTail = window.catch(() => {});
-            return window;
-          };
-          run.control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground });
-          run.phase = 'queued';
-          run.job = route.enqueue({ jobId: frameRun.runId, execute: async invocation => {
-            run.phase = 'generating';
+        const runId = `klein:${crypto.randomUUID()}`;
+        // One queued job owns admission. Its model runtime is created after admission,
+        // when the host's previous foreground run has finished. The inner runtime runs
+        // directly; enqueuing it again on this same session would deadlock.
+        admissionRoute = await session.registerRoute({ routeId: `${routeId}:admission` });
+        stopped(abort.signal);
+        run.phase = 'queued';
+        run.job = admissionRoute.enqueue({ jobId: runId, execute: async () => {
+          let frameRun, modelRoute, result, failure;
+          const cleanupErrors = [];
+          try {
             stopped(abort.signal);
-            return pipeline.generate({ ...options, schedule: { maxInFlight: 2, ...scheduling, ...runScheduling,
-              runtime: route.runtime, invocation, control: run.control, signal: abort.signal, withForeground } });
-          } });
-          const completion = await run.job.completion;
-          stopped(abort.signal);
-          if (completion.status !== 'succeeded') {
-            const error = new Error(completion.failure?.message ?? completion.status);
-            error.name = completion.failure?.name ?? 'Error';
-            throw error;
+            frameRun = await foreground.beginRun(runId, { routeId });
+            stopped(abort.signal);
+            run.phase = 'generating';
+            if (cooperative) {
+              modelRoute = await session.registerRoute({ routeId, runtimeOptions: {
+                runtimeLabel: 'klein-app', foregroundOpportunities: frameRun.foregroundOpportunities } });
+              // Pause parks behind any current lean-residency CPU weight window.
+              let windowTail = Promise.resolve();
+              const withForeground = (phase, work) => {
+                const window = windowTail.then(() => frameRun.withForeground(phase, work));
+                windowTail = window.catch(() => {});
+                return window;
+              };
+              run.control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground });
+              result = await modelRoute.runtime.runInvocation({ invocationId: runId }, invocation =>
+                pipeline.generate({ ...options, schedule: { maxInFlight: 2, ...scheduling, ...runScheduling,
+                  runtime: modelRoute.runtime, invocation, control: run.control, signal: abort.signal, withForeground } }));
+            } else {
+              result = await pipeline.generate(options);
+            }
+            if (fatal) throw fatal;
+            stopped(abort.signal);
+          } catch (error) { failure = error; }
+          finally {
+            // Keep admission until all model and foreground settlement has finished.
+            run.phase = 'finishing';
+            try { await run.control?.close(); } catch (e) { cleanupErrors.push(e); }
+            run.control = null;
+            if (modelRoute) {
+              try { session.unregisterRoute(modelRoute.routeId); } catch (e) { cleanupErrors.push(e); }
+            }
+            try { await frameRun?.finish(); } catch (e) { cleanupErrors.push(e); }
           }
-          result = completion.output;
-        } else {
-          run.phase = 'generating';
-          result = await pipeline.generate(options);
-        }
+          if (cleanupErrors.length) {
+            fatal = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Klein generation cleanup failed');
+            throw fatal;
+          }
+          if (failure) throw failure;
+          return result;
+        } });
+        const completion = await run.job.completion;
         if (fatal) throw fatal;
         stopped(abort.signal);
-      } catch (error) { failure = error; }
-      finally {
-        // Attempt all independent releases and surface cleanup failure. A poisoned lifecycle
-        // refuses reuse instead of leaving a ghost route behind a successful image result.
-        run.phase = 'finishing';
-        try { await run.control?.close(); } catch (e) { cleanupErrors.push(e); }
-        if (route) {
-          try { await route.drain(); session.unregisterRoute(route.routeId); } catch (e) { cleanupErrors.push(e); }
+        if (completion.status !== 'succeeded') {
+          const error = new Error(completion.failure?.message ?? completion.status);
+          error.name = completion.failure?.name ?? 'Error';
+          throw error;
         }
-        try { await frameRun?.finish(); } catch (e) { cleanupErrors.push(e); }
+        return completion.output;
+      } finally {
         signal?.removeEventListener('abort', forwardAbort);
         abort.signal.removeEventListener('abort', cancelPending);
-        active = null;
+        try {
+          if (admissionRoute) { await admissionRoute.drain(); session.unregisterRoute(admissionRoute.routeId); }
+        } catch (error) { fatal = error; throw error; }
+        finally { active = null; }
       }
-      if (cleanupErrors.length) {
-        fatal = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Klein generation cleanup failed');
-        throw fatal;
-      }
-      if (failure) throw failure;
-      return result;
     });
     return run.promise;
   }

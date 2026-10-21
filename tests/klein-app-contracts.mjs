@@ -74,7 +74,7 @@ async function frame(app, id) {
   const hostRoute = await session.registerRoute({ routeId: 'host' });
   const foreground = createWebGpuForegroundService({ device: dev, routeId: 'host-scene' });
   const a = await createKleinApp({ session, foreground, Pipeline: Producer });
-  const b = await createKleinApp({ session, Pipeline: Producer });
+  const b = await createKleinApp({ session, foreground, Pipeline: Producer });
   assert.notEqual(a.routeId, b.routeId);
   await Promise.all([a.generate({}), b.generate({})]);
   await a.destroy(); await b.destroy();
@@ -84,7 +84,8 @@ async function frame(app, id) {
   await frame({ foreground }, 'host-after');
   await foreground.dispose(); await session.drain(); session.close();
   assert.equal(dev.destroyed, 0);
-  await assert.rejects(() => createKleinApp({ device: device(), session, Pipeline: Producer }), /must match/);
+  await assert.rejects(() => createKleinApp({ device: device(), session, foreground, Pipeline: Producer }), /must match/);
+  await assert.rejects(() => createKleinApp({ session, Pipeline: Producer }), /host foreground service/);
 }
 
 // One load flight, atomic failure cleanup, then a fresh producer on retry.
@@ -142,16 +143,51 @@ async function frame(app, id) {
 {
   const dev = device(), held = deferred(), entered = deferred();
   const session = await createWebGpuInferenceSession({ device: dev, sessionId: 'busy-host', adapterName: 'fixture' });
+  const foreground = createWebGpuForegroundService({ device: dev, routeId: 'host-frames' });
+  const hostFrames = await foreground.beginRun('host-hold', { routeId: 'busy' });
   const route = await session.registerRoute({ routeId: 'busy' });
-  const job = route.enqueue({ jobId: 'hold', execute: async () => { entered.resolve(); await held.promise; } });
+  const job = route.enqueue({ jobId: 'hold', execute: async () => {
+    entered.resolve(); await held.promise; await hostFrames.finish();
+  } });
   await entered.promise;
-  const app = await createKleinApp({ session, Pipeline: Producer });
+  const app = await createKleinApp({ session, foreground, Pipeline: Producer });
   const run = app.generate({});
-  // Wait for registration, not for a wall-clock timeout.
-  while (app.snapshot().phase !== 'queued') await new Promise(r => setImmediate(r));
-  app.stop(); await assert.rejects(run, { name: 'AbortError' });
+  const cancelled = assert.rejects(run, { name: 'AbortError' });
+  await new Promise(r => setImmediate(r));
+  assert.equal(app.snapshot().phase, 'queued', 'Klein must queue without taking the current host foreground run');
+  let drew = false;
+  const frame = app.foreground.request({ requestId: 'waiting-frame', run: o => { drew = true; o.submit(['frame']); } });
+  assert.equal(await app.pause(), null, 'queued work has no GPU pause control before admission');
+  assert.equal(drew, false);
+  app.stop(); await cancelled;
+  assert.equal(drew, false, 'pending cancellation must not drain the current host foreground requests');
+  assert.equal(foreground.snapshot().activeRun.runId, 'host-hold');
   assert.equal(app.pipeline.received, undefined);
-  await app.destroy(); held.resolve(); await job.completion; await route.drain(); session.close();
+  const next = app.generate({});
+  held.resolve(); await job.completion; await next;
+  assert.equal((await frame.completion).status, 'completed');
+  assert.equal(foreground.snapshot().activeRun, null);
+  await app.destroy(); await route.drain(); session.close(); await foreground.dispose();
+}
+
+// Owned device setup, load failure, and teardown during load all release their resources.
+{
+  const dev = device(), finishing = deferred(), finish = deferred();
+  const session = await createWebGpuInferenceSession({ device: dev, sessionId: 'finish-order', adapterName: 'fixture' });
+  const service = createWebGpuForegroundService({ device: dev, routeId: 'scene' });
+  const foreground = { ...service, async beginRun(...args) {
+    const run = await service.beginRun(...args);
+    return { ...run, async finish() { finishing.resolve(); await finish.promise; return run.finish(); } };
+  } };
+  const app = await createKleinApp({ session, foreground, Pipeline: Producer });
+  const generation = app.generate({}); await finishing.promise;
+  const nextRoute = await session.registerRoute({ routeId: 'next-model' });
+  let nextStarted = false;
+  const next = nextRoute.enqueue({ jobId: 'next', execute() { nextStarted = true; } });
+  await new Promise(r => setImmediate(r));
+  assert.equal(nextStarted, false, 'foreground settlement must retain session admission');
+  finish.resolve(); await generation; await next.completion;
+  await app.destroy(); await nextRoute.drain(); session.close(); await service.dispose();
 }
 
 // Owned device setup, load failure, and teardown during load all release their resources.
