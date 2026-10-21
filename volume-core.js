@@ -1,4 +1,5 @@
-import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_WGSL,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
+import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
+import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';

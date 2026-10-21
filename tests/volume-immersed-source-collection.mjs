@@ -1,6 +1,7 @@
 // kaminos-test: node
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
 import * as core from '../volume-core.js';
 const field={resolution:32,emitterSourceLaw:'immersed-source',pressureSolver:'converged-open-top',pressureIterations:8,immersedRadius:.2,immersedSpeed:.1,immersedFuel:.56,immersedTemperature:1.2};
 const source=(id,x=0)=>({id,controls:{...field,immersedCentreX:x,immersedCentreY:-.5,immersedPitch:90}});
@@ -42,4 +43,9 @@ test('pressure diagnostics name every source supply rather than projecting the o
  const receipt=core.pressureResidualMeasurement(null,null,{active:true,sources:compiled.sources});
  const expected=compiled.sources.reduce((sum,s)=>sum+s.config.effective.fluxEffectivePredicted,0);
  assert.equal(receipt.immersedSource.fluxEffectivePredicted,expected);assert.equal(receipt.immersedSource.count,2);assert.match(receipt.immersedSource.law,/sum/);
+});
+
+test('collection can be the first module imported by a fresh runtime',()=>{
+ const result=spawnSync(process.execPath,['--input-type=module','-e',"await import('./volume-immersed-source-collection.mjs')"],{cwd:new URL('..',import.meta.url),encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
 });
