@@ -60,24 +60,36 @@ def run_visual_cases(cases, *, repo_root, node, out, continuation, on_submitted)
             write()
             return result
 
+        def invoke(callback, argument):
+            try:
+                return callback(argument)
+            except BaseException as error:
+                # A callback's zero exit is still a failed handoff, whereas
+                # Greenroom itself exits zero after a successful checkpoint.
+                report.update(status="failed", error=repr(error))
+                raise
+
         def next_request(checkpoint):
-            request = continuation(checkpoint)
+            request = invoke(continuation, checkpoint)
             if request is not None:
                 # The remaining cases are a different workload. The caller can
                 # submit a new estimate in a subsequent invocation; inherited
                 # cheap-profile/history claims cannot follow this successor.
                 request.runtime_hint = None
                 request.runtime_profile = None
-            report.update(status="yielded", phase="checkpoint", checkpoint=str(checkpoint))
+            report.update(phase="checkpoint", checkpoint=str(checkpoint))
             write()
             return request
 
         results = run_units(cases, perform=perform, quiesce=lambda: True,
-                            continuation=next_request, on_submitted=on_submitted)
+                            continuation=next_request,
+                            on_submitted=(lambda request: invoke(on_submitted, request)) if on_submitted else None)
         report.update(status="passed", phase="complete", cases=results)
         return results
     except SystemExit as error:
-        if error.code not in (None, 0):
+        if error.code in (None, 0) and report['status'] != 'failed' and 'checkpoint' in report:
+            report.update(status="yielded")
+        else:
             report.update(status="failed", error=repr(error))
         raise
     except BaseException as error:

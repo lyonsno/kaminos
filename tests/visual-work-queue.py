@@ -24,6 +24,8 @@ if __name__ == '__main__' and '--producer' in sys.argv:
             command_argv=request.command_argv,command_env=request.command_env,runtime_hint={'expected_seconds':10})
     out = Path(sys.argv[-1])
     def register(successor):
+        if os.environ.get('TEST_REGISTRATION_ZERO') == '1':
+            raise SystemExit(0)
         (out / 'registered.json').write_text(successor.to_json())
     run_visual_cases([{'id':'first','args':[]},{'id':'second','args':[]}],repo_root=request.repo_root,
         node=sys.executable,out=out,continuation=continuation,on_submitted=register)
@@ -33,6 +35,13 @@ if __name__ == '__main__' and '--producer' in sys.argv:
 class QueueConformance(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('KAMINOS_GREENROOM_SOURCE'), 'set KAMINOS_GREENROOM_SOURCE for real queue conformance')
     def test_completed_case_yields_then_resumes_without_repeating(self):
+        self.exercise_queue()
+
+    @unittest.skipUnless(os.environ.get('KAMINOS_GREENROOM_SOURCE'), 'set KAMINOS_GREENROOM_SOURCE for real queue conformance')
+    def test_registration_zero_exit_is_failed_with_retained_first_case(self):
+        self.exercise_queue(registration_zero=True)
+
+    def exercise_queue(self, registration_zero=False):
         source = str(Path(os.environ['KAMINOS_GREENROOM_SOURCE']).resolve())
         sys.path.insert(0, source)
         from gpu_queue.models import JobRequest
@@ -54,9 +63,20 @@ if out.name=='first':
             request = JobRequest(job_type='command',input_path='',agent_id='fixture-minion',
                 repo_root=str(root),command_cwd=str(root),route_identity='fixture/visual-cases',
                 command_argv=[sys.executable,str(script),'--producer',str(root/'results')],
-                command_env={'PYTHONPATH':os.pathsep.join([source,str(script.parents[1])])},cooperative_checkpoint=True)
+                command_env={'PYTHONPATH':os.pathsep.join([source,str(script.parents[1])]),
+                    'TEST_REGISTRATION_ZERO': '1' if registration_zero else '0'},cooperative_checkpoint=True)
             queue.submit(request)
             self.assertTrue(queue.run_one({}))
+            if registration_zero:
+                result = json.loads((root/'results/batch.json').read_text())
+                self.assertEqual(result['status'], 'failed')
+                self.assertIn('SystemExit(0)', result['error'])
+                self.assertEqual(json.loads((root/'results/first/report.json').read_text())['status'], 'passed')
+                self.assertFalse((root/'results/second').exists())
+                self.assertFalse(list(queue.queue_dir.rglob('checkpoint-handoff.json')))
+                failures = list(queue.queue_dir.rglob('registration-failure.json'))
+                self.assertEqual(len(failures), 1)
+                return
             handoff = json.loads((queue.queue_dir/'done'/request.job_id/'checkpoint-handoff.json').read_text())
             self.assertEqual(handoff['registration'], 'callback-returned')
             checkpoint = json.loads(Path(handoff['checkpoint']).read_text())

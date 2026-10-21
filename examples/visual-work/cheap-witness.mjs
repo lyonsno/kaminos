@@ -14,6 +14,8 @@ const report={status:'running',phase:'prepare',root,requested:values};
 const write=()=>fs.writeFile(path.join(out,'witness.json'),JSON.stringify(report,null,2));
 let server;
 let exited;
+let serverError;
+let log;
 await write();
 try {
   const home=path.join(out,'home'),scenes=path.join(out,'scenes'),basins=path.join(out,'basins');
@@ -27,15 +29,20 @@ try {
   const port=await new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
   const origin=`http://127.0.0.1:${port}`;
   const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('KAMINOS_')));
+  report.phase='server-start';report.server={started:false,origin};await write();
   server=spawn(values.python||'python3',['-u','serve.py',String(port),'--volume-settings-store',basins,'--no-shared-basin-store',
     '--volume-basin-session-store',path.join(out,'sessions'),'--volume-cockpit-layout-store',path.join(out,'layouts')],
     {cwd:root,env:{...env,HOME:home,KAMINOS_SCENES_DIR:scenes,KAMINOS_BIND_HOST:'127.0.0.1'},stdio:['ignore','pipe','pipe']});
-  exited=new Promise(resolve=>server.once('exit',resolve));
-  const log=await fs.open(path.join(out,'server.log'),'a');
+  exited=new Promise(resolve=>{
+    server.once('exit',resolve);
+    server.once('error',error=>{serverError=error;resolve();});
+  });
+  server.once('spawn',()=>{report.server.started=true;report.server.pid=server.pid;});
+  log=await fs.open(path.join(out,'server.log'),'a');
   server.stdout.on('data',data=>log.write(data));server.stderr.on('data',data=>log.write(data));
-  report.server={pid:server.pid,origin};report.phase='server';await write();
   let serving=false;
   while(!serving){
+    if(serverError)throw serverError;
     if(server.exitCode!==null)throw Error(`server exited ${server.exitCode}`);
     try{serving=(await fetch(`${origin}/api/runtime-config`)).ok;}catch{}
     if(!serving)await new Promise(resolve=>setTimeout(resolve,100));
@@ -50,4 +57,8 @@ try {
   if(JSON.stringify(source)!==JSON.stringify(persisted))throw Error('authored source changed');
   report.status='passed';report.phase='complete';
 } catch(error){report.status='failed';report.error=error.stack;process.exitCode=1;}
-finally{if(server?.exitCode===null){server.kill('SIGTERM');await exited;}report.serverClosed=true;await write();}
+finally{
+  if(server?.pid && server.exitCode===null && server.signalCode===null){server.kill('SIGTERM');await exited;}
+  if(log)await log.close();
+  report.serverClosed=true;await write();
+}
