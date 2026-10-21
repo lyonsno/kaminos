@@ -20,6 +20,12 @@ for (const [n, ref] of [[16, REF16], [4, REF4]]) {
   assert.deepEqual(s.targets, s.sigmas.slice(1));
 }
 
+// Base model + 4-step distill LoRA: constant shift 3 (ComfyUI ModelSamplingFlux ln 3, simple scheduler).
+for (const [n, ref] of [[4, [1.0, 0.8999999761581421, 0.75, 0.5, 0.0]], [2, [1.0, 0.75, 0.0]]]) {
+  const s = flux3Schedule(n, 3);
+  s.sigmas.forEach((v, i) => assert.ok(Math.abs(v - ref[i]) <= 1e-7, `shift-3 sigma ${i} of ${n}: ${v} vs ${ref[i]}`));
+}
+
 // Image tokens: (t=0, h*0.5, w*0.5, l=0), row-major over the latent grid.
 const img = flux3ImageIds(2, 3);
 assert.deepEqual([...img], [0, 0, 0, 0, 0, 0, 0.5, 0, 0, 0, 1, 0, 0, 0.5, 0, 0, 0, 0.5, 0.5, 0, 0, 0.5, 1, 0]);

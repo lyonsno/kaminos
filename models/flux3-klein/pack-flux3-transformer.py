@@ -10,11 +10,18 @@ never straddle a fused boundary (D and F are multiples of the group), so quantiz
 equals quantizing each part.
 
   python pack-flux3-transformer.py --model-dir <hf snapshot> --out <dir> [--format i4] [--globals-format i8]
+      [--lora <file.safetensors> [--lora-strength 1]] [--shift 6.93] [--steps 16]
+
+The distilled checkpoint (flow_map) embeds each step's target timestep; the base checkpoint does not,
+and is packed with a step-distill LoRA merged in (--lora, see flux3_lora.py) before quantization.
+--shift and --steps record the sampling recipe the weights were made for in the manifest
+("sampling"), which Flux3Pipeline uses by default.
 """
 import argparse
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -61,13 +68,24 @@ def main():
     ap.add_argument("--format", default="i4", choices=["f16", "i8", "i4", "i3", "i2"])
     ap.add_argument("--globals-format", default="i8", choices=["f16", "i8", "i4", "i3", "i2"])
     ap.add_argument("--group", type=int, default=64)
+    ap.add_argument("--lora")
+    ap.add_argument("--lora-strength", type=float, default=1.0)
+    ap.add_argument("--shift", type=float, default=None)
+    ap.add_argument("--steps", type=int, default=None)
     args = ap.parse_args()
     src = Path(args.model_dir) / "transformer"
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     config = json.loads((src / "config.json").read_text())
-    if not config.get("flow_map"):
-        raise SystemExit("expected the step-distilled flow-map checkpoint (flow_map: true)")
+    flow_map = bool(config.get("flow_map"))
+    if not flow_map and not args.lora:
+        raise SystemExit("the base checkpoint needs a step-distill LoRA (--lora); without one it wants 50 CFG steps")
+    deltas = {}
+    if args.lora:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from flux3_lora import lora_deltas
+        deltas = lora_deltas(args.lora, args.lora_strength)
+    used = set()
     weight_map = json.loads((src / "diffusion_pytorch_model.safetensors.index.json").read_text())["weight_map"]
     handles = {}
 
@@ -75,10 +93,14 @@ def main():
         fname = weight_map[name]
         if fname not in handles:
             handles[fname] = safe_open(str(src / fname), "pt")
-        return handles[fname].get_tensor(name)
+        w = handles[fname].get_tensor(name)
+        if name in deltas:
+            used.add(name)
+            w = w.to(torch.float32) + deltas[name]  # merged in f32, then quantized like every weight
+        return w
 
     D = config["num_attention_heads"] * config["attention_head_dim"]
-    bundles = {"globals": [(n, t(p)) for n, p in GLOBALS]}
+    bundles = {"globals": [(n, t(p)) for n, p in GLOBALS if flow_map or not n.startswith("target_")]}
     for bname, p in block_prefixes(config):
         ins = [t(p + n) for n in FUSED_IN]
         outs = [t(p + n) for n in FUSED_OUT]
@@ -89,7 +111,12 @@ def main():
     manifest = {"schema": "kaminos.flux3-klein.transformer-weights.v1", "format": args.format,
                 "globals_format": args.globals_format, "group": args.group, "globals_group": args.group,
                 "layout": "row-major [out, in]", "mode": "text-to-image", "source": source_identity(src),
-                "config": config, "bundles": {}, "conversion": {}}
+                "config": config, "bundles": {}, "conversion": {},
+                "sampling": {"shift": args.shift if args.shift is not None else (6.93 if flow_map else 3.0),
+                             "steps": args.steps if args.steps is not None else (16 if flow_map else 4)}}
+    if args.lora:
+        manifest["lora"] = {"file": Path(args.lora).name, "sha256": hashlib.sha256(Path(args.lora).read_bytes()).hexdigest(),
+                            "strength": args.lora_strength, "merged": len(deltas)}
     total_overflow = total_subnormal = 0
     for bname, tensors in bundles.items():
         fmt_for = args.globals_format if bname == "globals" else args.format
@@ -128,6 +155,8 @@ def main():
         manifest["bundles"][bname] = {"file": f"{bname}.bin", "bytes": len(blob),
                                       "sha256": hashlib.sha256(blob).hexdigest(), "tensors": entries}
         print(bname, len(blob), flush=True)
+    if set(deltas) - used:
+        raise SystemExit(f"LoRA targets never packed: {sorted(set(deltas) - used)[:5]}")
     manifest["conversion"] = {"overflow_values": total_overflow, "subnormal_values": total_subnormal}
     manifest["total_bytes"] = sum(b["bytes"] for b in manifest["bundles"].values())
     (out / "manifest.json").write_text(json.dumps(manifest, indent=1))

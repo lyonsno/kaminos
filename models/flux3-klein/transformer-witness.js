@@ -61,7 +61,9 @@ window.runTransformerWitness = async function (cfg) {
     const rm = await getJson('/ref/manifest.json');
     if (rm.phase !== 'done') throw new Error(`reference export ended in phase ${rm.phase}`);
     report.weights = { format: wm.format, globalsFormat: wm.globals_format, source: wm.source, totalBytes: wm.total_bytes };
-    report.reference = { prompt: rm.prompt, seed: rm.seed, size: rm.size, steps: rm.steps, versions: rm.versions, weights: rm.weights, source: rm.source };
+    report.reference = { prompt: rm.prompt, seed: rm.seed, size: rm.size, steps: rm.steps, shift: rm.shift, flowMap: rm.flowMap, lora: rm.lora,
+      versions: rm.versions, weights: rm.weights, source: rm.source };
+    if (rm.lora && wm.lora && rm.lora.file !== wm.lora.file) throw new Error(`reference merged ${rm.lora.file}, bundles merged ${wm.lora.file}`);
     if (rm.weights.format !== wm.format || rm.weights.globals_format !== wm.globals_format)
       throw new Error(`reference ran ${rm.weights.format}/${rm.weights.globals_format}, bundles are ${wm.format}/${wm.globals_format}`);
     const refTensor = async name => {
@@ -72,7 +74,8 @@ window.runTransformerWitness = async function (cfg) {
     };
 
     // Host-side checks: schedule and position ids against the reference.
-    const sched = flux3Schedule(rm.steps);
+    const sched = flux3Schedule(rm.steps, rm.shift ?? 6.93);
+    if (Boolean(wm.config.flow_map) !== Boolean(rm.flowMap ?? true)) throw new Error('bundles and reference disagree about flow_map');
     report.schedule = { maxAbsDiff: Math.max(...sched.sigmas.map((v, i) => Math.abs(v - rm.sigmas[i]))) };
     const grid = rm.size / 16;
     const imgIds = flux3ImageIds(grid, grid);
@@ -161,7 +164,7 @@ window.runTransformerWitness = async function (cfg) {
       state.phase = `parity:step${step}`;
       const latents = await refTensor(`step${step}/latents_in`);
       const tModel = Math.fround((await refTensor(`step${step}/timestep`))[0] * 1000);
-      const targetModel = Math.fround((await refTensor(`step${step}/target_timestep`))[0] * 1000);
+      const targetModel = rm.tensors[`step${step}/target_timestep`] ? Math.fround((await refTensor(`step${step}/target_timestep`))[0] * 1000) : null;
       // With the text encoder, the transformer keeps the browser's own prompt embeddings.
       model.prepare({ latents, promptEmbeds: cfg.textEncoder ? null : promptEmbeds, imgIds, txtIds });
       await model.forward({ tModel, targetModel }, async (name, buf, rows, cols, byteOffset) => {

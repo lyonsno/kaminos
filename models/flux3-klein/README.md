@@ -32,6 +32,12 @@ Present: text-to-image end to end. On an M4 Max a 512 × 512 image takes about 2
   precompile, prompt reuse, live previews (same latent space) and decoding are Klein's. FLUX.2 Klein's
   `generate.html` runs it with `?model=flux3`, and `run-generate.mjs --model flux3 --steps 16` batches it.
 
+- Few-step variant: the base checkpoint (`flux-3-image-klein-base`, no flow map) with the community
+  4-step distill LoRA `Muinez/flux3-klein-distil-4step` merged in at pack time
+  (`pack-flux3-transformer.py --lora <file>`, `flux3_lora.py` finishes the LoRA's key conversion).
+  The manifest records the recipe (shift 3, 4 steps; 2-3 also work), which `Flux3Pipeline` follows.
+  Same size as the distilled pack (2.83 GB); a 512 image takes 4 transformer steps instead of 16.
+
 Not yet: hosted weights and a public page.
 
     python pack-flux3-transformer.py --model-dir <snapshot> --out <weights>

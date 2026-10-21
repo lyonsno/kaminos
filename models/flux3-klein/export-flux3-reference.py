@@ -16,6 +16,10 @@ manifest.json is written even when a phase fails, naming it.
 
   python export-flux3-reference.py --model-dir <hf snapshot> --out <dir> --prompt-file <txt>
       [--size 256] [--seed 9001] [--steps 16] [--at 0,15] [--format i4] [--globals-format i8] [--te-format i4]
+      [--lora <file> [--lora-strength 1]] [--shift 6.93]
+
+For the base checkpoint (no flow map) pass --lora (merged in f32 before quantization, exactly as
+pack-flux3-transformer.py does) and the LoRA's recipe, e.g. --steps 4 --at 0,3 --shift 3.
 """
 import argparse
 import hashlib
@@ -48,6 +52,9 @@ def main():
     ap.add_argument("--globals-format", default="i8")
     ap.add_argument("--group", type=int, default=64)
     ap.add_argument("--te-format", default="i4")
+    ap.add_argument("--lora")
+    ap.add_argument("--lora-strength", type=float, default=1.0)
+    ap.add_argument("--shift", type=float, default=6.93)
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -135,6 +142,18 @@ def main():
         tr.mode_blocks["image_cond"] = torch.nn.ModuleList()
         for d in (tr.x_embedders, tr.early_stream_modulations, tr.single_stream_modulations):
             del d["image_cond"]
+        flow_map = bool(tr.config.flow_map)
+        manifest["flowMap"] = flow_map
+        if args.lora:
+            import sys
+            sys.path.insert(0, str(here))
+            from flux3_lora import lora_deltas
+            deltas = lora_deltas(args.lora, args.lora_strength)
+            params = dict(tr.named_parameters())
+            with torch.no_grad():
+                for name, d in deltas.items():
+                    params[name].data.add_(d)
+            manifest["lora"] = {"file": Path(args.lora).name, "merged": len(deltas), "strength": args.lora_strength}
         manifest["phase"] = "transformer-quantize"
         globals_names = {p for _, p in flux3_pack.GLOBALS}
         quantized = {"block": 0, "globals": 0, "f16": 0}
@@ -163,7 +182,8 @@ def main():
         img_ids = _prepare_image_ids(grid, grid, 0.5)
         save("denoise/img_ids", img_ids)
         save("denoise/latents_init", latents[0])
-        scheduler = FlowMatchEulerDiscreteScheduler(shift=6.93)
+        scheduler = FlowMatchEulerDiscreteScheduler(shift=args.shift)
+        manifest["shift"] = args.shift
         retrieve_timesteps(scheduler, None, "cpu", sigmas=np.linspace(1.0, 1 / args.steps, args.steps))
         sigmas = scheduler.sigmas
         manifest["sigmas"] = [float(s) for s in sigmas]
@@ -181,10 +201,11 @@ def main():
             return fn
 
         hooks = [tr.timestep_embedder.register_forward_hook(hook("temb")),
-                 tr.target_timestep_embedder.register_forward_hook(hook("target")),
                  tr.context_embedder.register_forward_hook(hook("context_embedder")),
                  tr.x_embedders["image"].register_forward_hook(hook("x_embedder")),
                  tr.norm_out.register_forward_hook(hook("norm_out"))]
+        if flow_map:
+            hooks.append(tr.target_timestep_embedder.register_forward_hook(hook("target")))
         for key, mod in (("mod_early_img", tr.early_stream_modulations["image"]), ("mod_early_txt", tr.early_stream_modulations["txt"]),
                          ("mod_single_img", tr.single_stream_modulations["image"]), ("mod_single_txt", tr.single_stream_modulations["txt"])):
             hooks.append(mod.register_forward_hook(hook(key)))
@@ -207,14 +228,15 @@ def main():
             p = f"step{step}"
             save(f"{p}/latents_in", latents[0])
             save(f"{p}/timestep", timestep)
-            save(f"{p}/target_timestep", target_t)
+            if flow_map:
+                save(f"{p}/target_timestep", target_t)
             t0 = time.time()
             with torch.no_grad():
                 v = tr(hidden_states=latents, encoder_hidden_states=embeds, timestep=timestep, img_ids=img_ids,
-                       txt_ids=txt_ids, target_timestep=target_t, return_dict=False)[0]
+                       txt_ids=txt_ids, target_timestep=target_t if flow_map else None, return_dict=False)[0]
             manifest[f"{p}/seconds"] = round(time.time() - t0, 2)
             temb_img, temb_zero = taps["temb"][0], taps["temb"][1]
-            tgt = taps["target"][0]
+            tgt = taps["target"][0] if flow_map else 0
             save(f"{p}/temb_img", (temb_img + tgt)[0])
             save(f"{p}/temb_zero", (temb_zero + tgt)[0])
             mods = torch.cat([taps["mod_early_img"][0][0, 0], taps["mod_early_txt"][0][0, 0], taps["mod_single_img"][0][0, 0],

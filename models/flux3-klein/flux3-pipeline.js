@@ -32,11 +32,15 @@ export class Flux3Pipeline extends KleinPipeline {
 
   tokenIds(latH, latW, txtTokens) { return { imgIds: flux3ImageIds(latH, latW), txtIds: flux3TextIds(txtTokens) }; }
 
+  // The packed weights record their sampling recipe: the distilled flow map at shift 6.93 and 16
+  // steps, the base with the 4-step distill LoRA merged at shift 3 and 4 steps.
+  get sampling() { return this.ditManifest?.sampling ?? { shift: 6.93, steps: FLUX3_DEFAULT_STEPS }; }
+
   denoiseSchedule(imgTokens, steps) {
-    const s = flux3Schedule(steps);
+    const s = flux3Schedule(steps, this.sampling.shift);
     // The pipeline hands the transformer t / 1000 and the transformer multiplies by 1000, both in f32.
     return { sigmas: s.sigmas, forwardArgs: i => ({ tModel: transformerTime(s.timesteps[i]), targetModel: transformerTime(Math.fround(s.targets[i] * 1000)) }) };
   }
 
-  generate(options) { return super.generate({ steps: FLUX3_DEFAULT_STEPS, ...options }); }
+  generate(options) { return super.generate({ steps: this.sampling.steps, ...options }); }
 }
