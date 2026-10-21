@@ -11,7 +11,7 @@ const release=root=>{if(!root)return;root.traverse(o=>{if(o.isTrellisSurfelRoot)
 
 export default {
   id:'gi-source-study',title:'GI source geometry',
-  async create({host,inputs,record}){
+  async create({host,inputs,record,updateInputs}){
     const hero=sha(inputs.hero),surfelSHA=sha(inputs.surfels),session=await host.scene.open();
     const before=host.rendering.readGI(),abort=new AbortController(),candidates={};
     let comparison,asset,disposed=false,generation=0,mergeFactor=factor(inputs.mergeFactor??16),worker=null,rejectWorker=null;
@@ -87,8 +87,8 @@ export default {
         },
         async setMergeFactor(value){
           const k=factor(value),next=await buildSurfels(k),previous=candidates.surfels;
-          candidates.surfels=next;mergeFactor=k;
-          comparison.select(comparison.read().selection);release(previous.root);return applied('surfel-merge');
+          try{comparison.replace('surfels',next);}catch(error){release(next.root);throw error;}
+          mergeFactor=k;release(previous.root);updateInputs({...inputs,mergeFactor:k});return applied('surfel-merge');
         },
       },
       mount({root,document,invoke}){

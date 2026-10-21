@@ -2,7 +2,7 @@ import {pass,mrt,output,uniform} from 'three/tsl';
 
 // Opt-in Workbench comparison. The normal scene capture remains the receiver
 // and flame-light cache; this additional pass replaces only the sampled source.
-export function createGISourceComparison(scene,camera,receiver,normal,changed) {
+export function createGISourceComparison(scene,camera,receiver,normal,changed,surfaceLighting) {
   const source=pass(scene,camera,{samples:0});
   source.name='SSGI proxy source comparison';source.transparent=false;
   source.setMRT(mrt({output,normal}));
@@ -43,11 +43,19 @@ export function createGISourceComparison(scene,camera,receiver,normal,changed) {
       if(!root?.parent||!candidates||!Object.keys(candidates).length)throw Error('Mounted receiver and source candidates required');
       for(const [key,item] of Object.entries(candidates))if(key==='detailed'||!item.root?.isObject3D||item.root.parent||!item.identity)throw Error('Detached, identified GI candidates required');
       const owned={root,candidates};lease=owned;
+      const releases=new Map();
+      try{for(const [key,item] of Object.entries(candidates))releases.set(key,surfaceLighting.registerProxyRoot(item.root));}
+      catch(error){for(const release of releases.values())release();lease=null;throw error;}
       const current=()=>{if(lease!==owned)throw Error('GI source comparison is closed');};
       return {read,
+        replace(key,item){
+          current();if(!candidates[key]||!item.root?.isObject3D||item.root.parent||!item.identity)throw Error('Detached, identified replacement required');
+          const release=surfaceLighting.registerProxyRoot(item.root);
+          releases.get(key)();releases.set(key,release);candidates[key]=item;changed('source-replacement');
+        },
         select(value){current();if(value!=='detailed'&&!candidates[value])throw Error('Unknown GI source');selection=value;enabled.value=value!=='detailed';changed('source-representation');return read();},
         show(value){current();showSource.value=!!value;changed('source-view');return read();},
-        dispose(){if(lease!==owned)return;enabled.value=false;showSource.value=false;selection='detailed';lease=null;changed('source-comparison-closed');},
+        dispose(){if(lease!==owned)return;enabled.value=false;showSource.value=false;selection='detailed';lease=null;for(const release of releases.values())release();changed('source-comparison-closed');},
       };
     },
   };

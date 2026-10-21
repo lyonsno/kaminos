@@ -88,7 +88,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     limitations:['point-region-surface-approximation','center-cube-area-shadow-approximation','GPU-smoke-visibility-refresh-on-transform','CPU-local-BVH-rebuild-on-vertex-or-topology-edit','no-surface-bounce']};
   let rebuildRevision=0,rebuildTask=null,rebuilding=false;
   function replaceLighting(){
-    releasePoints();buildPoints(pointCount);installMaterials();
+    releasePoints();buildPoints(pointCount);installAllMaterials();
     for(const row of originals.values())for(const material of row.owned){surfaceLighting?.bind(material,irradiance,prepareSurfaceSampling);material.needsUpdate=true;}
   }
   function requestRebuild(){
@@ -115,8 +115,8 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     // unhandled rejection from synchronous UI setters. whenRebuilt rejects.
     rebuildTask.catch(()=>{});
   }
-  function installMaterials(){
-    scene.traverseVisible(mesh=>{
+  function installMaterials(root=scene){
+    root.traverseVisible(mesh=>{
       if(!mesh.isMesh)return;
       const prior=originals.get(mesh);if(prior&&mesh.material===prior.installed)return;
       if(prior){for(const m of prior.owned){surfaceLighting?.unbind(m);m.dispose();}originals.delete(mesh);}
@@ -134,6 +134,19 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const installed=Array.isArray(source)?owned:owned[0];originals.set(mesh,{source,installed,owned});mesh.material=installed;
     });
   }
+  function releaseProxyMaterials(root){
+    root.traverse(mesh=>{
+      const row=originals.get(mesh);if(!row)return;
+      if(mesh.material===row.installed)mesh.material=row.source;
+      for(const material of row.owned){surfaceLighting?.unbind(material);material.dispose();}
+      originals.delete(mesh);
+    });
+  }
+  function installAllMaterials(){
+    installMaterials();
+    for(const root of surfaceLighting?.proxyRoots??[])installMaterials(root);
+  }
+  const releaseProxyAdapter=surfaceLighting?.setProxyMaterialAdapter({install:installMaterials,release:releaseProxyMaterials});
   function prepare(field){
     if(disposed)throw new Error('hybrid lighting disposed');valid=false;
     if(rebuilding||status.status==='lighting-compile-failed')throw Error(status.error??'lighting compilation pending');
@@ -143,7 +156,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
       const domainKey=JSON.stringify(sourceDomain.hi);
       sourceRadius=Math.hypot(...sourceDomain.hi.map((x,a)=>Math.max(Math.abs(x),Math.abs(sourceDomain.lo[a]))));
       translation.value.set(...sourceTransform.translate);scale.value=sourceTransform.scale;
-      installMaterials();
+      installAllMaterials();
       const started=performance.now(),snapshot=localVisibility.snapshot(scene),{revision,geometry:packed}=snapshot;
       status.localBvhBuilds=snapshot.localBuilds;status.visibilityMeshes=snapshot.meshCount;
       if(!gather||revision!==geometryRevision||domainKey!==builtDomain){
@@ -233,6 +246,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     dispose(){
       valid=false;disposed=true;prototype.setSceneSourceFrameConsumer(null);prototype.setSceneDistributedLightFrame(null);
       const cleanup=()=>{
+      releaseProxyAdapter?.();
       for(const [mesh,row] of originals){
         if(mesh.material===row.installed){
           // Preserve edits to the installed material without contaminating an
