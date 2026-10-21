@@ -15,9 +15,11 @@ const shaOf=source=>{
 };
 const surfelRootIn=root=>{let found=null;root.traverse(o=>{if(!found&&o.isTrellisSurfelRoot)found=o;});return found;};
 const digestHex=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
-// Geometry, materials and every texture a material holds (material disposal leaves its textures allocated).
-const disposeTree=root=>root?.traverse(m=>{if(!m.isMesh)return;m.geometry?.dispose();
-  for(const a of Array.isArray(m.material)?m.material:[m.material]){if(!a)continue;for(const v of Object.values(a))if(v?.isTexture)v.dispose();a.dispose?.();}});
+// Geometry, materials and every texture a material holds (material disposal leaves its textures allocated),
+// each disposed once however many meshes or material slots share it.
+const disposeTree=root=>{if(!root)return;const seen=new Set(),once=r=>{if(r&&!seen.has(r)){seen.add(r);r.dispose?.();}};
+  root.traverse(m=>{if(!m.isMesh)return;once(m.geometry);
+    for(const a of Array.isArray(m.material)?m.material:[m.material]){if(!a||seen.has(a))continue;for(const v of Object.values(a))if(v?.isTexture)once(v);once(a);}});};
 
 export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await fetch(url);const j=await r.json();if(!r.ok)throw Error(j.error||`HTTP ${r.status}`);return j;},
   fetchBytes=async url=>{const r=await fetch(url);if(!r.ok)throw Error(`HTTP ${r.status}`);return r.arrayBuffer();},parseGlb,digest=digestHex}){

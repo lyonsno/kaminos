@@ -112,3 +112,13 @@ test('GI-PROXY-01: the page clears the registry when it clears a scene, and rele
   assert.match(body('clearScene'),/sceneGiProxies\.clear\(\)/);
   assert.match(body('removeSceneObjectInternal'),/sceneGiProxies\.release\(entry\.object\)/);
 });
+
+test('GI-PROXY-04: a texture or material shared within the proxy is disposed once',async()=>{
+  const counts={texture:0,material:0};
+  const registry=createGiProxyRegistry({THREE,fetchJson:async()=>({schema:'kaminos.lod-set.v0',levels:[],choice:{...TIERS[1],source:`/api/read?root=generated-meshes&path=${TIERS[1].sha256}.glb`},withinBudget:true}),
+    fetchBytes:async()=>tierBytes(1000),parseGlb:async()=>{const t=new THREE.Texture();t.addEventListener('dispose',()=>counts.texture++);
+      const m=new THREE.MeshStandardMaterial({roughnessMap:t,metalnessMap:t});m.addEventListener('dispose',()=>counts.material++);
+      const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.BoxGeometry(),m),new THREE.Mesh(new THREE.BoxGeometry(),m));return g;}});
+  const {root}=sceneObject(heroSource);await registry.attach(root);registry.release(root);
+  assert.deepEqual(counts,{texture:1,material:1});
+});
