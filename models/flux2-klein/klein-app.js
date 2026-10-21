@@ -27,7 +27,7 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     throw new Error('Klein foreground and device must match');
   }
   if (session && session.queue !== device.queue) throw new Error('Klein session must use the device queue');
-  let pipeline, loading = null, loaded = false, active = null, closing = null, destroyed = false, fatal = null;
+  let pipeline, loading = null, warmupJob = null, loaded = false, active = null, closing = null, destroyed = false, fatal = null;
   const onGpuError = event => { fatal = event.error ?? new Error('Klein WebGPU error'); active?.abort.abort(fatal); };
   function assertOpen() {
     if (destroyed) throw new Error('this Klein app has been destroyed');
@@ -63,13 +63,54 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     throw error;
   }
 
+  async function runWarmup(work) {
+    assertOpen();
+    const route = await session.registerRoute({ routeId: `${routeId}:load` });
+    try {
+      assertOpen();
+      const runId = `klein-warmup:${crypto.randomUUID()}`;
+      warmupJob = route.enqueue({ jobId: runId, execute: async () => {
+        let frameRun, failure;
+        const cleanupErrors = [];
+        try {
+          assertOpen();
+          frameRun = await foreground.beginRun(runId, { routeId });
+          assertOpen();
+          await work();
+          assertOpen();
+        } catch (error) { failure = error; }
+        finally {
+          // Even a failed warmup retains admission until submitted work settles.
+          try { await device.queue.onSubmittedWorkDone(); } catch (e) { cleanupErrors.push(e); }
+          try { await frameRun?.finish(); } catch (e) { cleanupErrors.push(e); }
+        }
+        if (cleanupErrors.length) {
+          fatal = new AggregateError([...(failure ? [failure] : []), ...cleanupErrors], 'Klein warmup cleanup failed');
+          throw fatal;
+        }
+        if (failure) throw failure;
+      } });
+      const completion = await warmupJob.completion;
+      assertOpen();
+      if (completion.status !== 'succeeded') {
+        const error = new Error(completion.failure?.message ?? completion.status);
+        error.name = completion.failure?.name ?? 'Error';
+        throw error;
+      }
+    } finally {
+      warmupJob = null;
+      try { await route.drain(); session.unregisterRoute(route.routeId); }
+      catch (error) { fatal = error; throw error; }
+    }
+  }
+
   function loadWeights(progress = onProgress) {
     assertOpen();
     if (loading) return loading;
     if (loaded) return Promise.resolve();
     loading = Promise.resolve().then(async () => {
       pipeline ??= new Pipeline(device, pipelineOptions);
-      try { await pipeline.load(progress); assertOpen(); loaded = true; }
+      try { await pipeline.load(progress, { runWarmup }); assertOpen(); loaded = true; }
       catch (error) {
         // A failed load cannot leave a half-built instance for a retry to overwrite.
         try { await pipeline.destroy(); pipeline = null; }
@@ -187,6 +228,7 @@ export async function createKleinApp({ device, session, foreground, gpu = global
     if (closing) return closing;
     destroyed = true;
     stop('Klein app destroyed');
+    warmupJob?.cancel('Klein app destroyed');
     closing = (async () => {
       // The original operation retains its own failure; destruction waits for it to retire.
       await Promise.allSettled([active?.promise, loading]);

@@ -165,7 +165,7 @@ export class KleinPipeline {
   }
 
   // onProgress(part, name, { loadedBytes, totalBytes }) reports per-bundle progress over all weights.
-  async load(onProgress = () => {}) {
+  async load(onProgress = () => {}, { runWarmup } = {}) {
     this.assertUsable();
     const { textEncoderUrl: te, transformerUrl: dit, vaeUrl: vae } = this.urls;
     const t0 = performance.now();
@@ -204,7 +204,7 @@ export class KleinPipeline {
     // Live previews: decoder-space latents to RGB, up to 1024 x 1024 (128 x 128 latent pixels).
     this.preview = await createWebGpuLatentPreview({ device: this.device, channels: 32, weights: LATENT_PREVIEW_WEIGHTS,
       bias: LATENT_PREVIEW_BIAS, kernel: LATENT_PREVIEW_FIT.kernel ?? 1, maxPixels: 128 * 128 });
-    await this.precompile();
+    await this.precompile({ runWarmup });
     // Lean: the first generation needs the text encoder, so it takes the transformer's place now
     // (downloading it on a first visit).
     if (lean) await this.useWeights('textEncoder', fetchBundle(te, 'text-encoder'));
@@ -337,7 +337,7 @@ export class KleinPipeline {
   // create; they are then compiled with createComputePipelineAsync, off the GPU process's main
   // thread, so a page's rendering does not stall the way it does when pipelines are compiled
   // synchronously at first use. Returns the number of pipelines compiled.
-  async precompile() {
+  async precompile({ runWarmup = work => work() } = {}) {
     const t0 = performance.now();
     const collected = new Map(), models = [this.textEncoder, this.transformer, this.vae];
     for (const m of models) m.pipelineCollector = collected;
@@ -362,11 +362,17 @@ export class KleinPipeline {
     }));
     // Run the same tiny generation once on the GPU, so each pipeline's first dispatch happens
     // here rather than as a long stall at the start of the visitor's first image.
-    const t1 = performance.now();
-    await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
-    await this.sched.flush('warm');
-    this.sched.stats.history.length = 0;
-    this.timings.warmMs = performance.now() - t1;
+    // The application owns admission for actual GPU execution. Downloads, the dry
+    // collection pass and asynchronous compilation don't reserve the foreground run.
+    await runWarmup(async () => {
+      const t1 = performance.now();
+      try {
+        await this.generateScheduled({ prompt: 'x', seed: 0, width: 64, height: 64, steps: 1, textLength: 'fit0', dry: true });
+        await this.sched.flush('warm');
+      } catch (error) { await this.sched.discard(); throw error; }
+      this.sched.stats.history.length = 0;
+      this.timings.warmMs = performance.now() - t1;
+    });
     this.timings.precompileMs = performance.now() - t0; this.timings.precompiledPipelines = collected.size;
     return collected.size;
   }
