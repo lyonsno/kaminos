@@ -8,7 +8,9 @@ export function validateRendererConsole(messages){assert.ok(Array.isArray(messag
 export function validateBehaviorRoom(state,setup){
  validateActors(state,setup);assert.equal(state.running,setup.running);assert.equal(state.zones?.length,setup.zones.length,'Missing or extra zone');
  for(const zone of setup.zones){const row=state.zones.find(z=>z.id===zone.id);assert.ok(row?.mounted&&row.hostId,'Missing registered zone');matchSemantic(row.transform,zone.transform,'zone transform');assert.equal(row.label,zone.label);}
- for(const actor of setup.actors){const row=state.actors.find(a=>a.id===actor.id);assert.equal(row.active,actor.active);matchSemantic(row.places,actor.places,'actor places');assert.equal(row.state.skin.bones,32,'Wrong rig family');if(!setup.running&&!actor.preview)assert.notEqual(row.state.playback.status,'playing','Paused scene advanced a behavior');}
+ for(const actor of setup.actors){const row=state.actors.find(a=>a.id===actor.id);assert.equal(row.active,actor.active);matchSemantic(row.places,actor.places,'actor places');assert.equal(row.state.skin.bones,32,'Wrong rig family');if(!setup.running&&!actor.preview)assert.notEqual(row.state.playback.status,'playing','Paused scene advanced a behavior');
+  if(actor.creature.wander_travel==='stance'&&!actor.preview){const travel=row.state.action.motion?.travel;assert.equal(travel?.kind,'derived-low-foot-backward-speed','Requested stance travel did not reach the effective controller');assert.ok(Number.isFinite(travel.unitsPerSecond)&&travel.unitsPerSecond>0,'Invalid effective stance speed');assert.deepEqual(travel.supports?.map(s=>s.name),['hindlimb-left-toe','hindlimb-right-toe','forelimb-left-toe','forelimb-right-toe'],'Missing stance supports');}
+ }
 }
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 export async function witness(args){

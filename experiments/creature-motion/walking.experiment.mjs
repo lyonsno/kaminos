@@ -23,6 +23,7 @@ function checkRecipeInputs(inputs){
  if(inputs.label!==undefined&&(typeof inputs.label!=='string'||!inputs.label.trim()))throw Error('Creature label must be nonempty');
  if(inputs.deformation!==undefined&&!['cpu','gpu'].includes(inputs.deformation))throw Error('Unknown creature deformation backend');
  if(inputs.action!==undefined&&!['preview','wander'].includes(inputs.action))throw Error('Unknown initial creature action');
+ if(inputs.wander_travel!==undefined&&!['source','stance'].includes(inputs.wander_travel))throw Error('Unknown wander travel policy');
  if(inputs.wander!==undefined){checkAuthoredTransform(inputs.wander?.area);if(!inputs.wander?.area||!inputs.wander?.motion)throw Error('Wander setup requires the actual area transform and motion state');}
  if(inputs.attention!==undefined){const a=inputs.attention;if(!a||typeof a!=='object'||!Array.isArray(a.interests))throw Error('Attention setup requires an interests array');if(a.enabled!==undefined&&typeof a.enabled!=='boolean')throw Error('Attention enabled must be boolean');if(a.flame!==undefined&&(!a.flame||typeof a.flame!=='object'||a.flame.interest!==undefined&&(!Number.isFinite(a.flame.interest)||a.flame.interest<0)))throw Error('Attention flame setup must be an object with a finite nonnegative interest');}
  if(inputs.choices!==undefined){if(!Array.isArray(inputs.choices))throw Error('Skin choices must be an array');if(inputs.choices.length)validateSkinCaseChoices({choices:inputs.choices,currentCaseSha256:inputs.case_sha256});}
@@ -69,8 +70,9 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
  const releaseHistory=liveRoot?registerSceneObjectPoseHistory(placement,liveRoot.history):()=>{};
  const authoredTransform=()=>liveRoot?liveRoot.read():transformOf(placement);
  const authoredPlacement=()=>liveRoot?liveRoot.sync():placement;
- let wander=inputs.wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.wander.motion}):null;
- let heldWander=inputs.held_wander?createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,snapshot:inputs.held_wander}):null;
+ const makeWander=options=>createWanderMotion({THREE,adapter,walking,travel:chosenInputs.wander_travel??'source',sourceKey:source.motionSha256+':'+source.frameSha256,...options});
+ let wander=inputs.wander?makeWander({snapshot:inputs.wander.motion}):null;
+ let heldWander=inputs.held_wander?makeWander({snapshot:inputs.held_wander}):null;
  let areaRoot=null,areaAsset=null,areaKey='',actionError=null,guideSegment=-1,motionClock=0;
  const relatedAssets=[];
  const transformOf=root=>({position:root.position.toArray(),quaternion:root.quaternion.toArray(),scale:root.scale.toArray()});
@@ -278,7 +280,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     if(!wander){
      placement.updateMatrixWorld(true);const root=[...runtime.bones.values()].find(b=>!b.parent?.isBone),point=frame.worldToLocal(root.getWorldPosition(new THREE.Vector3()));
      const first=adapter.frame(0).bones.find(b=>b.parent===null).worldMatrix,last=adapter.frame(adapter.frames-1).bones.find(b=>b.parent===null).worldMatrix;
-     wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
+     wander=makeWander({area,position:[point.x,point.z],direction:[last[12]-first[12],last[14]-first[14]],seed:input.seed??1});wander.seek(player.read().frame??0);
     }
     areaKey=zoneProvider?JSON.stringify(wander.snapshot().path.areas??null):JSON.stringify(area);actionError=null;mode='cycle';source.presentation.mode=mode;source.presentation.action='wander';const canRun=!zoneProvider||syncArea();refreshGuide();player.seek(wander.read().frame);if(canRun){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
    }),
@@ -305,8 +307,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
-     if(wander)wander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,pathSnapshot:prior.wander.snapshot().path});
-     if(heldWander)heldWander=createWanderMotion({THREE,adapter,walking,sourceKey:source.motionSha256+':'+source.frameSha256,pathSnapshot:prior.heldWander.snapshot().path});
+     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
+     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);return read();
     }
     catch(error){
@@ -340,7 +342,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      checkRecipeInputs(recipe);await checkRecipeView(recipe.view,session.readView());
      const loaded=await loadSources(recipe),check=createGivenPaletteMotion({THREE,motion:loaded.motion,rigFrame:loaded.frame});
      createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6});if(recipe.sample!==undefined)check.frame(recipe.sample);
-     if(recipe.wander)createWanderMotion({THREE,adapter:check,walking:createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6}),sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
+     if(recipe.wander)createWanderMotion({THREE,adapter:check,walking:createWalkingPoseAdapter({THREE,adapter:check,radius:recipe.radius??10,blendFrames:recipe.blend_frames??6}),travel:recipe.wander_travel??'source',sourceKey:loaded.source.motionSha256+':'+loaded.source.frameSha256,snapshot:recipe.wander.motion});
      active();await reopen(recipe);
     }});
    refresh=presentation.update;
