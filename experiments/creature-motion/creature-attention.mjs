@@ -1,5 +1,6 @@
 import {createAttentionPolicy} from './attention-policy.mjs';
 import {createSignalFamiliarity} from './signal-familiarity.mjs';
+import {applyStartlePose} from './startle-pose.mjs';
 import {createLookPoseModifier} from './look-pose.mjs';
 
 // Head-local muzzle forward/up for one cast, measured from its own skin: the
@@ -71,7 +72,8 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
  const patches=new Map();
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
- let interruption=null,powerDropArmed=true;
+ let interruption=null,powerDropArmed=true,startle=null,onset=null,previousPower=null;
+ const localLevels=new Map();
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -110,13 +112,21 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   if(interruption?.id===id&&time-interruption.since<o.glanceSeconds)return;
   const surprise=1-familiarity;
   interruption={id,cause,familiarity,surprise,since:time,until:time+o.interruptSeconds+o.investigateSeconds*surprise,evidence};
+  startle=null;onset=null;
   policy.reset();focus=null;why=null;scan=null;nextScan=null;
   const m=memory.get(id);if(m){m.impulse=0;m.urgency=0;m.alerted=false;}
   remember('interrupt',time,structuredClone(interruption));
  }
+ function recoil({id,point,strength,familiarity,evidence},time){
+  const duration=.4+strength*(.9-.6*familiarity);
+  startle={id,point:[...point],strength,familiarity,since:time,until:time+duration,holdUntil:time+.15+.3*strength,evidence};
+  remember('startle',time,structuredClone(startle));
+ }
  const motionSeconds=(from,to)=>{
-  if(!enabled||!interruption)return Math.max(0,to-from);
-  return Math.max(0,to-from-Math.max(0,Math.min(to,interruption.until)-Math.max(from,interruption.since)));
+  if(!enabled)return Math.max(0,to-from);
+  const spans=[interruption&&[interruption.since,interruption.until],startle&&[startle.since,startle.holdUntil]].filter(Boolean).map(([a,b])=>[Math.max(from,a),Math.min(to,b)]).filter(([a,b])=>b>a).sort((a,b)=>a[0]-b[0]);
+  let held=0,end=from;for(const [a,b] of spans){held+=Math.max(0,b-Math.max(a,end));end=Math.max(end,b);}
+  return Math.max(0,to-from-held);
  };
 
  function modify({bones,group,time,placement}){
@@ -132,6 +142,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    if(interruption&&time>=interruption.until){remember('settled',time,{id:interruption.id,cause:interruption.cause});interruption=null;restUntil=time+o.restSeconds;}
+   if(startle&&time>=startle.until)startle=null;
    candidates=[];const observations=[];
    // Light events sensed since the last frame: alert the creature to their
    // source wherever it is (light reaches all around).
@@ -144,7 +155,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    for(const [id,x] of lightSources)if(time>x.until&&focus?.id!==id)lightSources.delete(id);
    const sources=[...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))];
    // A remembered light event is not a current observation of its source.
-   for(const [id,known] of states)if(!ids.has(id)){known.memory.gap();known.previous=null;}
+   for(const [id,known] of states)if(!ids.has(id)){known.memory.gap();known.previous=null;if(onset?.id===id)onset=null;}
    for(const source of sources){
     const m=memo(source.id),significance=source.interest,active=source.active!==false&&source.sensed!==false;
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
@@ -158,11 +169,14 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      let known=states.get(source.id);if(!known){known={memory:createSignalFamiliarity({decaySeconds:o.familiarSeconds}),previous:null};states.set(source.id,known);}
      if(source.sensed!==false&&sight(source.point,range).visible){
       const state=!active?'off':source.restless?'moving':'still',learned=known.memory.observe({time,value:state});
+      known.familiarity=learned.familiarity;
       if(known.previous&&known.previous!=='off'&&state==='off')interrupt({id:source.id,cause:'light went out',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='moving'&&state==='still')interrupt({id:source.id,cause:'movement stopped',familiarity:learned.familiarity,evidence:{from:known.previous,to:state}},time);
       else if(known.previous==='still'&&state==='moving'){m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.familiarity*=.4;m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='movement resumed';}
+      if(known.previous==='off'&&state!=='off')onset={id:source.id,since:time,familiarity:learned.familiarity};
+      if(state==='off'&&onset?.id===source.id)onset=null;
       known.previous=state;
-     }else{known.memory.gap();known.previous=null;}
+     }else{known.memory.gap();known.previous=null;if(onset?.id===source.id)onset=null;}
     }
     const forgetThis=Math.exp(-dt/(source.forgetSeconds??o.forgetSeconds));
     const lit=active&&m.wasActive===false,changed=m.version!==undefined&&source.version!==undefined&&source.version!==m.version;
@@ -267,6 +281,11 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
      bones.get('neck').updateMatrixWorld(true);
     }
    }
+   if(startle){
+    const elapsed=time-startle.since,attack=.09,release=Math.max(.01,startle.until-startle.since-attack);
+    const pulse=elapsed<attack?Math.sin(Math.max(0,elapsed)/attack*Math.PI/2):Math.pow(Math.max(0,1-(elapsed-attack)/release),2);
+    applyStartlePose({THREE,bones,point:startle.point,strength:startle.strength*pulse});
+   }
    reticle.visible=Boolean(focus)&&weight>.2;
    if(reticle.visible&&placement){
     placement.updateMatrixWorld(true);
@@ -285,9 +304,27 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  function sense({time,samples,source=null,sourcePower=null,status='effective'}){
   if(!enabled)return;
   const valid=Array.isArray(samples)&&samples.length>0&&samples.every(x=>Number.isFinite(x.luminance)&&x.luminance>=0&&Array.isArray(x.point)&&x.point.length===3&&x.point.every(Number.isFinite));
-  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;return;}
+  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;localLevels.clear();previousPower=null;onset=null;return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
   const dt=light.time===null?0:Math.max(0,time-light.time);
+  // A source observed off then on is a real onset even when its renderer left
+  // the old light atlas resident while off. Local illumination sets amplitude;
+  // an unavailable probe or first sight alone cannot supply that measurement.
+  const known=source&&states.get(source.id),litOnset=Boolean(onset&&source&&onset.id===source.id&&known?.previous!=='off');
+  const raw=samples.map(x=>x.luminance).sort((a,b)=>a-b),local=raw[Math.floor(raw.length/2)];
+  const priorLevels=new Map(localLevels);localLevels.clear();
+  const contrasts=samples.flatMap(x=>{const key=x.point.join(','),before=priorLevels.get(key);localLevels.set(key,x.luminance);return before===undefined?[]:[Math.log((x.luminance+o.lightFloor)/(before+o.lightFloor))];}).sort((a,b)=>a-b);
+  const contrast=litOnset?Math.log1p(local/o.lightFloor):contrasts.length?contrasts[Math.floor(contrasts.length/2)]:0;
+  const sourceRise=Number.isFinite(sourcePower)&&previousPower!==null?Math.log((sourcePower+1e-6)/(previousPower+1e-6)):0;
+  if(source&&known?.previous!=='off'&&contrast>.7&&(litOnset||sourceRise>.5)&&dt>0){
+   const rate=contrast/Math.max(dt,.05),strength=(1-Math.exp(-(contrast-.7)/2))*rate/(rate+2);
+   if(rate>1&&!startle){
+    const familiarity=litOnset?onset.familiarity:known?.familiarity??0;
+    recoil({id:source.id,point:source.point,strength,familiarity,evidence:{kind:litOnset?'observed-onset':'measured-rise',local,contrast,sourceRise,dt,sourcePower}},time);
+   }
+  }
+  if(litOnset)onset=null;
+  previousPower=Number.isFinite(sourcePower)?sourcePower:null;
   // Light is remembered per fixed patch of ground, not per sample slot, so
   // walking through static light and shade changes nothing; a patch seen for
   // the first time simply starts its own baseline.
@@ -355,12 +392,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
-  return {enabled,weight,arrested:enabled&&interruption!==null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {enabled,weight,arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}

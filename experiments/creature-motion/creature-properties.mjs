@@ -82,7 +82,7 @@ export function mountCreatureProperties({document,read,invoke,save,open,behavior
   const a=r.attention;attentionBox.hidden=!a;
   if(a){
    attentionToggle.checked=a.enabled;
-   attentionNow.textContent=!a.enabled?'Off':a.interruption?`Stopped to check · ${a.interruption.cause}`:a.why?`Looking at ${a.why.label} · ${a.why.cause}`:'Not looking at anything in particular';
+   attentionNow.textContent=!a.enabled?'Off':a.interruption?`Stopped to check · ${a.interruption.cause}`:a.startle?'Startled · recovering':a.why?`Looking at ${a.why.label} · ${a.why.cause}`:'Not looking at anything in particular';
    const looks=a.history.filter(e=>e.kind==='look').slice(-5).reverse(),key=looks.map(e=>e.time).join('|');
    if(attentionRecent.dataset.key!==key){attentionRecent.dataset.key=key;for(const child of [...attentionRecent.children])child.remove();for(const e of looks)attentionRecent.append(el('li',`${e.time.toFixed(1)} s · ${e.cause} · ${e.label??e.id}`));}
   }
