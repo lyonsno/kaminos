@@ -98,7 +98,8 @@ test('fixed reference changes quadrature width without changing material footpri
   const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--reference'],{encoding:'utf8'});
   assert.equal(r.status,0,r.stdout+r.stderr);
   const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
-  assert.deepEqual(report.armPlan.filter(x=>x.reference).map(x=>x.reference),[2,4,8,16]);
+  assert.deepEqual(report.armPlan.filter(x=>x.reference).map(x=>x.reference),[1,2,4,8,16]);
+  assert.deepEqual(report.armPlan.filter(x=>x.guide===1).map(x=>[x.priority,x.constraints]),[[.1,6],[.5,6],[.75,6],[1,6]]);
   assert.ok(report.armPlan.filter(x=>x.reference).every(x=>x.priority===0&&!x.jitter));
   const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
   assert.match(optical,/s.minimum = base \/ f32\(DIAG_REFERENCE_PANELS\);\s*s.maximum = s.minimum;/);
