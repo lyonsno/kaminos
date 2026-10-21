@@ -48,10 +48,13 @@ class GreenroomPageLease(unittest.TestCase):
         waiting=self.call({'action':'claim','runId':'r2','route':'t'})
         self.assertEqual(waiting['status'],'waiting');self.assertEqual(waiting['heldBy'],['job123'])
 
-    def test_a_page_inside_that_running_job_is_already_covered_by_it(self):
+    def test_GL02_naming_a_running_job_never_exempts_the_page(self):
         job=self.queue/'running'/'job123';job.mkdir(parents=True);(job/'status.json').write_text(json.dumps({'status':'running','job_id':'job123'}))
-        self.assertEqual(self.call({'action':'claim','runId':'r3','route':'t','insideJob':'job123'}),{'status':'inside-job','jobId':'job123'})
-        self.assertEqual(self.call({'action':'claim','runId':'r4','route':'t','insideJob':'nojob'})['status'],'waiting','an unknown job covers nothing')
+        self.assertEqual(self.call({'action':'claim','runId':'r3','route':'t','insideJob':'job123'})['status'],'waiting')
+
+    def test_renew_reports_the_lease_lifecycle_greenroom_records(self):
+        self.call({'action':'claim','runId':'r5','route':'t'})
+        self.assertEqual(self.call({'action':'renew','leaseId':'kaminos-page-r5'})['lifecycle'],'active')
 
     def test_only_page_leases_can_be_renewed_or_released_through_the_page(self):
         with self.assertRaises(PermissionError):self.call({'action':'release','leaseId':'someone-elses-lease','reason':'x'})
@@ -79,6 +82,18 @@ class GreenroomLeaseConfig(unittest.TestCase):
         home,cli=self.machine()
         got=self.resolve({},home)
         self.assertEqual((got['greenroomBin'],got['queueDir'],got['source']),(str(cli),str(home/'.local/state/gpu-greenroom'),'installed-default'))
+    def test_GL03_a_broken_explicit_configuration_fails_instead_of_running_unleased(self):
+        home,cli=self.machine();q=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,q,True)
+        bad=Path(tempfile.mkdtemp())/'trellis.json';bad.write_text('{not json')
+        for env in [{'KAMINOS_GREENROOM_BIN':'/missing/gpu-greenroom','KAMINOS_GREENROOM_QUEUE_DIR':str(q)},
+                    {'KAMINOS_GREENROOM_BIN':str(cli),'KAMINOS_GREENROOM_QUEUE_DIR':'/missing/queue'},
+                    {'KAMINOS_GREENROOM_BIN':str(cli)},
+                    {'KAMINOS_TRELLIS_CONFIG':str(bad)},
+                    {'KAMINOS_TRELLIS_CONFIG':'/missing/trellis.json'}]:
+            with self.subTest(env=env),self.assertRaises(ValueError):self.resolve(env,home)
+    def test_a_trellis_config_without_greenroom_keys_falls_through_to_the_installed_greenroom(self):
+        home,cli=self.machine();cfg=Path(tempfile.mkdtemp())/'trellis.json';cfg.write_text('{}')
+        self.assertEqual(self.resolve({'KAMINOS_TRELLIS_CONFIG':str(cfg)},home)['source'],'installed-default')
     def test_no_greenroom_on_the_machine_is_unconfigured(self):
         home=Path(tempfile.mkdtemp());self.addCleanup(shutil.rmtree,home,True)
         self.assertIsNone(self.resolve({},home))

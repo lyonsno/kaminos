@@ -27024,24 +27024,35 @@ function setupAuthoringAssets(){
     meshRunning.trellisPage=true;redraw();
     try{
       // The run holds a Greenroom lease (greenroom-lease.mjs) for its whole length, so queued GPU jobs wait
-      // for it and it waits for them. ?greenroom_job=<id> marks a page already running inside that job.
+      // for it and it waits for them. A failed release stays owed (retried on page close); a run whose GPU
+      // work did not settle leaves Greenroom blocked on purpose and says what recovery is needed.
       const {withGreenroomLease}=await loadModule('./greenroom-lease.mjs');
       const post=async body=>{const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;};
-      const {result,lease}=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',
-        insideJob:new URLSearchParams(location.search).get('greenroom_job'),signal:options?.signal,
-        onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
-        held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
-          if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
-          return trellisPageRunInner(options);});
-      trellisPageLease=null;
-      if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),...(lease.jobId?{jobId:lease.jobId}:{}),...(lease.renewError?{renewError:lease.renewError}:{})};
+      let outcome;
+      try{
+        outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,
+          onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
+          held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
+            if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
+            return trellisPageRunInner(options);});
+      }catch(error){
+        const handback=error?.greenroomHandback;trellisPageLease=null;
+        if(handback?.state==='release-failed'){trellisPageReleaseOwed=handback.leaseId;setInfo(`Greenroom lease ${handback.leaseId} was not released (${handback.releaseError}); queued GPU jobs wait until it is`);}
+        else if(handback?.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${handback.reason}. Release lease ${handback.leaseId} once this page's GPU work has stopped`);
+        throw error;
+      }
+      const {result,lease}=outcome;trellisPageLease=null;
+      if(lease.releaseError){trellisPageReleaseOwed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
+      if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),
+        ...(lease.renewError?{renewError:lease.renewError}:{}),...(lease.releaseError?{releaseError:lease.releaseError}:{})};
       return result;
     }finally{trellisPageLease=null;meshRunning.trellisPage=false;redraw();}
   };
-  // A tab closed mid-run frees its GPU work: release the lease rather than leave Greenroom blocked.
-  let trellisPageLease=null;
-  addEventListener('pagehide',()=>{if(trellisPageLease)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId:trellisPageLease,reason:'page closed during the run'})],{type:'application/json'}));});
+  // A tab closed mid-run (or with a release still owed) frees its GPU work: release rather than leave Greenroom blocked.
+  let trellisPageLease=null,trellisPageReleaseOwed=null;
+  addEventListener('pagehide',()=>{for(const [leaseId,reason] of [[trellisPageLease,'page closed during the run'],[trellisPageReleaseOwed,'page closed with a release owed']])
+    if(leaseId)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId,reason})],{type:'application/json'}));});
   // Witness hook: run in the page and save the GLB.
   window.kaminosTrellisPage=async options=>{
     let out;

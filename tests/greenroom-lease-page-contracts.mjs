@@ -35,16 +35,62 @@ test('a stop while waiting gives up without claiming further, and without a rele
   await assert.rejects(run,/abort|stop/i);assert.deepEqual(s.actions(),['claim']);
 });
 
-test('no Greenroom on this server, or a page inside a Greenroom job: the run proceeds and says which',async()=>{
-  for(const [reply,status] of [[{status:'unconfigured'},'unconfigured'],[{status:'inside-job',jobId:'j9'},'inside-job']]){
-    const s=server(()=>reply);
-    const {result,lease}=await withGreenroomLease({post:s.post,runId:'r',route:'t',insideJob:'j9'},async l=>l.status);
-    assert.equal(result,status);assert.equal(lease.status,status);assert.deepEqual(s.actions(),['claim']);
-    assert.equal(s.calls[0].insideJob,'j9');
-  }
+test('no Greenroom on this server: the run proceeds and says so',async()=>{
+  const s=server(()=>({status:'unconfigured'}));
+  const {result,lease}=await withGreenroomLease({post:s.post,runId:'r',route:'t'},async l=>l.status);
+  assert.equal(result,'unconfigured');assert.equal(lease.status,'unconfigured');assert.deepEqual(s.actions(),['claim']);
+});
+
+test('GL-02: the page never asks to be exempted from the lease',async()=>{
+  const s=server(()=>({status:'held',leaseId:'kaminos-page-r'}));
+  await withGreenroomLease({post:s.post,runId:'r',route:'t',insideJob:'job1'},async()=>'x');
+  assert.ok(s.calls.every(c=>!('insideJob' in c)));
 });
 
 test('a server that cannot be reached for the claim fails the run loudly instead of running unleased',async()=>{
   const s=server(()=>new Error('fetch failed'));
   await assert.rejects(withGreenroomLease({post:s.post,runId:'r',route:'t'},async()=>'ran'),/Greenroom lease/);
+});
+
+// GL-01: a run whose GPU work did not settle must keep Greenroom blocked.
+import {runTrellisInPage} from '../authoring-trellis-page.mjs';
+function heldTrellis(release){
+  const route={routeId:'trellis2.image-generation.webgpu.v0',runtime:{readTensor(){}},
+    enqueue(job){return {completion:(async()=>({status:'succeeded',output:await job.execute('i')}))()};}};
+  const glb=new Uint8Array([0x67,0x6c,0x54,0x46,2,0,0,0,12,0,0,0]).buffer,outputs={geometry:{},material:{}};
+  const deps={async createTrellisSharedHost(){return {async beginRun({runId}){return {runId,route,withForeground:(p,w)=>w(),async finish(){return {status:release};}};},async dispose(){}};},
+    async loadGenerationInputs(){return {seed:42};},createTrellisImageGenerationAdapter(){return {outputs,async run(){return outputs;},dispose(){}};},
+    createTrellisAssetAdapter(){return {async run(){return {glb,mesh:{uvMetadata:{}},textures:{metadata:{}}};},dispose(){}};}};
+  return ()=>runTrellisInPage({appGpu:{device:{},queue:{},async session(){return {};},beginRun(){return {};}},manifest:{id:'p'},fetchTensor:async()=>new ArrayBuffer(4),
+    pixelValues:new Float32Array(512*512*3),finishing:{postprocessMesh:async m=>m,unwrapMesh:async m=>m},deps});
+}
+test('GL-01: when TRELLIS reports its GPU route held, no release is sent and the run says Greenroom stays blocked',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'});
+  const error=await withGreenroomLease({post:s.post,runId:'r',route:'t'},heldTrellis('held')).catch(e=>e);
+  assert.match(error.message,/not released: held/);
+  assert.deepEqual(s.actions(),['claim'],'no release while the GPU work is unsettled');
+  assert.deepEqual(error.greenroomHandback,{leaseId:'kaminos-page-r',state:'kept-blocking',reason:error.greenroomHandback.reason});
+  assert.match(error.greenroomHandback.reason,/not released/);
+});
+test('GL-01: a TRELLIS run that settles, whether it succeeds or fails, releases',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:{status:'released'});
+  await withGreenroomLease({post:s.post,runId:'r',route:'t'},heldTrellis('released'));
+  assert.deepEqual(s.actions(),['claim','release']);
+});
+
+// GL-04: a failed release is reported, never swallowed.
+test('GL-04: a generation followed by a failed release keeps its result and reports the incomplete handback',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:new Error('release endpoint unavailable'));
+  const {result,lease}=await withGreenroomLease({post:s.post,runId:'r',route:'t'},async()=>'mesh');
+  assert.equal(result,'mesh');assert.match(lease.releaseError,/release endpoint unavailable/);assert.equal(lease.leaseId,'kaminos-page-r');
+});
+test('GL-04: a failed run followed by a failed release keeps both failures',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r'}:new Error('release endpoint unavailable'));
+  const error=await withGreenroomLease({post:s.post,runId:'r',route:'t'},async()=>{throw Error('boom');}).catch(e=>e);
+  assert.equal(error.message,'boom');assert.match(error.greenroomHandback?.releaseError,/release endpoint unavailable/);
+});
+test('a renewal that comes back not active (Greenroom moved the lease to ownership_unknown) is reported',async()=>{
+  const clock=manual(),s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-r',ttlSeconds:120}:b.action==='renew'?{status:'held',lifecycle:'ownership_unknown'}:{status:'released'});
+  const {lease}=await withGreenroomLease({post:s.post,runId:'r',route:'t',setTimer:clock.setTimer,clearTimer:clock.clearTimer},async()=>{await clock.fire();return 'mesh';});
+  assert.match(lease.renewError,/ownership_unknown/);
 });

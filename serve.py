@@ -2965,27 +2965,35 @@ def cancel_owned_gpu_job(job_id, *, queue_dir, greenroom_bin, runs_root):
 
 # A model run in the page (in-page TRELLIS) holds a cooperative Greenroom lease, so queued jobs and
 # other lanes' leases wait for it and it waits for them. The server claims for the page (holder pid:
-# this server). A page running inside a Greenroom job (an automated witness) names that job instead.
+# this server). No page is exempt: an automated witness takes the same lease, outside any queue job.
 # Only leases this route issued (kaminos-page-*) can be renewed or released through it.
 def greenroom_lease_config():
     """The Greenroom this server's page leases go through, and where that came from: explicit environment,
-    else the TRELLIS queue config, else this machine's installed gpu-greenroom with its own default queue
-    (the queue the CLI uses with no --queue-dir). None only when the machine has no Greenroom."""
-    def usable(bin_path, queue_dir):
-        return bool(bin_path and queue_dir and Path(bin_path).is_file() and Path(queue_dir).is_dir())
+    else the TRELLIS queue config's Greenroom, else this machine's installed gpu-greenroom with its own
+    default queue (the queue the CLI uses with no --queue-dir). None only when nothing is configured and the
+    machine has no Greenroom. A configuration that names a Greenroom it cannot use raises ValueError: a page
+    must not run unleased because a configured path went stale."""
+    def check(bin_path, queue_dir, where):
+        if not (bin_path and Path(bin_path).is_file()):
+            raise ValueError(f"{where} names no usable gpu-greenroom executable: {bin_path or '(missing)'}")
+        if not (queue_dir and Path(queue_dir).is_dir()):
+            raise ValueError(f"{where} names no usable Greenroom queue directory: {queue_dir or '(missing)'}")
+        return bin_path, queue_dir
     env = os.environ
-    if usable(env.get("KAMINOS_GREENROOM_BIN"), env.get("KAMINOS_GREENROOM_QUEUE_DIR")):
-        return {"greenroomBin": env["KAMINOS_GREENROOM_BIN"], "queueDir": env["KAMINOS_GREENROOM_QUEUE_DIR"], "source": "environment"}
+    if env.get("KAMINOS_GREENROOM_BIN") or env.get("KAMINOS_GREENROOM_QUEUE_DIR"):
+        bin_path, queue_dir = check(env.get("KAMINOS_GREENROOM_BIN"), env.get("KAMINOS_GREENROOM_QUEUE_DIR"), "KAMINOS_GREENROOM_BIN/QUEUE_DIR")
+        return {"greenroomBin": bin_path, "queueDir": queue_dir, "source": "environment"}
     if env.get("KAMINOS_TRELLIS_CONFIG"):
         try:
             config = json.loads(Path(env["KAMINOS_TRELLIS_CONFIG"]).read_text())
-            if usable(config.get("greenroomBin"), config.get("queueDir")):
-                return {"greenroomBin": config["greenroomBin"], "queueDir": config["queueDir"], "source": "trellis-config"}
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as error:
+            raise ValueError(f"KAMINOS_TRELLIS_CONFIG cannot be read: {error}") from error
+        if config.get("greenroomBin") or config.get("queueDir"):
+            bin_path, queue_dir = check(config.get("greenroomBin"), config.get("queueDir"), "KAMINOS_TRELLIS_CONFIG")
+            return {"greenroomBin": bin_path, "queueDir": queue_dir, "source": "trellis-config"}
     installed = shutil.which("gpu-greenroom") or str(Path.home() / ".local/bin/gpu-greenroom")
     default_queue = str(Path.home() / ".local/state/gpu-greenroom")
-    if usable(installed, default_queue):
+    if Path(installed).is_file() and Path(default_queue).is_dir():
         return {"greenroomBin": installed, "queueDir": default_queue, "source": "installed-default"}
     return None
 
@@ -3002,9 +3010,6 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
         run_id = str(payload.get("runId") or "")
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
             raise ValueError("a lease claim needs the run id")
-        inside = payload.get("insideJob")
-        if inside and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(inside)) and (running / str(inside)).is_dir():
-            return {"status": "inside-job", "jobId": str(inside)}
         lease_id = f"kaminos-page-{run_id}"
         done = cli("claim", "--lease-id", lease_id, "--owner", "kaminos-page", "--agent-id", f"kaminos-page:{run_id}",
                    "--repo-root", str(repo_root), "--pid", str(server_pid), "--effective-route", str(payload.get("route") or "kaminos-page"),
@@ -3019,7 +3024,11 @@ def greenroom_page_lease(payload, *, greenroom_bin, queue_dir, server_pid, repo_
         done = cli("renew", lease_id, "--ttl-seconds", str(ttl_seconds))
         if done.returncode != 0:
             raise RuntimeError((done.stderr or done.stdout).strip()[-300:] or "lease renew failed")
-        return {"status": "held", "leaseId": lease_id, "ttlSeconds": ttl_seconds}
+        try:
+            lifecycle = json.loads(done.stdout).get("lifecycle_state")
+        except ValueError:
+            lifecycle = None
+        return {"status": "held", "leaseId": lease_id, "ttlSeconds": ttl_seconds, "lifecycle": lifecycle}
     if action == "release":
         done = cli("release", lease_id, "--released-by", "kaminos-page", "--reason", str(payload.get("reason") or "page run ended")[:200])
         if done.returncode != 0:
