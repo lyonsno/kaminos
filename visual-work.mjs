@@ -4,6 +4,34 @@ import path from 'node:path';
 import { compositionRestoreUrl } from './scene-authoring.mjs';
 import { verifyAuthoringServer } from './scene-authoring-witness-identity.mjs';
 import { decodeScreenshotPngRgb } from './screenshot-png-rgb.mjs';
+import { checkedRenderOutput, outputPixels } from './render-output.mjs';
+
+export function visualWorkOutput({output = {}, reason = null} = {}) {
+  const settings = checkedRenderOutput({width:640,height:480,quality:'preview',...output});
+  const pixels = outputPixels(settings);
+  const justification = typeof reason === 'string' ? reason.trim() : '';
+  if (settings.kind === 'recording') throw Error('Visual-work observations use still output; use the recording flow for clips');
+  if ((pixels.width > 640 || pixels.height > 480 || settings.quality !== 'preview') && !justification)
+    throw Error('Expensive output requires an explicit reason');
+  return {settings,pixels,reason:justification || null};
+}
+
+export function prepareVisualWorkScene(source, {reason = null} = {}) {
+  const justification = typeof reason === 'string' ? reason.trim() : '';
+  const simulation = Boolean(source.composition || source.localLiquid || source.objects?.some(object =>
+    object.simulation || ['simulation-domain','flame-emitter','local-liquid-emitter'].includes(object.type)));
+  if (simulation && !justification) throw Error('Authored simulation requires an explicit cost reason; preview output does not budget physics');
+  if (justification) return {document:structuredClone(source),policy:{mode:'explicit',reason:justification,simulation}};
+  const document = structuredClone(source);
+  document.editorDisplay = {...document.editorDisplay,quality:'preview'};
+  document.postprocessing = {...document.postprocessing,
+    ao:{...document.postprocessing?.ao,enabled:false},
+    dof:{...document.postprocessing?.dof,enabled:false},
+    sceneGI:{...document.postprocessing?.sceneGI,mode:'gtao',view:'scene'}};
+  document.capture = null;
+  return {document,policy:{mode:'cheap',simulation:false,
+    overrides:{quality:'preview',ao:false,dof:false,sceneGI:'gtao'}}};
+}
 
 export function assertCapturePixels({ width, height, channels, pixels }, capture) {
   assert.ok(width === capture.width && height === capture.height && pixels.length === width * height * channels,
@@ -52,7 +80,7 @@ export function assertMountedScene(document, actual, {authoredObjects=[],volume=
 
 // The caller supplies a Playwright page and feature operations. All edits and
 // persistence still run through the mounted editor's normal public operations.
-export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null,owner=null, out, exercise }) {
+export async function visualWork({ page, origin, repoRoot, sceneStore, basinStore, sceneFile, workspace=null,owner=null, out, exercise, execution=null }) {
   await fs.mkdir(out, { recursive: true });
   const report = { status: 'running', phase: 'identity', startedAt: new Date().toISOString(),
     requested: { origin, repoRoot, sceneStore, basinStore, sceneFile, workspace }, observations: [], errors: [] };
@@ -67,12 +95,29 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
     return response.json();
   };
   try {
+    const output = execution === null ? null : visualWorkOutput(execution);
+    report.execution = output;
     report.serving = await verifyAuthoringServer({ origin, repoRoot });
     if (sceneStore) assert.equal(await fs.realpath(sceneStore), await fs.realpath(report.serving.sceneStore), 'Wrong scene store');
     if (basinStore) assert.equal(await fs.realpath(basinStore), await fs.realpath(report.serving.basinStore), 'Wrong basin store');
     const open = async filename => {
       report.phase = 'open'; await write();
-      const document = await readScene(filename);
+      let document = await readScene(filename);
+      if (output) {
+        const prepared = prepareVisualWorkScene(document, output);
+        const sourceFilename = filename;
+        // Save through the normal scene store; preserve the caller's source file.
+        const response = await fetch(new URL('/api/save-scene', origin), {method:'POST',
+          headers:{'Content-Type':'application/json'},body:JSON.stringify(prepared.document)});
+        if (!response.ok) throw Error(`Execution scene save failed: HTTP ${response.status}`);
+        const saved = await response.json();
+        if (!saved.saved) throw Error('Execution scene save returned no filename');
+        filename = saved.saved;
+        document = await readScene(filename);
+        assert.deepEqual(document, prepared.document, 'Execution scene differs from requested cost settings');
+        (report.executionScenes ??= []).push({sourceFilename,filename,policy:prepared.policy});
+        await write();
+      }
       const url = compositionRestoreUrl(document.composition, filename, origin, workspace,owner);
       // Leaving the document explicitly also exercises fresh restoration when
       // only the scene hash would otherwise change.
@@ -84,8 +129,16 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
         if (failure || /Scene load failed|Invalid scene|water host unavailable/i.test(status)) throw Error(failure?.textContent || status);
         return /^(Scene loaded|Volume scene loaded)/.test(status);
       });
-      const mount = await page.evaluate(() => ({objects:window.kaminosSceneObjectDebugState(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,volume:window.__kaminosVolumePrototype?.debugState()}));
+      const mount = await page.evaluate(() => {
+        const volume=window.__kaminosVolumePrototype?.debugState();
+        return {objects:window.kaminosSceneObjectDebugState(),authoredObjects:window.kaminosSceneAuthoring?.read().objects,
+          volume:volume?.active ? volume : {active:false}};
+      });
       assertMountedScene(document, mount.objects, mount);report.mount=mount;
+      if (output && !output.reason) {
+        const display = await page.evaluate(() => window.kaminosViewportSettings.read());
+        assert.equal(display.quality, 'preview', 'Cheap viewport quality was not applied');
+      }
       assert.equal(new URL(page.url()).origin, new URL(origin).origin, 'Mount changed origin');
       const route = new URL(page.url());
       const effectiveScene = route.searchParams.get('scene') || new URLSearchParams(route.hash.slice(1)).get('scene');
@@ -100,21 +153,29 @@ export async function visualWork({ page, origin, repoRoot, sceneStore, basinStor
       report.phase = `observe:${name}`; await write();
       await settle(page);
       const effective = await observe(page);
+      const rendered = capture && output ? await page.evaluate(settings => window.kaminosRenderOutput.capture(settings), output.settings) : null;
       const result = await page.evaluate(capture => capture
-        ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture);
+        ? window.captureComposition({ result: true }) : window.saveSceneAs({ result: true }), capture && !output);
       if (!result?.ok) throw Error(`Save failed: ${result?.error || 'no result'}`);
       const persisted = await readScene(result.filename);
       assertSavedResult(result, persisted, {workspace,owner:expectedOwner});
       assert.deepEqual(report.errors, [], 'Uncaught browser error');
       await fs.writeFile(path.join(out, `${name}.kaminos.json`), JSON.stringify(persisted, null, 2));
       if (capture) {
-        assert.ok(persisted.capture?.image?.startsWith('data:image/png;base64,'), 'Capture missing PNG');
-        const png = Buffer.from(persisted.capture.image.split(',')[1], 'base64');
-        assertCapturePixels(decodeScreenshotPngRgb(png), persisted.capture);
+        const image = rendered?.dataUrl ?? persisted.capture?.image;
+        assert.ok(image?.startsWith('data:image/png;base64,'), 'Capture missing PNG');
+        if (output) {
+          assert.equal(rendered.width, output.pixels.width, 'Wrong output width');
+          assert.equal(rendered.height, output.pixels.height, 'Wrong output height');
+          assert.deepEqual(rendered.settings, output.settings, 'Wrong output settings');
+        }
+        const png = Buffer.from(image.split(',')[1], 'base64');
+        assertCapturePixels(decodeScreenshotPngRgb(png), rendered ?? persisted.capture);
         await fs.writeFile(path.join(out, `${name}.png`), png);
       }
+      const {dataUrl, ...renderReceipt} = rendered ?? {};
       const observation = { name, filename: result.filename, url: result.url, captured: capture,
-        effective, savedAt: new Date().toISOString() };
+        effective, ...(rendered ? {rendering:renderReceipt,image:`${name}.png`,state:'authored-scene'} : {}), savedAt: new Date().toISOString() };
       report.observations.push(observation); await write();
       return result;
     };
