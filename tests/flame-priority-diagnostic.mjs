@@ -1,3 +1,4 @@
+// kaminos-test: node
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -45,4 +46,21 @@ test('complete blank beauty and count buffers are rejected',()=>{
  const blank={ok:true,image:{width:1,height:1,rgba:[0,0,0,255]}};
  assert.equal(vm.runInNewContext(condition,{s:blank}),true);
  assert.equal(vm.runInNewContext(condition,{s:{...blank,image:{...blank.image,rgba:[5,0,0,255]}}}),false);
+});
+test('constraint isolation retains the complete factorial and effective shader switches',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-constraints-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--constraints'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  assert.ok(Array.isArray(report.armPlan),'constraint arms must be declared before capture');
+  assert.deepEqual(report.armPlan.filter(x=>x.priority===.75).map(x=>x.constraints),[0,1,2,3,4,5,6,7]);
+  const {label:first,...firstArm}=report.armPlan[0],{label:last,...lastArm}=report.armPlan.at(-1);
+  assert.notEqual(first,last);assert.deepEqual(firstArm,lastArm);
+  const core=await fs.readFile(dir+'/output/effective-volume-core.js','utf8');
+  assert.match(core,/if \(\(DIAG_CONSTRAINTS & 1u\) != 0u\) \{ minimum = dtBase; \}/);
+  assert.match(core,/if \(\(DIAG_CONSTRAINTS & 2u\) != 0u\) \{ maximum = dtBase \* 4\.0; \}/);
+  assert.match(core,/if \(\(DIAG_CONSTRAINTS & 4u\) != 0u\) \{ stop = remaining; \}/);
+  assert.match(core,/DIAG_CONSTRAINTS:globalThis\.__priorityDiagnostic\?\.constraints\|\|0/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
