@@ -8,6 +8,10 @@ test('surfel material rows remain instance-owned with transparent and opaque pop
  assert.equal(c.read().count,2);assert.equal(c.root.children.length,2);
  const clear=c.root.children.find(m=>m.userData.transmissive);
  assert.equal(clear.count,1);assert.ok(clear.material.transmissionNode);
+ const opaque=c.root.children.find(m=>!m.userData.transmissive);
+ assert.equal(opaque.material.transmission,1,'reconstructed wall classification must not depend on source-row opacity');
+ c.set({reconstruction:false});assert.equal(opaque.material.transmission,0);
+ c.set({reconstruction:true});assert.equal(opaque.material.transmission,1);
  assert.ok(Math.abs(clear.geometry.getAttribute('surfelOpacity').array[0]-.3)<1e-6);
  c.set({mode:'opaque'});assert.equal(clear.material.transmission,0);
  c.set({mode:'glass',thickness:.03});assert.equal(clear.material.transmission,1);
