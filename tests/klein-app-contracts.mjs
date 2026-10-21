@@ -116,6 +116,28 @@ async function frame(app, id) {
   await app.destroy();
 }
 
+// Pausing a lean-residency weight reload waits for its CPU window, then parks GPU admission.
+{
+  const entered = deferred(), release = deferred();
+  const app = await createKleinApp({ device: device(), Pipeline: Producer,
+    pipelineOptions: { beforeDuty: options => options.schedule.withForeground('weights', async () => {
+      entered.resolve(); await release.promise;
+    }) } });
+  const run = app.generate({});
+  // Install rejection handlers before the intentionally failing pre-fix pause.
+  const outcome = run.then(value => ({ value }), error => ({ error }));
+  await entered.promise;
+  const pausing = app.pause().then(value => ({ value }), error => ({ error }));
+  await new Promise(r => setImmediate(r)); release.resolve();
+  const paused = await pausing;
+  assert.equal(paused.error, undefined, 'pause during weight reload must not overlap foreground windows');
+  assert.equal(paused.value.status, 'paused');
+  await frame(app, 'paused-after-weights');
+  await app.resume();
+  assert.equal((await outcome).error, undefined);
+  await app.destroy();
+}
+
 // Pending cancellation doesn't wait for unrelated host work or invoke the model.
 {
   const dev = device(), held = deferred(), entered = deferred();

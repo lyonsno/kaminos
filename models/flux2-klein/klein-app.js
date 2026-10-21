@@ -107,13 +107,22 @@ export async function createKleinApp({ device, session, foreground, gpu = global
           route = await session.registerRoute({ routeId, runtimeOptions: {
             runtimeLabel: 'klein-app', foregroundOpportunities: frameRun.foregroundOpportunities } });
           stopped(abort.signal);
-          run.control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
+          // A pause can arrive during a lean-residency weight reload. Both permit frames,
+          // but the foreground service admits one CPU window at a time. Park behind the
+          // current reload; the control has already sealed admission for the next GPU duty.
+          let windowTail = Promise.resolve();
+          const withForeground = (phase, work) => {
+            const window = windowTail.then(() => frameRun.withForeground(phase, work));
+            windowTail = window.catch(() => {});
+            return window;
+          };
+          run.control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground });
           run.phase = 'queued';
           run.job = route.enqueue({ jobId: frameRun.runId, execute: async invocation => {
             run.phase = 'generating';
             stopped(abort.signal);
             return pipeline.generate({ ...options, schedule: { maxInFlight: 2, ...scheduling, ...runScheduling,
-              runtime: route.runtime, invocation, control: run.control, signal: abort.signal, withForeground: frameRun.withForeground } });
+              runtime: route.runtime, invocation, control: run.control, signal: abort.signal, withForeground } });
           } });
           const completion = await run.job.completion;
           stopped(abort.signal);
