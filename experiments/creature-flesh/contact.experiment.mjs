@@ -35,7 +35,12 @@ export default {
   const parameters={young:inputs.young??30,bulk:inputs.bulk??100};let volume=createFleshVolume(prepared,parameters),session,bodyAsset,probeAsset,unsubscribe,disposed=false,playing=false,motion=false,physical=true,frame=0,stepCount=0,poseKey='',palette,offsets=volume.offsets(),mirror=null,mirrorKey='',stroke=null,error=null,refresh=()=>{};
   const dt=1/60,profile=prepared.construction.profile[Math.floor(prepared.construction.sections/2)],radius=profile.radius[0]*.5;
   probe.scale.setScalar(radius);
-  const localStart=prepared.construction.origin.map((v,a)=>v+prepared.construction.axis[a]*prepared.construction.length*.5+prepared.construction.right[a]*(profile.center[0]+profile.radius[0]+radius*1.1)+prepared.construction.up[a]*profile.center[1]);
+  let localStart,pressDirection;
+  function seatStroke(){
+   const c=prepared.construction.crossSection,m=(c-1)/2,k=Math.floor(prepared.construction.sections/2),points=volume.points(),surface=points[(k*c+m)*c+c-1],center=points[(k*c+m)*c+m],delta=surface.map((v,a)=>v-center[a]),length=Math.hypot(...delta);
+   if(!(length>0))throw Error('Posed flank has no outward contact direction');
+   pressDirection=delta.map(v=>v/length);localStart=surface.map((v,a)=>v+pressDirection[a]*radius*1.1);
+  }
   function setPose(index){
    if(!Number.isInteger(index)||index<0||index>=adapter.frames)throw Error('Source frame outside retained clip');
    const pose=adapter.frame(index),byName=new Map(pose.bones.map(b=>[b.name,b.skinMatrix])),next=[identity,...data.manifest.channels.slice(1).map(name=>byName.get(name))];
@@ -60,7 +65,7 @@ export default {
    if(disposed)throw Error('Contact experiment disposed');
    for(let i=0;i<count;i++){
     if(motion)setPose(Math.min(adapter.frames-1,Math.floor((stepCount+1)*dt*adapter.fps)));
-    if(stroke){stroke.time=++stroke.steps*dt;const t=stroke.time,amount=t<1?t:t<2?1:t<3?3-t:0;putProbe(localStart.map((v,a)=>v-prepared.construction.right[a]*radius*.75*amount));if(t>=3){stroke=null;playing=false;}}
+    if(stroke){stroke.time=++stroke.steps*dt;const t=stroke.time,amount=t<1?t:t<2?1:t<3?3-t:0;putProbe(localStart.map((v,a)=>v-pressDirection[a]*radius*.75*amount));if(t>=3){stroke=null;playing=false;}}
     placement.updateMatrixWorld(true);probe.updateMatrixWorld(true);const center=root.worldToLocal(probe.getWorldPosition(new THREE.Vector3())).toArray(),scale=probe.getWorldScale(new THREE.Vector3()),bodyScale=root.getWorldScale(new THREE.Vector3());
     if(Math.max(scale.x,scale.y,scale.z)-Math.min(scale.x,scale.y,scale.z)>1e-5)throw Error('Contact primitive requires a uniformly scaled sphere');
     if(!(bodyScale.x>0)||Math.max(bodyScale.x,bodyScale.y,bodyScale.z)-Math.min(bodyScale.x,bodyScale.y,bodyScale.z)>1e-5)throw Error('Physical body requires positive uniform authored scale');
@@ -68,20 +73,20 @@ export default {
    }
    publish();refresh();return read();
   }
-  function reset(){volume=createFleshVolume(prepared,parameters);volume.setEnabled(physical);poseKey='';stepCount=0;stroke=null;setPose(0);putProbe(localStart);publish();return read();}
+  function reset(){volume=createFleshVolume(prepared,parameters);volume.setEnabled(physical);poseKey='';stepCount=0;stroke=null;setPose(0);seatStroke();putProbe(localStart);publish();return read();}
   async function dispose(){if(disposed)return;disposed=true;unsubscribe?.();refresh=()=>{};mirror?.dispose();deformer.dispose();if(session)await session.dispose();else{geometry.dispose();mesh.material.dispose();probe.geometry.dispose();probe.material.dispose();guideGeometry.dispose();guide.material.dispose();}if(globalThis.window?.kaminosCreatureFlesh===diagnostic)delete globalThis.window.kaminosCreatureFlesh;}
   const diagnostic={read,advance,geometry:currentGeometry,physicalState:()=>({points:volume.points(),offsets:volume.offsets()}),gpu:()=>deformer.readback()};
   try{
-   session=await host.scene.open();setPose(0);putProbe(localStart);publish();
+   session=await host.scene.open();setPose(0);seatStroke();putProbe(localStart);publish();
    bodyAsset=await session.attach(placement,{owned:true,metadata:{label:placement.name,type:'glb',source:{...data.source,physicalPreparation:inputs.prepared_sha256}}});
    probeAsset=await session.attach(probe,{owned:true,metadata:{label:probe.name,type:'mesh',source:'kinematic-sphere-contact-control'}});
-   const center=new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()),direction=new THREE.Vector3(...prepared.construction.right).multiplyScalar(5).add(new THREE.Vector3(0,1.4,2));session.setView(inputs.view??{position:center.clone().add(direction).toArray(),target:center.toArray()});
+   const center=new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3()),direction=new THREE.Vector3(...prepared.construction.right).multiplyScalar(5).add(new THREE.Vector3(0,1.4,2));session.setView(inputs.view??{position:center.clone().add(direction).toArray(),target:center.toArray()});if(!inputs.view)host.scene.frame([placement,probe]);
    unsubscribe=session.onFrame(()=>{if(!playing)return;try{advance();}catch(e){error=e.message;playing=false;record({kind:'creature-flesh.step',phase:'failed',message:e.message,state:read()});refresh();}});
    if(globalThis.window)globalThis.window.kaminosCreatureFlesh=diagnostic;
   }catch(e){await dispose();throw e;}
   const action=(kind,fn)=>(...args)=>{const result=fn(...args);session.redraw();refresh();record({kind:'creature-flesh.'+kind,phase:'applied',state:read()});return result??read();};
   return{read,dispose,operations:{
-   advance:action('advance',advance),reset:action('reset',reset),frame:action('frame',setPose),
+   advance:action('advance',advance),reset:action('reset',reset),frame:action('frame',setPose),view:action('view',value=>session.setView(value)),
    play:action('play',value=>{if(typeof value!=='boolean')throw Error('Boolean playback required');playing=value;}),
    motion:action('motion',value=>{if(typeof value!=='boolean')throw Error('Boolean motion required');motion=value;}),
    physical:action('physical',value=>{if(typeof value!=='boolean')throw Error('Boolean physical response required');physical=value;volume.setEnabled(value);publish();}),
