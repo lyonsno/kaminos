@@ -46,6 +46,9 @@ LISTENER_STALE_SECONDS = 15.0
 LISTENER_HEARTBEAT_SECONDS = 3.0
 LISTENER_GRACE_SECONDS = 6.0
 PAGE_TOKEN_GRACE_SECONDS = 15.0
+# A hub (one shared notes stream per browser) reports the pages it carries every
+# 10 s; one silent this long has gone, and its pages with it.
+HUB_SILENCE_SECONDS = 60.0
 
 
 class NotesError(Exception):
@@ -525,9 +528,9 @@ class NotesHttp:
     """The /api/notes routes. They answer only this machine at the server's own
     address: local tools without an Origin, or this server's own pages."""
 
-    def __init__(self, log, *, source, directory=lambda: [], notify=None):
+    def __init__(self, log, *, source, directory=lambda: [], notify=None, clock=time.monotonic):
         self.log, self.source, self.directory, self.notify = log, source, directory, notify
-        self._pages, self._lock = {}, threading.Lock()
+        self._pages, self._hubs, self._lock, self._clock = {}, {}, threading.Lock(), clock
 
     def handle(self, handler, method, path):
         parsed = urlparse(path)
@@ -536,6 +539,8 @@ class NotesHttp:
             ("GET", "/api/notes/stream"): self.stream,
             ("GET", "/api/notes/wait"): self.wait,
             ("GET", "/api/notes/presence"): self.presence,
+            ("POST", "/api/notes/presence"): self.hub_report,
+            ("POST", "/api/notes/hello"): self.hello,
             ("GET", "/api/notes/picture"): self.picture,
             ("POST", "/api/notes"): self.post,
             ("POST", "/api/notes/receipt"): self.receipt,
@@ -616,18 +621,14 @@ class NotesHttp:
         token = handler.headers.get("X-Kaminos-Notes-Token")
         if page_id is None and token is None:
             return {"via": "cli", "source": self.source()}
-        with self._lock:
-            page = self._pages.get(page_id or "")
-            valid = (page is not None and token is not None and hmac.compare_digest(page["token"], token)
-                     and (page["streams"] > 0 or time.monotonic() < page["expires"]))
-        if not valid:
+        if not self.page_token_live(page_id or "", token):
             raise NotesError(403, "page-token", "This page's notes link has lapsed; reload the page")
         return {"via": "page", "pageId": page_id, "source": self.source()}
 
     # --- routes ------------------------------------------------------------
     def list(self, handler, query):
         after = int(self._first(query, "after", "0") or 0)
-        self._json(handler, {"schema": NOTES_SCHEMA, "root": str(self.log.root), "pageAuthor": self.log.page_author,
+        self._json(handler, {"schema": NOTES_SCHEMA, "root": str(self.log.root), "pageAuthor": self.log.page_author, "hub": True,
                              "lastSeq": self.log.last_seq, "events": self.log.events(after), "issues": self.log.issues})
 
     def post(self, handler, query):
@@ -704,10 +705,75 @@ class NotesHttp:
         notes = self.log.claim(name, timeout, still_wanted=lambda: not self._peer_closed(handler), server=self.source().get("origin"))
         self._json(handler, {"schema": NOTES_SCHEMA, "root": str(self.log.root), "notes": notes, "lastSeq": self.log.last_seq})
 
+    # --- pages: by their own stream, or carried by a browser's hub ------------
+    def _carried(self):
+        """Pages some live hub carries now; hubs silent too long are forgotten. Call with the lock held."""
+        now = self._clock()
+        for hub_id in [hub_id for hub_id, hub in self._hubs.items() if now - hub["seen"] >= HUB_SILENCE_SECONDS]:
+            del self._hubs[hub_id]
+        return {page_id for hub in self._hubs.values() for page_id in hub["pages"]}
+
+    def _page(self, page_id):
+        """This page's record, kept while it is live and made afresh once it has lapsed. Call with the lock held."""
+        page = self._pages.get(page_id)
+        if page is None or (page["streams"] == 0 and self._clock() >= page["expires"] and page_id not in self._carried()):
+            page = self._pages[page_id] = {"token": secrets.token_urlsafe(24), "author": self.log.page_author,
+                                           "since": time.time(), "streams": 0, "expires": 0.0}
+        return page
+
+    def hello_page(self, page_id):
+        """A page's token and starting point, asked for by the page itself (a hub's
+        shared stream carries no page's secrets). It holds for a short grace, and
+        then while the page's stream is open or a hub carries it."""
+        if not PAGE_ID.match(page_id or ""):
+            raise NotesError(400, "request", "page is 8-80 letters, digits, dashes or underscores")
+        with self._lock:
+            page = self._page(page_id)
+            page["expires"] = max(page["expires"], self._clock() + PAGE_TOKEN_GRACE_SECONDS)
+            token = page["token"]
+        return {"schema": NOTES_SCHEMA, "token": token, "author": self.log.page_author, "root": str(self.log.root),
+                "lastSeq": self.log.last_seq}
+
+    def page_token_live(self, page_id, token):
+        with self._lock:
+            page = self._pages.get(page_id)
+            return (page is not None and token is not None and hmac.compare_digest(page["token"], token)
+                    and (page["streams"] > 0 or self._clock() < page["expires"] or page_id in self._carried()))
+
+    def hub_presence(self, body):
+        """A hub's report of every page it carries. A report numbered lower than one
+        already held from that hub is old news; the empty set retires the hub."""
+        hub_id, rev, pages = (body or {}).get("hub"), (body or {}).get("rev"), (body or {}).get("pages")
+        if not isinstance(hub_id, str) or not PAGE_ID.match(hub_id):
+            raise NotesError(400, "request", "hub is 8-80 letters, digits, dashes or underscores")
+        if not isinstance(rev, int) or isinstance(rev, bool) or rev < 0:
+            raise NotesError(400, "request", "rev is a whole number that rises with each report")
+        if not isinstance(pages, list) or not all(isinstance(page, str) and PAGE_ID.match(page) for page in pages):
+            raise NotesError(400, "request", "pages is a list of page ids")
+        with self._lock:
+            held = self._hubs.get(hub_id)
+            if held is not None and rev < held["rev"]:
+                return {"schema": NOTES_SCHEMA, "accepted": False}
+            if pages:
+                self._hubs[hub_id] = {"rev": rev, "pages": sorted(set(pages)), "seen": self._clock()}
+                for page_id in pages:
+                    self._page(page_id)
+            else:
+                self._hubs.pop(hub_id, None)
+        return {"schema": NOTES_SCHEMA, "accepted": True}
+
     def _pages_now(self):
         with self._lock:
-            return [{"id": page_id, "author": page["author"], "since": iso(page["since"])}
-                    for page_id, page in self._pages.items() if page["streams"] > 0]
+            carried = self._carried()
+            ids = sorted({page_id for page_id, page in self._pages.items() if page["streams"] > 0} | carried)
+            return [{"id": page_id, "author": self._pages[page_id]["author"] if page_id in self._pages else self.log.page_author,
+                     "since": iso(self._pages[page_id]["since"] if page_id in self._pages else time.time())} for page_id in ids]
+
+    def hello(self, handler, query):
+        self._json(handler, self.hello_page((self._body(handler) or {}).get("page")))
+
+    def hub_report(self, handler, query):
+        self._json(handler, self.hub_presence(self._body(handler)))
 
     def presence(self, handler, query):
         self._json(handler, {"schema": NOTES_SCHEMA, **self.log.presence(detail=True), "pages": self._pages_now()})
@@ -726,6 +792,9 @@ class NotesHttp:
         handler.wfile.write(data)
 
     def stream(self, handler, query):
+        hub_id = self._first(query, "hub")
+        if hub_id is not None:
+            return self._hub_stream(handler, query, hub_id)
         page_id = self._first(query, "page") or ""
         if not PAGE_ID.match(page_id):
             raise NotesError(400, "request", "page is 8-80 letters, digits, dashes or underscores")
@@ -734,14 +803,10 @@ class NotesHttp:
         except ValueError:
             raise NotesError(400, "request", "after is a sequence number")
         with self._lock:
-            page = self._pages.get(page_id)
-            if page is None or (page["streams"] == 0 and time.monotonic() >= page["expires"]):
-                page = self._pages[page_id] = {"token": secrets.token_urlsafe(24), "author": self.log.page_author,
-                                               "since": time.time(), "streams": 0, "expires": 0.0}
+            page = self._page(page_id)
             page["streams"] += 1
             token = page["token"]
         handler.close_connection = True
-        sent_presence = None
         try:
             handler.send_response(200)
             handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
@@ -751,31 +816,57 @@ class NotesHttp:
                      "lastSeq": self.log.last_seq}
             handler.wfile.write(b"retry: 2000\n\n" + self._event("hello", hello))
             handler.wfile.flush()
-            quiet_since = time.monotonic()
-            while True:
-                events = self.log.wait_events(after, 1.0)
-                presence = {**self.log.presence(), "pages": self._pages_now(), "participantsVersion": f"{self.log.participants_version()}:{self._directory_version()}"}
-                if events:
-                    after = events[-1]["seq"]
-                    handler.wfile.write(self._event("events", {"events": events}, event_id=after))
-                if presence != sent_presence:
-                    handler.wfile.write(self._event("presence", presence))
-                    sent_presence = presence
-                elif not events:
-                    if self._peer_closed(handler):
-                        break
-                    if time.monotonic() - quiet_since < 5:
-                        continue
-                    handler.wfile.write(b": keepalive\n\n")
-                handler.wfile.flush()
-                quiet_since = time.monotonic()
+            self._feed(handler, after)
         except OSError:
             pass
         finally:
             with self._lock:
                 page["streams"] -= 1
                 if page["streams"] == 0:
-                    page["expires"] = time.monotonic() + PAGE_TOKEN_GRACE_SECONDS
+                    page["expires"] = self._clock() + PAGE_TOKEN_GRACE_SECONDS
+
+    def _hub_stream(self, handler, query, hub_id):
+        """The one notes stream a browser's hub shares among its tabs: the log and
+        presence, as a page's stream has, and no page's hello or token."""
+        if not PAGE_ID.match(hub_id):
+            raise NotesError(400, "request", "hub is 8-80 letters, digits, dashes or underscores")
+        try:
+            after = max(int(self._first(query, "after", "0") or 0), int(handler.headers.get("Last-Event-ID") or 0))
+        except ValueError:
+            raise NotesError(400, "request", "after is a sequence number")
+        handler.close_connection = True
+        try:
+            handler.send_response(200)
+            handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            handler.send_header("Cache-Control", "no-store")
+            handler.end_headers()
+            handler.wfile.write(b"retry: 2000\n\n")
+            handler.wfile.flush()
+            self._feed(handler, after)
+        except OSError:
+            pass
+
+    def _feed(self, handler, after):
+        """New log events and changed presence, until the reader goes away."""
+        sent_presence = None
+        quiet_since = time.monotonic()
+        while True:
+            events = self.log.wait_events(after, 1.0)
+            presence = {**self.log.presence(), "pages": self._pages_now(), "participantsVersion": f"{self.log.participants_version()}:{self._directory_version()}"}
+            if events:
+                after = events[-1]["seq"]
+                handler.wfile.write(self._event("events", {"events": events}, event_id=after))
+            if presence != sent_presence:
+                handler.wfile.write(self._event("presence", presence))
+                sent_presence = presence
+            elif not events:
+                if self._peer_closed(handler):
+                    break
+                if time.monotonic() - quiet_since < 5:
+                    continue
+                handler.wfile.write(b": keepalive\n\n")
+            handler.wfile.flush()
+            quiet_since = time.monotonic()
 
     @staticmethod
     def _event(name, payload, event_id=None):

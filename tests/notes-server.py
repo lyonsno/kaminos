@@ -182,6 +182,84 @@ def participant_contracts(notes):
 
 # --- HTTP, through a real serve.py ------------------------------------------
 
+def hub_contracts():
+    """One notes stream per browser, shared by its tabs through the vantage hub:
+    the server offers it, says which pages a hub carries, and gives each page its
+    posting token by its own request rather than over the shared stream."""
+    port = free_port()
+    with tempfile.TemporaryDirectory() as tmp:
+        process = subprocess.Popen([sys.executable, str(ROOT / "serve.py"), str(port)], cwd=ROOT,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                   env={**os.environ, "KAMINOS_BIND_HOST": "127.0.0.1", "KAMINOS_NOTES_ROOT": str(Path(tmp) / "notes"),
+                                        "KAMINOS_NOTES_PAGE_AUTHOR": "noah"})
+        stream = None
+        try:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    status, listing = call(port, "GET", "/api/notes?after=0")
+                    break
+                except OSError:
+                    if time.monotonic() > deadline or process.poll() is not None:
+                        raise AssertionError(process.stderr.read().decode() if process.poll() is not None else "serve.py did not start")
+                    time.sleep(0.1)
+            assert listing.get("hub") is True and listing["lastSeq"] == 0, listing
+
+            # A page's hello gives it its token; the page can post with it straight away.
+            status, hello = call(port, "POST", "/api/notes/hello", {"page": "page-hubbbbbb"})
+            assert status == 200 and hello["token"] and hello["author"] == "noah" and hello["lastSeq"] == 0, (status, hello)
+            assert call(port, "POST", "/api/notes/hello", {"page": "x"})[0] == 400, "a page id is checked"
+            page = {"X-Kaminos-Notes-Page": "page-hubbbbbb", "X-Kaminos-Notes-Token": hello["token"]}
+            status, note = call(port, "POST", "/api/notes", {"kind": "note", "text": "through the hub", "anchor": {"kind": "scene"}}, headers=page)
+            assert status == 200 and note["via"] == "page", (status, note)
+            again = call(port, "POST", "/api/notes/hello", {"page": "page-hubbbbbb"})[1]
+            assert again["token"] == hello["token"], "a page that says hello again keeps its token"
+
+            # The hub's stream carries the log and presence, but no page's token.
+            stream = Stream(port, None, query="hub=hub-aaaaaaaa&after=0")
+            assert stream.status == 200, stream.status
+            batch = stream.next("events")
+            assert [item["id"] for item in batch["events"]] == [note["id"]], batch
+            with stream.lock:
+                assert not any(event == "hello" or "token" in json.dumps(payload) for event, payload in stream.events), stream.events
+            assert call(port, "GET", "/api/notes/stream?hub=x&after=0")[0] == 400, "a hub id is checked"
+
+            # Presence: the pages a hub carries, newest report wins, [] retires them.
+            def present():
+                return {row["id"] for row in call(port, "GET", "/api/notes/presence")[1]["pages"]}
+            assert call(port, "POST", "/api/notes/presence", {"hub": "hub-aaaaaaaa", "rev": 2, "pages": ["page-hubbbbbb", "page-hubccccc"]})[0] == 200
+            assert present() == {"page-hubbbbbb", "page-hubccccc"}, present()
+            stream.next("presence", lambda payload: {row["id"] for row in payload["pages"]} == {"page-hubbbbbb", "page-hubccccc"})
+            assert call(port, "POST", "/api/notes/presence", {"hub": "hub-aaaaaaaa", "rev": 1, "pages": []})[0] == 200
+            assert present() == {"page-hubbbbbb", "page-hubccccc"}, "an older report does not replace a newer one"
+            assert call(port, "POST", "/api/notes/presence", {"hub": "hub-aaaaaaaa", "rev": 3, "pages": []})[0] == 200
+            assert present() == set(), present()
+            for bad in [{"hub": "x", "rev": 1, "pages": []}, {"hub": "hub-aaaaaaaa", "rev": "1", "pages": []},
+                        {"hub": "hub-aaaaaaaa", "rev": 4, "pages": ["x"]}]:
+                assert call(port, "POST", "/api/notes/presence", bad)[0] == 400, bad
+        finally:
+            if stream is not None:
+                stream.connection.close()
+            process.terminate()
+            process.wait(10)
+
+
+def hub_clock_contracts(notes):
+    """A carried page counts as present, and its token as live, while its hub keeps
+    reporting; a hub silent for 60 s is dropped."""
+    now = [1000.0]
+    with tempfile.TemporaryDirectory() as tmp:
+        log = notes.NotesLog(Path(tmp) / "notes", page_author="noah")
+        http = notes.NotesHttp(log, source=lambda: {}, clock=lambda: now[0])
+        token = http.hello_page("page-hubbbbbb")["token"]
+        http.hub_presence({"hub": "hub-aaaaaaaa", "rev": 1, "pages": ["page-hubbbbbb"]})
+        assert [row["id"] for row in http._pages_now()] == ["page-hubbbbbb"]
+        now[0] += notes.PAGE_TOKEN_GRACE_SECONDS + 30
+        assert http.page_token_live("page-hubbbbbb", token), "a carried page's token outlives the hello grace"
+        now[0] += notes.HUB_SILENCE_SECONDS
+        assert http._pages_now() == [] and not http.page_token_live("page-hubbbbbb", token), "a silent hub's pages lapse"
+
+
 def free_port():
     with socket.socket() as server:
         server.bind(("127.0.0.1", 0))
@@ -206,11 +284,11 @@ def call(port, method, path, payload=None, headers=None, timeout=15):
 class Stream:
     """Reads /api/notes/stream the way EventSource does."""
 
-    def __init__(self, port, page_id):
+    def __init__(self, port, page_id, query=None):
         self.events = []
         self.lock = threading.Condition()
         self.connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
-        self.connection.request("GET", f"/api/notes/stream?page={page_id}&after=0")
+        self.connection.request("GET", f"/api/notes/stream?{query or f'page={page_id}&after=0'}")
         self.response = self.connection.getresponse()
         self.status = self.response.status
         self.thread = threading.Thread(target=self.read, daemon=True)
@@ -561,5 +639,7 @@ if __name__ == "__main__":
     notify_timing_contracts(notes)
     http_contracts()
     presence_stream_contracts()
+    hub_contracts()
+    hub_clock_contracts(notes)
     directory_and_notify_contracts()
     print("notes server contracts passed")

@@ -276,7 +276,7 @@ export async function capturePicture({capture, document}) {
  */
 export function installNotes({THREE, document, window, viewport, camera, entries, selection, select, readView, writeView,
   sceneFile, capture, redraw = () => {}, endpoint = '/api/notes', linkedNote = null, ready = null, avatarOf = null, avoid = () => [],
-  ownView = async () => true}) {
+  ownView = async () => true, subscribeHub = null}) {
   if (!document.getElementById('kaminos-notes-style')) {
     const style = element(document, 'style');
     style.id = 'kaminos-notes-style';
@@ -285,13 +285,9 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   }
   const pageId = randomPageId(window);
   const transport = {token: null};
-  const send = async (path, body) => {
-    const response = await window.fetch(path, {method: 'POST', body: JSON.stringify(body),
-      headers: {'Content-Type': 'application/json', 'X-Kaminos-Notes-Page': pageId, 'X-Kaminos-Notes-Token': transport.token ?? ''}});
-    const data = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(data?.error || `Notes request failed (${response.status})`);
-    return data;
-  };
+  let link = null;
+  const send = (path, body) => sendWithPageToken({window, pageId, token: () => transport.token,
+    renew: async () => { if (link) transport.token = (await link.hello()).token; }}, path, body);
   transport.post = body => send(endpoint, body);
   transport.receipt = body => send(`${endpoint}/receipt`, body);
   const session = createNotesSession({transport, selection, entries, readView, writeView, select, sceneFile,
@@ -855,24 +851,24 @@ export function installNotes({THREE, document, window, viewport, camera, entries
     say(result.object && !result.present ? `Opened ${note.id}; its object is not in this scene, so only the view was restored` : `Opened ${note.id} and restored the view it was written from`);
   };
   if (ready) Promise.resolve().then(ready).then(() => { sceneReady = true; applyLink(); }, () => { /* the page is moving to the saved scene's route; the link travels with it */ });
-  const source = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=0`);
-  source.addEventListener('hello', event => {
-    const hello = JSON.parse(event.data);
-    transport.token = hello.token;
-    session.hello(hello);
-    refreshParticipants();
-    if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
-  });
-  source.addEventListener('events', event => {
-    const batch = JSON.parse(event.data).events;
+  // One notes stream per browser through the shared hub when there is one; else this page's own.
+  link = connectNotesLink({window, endpoint, pageId, subscribe: subscribeHub,
+    onHello: hello => {
+      transport.token = hello.token;
+      session.hello(hello);
+      refreshParticipants();
+      if (status.dataset.tone === 'error' && /link/i.test(status.textContent)) say('Reconnected');
+    },
+    onEvents: batch => receiveBatch(batch),
+    onPresence: presence => { session.setPresence(presence); refreshParticipantsSoon(); },
+    onLost: () => say('Notes link lost; reconnecting…', 'error')});
+  function receiveBatch(batch) {
     const known = new Set(session.participants.map(person => person.name));
     const notices = session.receive(batch);
     if (batch.some(item => item.type === 'note' && item.author && !known.has(item.author))) refreshParticipantsSoon();
     for (const note of notices) toast(note);
     applyLink();
-  });
-  source.addEventListener('presence', event => { session.setPresence(JSON.parse(event.data)); refreshParticipantsSoon(); });
-  source.addEventListener('error', () => { if (source.readyState !== 2) say('Notes link lost; reconnecting…', 'error'); });
+  }
   const unsubscribe = session.onChange(render);
   const refreshOnSelection = window.setInterval(() => { if (!drawer.hidden) { refreshAnchor(); placeDrawer(); } }, 500);
   const placeOnResize = () => { if (!drawer.hidden) placeDrawer(); };
@@ -882,10 +878,11 @@ export function installNotes({THREE, document, window, viewport, camera, entries
   return {
     pageId,
     session,
+    get route() { return link.route; },
     open: thread => openDrawer({thread}),
     compose: () => openDrawer({composeFocus: true}),
     dispose() {
-      source.close();
+      link.close();
       unsubscribe();
       window.cancelAnimationFrame(frame);
       window.clearInterval(refreshOnSelection);
@@ -895,4 +892,59 @@ export function installNotes({THREE, document, window, viewport, camera, entries
       root.remove();
     },
   };
+}
+
+// How a page's notes reach it. With the browser's shared hub (one notes stream per
+// browser and server, so open tabs do not use up the connections a browser keeps
+// to one host), the page asks for its posting token by its own hello and takes
+// events and presence from the hub. Without a SharedWorker, against a server with
+// no hub stream, or when hello fails, it keeps its own stream, which says hello itself.
+export function connectNotesLink({window, endpoint, pageId, subscribe, onHello, onEvents, onPresence, onLost = () => {}}) {
+  let hub = null, own = null, closed = false;
+  const openOwn = () => {
+    if (closed || own) return;
+    hub?.close?.();
+    hub = null;
+    own = new window.EventSource(`${endpoint}/stream?page=${encodeURIComponent(pageId)}&after=0`);
+    own.addEventListener('hello', event => onHello(JSON.parse(event.data)));
+    own.addEventListener('events', event => onEvents(JSON.parse(event.data).events));
+    own.addEventListener('presence', event => onPresence(JSON.parse(event.data)));
+    own.addEventListener('error', () => { if (own.readyState !== 2) onLost(); });
+  };
+  const hello = () => window.fetch(`${endpoint}/hello`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({page: pageId})}).then(response => (response.ok ? response.json() : Promise.reject(new Error(`hello answered ${response.status}`))));
+  if (!subscribe || !window.SharedWorker) openOwn();
+  else {
+    hello().then(payload => {
+      if (closed) return;
+      onHello(payload);
+      hub = subscribe({window, channel: 'notes', endpoint, page: pageId, after: 0,
+        onEvent: (event, data) => { if (event === 'events') onEvents(data.events); else if (event === 'presence') onPresence(data); },
+        onFallback: openOwn,
+        onStatus: () => {}});
+      if (!hub) openOwn();
+    }, openOwn);
+  }
+  return {
+    hello,
+    get route() { return own ? 'own-stream' : hub ? 'hub' : 'connecting'; },
+    close() { closed = true; hub?.close?.(); own?.close?.(); },
+  };
+}
+
+// A page's post, with its token. A token the server no longer holds (it restarted,
+// or the page's hub went quiet) is renewed by a fresh hello and the post sent once more.
+export async function sendWithPageToken({window, pageId, token, renew}, path, body) {
+  const attempt = async () => {
+    const response = await window.fetch(path, {method: 'POST', body: JSON.stringify(body),
+      headers: {'Content-Type': 'application/json', 'X-Kaminos-Notes-Page': pageId, 'X-Kaminos-Notes-Token': token() ?? ''}});
+    return {response, data: await response.json().catch(() => null)};
+  };
+  let {response, data} = await attempt();
+  if (response.status === 403 && data?.phase === 'page-token') {
+    await renew();
+    ({response, data} = await attempt());
+  }
+  if (!response.ok) throw new Error(data?.error || `Notes request failed (${response.status})`);
+  return data;
 }

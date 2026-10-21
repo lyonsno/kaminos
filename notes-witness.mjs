@@ -526,6 +526,51 @@ try {
     await page.evaluate(id => window.kaminosSelection.set([id], id), red);
   }
 
+  report.phase = 'shared-connection'; save();
+  // One notes stream per browser, shared through the vantage hub: many tabs in one
+  // profile (one connection pool), several hidden, and another page still loads;
+  // every tab is in notes presence, and a hidden tab gets a new note once.
+  {
+    const hide = tab => tab.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => 'hidden'});
+      Object.defineProperty(document, 'hidden', {configurable: true, get: () => true});
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    const tabs = [];
+    for (let index = 0; index < 9; index++) {
+      const tab = await context.newPage();
+      tab.on('pageerror', error => { report.pageErrors.push(`shared tab ${index}: ${error}`); });
+      await tab.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 60000});
+      await tab.waitForFunction(() => window.kaminosNotes?.session?.author && window.kaminosNotes.route?.() !== 'connecting', null, {timeout: 60000}).catch(() => {});
+      if (index % 2 === 0) await hide(tab);
+      tabs.push(tab);
+    }
+    const routes = await Promise.all(tabs.map(tab => tab.evaluate(() => ({page: window.kaminosNotes?.pageId ?? null, route: window.kaminosNotes?.route?.() ?? null}))));
+    report.effective.sharedConnection = {routes};
+    check('every tab takes its notes through the shared hub', routes.every(item => item.route === 'hub'), {routes});
+    let listed = [];
+    for (const deadline = Date.now() + 20000; Date.now() < deadline; await sleep(500)) {
+      listed = (await (await fetch(`${origin}/api/notes/presence`)).json()).pages.map(entry => entry.id);
+      if (routes.every(item => listed.includes(item.page))) break;
+    }
+    check('every tab, hidden or not, is in notes presence', routes.every(item => listed.includes(item.page)), {missing: routes.filter(item => !listed.includes(item.page)).map(item => item.page)});
+    const extra = await context.newPage();
+    const started = Date.now();
+    const loaded = await extra.goto(`${origin}/index.html`, {waitUntil: 'load', timeout: 20000}).then(() => true).catch(() => false)
+      && await extra.waitForFunction(() => !!window.kaminosNotes?.session?.author, null, {timeout: 20000}).then(() => true).catch(() => false);
+    check('with nine tabs open, another page still loads and links its notes', loaded, {loaded, ms: Date.now() - started});
+    const watched = tabs[0];
+    const before = await watched.evaluate(() => document.querySelectorAll('.kn-toast').length);
+    const sent = await notes(['post', 'shared connection check for the page', '--to', PERSON, '--as', 'hub-check-agent']);
+    const sentId = (sent.stdout.match(/kn-[0-9a-z]+/) ?? [])[0] ?? null;
+    await watched.waitForFunction(id => window.kaminosNotes?.session?.state?.notes?.has(id), sentId, {timeout: 15000}).catch(() => {});
+    await sleep(1500);
+    const seen = await watched.evaluate(([id, earlier]) => ({has: !!window.kaminosNotes?.session?.state?.notes?.has(id),
+      toasts: [...document.querySelectorAll('.kn-toast')].slice(earlier).filter(node => node.textContent.includes('shared connection check')).length}), [sentId, before]);
+    check('a hidden tab receives a new note through the hub, once', sent.code === 0 && seen.has && seen.toasts === 1, {sentId, ...seen});
+    for (const tab of [...tabs, extra]) await tab.close();
+  }
+
   report.phase = 'negative-controls'; save();
   const someone = await notes(['register', '--as', 'someone-else', '--about', 'another agent']);
   check('another agent registers itself', someone.code === 0, {stderr: someone.stderr});
