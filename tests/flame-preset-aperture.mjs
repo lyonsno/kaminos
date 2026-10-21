@@ -21,13 +21,13 @@ test('explicit legacy recovery retains current aperture rather than clamping sav
  const state=load(135.764753512356,{sourceSize:'current'});
  assert.equal(state.domControls['volume-immersed-radius'].value,.2);
 });
-test('ordinary basin apply clamps legacy aperture without an opt-in and preserves its receipt',()=>{
+test('ordinary basin apply preserves uncapped legacy aperture and its receipt',()=>{
  for(const scale of [.001,.1,1,8]){
   const original=135764.753512356,state=load(original,{},undefined,scale);
-  assert.equal(state.domControls['volume-immersed-radius'].value,.5/scale);
-  assert.equal(Number(state.domControls['volume-immersed-radius'].rawValue),.5/scale);
+  assert.equal(state.domControls['volume-immersed-radius'].value,original);
+  assert.equal(Number(state.domControls['volume-immersed-radius'].rawValue),original);
   assert.equal(state.source.preset.domControls['volume-immersed-radius'].value,original);
-  assert.equal(state.source.sourceSizeRecovery,'clamped-to-valid-range');
+  assert.equal(state.source.sourceSizeRecovery,undefined);
   assert.equal(state.sourcePose.scale[0],scale);
  }
 });
@@ -95,4 +95,12 @@ test('portable preset records simulation-space aperture and updates its launch r
  assert.equal(original.domControls['volume-immersed-radius'].value,135.764);
  assert.ok(Math.abs(aperture.flamePresetRadius(saved,.01)-13.5764)<1e-12);
  assert.equal(aperture.flamePresetRadius(original,.01),135.764);
+});
+test('portable save and authored apply retain a large finite effective aperture',()=>{
+ const original={route:'http://localhost/',domControls:{'volume-emitter-source-law':{value:'immersed-source'},'volume-immersed-radius':{value:2}}};
+ const saved=aperture.portableFlamePreset(original,4);
+ assert.equal(saved.domControls['volume-immersed-radius'].value,8);
+ const state=load(8,{},'simulation-v1',2);
+ assert.equal(state.domControls['volume-immersed-radius'].value,4);
+ assert.equal(state.source.preset.domControls['volume-immersed-radius'].value,8);
 });

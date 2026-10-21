@@ -8,7 +8,7 @@ export function portableFlamePreset(preset, localScale) {
   if(!(localScale>0)||!Number.isFinite(localScale))throw Error('Invalid emitter scale for preset aperture');
   const d=result.domControls['volume-immersed-radius'];
   const radius=Number(d.rawValue??d.value)*localScale;
-  if(!Number.isFinite(radius)||radius<.02-1e-12||radius>.5+1e-12)throw Error('Effective preset aperture must be within [0.02, 0.5]');
+  if(!Number.isFinite(radius)||radius<.02-1e-12)throw Error('Effective preset aperture must be finite and at least 0.02');
   if(Object.hasOwn(d,'rawValue'))d.rawValue=String(radius);
   if(Object.hasOwn(d,'value'))d.value=radius;
   const route=new URL(result.route);route.searchParams.set('volume_immersed_radius',String(radius));
