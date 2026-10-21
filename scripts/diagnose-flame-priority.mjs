@@ -34,11 +34,13 @@ const baseline={label:'zero-j1',priority:0,jitter:true,guide:0,constraints:0};
 report.armPlan=flags.has('--constraints')
  ? [baseline,...Array.from({length:8},(_,constraints)=>({label:'constraints-'+constraints,priority:.75,jitter:false,guide:0,constraints})),{...baseline,label:'zero-repeat'}]
  : [ ...[true,false].flatMap(jitter=>[['zero',0],['below',.00133],['above',.001333],['high',.75]].map(([name,priority])=>({label:name+'-j'+Number(jitter),priority,jitter,guide:0,constraints:0}))),{label:'uniform-guide',priority:.75,jitter:false,guide:1,constraints:0},{...baseline,label:'zero-repeat'} ];
+if(flags.has('--repair-floor'))report.armPlan=[...[0,.00133,.001333,.1,.5,.75,1].flatMap(priority=>[false,true].map(repair=>({label:(repair?'floor-':'original-')+priority,priority,jitter:false,guide:0,constraints:0,repair}))),{label:'zero-repeat',priority:0,jitter:false,guide:0,constraints:0,repair:false}];
 const save=()=>fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));
 let server,context,page;
 process.on('SIGTERM',async()=>{report.error='terminated';await save();await context?.close();server?.kill();process.exit(1);});
 try{
- for(const flag of flags)assert.ok(['--prepare-only','--constraints'].includes(flag),'unknown diagnostic option: '+flag);
+ for(const flag of flags)assert.ok(['--prepare-only','--constraints','--repair-floor'].includes(flag),'unknown diagnostic option: '+flag);
+ assert.ok(!(flags.has('--constraints')&&flags.has('--repair-floor')),'choose one diagnostic comparison');
  report.phase='browser-dependency';await save();
  const {chromium}=await import('/Users/noahlyons/.local/state/kaminos/minion-visual-handoff-1004/browser-deps/node_modules/playwright-core/index.mjs');
  report.phase='prepare';await save();await fs.copyFile(new URL(import.meta.url),out+'/witness.mjs');
@@ -56,6 +58,14 @@ override DIAG_COUNTS: bool = false;
 override DIAG_GUIDE: u32 = 0u;`);
  let core=bodies['volume-core.js'];
  bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_GUIDE: u32 = 0u;','override DIAG_GUIDE: u32 = 0u;\noverride DIAG_CONSTRAINTS: u32 = 0u;');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'override DIAG_CONSTRAINTS: u32 = 0u;','override DIAG_CONSTRAINTS: u32 = 0u;\noverride DIAG_REPAIR_FLOOR: bool = false;');
+ bodies['volume-optical-native.mjs']=replaceOne(bodies['volume-optical-native.mjs'],'    (*s).width = (*s).positions[2];',`    if (DIAG_REPAIR_FLOOR && (*s).positions[2] < (*s).minimum) {
+      (*s).width = (*s).minimum;
+      (*s).mask = 1u;
+      opticalStepResetPositions(s);
+      return;
+    }
+    (*s).width = (*s).positions[2];`);
  for(const anchor of ['let minimum = dtBase * mix','let maximum = dtBase * 4.0 * mix','let stop = select(remaining, max(minimum, guide.x'])core=replaceOne(core,anchor,anchor.replace('let ','var '));
  core=replaceOne(core,'opticalStepConstrain(&opticalStep, minimum, maximum, stop);',
   'if ((DIAG_CONSTRAINTS & 1u) != 0u) { minimum = dtBase; }\n        if ((DIAG_CONSTRAINTS & 2u) != 0u) { maximum = dtBase * 4.0; }\n        if ((DIAG_CONSTRAINTS & 4u) != 0u) { stop = remaining; }\n        opticalStepConstrain(&opticalStep, minimum, maximum, stop);');
@@ -74,6 +84,7 @@ override DIAG_GUIDE: u32 = 0u;`);
     return makeRaymarchResult(vec4<f32>(vec3<f32>(f32(rayMaterialSamples & 255u), f32((rayMaterialSamples >> 8u) & 255u), f32((rayMaterialSamples >> 16u) & 255u)) / 255.0, 1.0), trans, residualFeature, vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0));
   }`);
  bodies['volume-core.js']=core;
+ core=replaceOne(core,'DIAG_CONSTRAINTS:globalThis.__priorityDiagnostic?.constraints||0','DIAG_CONSTRAINTS:globalThis.__priorityDiagnostic?.constraints||0, DIAG_REPAIR_FLOOR:!!globalThis.__priorityDiagnostic?.repair');
  bodies['volume-core.js']=replaceOne(core,'state.opticalStepping = { ...optical, effective: optical.mode,','state.opticalStepping = { ...optical, effective: optical.mode, diagnosticConstants:{...opticalConstants},');
  for(const [name,body] of Object.entries(bodies)){report.source[name].effectiveSha256=sha(body);await fs.writeFile(out+'/effective-'+name,body);}
  if(flags.has('--prepare-only')){report.ok=true;report.phase='prepared';await save();process.exit(0);}
@@ -110,19 +121,20 @@ override DIAG_GUIDE: u32 = 0u;`);
  await step(page.waitForFunction(()=>window.__kaminosVolumePrototype.debugState().simStepCount>=96));
  await step(page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setPaused',true)));
  report.held=await page.evaluate(()=>window.__kaminosVolumePrototype.debugState());report.phase='capture';await save();
- async function arm({label,priority,jitter,guide=0,constraints=0}){
-  const row={label,priority,jitter,guide,constraints};
+ async function arm({label,priority,jitter,guide=0,constraints=0,repair=false}){
+  const row={label,priority,jitter,guide,constraints,repair};
   await step(page.evaluate(async({priority,jitter})=>{await window.kaminosWorkbenchExperiments.invoke('setControls',{'volume-flame-priority':priority,'volume-quadrature-jitter':jitter,'volume-ray-noise-animated':false});window.__kaminosVolumePrototype.setControls({rayStartNoise:true,rayNoiseFrame:0});},{priority,jitter}));
   for(const counts of [false,true]){
-   const data=await step(page.evaluate(async({counts,guide,constraints})=>{
-    window.__priorityDiagnostic={counts,guide,constraints};const r=window.__kaminosVolumePrototype;
+   const data=await step(page.evaluate(async({counts,guide,constraints,repair})=>{
+    window.__priorityDiagnostic={counts,guide,constraints,repair};const r=window.__kaminosVolumePrototype;
     const s=await r.sampleFrame({advanceSim:false,includeRgba:true,now:12000});if(!s.ok||s.image?.rgba?.length!==s.image.width*s.image.height*4||!s.image.rgba.some((v,i)=>i%4!==3&&v>0))throw Error('missing/partial/blank frame');
     const c=document.createElement('canvas');c.width=s.image.width;c.height=s.image.height;const ctx=c.getContext('2d');ctx.putImageData(new ImageData(new Uint8ClampedArray(s.image.rgba),c.width,c.height),0,0);
     return{png:c.toDataURL().split(',')[1],state:r.debugState(),width:c.width,height:c.height,diagnostic:{...window.__priorityDiagnostic}};
-   },{counts,guide,constraints}));
-   assert.deepEqual(data.diagnostic,{counts,guide,constraints},'diagnostic specialization request changed');
+   },{counts,guide,constraints,repair}));
+   assert.deepEqual(data.diagnostic,{counts,guide,constraints,repair},'diagnostic specialization request changed');
    const effective=data.state.opticalStepping.diagnosticConstants;
    assert.equal(effective.DIAG_COUNTS,counts);assert.equal(effective.DIAG_GUIDE,guide);assert.equal(effective.DIAG_CONSTRAINTS,constraints);
+   assert.equal(effective.DIAG_REPAIR_FLOOR,repair);
    validateArm(data.state,priority,jitter,report.held.simStepCount);
    const name=label+(counts?'-counts':'');const bytes=Buffer.from(data.png,'base64');await fs.writeFile(out+'/'+name+'.png',bytes);
    row[counts?'counts':'image']={sha256:sha(bytes),width:data.width,height:data.height};row.state=data.state;

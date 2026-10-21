@@ -64,3 +64,15 @@ test('constraint isolation retains the complete factorial and effective shader s
   assert.match(core,/DIAG_CONSTRAINTS:globalThis\.__priorityDiagnostic\?\.constraints\|\|0/);
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+test('floor repair preserves a separate baseline and clamps the actual child width',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'priority-floor-'));
+ try{
+  const r=spawnSync(process.execPath,[root+'/scripts/diagnose-flame-priority.mjs',root,dir+'/output','--prepare-only','--repair-floor'],{encoding:'utf8'});
+  assert.equal(r.status,0,r.stdout+r.stderr);
+  const report=JSON.parse(await fs.readFile(dir+'/output/report.json'));
+  for(const p of [0,.00133,.001333,.1,.5,.75,1])assert.deepEqual(report.armPlan.filter(x=>x.priority===p&&x.label!=='zero-repeat').map(x=>x.repair),[false,true]);
+  const optical=await fs.readFile(dir+'/output/effective-volume-optical-native.mjs','utf8');
+  assert.match(optical,/DIAG_REPAIR_FLOOR && \(\*s\)\.positions\[2\] < \(\*s\)\.minimum/);
+  assert.match(optical,/\(\*s\)\.width = \(\*s\)\.minimum;\s*\(\*s\)\.mask = 1u;\s*opticalStepResetPositions\(s\);\s*return;/);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
