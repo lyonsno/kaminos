@@ -8,12 +8,12 @@ import {buildSceneDocument} from '../../scene-persistence-core.js';
 import {legacyLocalLiquidEmitterRecord,defaultLocalLiquidSetup} from '../../local-liquid-setup.mjs';
 import {checkWater,checkOverlap} from './scheduling-evidence.mjs';
 
-const {values}=parseArgs({options:Object.fromEntries(['out','browser','playwright','python'].map(key=>[key,{type:'string'}]))});
-for(const key of ['out','browser','playwright'])if(!values[key])throw Error(`--${key} required`);
-const root=fileURLToPath(new URL('../../',import.meta.url)),out=path.resolve(values.out);
+const {values:output}=parseArgs({options:{out:{type:'string'}},strict:false,allowPositionals:true});
+if(!output.out)throw Error('--out required for retained output');
+const root=fileURLToPath(new URL('../../',import.meta.url)),out=path.resolve(output.out);
 await fs.mkdir(out,{recursive:true});
-const report={status:'running',phase:'prepare',root,source:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),
-  requested:values,stepsPerCase:180,casesPerArm:2,arms:[],memory:[],startedAt:new Date().toISOString(),
+const report={status:'running',phase:'arguments',root,argv:process.argv.slice(2),
+  stepsPerCase:180,casesPerArm:2,arms:[],memory:[],startedAt:new Date().toISOString(),
   limits:['Finite independent cases; interleaving models an admitted completed-case boundary, not fleet queue latency.',
     'Frame gaps measure the water page, not operator-perceived responsiveness.',
     'Saved scenes retain authoring inputs; water.json records solver observations, not a restartable particle checkpoint.',
@@ -24,6 +24,12 @@ const memory=()=>{try{report.memory.push({at:Date.now(),vm:execFileSync('/usr/bi
   processes:execFileSync('/bin/ps',['-axo','pid=,ppid=,rss=,pcpu=,comm='],{encoding:'utf8'})});}catch(error){report.memory.push({at:Date.now(),error:String(error)});}};
 await write();
 try {
+  const {values}=parseArgs({options:Object.fromEntries(['out','browser','playwright','python'].map(key=>[key,{type:'string'}]))});
+  report.requested=values;
+  for(const key of ['out','browser','playwright'])if(!values[key])throw Error(`--${key} required`);
+  report.phase='source';
+  report.source=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+  report.phase='prepare';await write();
   const home=path.join(out,'home'),scenes=path.join(out,'scenes'),basins=path.join(out,'basins');
   for(const folder of [home,scenes,basins])await fs.mkdir(folder,{recursive:true});
   const emitter=legacyLocalLiquidEmitterRecord({x:0,y:.7,z:0,radius:.12,strength:1,rate:1200},'water-source');
