@@ -170,9 +170,9 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     return value.status==='available'?null:(value.message||'TRELLIS cannot run in this page');};
   const elapsed=()=>{const s=Math.round((now()-started)/1000);return s<60?`${s}s`:`${Math.floor(s/60)}m ${String(s%60).padStart(2,'0')}s`;};
   async function storePending(){
-    const {glb,generation,label,surfelGlb,surfels,meshError}=state.pending;
+    const {glb,generation,label,surfelGlb,surfels,levelInputs,meshError}=state.pending;
     set({status:'saving',stage:glb?'Saving mesh':'Saving surfels',progress:glb?'Saving generated mesh…':'Saving the surfels from the decoded field…'});
-    const saved=await persist(glb,generation,label,{surfelGlb,surfels});
+    const saved=await persist(glb,generation,label,{surfelGlb,surfels,levelInputs});
     state.results.push(saved);state.pending=null;
     // A mesh-finishing failure stays the run's outcome; the surfels are what it kept.
     if(meshError)set({status:'failed',error:`inference: ${meshError}; surfels saved`,stage:null,progress:'The mesh could not be finished. The surfels from the decoded field were saved.'});
@@ -206,7 +206,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       try{
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
-        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null};
+        state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null,levelInputs:out.levelInputs??null};
         phase='persistence';return await storePending();
       }catch(error){
         // A clean stop is the cancellation itself; a release or settlement failure met while
@@ -293,7 +293,11 @@ async function buildRunSurfels({runtime,out,rawMesh,withForeground,provenance}){
       const field=buildSurfelField({...rawMesh,geometryCoordinates:new Int32Array(gc),
         material:{coordinates:new Int32Array(mc),features:new Float32Array(mf),resolution:out.material.resolution}});
       const surfelGlb=encodeSurfelGLB(field,{provenance});
-      return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution}};
+      // The decode and material, as copies the cleanup cannot take away, for the GI proxy tiers built
+      // once the finished mesh is stored (generation-levels-runner.mjs).
+      const levelInputs={decode:{vertices:rawMesh.vertices.slice(),triangles:rawMesh.triangles.slice()},
+        materialFields:{features:new Float32Array(mf),coordinates:new Int32Array(mc),resolution:out.material.resolution}};
+      return {surfelGlb,surfels:{status:'built',count:field.count,bytes:surfelGlb.byteLength,resolution:field.resolution},levelInputs};
     });
   }catch(error){return {surfelGlb:null,surfels:{status:'failed',error:String(error?.message||error)}};}
 }

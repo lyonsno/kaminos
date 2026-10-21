@@ -234,3 +234,14 @@ test('finishMesh:false yields the surfel asset without cleanup, UV or bake',asyn
   assert.equal(assetBuilt,false,'no mesh finishing');assert.equal(result.glb,null);
   assert.equal(result.surfels.status,'built');assert.equal(result.surfels.count,5);
 });
+
+test('a run hands back its raw decode and material fields for GI tiers, as copies the cleanup cannot take away',async()=>{
+  const f=surfelRun();const adapter=f.deps.createTrellisAssetAdapter;
+  // a cleanup that takes ownership of its input (as the worker transfer does) by zeroing it
+  f.deps.createTrellisAssetAdapter=options=>({...adapter(options),async run(){const raw=rawFixture();await options.postprocessMesh(raw);raw.vertices.fill(0);return {glb};},dispose(){}});
+  const result=await call(f);
+  const {decode,materialFields}=result.levelInputs;
+  assert.deepEqual([...decode.vertices.subarray(0,3)],[...rawFixture().vertices.subarray(0,3)]);
+  assert.equal(decode.triangles.length,6);assert.equal(materialFields.resolution,8);
+  assert.equal(materialFields.features.length,5*6);assert.equal(materialFields.coordinates.length,5*3);
+});
