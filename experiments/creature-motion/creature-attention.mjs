@@ -1,3 +1,4 @@
+import {createVisualDisturbance} from './visual-disturbance.mjs';
 import {createAttentionPolicy} from './attention-policy.mjs';
 import {createSignalFamiliarity} from './signal-familiarity.mjs';
 import {applyStartlePose} from './startle-pose.mjs';
@@ -71,6 +72,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
  let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
  const patches=new Map();
+ const visualTrackers=new Map(),visualSources=new Map();
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
  let interruption=null,powerDropArmed=true,startle=null,onset=null,previousPower=null;
  const localLevels=new Map();
@@ -162,6 +164,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const sources=[...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))];
    // A remembered light event is not a current observation of its source.
    for(const [id,known] of states)if(!ids.has(id)){known.memory.gap();known.previous=null;if(onset?.id===id)onset=null;}
+   for(const id of visualTrackers.keys())if(!ids.has(id))visualTrackers.delete(id);
    for(const source of sources){
     const m=memo(source.id),significance=source.interest,active=source.active!==false&&source.sensed!==false;
     // Per-source cause names (a flame is lit, flares up, flickers) and its own
@@ -205,11 +208,26 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const s=(m.alerted||engagementId===source.id&&perceivedNow)&&active?sight(source.point,range,2*Math.PI):plain;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;m.urgency=(m.urgency??0)*Math.exp(-dt/o.lingerSeconds);
+    const visual=source.visual??visualSources.get(source.id);
+    let visualEvent=null;
+    if(visual){
+     let tracker=visualTrackers.get(source.id);if(!tracker){tracker=createVisualDisturbance();visualTrackers.set(source.id,tracker);}
+     const observable=source.sensed!==false&&!source.transient&&(sight(visual.center,range).visible||Boolean(gazeNow&&new THREE.Vector3(...visual.center).sub(headAt).angleTo(gazeNow)<o.fieldOfView*.5&&towardNow.length()<range));
+     visualEvent=tracker.update({time,eye:headAt.toArray(),visual,active,observed:observable});
+     if(visualEvent?.triggered&&active){
+      m.evidence=visualEvent;m.impulse=Math.max(m.impulse,significance*visualEvent.strength*2);m.urgency=Math.max(m.urgency??0,visualEvent.strength*2);
+      m.alerted=true;m.eventAt=time;m.inspected=false;m.cause='visual change';
+      remember('visual-change',time,{id:source.id,...visualEvent});
+      if(visualEvent.strength>.35&&visualEvent.strength>recoilAmount(startle,time))recoil({id:source.id,point:source.point,strength:visualEvent.strength,familiarity:m.familiarity,evidence:visualEvent},time);
+     }
+    }else visualTrackers.delete(source.id);
+
     if(s.visible){
      // Causes fire on transitions and changes, not on mere presence.
-     if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
+     if(visualEvent?.triggered&&active){}
+     else if(lit||(m.everSeen&&!m.seen&&m.litUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.lit;m.litUnseen=false;m.inspected=false;}
      else if(changed||(m.everSeen&&!m.seen&&m.changedUnseen)){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance);m.cause=names.changed;m.changedUnseen=false;m.inspected=false;}
-     else if(m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.eventAt=time;m.cause='moved';m.movedUnseen=false;}
+     else if(!visual&&m.everSeen&&(moved>o.moveDistance&&(dt===0||moved/Math.max(dt,1e-6)>o.moveSpeed)||(!m.seen&&m.movedUnseen))){m.familiarity*=.4;m.impulse=Math.max(m.impulse,significance);m.urgency=Math.max(m.urgency??0,significance*Math.min(2,.5+(dt>0?moved/dt:0)));m.eventAt=time;m.cause='moved';m.movedUnseen=false;}
      else if(!m.seen&&!m.inspected&&m.eventAt!==time&&!source.transient){m.impulse=Math.max(m.impulse,significance*(1-m.familiarity));m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';}
      m.everSeen=true;
     }else{if(m.everSeen&&moved>o.moveDistance)m.movedUnseen=true;if(lit)m.litUnseen=true;if(changed&&active)m.changedUnseen=true;}
@@ -235,7 +253,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const withinReach=s.angle<=o.reach||m.alerted;
     // Hysteresis: catching the eye takes the full threshold, keeping it less.
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
-    candidates.push({id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
+    candidates.push({visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
     if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
@@ -313,8 +331,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // world points). Change against a slowly adapting baseline is what counts:
  // a flare draws a look at the light's source, a sudden local darkening
  // draws a look at where the shadow fell. Steady light, bright or dim, does not.
- function sense({time,samples,source=null,sourcePower=null,status='effective'}){
+ function sense({time,samples,source=null,sourcePower=null,sourceVisual=null,status='effective'}){
   if(!enabled)return;
+  if(source){if(status==='effective'&&sourceVisual)visualSources.set(source.id,{...sourceVisual,sampleTime:time});else{visualSources.delete(source.id);visualTrackers.delete(source.id);}}
   const valid=Array.isArray(samples)&&samples.length>0&&samples.every(x=>Number.isFinite(x.luminance)&&x.luminance>=0&&Array.isArray(x.point)&&x.point.length===3&&x.point.every(Number.isFinite));
   if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;localLevels.clear();previousPower=null;onset=null;return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
@@ -410,7 +429,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}
@@ -444,7 +463,10 @@ export function sceneObjectInterests({THREE,root,specs}) {
  return ()=>checked.flatMap(spec=>{
   const object=find(spec.object);if(!object)return [];
   const box=localBox(object),center=box.getCenter(new THREE.Vector3());if(spec.anchor==='top')center.y=box.max.y;
-  return [{id:spec.object,label:spec.label??object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason}];
+  const boundsCenter=box.getCenter(new THREE.Vector3()).applyMatrix4(object.matrixWorld);
+  const scale=new THREE.Vector3().setFromMatrixScale(object.matrixWorld),radius=box.getSize(new THREE.Vector3()).length()*.5*Math.max(Math.abs(scale.x),Math.abs(scale.y),Math.abs(scale.z));
+  let visible=true;for(let node=object;node;node=node.parent)if(!node.visible)visible=false;
+  return [{id:spec.object,label:spec.label??object.userData.kaminosSceneObject.label??spec.object,point:center.applyMatrix4(object.matrixWorld).toArray(),interest:spec.interest,reason:spec.reason,active:visible,visual:{center:boundsCenter.toArray(),radius,provenance:'rigid-mesh-bound'}}];
  });
 }
 
