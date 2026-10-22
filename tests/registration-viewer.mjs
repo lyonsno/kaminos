@@ -1,0 +1,22 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';
+import * as T from '../lib/three.core.js';
+import {createRegistrationViewer,sourceParts} from '../registration-viewer.mjs';
+const primitive={id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}};
+const parts=sourceParts({objects:[primitive],provenance:{analyticalCarrier:{parts:{a:['box'],b:['box']}}}});
+const target=new T.Mesh(new T.BoxGeometry(1,1,1),new T.MeshStandardMaterial());const original=target.material;
+const v=createRegistrationViewer({target,parts});
+v.configure({alignment:{rotation:[0,0,0]}});await v.compute();
+assert.equal(v.read().summary.overlap,12);
+v.configure({solo:'a',parts:{b:{visible:false}},targetOpacity:.2});
+assert.equal(v.read().summary.overlap,12,'visibility must not alter membership');
+assert.equal(original.opacity,1,'original material is untouched');
+assert.equal(target.material.opacity,.2);
+const before=v.read();assert.throws(()=>v.configure({target:false,alignment:{scale:0}}),/Scale/);assert.deepEqual(v.read(),before,'invalid patch is atomic');
+v.configure({alignment:{position:[10,0,0]}});assert.equal(v.read().status,'not computed');await v.compute();assert.equal(v.read().summary.unclaimed,12);
+target.position.x=1;v.refresh();assert.equal(v.read().status,'not computed','moving target invalidates claims');
+await v.compute();target.geometry.attributes.position.setX(0,20);target.geometry.attributes.position.needsUpdate=true;v.refresh();
+assert.equal(v.read().status,'not computed','editing geometry invalidates claims');
+const pending=v.compute();v.dispose();await pending;assert.equal(target.material,original);assert.equal(target.visible,true);
+assert.throws(()=>v.configure({target:false}),/disposed/);
+console.log('registration viewer: full overlapping claims, isolation, invalidation, cancellation and restoration pass');
