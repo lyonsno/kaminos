@@ -16,7 +16,7 @@ globalThis.requestAnimationFrame=fn=>queueMicrotask(fn);
 globalThis.window={kaminosWorkbenchExperiments:{state:()=>({id:'creature-flesh/contact'}),async invoke(op,v){if(op==='motion'&&process.env.CONTACT_MODE!=='noop')state.motion=v;if(op==='replay'){state.steps=state.frame=0;}if(op==='advance'){state.steps++;state.volume.steps++;state.deformer.dispatches++;if(state.motion&&process.env.CONTACT_MODE!=='frozen')state.frame=Math.min(59,Math.floor(state.steps/60*30));}}},kaminosCreatureFlesh:{read:()=>structuredClone(state),physicalState:()=>({points:[],offsets:[]}),geometry:()=>({attributes:{position:{array:new Float32Array(9)}}}),gpu:async()=>({positions:new Float32Array(9),layout:'vec4',backend:'webgpu-dense-dq'})}};
 const screenshot=async({path})=>fs.writeFileSync(path,'synthetic-control-fixture-not-native-image');
 const page={on(){},goto:async()=>{},waitForFunction:async()=>{},evaluate:async(fn,arg)=>fn(arg),screenshot,locator:()=>({screenshot,textContent:async()=>''})};
-export const chromium={launchPersistentContext:async()=>({setDefaultTimeout(){},pages:()=>[page],close:async()=>{}})};`);
+export const chromium={launchPersistentContext:async()=>({setDefaultTimeout(){},pages:()=>[page],newCDPSession:async()=>({send:async()=>({data:Buffer.from('89504e470d0a1a0a0000000d494844520000000100000001','hex').toString('base64')})}),close:async()=>{}})};`);
 const server=http.createServer((request,response)=>{response.setHeader('Content-Type','application/json');response.end(JSON.stringify({source:{repoRoot:scratch,commit:'fixture',dirty:false}}));});
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 try{

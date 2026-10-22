@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {admitContactState} from './creature-flesh-evidence.mjs';
+import {captureContactPage} from './creature-flesh-capture.mjs';
 const options=Object.fromEntries(process.argv.slice(2).reduce((a,v,i,all)=>i%2?a:[...a,[v.replace(/^--/,''),all[i+1]]],[]));
 const out=path.resolve(options.out??'scratch/contact-witness');
 if(fs.existsSync(out)&&(!fs.statSync(out).isDirectory()||fs.readdirSync(out).length)){
@@ -12,7 +13,8 @@ if(fs.existsSync(out)&&(!fs.statSync(out).isDirectory()||fs.readdirSync(out).len
 }
 fs.mkdirSync(out,{recursive:true});
 const report={status:'running',phase:'arguments',requested:options,frames:[],pageErrors:[],consoleErrors:[],browserClosed:false};const save=()=>fs.writeFileSync(path.join(out,'report.json'),JSON.stringify(report,null,2));save();
-let context,page;
+let context,page,captureSession;
+const capture=async file=>{save();fs.writeFileSync(path.join(out,file),await captureContactPage(captureSession));};
 try{
  if(!options.url||!options.browser||!options.playwright||!options.root||!options.revision)throw Error('Explicit URL, independent browser, Playwright, root and revision required');
  if(!['static','probe','held','motion'].includes(options.mode))throw Error('Explicit static, probe, held or motion capture mode required');
@@ -23,6 +25,7 @@ try{
  const {chromium}=await import(options.playwright);report.phase='browser';save();
  context=await chromium.launchPersistentContext(path.join(out,'profile'),{executablePath:options.browser,headless:true,viewport:{width:1440,height:1050},args:['--use-mock-keychain','--password-store=basic'],timeout:0});
  context.setDefaultTimeout(0);page=context.pages()[0]??await context.newPage();
+ captureSession=await context.newCDPSession(page);report.captureRoute='CDP Page.captureScreenshot, complete viewport';
  let rejectFailure;const failure=new Promise((_,reject)=>{rejectFailure=reject;});failure.catch(()=>{});
  page.on('pageerror',e=>{report.pageErrors.push(e.message);rejectFailure(Error(e.message));});page.on('console',m=>{if(m.type()==='error'){report.consoleErrors.push(m.text());rejectFailure(Error(m.text()));}});
  report.phase='page-load';save();await page.goto(options.url,{waitUntil:'domcontentloaded',timeout:0});
@@ -37,11 +40,12 @@ try{
  report.initial=await page.evaluate(()=>window.kaminosCreatureFlesh.read());
  if(options.solver==='webgpu-tetrahedral-local-energy'){await page.evaluate(()=>window.kaminosCreatureFlesh.physicalState());report.initial=await page.evaluate(()=>window.kaminosCreatureFlesh.read());}
  const admission={caseSha256:options['case-sha'],preparedSha256:options['prepared-sha'],physical:options.physical!=='off',solver:options.solver??'cpu-tetrahedral-local-energy'};admitContactState(report.initial,{...admission,steps:0,presented:true});
- report.phase='initial-capture';await page.screenshot({path:path.join(out,'initial.png')});
- await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',true));await page.screenshot({path:path.join(out,'volume.png')});await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',false));
+ report.phase='initial-capture';await capture('initial.png');
+ await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',true));await capture('volume.png');await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',false));
  if(options.mode==='probe'){
   report.phase='short-ui-probe';save();await page.evaluate(async()=>{const api=window.kaminosWorkbenchExperiments,s=window.kaminosCreatureFlesh.read(),p=s.sphere.position;p[0]+=.18;await api.invoke('sphere',p);await api.invoke('advance',5);});
-  await page.locator('#viewport').screenshot({path:path.join(out,'probe.png')});report.probe=await page.evaluate(()=>window.kaminosCreatureFlesh.read());admitContactState(report.probe,{...admission,steps:5,presented:true});
+  if(options.solver==='webgpu-tetrahedral-local-energy')await page.evaluate(()=>window.kaminosCreatureFlesh.physicalState());
+  await capture('probe.png');report.probe=await page.evaluate(()=>window.kaminosCreatureFlesh.read());admitContactState(report.probe,{...admission,steps:5,presented:true});
  }
  if(['held','motion'].includes(options.mode)){
   report.phase='contact-stroke';save();
@@ -54,7 +58,7 @@ try{
    const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);await window.kaminosCreatureFlesh.physicalState();return window.kaminosCreatureFlesh.read({geometry:false});});
    admitContactState(state,{...admission,steps:i+1});
    const raw=await page.evaluate(async()=>{const physical=await window.kaminosCreatureFlesh.physicalState();return{state:window.kaminosCreatureFlesh.read(),...physical};});
-   const file=`frames/${String(i+1).padStart(4,'0')}.png`;await page.locator('#viewport').screenshot({path:path.join(out,file)});
+   const file=`frames/${String(i+1).padStart(4,'0')}.png`;await capture(file);
    const presented=await page.evaluate(()=>window.kaminosCreatureFlesh.read());admitContactState(presented,{...admission,steps:i+1,presented:true});
    fs.writeFileSync(path.join(out,`frames/${String(i+1).padStart(4,'0')}.json`),JSON.stringify(raw));report.frames.push({file,step:state.steps,frame:state.frame,volume:state.volume});
   }
@@ -63,6 +67,6 @@ try{
   fs.writeFileSync(path.join(out,'gpu-positions.bin'),Buffer.from(Float32Array.from(parity.positions).buffer));delete parity.positions;report.parity=parity;if(!(parity.max<1e-4)||parity.vertices!==report.initial.body.vertices)throw Error('GPU skin differs from CPU current-shape consumer');
  }
  report.final=await page.evaluate(()=>window.kaminosCreatureFlesh.read());report.status='passed';report.phase='complete';
-}catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};if(page)try{await page.screenshot({path:path.join(out,'failure.png')});report.last=await page.evaluate(()=>({owner:window.kaminosWorkbenchExperiments?.state(),physical:window.kaminosCreatureFlesh?.read()}));}catch(e){report.failureCaptureError=e.message;}}
+}catch(error){report.status='failed';report.failure={phase:report.phase,message:error.message,stack:error.stack};save();if(page)try{report.last=await page.evaluate(()=>({owner:window.kaminosWorkbenchExperiments?.state(),physical:window.kaminosCreatureFlesh?.read()}));save();await capture('failure.png');}catch(e){report.failureCaptureError=e.message;save();}}
 finally{if(context){await context.close();report.browserClosed=true;}save();}
 console.log(JSON.stringify({status:report.status,phase:report.phase,output:path.join(out,'report.json'),failure:report.failure?.message,frames:report.frames.length,browserClosed:report.browserClosed}));if(report.status!=='passed')process.exitCode=1;

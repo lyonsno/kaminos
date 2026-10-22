@@ -16,3 +16,4 @@ gpu.deformer.physicalBackend='webgpu-tetrahedral-local-energy';
 assert.equal(admitContactState(gpu,{solver:'webgpu-tetrahedral-local-energy',steps:2}),true);
 for(const mutate of [s=>s.volume.snapshot.current=false,s=>s.volume.snapshot.epoch=2,s=>s.volume.snapshot.gpuSteps=0,s=>s.volume.backend='cpu',s=>s.gpuValidated=false,s=>delete s.volume.snapshot,s=>s.volume.snapshot.minJ=-1]){const s=structuredClone(gpu);mutate(s);assert.throws(()=>admitContactState(s,{solver:'webgpu-tetrahedral-local-energy',steps:2}));}
 assert.throws(()=>admitContactState(good,{solver:'webgpu-tetrahedral-local-energy'}),'CPU route cannot satisfy GPU request');
+for(const value of [undefined,NaN,Infinity,2.5]){const s=structuredClone(gpu);s.volume.snapshot.gpuSteps=value;assert.throws(()=>admitContactState(s,{solver:'webgpu-tetrahedral-local-energy'}),'Missing/noninteger dispatch receipt must not count as GPU execution');}
