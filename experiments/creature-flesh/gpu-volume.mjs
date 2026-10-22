@@ -69,9 +69,11 @@ export function createGpuFleshVolume(source,settings={}){
   async snapshot(){
    if(!renderer)throw Error('Physical GPU has not been rendered');const capturedEpoch=epoch,capturedTargets=structuredClone(targets),capturedSteps=steps;
    const data=new Float32Array(await renderer.getArrayBufferAsync(attribute));
-   if(capturedSteps>0&&data[n*8+1]<capturedSteps)throw Error('GPU physical dispatch did not execute');
-   const offsets=Array.from({length:n},(_,i)=>Array.from(data.slice(i*4,i*4+3))),points=capturedTargets.map((p,i)=>p.map((v,a)=>v+offsets[i][a]));
+   if(data.length!==(2*n+1)*4)throw Error('Incomplete GPU physical readback layout');
    if(!data.every(Number.isFinite))throw Error('Nonfinite physical GPU state');
+   if(data[n*8+2]!==0)throw Error('GPU physical reference fault: zero residual is not feasible');
+   if(!Number.isSafeInteger(data[n*8+1])||data[n*8+1]!==capturedSteps)throw Error('GPU physical dispatch did not execute matching steps');
+   const offsets=Array.from({length:n},(_,i)=>Array.from(data.slice(i*4,i*4+3))),points=capturedTargets.map((p,i)=>p.map((v,a)=>v+offsets[i][a]));
    let minJ=Infinity,maxJ=-Infinity,total=0,reference=0;
    source.tetrahedra.forEach(t=>{const ref=tetrahedron(t.map(i=>capturedTargets[i]),config),r=ref.evaluate(t.map(i=>points[i]));minJ=Math.min(minJ,r.J);maxJ=Math.max(maxJ,r.J);total+=ref.volume*r.J;reference+=ref.volume;});
    lastSnapshot={epoch:capturedEpoch,steps:capturedSteps,offsets,points,minJ,maxJ,volumeRatio:total/reference,maxDisplacement:Math.max(...offsets.map(p=>Math.hypot(...p))),transportRetainedFraction:data[n*8],gpuSteps:data[n*8+1]};return structuredClone(lastSnapshot);

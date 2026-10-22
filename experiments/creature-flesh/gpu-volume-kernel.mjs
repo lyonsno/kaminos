@@ -70,6 +70,9 @@ fn value(i:u32,trial:vec3<f32>,hessian:bool)->Value{
   if(lane==0u){atomicStore(&invalid,0u);}workgroupBarrier();
   for(var e=lane;e<arrayLength(&tets);e+=64u){if(!(determinant(deformation(e,N,vec3<f32>(0)))>0.0)){atomicStore(&invalid,1u);}}
   workgroupBarrier();if(lane==0u){bad=atomicLoad(&invalid);}if(workgroupUniformLoad(&bad)==0u){break;}
+  // At representable zero, further halving cannot repair the reference. Fail
+  // explicitly rather than spinning forever on a degenerate f32 target.
+  if(workgroupUniformLoad(&fraction)==0.0){if(lane==0u){state[N*2u].z=1.0;}return;}
   if(lane==0u){fraction*=0.5;}workgroupBarrier();
   for(var i=lane;i<N;i+=64u){x[i]=before[i]*fraction;}workgroupBarrier();
  }

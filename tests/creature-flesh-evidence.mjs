@@ -12,8 +12,10 @@ assert.equal(admitContactState({...moving,frame:59,steps:180,volume:{...moving.v
 assert.equal(admitContactState({...moving,frame:31,steps:62,volume:{...moving.volume,steps:62}},{mode:'motion',steps:62}),true,'an integer source-frame boundary is not delayed by floating-point roundoff');
 assert.throws(()=>admitContactState({...moving,motion:false,frame:1},{mode:'held',steps:2}),/frame|held/i);
 const gpu={...structuredClone(good),gpuValidated:true,physical:true,proxyAttachment:'section-shared-pelvis-lumbar-chest-v1',volume:{backend:'webgpu',steps:2,epoch:3,snapshot:{steps:2,epoch:3,current:true,minJ:1,volumeRatio:1,maxDisplacement:.1,gpuSteps:2,transportRetainedFraction:1}}};
-gpu.deformer.physicalBackend='webgpu-tetrahedral-local-energy';
+gpu.deformer.physicalBackend='webgpu-tetrahedral-local-energy';gpu.volume.enabled=true;
 assert.equal(admitContactState(gpu,{solver:'webgpu-tetrahedral-local-energy',steps:2}),true);
 for(const mutate of [s=>s.volume.snapshot.current=false,s=>s.volume.snapshot.epoch=2,s=>s.volume.snapshot.gpuSteps=0,s=>s.volume.backend='cpu',s=>s.gpuValidated=false,s=>delete s.volume.snapshot,s=>s.volume.snapshot.minJ=-1]){const s=structuredClone(gpu);mutate(s);assert.throws(()=>admitContactState(s,{solver:'webgpu-tetrahedral-local-energy',steps:2}));}
 assert.throws(()=>admitContactState(good,{solver:'webgpu-tetrahedral-local-energy'}),'CPU route cannot satisfy GPU request');
 for(const value of [undefined,NaN,Infinity,2.5]){const s=structuredClone(gpu);s.volume.snapshot.gpuSteps=value;assert.throws(()=>admitContactState(s,{solver:'webgpu-tetrahedral-local-energy'}),'Missing/noninteger dispatch receipt must not count as GPU execution');}
+for(const mutate of [s=>{delete s.volume.epoch;delete s.volume.snapshot.epoch;},s=>{s.physical=false;s.volume.enabled=false;},s=>s.volume.enabled=false]){const s=structuredClone(gpu);mutate(s);assert.throws(()=>admitContactState(s,{solver:'webgpu-tetrahedral-local-energy'}));}
+const off=structuredClone(gpu);off.physical=false;off.volume.enabled=false;off.volume.snapshot.maxDisplacement=0;assert.equal(admitContactState(off,{solver:'webgpu-tetrahedral-local-energy',physical:false}),true);
