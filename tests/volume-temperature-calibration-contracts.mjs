@@ -83,6 +83,8 @@ test('reference comparison retains off-anchor errors and does not claim a cold p
   assert.equal(report.rows.length, reference.rows.length);
   assert.ok(Math.abs(report.calibration.kelvinPerHeat - 1283.68305565) < 1e-6);
   assert.equal(report.rows[2].potentialErrorKelvin, 0);
+  assert.equal(report.legacyKelvinPerHeat, 1600, 'historical comparison must not follow the adopted default');
+  assert.equal(report.rows[2].legacyPotentialKelvin, 2700);
   assert.ok(report.rows[5].potentialErrorKelvin > 270, 'the rich residual is real, not auto-fitted away');
   assert.equal(report.rows[2].localBurn.status, 'not-ignited');
   assert.equal(report.rows[2].localBurn.burned, 0);

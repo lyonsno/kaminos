@@ -5,7 +5,10 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { REACTANT_MODEL, REACTANT_CONTROL_DEFAULTS, reactantBurnStep, calibrateReactantTemperature } from '../volume-reactant-combustion.mjs';
-import { PHYSICS_COLD_KELVIN, PHYSICS_APPEARANCE_DEFAULTS, physicsSootKelvin } from '../volume-physics-appearance.mjs';
+import { PHYSICS_COLD_KELVIN, physicsSootKelvin } from '../volume-physics-appearance.mjs';
+
+// Historical pre-adoption baseline, deliberately independent of today's default.
+const LEGACY_KELVIN_PER_HEAT = 1600;
 
 const check = (condition, message) => { if (!condition) throw new Error(message); };
 const close = (a, b, tolerance) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance;
@@ -79,12 +82,12 @@ export function compareTemperatureReference(reference) {
     const subdivided = localBurn({ ...material, heat: initialHeat }, model, calibration.kelvinPerHeat, 0.25);
     return { initialKelvin: r.initialKelvin, equivalenceRatio: r.equivalenceRatio, material, referenceKelvin: r.finalKelvin,
       potentialKelvin, potentialErrorKelvin: potentialKelvin - r.finalKelvin,
-      legacyPotentialKelvin: r.initialKelvin + heatRise * PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat,
+      legacyPotentialKelvin: r.initialKelvin + heatRise * LEGACY_KELVIN_PER_HEAT,
       localBurn: { ...coarse, subdivisionDifferenceKelvin: Math.abs(coarse.finalKelvin - subdivided.finalKelvin) }, subdividedBurn: subdivided };
   });
   return { identity: 'kaminos.flame-temperature-calibration.v1', status: 'complete',
     scope: 'offline reference fit and CPU local-burn validation; not a GPU trajectory or named-fuel simulation',
-    calibration, model, legacyKelvinPerHeat: PHYSICS_APPEARANCE_DEFAULTS.kelvinPerHeat,
+    calibration, model, legacyKelvinPerHeat: LEGACY_KELVIN_PER_HEAT,
     ignitionKelvin: model.ignitionBand.map(h => physicsSootKelvin(h, calibration.kelvinPerHeat)),
     reference: { requested: reference.requested, effective: reference.effective }, rows,
     limits: ['Calibration fits only the 300 K stoichiometric methane-air equilibrium temperature.',
@@ -92,7 +95,7 @@ export function compareTemperatureReference(reference) {
       'Potential temperatures assume complete consumption of the limiting reactant; cold parcels need ignition.',
       'No cooling, transport, expansion work, radiative loss, solids, or soot oxidation heat is included.',
       'One linear scale does not model temperature-dependent heat capacity or equilibrium dissociation.',
-      'No production defaults or saved basins were changed.'] };
+      'Running this comparison does not mutate production defaults or saved basins.'] };
 }
 
 function main() {
