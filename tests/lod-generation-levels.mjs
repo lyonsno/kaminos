@@ -164,5 +164,15 @@ test('raw-decode reference refuses a hero, and an unknown reference is refused',
   const withHero = await prepareGenerationLevels({...base, reference: 'raw-decode', heroGLB: heroGLB()});
   assert.match(withHero.error.message, /raw-decode reference takes no hero/);
   const unknown = await prepareGenerationLevels({...base, reference: 'surfels'});
-  assert.match(unknown.error.message, /reference must be 'hero' or 'raw-decode'/);
+  assert.match(unknown.error.message, /reference must be one of hero, raw-decode/);
+});
+
+test('the module declares the references it accepts, and that declaration is what it checks', async () => {
+  const mod = await import('../lod-generation-levels.mjs');
+  assert.deepEqual(mod.GENERATION_LEVEL_REFERENCES, ['hero', 'raw-decode']);
+  assert.ok(Object.isFrozen(mod.GENERATION_LEVEL_REFERENCES));
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh');
+  const report = await mod.prepareGenerationLevels({decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'c'.repeat(64),
+    THREE, MeshBVH, finish: () => {}, targets: [200], reference: 'surfels', fetch: async () => { throw Error('no request expected'); }});
+  assert.match(report.error.message, /reference must be one of hero, raw-decode/);
 });

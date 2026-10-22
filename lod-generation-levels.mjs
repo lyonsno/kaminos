@@ -14,6 +14,9 @@ import {prepareLowTiers, readGLBWorldMesh, measureGeometricError, glbNodeWorldMa
 import {addNormalMapToGLB, createHeroNormalSampler, windingFreeVertexNormals} from './lod-normal-bake.mjs';
 
 export const LOW_TIER_ROUTE = 'closed-remesh+projection+trellis-simplify';
+// The references this module measures levels against. Callers gate on it: a build without
+// 'raw-decode' would treat a surfel sha as a hero and measure against its fallback mesh.
+export const GENERATION_LEVEL_REFERENCES = Object.freeze(['hero', 'raw-decode']);
 
 const sha256 = async array => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(array.buffer, array.byteOffset, array.byteLength)))]
   .map(b => b.toString(16).padStart(2, '0')).join('');
@@ -24,7 +27,7 @@ export async function prepareGenerationLevels({decode: {vertices, triangles}, ma
   Object.assign(report, {schema: 'kaminos.lod-tiers-report.v0', source, targets, tiers: report.tiers ?? []});
   const phase = name => { report.phase = name; onPhase(report); };
   try {
-    if (!['hero', 'raw-decode'].includes(reference)) throw Error("reference must be 'hero' or 'raw-decode'");
+    if (!GENERATION_LEVEL_REFERENCES.includes(reference)) throw Error(`reference must be one of ${GENERATION_LEVEL_REFERENCES.join(', ')}`);
     if (reference === 'raw-decode' && heroGLB) throw Error('a raw-decode reference takes no hero; levels are measured against the decode');
     report.reference = reference;
     if (!/^[a-f0-9]{64}$/.test(source || '')) throw Error('source must be the sha256 of the stored mesh the levels belong to');
