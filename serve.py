@@ -400,6 +400,22 @@ def _settings_preset_descriptor_value(descriptor):
     return descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
 
 
+# The procedural-force switches were retired 2026-10-22: Microdetail and Shred
+# are their own switches (0 is off) and Fine breakup became Swirl jostle. A
+# switch that was off moves onto its slider as 0, so a saved basin keeps the
+# forces it had. Mirrors transferRetiredForceSwitches in
+# volume-retired-control-migration.mjs.
+FORCE_SWITCH_TRANSFERS = (
+    ("volume-force-micro-carrier", "volume-microdetail"),
+    ("volume-force-interface-shred", "volume-interface-shred"),
+    ("volume-force-fine-breakup", "volume-swirl-jostle"),
+)
+
+
+def _force_switch_off(value):
+    return value is False or value == 0 or str(value).lower() in ("false", "0")
+
+
 def _settings_preset_descriptor_for_default(descriptor):
     return {
         "id": descriptor["key"],
@@ -652,6 +668,26 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
             normalized.pop(field, None)
             normalized.pop(count_field, None)
 
+    stripped_switches = {
+        entry["id"]: entry["value"] for entry in retired_controls_stripped if entry["axis"] == "basin"
+    }
+    master_off = "volume-procedural-detail-forces" in stripped_switches and _force_switch_off(
+        stripped_switches["volume-procedural-detail-forces"]
+    )
+    params_by_key = {descriptor["key"]: descriptor["param"] for descriptor in schema.get("controls") or []}
+    force_switch_transfers = []
+    zeroed_params = set()
+    for switch_key, slider_key in FORCE_SWITCH_TRANSFERS:
+        if not (master_off or (switch_key in stripped_switches and _force_switch_off(stripped_switches[switch_key]))):
+            continue
+        descriptor = (normalized.get("domControls") or {}).get(slider_key)
+        if not isinstance(descriptor, dict):
+            continue
+        descriptor.pop("rawValue", None)
+        descriptor["value"] = 0
+        zeroed_params.add(params_by_key[slider_key])
+        force_switch_transfers.append(slider_key)
+
     exclusions = payload.get("stateExclusions") or {}
     if any(exclusions.get(field) is not True for field in schema.get("excludedStateFields") or []):
         raise ValueError("settings preset must explicitly exclude runtime and replay state")
@@ -703,6 +739,8 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
         route_values.pop(key)
     if route_values:
         raise skew(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
+    if zeroed_params:
+        route_entries = [(key, "0" if key in zeroed_params else value) for key, value in route_entries]
     normalized["route"] = parsed._replace(query=urlencode(route_entries)).geturl()
     return normalized, {
         "identity": "kaminos-volume-settings-schema-projection-v1",
@@ -716,6 +754,7 @@ def normalize_volume_settings_preset_payload(payload, schema=None, tolerate_fore
         "retiredControlsStripped": retired_controls_stripped,
         "carriedControls": carried_controls,
         "unsupportedValuesDefaulted": unsupported_values_defaulted,
+        "forceSwitchTransfers": force_switch_transfers,
     }
 
 
