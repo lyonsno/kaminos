@@ -23,7 +23,7 @@ function cameraFrame(camera, width, height, generation) {
 // The caller owns solver creation, stepping and destruction. This adapter owns
 // only scene attachments, optical submission and final display resources.
 export function createFluidViewportHost({renderer,scene,camera,device,solver,getDisplayPolicy,decorateOutput,
-  pipelineIdentity='kaminos/local-liquid-authoring-v0',framePrefix='local-liquid'}) {
+  pipelineIdentity='kaminos/local-liquid-authoring-v0',framePrefix='local-liquid',supportIdentity=SUPPORT}) {
   if(!device||renderer.backend.device!==device)throw Error('Fluid viewport requires the host WebGPU device');
   if(!solver?.available||typeof solver.render!=='function')throw Error('Fluid viewport requires an available solver');
   if(typeof getDisplayPolicy!=='function'||typeof decorateOutput!=='function')throw Error('Fluid viewport requires scene lighting and presentation bindings');
@@ -105,7 +105,7 @@ export function createFluidViewportHost({renderer,scene,camera,device,solver,get
         width:target.width,height:target.height,view:nativeTexture(target).createView(),...extra});
       const commandEncoder=device.createCommandEncoder({label:frameId});
       const hostFrame={schema:FRAME_SCHEMA,frameId,device,deviceIdentity:pipelineIdentity,commandEncoder,width,height,
-        camera:cameraSnapshot,pipelineIdentity,remapGeneration:0,supportIdentity:SUPPORT,
+        camera:cameraSnapshot,pipelineIdentity,remapGeneration:0,supportIdentity,
         route:{requested:ROUTE,effective:ROUTE,fallback:null},
         sceneColor:attachment('host-color',colorTarget,{format:'rgba16float',colorSpace:'linear_hdr'}),
         sceneDepth:attachment('host-depth',depthTarget,{format:'r32float',encoding:'linear_view_depth_meters'}),
