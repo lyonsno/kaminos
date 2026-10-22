@@ -1394,9 +1394,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <div class="volume-control-section-title">Physics appearance</div>
       <span class="slider-help">Physics is the material law, under every reaction law: soot glows as a blackbody at the temperature the transported heat implies (300 K + Kelvin per heat &times; heat), and absorbs and scatters by Smoke extinction and Smoke albedo. Fresh burning adds the reaction&rsquo;s own light (Clean emission), which exists only under the Reactant reaction law. Thermal emission is an artistic gain on the soot glow; 1 keeps the glow consistent with how dark the soot is. Exposure EV, Camera white K and Tone mapping grade the picture and also the light the flame throws on the scene; Highlight knee applies only to the Custom curve. Soot display gain scales the soot the renderer draws (not the simulated soot); because the picture uses soot &times; Smoke extinction, the two trade off one-for-one in the image, though they mean different things. Under the Reactant law, Soot yield sets how much soot the simulation makes. Physics draws in the ordinary view; a field view, a Structure view or Residual switches it off.</span>
       <div class="slider-row">
-        <span class="slider-label" title="Calibration of the dimensionless heat field: T = 300 K + this × heat.">Kelvin per heat</span>
-        <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1600">
-        <span class="slider-val" id="volume-physical-kelvin-per-heat-val">1600</span>
+        <span class="slider-label" title="Temperature calibration for emission and soot burnout: T = 300 K + this × heat. New flames use the methane-air reference; saved basins retain their scale.">Kelvin per heat</span>
+        <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1283.6830556513362">
+        <span class="slider-val" id="volume-physical-kelvin-per-heat-val">1284</span>
       </div>
       <div class="slider-row">
         <span class="slider-label" title="Simulation: soot consumed per step at this rate × local oxygen fraction where the gas is hotter than Burnout K. 0 = off.">Soot burnout</span>

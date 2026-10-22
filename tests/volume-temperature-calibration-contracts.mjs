@@ -2,12 +2,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as combustion from '../volume-reactant-combustion.mjs';
-import { physicsSootKelvin } from '../volume-physics-appearance.mjs';
+import { physicsSootKelvin, resolvePhysicsAppearance, physicsAppearanceUniformValues } from '../volume-physics-appearance.mjs';
+import { migrateRetiredVolumeSettingsPresetDocument } from '../volume-retired-control-migration.mjs';
 import { readFileSync } from 'node:fs';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+
+test('new flames use the accepted methane-air reference in the material and burnout uniform', () => {
+  const reference = JSON.parse(readFileSync(new URL('./fixtures/flame-temperature-reference.json', import.meta.url)));
+  const anchor = reference.rows.find(row => row.initialKelvin === 300 && row.equivalenceRatio === 1);
+  const fit = combustion.calibrateReactantTemperature({ initialKelvin: 300, finalKelvin: anchor.finalKelvin, fuel: 0.25, oxidizer: 0.75 });
+  const resolved = resolvePhysicsAppearance({}, { reactantAdmitted: true, emissiveRouteEffective: true });
+  assert.equal(resolved.kelvinPerHeat, fit.kelvinPerHeat);
+  assert.equal(physicsAppearanceUniformValues(resolved)[1], fit.kelvinPerHeat);
+  assert.equal(physicsSootKelvin(1.5, resolved.kelvinPerHeat), anchor.finalKelvin);
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const input = html.match(/<input[^>]*id="volume-physical-kelvin-per-heat"[^>]*>/)[0];
+  assert.equal(Number(input.match(/value="([^"]+)"/)[1]), fit.kelvinPerHeat, 'the cockpit starts with the same scale as the renderer');
+});
+
+test('saved calibration overrides and pre-calibration basins keep their temperature scale', () => {
+  const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
+  const key = 'volume-physical-kelvin-per-heat';
+  const descriptor = schema.controls.find(c => c.key === key);
+  assert.equal(descriptor.additiveDefault, 1600, 'migration default is historical, not the new-flame default');
+  for (const scale of [949.18689, 1600, 1283.6830556513362]) {
+    assert.equal(resolvePhysicsAppearance({ physicalKelvinPerHeat: scale }).kelvinPerHeat, scale);
+  }
+  const old = { preset: { domControls: {}, route: 'http://kaminos.invalid/?kaminos_volume_smoke=1', controlCount: 0 } };
+  const migrated = migrateRetiredVolumeSettingsPresetDocument(old, schema).document;
+  assert.equal(migrated.preset.domControls[key].value, 1600);
+  assert.equal(new URL(migrated.preset.route).searchParams.get(descriptor.param), '1600');
+  assert.equal(old.preset.domControls[key], undefined, 'migration does not mutate the saved source');
+});
 
 test('reference calibration uses heat gain, not the final heat or brightness', () => {
   assert.equal(typeof combustion.calibrateReactantTemperature, 'function',

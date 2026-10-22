@@ -6,7 +6,7 @@ import { thermalRadianceRGB, REACTION_RGB } from './volume-emissive-transport.mj
 // emits as a blackbody at the temperature the heat field implies; the same soot
 // absorbs and scatters; fresh burning adds the reaction spectrum. No appearance
 // carrier, and no carrier-built coverage, is read. Heat is dimensionless, so its
-// Kelvin scale is a calibration the operator owns (Kelvin per heat unit).
+// Kelvin scale calibrates emission and soot burnout, not brightness alone.
 //
 // Soot burnout: soot is consumed where it is hot and meets oxygen, which is what
 // ends a real luminous flame. A sim term, off at rate 0; v0 does not consume
@@ -16,8 +16,18 @@ export const PHYSICS_APPEARANCE_IDENTITY = 'kaminos.volume.physics-appearance.v0
 export const PHYSICS_MATERIAL_LAW = 2;
 export const PHYSICS_COLD_KELVIN = 300;
 export const PHYSICS_BURNOUT_HALF_WIDTH_KELVIN = 150;
+// Accepted reference: Cantera 3.2.0 / GRI30, methane-air, phi=1, 300 K,
+// 101325 Pa, HP equilibrium. See tests/fixtures/flame-temperature-reference.json.
+// The reduced model releases 6 * 0.25 = 1.5 heat units in this parcel.
+// This fixes one anchor, not rich/preheated chemistry or physical ignition.
+export const PHYSICS_TEMPERATURE_REFERENCE = Object.freeze({
+  initialKelvin: 300,
+  finalKelvin: 2225.5245834770044,
+  heatRise: 1.5,
+});
 export const PHYSICS_APPEARANCE_DEFAULTS = Object.freeze({
-  kelvinPerHeat: 1600,
+  kelvinPerHeat: (PHYSICS_TEMPERATURE_REFERENCE.finalKelvin - PHYSICS_TEMPERATURE_REFERENCE.initialKelvin)
+    / PHYSICS_TEMPERATURE_REFERENCE.heatRise,
   sootBurnoutRate: 0,
   sootBurnoutKelvin: 1300,
 });

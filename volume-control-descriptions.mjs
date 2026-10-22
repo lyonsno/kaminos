@@ -202,7 +202,7 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   "volume-render-scale": { kind: "quality", activeWhen: "always",
     tooltip: "Resolution of the volume render as a share of the screen. Lower is faster and softer; 100% renders at full resolution." },
   "volume-physical-kelvin-per-heat": { kind: "physical", activeWhen: "always",
-    tooltip: "How hot a unit of simulated heat is. Higher makes the same fire hotter: whiter and much brighter. It also moves where soot burnout starts." },
+    tooltip: "Temperature calibration: T = 300 K + this times simulated heat. New flames use 1283.683 K per heat, fitted to a 2225.525 K methane-air reference; saved basins retain their scale. Changes emission and soot burnout, not just brightness. Thermal emission and Exposure EV adjust brightness without changing temperature." },
   "volume-physical-soot-burnout-rate": { kind: "conditional", activeWhen: "reaction law = Reactant candidate and rate > 0 (simulation term; runs whether or not Physics is drawn)",
     tooltip: "Simulation: hot soot that meets air burns away, so the flame stops making smoke higher up. It needs the Reactant reaction law; 0 is off." },
   "volume-physical-soot-burnout-kelvin": { kind: "conditional", activeWhen: "reaction law = Reactant candidate and Soot burnout > 0",
