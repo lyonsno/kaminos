@@ -12,9 +12,17 @@ export const DETECTOR_OUTPUTS = 69;
 const SILU = Object.freeze({ expression: 'value/(1.0+exp(-value))' });
 // Downsampling Conv blocks (3x3, stride 2); every other convolution has stride 1.
 const STRIDE_2 = new Set(['b0', 'b1', 'b3', 'b5', 'b7', 'h16', 'h19']);
-const BIG_TILE = Object.freeze({ tm: 4, tn: 4, bk: 16 }), SMALL_TILE = Object.freeze({ tm: 2, tn: 4, bk: 16 });
+// GEMM tiles from largest to smallest; each layer takes the largest that still
+// launches `minWorkgroups` workgroups, so small 16x16 and 32x32 layers spread
+// over the GPU instead of running on a handful of workgroups.
+const TILES = [{ tm: 4, tn: 4, bk: 16 }, { tm: 2, tn: 4, bk: 16 }, { tm: 2, tn: 2, bk: 16 }, { tm: 1, tn: 2, bk: 16 }, { tm: 1, tn: 1, bk: 16 }];
+// Provisional: best of a 0-1024 sweep on a contended shared GPU (diagnostic, not a benchmark).
+export const DEFAULT_MIN_WORKGROUPS = 128;
+export function chooseDetectorTile(M, N, minWorkgroups = DEFAULT_MIN_WORKGROUPS) {
+  return TILES.find(t => Math.ceil(N / (16 * t.tn)) * Math.ceil(M / (16 * t.tm)) >= minWorkgroups) ?? TILES[TILES.length - 1];
+}
 
-export function createHandDetectorNetwork({ device, tensors, label = 'hand-detector' }) {
+export function createHandDetectorNetwork({ device, tensors, label = 'hand-detector', minWorkgroups = DEFAULT_MIN_WORKGROUPS }) {
   const graph = createStaticGraph({ device, tensors, label, missing: key => `missing hand detector tensor ${key}` });
   const { weight, weightResource, alloc, slice, name, whole, uniform, record, grid1, named, steps } = graph;
 
@@ -26,7 +34,7 @@ export function createHandDetectorNetwork({ device, tensors, label = 'hand-detec
     const oh = Math.ceil(h / stride), ow = Math.ceil(wd / stride);
     const y = out ?? alloc([cout, oh, ow], prefix);
     if (y.shape[0] !== cout || y.shape[1] !== oh || y.shape[2] !== ow) throw new Error(`${prefix}: output slot ${y.shape} vs ${[cout, oh, ow]}`);
-    const tile = cout >= 64 ? BIG_TILE : SMALL_TILE;
+    const tile = chooseDetectorTile(cout, oh * ow, minWorkgroups);
     const common = { M: cout, N: oh * ow, K: cin * kh * kw, a: { resource: weightResource(w), offset: 0, sm: cin * kh * kw, sk: 1 },
       c: { ...y, sm: oh * ow, sn: 1 }, biasM: weightResource(weight(`${prefix}.bias`)), activation: act, tile, tag: prefix,
       residual, residualAfterActivation: Boolean(residual) };
@@ -110,6 +118,7 @@ export function createHandDetectorNetwork({ device, tensors, label = 'hand-detec
   return Object.freeze({
     input, output, dispatchCount: steps.length,
     names: () => [...named.keys()],
+    profile: () => graph.profile(),
     view: key => named.get(key) ?? null,
     encode(encoder) {
       if (disposed) throw new Error('hand detector network disposed');

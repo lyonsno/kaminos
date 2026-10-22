@@ -38,7 +38,7 @@ export async function loadHandDetector({ route, packageUrl, signal, onProgress }
     });
     let released = false;
     return Object.freeze({
-      identity, network, letterbox,
+      identity, network, letterbox, tensors: lease.tensors,
       // Letterbox + detector in the caller's encoder (no readback).
       encode(encoder, { texture }) {
         letterbox.encode(encoder, { texture });

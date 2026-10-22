@@ -78,7 +78,7 @@ const server = http.createServer((req, res) => {
   report.phase = 'browser';
   write();
   child = spawn(chrome, ['--headless=new', '--no-first-run', '--use-mock-keychain', '--password-store=basic',
-    '--enable-unsafe-webgpu', '--enable-features=WebGPU', `--user-data-dir=${profile}`,
+    '--enable-unsafe-webgpu', '--enable-features=WebGPU', '--enable-webgpu-developer-features', `--user-data-dir=${profile}`,
     `http://127.0.0.1:${server.address().port}/`], { stdio: 'ignore' });
   child.on('error', error => finish({ status: 'error', phase: 'browser', error: String(error) }));
   child.on('exit', code => finish({ status: 'browser-exited', code }));
