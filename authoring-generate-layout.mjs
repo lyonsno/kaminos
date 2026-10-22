@@ -1,7 +1,7 @@
 // Generate tab as three steps across the drawer: 1 Image (text -> image), 2 Mesh (the
 // image that will be used, model choice, Generate mesh), 3 Results (meshes to Add).
 // Existing controls are moved, not rebuilt, so their ids and handlers stay as they are.
-export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null}){
+export function installGenerateLayout({document,trellisSettings=()=>null,queueLine=()=>'',openMasks=null,selected=()=>null,trellisOutput=null}){
   const pane=document.getElementById('asset-generate');if(!pane)throw Error('Generate panel is missing');
   const byId=id=>document.getElementById(id);
   const column=(id,step,title)=>{const c=document.createElement('section');c.id=id;c.className='asset-step';c.innerHTML=`<h3><span>${step}</span>${title}</h3>`;return c;};
@@ -14,6 +14,10 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const preview=document.createElement('img');preview.id='asset-step-source';preview.alt='Image the mesh will be made from';preview.hidden=true;
   const sourceName=document.createElement('div');sourceName.id='asset-step-source-name';
   const settings=document.createElement('div');settings.id='asset-mesh-settings';
+  // In-page TRELLIS output: the finished mesh (with its surfels beside it), or surfels only, skipping mesh finishing.
+  const outputRow=document.createElement('label');outputRow.id='asset-trellis-output-row';outputRow.hidden=true;
+  outputRow.innerHTML='Output <select id="asset-trellis-output" aria-label="TRELLIS output"><option value="mesh">Mesh and surfels</option><option value="surfels">Surfels only (no mesh finishing, faster)</option></select>';
+  outputRow.querySelector('select').addEventListener('change',event=>{try{trellisOutput?.set(event.target.value);}catch(error){event.target.value=trellisOutput?.get()??'mesh';}});
   const queue=document.createElement('div');queue.id='asset-queue-line';queue.setAttribute('role','status');
   // The input and action share a row so neither is buried by model help text.
   const actions=document.createElement('div');actions.className='asset-step-actions';
@@ -23,7 +27,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
   const controls=document.createElement('div');controls.className='asset-mesh-controls';
   controls.append(...[byId('asset-mesh-model-row'),actions,byId('asset-express-row')].filter(Boolean));
   const input=document.createElement('div');input.className='asset-mesh-input';input.append(preview,controls);
-  mesh.append(input,sourceName,settings,queue,...[byId('asset-preparation-status')].filter(Boolean));
+  mesh.append(input,sourceName,outputRow,settings,queue,...[byId('asset-preparation-status')].filter(Boolean));
   heading?.remove();help?.remove();
   const resultList=byId('asset-results');const empty=document.createElement('p');empty.className='asset-help';empty.id='asset-results-empty';empty.textContent='Generated meshes appear here. Add puts one in the scene.';
   results.append(empty,resultList);
@@ -37,6 +41,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
     settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    outputRow.hidden=!trellisOutput||model!=='trellis-page';if(!outputRow.hidden)outputRow.querySelector('select').value=trellisOutput.get();
     masks.hidden=!openMasks||selected()?.kind!=='image';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
     empty.hidden=resultList.children.length>0;
