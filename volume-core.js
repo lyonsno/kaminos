@@ -1,6 +1,7 @@
 import {IMMERSED_COLLECTION_WGSL} from './volume-immersed-source-collection-wgsl.mjs';
 import {checkedImmersedSources,compileImmersedSourceCollection,IMMERSED_COLLECTION_IDENTITY} from './volume-immersed-source-collection.mjs';
 export {compileImmersedSourceCollection} from './volume-immersed-source-collection.mjs';
+import { FIRE_EMISSION_EXTENT_WGSL } from './fire-emission-extent.mjs';
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
 import { RAY_START_WGSL, createRayStartTexture } from './volume-ray-start.mjs';
@@ -6586,6 +6587,8 @@ fn csIrradianceResolve(@builtin(global_invocation_id) gid: vec3<u32>) {
   textureStore(irradianceAtlasOut, vec2<i32>(gid.xy), irradianceSrc[irradianceIndex(cell)]);
 }
 
+${FIRE_EMISSION_EXTENT_WGSL}
+
 // Analytic far-field reduce: collapse the live lattice to its luminance
 // centroid, total power, and mean color so receivers can add a true 1/r^2
 // radial term beyond the diffusion shell. The 4-round axis diffusion carries
@@ -11588,6 +11591,7 @@ export function createKaminosVolumePrototype({
   let irradianceAtlasTexture = null;
   let irradianceMetaTexture = null;
   let irradianceAnalyticPipeline = null;
+  let emissionExtentPipeline = null;
   let irradianceBindGroups = null;
   let irradianceLatticeBindGroupLayout = null;
   let irradiancePipelineLayout = null;
@@ -17526,6 +17530,7 @@ export function createKaminosVolumePrototype({
     irradianceAtlasTexture = null;
     irradianceMetaTexture = null;
     irradianceAnalyticPipeline = null;
+    emissionExtentPipeline = null;
     irradianceBindGroups = null;
     irradianceSeedPipeline = null;
     irradiancePropagatePipeline = null;
@@ -17560,7 +17565,7 @@ export function createKaminosVolumePrototype({
     });
     irradianceMetaTexture = device.createTexture({
       label: 'kaminos fire-irradiance-far-field-meta-v0',
-      size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+      size: { width: 4, height: 1, depthOrArrayLayers: 1 },
       format: 'rgba16float',
       usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
     });
@@ -17610,6 +17615,10 @@ export function createKaminosVolumePrototype({
       layout: irradiancePipelineLayout,
       compute: { module: shader, entryPoint: 'csIrradianceAnalytic', constants: irradiancePipelineConstants },
     });
+    emissionExtentPipeline = device.createComputePipeline({
+      label: 'kaminos undiffused emission extent', layout: irradiancePipelineLayout,
+      compute: { module: shader, entryPoint: 'csEmissionExtent', constants: irradiancePipelineConstants },
+    });
     irradianceResourcesKey = key;
     irradianceAtlasGeneration += 1;
     state.fireLightFieldGrid = irradianceGridSize;
@@ -17649,6 +17658,11 @@ export function createKaminosVolumePrototype({
     seedPass.setBindGroup(1, irradianceBindGroups[0]);
     seedPass.dispatchWorkgroups(latticeWorkgroups, latticeWorkgroupsY, latticeWorkgroups);
     seedPass.end();
+    const extentPass = encoder.beginComputePass({ label: 'kaminos undiffused emission extent' });
+    extentPass.setPipeline(emissionExtentPipeline);
+    extentPass.setBindGroup(0, readBindGroup);
+    extentPass.setBindGroup(1, irradianceBindGroups[1]); // freshly seeded buffer0 as source
+    extentPass.dispatchWorkgroups(1); extentPass.end();
     const propagatePass = encoder.beginComputePass({
       label: `kaminos ${FIRE_IRRADIANCE_PROPAGATION_IDENTITY} pass`,
       ...(options.propagationTimestampWrites ? { timestampWrites: options.propagationTimestampWrites } : {}),
@@ -17743,7 +17757,8 @@ export function createKaminosVolumePrototype({
       reason: null,
       atlasTexture: irradianceAtlasTexture,
       metaTexture: irradianceMetaTexture,
-      metaWidth: 2,
+      metaWidth: 4,
+      visualExtentIdentity: 'undiffused-emission-moments-v1',
       metaHeight: 1,
       farFieldIdentity: 'fire-irradiance-far-field-meta-v0',
     };
