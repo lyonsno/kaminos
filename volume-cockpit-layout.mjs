@@ -25,10 +25,7 @@ const LAYOUT_ACTIVATION_API = '/api/volume-cockpit-layout-activation';
 const LAYOUT_SURFACES = new Set(['primary', 'authored-mix']);
 const SAFE_ID = /^[a-z0-9](?:[a-z0-9._-]{0,95})$/;
 const FORCE_CONTRIBUTION_CONTROL_IDS = Object.freeze([
-  'volume-procedural-detail-forces',
-  'volume-force-micro-carrier',
-  'volume-force-interface-shred',
-  'volume-force-fine-breakup',
+  'volume-swirl-jostle',
   'volume-fine-breakup-localization',
 ]);
 
@@ -423,7 +420,7 @@ const ORGANIZED_GROUPS = [
   ['detail', 'Flame detail', /^volume-(fire-scale|microdetail|interface-shred|fire-licks)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
-  ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
+  ['force', 'Force contributions', /^volume-(swirl-jostle|fine-breakup-localization)$/],
   ['simulation', 'Simulation dynamics', /^volume-(resolution|speed|curl|projection|pressure-.+|canonical-.+|artistic-swirl|phased-sway|pyro-detail|advection-scheme|confinement|time-step|wavelet-turbulence|wavelet-octaves|wavelet-strength|common-gas-transport)$/],
   ['diagnostics', 'Diagnostics & alternate renderers', /^volume-(boundary-sidecar-view|residual-.+|grid-overlay|flow-debug|oracle-.+|look-freeze)$/],
   ['capture', 'Capture extractor', /^volume-reaction-.+/],

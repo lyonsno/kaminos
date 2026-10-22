@@ -32,7 +32,7 @@ const control = schema.controls.find(entry => entry.key === 'volume-reactant-soo
 assert.ok(control, 'the schema declares the soot yield control');
 assert.equal(control.param, 'volume_reactant_soot_yield');
 assert.equal(Number(control.additiveDefault), REACTANT_MODEL.sootYield, 'older basins load at the model yield');
-assert.ok(control.additiveSinceControlCount > Math.max(...schema.controls.filter(entry => entry !== control && Number.isSafeInteger(entry.additiveSinceControlCount)).map(entry => entry.additiveSinceControlCount)), 'it is the newest additive control');
+assert.equal(control.additiveSinceControlCount, 260, 'it follows the wavelet controls in the additive history');
 assert.equal(schema.controls.length, schema.controlCount);
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 assert.match(index, /<input[^>]+id="volume-reactant-soot-yield"[^>]+data-volume-settings-param="volume_reactant_soot_yield"/, 'the cockpit has the slider');

@@ -144,7 +144,7 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Detail', view:'shape', fields:[
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'],
+    ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Emitter scale'],
   ] },
   { name:'Emission', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
