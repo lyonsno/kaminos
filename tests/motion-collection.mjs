@@ -12,3 +12,18 @@ await assert.rejects(()=>library.add({...motion(),textEncoder:'fallback'}),/rout
 const bad=structuredClone(snapshot);bad.motions[0].motion.prompt='changed';await assert.rejects(()=>restored.import(bad),/digest/);assert.equal(restored.list().length,3);
 assert(library.read().bytes>0);assert.equal(library.list(a.skeletonKey).length,2);
 console.log('motion collection retention, skeleton separation, export/import and corrupt-output rejection pass');
+const run={id:'run-1',status:'running',prompt:'walk',seed:1,skeletonKey:a.skeletonKey,solver:{rtol:1e-3,atol:1e-6,cfgScale:3},samples:[]};
+assert.equal(typeof library.beginGeneration,'function','retain generation independently of completed takes');
+library.beginGeneration(run);
+const partial={...motion(),status:'partial',refinement:{t:.2,index:1,evaluations:8}};
+library.appendPartial(run.id,partial);
+library.finishGeneration(run.id,'stopped');
+assert.equal(library.generations(a.skeletonKey)[0].samples.length,1);
+await assert.rejects(library.add(partial),/route/,'partial must never pass as completed take');
+const archive=library.export(),reopened=createMotionCollection();await reopened.import(archive);
+assert.equal(reopened.generations()[0].status,'stopped');
+assert.equal(reopened.generations()[0].samples[0].status,'partial');
+const broken=structuredClone(archive);broken.generations[0].samples[0].positions=[];
+await assert.rejects(reopened.import(broken),/positions/);
+assert.equal(reopened.generations()[0].samples.length,1);
+console.log('stopped refinement history survives export/reopen without completed-motion promotion');

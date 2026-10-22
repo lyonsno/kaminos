@@ -57,7 +57,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
     return generator;
   }
 
-  async function run({ asset, prompt, seed = 1, onProgress = () => {} } = {}) {
+  async function run({ asset, prompt, seed = 1, rtol = 1e-3, atol = 1e-6, cfgScale = 3, onPartial, onProgress = () => {} } = {}) {
     if (running) throw new Error('UniMate is already running');
     if (!prompt) throw new Error('a prompt is needed');
     const prepared = asset != null && Object.hasOwn(asset, 'skeletonData');
@@ -97,7 +97,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       }
       if (running.stopped) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
       report('running', 'solve', prompt, { evaluations: 0, t: 0 });
-      const result = await gen.generate({ text: prompt, seed, onEvaluation: e => report('running', 'solve', prompt, { evaluations: e.evaluations, t: Math.min(e.t, 1) }) });
+      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale, onPartial: onPartial ? sample => onPartial({...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? "browser T5" : "captured embedding"}) : undefined, onEvaluation: e => report('running', 'solve', prompt, { evaluations: e.evaluations, t: Math.min(e.t, 1) }) });
       report('running', 'bake', 'animated .glb');
       const sk = gen.skeleton;
       const glb = exportMotionGlb({ name: asset?.name ?? sk.name, jointNames: sk.jointNames, parents: sk.parents, rest: sk.rest, fps: sk.fps,
@@ -106,7 +106,7 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       const out = {
         glb, motion: result.motion, skeleton: sk, restFrame: data?.restFrame ? structuredClone(data.restFrame) : null,
         rig: rig ? { names: rig.names, pruned: rig.pruned, labels: labels.clean, face: labels.face, restRotation: rig.restRotation ?? null, mesh: Boolean(data?.mesh) } : null,
-        report: { prompt, seed, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
+        report: { prompt, seed, solver: result.solver, evaluations: result.evaluations, steps: result.steps.length, wallMs: result.wallMs, dutyCount: result.dutyCount, textEncoder: result.textEncoder },
       };
       state.last = { prompt, seed, skeleton: sk.name, glbBytes: glb.byteLength, evaluations: result.evaluations };
       report('done', null, `${sk.name}: ${prompt}`);

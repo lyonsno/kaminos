@@ -135,22 +135,27 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
       motionLength: [bundle.motionLength, bundle.motionLength] };
   };
 
+  function decode(final) {
+    // Denormalize (motion * std + mean, float32) into [T, J, 12] features, then decode.
+    const features = new Float32Array(T * J * Fe);
+    for (let t = 0; t < T; t++) for (let j = 0; j < J; j++) for (let d = 0; d < Fe; d++) {
+      features[(t * J + j) * Fe + d] = Math.fround(Math.fround(final[(j * Fe + d) * T + t] * arrays.std[j * Fe + d]) + arrays.mean[j * Fe + d]);
+    }
+    const motion = decodeUniMateMotion({ features, frames: T, parents, offsets });
+    return {motion, features};
+  }
   let active = null;
-  async function solve({ caption, noise, schedule, onEvaluation, onStep }) {
+  async function solve({ caption, noise, schedule, onEvaluation, onStep, onPartial, rtol, atol, cfgScale }) {
     scheduler.setSchedule(schedule);
     den.writeConditioning(conditioningFor(caption));
     den.encodePrepare(scheduler.encoder());
     await scheduler.flush('unimate.prepare');
-    const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation });
+    const drift = createCooperativeCfgDrift(device, den, scheduler, { prompts: 1, onEvaluation, cfgScale });
     try {
-      const res = await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol: 1e-3, atol: 1e-6, onStep });
-      const final = res.solution.at(-1);
-      // Denormalize (motion * std + mean, float32) into [T, J, 12] features, then decode.
-      const features = new Float32Array(T * J * Fe);
-      for (let t = 0; t < T; t++) for (let j = 0; j < J; j++) for (let d = 0; d < Fe; d++) {
-        features[(t * J + j) * Fe + d] = Math.fround(Math.fround(final[(j * Fe + d) * T + t] * arrays.std[j * Fe + d]) + arrays.mean[j * Fe + d]);
-      }
-      const motion = decodeUniMateMotion({ features, frames: T, parents, offsets });
+      const res = await dopri5Solve({ y0: noise, drift, outputTimes: bundle.outputTimes, rtol, atol, onStep, onSample: onPartial ? async ({state, t, index}) => {
+        await onPartial({motion: decode(state).motion, t, index, skeleton: g.skeleton, evaluations: drift.evaluations});
+      } : null });
+      const {motion, features} = decode(res.solution.at(-1));
       return { motion, features, steps: res.steps, evaluations: drift.evaluations, duties: scheduler.stats.history.slice() };
     } finally {
       drift.dispose();
@@ -161,7 +166,9 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
   // text: any prompt (browser T5), or promptIndex: a captured bundle prompt. seed null replays
   // the accepted run's noise, which exists only for captured prompts.
   async function generate({ text = null, promptIndex = null, seed = null, cooperative = true, targetDutyMs = 12, maxInFlight = 1,
-    onEvaluation, onStep } = {}) {
+    onEvaluation, onStep, onPartial, rtol = 1e-3, atol = 1e-6, cfgScale = 3 } = {}) {
+    if (![rtol, atol].every(v => Number.isFinite(v) && v > 0)) throw new RangeError("solver tolerance must be finite and positive");
+    if (!Number.isFinite(cfgScale)) throw new RangeError("guidance must be finite");
     if (text === null) text = bundle.prompts[promptIndex ?? 0].text;
     const match = bundle.prompts.findIndex(p => p.text === text);
     if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
@@ -184,7 +191,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
         route = await session.registerRoute({ routeId, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
         const control = createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal, withForeground: frameRun.withForeground });
         active.control = control;
-        const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep,
+        const job = route.enqueue({ jobId: runId, execute: invocation => solve({ caption, noise, onEvaluation, onStep, onPartial, rtol, atol, cfgScale,
           schedule: { runtime: route.runtime, invocation, control, signal: abort.signal, targetDutyMs, maxInFlight } }) });
         const completion = await job.completion;
         if (completion.status !== 'succeeded') {
@@ -194,8 +201,9 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
         }
         result = completion.output;
       } else {
-        result = await solve({ caption, noise, schedule: null, onEvaluation, onStep });
+        result = await solve({ caption, noise, schedule: null, onEvaluation, onStep, onPartial, rtol, atol, cfgScale });
       }
+      result.solver = {method: "dopri5", rtol, atol, cfgScale, endTime: bundle.outputTimes.at(-1)};
       result.prompt = text;
       result.seed = seed;
       result.textEncoder = t5 ? 'browser T5' : 'captured embedding';

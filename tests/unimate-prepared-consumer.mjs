@@ -14,8 +14,10 @@ globalThis.__preparedConsumerTest = {
       get skeleton() { const s = data.b.skeleton; return { ...s, rest: [[0, 1, 0], [0, 0, 0]] }; },
       async useSkeletonData(next) { calls.push({ kind: 'data', data: next }); data = next; },
       async useSkeleton(url) { throw Error(`unexpected stock skeleton: ${url}`); },
-      async generate() {
-        calls.push({ kind: 'generate', data });
+      hasTextEncoder:()=>true,
+      async generate(options) {
+        calls.push({ kind: 'generate', data, options });
+        await options.onPartial?.({t:.5,index:1,evaluations:8,motion:{positions:new Float32Array(12)}});
         return { motion: { frames: 2, joints: 2, positions: new Float32Array(12),
           localRotations: new Float32Array([1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0]), rootTranslation: new Float32Array(6) },
           evaluations: 2, steps: [], wallMs: 1, dutyCount: 1, textEncoder: 'browser T5' };
@@ -46,7 +48,8 @@ try {
   assert.deepEqual(result.restFrame, first.restFrame, 'result retains the authored-to-canonical frame for playback');
   assert.equal(new DataView(result.glb.buffer, result.glb.byteOffset, result.glb.byteLength).getUint32(0, true), 0x46546c67);
   const second = prepared('edited dog');
-  await consumer.run({ asset: { skeletonData: second }, prompt: 'A dog walks.' });
+  await consumer.run({ asset: { skeletonData: second }, prompt: 'A dog walks.',rtol:1e-5,atol:1e-8,cfgScale:4,onPartial:s=>calls.push({kind:'partial',sample:s}) });
+  const configured=calls.filter(c=>c.kind==='generate').at(-1).options;assert.equal(configured.rtol,1e-5);assert.equal(configured.atol,1e-8);assert.equal(configured.cfgScale,4);assert.equal(calls.find(c=>c.kind==='partial').sample.textEncoder,'browser T5');
   assert.equal(calls.filter(c => c.kind === 'create').length, 1, 'weights stay resident across input changes');
   assert.equal(calls.filter(c => c.kind === 'generate').at(-1).data, second, 'warm run uses latest edited conditioning');
   for (const asset of [{ skeletonData: null }, { skeletonData: first, skeleton: 'dog' }, { skeletonData: first, bytes: new ArrayBuffer(1) }]) {
