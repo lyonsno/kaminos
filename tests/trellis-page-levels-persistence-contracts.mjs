@@ -9,9 +9,9 @@ const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const start=html.indexOf('const persistTrellisPageRun=async out=>{'),end=html.indexOf('\n  // TRELLIS in this page',start);
 // The page function, with its dynamic import routed through an injected loader.
 const source=html.slice(start,end).replaceAll('await import(','await loadModule(');
-const pagePersist=({loadModule,window})=>{let stored=0;
+const pagePersist=({loadModule,window,infos=[]})=>{let stored=0;
   const persist=new Function('persistGeneratedMesh','sha256Of','window','setInfo','console','loadModule',`${source};return persistTrellisPageRun;`)(
-    async()=>{stored++;return {sha256:'a'.repeat(64),source:'/stored-hero.glb'};},async()=>'',window,()=>{},{warn(){}},loadModule);
+    async()=>{stored++;return {sha256:'a'.repeat(64),source:'/stored-hero.glb'};},async()=>'',window,m=>infos.push(m),{warn(){}},loadModule);
   return {persist,stored:()=>stored};};
 const settle=()=>new Promise(r=>setTimeout(r,0));
 
@@ -44,4 +44,12 @@ test('a surfels-only run builds GI levels keyed to the stored surfel asset, meas
   assert.equal(stored(),1);assert.equal(saved.sha256,'a'.repeat(64));
   assert.equal(calls.length,1);assert.equal(calls[0].source,'a'.repeat(64));assert.equal(calls[0].reference,'raw-decode');
   assert.equal(window.__kaminosLastGenerationLevels?.source,'a'.repeat(64));
+});
+
+test('GI tiers skipped for a surfels-only asset are reported to the author with the reason, never silently',async()=>{
+  const infos=[],window={};
+  const {persist}=pagePersist({window,infos,loadModule:async()=>({runGenerationLevels:async()=>({phase:'skipped',reason:'this build cannot measure tiers against the raw decode yet'})})});
+  await persist({glb:null,surfelGlb:new ArrayBuffer(8),surfels:{status:'built'},generation:{runId:'r'},label:'grass',levelInputs:{decode:{},materialFields:{}}});
+  for(let i=0;i<5;i++)await settle();
+  assert.ok(infos.some(m=>/No GI tiers for grass: this build cannot measure tiers against the raw decode yet/.test(m)),JSON.stringify(infos));
 });

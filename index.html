@@ -27034,7 +27034,9 @@ function setupAuthoringAssets(){
       })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(report=>{
         window.__kaminosLastGenerationLevels={source,...report};
         if(report.phase==='done')setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
-        else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
+        // Never silent: a skipped or failed levels build says why (the asset itself is saved either way).
+        else if(report.phase==='skipped'){if(reference)setInfo(`No GI tiers for ${out.label}: ${report.reason}`);}
+        else console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
     };
     // A surfels-only run (finishMesh:false) stores the surfel asset as the result.
     if(!out.glb){if(!out.surfelGlb)throw Error('TRELLIS run produced neither a mesh nor surfels');
