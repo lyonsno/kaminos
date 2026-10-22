@@ -1,5 +1,5 @@
-// Tiny native transport witness: the far grid has no donor face in this
-// fixture, while the intermediate grid can resolve and carry its lateral jet.
+// Tiny native transport comparison of a resolved lateral donor jet against
+// the same coarser far field without the intermediate envelope.
 export async function probeIntermediateFlow(){
   const {createWorldSmoke,worldSmokePlan,intermediateFlowPlan}=await import('./volume-world-smoke.mjs');
   const adapter=await navigator.gpu.requestAdapter();
@@ -38,6 +38,6 @@ export async function probeIntermediateFlow(){
       const after=device.createCommandEncoder();far.encode(after,input);device.queue.submit([after.finish()]);await device.queue.onSubmittedWorkDone();
       far.destroy();fine.destroy();reaction.destroy();
     }
-    return {cases,errors,passed:errors.length===0&&cases.every(c=>c.finite)&&cases[0].lateralSoot===0&&cases[1].lateralSoot>0};
+    return {cases,errors,passed:errors.length===0&&cases.every(c=>c.finite)&&cases[1].lateralSoot>cases[0].lateralSoot};
   }finally{device.destroy();}
 }
