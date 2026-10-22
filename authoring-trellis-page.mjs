@@ -163,7 +163,8 @@ const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[
 export function trellisPageStage(phase){return STAGES.find(([pattern])=>pattern.test(String(phase||'')))?.[1]??'Generating';}
 
 export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now()}){
-  let active=false,abort=null,started=0;
+  // Output: 'mesh' (the finished mesh, with its surfels beside it) or 'surfels' (surfels only: no mesh finishing).
+  let active=false,abort=null,started=0,output='mesh';
   let state={status:'idle',progress:'TRELLIS 2 runs in this page on its GPU; it takes many minutes.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
   const publish=()=>changed(structuredClone({...state,pending:state.pending?{label:state.pending.label}:null}));
   const set=values=>{Object.assign(state,values);publish();};
@@ -177,11 +178,13 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
     state.results.push(saved);state.pending=null;
     // A mesh-finishing failure stays the run's outcome; the surfels are what it kept.
     if(meshError)set({status:'failed',error:`inference: ${meshError}; surfels saved`,stage:null,progress:'The mesh could not be finished. The surfels from the decoded field were saved.'});
-    else set({status:'complete',error:null,stage:'Complete',progress:'Mesh saved. Add it to this scene when you want.'});
+    else set({status:'complete',error:null,stage:'Complete',progress:glb?'Mesh saved. Add it to this scene when you want.':'Surfels saved. Add them to this scene when you want.'});
     return saved;
   }
   return {
     preparesInput:true,
+    output:()=>output,
+    setOutput(value){if(!['mesh','surfels'].includes(value))throw Error('TRELLIS output must be mesh or surfels');if(active)throw Error('Generation is already running');output=value;publish();},
     // The drawer keeps the model choice bound to this service while it runs, saves, or
     // holds a generated mesh that still needs saving.
     busy:()=>active||!!state.pending,
@@ -205,7 +208,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
       const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
       try{
-        const out=await runPage({image:{source:cutout},label,signal:abort.signal,onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
+        const out=await runPage({image:{source:cutout},label,signal:abort.signal,finishMesh:output!=='surfels',onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
           const stage=trellisPageStage(event?.phase);set({stage,progress:`${stage} · ${elapsed()}`});}});
         state.pending={glb:out.glb,generation:{...out.generation,input:{...out.generation?.input,source:input.source}},label:out.label||label,surfelGlb:out.surfelGlb??null,surfels:out.surfels??null,levelInputs:out.levelInputs??null};
         phase='persistence';return await storePending();

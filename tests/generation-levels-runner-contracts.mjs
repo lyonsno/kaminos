@@ -31,3 +31,9 @@ test('no hero, no tiers: a surfels-only run is skipped with a reason',async()=>{
   const report=await runGenerationLevels({...inputs(),source:null,WorkerClass:FakeWorker});
   assert.equal(report.phase,'skipped');assert.match(report.reason,/no stored hero mesh/);
 });
+
+test('a surfels-only run sends its levels keyed to the surfel asset with the raw decode as reference',async()=>{
+  FakeWorker.prototype.reply=function(m){this.emit('message',{kind:'done',report:{phase:'done',source:m.source,reference:m.reference}});};
+  const report=await runGenerationLevels({...inputs(),source:'c'.repeat(64),reference:'raw-decode',WorkerClass:FakeWorker});
+  assert.equal(FakeWorker.last.message.reference,'raw-decode');assert.equal(report.reference,'raw-decode');
+});

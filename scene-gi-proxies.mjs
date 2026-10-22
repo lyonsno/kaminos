@@ -35,11 +35,12 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     if(!assetSha)return {state:'not-generated',reason:'not a stored generated mesh'};
     if(surfels){
       const levels=surfels.surfelOptions?.levels??[1];
+      // Tiers come from the hero mesh when there is one; a surfels-only asset's tiers are keyed to its own sha
+      // (built from the raw decode, their error measured against it).
       const heroSha=object.generation?.meshSha256??null;
-      return {representation:'surfels',assetSha,heroSha,surfels:{root:surfels,levels:[...levels],coarsest:Math.max(...levels)},
-        ...(heroSha?{}:{state:'no-tiers',reason:'a surfels-only asset has no hero mesh to take tiers from'})};
+      return {representation:'surfels',assetSha,heroSha,tierSource:heroSha??assetSha,surfels:{root:surfels,levels:[...levels],coarsest:Math.max(...levels)}};
     }
-    return {representation:'mesh',assetSha,heroSha:assetSha};
+    return {representation:'mesh',assetSha,heroSha:assetSha,tierSource:assetSha};
   }
   async function resolve(root,selection){
     const version=++sequence;versions.set(root,version);
@@ -52,7 +53,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     if(base.state)return settle(base);
     handles.set(root,{...(handles.get(root)??base),state:'resolving'});
     try{
-      const query=new URLSearchParams({source:base.heroSha});
+      const query=new URLSearchParams({source:base.tierSource});
       if(selection.faces!=null)query.set('faces',String(selection.faces));
       if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
       const set=await fetchJson(`/api/mesh-lods?${query}`);
@@ -63,7 +64,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       const proxyRoot=await parseGlb(bytes);proxyRoot.matrixAutoUpdate=false;proxyRoot.updateMatrix?.();
       return settle({...base,levels,state:'loaded',proxyRoot,
         effective:{sha:choice.sha256,faces:choice.faces,withinBudget:set.withinBudget??null},
-        error:choice.error?{reference:choice.error.reference,units:'fraction of the hero bounding-box diagonal',relative:choice.error.relative}:null});
+        error:choice.error?{reference:choice.error.reference,units:`fraction of the ${choice.error.reference?.kind==='raw-decode'?'raw decode':'hero'} bounding-box diagonal`,relative:choice.error.relative}:null});
     }catch(error){return settle({...base,state:'failed',failure:String(error?.message||error)});}
   }
   return {

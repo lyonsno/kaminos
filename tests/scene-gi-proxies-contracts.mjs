@@ -60,7 +60,7 @@ test('objects with no TRELLIS tiers say why, and nothing is loaded',async()=>{
   assert.equal((await registry.attach(sceneObject(heroSource).root)).state,'no-tiers');
   assert.equal((await registry.attach(sceneObject('/kiln.glb').root)).state,'not-generated');
   const so=sceneObject(`/api/read?root=generated-meshes&path=${SURF}.glb`,{representation:'trellis-surfels'});const s=new THREE.Group();s.isTrellisSurfelRoot=true;so.root.add(s);
-  const h=await registry.attach(so.root);assert.equal(h.state,'no-tiers');assert.match(h.reason,/surfels-only/);
+  const h=await registry.attach(so.root);assert.equal(h.state,'no-tiers');assert.match(h.reason,/no stored tiers/);
   assert.equal(loaded.length,0);
 });
 
@@ -130,4 +130,13 @@ test('the registry knows whether any GI pass consumes proxies, so a setting that
   assert.deepEqual(registry.consumers(),['ssgi-proxy-source']);
   release();assert.deepEqual(registry.consumers(),[]);
   assert.throws(()=>registry.registerConsumer(''),/name/);
+});
+
+test('a surfels-only asset resolves GI tiers keyed to its own sha (levels measured against the raw decode)',async()=>{
+  const SO='d'.repeat(64),{registry,calls}=world();
+  const {root}=sceneObject(`/api/read?root=generated-meshes&path=${SO}.glb`,{representation:'trellis-surfels'});
+  const s=new THREE.Group();s.isTrellisSurfelRoot=true;s.surfelOptions={levels:[1,2,4]};root.add(s);
+  const h=await registry.attach(root);
+  assert.equal(h.heroSha,null);assert.equal(h.tierSource,SO);assert.match(calls.at(-1),new RegExp(`source=${SO}`));
+  assert.equal(h.state,'no-tiers','the fixture stores no levels for this sha');assert.doesNotMatch(h.reason??'',/surfels-only asset has no hero/);
 });
