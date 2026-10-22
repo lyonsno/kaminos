@@ -21,7 +21,9 @@ export function createRawFieldMesh(data,indices,meta){
   const alpha=attribute('rawOpacity','float').clamp(0,1);
   material.transmission=state.mode==='glass'?1:0;material.transmissionNode=material.transmission?alpha.oneMinus():null;
   material.alphaHash=state.mode==='opacity';material.opacityNode=material.alphaHash?alpha:null;
-  material.fragmentNode=state.mode==='normals'?vec4(normalView.mul(.5).add(.5),1):null;
+  // Keep the standard output path so the Workbench MRT attachments are written.
+  material.lights=state.mode!=='normals';
+  if(!material.lights)material.colorNode=vec4(normalView.mul(.5).add(.5),1);
   material.ior=state.ior;material.thickness=state.thickness;material.needsUpdate=true;
  }
  apply();return {root,read:()=>({...state,route:'unsimplified-raw-triangles',vertices:meta.count,triangles:indices.length/3}),set(patch){

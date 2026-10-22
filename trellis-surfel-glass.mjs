@@ -45,7 +45,8 @@ export function createSurfelGlass(data,meta){
   material.transmissionNode=material.transmission?opacity.oneMinus():null;
   material.opacityNode=state.mode==='opacity'?opacity:null;
   material.alphaHash=state.mode==='opacity';material.ior=state.ior;material.thickness=state.thickness;material.needsUpdate=true;
-  material.fragmentNode=state.mode==='normals'?vec4((state.reconstruction?surface.normal:normalView).normalize().mul(.5).add(.5),1):null;
+  material.lights=state.mode!=='normals';
+  if(!material.lights)material.colorNode=vec4((state.reconstruction?surface.normal:normalView).normalize().mul(.5).add(.5),1);
   if(state.mode==='plain'){material.colorNode=vec4(vec3(.5),1);material.metalnessNode=null;material.roughnessNode=null;material.metalness=0;material.roughness=.8;}
  }}apply();
  return {root,inspectSurface:(x,y)=>surface.inspect(x,y),read:()=>({...state,count:meta.count,route:'oriented-raw-field-surfels',radius:meta.radius,footprintScale:footprint,surface:surface.read()}),set(patch){
