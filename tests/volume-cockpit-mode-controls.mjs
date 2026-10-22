@@ -35,12 +35,9 @@ for (const id of ids.filter(id => id !== 'future-control')) assert.ok(knownIds.h
 const emissive = { boundarySidecarSource: 'baked' };
 const before = structuredClone(emissive);
 const availability = layout.volumeCockpitModeAvailability(emissive);
-const pyro = layout.volumeCockpitModeAvailability(emissive, [...knownIds]);
-assert.ok(pyro['volume-pyro-carrier-view'], 'the legacy pyro carrier view is inactive under emissive transport');
+// The legacy transfer controls (Smoke, Absorption, the pyro carriers) are retired; nothing is left for availability to dim on the emissive route.
+assert.ok(![...knownIds].some(id => id.startsWith('volume-pyro-')), 'no legacy pyro control is live');
 for (const id of Object.keys(availability)) assert.ok(knownIds.has(id), id);
-for (const id of ['volume-smoke', 'volume-absorption']) {
-  assert.ok(availability[id], `${id} is inactive in emissive mode`);
-}
 for (const id of ['volume-physical-thermal', 'volume-physical-smoke-extinction', 'volume-physical-kelvin-per-heat', 'volume-boundary-sidecar-ridge']) {
   assert.equal(availability[id], '', `${id} is active in emissive baked mode`);
 }
@@ -52,14 +49,13 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
   const fallback = layout.volumeCockpitModeAvailability(emissive, [...knownIds], {
     requested: 'emissive-transport-v2', effective: 'legacy', inactiveReason,
   });
-  assert.equal(fallback['volume-smoke'], '', `${inactiveReason}: effective legacy smoke transfer must return`);
   assert.ok(fallback['volume-physical-thermal'], `${inactiveReason}: unused emission control must disappear`);
 }
 // Exercise the actual readout's receipt-to-DOM integration without starting a
 // GPU. These are UI fixtures, not evidence that a native renderer was executed.
 const nodes = new Map([...knownIds].map(id => [id, { id, value: `preserved:${id}`, dataset: {}, disabled: false }]));
 for(const id of ['volume-raymarch-status','volume-ray-step-status'])nodes.set(id,{id,textContent:''});
-const rows = ['volume-smoke', 'volume-physical-thermal'].map(id => ({
+const rows = ['volume-physical-thermal'].map(id => ({
   dataset: {}, style: {}, querySelectorAll: () => [Object.assign(nodes.get(id), { closest: () => null })],
 }));
 const root = { querySelectorAll: selector => selector === '.slider-row' ? rows : [] };
@@ -79,8 +75,7 @@ for (const inactiveReason of ['intrinsic-presentation', 'caller-owned-presentati
       flameInspector:null,syncKilnCollisionControl(){},readVolumeControls: () => emissive, document: doc,
       syncVolumeCockpitModeAvailability: layout.syncVolumeCockpitModeAvailability,
     });
-    assert.equal(rows[0].dataset.volumeModeHidden, String(effective !== 'legacy'));
-    assert.equal(rows[1].dataset.volumeModeHidden, String(effective === 'legacy'));
+    assert.equal(rows[0].dataset.volumeModeHidden, String(effective === 'legacy'));
     assert.deepEqual([...nodes.values()].map(input => input.value), savedValues);
   }
 }

@@ -417,10 +417,10 @@ function sourceGroupForControl(control, looseIndex) {
 const ORGANIZED_GROUPS = [
   ['renderer', 'Renderer & emission model', /^volume-reaction-live-view$/],
   ['flame', 'Flame color & exposure', /^volume-(tone-mapping|physical-(kelvin-per-heat|soot-burnout-rate|soot-burnout-kelvin|thermal|clean|exposure|knee|white))$/],
-  ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density|smoke|absorption)$/],
+  ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density)$/],
   ['structure', 'Combustion-front structure', /^volume-boundary-sidecar-(source|width)$/],
   ['support', 'Support field & baked ridge', /^volume-boundary-sidecar-(blur|ridge)$/],
-  ['detail', 'Flame detail', /^volume-(fire|fire-scale|detail-scale|microdetail|interface-shred|fire-licks)$/],
+  ['detail', 'Flame detail', /^volume-(fire-scale|microdetail|interface-shred|fire-licks)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(procedural-detail-forces|force-(micro-carrier|interface-shred|fine-breakup)|fine-breakup-localization)$/],
@@ -484,7 +484,6 @@ export function volumeCockpitModeAvailability(c, controlIds = [], physicalColor 
   const set = (ids, active, reason) => {
     for (const id of ids) availability[`volume-${id}`] = active ? '' : reason;
   };
-  set(['smoke', 'absorption'], !emissive, 'Legacy transfer; emissive transport uses hot soot density and smoke extinction.');
   set(['physical-thermal', 'physical-clean', 'physical-exposure', 'physical-knee', 'physical-white',
     'physical-smoke-extinction', 'physical-smoke-albedo', 'physical-ambient',
     'physical-kelvin-per-heat', 'physical-soot-burnout-rate', 'physical-soot-burnout-kelvin'],

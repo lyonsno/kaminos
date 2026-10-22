@@ -133,7 +133,6 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'Smoke', view:'look', open:true, fields:[
     ['volume-density','Soot display gain'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Albedo'], ['volume-physical-ambient','Ambient light'],
-    ['volume-smoke','Smoke amount'],
   ] },
   { name:'Material', view:'look', fields:[
     ['volume-physical-kelvin-per-heat','Kelvin per heat'], ['volume-physical-soot-burnout-rate','Soot burnout rate'],
@@ -144,8 +143,8 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
   { name:'Detail', view:'shape', fields:[
-    ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'], ['volume-detail-scale','Detail scale'],
+    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
+    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Emitter scale'],
   ] },
   { name:'Emission', open:true, fields:[
     ['volume-emitter-source-law','Source law'],
@@ -184,8 +183,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-reaction-live-view','Field view'], ['volume-boundary-sidecar-view','Structure view'],
     ['volume-grid-overlay','Grid overlay'], ['volume-flow-debug','Flow display'],
   ] },
-  { name:'Legacy appearance', view:'look', fields:[
-    ['volume-absorption','Absorption'], ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));
