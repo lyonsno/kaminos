@@ -139,5 +139,33 @@ test('a leased service runs the model inside the lease and passes the result thr
   const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-k'}:{status:'released'});
   const leased=leasedService(service,{lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){}}),label:'Klein',route:'r'});
   assert.equal(await leased.run({prompt:'lantern'}),'image:lantern');assert.deepEqual(s.actions(),['claim','release']);
-  assert.equal(leased.read,service.read,'everything but run, busy and stop is the service itself');
+  assert.deepEqual(leased.read(),service.read(),'when not waiting, read is the service\'s own view');
+});
+
+import {sf3dFinishUnsettled} from '../greenroom-lease.mjs';
+test('ML-03: while a leased service waits, read() shows a stoppable loading state naming the holder, and the drawer is told',async()=>{
+  let release;const gate=new Promise(r=>{release=r;});let changes=0;
+  const service={busy:()=>false,stop:()=>false,read:()=>({status:'idle',canStop:false,progress:''}),run:async()=>'image'};
+  const s=server(b=>b.action==='claim'?{status:'waiting',heldBy:['job7']}:{status:'released'});
+  const leased=leasedService(service,{lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){},sleep:()=>gate,retryMs:0}),label:'FLUX.2 klein',route:'r',changed:()=>changes++});
+  const run=leased.run({});await new Promise(r=>setTimeout(r,0));
+  const view=leased.read();
+  assert.equal(view.status,'loading');assert.equal(view.canStop,true);assert.match(view.progress,/Waiting for the GPU: Greenroom job job7/);
+  assert.ok(changes>0,'the drawer redraws when the wait begins');
+  leased.stop();release();await assert.rejects(run);
+  assert.equal(leased.read().status,'idle','after the wait ends the service reads as itself again');
+});
+
+test('ML-01: an SF3D run whose foreground finish failed keeps Greenroom blocked; one whose finish settled releases',async()=>{
+  const failedFinish=Object.assign(Error('SF3D foreground finish failed'),{sf3dRun:{foregroundOpportunityReport:null,inferenceCompleted:true}});
+  const wrapped=new Error('SF3D generation failed',{cause:failedFinish});
+  assert.match(sf3dFinishUnsettled(wrapped),/finish/);
+  assert.equal(sf3dFinishUnsettled(Object.assign(Error('inference failed'),{sf3dRun:{foregroundOpportunityReport:{status:'released'},inferenceCompleted:false}})),null);
+  assert.equal(sf3dFinishUnsettled(Error('blocked before the run')),null);
+  for(const [error,expected] of [[wrapped,['claim']],[Error('blocked before the run'),['claim','release']]]){
+    const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-s'}:{status:'released'});
+    const service={busy:()=>false,stop:()=>false,read:()=>({status:'idle'}),run:async()=>{throw error;}};
+    const leased=leasedService(service,{lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){}}),label:'Stable Fast 3D',route:'r',unsettled:sf3dFinishUnsettled});
+    await assert.rejects(leased.run({}));assert.deepEqual(s.actions(),expected);
+  }
 });
