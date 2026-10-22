@@ -16,6 +16,13 @@ try{
  const second=await definition.create({host,inputs:recipe,record(){}});
  assert.deepEqual(target.position.toArray(),[3,4,5],'reopen preserves edited target placement');
  assert.equal(target.rotation.z,.4);assert.deepEqual(target.scale.toArray(),[2,2,2]);assert.equal(refreshes,1);
- await second.dispose();
+ second.operations.configure({solo:'base',referenceOpacity:.6});
+ target.scale.x*=-1;
+ const reflectedRecipe=second.operations.recipe();await second.dispose();
+ const reflected=await definition.create({host,inputs:reflectedRecipe,record(){}});
+ assert.deepEqual(target.scale.toArray(),[-2,2,2],'reopen preserves the shared editor Flip X reflection');
+ assert.deepEqual(target.position.toArray(),[3,4,5]);assert.equal(target.rotation.z,.4);
+ assert.equal(reflected.read().solo,'base');assert.equal(reflected.read().referenceOpacity,.6);
+ await reflected.dispose();
 }finally{globalThis.fetch=oldFetch;}
 console.log('registration experiment retains target placement with the comparison');

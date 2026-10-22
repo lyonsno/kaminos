@@ -7,7 +7,7 @@ export default {
  async create({host,inputs,record}){
   const sourceUrl=inputs.sourceUrl||'/api/read?root=scenes&path=hostile-analytical-arm-supported-1017.kaminos.json';
   const targetUrl=inputs.targetUrl||'/api/read?root=generated-meshes&path=hostile-machine-trials-1018%2Felaborated-arm.glb';
-  if(inputs.targetTransform)for(const key of ['position','rotation','scale']){const v=inputs.targetTransform[key];if(!Array.isArray(v)||v.length!==3||!v.every(Number.isFinite)||(key==='scale'&&v.some(n=>n<=0)))throw Error(`Invalid target ${key}`);}
+  if(inputs.targetTransform)for(const key of ['position','rotation','scale']){const v=inputs.targetTransform[key];if(!Array.isArray(v)||v.length!==3||!v.every(Number.isFinite)||(key==='scale'&&v.some(n=>n===0)))throw Error(`Invalid target ${key}`);}
   const response=await fetch(sourceUrl);if(!response.ok)throw Error(`Source carrier HTTP ${response.status}: ${sourceUrl}`);
   const parts=sourceParts(await response.json()),session=await host.scene.open();let controller,panel,stop;
   try{
