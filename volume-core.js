@@ -20599,7 +20599,7 @@ export function createKaminosVolumePrototype({
           let code=WGSL,lighting=null;
           if(distributedGroup) {
             if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
-            code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
+            code=code.replaceAll('medium.scattering * incidentAt(p)','medium.scattering * distributedMeanIncident(p)')
               .replace('fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return vec2<f32>(0.0); }','fn opticalIncidentMaskFlags(p: vec3<f32>) -> vec2<f32> { return distributedLastMaskFlags; }')+DISTRIBUTED_SMOKE_WGSL;
             lighting={layout:distributedLayout,group:distributedGroup};
           } else {
@@ -20608,7 +20608,7 @@ export function createKaminosVolumePrototype({
             }
             if(scenePointBindGroup) {
               if(scenePointFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport point lighting is stale');
-              code=code.replace('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
+              code=code.replaceAll('medium.scattering * incidentAt(p)','medium.scattering * (incidentAt(p) + scenePointIncident(p))')+SCENE_POINT_SMOKE_WGSL;
               lighting={layout:scenePointBindings.layout,group:scenePointBindGroup};
             }
           }
