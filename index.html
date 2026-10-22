@@ -3291,7 +3291,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { createPageGpuLease, leasedService } from './greenroom-lease.mjs';
+import { createPageGpuLease, leasedService, sf3dFinishUnsettled } from './greenroom-lease.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
@@ -27187,8 +27187,9 @@ function setupAuthoringAssets(){
         return null;
       };
       const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
-      authoringGenerator={...sf3d,run:tracked('sf3d',input=>pageGpuLease.run({label:'Stable Fast 3D',route:'sf3d.image-to-mesh.webgpu-local.v0',signal:input?.signal},
-        ()=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked})).then(outcome=>outcome.result))};
+      // SF3D runs on its own foreground service: a failed foreground finish (sf3dFinishUnsettled) keeps Greenroom blocked.
+      authoringGenerator=leasedService({...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))},
+        {lease:pageGpuLease,label:'Stable Fast 3D',route:'sf3d.image-to-mesh.webgpu-local.v0',changed:()=>redraw(),unsettled:sf3dFinishUnsettled});
     }
     return authoringGenerator;
   };
@@ -27214,7 +27215,7 @@ function setupAuthoringAssets(){
     changed:()=>redraw(),
     blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
-  authoringImageGenerator=leasedService(authoringImageGenerator,{lease:pageGpuLease,label:'FLUX.2 klein',route:'flux2-klein.text-to-image.authoring-shared-device.v0'});
+  authoringImageGenerator=leasedService(authoringImageGenerator,{lease:pageGpuLease,label:'FLUX.2 klein',route:'flux2-klein.text-to-image.authoring-shared-device.v0',changed:()=>redraw()});
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));

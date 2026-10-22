@@ -84,17 +84,38 @@ export function createPageGpuLease({post,unsettledWork,setInfo=()=>{},sleep,retr
   };
 }
 
-// A model service whose run takes the page's Greenroom lease first. While it waits for the GPU it counts as busy (a
-// second run is refused) and Stop cancels the wait; once the model runs, Stop is the service's own.
-export function leasedService(service,{lease,label,route}){
+// SF3D runs on its own foreground service, outside the app GPU host's ledger. Its run errors carry sf3dRun evidence; a
+// null foregroundOpportunityReport there means the foreground finish failed, so its GPU work is not known settled.
+export function sf3dFinishUnsettled(error){
+  for(let e=error,depth=0;e&&depth<8;e=e.cause,depth++){
+    if(e.sf3dRun)return e.sf3dRun.foregroundOpportunityReport==null?'SF3D foreground finish did not settle':null;
+    for(const inner of e.errors??[])if(inner?.sf3dRun?.foregroundOpportunityReport===null)return 'SF3D foreground finish did not settle';
+  }
+  return null;
+}
+
+// A model service whose run takes the page's Greenroom lease first. While it waits for the GPU it reads as a stoppable
+// loading state naming the holder (so the existing drawers show it) and counts as busy; Stop cancels the wait. Once
+// the model runs, Stop and read are the service's own. unsettled(error) names GPU work a failed run left unsettled
+// that the app GPU host's ledger cannot see; such a run keeps Greenroom blocked.
+export function leasedService(service,{lease,label,route,changed=()=>{},unsettled=()=>null}){
   let waiting=null;
+  const held=error=>{const reason=unsettled(error);if(!reason)return error;
+    const marked=error instanceof Error&&Object.isExtensible(error)?error:new Error(String(error?.message||error),{cause:error});
+    return Object.assign(marked,{gpuRouteHeld:true,gpuRouteHeldReason:reason});};
   return {...service,
     busy:()=>!!waiting||service.busy(),
-    stop:()=>{if(waiting&&!waiting.started){waiting.abort.abort();return true;}return service.stop();},
+    read(){const view=service.read();if(!waiting||waiting.started)return view;
+      return {...view,status:'loading',canStop:true,error:null,stage:'Waiting for the GPU',percent:null,
+        progress:`Waiting for the GPU: Greenroom ${waiting.heldBy?.length?`job ${waiting.heldBy.join(', ')}`:'work'} holds it`};},
+    stop:()=>{if(waiting&&!waiting.started){waiting.abort.abort();changed();return true;}return service.stop();},
     async run(input){
       if(waiting||service.busy())throw Error(`${label} is already running`);
-      const state={abort:new AbortController(),started:false};waiting=state;
-      try{const {result}=await lease.run({label,route,signal:state.abort.signal},()=>{state.started=true;return service.run(input);});return result;}
-      finally{if(waiting===state)waiting=null;}
+      const state={abort:new AbortController(),started:false,heldBy:null};waiting=state;changed();
+      try{
+        const {result}=await lease.run({label,route,signal:state.abort.signal,onPhase:event=>{if(event?.phase==='waiting-for-gpu'){state.heldBy=event.heldBy;changed();}}},
+          async()=>{state.started=true;changed();try{return await service.run(input);}catch(error){throw held(error);}});
+        return result;
+      }finally{if(waiting===state){waiting=null;changed();}}
     }};
 }
