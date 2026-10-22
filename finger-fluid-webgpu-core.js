@@ -71,7 +71,7 @@ export function resolveFingerFluidPressureOptimizations({pressureSolver='pbf',ad
   };
 }
 
-import {SCENE_LIQUID_SUPPORT_ROUTE,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL,SCENE_LIQUID_SUPPORT_WGSL,createSceneLiquidSupport} from './scene-liquid-support.mjs';
+import {SCENE_LIQUID_SUPPORT_ROUTE,SCENE_LIQUID_SUPPORT_BINDINGS_WGSL,SCENE_LIQUID_SUPPORT_WGSL,sceneLiquidSupportShader,createSceneLiquidSupport} from './scene-liquid-support.mjs';
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
@@ -13408,7 +13408,7 @@ export async function createWebGPUFingerFluidSolver({
   const reducedDynamics=safeDiagnosticDynamics==='pressure_surface';
   const safeDiagnosticBox=diagnosticBox===null?null:validateFingerFluidReferenceBox(diagnosticBox);
   const finitePBF=!!safeDiagnosticBox&&!useIPBF;
-  if(finitePBF&&(!diagnosticPopulation||reducedDynamics||adaptiveDensity||truthScene!=='multi_regime_playground'||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Finite PBF requires uniform assembled water and analytic box support');
+  if(finitePBF&&(!diagnosticPopulation||reducedDynamics||adaptiveDensity||truthScene!=='multi_regime_playground'||![KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE,SCENE_LIQUID_SUPPORT_ROUTE].includes(supportContactRoute)))throw new RangeError('Finite PBF requires uniform assembled water and analytic box or authored primitive support');
   if(!finitePBF){
     if(safeDiagnosticBox&&(!diagnosticPopulation||!reducedDynamics||ipbfBoundaryMode!=='tangent_plane'||(hostFrameComposition&&presentationMode!==KAMINOS_FINGER_FLUID_LOCAL_PRESENTATION_MODE)||supportContactRoute!==KAMINOS_FINGER_FLUID_ANALYTIC_SUPPORT_CONTACT_ROUTE))throw new RangeError('Reference box requires finite reduced IPBF water, explicit plane pressure and standalone or shared local presentation');
     if((reducedDynamics||diagnosticPopulation||akinciSupportRadius!==null)&&(!useIPBF||!useAkinci||adaptiveDensity||truthScene!=='multi_regime_playground'))throw new RangeError('Diagnostic dynamics require fixed-volume IPBF/Akinci analytic playground');
@@ -13482,7 +13482,7 @@ export async function createWebGPUFingerFluidSolver({
   if (!webgpuDevice && !globalThis.navigator?.gpu) {
     return createUnavailableSolver('navigator.gpu unavailable');
   }
-  const supportShaderSource = safeDiagnosticBox ? {bindings:'',functions:fingerFluidReferenceBoxSupport(safeDiagnosticBox)} : supportShaderSourceForRoute(supportContactRoute);
+  const supportShaderSource = supportContactRoute===SCENE_LIQUID_SUPPORT_ROUTE ? {bindings:SCENE_LIQUID_SUPPORT_BINDINGS_WGSL,functions:sceneLiquidSupportShader(safeDiagnosticBox)} : safeDiagnosticBox ? {bindings:'',functions:fingerFluidReferenceBoxSupport(safeDiagnosticBox)} : supportShaderSourceForRoute(supportContactRoute);
   const safeComposedRevision = typeof composedRevision === 'string' && /^[0-9a-f]{40}$/.test(composedRevision)
     ? composedRevision
     : null;

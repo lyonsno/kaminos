@@ -13026,7 +13026,7 @@ async function releaseAuthoredWater(id){
  const emitters=localLiquidEmitterRecords(),setup=structuredClone(localLiquidSetup);
  const {createAuthoredWaterHost}=await import('./authored-water-host.mjs');
  if(!isCurrent())throw Error('Water release superseded or scene changed');
- const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
+ const candidate=await createAuthoredWaterHost({renderer,scene,camera,pipeline:renderPipeline,device:sharedGpu?.device,setup,emitters,isCurrent,readColliders:()=>sceneObjects,redraw:()=>window._kaminosDirty?.(),getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output)});
  if(!isCurrent()){candidate?.dispose();throw Error('Water release superseded or scene changed');}
  if(!candidate)throw Error('Water replacement did not create an available host');
  try{candidate.setPaused(false);}catch(error){candidate.dispose();throw error;}
