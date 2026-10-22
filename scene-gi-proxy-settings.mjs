@@ -22,3 +22,9 @@ export function giProxySettingFor(record){
   if(!canHaveGiProxy(record))return null;
   return record.giProxy==null?structuredClone(DEFAULT_GI_PROXY_SETTING):checkedGiProxySetting(record,record.giProxy);
 }
+// The inspector's controls as a setting. An object already chosen by error keeps its statistic (max, p95 or mean);
+// choosing By error fresh uses p95.
+export function giProxySettingFromControls({enabled,detail,maxError},previous){
+  if(detail==='error')return {enabled,selection:{maxError:Number(maxError),stat:previous?.selection?.stat??'p95'}};
+  return {enabled,selection:{faces:Number(String(detail).replace(/^faces:/,''))}};
+}

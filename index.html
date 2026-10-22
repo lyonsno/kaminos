@@ -3291,7 +3291,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
-import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS } from './scene-gi-proxy-settings.mjs';
+import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
@@ -25552,8 +25552,12 @@ function installSceneConstruction() {
     +'<p id="object-gi-proxy-status" class="flame-scope"></p>';
   collisionPanel.after(renderPanel);scenePlacementTools.addHistoryScope(renderPanel);
   const giProxyInput=document.getElementById('object-gi-proxy'),giProxyDetail=document.getElementById('object-gi-proxy-detail'),giProxyError=document.getElementById('object-gi-proxy-error');
-  const giProxyControlValue=()=>({enabled:giProxyInput.checked,selection:giProxyDetail.value==='error'?{maxError:Number(giProxyError.value),stat:'p95'}:{faces:Number(giProxyDetail.value.slice(6))}});
-  for(const control of [giProxyInput,giProxyDetail,giProxyError])control.addEventListener('change',()=>{try{const target=ensureObjectGiProxyTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview(giProxyControlValue());}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  const giProxyControlValue=()=>giProxySettingFromControls({enabled:giProxyInput.checked,detail:giProxyDetail.value,maxError:giProxyError.value},selectedSceneObjectEntry()?.giProxy);
+  // input as well as change: Enter commits a typed value before change fires (scene-control-history.mjs).
+  for(const control of [giProxyInput,giProxyDetail,giProxyError])for(const type of ['input','change'])control.addEventListener(type,()=>{try{const target=ensureObjectGiProxyTarget(activeSceneObjectId);const value=giProxyControlValue();
+    // A half-typed error value waits for the next keystroke instead of reporting an error mid-typing.
+    if(value.selection.maxError!==undefined&&!(Number.isFinite(value.selection.maxError)&&value.selection.maxError>=0&&giProxyError.value!==''))return;
+    if(edits.state().active?.id===target)edits.preview(value);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[giProxyInput,giProxyDetail,giProxyError],edits,id:()=>ensureObjectGiProxyTarget(activeSceneObjectId),label:'Set GI proxy',onError:error=>setInfo(error.message)}));
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';

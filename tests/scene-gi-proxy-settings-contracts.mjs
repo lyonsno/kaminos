@@ -36,3 +36,12 @@ test('a disabled object holds no proxy and its handle says it is disabled',async
   registry.disable(root);
   assert.equal(registry.get(root).state,'disabled');assert.equal(registry.get(root).proxyRoot,null);
 });
+
+import {giProxySettingFromControls} from '../scene-gi-proxy-settings.mjs';
+test('RENDER-02: inspector edits keep an existing error statistic; choosing By error fresh uses p95',()=>{
+  const mean={enabled:true,selection:{maxError:.005,stat:'mean'}};
+  assert.deepEqual(giProxySettingFromControls({enabled:false,detail:'error',maxError:'0.005'},mean),{enabled:false,selection:{maxError:.005,stat:'mean'}});
+  assert.deepEqual(giProxySettingFromControls({enabled:true,detail:'error',maxError:'0.02'},mean),{enabled:true,selection:{maxError:.02,stat:'mean'}});
+  assert.deepEqual(giProxySettingFromControls({enabled:true,detail:'error',maxError:'0.01'},{enabled:true,selection:{faces:1000}}),{enabled:true,selection:{maxError:.01,stat:'p95'}});
+  assert.deepEqual(giProxySettingFromControls({enabled:true,detail:'faces:500',maxError:'0.01'},mean),{enabled:true,selection:{faces:500}});
+});
