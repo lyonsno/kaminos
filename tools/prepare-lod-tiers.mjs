@@ -1,11 +1,13 @@
 // Prepare low LOD tiers for one TRELLIS generation and publish them to a Kaminos server.
 //
 //   node tools/prepare-lod-tiers.mjs --input <dir> --source <sha256> --server http://127.0.0.1:8484 \
-//     [--targets 5000,1000,500] [--replace true] [--normal-maps false] --report <path>
+//     [--targets 5000,1000,500] [--replace true] [--normal-maps false] [--reference raw-decode] --report <path>
 //
 // <dir> holds the generation's raw mesh and material field: vertices.f32, triangles.u32,
 // material.features.f32, material.coordinates.i32 and meta.json {materialResolution}.
-// <sha256> is the stored mesh the levels belong to (normally the generation's hero GLB).
+// <sha256> is the stored mesh the levels belong to (normally the generation's hero GLB). With
+// --reference raw-decode it can be any stored asset of the run (a surfels-only run's surfel GLB);
+// the levels are then measured against, and their normal maps baked from, the raw decode.
 // Each tier gets a tangent-space normal map baked from the hero's shading normals (unless
 // --normal-maps false), then is ingested through /api/ingest-mesh and registered through /api/mesh-lods.
 // The report is written at every phase, including on failure.
@@ -15,7 +17,7 @@ import path from 'node:path';
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
 const input = args.get('--input'), source = args.get('--source'), server = args.get('--server'), reportPath = args.get('--report');
-const targets = (args.get('--targets') || '5000,1000,500').split(',').map(Number), replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false';
+const targets = (args.get('--targets') || '5000,1000,500').split(',').map(Number), replace = args.get('--replace') === 'true', normalMaps = args.get('--normal-maps') !== 'false', reference = args.get('--reference') || 'hero';
 const report = {schema: 'kaminos.lod-tiers-report.v0', phase: 'admission', input, source, server, targets, startedAt: new Date().toISOString(), tiers: []};
 const save = () => reportPath && fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');
 try {
@@ -39,7 +41,7 @@ try {
   // The same steps the page runs at Generate (lod-generation-levels.mjs), with Node's worker and fetch.
   await prepareGenerationLevels({decode: {vertices, triangles}, materialFields, source, server, THREE, MeshBVH, finish: finishTrellisMesh,
     unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets, replace, normalMaps, input: meta.source ?? input, route: meta.route,
-    report, onPhase: save});
+    reference, report, onPhase: save});
   if (report.error) throw Object.assign(Error(report.error.message), {stack: report.error.stack});
 } catch (error) {
   report.error = {message: error.message, stack: error.stack}; process.exitCode = 1;

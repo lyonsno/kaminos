@@ -89,12 +89,14 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
 // for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
 // With `footprint`, the normal is averaged over a 3x3 grid across the texel in the surface plane,
 // so detail finer than a texel (fur) shades as its average rather than as one aliased sample.
-export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false}) {
+export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false, bvh: prebuilt = null}) {
   if (!normals) throw Error('source has no shading normals');
   if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1));
-  const bvh = new MeshBVH(geometry), ray = new THREE.Ray(), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
+  // A caller that already built a BVH over these same vertices and faces passes it as `bvh`.
+  let bvh = prebuilt;
+  if (!bvh) { const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1)); bvh = new MeshBVH(geometry); }
+  const ray = new THREE.Ray(), point = new THREE.Vector3(), hit = {}, tri = new THREE.Triangle(), weights = new THREE.Vector3();
   const corner = i => new THREE.Vector3(vertices[i*3], vertices[i*3+1], vertices[i*3+2]);
   const normalAt = (face, at) => {
     const v = [0, 1, 2].map(k => faces[face * 3 + k]);
@@ -134,7 +136,9 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE
 // Adds a baked normal map and TANGENT attribute to a one-mesh, one-primitive GLB with float
 // POSITION, NORMAL and TEXCOORD_0. sampleWorldNormal(point, levelNormal) works in world space
 // (after the node transform), so the source can be any mesh in the same world frame.
-export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, source = null}) {
+// Or sampleLocalNormal(point, levelNormal, texelSize) in the mesh's own frame, when the source shares it.
+export async function addNormalMapToGLB(glb, {sampleWorldNormal, sampleLocalNormal, textureSize, source = null}) {
+  if (!sampleWorldNormal === !sampleLocalNormal) throw Error('exactly one of sampleWorldNormal and sampleLocalNormal is required');
   const view = new DataView(glb), jsonLength = view.getUint32(12, true);
   const json = JSON.parse(new TextDecoder().decode(new Uint8Array(glb, 20, jsonLength))), binStart = 28 + jsonLength, binLength = view.getUint32(20 + jsonLength, true);
   if (json.meshes?.length !== 1 || json.meshes[0].primitives.length !== 1) throw Error('one mesh with one primitive required');
@@ -169,7 +173,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   const linear = [world[0], world[1], world[2], world[4], world[5], world[6], world[8], world[9], world[10]];
   const normalToLocal = n => [0, 1, 2].map(c => linear[c*3]*n[0] + linear[c*3+1]*n[1] + linear[c*3+2]*n[2]); // transpose of the linear part
   const baked = bakeTangentNormalMap({positions, normals, uvs, indices, textureSize,
-    sampleNormal: (p, n, texelSize) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n)), texelSize * lengths[0]); return s && normalToLocal(s); }});
+    sampleNormal: sampleLocalNormal ?? ((p, n, texelSize) => { const s = sampleWorldNormal(toWorld(p), unit(normalToWorld(n)), texelSize * lengths[0]); return s && normalToLocal(s); })});
   const png = new Uint8Array(await encodeTrellisTexturePNG({pixels: baked.pixels, width: textureSize, height: textureSize}));
   // Append the tangents and the image after the existing binary chunk.
   const extra = []; let offset = Math.ceil(binLength / 4) * 4;
@@ -182,7 +186,7 @@ export async function addNormalMapToGLB(glb, {sampleWorldNormal, textureSize, so
   json.textures = [...(json.textures ?? []), {source: json.images.length - 1, sampler: 0}];
   material.normalTexture = {index: json.textures.length - 1};
   json.extras = {...json.extras, lodNormalMap: {source, textureSize, texelSize: baked.texelSize * lengths[0], coveredPixels: baked.coveredPixels, unsampledTexels: baked.unsampled,
-    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: sampleWorldNormal.method ?? 'caller-supplied sampler',
+    maxDegreesFromLevel: +baked.maxDegrees.toFixed(3), method: (sampleWorldNormal ?? sampleLocalNormal).method ?? 'caller-supplied sampler',
     tangentFrame: 'glTF: T along +u from UV gradients, Gram-Schmidt to N; B = cross(N, T) * w toward decreasing v'}};
   json.buffers[0].byteLength = offset;
   const text = new TextEncoder().encode(JSON.stringify(json)), textLength = Math.ceil(text.length / 4) * 4;
