@@ -509,7 +509,12 @@ function sameAppliedControlValue(left, right) {
     : typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
   const leftNumber = numeric(left);
   const rightNumber = numeric(right);
-  if (leftNumber !== null && rightNumber !== null) return leftNumber === rightNumber;
+  if (leftNumber !== null && rightNumber !== null) {
+    // Native range inputs serialize to 15 significant digits (observed in
+    // Chrome 154). Compare applied values at that precision, not preset hashes.
+    return leftNumber === rightNumber
+      || leftNumber.toPrecision(15) === rightNumber.toPrecision(15);
+  }
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
