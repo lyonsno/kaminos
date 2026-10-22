@@ -54,7 +54,7 @@ export const SCENE_LIQUID_SUPPORT_BINDINGS_WGSL=`
 @group(0) @binding(12) var sceneSupportSamples: texture_2d_array<f32>;
 @group(0) @binding(13) var<uniform> sceneSupportParams: vec4<u32>;
 `;
-export const SCENE_LIQUID_SUPPORT_WGSL=`
+const SCENE_LIQUID_SUPPORT_BODY=`
 const analyticObstacleSupportEnabled: bool = false;
 fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  let kind=textureLoad(sceneSupportSamples,vec2<i32>(0,i32(i)),0,0);
@@ -69,12 +69,20 @@ fn sceneColliderFrame(p:vec3<f32>,i:u32)->vec4<f32>{
  else if(kind.x>.5){let outside=max(abs(q.xz)-kind.zw*.5,vec2<f32>(0));d=q.y;n=vec3<f32>(0,1,0);if(any(outside>vec2<f32>(0))){let delta=vec3<f32>(sign(q.x)*outside.x,q.y,sign(q.z)*outside.y);d=length(delta);n=delta/max(d,1e-10);}}
  return vec4<f32>(ax.xyz*n.x+ay*n.y+az*n.z,d*pose.w);
 }
-fn sceneSupportFrame(p:vec3<f32>)->vec4<f32>{var result=vec4<f32>(0,1,0,1e6);for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);if(f.w<result.w){result=f;}}return result;}
-fn floorHeight(p:vec3<f32>)->f32{_ = p;return params.boundsMin.y;}
+fn sceneSupportFrame(p:vec3<f32>)->vec4<f32>{var result=vec4<f32>(0,1,0,1e6);if(sceneContainerFloorEnabled){result.w=p.y-sceneContainerFloorY;}for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);if(f.w<result.w){result=f;}}return result;}
+fn floorHeight(p:vec3<f32>)->f32{_ = p;return select(-1e30,sceneContainerFloorY,sceneContainerFloorEnabled);}
 fn floorNormal(p:vec3<f32>)->vec3<f32>{return sceneSupportFrame(p).xyz;}
 fn supportVelocityAt(p:vec3<f32>)->vec3<f32>{_ = p;return vec3<f32>(0);}
 fn supportSignedDistanceFrame(p:vec3<f32>,radius:f32)->vec4<f32>{let f=sceneSupportFrame(p);return vec4<f32>(f.xyz,f.w-radius);}
-fn resolveSupportPenetration(inputPosition:vec3<f32>,radius:f32)->vec3<f32>{var p=inputPosition;for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);if(f.w<radius){p+=f.xyz*(radius-f.w);}}return p;}
-fn resolveSupportVelocity(inputVelocity:vec3<f32>,p:vec3<f32>,radius:f32)->vec3<f32>{var v=inputVelocity;for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);let speed=dot(v,f.xyz);if(f.w<=radius+.01&&speed<0){v-=f.xyz*speed;}}return v;}
+fn resolveSupportPenetration(inputPosition:vec3<f32>,radius:f32)->vec3<f32>{var p=inputPosition;if(sceneContainerFloorEnabled){p.y=max(p.y,sceneContainerFloorY+radius);}for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);if(f.w<radius){p+=f.xyz*(radius-f.w);}}return p;}
+fn resolveSupportVelocity(inputVelocity:vec3<f32>,p:vec3<f32>,radius:f32)->vec3<f32>{var v=inputVelocity;if(sceneContainerFloorEnabled&&p.y<=sceneContainerFloorY+radius+.00001&&v.y<0){v.y=0;}for(var i=0u;i<sceneSupportParams.x;i++){let f=sceneColliderFrame(p,i);let speed=dot(v,f.xyz);if(f.w<=radius+.01&&speed<0){v-=f.xyz*speed;}}return v;}
 fn supportContactFrame(p:vec3<f32>)->vec4<f32>{let f=supportSignedDistanceFrame(p,params.fluid.x*.22);return vec4<f32>(f.xyz,1.0-smoothstep(.012,.09,max(0.0,f.w)));}
 `;
+
+/** Optional finite container floor composes with authored contacts; the solver
+ * separately retains its enabled six-face position clamp and boundary density. */
+export function sceneLiquidSupportShader(box=null){
+ const enabled=box!==null&&box.collisions!==false;
+ return `const sceneContainerFloorEnabled: bool = ${enabled};\nconst sceneContainerFloorY: f32 = ${enabled?box.bounds.min[1]:0};\n`+SCENE_LIQUID_SUPPORT_BODY;
+}
+export const SCENE_LIQUID_SUPPORT_WGSL=sceneLiquidSupportShader();
