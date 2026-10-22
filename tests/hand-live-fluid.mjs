@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Matrix4, Vector3, Quaternion} from '../lib/three.core.js';
+import {planFingerFluidLiveInletEconomics} from '../finger-fluid-webgpu-core.js';
 const module = await import('../experiments/hand-live-fluid.mjs').catch(error => {
   if(error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
   return {};
@@ -20,6 +21,12 @@ test('native joints drive five distal jets without changing the source pose',()=
   assert.deepEqual(packet.emitters[1].aim_world,[0,-1,0]);
   assert.equal(packet.source_frame_id,'observed-1');
   assert.equal(packet.route_identity,'mobrecon-native-mesh-finger-juice-v1');
+  const economics=planFingerFluidLiveInletEconomics(packet,2400);
+  for(const inlet of economics.inlets){
+    assert.equal(inlet.opticalDensity.requested,1.7);
+    assert.equal(inlet.reconstructionRadius.requested,1.6);
+    assert.equal(inlet.opticalDensity.authority,'consumer_owned_not_applied');
+  }
 });
 test('fist, stale, stopped, detection miss and malformed joints cannot emit',()=>{
   assert.equal(typeof module.nativeFingerPacket,'function');

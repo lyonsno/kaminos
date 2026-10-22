@@ -29,6 +29,7 @@ export function nativeFingerPacket(frame,{nowMs,running,center,matrix,sourceFlux
     const active=!reason&&extension>=.86;
     return {id,extension,active,emission_state:active?'jet':'off',origin_world:origin.toArray(),aim_world:direction.toArray(),
       radius:(id==='middle'?.052:.044)*1.6,strength:1.15*1.7,lifetime_seconds:6,
+      optical_density_scale:1.7,reconstruction_radius_scale:1.6,
       chemistry:f===0?'splash':f===1?'knockback':f===2?'pooling':'weird'};
   });
   const count=Math.max(1,emitters.filter(e=>e.active).length);
