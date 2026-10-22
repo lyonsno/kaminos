@@ -27,7 +27,7 @@ export async function createAuthoredWaterHost(options) {
  const initial=authoredDropSetup(records,options.setup);
  const {createFluidViewportHost}=await import('./fluid-viewport-host.mjs');
  const finite=await createFiniteFluidHost({setup:initial,device:options.device,isCurrent:options.isCurrent,redraw:options.redraw,readColliders:options.readColliders??(()=>[]),
-  createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
+  createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver,supportIdentity:initial.solver.supportContactRoute})});
  return {...finite,
   get paused(){return finite.paused;},
   get presentation(){return finite.presentation;},
