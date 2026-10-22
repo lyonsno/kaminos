@@ -83,13 +83,44 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   return {pixels, tangents, coveredPixels, unsampled, maxDegrees, texelSize};
 }
 
+// Shading normals for a surface whose winding is not consistent (TRELLIS's raw decode): each vertex
+// takes the principal axis of its faces' area-weighted normal outer products, which neither the
+// winding nor the face order can cancel. The result is an axis: its sign is arbitrary per vertex, so
+// sample it with createHeroNormalSampler({unoriented: true}).
+export function windingFreeVertexNormals(vertices, faces) {
+  const n = vertices.length / 3, m = new Float32Array(n * 6), seed = new Float32Array(n * 3);
+  for (let t = 0; t < faces.length; t += 3) {
+    const a = faces[t]*3, b = faces[t+1]*3, c = faces[t+2]*3;
+    const ux = vertices[b]-vertices[a], uy = vertices[b+1]-vertices[a+1], uz = vertices[b+2]-vertices[a+2], wx = vertices[c]-vertices[a], wy = vertices[c+1]-vertices[a+1], wz = vertices[c+2]-vertices[a+2];
+    let x = uy*wz-uz*wy, y = uz*wx-ux*wz, z = ux*wy-uy*wx; const l = Math.hypot(x, y, z); if (!(l > 0)) continue;
+    const area = l / 2; x /= l; y /= l; z /= l;
+    for (const v of [faces[t], faces[t+1], faces[t+2]]) {
+      const o = v * 6; m[o] += area*x*x; m[o+1] += area*x*y; m[o+2] += area*x*z; m[o+3] += area*y*y; m[o+4] += area*y*z; m[o+5] += area*z*z;
+      const s = seed[v*3]*x + seed[v*3+1]*y + seed[v*3+2]*z < 0 ? -area : area; seed[v*3] += s*x; seed[v*3+1] += s*y; seed[v*3+2] += s*z;
+    }
+  }
+  const out = new Float32Array(n * 3);
+  for (let v = 0; v < n; v++) {
+    const o = v * 6; let x = seed[v*3], y = seed[v*3+1], z = seed[v*3+2];
+    if (!(Math.hypot(x, y, z) > 0)) { x = 1; y = 1; z = 1; }
+    for (let i = 0; i < 12; i++) { // power iteration toward the dominant axis
+      const nx = m[o]*x + m[o+1]*y + m[o+2]*z, ny = m[o+1]*x + m[o+3]*y + m[o+4]*z, nz = m[o+2]*x + m[o+4]*y + m[o+5]*z, l = Math.hypot(nx, ny, nz);
+      if (!(l > 0)) break; x = nx / l; y = ny / l; z = nz / l;
+    }
+    const l = Math.hypot(x, y, z); if (l > 0 && m[o] + m[o+3] + m[o+5] > 0) out.set([x / l, y / l, z / l], v * 3);
+  }
+  return out;
+}
+
 // The source's interpolated shading normal for a level point: the nearest source surface hit by a
 // ray along the level normal (both ways) within `reach`, else the closest source point. Looking
 // along the normal keeps a nearby strand or sheet beside the point (fur, fins) from standing in
 // for the surface the level approximates there. THREE and MeshBVH are passed in by the caller.
 // With `footprint`, the normal is averaged over a 3x3 grid across the texel in the surface plane,
 // so detail finer than a texel (fur) shades as its average rather than as one aliased sample.
-export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false, bvh: prebuilt = null}) {
+// With `unoriented`, vertex normals are axes (windingFreeVertexNormals): each is turned to the hit
+// face's side before they are blended.
+export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach, footprint = false, bvh: prebuilt = null, unoriented = false}) {
   if (!normals) throw Error('source has no shading normals');
   if (!(reach >= 0)) throw Error('reach must be a non-negative distance');
   // A caller that already built a BVH over these same vertices and faces passes it as `bvh`.
@@ -103,7 +134,10 @@ export function createHeroNormalSampler({hero: {vertices, faces, normals}, THREE
     tri.set(corner(v[0]), corner(v[1]), corner(v[2])); tri.getBarycoord(at, weights);
     const w = [weights.x, weights.y, weights.z];
     if (!w.every(Number.isFinite)) return null;
-    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + w[k] * normals[vi * 3 + a], 0));
+    let sign = [1, 1, 1];
+    if (unoriented) { const f = new THREE.Vector3(); tri.getNormal(f);
+      sign = v.map(vi => normals[vi*3]*f.x + normals[vi*3+1]*f.y + normals[vi*3+2]*f.z < 0 ? -1 : 1); }
+    return [0, 1, 2].map(a => v.reduce((sum, vi, k) => sum + sign[k] * w[k] * normals[vi * 3 + a], 0));
   };
   const sample = (p, n) => {
     let best = null;
