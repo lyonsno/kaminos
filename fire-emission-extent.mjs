@@ -7,6 +7,7 @@ var<workgroup> emissionMean: array<vec3<f32>, 64>;
 var<workgroup> emissionSquare: array<vec3<f32>, 64>;
 @compute @workgroup_size(64)
 fn csEmissionExtent(@builtin(local_invocation_index) tid: u32) {
+  seatGridShape();
   let shape = vec3<u32>(IRRADIANCE_GRID, IRRADIANCE_GRID_Y, IRRADIANCE_GRID);
   var mass = 0.0;
   var mean = vec3<f32>(0.0);

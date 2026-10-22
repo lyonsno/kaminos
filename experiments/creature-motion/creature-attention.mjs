@@ -333,10 +333,10 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  // draws a look at where the shadow fell. Steady light, bright or dim, does not.
  function sense({time,samples,source=null,sourcePower=null,sourceVisual=null,status='effective'}){
   if(!enabled)return;
-  if(source){if(status==='effective'&&sourceVisual)visualSources.set(source.id,{...sourceVisual,sampleTime:time});else{visualSources.delete(source.id);visualTrackers.delete(source.id);}}
   const valid=Array.isArray(samples)&&samples.length>0&&samples.every(x=>Number.isFinite(x.luminance)&&x.luminance>=0&&Array.isArray(x.point)&&x.point.length===3&&x.point.every(Number.isFinite));
-  if(status!=='effective'||!valid){light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;localLevels.clear();previousPower=null;onset=null;return;}
+  if(status!=='effective'||!valid){for(const id of visualSources.keys())visualTrackers.delete(id);visualSources.clear();light={...light,status:status==='effective'?(samples?.length?'invalid':'empty'):status,time};powerHistory.gap();light.powerNow=null;light.powerUsual=null;light.lossSpeed=0;localLevels.clear();previousPower=null;onset=null;return;}
   if(!Number.isFinite(time))throw Error('Light sense requires a finite time');
+  if(source){if(status==='effective'&&sourceVisual)visualSources.set(source.id,{...sourceVisual,sampleTime:time});else{visualSources.delete(source.id);visualTrackers.delete(source.id);}}
   const dt=light.time===null?0:Math.max(0,time-light.time);
   // A source observed off then on is a real onset even when its renderer left
   // the old light atlas resident while off. Local illumination sets amplitude;
