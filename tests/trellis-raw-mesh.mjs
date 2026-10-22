@@ -9,6 +9,7 @@ test('raw triangles preserve positions, normals and opacity without finishing',(
  assert.equal(c.root.geometry.getAttribute('position').getX(1),1);
  assert.ok(Math.abs(c.root.geometry.getAttribute('rawOpacity').getX(0)-.3)<1e-6);
  for(const mode of ['plain','normals','glass']){c.set({mode});assert.equal(c.read().mode,mode);}
+ c.set({mode:'normals'});assert.equal(c.root.material.fragmentNode,null,'normal diagnostics must preserve renderer MRT outputs');assert.equal(c.root.material.lights,false);
  assert.throws(()=>createRawFieldMesh(data,new Uint32Array([0,1,4]),{count:3,stride:12,triangles:{count:1}}));
  c.dispose();
 });

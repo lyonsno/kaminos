@@ -24,6 +24,7 @@ test('glass study preserves source and restores exact materials without disposin
   controller.set({mode:'glass',ior:1.5,thickness:.08});
   assert.equal(mesh.children[0].visible,true);
   assert.equal(mesh.children[0].material.ior,1.5);
+  controller.set({mode:'normals'});assert.equal(mesh.material.fragmentNode,null,'normal diagnostics must preserve renderer MRT outputs');assert.equal(mesh.material.lights,false);
   assert.throws(()=>controller.set({ior:NaN}));
   assert.equal(controller.read().ior,1.5);
   controller.dispose();controller.dispose();

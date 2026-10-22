@@ -30,7 +30,7 @@ export function createGeneratedGlass(root, initial={}) {
     const rgba=texture(source.map),alpha=rgba.a.clamp(0,1);
     const solid=copySurface(source,new MeshStandardNodeMaterial());
     const plain=new MeshStandardNodeMaterial({color:0xbcbcbc,roughness:.8,side:source.side});
-    const normals=new MeshStandardNodeMaterial({side:source.side});normals.fragmentNode=vec4(normalView.mul(.5).add(.5),1);
+    const normals=new MeshStandardNodeMaterial({side:source.side});normals.lights=false;normals.colorNode=vec4(normalView.mul(.5).add(.5),1);
     solid.maskNode=alpha.greaterThanEqual(.98);
     const hashed=copySurface(source,new MeshStandardNodeMaterial());
     hashed.alphaHash=true;hashed.transparent=false;hashed.depthWrite=true;

@@ -5,6 +5,7 @@ import {createSurfelGlass} from '../trellis-surfel-glass.mjs';
 test('plain and normal views isolate shape without transmission or source tint',()=>{
  const c=createSurfelGlass(new Float32Array([0,0,0,0,0,1,1,.5,0,.1,.2,.3]),{count:1,stride:12,radius:.01});
  for(const mode of ['plain','normals']){c.set({mode});assert.equal(c.read().mode,mode);assert.equal(c.root.children[0].material.transmission,0);}
+ assert.equal(c.root.children[0].material.fragmentNode,null,'normal diagnostics must preserve renderer MRT outputs');assert.equal(c.root.children[0].material.lights,false);
  c.dispose();
 });
 test('surfel material rows remain instance-owned with transparent and opaque populations',()=>{
