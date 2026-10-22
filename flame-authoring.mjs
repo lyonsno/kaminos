@@ -145,7 +145,7 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wavelet-strength','Detail strength'],
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
-    ['volume-fire','Fire detail'], ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
+    ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
     ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Carrier contour scale'],
   ] },
   { name:'Emitter & feed', scope:'emitter', open:true, fields:[
@@ -191,8 +191,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-boundary-sidecar-source','Structure source'], ['volume-boundary-sidecar-width','Step width'],
     ['volume-boundary-sidecar-blur','Blur'], ['volume-boundary-sidecar-ridge','Baked ridge gain'],
   ] },
-  { name:'Legacy diagnostic appearance', view:'quality', fields:[
-    ['volume-smoke','Smoke amount'], ['volume-absorption','Absorption'], ] },
 ];
 
 const physicsUnused=new Set(PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS.filter(control=>control.reason==='unused').map(control=>control.id));

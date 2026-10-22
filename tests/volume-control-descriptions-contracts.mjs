@@ -40,19 +40,17 @@ assert.match(inspector, /volumeControlTooltip\(id\)/, 'the flame inspector shows
     const row = { querySelector: selector => (selector === '.slider-label' ? label : null) };
     return { id, title: '', disabled: false, dataset: {}, label, closest: selector => (selector === '.slider-row' ? row : null) };
   };
-  const elements = new Map(['volume-physical-exposure', 'volume-smoke'].map(id => [id, make(id)]));
+  const elements = new Map(['volume-physical-exposure'].map(id => [id, make(id)]));
   const documentRef = {
     getElementById: id => elements.get(id) ?? null,
     querySelectorAll: () => [],
   };
   applyVolumeControlDescriptions(documentRef);
   const exposure = elements.get('volume-physical-exposure');
-  const smoke = elements.get('volume-smoke');
   const description = volumeControlTooltip('volume-physical-exposure');
   assert.equal(exposure.title, description, 'startup sets the input description');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'emissive-transport-v2' });
   assert.equal(exposure.title, description, 'an active control keeps its description after an availability refresh');
-  assert.ok(smoke.disabled && smoke.title.includes(volumeControlTooltip('volume-smoke')), 'an unavailable control keeps its description alongside the reason');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'legacy' });
   assert.ok(exposure.disabled && exposure.title.length > description.length && exposure.title.includes(description), 'unavailable: reason plus description');
   syncVolumeCockpitModeAvailability(documentRef, {}, { effective: 'emissive-transport-v2' });

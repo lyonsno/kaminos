@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 140,
+  "controlCount": 135,
   "controls": [
     {
       "key": "volume-physical-white",
@@ -652,24 +652,6 @@
       "type": "range"
     },
     {
-      "key": "volume-fire",
-      "param": "volume_fire",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-absorption",
-      "param": "volume_absorption",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-smoke",
-      "param": "volume_smoke",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-curl",
       "param": "volume_curl",
       "tagName": "INPUT",
@@ -708,12 +690,6 @@
     {
       "key": "volume-fire-scale",
       "param": "volume_fire_scale",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-detail-scale",
-      "param": "volume_detail_scale",
       "tagName": "INPUT",
       "type": "range"
     },
@@ -854,12 +830,6 @@
       "param": "volume_look_freeze",
       "tagName": "INPUT",
       "type": "range"
-    },
-    {
-      "key": "volume-pyro-carrier-view",
-      "param": "volume_pyro_carrier_view",
-      "tagName": "SELECT",
-      "type": "select-one"
     },
     {
       "key": "volume-pressure-mode",
@@ -1904,6 +1874,41 @@
       "tagName": "INPUT",
       "type": "range",
       "axis": "domControls"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-smoke",
+      "param": "volume_smoke",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-absorption",
+      "param": "volume_absorption",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-fire",
+      "param": "volume_fire",
+      "tagName": "INPUT",
+      "type": "range"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-pyro-carrier-view",
+      "param": "volume_pyro_carrier_view",
+      "tagName": "SELECT",
+      "type": "select-one"
+    },
+    {
+      "axis": "domControls",
+      "key": "volume-detail-scale",
+      "param": "volume_detail_scale",
+      "tagName": "INPUT",
+      "type": "range"
     }
   ],
   "rendererControls": [

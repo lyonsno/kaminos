@@ -1847,21 +1847,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-density" min="0.35" max="12" step="0.05" value="4.2">
       <span class="slider-val" id="volume-density-val">4.20</span>
     </div>
-    <div class="slider-row" data-volume-visual-cost-knob="reaction-volume">
-      <span class="slider-label">Fire</span>
-      <input type="range" id="volume-fire" min="0" max="3.5" step="0.05" value="1.4">
-      <span class="slider-val" id="volume-fire-val">1.40</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="ray-extinction">
-      <span class="slider-label">Absorption</span>
-      <input type="range" id="volume-absorption" min="0" max="2" step="0.05" value="0.85">
-      <span class="slider-val" id="volume-absorption-val">0.85</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Smoke</span>
-      <input type="range" id="volume-smoke" min="0.1" max="2.8" step="0.05" value="2.8">
-      <span class="slider-val" id="volume-smoke-val">2.80</span>
-    </div>
     <div class="slider-row" data-volume-visual-cost-knob="transport-detail">
       <span class="slider-label">Curl</span>
       <input type="range" id="volume-curl" min="0" max="4" step="0.05" value="2.65">
@@ -1896,11 +1881,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-label">Emitter Scale</span>
       <input type="range" id="volume-fire-scale" min="0.35" max="1.3" step="0.01" value="0.86">
       <span class="slider-val" id="volume-fire-scale-val">0.86</span>
-    </div>
-    <div class="slider-row" data-volume-visual-cost-knob="ray-detail">
-      <span class="slider-label">Detail Scale</span>
-      <input type="range" id="volume-detail-scale" min="0.45" max="3.2" step="0.05" value="1.75">
-      <span class="slider-val" id="volume-detail-scale-val">1.75</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Plume Height</span>
@@ -2117,21 +2097,6 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-oracle-activity-material" min="0" max="3" step="0.05" value="0">
       <span class="slider-val" id="volume-oracle-activity-material-val">0.00</span>
     </div>
-    <div class="slider-row">
-      <span class="slider-label">Carrier View</span>
-      <select id="volume-pyro-carrier-view" class="select-input">
-        <option value="normal" selected>Normal</option>
-        <option value="border">Border only</option>
-        <option value="bite">Bite only</option>
-        <option value="fold">Fold only</option>
-        <option value="wake">Wake only</option>
-        <option value="radiance">Radiance only</option>
-        <option value="flow">Flow only</option>
-        <option value="all">All carriers</option>
-      </select>
-      <span class="slider-val" id="volume-pyro-carrier-view-val">normal</span>
-    </div>
-    <span class="slider-help">Retired: the legacy pyro carriers this chose between are always zero now, so it has no effect.</span>
     <div class="slider-row" data-volume-ui-retired="volume-pressure-mode">
       <span class="slider-label">Pressure</span>
       <select id="volume-pressure-mode" class="select-input">
@@ -15704,12 +15669,10 @@ const VOLUME_RAY_BUDGET_PRESETS = {
 };
 
 const CANONICAL_VOLUME_HIDDEN_CONTROLS = new Set([
-  'volume-fire',
   'volume-microdetail',
   'volume-interface-shred',
   'volume-fire-licks',
   'volume-fire-scale',
-  'volume-detail-scale',
   'volume-wind-strength',
   'volume-wind-angle',
   'volume-wind-height',
@@ -18572,9 +18535,6 @@ function applyRayBudgetPreset(name, options = {}) {
   if (!preset) return false;
   setVolumeControlValue('volume-steps', preset.raySteps);
   setVolumeControlValue('volume-adaptive-rays', preset.adaptiveRays.toFixed(2));
-  setVolumeControlValue('volume-fire', preset.fire.toFixed(2));
-  setVolumeControlValue(preset.radiance.toFixed(2));
-  setVolumeControlValue('volume-absorption', preset.absorption.toFixed(2));
   activeVolumeRayBudgetPreset = name;
   routedVolumeRayBudgetPreset = options.route ? name : '';
   return true;
@@ -18716,11 +18676,11 @@ function readVolumeControls({quality=viewportDisplay.quality}={}) {
     commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     volumeExposure: 1,
     density: parseFloat(document.getElementById('volume-density').value),
-    fire: parseFloat(document.getElementById('volume-fire').value),
+    fire: 1.4, // retired 2026-10-21: legacy raymarch flame gain only
     radiance: 1.65,
-    absorption: parseFloat(document.getElementById('volume-absorption').value),
+    absorption: 0.85, // retired 2026-10-21: legacy renderer only
     glow: 1.15,
-    smoke: parseFloat(document.getElementById('volume-smoke').value),
+    smoke: 2.8, // retired 2026-10-21: no effect under the Physics law
     curl: parseFloat(document.getElementById('volume-curl').value),
     microdetail: parseFloat(document.getElementById('volume-microdetail').value),
     interfaceShred: parseFloat(document.getElementById('volume-interface-shred').value),
@@ -18731,7 +18691,7 @@ function readVolumeControls({quality=viewportDisplay.quality}={}) {
     adaptiveRays: parseFloat(document.getElementById('volume-adaptive-rays').value),
     occupancySkip: parseFloat(document.getElementById('volume-occupancy-skip').value),
     fireScale: parseFloat(document.getElementById('volume-fire-scale').value),
-    detailScale: parseFloat(document.getElementById('volume-detail-scale').value),
+    detailScale: 1.75, // retired 2026-10-21: the single Flame simulator fixes the detail frequency
     plumeHeight: parseFloat(document.getElementById('volume-plume-height').value),
     windStrength: parseFloat(document.getElementById('volume-wind-strength').value),
     windAngle: parseFloat(document.getElementById('volume-wind-angle').value),
@@ -18970,7 +18930,7 @@ function readVolumeControls({quality=viewportDisplay.quality}={}) {
     pyroFlowCoolColor: normalizeVolumeHexColor('#2aa7b8', '#2aa7b8'),
     pyroFlowHotColor: normalizeVolumeHexColor('#ff7a36', '#ff7a36'),
     pyroDiagnosticPaint: 0,
-    pyroCarrierView: document.getElementById('volume-pyro-carrier-view').value,
+    pyroCarrierView: 'normal', // retired 2026-10-21: the pyro carriers are always zero
     pyroOverdrive: 1,
     pressureMode: pressureConfig.pressureMode,
     pressureEffectiveLabel: pressureConfig.pressureEffectiveLabel,
@@ -19098,9 +19058,6 @@ function updateVolumeControlLabels() {
       : 'legacy split';
   }
   document.getElementById('volume-density-val').textContent = c.density.toFixed(2);
-  document.getElementById('volume-fire-val').textContent = c.fire.toFixed(2);
-  document.getElementById('volume-absorption-val').textContent = c.absorption.toFixed(2);
-  document.getElementById('volume-smoke-val').textContent = c.smoke.toFixed(2);
   document.getElementById('volume-curl-val').textContent = c.curl.toFixed(2);
   document.getElementById('volume-microdetail-val').textContent = c.microdetail.toFixed(2);
   document.getElementById('volume-interface-shred-val').textContent = c.interfaceShred.toFixed(2);
@@ -19113,7 +19070,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-adaptive-rays-val').textContent = c.adaptiveRays.toFixed(2);
   document.getElementById('volume-occupancy-skip-val').textContent = c.occupancySkip.toFixed(2);
   document.getElementById('volume-fire-scale-val').textContent = c.fireScale.toFixed(2);
-  document.getElementById('volume-detail-scale-val').textContent = c.detailScale.toFixed(2);
   document.getElementById('volume-plume-height-val').textContent = c.plumeHeight.toFixed(2);
   document.getElementById('volume-wind-strength-val').textContent = c.windStrength.toFixed(2);
   document.getElementById('volume-wind-angle-val').textContent = formatVolumeWindDirection(c.windAngle);
@@ -19184,7 +19140,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-oracle-activity-material-val').textContent = c.oracleActivityMaterial.toFixed(2);
   document.getElementById('volume-look-freeze-val').textContent = c.lookFreeze >= 0.5 ? 'frozen' : 'live';
   syncReactionFrontExtractorLabels(c);
-  document.getElementById('volume-pyro-carrier-view-val').textContent = c.pyroCarrierView;
   const pressureMode = normalizeVolumePressureMode(c.pressureMode);
   if (pressureMode !== document.getElementById('volume-pressure-mode').value) setVolumeControlValue('volume-pressure-mode', pressureMode);
   document.getElementById('volume-pressure-mode-val').textContent = c.pressureEffectiveLabel || effectivePressureModeLabel(pressureMode, c.pressureIterations ?? defaultVolumePressureIterationsForScene(c.volumeScene));
@@ -19982,14 +19937,6 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_density') && Number.isFinite(routeDensity)) {
     document.getElementById('volume-density').value = String(Math.max(0.35, Math.min(12, routeDensity)));
   }
-  const routeFire = Number(params.get('volume_fire'));
-  if (params.has('volume_fire') && Number.isFinite(routeFire)) {
-    document.getElementById('volume-fire').value = String(Math.max(0, Math.min(3.5, routeFire)));
-  }
-  const routeSmoke = Number(params.get('volume_smoke'));
-  if (params.has('volume_smoke') && Number.isFinite(routeSmoke)) {
-    document.getElementById('volume-smoke').value = String(Math.max(0.1, Math.min(2.8, routeSmoke)));
-  }
   const routeProjection = Number(params.get('volume_projection'));
   if (params.has('volume_projection') && Number.isFinite(routeProjection)) {
     document.getElementById('volume-projection').value = String(Math.max(0, Math.min(1.5, routeProjection)));
@@ -20015,10 +19962,6 @@ async function initKaminosVolumeRoute() {
     document.getElementById('volume-fire-licks').value = String(Math.max(0, Math.min(10, routeFireLicks)));
   }
   const routeRadiance = Number(params.get('volume_radiance'));
-  const routeAbsorption = Number(params.get('volume_absorption'));
-  if (params.has('volume_absorption') && Number.isFinite(routeAbsorption)) {
-    document.getElementById('volume-absorption').value = String(Math.max(0, Math.min(2, routeAbsorption)));
-  }
   const routeGlow = Number(params.get('volume_glow'));
   const routeFlowDebug = Number(params.get('volume_flow_debug'));
   if (params.has('volume_flow_debug') && Number.isFinite(routeFlowDebug)) {
@@ -20113,10 +20056,6 @@ async function initKaminosVolumeRoute() {
   const routePyroFlowHotColor = normalizeVolumeHexColor(params.get('volume_pyro_flow_hot_color'), '');
   const routePyroDiagnosticPaint = Number(params.get('volume_pyro_diagnostic_paint'));
   const routePyroDebugTint = Number(params.get('volume_pyro_debug_tint'));
-  const routePyroCarrierView = params.get('volume_pyro_carrier_view');
-  if (['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'].includes(routePyroCarrierView)) {
-    document.getElementById('volume-pyro-carrier-view').value = routePyroCarrierView;
-  }
   const routePyroOverdrive = Number(params.get('volume_pyro_overdrive'));
   const routedPressureTierControls = normalizeVolumePressureTierControls({
     overlay: params.has('volume_pressure_tier_overlay') ? Number(params.get('volume_pressure_tier_overlay')) : document.getElementById('volume-pressure-tier-overlay').value,
@@ -20163,10 +20102,6 @@ async function initKaminosVolumeRoute() {
   const routeFireScale = Number(params.get('volume_fire_scale'));
   if (params.has('volume_fire_scale') && Number.isFinite(routeFireScale)) {
     document.getElementById('volume-fire-scale').value = String(Math.max(0.35, Math.min(1.3, routeFireScale)));
-  }
-  const routeDetailScale = Number(params.get('volume_detail_scale'));
-  if (params.has('volume_detail_scale') && Number.isFinite(routeDetailScale)) {
-    document.getElementById('volume-detail-scale').value = String(Math.max(0.45, Math.min(3.2, routeDetailScale)));
   }
   const routePlumeHeight = Number(params.get('volume_plume_height'));
   if (params.has('volume_plume_height') && Number.isFinite(routePlumeHeight)) {
@@ -20565,8 +20500,6 @@ async function initKaminosVolumeRoute() {
   const rayBudgetPresetOwnedControls = new Set([
     'volume-steps',
     'volume-adaptive-rays',
-    'volume-fire',
-    'volume-absorption',
   ]);
   const emitterMorphologyControls = new Set([
     'emitter-assay-family',
@@ -20730,7 +20663,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization', 'volume-density', 'volume-fire', 'volume-absorption', 'volume-smoke', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-detail-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pyro-carrier-view', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }
