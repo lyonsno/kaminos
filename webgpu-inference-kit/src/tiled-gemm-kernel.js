@@ -18,7 +18,8 @@
 // while loading (conv only). aPairs: packed-f16 A, K-contiguous, even K and
 // strides: one u32 load yields two consecutive k. activation: { expression,
 // helpers } is trusted caller WGSL over `value`, applied after bias/residual;
-// residualAfterActivation adds the residual after the activation instead.
+// residualAfterActivation adds the residual after the activation instead;
+// residualInOutput reads it from the output buffer at element offset word 19.
 
 const ELEMENT = { f32: 'f32', f16: 'f16', f16packed: 'u32' };
 const binding = (index, name, type = 'f32', write = false) =>
@@ -48,8 +49,8 @@ export function tiledGemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
 // tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
 // epilogue that turns accumulator value ACC into the stored output.
 export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, residualAfterActivation = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null,
-  aPairs = false, activation = null },
+  residual = false, residualAfterActivation = false, residualInOutput = false, conv = null, aF16 = false, bF16 = false,
+  types = {}, normB = null, aPairs = false, activation = null },
   { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
     biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
@@ -59,7 +60,9 @@ export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM
   if (biasM) bindings.push(binding(next++, 'bias_m', t.biasM));
   if (biasM2) bindings.push(binding(next++, 'bias_m2', t.biasM2));
   if (biasN) bindings.push(binding(next++, 'bias_n', t.biasN));
-  if (residual) bindings.push(binding(next++, 'res', t.residual));
+  if (residualInOutput && !residual) throw new TypeError('residualInOutput requires a residual');
+  if (residualInOutput && t.c !== 'f32' && t.c !== 'f16') throw new TypeError('residualInOutput requires an f32 or f16 output');
+  if (residual && !residualInOutput) bindings.push(binding(next++, 'res', t.residual));
   // normB: GroupNorm (+SiLU) of the conv input applied while loading B tiles.
   // normB: per-channel [scale, shift] (scale = rstd*gamma, shift = beta - mean*scale).
   if (normB) {
@@ -69,7 +72,7 @@ export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM
   bindings.push(binding(next++, 'c', t.c, true));
   bindings.push(uniform(next++, 'Params'));
   const used = { a: t.a, b: t.b, c: t.c, ...(biasM ? { biasM: t.biasM } : {}), ...(biasM2 ? { biasM2: t.biasM2 } : {}),
-    ...(biasN ? { biasN: t.biasN } : {}), ...(residual ? { residual: t.residual } : {}) };
+    ...(biasN ? { biasN: t.biasN } : {}), ...(residual && !residualInOutput ? { residual: t.residual } : {}) };
   const header = `struct Params {
   M:u32, N:u32, K:u32, alpha:f32,
   a_off:u32, a_sm:u32, a_sk:u32, a_sb:u32,
@@ -142,7 +145,10 @@ fn tiled_gemm_activate(value:f32)->f32{return ${activation.expression};}` : ''}`
   if (biasM2) epilogue += `v+=${load('bias_m2', t.biasM2, 'm')};`;
   if (biasN) epilogue += `v+=${load('bias_n', t.biasN, 'n')};`;
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
-  const addResidual = `v+=${load('res', t.residual, cIndex)};`;
+  // residualInOutput: the residual is another region of the output buffer, at
+  // element offset p.z1 with the output's strides (no separate binding).
+  const addResidual = residualInOutput ? `v+=${load('c', t.c, 'p.z1+bat*p.c_sb+m*p.c_sm+n*p.c_sn')};`
+    : `v+=${load('res', t.residual, cIndex)};`;
   if (residual && !residualAfterActivation) epilogue += addResidual;
   if (activation) epilogue += 'v=tiled_gemm_activate(v);';
   // residualAfterActivation: y = act(alpha*AB + bias) + R (MobRecon mobile_unit, YOLOv8 Bottleneck).

@@ -1,0 +1,1571 @@
+{
+"schema": "wilor-hand-detector.tensor-shapes.v0",
+"revision": "BasinShapers/wilor-mlx:hand-detector:266890896e0ac1b4:f32-bn-folded",
+"note": "Names and shapes of the packed hand detector tensors (no values); written from pack-weights.py output.",
+"tensors": [
+{
+"name": "b0.weight",
+"dtype": "f32",
+"shape": [
+48,
+3,
+3,
+3
+]
+},
+{
+"name": "b0.bias",
+"dtype": "f32",
+"shape": [
+48
+]
+},
+{
+"name": "b1.weight",
+"dtype": "f32",
+"shape": [
+96,
+48,
+3,
+3
+]
+},
+{
+"name": "b1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b2.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+1,
+1
+]
+},
+{
+"name": "b2.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b2.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+192,
+1,
+1
+]
+},
+{
+"name": "b2.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b2.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+48,
+48,
+3,
+3
+]
+},
+{
+"name": "b2.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+48
+]
+},
+{
+"name": "b2.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+48,
+48,
+3,
+3
+]
+},
+{
+"name": "b2.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+48
+]
+},
+{
+"name": "b2.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+48,
+48,
+3,
+3
+]
+},
+{
+"name": "b2.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+48
+]
+},
+{
+"name": "b2.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+48,
+48,
+3,
+3
+]
+},
+{
+"name": "b2.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+48
+]
+},
+{
+"name": "b3.weight",
+"dtype": "f32",
+"shape": [
+192,
+96,
+3,
+3
+]
+},
+{
+"name": "b3.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b4.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+1,
+1
+]
+},
+{
+"name": "b4.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b4.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+576,
+1,
+1
+]
+},
+{
+"name": "b4.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b4.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.2.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.2.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.2.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.2.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.3.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.3.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b4.m.3.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "b4.m.3.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "b5.weight",
+"dtype": "f32",
+"shape": [
+384,
+192,
+3,
+3
+]
+},
+{
+"name": "b5.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "b6.cv1.weight",
+"dtype": "f32",
+"shape": [
+384,
+384,
+1,
+1
+]
+},
+{
+"name": "b6.cv1.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "b6.cv2.weight",
+"dtype": "f32",
+"shape": [
+384,
+1152,
+1,
+1
+]
+},
+{
+"name": "b6.cv2.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "b6.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.2.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.2.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.2.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.2.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.3.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.3.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b6.m.3.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "b6.m.3.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "b7.weight",
+"dtype": "f32",
+"shape": [
+576,
+384,
+3,
+3
+]
+},
+{
+"name": "b7.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "b8.cv1.weight",
+"dtype": "f32",
+"shape": [
+576,
+576,
+1,
+1
+]
+},
+{
+"name": "b8.cv1.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "b8.cv2.weight",
+"dtype": "f32",
+"shape": [
+576,
+1152,
+1,
+1
+]
+},
+{
+"name": "b8.cv2.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "b8.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "b8.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "b8.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "b8.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "b8.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "b8.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "b8.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "b8.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "b9.cv1.weight",
+"dtype": "f32",
+"shape": [
+288,
+576,
+1,
+1
+]
+},
+{
+"name": "b9.cv1.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "b9.cv2.weight",
+"dtype": "f32",
+"shape": [
+576,
+1152,
+1,
+1
+]
+},
+{
+"name": "b9.cv2.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "h12.cv1.weight",
+"dtype": "f32",
+"shape": [
+384,
+960,
+1,
+1
+]
+},
+{
+"name": "h12.cv1.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "h12.cv2.weight",
+"dtype": "f32",
+"shape": [
+384,
+768,
+1,
+1
+]
+},
+{
+"name": "h12.cv2.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "h12.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h12.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h12.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h12.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h12.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h12.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h12.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h12.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h15.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+576,
+1,
+1
+]
+},
+{
+"name": "h15.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h15.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+384,
+1,
+1
+]
+},
+{
+"name": "h15.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h15.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "h15.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "h15.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "h15.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "h15.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "h15.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "h15.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+96,
+96,
+3,
+3
+]
+},
+{
+"name": "h15.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+96
+]
+},
+{
+"name": "h16.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h16.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h18.cv1.weight",
+"dtype": "f32",
+"shape": [
+384,
+576,
+1,
+1
+]
+},
+{
+"name": "h18.cv1.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "h18.cv2.weight",
+"dtype": "f32",
+"shape": [
+384,
+768,
+1,
+1
+]
+},
+{
+"name": "h18.cv2.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "h18.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h18.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h18.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h18.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h18.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h18.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h18.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "h18.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "h19.weight",
+"dtype": "f32",
+"shape": [
+384,
+384,
+3,
+3
+]
+},
+{
+"name": "h19.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "h21.cv1.weight",
+"dtype": "f32",
+"shape": [
+576,
+960,
+1,
+1
+]
+},
+{
+"name": "h21.cv1.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "h21.cv2.weight",
+"dtype": "f32",
+"shape": [
+576,
+1152,
+1,
+1
+]
+},
+{
+"name": "h21.cv2.bias",
+"dtype": "f32",
+"shape": [
+576
+]
+},
+{
+"name": "h21.m.0.cv1.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "h21.m.0.cv1.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "h21.m.0.cv2.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "h21.m.0.cv2.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "h21.m.1.cv1.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "h21.m.1.cv1.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "h21.m.1.cv2.weight",
+"dtype": "f32",
+"shape": [
+288,
+288,
+3,
+3
+]
+},
+{
+"name": "h21.m.1.cv2.bias",
+"dtype": "f32",
+"shape": [
+288
+]
+},
+{
+"name": "pose.cv2.0.0.weight",
+"dtype": "f32",
+"shape": [
+64,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.0.0.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.0.1.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.0.1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.1.0.weight",
+"dtype": "f32",
+"shape": [
+64,
+384,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.1.0.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.1.1.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.1.1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.2.0.weight",
+"dtype": "f32",
+"shape": [
+64,
+576,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.2.0.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.2.1.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+3,
+3
+]
+},
+{
+"name": "pose.cv2.2.1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv3.0.0.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.0.0.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv3.0.1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.0.1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv3.1.0.weight",
+"dtype": "f32",
+"shape": [
+192,
+384,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.1.0.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv3.1.1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.1.1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv3.2.0.weight",
+"dtype": "f32",
+"shape": [
+192,
+576,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.2.0.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv3.2.1.weight",
+"dtype": "f32",
+"shape": [
+192,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv3.2.1.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "pose.cv4.0.0.weight",
+"dtype": "f32",
+"shape": [
+63,
+192,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.0.0.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.0.1.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.0.1.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.1.0.weight",
+"dtype": "f32",
+"shape": [
+63,
+384,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.1.0.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.1.1.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.1.1.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.2.0.weight",
+"dtype": "f32",
+"shape": [
+63,
+576,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.2.0.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.2.1.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+3,
+3
+]
+},
+{
+"name": "pose.cv4.2.1.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv2.0.2.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+1,
+1
+]
+},
+{
+"name": "pose.cv2.0.2.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.1.2.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+1,
+1
+]
+},
+{
+"name": "pose.cv2.1.2.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv2.2.2.weight",
+"dtype": "f32",
+"shape": [
+64,
+64,
+1,
+1
+]
+},
+{
+"name": "pose.cv2.2.2.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "pose.cv3.0.2.weight",
+"dtype": "f32",
+"shape": [
+2,
+192,
+1,
+1
+]
+},
+{
+"name": "pose.cv3.0.2.bias",
+"dtype": "f32",
+"shape": [
+2
+]
+},
+{
+"name": "pose.cv3.1.2.weight",
+"dtype": "f32",
+"shape": [
+2,
+192,
+1,
+1
+]
+},
+{
+"name": "pose.cv3.1.2.bias",
+"dtype": "f32",
+"shape": [
+2
+]
+},
+{
+"name": "pose.cv3.2.2.weight",
+"dtype": "f32",
+"shape": [
+2,
+192,
+1,
+1
+]
+},
+{
+"name": "pose.cv3.2.2.bias",
+"dtype": "f32",
+"shape": [
+2
+]
+},
+{
+"name": "pose.cv4.0.2.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+1,
+1
+]
+},
+{
+"name": "pose.cv4.0.2.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.1.2.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+1,
+1
+]
+},
+{
+"name": "pose.cv4.1.2.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+},
+{
+"name": "pose.cv4.2.2.weight",
+"dtype": "f32",
+"shape": [
+63,
+63,
+1,
+1
+]
+},
+{
+"name": "pose.cv4.2.2.bias",
+"dtype": "f32",
+"shape": [
+63
+]
+}
+]
+}

@@ -65,6 +65,10 @@ export async function runParityWitness({ packageUrl, referenceUrl, fullCases = [
   let model, crop;
   try {
     const route = await session.registerRoute({ routeId: MOBRECON_ROUTE_ID });
+    // WebGPU validation errors do not throw; any one fails the witness.
+    const deviceErrors = [];
+    route.runtime.device.addEventListener('uncapturederror', event => deviceErrors.push(String(event.error?.message ?? event.error)));
+    report.deviceErrors = deviceErrors;
     report.phase = 'package';
     model = await loadMobRecon({ route, packageUrl });
     report.identity = model.identity;
@@ -137,6 +141,7 @@ export async function runParityWitness({ packageUrl, referenceUrl, fullCases = [
     times.sort((a, b) => a - b);
     report.timing = { authority: 'diagnostic wall clock on a shared machine; includes upload and readback; not a benchmark',
       runs: timedRuns, medianMs: times[Math.floor(times.length / 2)], minMs: times[0], maxMs: times[times.length - 1] };
+    if (deviceErrors.length) failures.push(`${deviceErrors.length} WebGPU device errors`);
     report.failures = failures;
     report.status = failures.length ? 'failed' : 'passed';
     report.phase = null;

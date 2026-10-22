@@ -45,6 +45,9 @@ export async function loadMobRecon({ route, packageUrl, signal, onProgress } = {
     const device = route.runtime.device;
     const network = createMobReconNetwork({ device, tensors: lease.tensors });
     const faces = await readU32(device, lease.tensors['topology.faces']);
+    if (faces.length !== 1538 * 3 || faces.some(v => v >= MOBRECON_VERTICES) || new Set(faces).size !== MOBRECON_VERTICES) {
+      throw new Error('MobRecon faces must index all 778 vertices in 1538 triangles');
+    }
     const identity = Object.freeze({
       routeId: MOBRECON_ROUTE_ID, backend: 'webgpu-local', modelId: row.manifest.modelId,
       revision: weightPackage.revision, dtype: weightPackage.dtype, bundleSha256: row.manifest.bundle.sha256,

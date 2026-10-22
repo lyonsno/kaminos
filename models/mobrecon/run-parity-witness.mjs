@@ -5,7 +5,9 @@
 // before the page reports (missing browser, server error, timeout, browser
 // exit) still writes a terminal report naming its phase.
 //
-// node models/mobrecon/run-parity-witness.mjs --package <dir> --reference <dir> --chrome <Chrome for Testing> --out <report.json> [--full <caseId,...>]
+// node models/mobrecon/run-parity-witness.mjs --package <dir> --reference <dir> --chrome <Chrome for Testing> --out <report.json> [--full <caseId,...>] [--witness <page module under the repo>]
+// The page module exports runParityWitness({ packageUrl, referenceUrl, fullCases, report });
+// the default is MobRecon's (models/mobrecon/parity-witness.js).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -21,11 +23,13 @@ const out = path.resolve(args.get('--out'));
 const chrome = path.resolve(args.get('--chrome'));
 if (/\/Google Chrome\.app\//.test(fs.realpathSync(chrome))) throw new Error('use Chrome for Testing, not the installed Google Chrome');
 const fullCases = (args.get('--full') ?? '').split(',').filter(Boolean);
+const witness = args.get('--witness') ?? 'models/mobrecon/parity-witness.js';
+if (!fs.existsSync(path.join(repo, witness))) throw new Error(`witness module ${witness} not found under ${repo}`);
 const roots = { '/repo/': repo, '/package/': path.resolve(args.get('--package')), '/reference/': path.resolve(args.get('--reference')) };
-const PAGE = `<!doctype html><meta charset="utf-8"><title>MobRecon parity witness</title><script type="module">
+const PAGE = `<!doctype html><meta charset="utf-8"><title>Parity witness</title><script type="module">
 const report={status:'running',phase:'import'};
 try{
-  const {runParityWitness}=await import('/repo/models/mobrecon/parity-witness.js');
+  const {runParityWitness}=await import('/repo/${witness}');
   await runParityWitness({packageUrl:'/package/',referenceUrl:'/reference/',fullCases:${JSON.stringify(fullCases)},report});
 }catch(e){report.status='error';report.error=String(e.stack||e);}
 await fetch('/__report',{method:'POST',body:JSON.stringify(report)});
@@ -33,7 +37,7 @@ await fetch('/__report',{method:'POST',body:JSON.stringify(report)});
 const types = { '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json' };
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'mobrecon-parity-'));
 let child, report = { status: 'running', phase: 'server', effectiveBrowser: chrome, browserRealPath: fs.realpathSync(chrome), repo, profile,
-  package: roots['/package/'], reference: roots['/reference/'], fullCases };
+  package: roots['/package/'], reference: roots['/reference/'], fullCases, witness };
 const write = () => fs.writeFileSync(out, JSON.stringify(report, null, 1));
 write();
 const timer = setTimeout(() => finish({ status: 'timeout' }), 10 * 60 * 1000);

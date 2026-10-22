@@ -24,7 +24,8 @@ from mobrecon_source import check_source, digest, load_model, OUT_CHANNELS, SPIR
 SCHEMA = 'mobrecon.browser-weight-package.v0'
 MODEL_ID = 'mobrecon.densestack-spiralconv'
 ALIGN = 256
-STORAGE_COPY_DST = 0x0080 | 0x0008
+# Storage and copy-in for weights; copy-out so the faces can be read back for rendering.
+STORAGE_COPY = 0x0080 | 0x0008 | 0x0004
 DTYPES = {np.dtype('<f4'): 'f32', np.dtype('<f2'): 'f16', np.dtype('<i4'): 'i32', np.dtype('<u4'): 'u32'}
 
 
@@ -131,7 +132,7 @@ def write_bundle(out, resource_id, tensors, revision):
             'manifest': {'modelId': MODEL_ID, 'revision': revision,
                          'bundle': {'byteLength': path.stat().st_size, 'sha256': digest(path)},
                          'allocations': [{'allocationId': f'{resource_id}.0', 'byteOffset': 0, 'byteLength': offset,
-                                          'usage': STORAGE_COPY_DST, 'tensors': rows}]}}
+                                          'usage': STORAGE_COPY, 'tensors': rows}]}}
 
 
 def main():
