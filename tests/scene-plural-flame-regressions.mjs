@@ -6,7 +6,7 @@ import {flameSourceInputs,fireControlOwner} from '../scene-fire-domain.mjs';
 const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const fn=name=>{const a=html.indexOf(`function ${name}(`);if(name==='primaryAuthoredFlameSource')return html.slice(a).split('\n')[0];if(name==='applyVolumeEmitterFamilyRuntimeToCockpit')return html.slice(a,html.indexOf('  applyFlameEmitterPose =',a));return html.slice(a,html.indexOf('\n}',a)+2);};
 test('selected radius bounds follow scale without changing the shared cockpit range',()=>{
- const text=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8'),a=text.indexOf('      function syncField('),code=text.slice(a,text.indexOf('\n      if(id===',a));
+ const text=fs.readFileSync(new URL('../flame-authoring.mjs',import.meta.url),'utf8'),a=text.indexOf('      function syncField('),code=text.slice(a,text.indexOf('\n      }',a)+8);
  let minimum=.01;const field={type:'number'},source={type:'range',min:'.02',max:'.5',value:'.01',disabled:false};
  const h={id:'volume-immersed-radius',field,source,document:{activeElement:null},readControlBounds:()=>({min:minimum,max:null}),readSourceControl:()=>({value:.01}),syncFlameRangeBounds:()=>assert.fail('selected bounds do not belong to the shared cockpit'),flameControlDisplayValue:(_id,x)=>x};
  vm.createContext(h);vm.runInContext(code,h);h.syncField(true);assert.equal(field.min,'0.01');assert.equal(field.max,'');assert.equal(source.min,'.02');minimum=.04;h.syncField(true);assert.equal(field.min,'0.04');
