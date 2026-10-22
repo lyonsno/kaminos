@@ -27017,7 +27017,8 @@ function setupAuthoringAssets(){
   // blocked() checks, so asking each other for status would recurse.
   let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
   const meshBusy=model=>meshRunning[model];
-  const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
+  // One run per model: a duplicate is refused before it touches the reservation, so it cannot clear the running one's.
+  const tracked=(model,run)=>async input=>{if(meshRunning[model])throw Error(`${model} is already running`);meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
   // Every in-page model run (TRELLIS, SF3D, Klein) holds a Greenroom lease, so queued GPU jobs and these runs
   // wait for each other. Release needs the app GPU host's ledger of model runs to be settled.
   const pageGpuLease=createPageGpuLease({setInfo,
