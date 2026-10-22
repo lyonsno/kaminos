@@ -17,7 +17,8 @@
 // output W). normB: { silu } applies a per-channel [scale, shift] (+SiLU) to B
 // while loading (conv only). aPairs: packed-f16 A, K-contiguous, even K and
 // strides: one u32 load yields two consecutive k. activation: { expression,
-// helpers } is trusted caller WGSL over `value`, applied after bias/residual.
+// helpers } is trusted caller WGSL over `value`, applied after bias/residual;
+// residualAfterActivation adds the residual after the activation instead.
 
 const ELEMENT = { f32: 'f32', f16: 'f16', f16packed: 'u32' };
 const binding = (index, name, type = 'f32', write = false) =>
@@ -47,7 +48,8 @@ export function tiledGemmTileShape({ tm = 4, tn = 4, bk = 16 } = {}) {
 // tile loaders (for `threads` threads filling bk x bm / bk x bn tiles) and the
 // epilogue that turns accumulator value ACC into the stored output.
 export function tiledGemmParts({ aKContiguous = true, bNContiguous = true, biasM = false, biasM2 = false, biasN = false,
-  residual = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null, aPairs = false, activation = null },
+  residual = false, residualAfterActivation = false, conv = null, aF16 = false, bF16 = false, types = {}, normB = null,
+  aPairs = false, activation = null },
   { bm, bn, bk, threads, aLayout = 'k-major' }) {
   const t = { a: types.a ?? (aF16 ? 'f16packed' : 'f32'), b: types.b ?? (bF16 ? 'f16packed' : 'f32'),
     biasM: types.biasM ?? 'f32', biasM2: types.biasM2 ?? 'f32', biasN: types.biasN ?? 'f32',
@@ -133,13 +135,18 @@ fn tiled_gemm_activate(value:f32)->f32{return ${activation.expression};}` : ''}`
   if (activation && (typeof activation.expression !== 'string' || !activation.expression.trim())) {
     throw new TypeError('activation expression must be nonempty WGSL over `value`');
   }
+  if (residualAfterActivation && !residual) throw new TypeError('residualAfterActivation requires a residual');
+  if (residualAfterActivation && !activation) throw new TypeError('residualAfterActivation requires an activation');
   let epilogue = 'var v=p.alpha*(ACC);';
   if (biasM) epilogue += `v+=${load('bias_m', t.biasM, 'm')};`;
   if (biasM2) epilogue += `v+=${load('bias_m2', t.biasM2, 'm')};`;
   if (biasN) epilogue += `v+=${load('bias_n', t.biasN, 'n')};`;
   const cIndex = 'p.c_off+bat*p.c_sb+m*p.c_sm+n*p.c_sn';
-  if (residual) epilogue += `v+=${load('res', t.residual, cIndex)};`;
+  const addResidual = `v+=${load('res', t.residual, cIndex)};`;
+  if (residual && !residualAfterActivation) epilogue += addResidual;
   if (activation) epilogue += 'v=tiled_gemm_activate(v);';
+  // residualAfterActivation: y = act(alpha*AB + bias) + R (MobRecon mobile_unit, YOLOv8 Bottleneck).
+  if (residualAfterActivation) epilogue += addResidual;
   epilogue += store('c', t.c, cIndex, 'v');
   return { header, loaders, epilogue, used, prologue };
 }
