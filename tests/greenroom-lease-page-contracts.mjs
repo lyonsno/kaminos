@@ -187,3 +187,27 @@ test('ML-02-C2: Stop during a pending claim prevents the model from running even
   await assert.rejects(run,/stop/i);assert.deepEqual(ran,[],'the model never ran');
   assert.deepEqual(s.actions(),['claim','release'],'the lease granted after Stop is released at once');
 });
+
+test('ML-02-C4: a failed release after Stop is reported as an owed handback, not swallowed',async()=>{
+  let grant;const pending=new Promise(r=>{grant=r;});const infos=[];
+  const s=server(b=>b.action==='claim'?pending:new Error('release endpoint unavailable'));
+  const lease=createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo:m=>infos.push(m)});
+  const leased=leasedService({busy:()=>false,stop:()=>false,read:()=>({status:'idle'}),run:async()=>'x'},{lease,label:'FLUX.2 klein',route:'r'});
+  const run=leased.run({});await new Promise(r=>setTimeout(r,0));leased.stop();grant({status:'held',leaseId:'kaminos-page-k'});
+  const error=await run.catch(e=>e);
+  assert.equal(error.name,'AbortError');assert.equal(error.greenroomHandback?.state,'release-failed');assert.match(error.greenroomHandback.releaseError,/release endpoint unavailable/);
+  assert.deepEqual(lease.pending().map(([id])=>id),['kaminos-page-k'],'the page retries the owed release on close');
+  assert.ok(infos.some(m=>/kaminos-page-k was not released/.test(m)));
+});
+
+test('ML-02-C5: a duplicate run of a tracked model is refused without clearing the first run\'s reservation',async()=>{
+  const fs=await import('node:fs'),vm=await import('node:vm');
+  const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const line=html.split('\n').find(l=>l.trimStart().startsWith('const tracked=(model,run)=>'));assert.ok(line,'the page tracker exists');
+  const ctx={meshRunning:{sf3d:false},redraw(){},Error};vm.runInNewContext(line.trim()+'\nthis.tracked=tracked;',ctx);
+  let finish;const first=ctx.tracked('sf3d',()=>new Promise(r=>{finish=r;}))({});
+  assert.equal(ctx.meshRunning.sf3d,true);
+  await assert.rejects(ctx.tracked('sf3d',async()=>'second')({}),/already/);
+  assert.equal(ctx.meshRunning.sf3d,true,'the refused duplicate leaves the first run reserved');
+  finish('done');assert.equal(await first,'done');assert.equal(ctx.meshRunning.sf3d,false);
+});

@@ -19,7 +19,13 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
   }
   if(!['held','unconfigured'].includes(lease?.status))throw Error(`Greenroom lease claim failed: ${lease?.error||lease?.status||'no answer'}`);
   // A Stop accepted while the claim was in flight wins over the grant: hand the lease straight back, run nothing.
-  if(signal?.aborted){if(lease.status==='held')await post({action:'release',leaseId:lease.leaseId,reason:'stopped before the run'}).catch(()=>{});stopped();}
+  if(signal?.aborted){
+    const stop=Object.assign(Error('GPU wait stopped'),{name:'AbortError'});
+    if(lease.status==='held'){const releaseError=await post({action:'release',leaseId:lease.leaseId,reason:'stopped before the run'}).then(()=>null,error=>String(error?.message||error));
+      // A release that failed here is owed, like any other: the page reports it and retries on close.
+      if(releaseError)stop.greenroomHandback={leaseId:lease.leaseId,state:'release-failed',releaseError};}
+    throw stop;
+  }
   if(lease.status!=='held')return {result:await run(lease),lease};
   let timer=null,renewError=null;
   const renewEvery=Math.max(5000,(lease.ttlSeconds??120)*1000/4);
