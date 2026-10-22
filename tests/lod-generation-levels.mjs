@@ -128,3 +128,41 @@ test('confirmation review: a registration response whose body cannot be read kee
   assert.equal(report.phase, 'publish'); assert.match(report.error.message, /connection reset/);
   assert.equal(report.failedTier, 200); assert.match(report.unconfirmedRegistration, /^[a-f0-9]{64}$/);
 });
+
+// Surfels-only runs (no finished mesh): levels keyed to the surfel asset's sha, referenced to the raw decode.
+test('raw-decode reference: no hero, error and normal maps from the decode, registered under the given source', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
+  const {finishTrellisMesh} = await import('../models/trellis2/trellis-material.js');
+  const {createWasmXatlasUnwrapper} = await import('../models/trellis2/wasm-xatlas.js');
+  const {NodeTrellisUVWorker} = await import('../models/trellis2/node-uv-worker.mjs');
+  const coordinates = [], features = [];
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { coordinates.push(i, j, 0); features.push(0.2, 0, 0, 0, 0.6, 1); }
+  const surfelSha = 'c'.repeat(64), calls = [], registrations = [], json = value => new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json'}});
+  const fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${url.split('?')[0]}`);
+    if (url.startsWith('/api/mesh-lods') && !init.method) return json({levels: []});
+    if (url.startsWith('/api/ingest-mesh')) return goodIngest(new Uint8Array(await new Response(init.body).arrayBuffer()), json);
+    if (url.startsWith('/api/mesh-lods')) { const body = JSON.parse(init.body); registrations.push(body); return goodRegister(body, json); }
+    return new Response('unexpected', {status: 500}); };
+  const vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0]), triangles = new Uint32Array([0,1,2]);
+  const report = await prepareGenerationLevels({decode: {vertices, triangles}, materialFields: {features: new Float32Array(features), coordinates: new Int32Array(coordinates), resolution: 4},
+    source: surfelSha, reference: 'raw-decode', fetch, THREE, MeshBVH, finish: finishTrellisMesh, unwrapMesh: createWasmXatlasUnwrapper(), WorkerClass: NodeTrellisUVWorker, targets: [200]});
+  assert.equal(report.phase, 'done', report.error?.message);
+  assert.ok(!calls.some(c => c.includes('/api/read')), 'no hero is read');
+  const tier = report.tiers[0];
+  assert.equal(tier.error.reference.kind, 'raw-decode');
+  assert.deepEqual(tier.error.reference.digests, {'vertices.f32': hex(vertices), 'triangles.u32': hex(triangles)});
+  assert.equal(tier.errorAgainstRawDecode, undefined, 'the error already is the raw-decode error');
+  assert.deepEqual(tier.normalMap.source, {kind: 'raw-decode', digests: tier.error.reference.digests});
+  assert.ok(tier.frameDrift <= 0.1);
+  assert.equal(registrations[0].source, surfelSha);
+});
+
+test('raw-decode reference refuses a hero, and an unknown reference is refused', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {prepareGenerationLevels} = await import('../lod-generation-levels.mjs');
+  const base = {decode: {vertices: new Float32Array(9), triangles: new Uint32Array([0, 1, 2])}, materialFields: {}, source: 'c'.repeat(64), THREE, MeshBVH, finish: () => {}, targets: [200],
+    fetch: async () => { throw Error('no request expected'); }};
+  const withHero = await prepareGenerationLevels({...base, reference: 'raw-decode', heroGLB: heroGLB()});
+  assert.match(withHero.error.message, /raw-decode reference takes no hero/);
+  const unknown = await prepareGenerationLevels({...base, reference: 'surfels'});
+  assert.match(unknown.error.message, /reference must be 'hero' or 'raw-decode'/);
+});
