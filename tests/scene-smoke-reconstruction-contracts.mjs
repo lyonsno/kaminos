@@ -59,7 +59,7 @@ assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity fail
 
 globalThis.GPUShaderStage={FRAGMENT:2};
 let groups=0;
-const device={createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
+const device={queue:{writeBuffer(){}},createBuffer(){return {destroy(){}};},createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
 const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
@@ -72,4 +72,8 @@ assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPrep
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,updates:0}}),/reconstruction resources/);
 assert.throws(()=>bindings.update({texture}),/reconstruction resources/);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'old'}}),/reconstruction resources/);
+const exterior={generation:2,frame:3,smokeReconstruction:{...r,localMin:[-3,-3,-3],localMax:[3,9,3]}};
+assert.throws(()=>bindings.update({...frame,generation:1,frame:3,exterior}),/same-generation/);
+assert.doesNotThrow(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior}));
+bindings.destroy();
 console.log(`smoke reconstruction bins preserve ${segmentCount} reference segments, uncapped candidates and binding lifetime`);

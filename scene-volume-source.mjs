@@ -63,7 +63,7 @@ export function integrateSceneMediumSegment(field, source, receiver, stepLength)
   return tau;
 }
 
-export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY}) {
+export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures, grid, gridY, fluidGrid = grid, fluidGridY = gridY,getWorldSmoke=()=>null,worldRenderUniform=null}) {
   for (const n of [grid, gridY, fluidGrid, fluidGridY]) {
     if (!Number.isInteger(n) || n <= 0) throw new Error('positive integer source dimensions required');
   }
@@ -90,6 +90,27 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
   let status = 'unbuilt', reason = 'not-encoded', frame = null, sourceIndex = null, generation = 0;
   let worldTransform=validateSceneSourceTransform();
   let optical = null;
+  let exterior=null,exteriorResources=null;
+  function encodeExterior(encoder){
+    exterior=null;
+    const world=getWorldSmoke();if(!world)return;
+    const key=world.dimensions.join(',');
+    if(!exteriorResources||exteriorResources.key!==key){
+      exteriorResources?.texture.destroy();
+      const texture=device.createTexture({label:'physical exterior smoke extinction',dimension:'3d',size:world.dimensions,format:'r32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
+      const pipeline=device.createComputePipeline({label:'encode exterior smoke extinction',layout:'auto',compute:{module,entryPoint:'seedSceneExteriorMedium'}});
+      exteriorResources={key,texture,pipeline};
+    }
+    const r=exteriorResources;
+    if(r.input!==world.texture){
+      r.group=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(0),entries:[
+        {binding:0,resource:{buffer:uniformBuffer}},{binding:20,resource:world.texture.createView()},{binding:21,resource:{buffer:worldRenderUniform}}]});
+      r.output=device.createBindGroup({layout:r.pipeline.getBindGroupLayout(3),entries:[{binding:6,resource:r.texture.createView()}]});r.input=world.texture;
+    }
+    const pass=encoder.beginComputePass({label:'current exterior physical extinction'});
+    pass.setPipeline(r.pipeline);pass.setBindGroup(0,r.group);pass.setBindGroup(3,r.output);pass.dispatchWorkgroups(...world.dimensions.map(n=>Math.ceil(n/4)));pass.end();
+    exterior={status:'encoded',identity:'world-smoke-physical-extinction-v1',texture:r.texture,dimensions:[...world.dimensions],localMin:[...world.localMin],localMax:[...world.localMax],generation,frame,coefficientLengthSpace:'volume-local',exteriorEmission:false};
+  }
   const invalidateOptical = () => {if (optical) optical.generation = null;};
   return {
     encode(encoder, index, currentFrame,transform) {
@@ -103,6 +124,7 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       pass.setPipeline(pipeline); pass.setBindGroup(0, inputs[index]); pass.setBindGroup(3, output);
       pass.dispatchWorkgroups(Math.ceil(grid/4), Math.ceil(gridY/4), Math.ceil(grid/4)); pass.end();
       status = 'encoded'; reason = null; sourceIndex = index; frame = currentFrame; generation++;
+      encodeExterior(encoder);
     },
     invalidate(why) {if (status !== 'destroyed') {status = 'unbuilt'; reason = why; invalidateOptical();}},
     // First experiment: one controlled source, in volume-local coordinates.
@@ -167,12 +189,23 @@ export function createSceneVolumeSource({device, module, uniformBuffer, fluidBuf
       channels: ['emission-r','emission-g','emission-b','extinction'], displayTransform: 'none',
       coefficientLengthSpace: 'volume-local', sampleCountPerCell: 8, completionAuthority: false,
       worldTransform:validateSceneSourceTransform(worldTransform),texture: status === 'encoded' ? texture : null,scatteringTexture:status==='encoded'?scatteringTexture:null,
+      exterior:status==='encoded'?exterior:null,
       scatteringChannels:['smoke-scattering-coefficient'],scatteringGeneration:status==='encoded'?generation:null};},
-    destroy() {texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
+    destroy() {exteriorResources?.texture.destroy();texture.destroy();scatteringTexture.destroy(); optical?.depth.destroy(); optical?.params.destroy(); status = 'destroyed'; reason = 'destroyed';},
   };
 }
 
 export const SCENE_VOLUME_SOURCE_WGSL = /* wgsl */`
+@group(3) @binding(6) var sceneExteriorOut:texture_storage_3d<r32float,write>;
+@compute @workgroup_size(4,4,4)
+fn seedSceneExteriorMedium(@builtin(global_invocation_id) c:vec3<u32>){
+  seatGridShape();
+  let dims=textureDimensions(sceneExteriorOut);if(any(c>=dims)){return;}
+  let p=worldRender.loPitch.xyz+(vec3<f32>(c)+.5)*worldRender.loPitch.w;
+  // Same physical law as the camera, before optional diagnostic tinting.
+  let medium=worldSmokeMaterial(p,1.0,1.0);
+  textureStore(sceneExteriorOut,vec3<i32>(c),vec4<f32>(medium.absorption+medium.scattering,0,0,0));
+}
 @group(3) @binding(4) var sceneSourceOut: texture_storage_3d<rgba32float, write>;
 @group(3) @binding(5) var sceneScatteringOut: texture_storage_3d<r32float, write>;
 @compute @workgroup_size(4,4,4)
