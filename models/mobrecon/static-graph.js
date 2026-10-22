@@ -50,11 +50,11 @@ export function createStaticGraph({ device, tensors, label, missing = name => `m
     device.queue.writeBuffer(b, 0, data);
     return b;
   };
-  const record = (key, code, resources, workgroups, tag) => {
+  const record = (key, code, resources, workgroups, tag, flops = 0) => {
     const p = pipeline(key, code);
     const bindGroup = device.createBindGroup({ label: `${label}:${tag}`, layout: p.getBindGroupLayout(0),
       entries: resources.map((resource, binding) => ({ binding, resource })) });
-    steps.push({ pipeline: p, bindGroup, workgroups, label: tag });
+    steps.push({ pipeline: p, bindGroup, workgroups, label: tag, kind: key.split(':')[0], flops });
   };
   const grid1 = n => { const groups = Math.ceil(n / 256); return [Math.min(groups, 65535), Math.ceil(groups / 65535), 1]; };
 
@@ -76,7 +76,7 @@ export function createStaticGraph({ device, tensors, label, missing = name => `m
     if (residual && !inOutput) resources.push(whole(residual));
     resources.push(whole(c), { buffer: uniform([...params], tag, { 3: 1 }) });
     const bm = 16 * tile.tm, bn = 16 * tile.tn;
-    record(key, createWebGpuTiledGemmShader(layout), resources, [Math.ceil(N / bn), Math.ceil(M / bm), 1], tag);
+    record(key, createWebGpuTiledGemmShader(layout), resources, [Math.ceil(N / bn), Math.ceil(M / bm), 1], tag, 2 * M * N * K);
   }
 
   return {
@@ -87,6 +87,31 @@ export function createStaticGraph({ device, tensors, label, missing = name => `m
         pass.setBindGroup(0, step.bindGroup);
         pass.dispatchWorkgroups(...step.workgroups);
       }
+    },
+    // Diagnostic: each dispatch in its own timestamped pass (needs the
+    // timestamp-query feature). Returns [{ label, kind, flops, ms }] in order.
+    async profile() {
+      const count = steps.length, querySet = device.createQuerySet({ type: 'timestamp', count: 2 * count });
+      const resolved = device.createBuffer({ size: 16 * count, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+      const staging = device.createBuffer({ size: 16 * count, usage: U.MAP_READ | U.COPY_DST });
+      const encoder = device.createCommandEncoder({ label: `${label}:profile` });
+      steps.forEach((step, i) => {
+        const pass = encoder.beginComputePass({ timestampWrites: { querySet, beginningOfPassWriteIndex: 2 * i, endOfPassWriteIndex: 2 * i + 1 } });
+        pass.setPipeline(step.pipeline);
+        pass.setBindGroup(0, step.bindGroup);
+        pass.dispatchWorkgroups(...step.workgroups);
+        pass.end();
+      });
+      encoder.resolveQuerySet(querySet, 0, 2 * count, resolved, 0);
+      encoder.copyBufferToBuffer(resolved, 0, staging, 0, 16 * count);
+      device.queue.submit([encoder.finish()]);
+      await staging.mapAsync(1);
+      const stamps = new BigUint64Array(staging.getMappedRange().slice(0));
+      staging.unmap();
+      for (const b of [staging, resolved]) b.destroy();
+      querySet.destroy();
+      return steps.map((step, i) => ({ label: step.label, kind: step.kind, flops: step.flops,
+        ms: Number(stamps[2 * i + 1] - stamps[2 * i]) / 1e6 }));
     },
     readback(encoder, view, tag) {
       const bytes = product(view.shape) * 4;

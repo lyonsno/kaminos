@@ -219,6 +219,7 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
   return Object.freeze({
     input, outputs: Object.freeze({ mesh, uv }), dispatchCount: steps.length,
     names: () => [...named.keys()],
+    profile: () => graph.profile(),
     view: key => named.get(key) ?? null,
     faces: weight('topology.faces'),
     // Records the whole network into one compute pass of the caller's encoder.
