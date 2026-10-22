@@ -44,7 +44,7 @@ export default class SceneGIHistory extends Node {
     this.pendingFrames=this.weight.value===0?1:1+Math.ceil(Math.log(.01)/Math.log(this.weight.value));
     this.passingChecks=0;this.lastError=null;this.checkFailure=null;this.epoch++;
   }
-  needsFrame(){return this.refine?!this.converged:this.pendingFrames>0;}
+  needsFrame(){return this.refine?!this.converged&&!this.checkFailure:this.pendingFrames>0;}
   reset(reason='explicit'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
   state(){return {stableFrames:this.stableFrames,converged:this.converged,checkPending:this.checkPending,
     estimatedRelativeError:this.lastError===null?null:this.lastError*this.tolerance.value,

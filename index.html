@@ -2787,6 +2787,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         </details>
       </div>
       <div id="scene-gi-status" role="status"></div>
+      <div id="scene-gi-refinement-status" role="status"></div>
       </div>
       <section id="rendering-fire-controls" hidden aria-label="Fire illumination"><div id="rendering-fire-route-status" role="status"></div></section>
       <div id="rendering-light-study">
@@ -11905,6 +11906,14 @@ async function initScene() {
     // Outside any render: a quality change resizes render targets.
     syncViewportQuality(syncViewportRendererSize);
     controls.update();
+    const refinement = sceneGI.historyStatus();
+    const refinementText = !refinement ? '' : refinement.checkFailure
+      ? 'GI refinement paused: noise check failed. Toggle Refine still scenes to retry.'
+      : refinement.converged ? `GI refinement settled · ${refinement.stableFrames} frames`
+      : refinement.mode === 'responsive' ? 'GI responds to scene changes'
+      : `Refining stationary GI · ${refinement.stableFrames < 64 ? refinement.stableFrames : Math.floor(refinement.stableFrames / 64) * 64} frames`;
+    const refinementStatus = document.getElementById('scene-gi-refinement-status');
+    if (refinementStatus.textContent !== refinementText) refinementStatus.textContent = refinementText;
     viewProjection?.update();
     syncAuthoredWaterFlameTransport();
     workbenchSceneFrames.tick(performance.now());

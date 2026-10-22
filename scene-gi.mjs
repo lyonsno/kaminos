@@ -136,6 +136,7 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
     },
     requestHistoryFrames(){if(settings.mode==='combined'&&settings.temporal)history.requestFrames();},
     needsHistoryFrame:()=>settings.mode==='combined'&&settings.temporal&&history.needsFrame(),
+    historyStatus:()=>settings.mode==='combined'&&settings.temporal&&settings.temporalRefine?history.state():null,
     resetHistory(reason) { history.reset(reason); },
     async readback(renderer,kind='incoming') {
       if (!['incoming','receiving','estimate','surface'].includes(kind)) throw new Error('Invalid GI readback kind');
