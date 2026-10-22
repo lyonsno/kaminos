@@ -14,10 +14,11 @@ export function createVisualDisturbance(){
   if(!observed||!visual||!finitePoint(visual.center)||!Number.isFinite(visual.radius)||visual.radius<0){reset();return null;}
   const shape={center:[...visual.center],radius:active?visual.radius:0},now=projection(shape,eye);
   const before=previous;
-  const observedTime=before&&before.active!==active?time:(visual.sampleTime??time);
-  previous={...shape,time:observedTime,active,provenance:visual.provenance};
+  const activationChanged=Boolean(before&&before.active!==active);
+  const observedTime=activationChanged?time:(visual.sampleTime??time);
+  previous={...shape,time:observedTime,seenAt:time,active,provenance:visual.provenance};
   if(!before||before.provenance!==visual.provenance)return null;
-  const dt=observedTime-before.time;if(dt<=0){previous=before;return null;}
+  const dt=observedTime-(activationChanged?before.seenAt:before.time);if(dt<=0){previous={...before,seenAt:time};return null;}
   // Reproject the old source at the CURRENT eye. Observer travel and head
   // rotation therefore cannot impersonate an independently changing source.
   const old=projection(before,eye),denom=old.distance*now.distance;
