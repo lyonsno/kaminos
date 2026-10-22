@@ -53,3 +53,36 @@ for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`members
  await edits.redo();assert.equal(h.sceneObjects.length,2-removed.length);assert.equal(h.authoredFlamePresent,removed.length===1);assert.equal(published.at(-1).length,2-removed.length);
  await edits.undo();assert.deepEqual(published.at(-1),expected);
 });
+
+for(const enabled of [true,false])test(`burner graph history restores only the saved nonoriginal source (enabled=${enabled})`,async()=>{
+ const pose={position:[.35,-.5,0],rotation:[0,.2,0],scale:[1.2,1.2,1.2]};
+ const source={id:'other',type:'flame-emitter',label:'Independent source',transform:pose,emissionEnabled:enabled,emission:{domainId:'flame-field',settings:{'volume-immersed-fuel':{value:.8}}}};
+ let cockpit=.2;const published=[],applications=[];
+ const h={structuredClone,performance,normalizeFlameEmitterPose,flamePoseToDomain,fireControlOwner,
+ FLAME_EMITTER_TYPE:'flame-emitter',FLAME_EMITTER_ID:'flame-emitter',FLAME_EMITTER_SOURCE:'kaminos:analytic-flame',FIRE_DOMAIN_ID:'flame-field',PROCEDURAL_MESH_TYPE:'procedural-mesh',GROUP_TYPE:'group',
+ activeSceneObjectId:null,activeSceneGroupId:null,sceneObjects:[],sceneGroups:[],proceduralMeshes:new Map(),groupProxies:new Map(),scene:{add(){},remove(){}},
+ authoredFlamePresent:false,flameEmitterPose:{position:[-.3,-.5,0],rotation:[0,0,0],scale:[1,1,1]},flameDomainTranslation:[0,0,0],flameDomainScale:1,flameDomainFollowSource:false,flameEmitterInjectionSuspended:false,
+ volumePrototype:{debugState:()=>({frameCount:1})},volumeEmitterRuntimeFrame:0,routeExternalEmitters:null,
+ window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},document:{getElementById:id=>({id,value:'ring'})},
+ readVolumeControls:()=>({emitterSourceLaw:'immersed-source'}),readVolumeSettingsValues:()=>({domControls:{'volume-immersed-fuel':{value:cockpit}}}),setVolumeControlValue:(id,v)=>{if(id==='volume-immersed-fuel')cockpit=Number(v);},
+ emitterCompilerControls:x=>x,flamePoseInDomain:()=>true,effectiveFlameDomainControls:()=>({}),
+ applyVolumeEmitterFamilyRuntime:args=>{applications.push(args);return {requested:{immersedControls:{immersedCentreX:.35,immersedCentreY:-.5,immersedCentreZ:0,immersedYaw:0,immersedPitch:90}},effective:{family:'ring'}};},
+ isFireLightFieldRoute:()=>true,createFlameEmitterHandle:()=>({userData:{kaminosSceneObject:{}}}),THREE:{},
+ applySceneObjectTransformState:(o,p)=>{o.pose=structuredClone(p);},sceneObjectTransformState:o=>structuredClone(o.pose),
+ registerSceneObject:(o,metadata)=>{const entry={...structuredClone(metadata),object:o};o.userData.kaminosSceneObject={...metadata};h.sceneObjects.push(entry);return entry;},
+ refreshFlameDomainPreview(){},flameDomainGuide:null,updateFlameEmitterSupportOutline(){},styleHelperLines(){},isSceneItemVisible:()=>true,selectionCaptureSuspended:false,viewportHelpersVisible:true,viewportDisplay:{emitters:true,emitterOpacity:1},
+ setFlameDomainTranslation:(v,s)=>{h.flameDomainTranslation=v;h.flameDomainScale=s;},disposeObjectTree(){},setSceneObjectGroupId(){},pruneSceneGroups(){},ensureGroupTarget(){},setActiveSceneGroup(){},setActiveSceneObject(){},clearActiveSceneObjectSelection(){},renderSceneObjectList(){},updateTransformInspector(){},renderVolumeEmitterReceipt(){},setInfo(){},
+ syncAuthoredFlameSources:()=>published.push(h.sceneObjects.map(o=>({id:o.id,transform:structuredClone(o.object.pose),emission:structuredClone(o.emission),emissionEnabled:o.emissionEnabled}))) };
+ vm.createContext(h);for(const name of ['primaryAuthoredFlameSource','projectAuthoredFlameSourceControls','ensureAuthoredFlameEmitter','applyVolumeEmitterFamilyRuntimeToCockpit','writeAuthoredFlameEmitterPose','writeBurnerGraphUnchecked'])vm.runInContext(fn(name),h);
+ h.applyFlameEmitterPose=(p,opts)=>h.applyVolumeEmitterFamilyRuntimeToCockpit(h.readVolumeControls(),p,opts);
+ const empty={objects:[],groups:[],domain:[0,0,0],domainScale:1,domainFollowSource:false},saved={...empty,objects:[source]};let current=empty;
+ const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@burner-graph',{read:()=>current,check:v=>v,write:v=>{h.writeBurnerGraphUnchecked(v);current=v;}});
+ edits.recordApplied('@burner-graph',saved,empty,'Remove surviving source');
+ for(let i=0;i<2;i++){
+  await edits.undo();assert.deepEqual(Array.from(h.sceneObjects,o=>o.id),['other'],'Undo must not invent the original emitter');
+  assert.deepEqual(published.at(-1),[{id:'other',transform:pose,emission:source.emission,emissionEnabled:enabled}]);
+  assert.equal(applications.at(-1).sourceEnabled,enabled);
+  await edits.redo();assert.equal(h.sceneObjects.length,0);assert.deepEqual(published.at(-1),[]);assert.equal(applications.at(-1).sourceEnabled,false);
+ }
+ assert.ok(published.every(records=>records.every(o=>o.id==='other')),'no intermediate publication may invent a source');
+});

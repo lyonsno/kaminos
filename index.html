@@ -26025,7 +26025,7 @@ function writeBurnerGraphUnchecked(next) {
   }
   for(const entry of [...sceneObjects])if(entry.type===FLAME_EMITTER_TYPE&&!ids.has(entry.id)){scene.remove(entry.object);disposeObjectTree(entry.object);sceneObjects=sceneObjects.filter(record=>record!==entry);}
   authoredFlamePresent=next.objects.some(record=>record.type===FLAME_EMITTER_TYPE);
-  if(applyFlameEmitterPose)applyFlameEmitterPose(flameEmitterPose,{sourceEnabled:authoredFlamePresent&&!flameEmitterInjectionSuspended});
+  // Restore explicit membership before compatibility code can create a default source.
   for(const record of next.objects){
     if(record.type===PROCEDURAL_MESH_TYPE){
       const entry=sceneObjects.find(entry=>entry.id===record.id);
@@ -26040,6 +26040,7 @@ function writeBurnerGraphUnchecked(next) {
   }
   setFlameDomainTranslation(next.domain,next.domainScale??1);flameDomainFollowSource=next.domainFollowSource??true;
   if(authoredFlamePresent)writeAuthoredFlameEmitterPose(flameEmitterPose);
+  else applyFlameEmitterPose?.(flameEmitterPose,{sourceEnabled:false});
   syncAuthoredFlameSources();
   sceneGroups=structuredClone(next.groups);
   for(const entry of sceneObjects)setSceneObjectGroupId(entry,next.groups.find(group=>group.objectIds.includes(entry.id))?.id||null);
