@@ -82,11 +82,22 @@ export function projectFireSettingsToSchema(settings,rawSchema){
  const retired=new Set((schema.retiredControls||[]).filter(entry=>entry.axis==='domControls').map(entry=>entry.key));
  for(const id of Object.keys(saved))if(retired.has(id))delete saved[id];
  for(const id of Object.keys(saved))if(!inventory.has(id))throw Error(`Unsupported authored fire control ${id}`);
- // A record that still carries a control introduced later cannot be missing one introduced earlier: a hole, not history.
- const latestPresent=Math.max(0,...schema.controls.filter(entry=>Number.isSafeInteger(entry.additiveSinceControlCount)&&Object.hasOwn(saved,entry.key)).map(entry=>entry.additiveSinceControlCount));
+ // Independent feature branches do not share an additive ordinal. Compare
+ // chronology within its declared lineage, never against another branch's
+ // later controls. Unmarked entries retain the original inventory history.
+ const lineage=entry=>entry.additiveLineage??'legacy';
+ const histories=new Map();
+ for(const entry of schema.controls){
+  const name=lineage(entry);
+  if(histories.has(name))continue;
+  const present=schema.controls.filter(e=>lineage(e)===name&&Object.hasOwn(saved,e.key));
+  const otherPresent=schema.controls.filter(e=>lineage(e)!=='legacy'&&Object.hasOwn(saved,e.key)).length;
+  histories.set(name,{count:name==='legacy'?count-otherPresent:present.length,latest:Math.max(0,...present.map(e=>e.additiveSinceControlCount??0))});
+ }
  for(const entry of schema.controls){
   if(Object.hasOwn(saved,entry.key))continue;
-  if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count||entry.additiveSinceControlCount<latestPresent)throw Error(`Missing authored fire control ${entry.key}`);
+  const history=histories.get(lineage(entry));
+  if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=history.count||entry.additiveSinceControlCount<history.latest)throw Error(`Missing authored fire control ${entry.key}`);
   saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
  }
  result.domControls=saved;

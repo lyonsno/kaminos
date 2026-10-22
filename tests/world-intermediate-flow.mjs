@@ -2,6 +2,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as world from '../volume-world-smoke.mjs';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+
+test('GPU profile explicitly excludes unmeasured intermediate solve from cost coverage',()=>{
+ const source=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+ const start=source.indexOf('      profile.worldSmoke = structuredClone(state.worldSmoke);');
+ const end=source.indexOf('      profile.timestampsNs =',start);
+ assert.ok(start>=0&&end>start);
+ for(const enabled of [false,true]){
+  const context={profile:{status:'sampled'},state:{worldSmoke:{effective:'one-way-world-field',intermediate:{effective:enabled?'two-fine-cell-flow':'off'}}},steps:1,worldFlowSamples:[1],worldMaterialSamples:[1],structuredClone};
+  vm.runInNewContext(source.slice(start,end),context);
+  assert.equal(context.profile.intermediateTimingStatus,enabled?'unmeasured':'inactive');
+  if(enabled)assert.match(context.profile.windowScope,/intermediate solve is unmeasured/i);
+ }
+});
 
 test('intermediate flow keeps a two-fine-cell pitch and borrows world material',()=>{
   assert.equal(typeof world.intermediateFlowPlan,'function','intermediate flow planner is implemented');

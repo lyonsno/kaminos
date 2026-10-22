@@ -1010,7 +1010,8 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": 2,
-      "additiveSinceControlCount": 260
+      "additiveLineage": "reactant-soot-yield",
+      "additiveSinceControlCount": 1
     }
   ],
   "retiredControls": [

@@ -18083,11 +18083,13 @@ export function createKaminosVolumePrototype({
       profile.worldFlowThroughProjection = stats(worldFlowSamples);
       profile.worldMaterialTransportReaction = stats(worldMaterialSamples);
       profile.worldSmoke = structuredClone(state.worldSmoke);
+      profile.intermediateTimingStatus = state.worldSmoke?.intermediate?.effective==='two-fine-cell-flow' ? 'unmeasured' : 'inactive';
       profile.worldTimingStatus = state.worldSmoke?.effective!=='one-way-world-field' ? 'inactive'
         : worldFlowSamples.length===steps && worldMaterialSamples.length===steps ? 'sampled' : 'partial';
       if(profile.worldTimingStatus==='partial')profile.status='partial';
       profile.timestampStride=8;
       profile.windowScope = 'GPU elapsed intervals: main kernel through final projection/prolong excludes preceding predictor, collision rebuild and rendering. After-main includes forces, injection, pressure and transfer; not pressure-exclusive. World flow spans transport through projection; world material spans transport and reaction. Both exclude world optical resolve, collision construction and raymarch.';
+      if(profile.intermediateTimingStatus==='unmeasured')profile.windowScope += ' The intermediate solve is unmeasured; these intervals cannot establish total simulation cost or its on/off delta.';
       profile.timestampsNs = Array.from(t,String);
       profile.pressureResolution = structuredClone(state.pressureResolution);
       profile.simPassMicrosecondsPerStep = profile.simPass?.mean ?? null;

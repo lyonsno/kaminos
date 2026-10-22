@@ -5,6 +5,15 @@ import {createSceneLoadRequests} from '../scene-load-generation.mjs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8'),schema=JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json',import.meta.url)));
 const start=html.indexOf('  if(restorePlan.fireSettings) {'),end=html.indexOf('  if (legacyBurner',start);assert.ok(start>=0&&end>start);
 const additions=['volume-reaction-law','volume-reactant-mixing-time','volume-reactant-cooling-time','volume-physical-kelvin-per-heat','volume-physical-soot-burnout-rate','volume-physical-soot-burnout-kelvin','volume-appearance-model','volume-wavelet-turbulence','volume-wavelet-octaves','volume-wavelet-strength','volume-wavelet-octave1-weight','volume-wavelet-octave2-weight','volume-pressure-resolution','volume-reactant-soot-yield'];
+test('observed pre-composition scene migrates independent soot history without altering authored values',()=>{
+ const {settings}=JSON.parse(readFileSync(new URL('./fixtures/fire-scene-816e82aa1.json',import.meta.url)));
+ const result=fire.projectFireSettingsToSchema(settings,schema);
+ assert.equal(result.domControls['volume-reactant-soot-yield'].value,2);
+ assert.equal(result.domControls['volume-world-smoke-intermediate'].value,'off');
+ for(const entry of schema.controls)if(settings.domControls[entry.key])assert.deepEqual(result.domControls[entry.key],settings.domControls[entry.key]);
+ const hole=structuredClone(settings);delete hole.domControls['volume-pressure-solver'];
+ assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-pressure-solver/);
+});
 // Native74383 restore-diagnostic-r2 observed these three declared additions
 // absent from an otherwise intact saved fire record (249 controls).
 function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)&&!e.key.startsWith('volume-world-smoke')).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}
