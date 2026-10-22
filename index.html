@@ -27442,8 +27442,10 @@ function setupAuthoringAssets(){
       };
       const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
       // SF3D runs on its own foreground service: a failed foreground finish (sf3dFinishUnsettled) keeps Greenroom blocked.
-      authoringGenerator=leasedService({...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))},
+      // tracked() encloses the whole leased run, so SF3D is reserved on the page while it waits as well as while it runs.
+      const leasedSf3d=leasedService({...sf3d,run:input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked})},
         {lease:pageGpuLease,label:'Stable Fast 3D',route:'sf3d.image-to-mesh.webgpu-local.v0',changed:()=>redraw(),unsettled:sf3dFinishUnsettled});
+      authoringGenerator={...leasedSf3d,run:tracked('sf3d',input=>leasedSf3d.run(input))};
     }
     return authoringGenerator;
   };

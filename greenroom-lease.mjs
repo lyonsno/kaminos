@@ -18,6 +18,8 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
     onWait(lease);await sleep(retryMs);
   }
   if(!['held','unconfigured'].includes(lease?.status))throw Error(`Greenroom lease claim failed: ${lease?.error||lease?.status||'no answer'}`);
+  // A Stop accepted while the claim was in flight wins over the grant: hand the lease straight back, run nothing.
+  if(signal?.aborted){if(lease.status==='held')await post({action:'release',leaseId:lease.leaseId,reason:'stopped before the run'}).catch(()=>{});stopped();}
   if(lease.status!=='held')return {result:await run(lease),lease};
   let timer=null,renewError=null;
   const renewEvery=Math.max(5000,(lease.ttlSeconds??120)*1000/4);
@@ -104,13 +106,13 @@ export function leasedService(service,{lease,label,route,changed=()=>{},unsettle
     const marked=error instanceof Error&&Object.isExtensible(error)?error:new Error(String(error?.message||error),{cause:error});
     return Object.assign(marked,{gpuRouteHeld:true,gpuRouteHeldReason:reason});};
   return {...service,
-    busy:()=>!!waiting||service.busy(),
+    busy:()=>!!waiting||service.busy?.()===true,
     read(){const view=service.read();if(!waiting||waiting.started)return view;
       return {...view,status:'loading',canStop:true,error:null,stage:'Waiting for the GPU',percent:null,
         progress:`Waiting for the GPU: Greenroom ${waiting.heldBy?.length?`job ${waiting.heldBy.join(', ')}`:'work'} holds it`};},
     stop:()=>{if(waiting&&!waiting.started){waiting.abort.abort();changed();return true;}return service.stop();},
     async run(input){
-      if(waiting||service.busy())throw Error(`${label} is already running`);
+      if(waiting||service.busy?.()===true)throw Error(`${label} is already running`);
       const state={abort:new AbortController(),started:false,heldBy:null};waiting=state;changed();
       try{
         const {result}=await lease.run({label,route,signal:state.abort.signal,onPhase:event=>{if(event?.phase==='waiting-for-gpu'){state.heldBy=event.heldBy;changed();}}},

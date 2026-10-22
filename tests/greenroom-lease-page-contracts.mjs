@@ -169,3 +169,21 @@ test('ML-01: an SF3D run whose foreground finish failed keeps Greenroom blocked;
     await assert.rejects(leased.run({}));assert.deepEqual(s.actions(),expected);
   }
 });
+
+test('ML-02-C1: a service without busy() (SF3D) runs through the leased wrapper',async()=>{
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-s'}:{status:'released'});
+  const sf3dLike={read:()=>({status:'idle'}),stop:()=>false,retryPersistence:async()=>null,run:async()=>'mesh'};
+  const leased=leasedService(sf3dLike,{lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){}}),label:'Stable Fast 3D',route:'r'});
+  assert.equal(leased.busy(),false);assert.equal(await leased.run({}),'mesh');assert.deepEqual(s.actions(),['claim','release']);
+});
+
+test('ML-02-C2: Stop during a pending claim prevents the model from running even if the claim is then granted',async()=>{
+  let grant;const pending=new Promise(r=>{grant=r;});const ran=[];
+  const s=server(b=>b.action==='claim'?pending:{status:'released'});
+  const leased=leasedService({busy:()=>false,stop:()=>false,read:()=>({status:'idle'}),run:async()=>{ran.push('model');return 'x';}},
+    {lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){}}),label:'FLUX.2 klein',route:'r'});
+  const run=leased.run({});await new Promise(r=>setTimeout(r,0));
+  assert.equal(leased.stop(),true);grant({status:'held',leaseId:'kaminos-page-k'});
+  await assert.rejects(run,/stop/i);assert.deepEqual(ran,[],'the model never ran');
+  assert.deepEqual(s.actions(),['claim','release'],'the lease granted after Stop is released at once');
+});
