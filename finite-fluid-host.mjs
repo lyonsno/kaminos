@@ -4,14 +4,14 @@ import {createOwnerWaterCapability,applyFluidOwnerSetup} from './fluid-owner-hos
 
 /** One producer lifetime on the application's existing draw loop. Presentation
  * is supplied by the shared optical owner; no private canvas or frame pump. */
-export async function createFiniteFluidHost({setup,device,createSolver,createPresentation,redraw=()=>{},isCurrent=()=>true}) {
+export async function createFiniteFluidHost({setup,device,createSolver,createPresentation,redraw=()=>{},isCurrent=()=>true,readColliders=null}) {
  applyFluidOwnerSetup({},setup);
  let currentSetup=setup,solver=null,presentation=null,closed=false,generation=0,step=0,paused=true;
  let presentationMode='full',proxyStepEvery=1,drawFrame=0;
  const lifetime={},clock=createFixedStepPlayback({dt:setup.dt,rate:setup.playbackRate??1,mode:setup.playbackMode??'render_cadence'});
  async function install(next) {
   applyFluidOwnerSetup({},next);
-  const candidate=await createSolver({...next.solver,simulationStepSeconds:next.dt,webgpuDevice:device,hostFrameComposition:true,hostFramePipelineIdentity:'kaminos/local-liquid-authoring-v0',presentationMode:'local_analytic_consumer'});
+  const candidate=await createSolver({...next.solver,...(readColliders?{sceneColliders:readColliders()}:{}),simulationStepSeconds:next.dt,webgpuDevice:device,hostFrameComposition:true,hostFramePipelineIdentity:'kaminos/local-liquid-authoring-v0',presentationMode:'local_analytic_consumer'});
   if(closed||!isCurrent()){candidate.destroy?.();throw Error('Finite water lifetime changed during allocation');}
   if(!candidate.available){candidate.destroy?.();throw Error(candidate.reason??'Finite water solver unavailable');}
   let view;
@@ -24,7 +24,7 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
  const assertActive=()=>{if(closed||!isCurrent())throw Error('Finite water lifetime changed');};
  const state=()=>({available:!closed&&isCurrent(),generation,step,timeSeconds:step*currentSetup.dt,frameTimeStepSeconds:currentSetup.dt,paused,playbackRate:clock.state().rate,playbackMode:clock.state().mode});
  const host={
-  render({advance=true,timestampMs=performance.now()}={}){assertActive();const stepThisFrame=presentationMode!=='proxy'||drawFrame%proxyStepEvery===0;drawFrame++;const tick=clock.advance(timestampMs,{paused:paused||!advance||!stepThisFrame});for(let i=0;i<tick.steps;i++){solver.step(currentSetup.dt);step++;}presentation.render({presentation:presentationMode});},
+  render({advance=true,timestampMs=performance.now()}={}){assertActive();if(readColliders)solver.setSceneColliders(readColliders());const stepThisFrame=presentationMode!=='proxy'||drawFrame%proxyStepEvery===0;drawFrame++;const tick=clock.advance(timestampMs,{paused:paused||!advance||!stepThisFrame});for(let i=0;i<tick.steps;i++){solver.step(currentSetup.dt);step++;}presentation.render({presentation:presentationMode});},
   setPaused(value){assertActive();paused=Boolean(value);clock.reset();redraw();return paused;},
   get paused(){return paused;},
   setPresentation(mode){assertActive();localLiquidPresentationPlan(mode);presentationMode=mode;return mode;},
@@ -34,7 +34,7 @@ export async function createFiniteFluidHost({setup,device,createSolver,createPre
   interfaceRecordDescriptor:()=>closed?null:solver.getInterfaceRecordDescriptor(),
   setPlaybackRate(value){assertActive();clock.setRate(value);redraw();return state();},
   setPlaybackMode(value){assertActive();clock.setMode(value);redraw();return state();},
-  async advanceTo(target){assertActive();if(!Number.isSafeInteger(target)||target<step)throw Error('Reset before advancing backwards');paused=true;clock.reset();for(;step<target;step++)solver.step(currentSetup.dt);await device.queue.onSubmittedWorkDone();assertActive();redraw();return state();},
+  async advanceTo(target){assertActive();if(!Number.isSafeInteger(target)||target<step)throw Error('Reset before advancing backwards');paused=true;clock.reset();if(readColliders)solver.setSceneColliders(readColliders());for(;step<target;step++)solver.step(currentSetup.dt);await device.queue.onSubmittedWorkDone();assertActive();redraw();return state();},
   restart:()=>install(currentSetup),
   state:()=>({...presentation.state(),clock:state(),presentation:presentationMode,proxyStepEvery,setup:currentSetup,solver:solver.getDebugState()}),
   getMaterialControls:()=>solver.getMaterialControls?.()??{available:false},

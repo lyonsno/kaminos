@@ -1,3 +1,4 @@
+import {SCENE_LIQUID_SUPPORT_ROUTE} from './scene-liquid-support.mjs';
 import {createAuthoredWaterDrop,describeAuthoredWaterDrop,inspectAuthoredWaterCompatibility,resolveAuthoredWaterSampling} from './authored-water-drop.mjs';
 import {createFiniteFluidHost} from './finite-fluid-host.mjs';
 import {createWebGPUFingerFluidSolver,resolveFingerFluidParticleCount} from './finger-fluid-webgpu-core.js';
@@ -15,7 +16,7 @@ export function authoredDropSetup(records,{densityIterations=2,materialControls=
  const data=new Float32Array(particleCount*16);let offset=0;for(const f of fixtures){data.set(f.population.particleData,offset);offset+=f.population.particleData.length;}
  const population={...first.population,particleData:data,particleCount,worldVolume:fixtures.reduce((n,f)=>n+f.worldVolume,0)};
  return {waterSampling:sampling,dt:1/240,playbackMode:'render_cadence',playbackRate:1,support:{kind:'invisible_box',box:first.box},sourceIds:finite.map(r=>r.id),sourceRecords:records.map(r=>[r.id,r.transform,r.localLiquidEmitter]),
-  solver:{particleCount,diagnosticPopulation:population,diagnosticBox:first.box,diagnosticDynamics:'assembled',pressureSolver:'pbf',ipbfBoundaryMode:'collision_only',cohesionModel:'legacy',truthScene:'multi_regime_playground',rendererMode:'screen_space_refraction',colorMode:'phase',viscosityScaling:'nominal_diffusion',particleRepulsionStrength:.62,densityIterations,capillaryStrength:.48,freeFlightViscosityBoost:.30,...materialControls,substeps:1,adaptiveDensity:false,densityCellRejection:true,uniformVolumeDensityKernel:true,energyDiagnosticsMode:'disabled'}};
+  solver:{supportContactRoute:SCENE_LIQUID_SUPPORT_ROUTE,particleCount,diagnosticPopulation:population,diagnosticBox:first.box,diagnosticDynamics:'assembled',pressureSolver:'pbf',ipbfBoundaryMode:'collision_only',cohesionModel:'legacy',truthScene:'multi_regime_playground',rendererMode:'screen_space_refraction',colorMode:'phase',viscosityScaling:'nominal_diffusion',particleRepulsionStrength:.62,densityIterations,capillaryStrength:.48,freeFlightViscosityBoost:.30,...materialControls,substeps:1,adaptiveDensity:false,densityCellRejection:true,uniformVolumeDensityKernel:true,energyDiagnosticsMode:'disabled'}};
 }
 
 export async function createAuthoredWaterHost(options) {
@@ -25,7 +26,7 @@ export async function createAuthoredWaterHost(options) {
  }
  const initial=authoredDropSetup(records,options.setup);
  const {createFluidViewportHost}=await import('./fluid-viewport-host.mjs');
- const finite=await createFiniteFluidHost({setup:initial,device:options.device,isCurrent:options.isCurrent,redraw:options.redraw,
+ const finite=await createFiniteFluidHost({setup:initial,device:options.device,isCurrent:options.isCurrent,redraw:options.redraw,readColliders:options.readColliders??(()=>[]),
   createSolver:createWebGPUFingerFluidSolver,createPresentation:solver=>createFluidViewportHost({...options,solver})});
  return {...finite,
   get paused(){return finite.paused;},
