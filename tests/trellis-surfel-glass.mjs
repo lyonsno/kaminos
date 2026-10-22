@@ -2,6 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createSurfelGlass} from '../trellis-surfel-glass.mjs';
+test('plain and normal views isolate shape without transmission or source tint',()=>{
+ const c=createSurfelGlass(new Float32Array([0,0,0,0,0,1,1,.5,0,.1,.2,.3]),{count:1,stride:12,radius:.01});
+ for(const mode of ['plain','normals']){c.set({mode});assert.equal(c.read().mode,mode);assert.equal(c.root.children[0].material.transmission,0);}
+ c.dispose();
+});
 test('surfel material rows remain instance-owned with transparent and opaque populations',()=>{
  const data=new Float32Array([0,0,0,0,0,1,1,.5,0,.1,.2,.3, 1,0,0,0,1,0,0,1,0,0,.8,1]);
  const c=createSurfelGlass(data,{count:2,stride:12,radius:.01});

@@ -23,6 +23,10 @@ try{
  assert.deepEqual(report.glass[0].pixel,report.glass[1].pixel,'equal reconstructed walls must shade equally across source opacity threshold');
  assert.deepEqual(report.glass[2].pixel,report.glass[3].pixel,'duplicate wall samples must not change final glass');
  assert.ok(report.glass[0].pixel[0]>0,'blank final glass');
+ report.diagnostics=await page.evaluate(()=>window.runDiagnosticWitness());
+ assert.equal(report.diagnostics.length,8);
+ assert.deepEqual(report.diagnostics[1].pixel,report.diagnostics[5].pixel,'same raw normals must retain their diagnostic encoding');
+ for(const r of report.diagnostics)assert.ok(r.pixel[3]>0&&r.pixel.some((v,i)=>i<3&&v>0&&v<255),'missing diagnostic surface');
  assert.equal(report.errors.length,0);report.ok=true;
 }catch(error){report.ok=false;report.error=String(error);}finally{await browser?.close();writeFileSync(resolve(output,'report.json'),JSON.stringify(report,null,2));}
 console.log(JSON.stringify(report));if(!report.ok)process.exitCode=1;

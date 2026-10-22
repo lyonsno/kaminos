@@ -1,11 +1,11 @@
 import {Group,InstancedMesh,CircleGeometry,InstancedBufferAttribute,Matrix4,Quaternion,Vector3,DoubleSide} from './lib/three.core.js';
 import {MeshPhysicalNodeMaterial} from './lib/three.webgpu.js';
-import {attribute,vec4} from './lib/three.tsl.js';
+import {attribute,vec4,vec3,normalView} from './lib/three.tsl.js';
 import {createSurfelSurface} from './surfel-surface-reconstruction.mjs';
 
 export function createSurfelGlass(data,meta){
  if(meta.stride!==12||!Number.isInteger(meta.count)||meta.count<1||data.length!==meta.count*12||!data.every(Number.isFinite)||!(meta.radius>0))throw Error('Invalid surfel field payload');
- const root=new Group();root.name='Raw TRELLIS bottle surfels';
+ const root=new Group();root.name='Raw TRELLIS surfels';
  const populations=[[],[]];for(let i=0;i<meta.count;i++)populations[data[i*12+11]<.98?1:0].push(i);
  const materials=[];let state={mode:'glass',ior:1.45,thickness:.06,reconstruction:true};
  for(let p=0;p<2;p++){
@@ -36,6 +36,7 @@ export function createSurfelGlass(data,meta){
   for(const {material,transmissive} of materials){
   material.colorNode=state.reconstruction?surface.color:vec4(attribute('surfelColor','vec3'),1);
   material.normalNode=state.reconstruction?surface.normal:null;
+  material.maskNode=state.reconstruction?surface.mask:null;
   material.metalnessNode=state.reconstruction?surface.metallic:attribute('surfelMetallic','float');
   material.roughnessNode=state.reconstruction?surface.roughness:attribute('surfelRoughness','float');
   const opacity=state.reconstruction?surface.opacity:attribute('surfelOpacity','float');
@@ -44,9 +45,11 @@ export function createSurfelGlass(data,meta){
   material.transmissionNode=material.transmission?opacity.oneMinus():null;
   material.opacityNode=state.mode==='opacity'?opacity:null;
   material.alphaHash=state.mode==='opacity';material.ior=state.ior;material.thickness=state.thickness;material.needsUpdate=true;
+  material.fragmentNode=state.mode==='normals'?vec4((state.reconstruction?surface.normal:normalView).normalize().mul(.5).add(.5),1):null;
+  if(state.mode==='plain'){material.colorNode=vec4(vec3(.5),1);material.metalnessNode=null;material.roughnessNode=null;material.metalness=0;material.roughness=.8;}
  }}apply();
  return {root,inspectSurface:(x,y)=>surface.inspect(x,y),read:()=>({...state,count:meta.count,route:'oriented-raw-field-surfels',radius:meta.radius,footprintScale:footprint,surface:surface.read()}),set(patch){
-  const next={...state,...patch};if(!['glass','opaque','opacity'].includes(next.mode)||!Number.isFinite(next.ior)||next.ior<1||next.ior>2.5||!Number.isFinite(next.thickness)||next.thickness<0||next.thickness>1)throw Error('Invalid surfel optics');
+  const next={...state,...patch};if(!['glass','opaque','opacity','plain','normals'].includes(next.mode)||!Number.isFinite(next.ior)||next.ior<1||next.ior>2.5||!Number.isFinite(next.thickness)||next.thickness<0||next.thickness>1)throw Error('Invalid surfel optics');
   if(typeof next.reconstruction!=='boolean')throw Error('Invalid surface reconstruction');
   state=next;apply();return this.read();
  },dispose(){surface.dispose();for(const mesh of root.children){mesh.geometry.dispose();mesh.material.dispose();}}};

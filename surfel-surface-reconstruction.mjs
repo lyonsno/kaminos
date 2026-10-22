@@ -1,6 +1,6 @@
 import {Scene,InstancedMesh,RenderTarget,FloatType,HalfFloatType,NearestFilter,DoubleSide,CustomBlending,OneFactor,AddEquation,Color,Vector2,Vector3} from './lib/three.core.js';
 import {MeshBasicNodeMaterial,TSL} from './lib/three.webgpu.js';
-const {Fn,If,Discard,attribute,vec4,vec3,float,uv,texture,screenUV,positionView,normalViewGeometry,faceDirection,uniform}=TSL;
+const {Fn,If,Discard,attribute,vec4,vec3,float,bool,uv,texture,screenUV,positionView,normalViewGeometry,faceDirection,uniform}=TSL;
 
 // Reconstruct attributes of the nearest wall, not a stack of independently transparent discs.
 // The source geometry still supplies visibility/depth; this pass never changes source rows.
@@ -47,7 +47,7 @@ export function createSurfelSurface(meshes,radius){
    key=next;updates++;
   }finally{renderer.setRenderTarget(oldTarget,oldFace,oldMip);renderer.setMRT(oldMRT);renderer.setRenderObjectFunction(oldFunction);renderer.setClearColor(oldClear,oldAlpha);renderer.autoClear=oldAuto;renderer.opaque=oldOpaque;renderer.transparent=oldTransparent;busy=false;}
  }
- return {prepare,invalidate(){key='';},color:Fn(()=>{reject();return vec4(color,1);})(),normal,opacity:parameters.x,metallic:parameters.y,roughness:parameters.z,
+ return {prepare,invalidate(){key='';},mask:Fn(()=>{reject();return bool(true);})(),color:Fn(()=>{reject();return vec4(color,1);})(),normal,opacity:parameters.x,metallic:parameters.y,roughness:parameters.z,
   read:()=>({updates,width:nearest.width,height:nearest.height,depthTolerance:tolerance.value,route:'nearest-wall-normalized-attributes'}),
   async inspect(x,y){if(!lastRenderer||disposed)throw Error('Surface has not rendered or was disposed');if(!Number.isInteger(x)||!Number.isInteger(y)||x<0||y<0||x>=nearest.width||y>=nearest.height)throw Error('Surface sample outside the buffer');return Promise.all(targets.map(async t=>({type:t.texture.type,values:Array.from(await lastRenderer.readRenderTargetPixelsAsync(t,x,y,1,1))})));},
   dispose(){disposed=true;for(const t of targets)t.dispose();for(const m of materials)m.dispose();for(const s of scenes)for(const m of s.children)m.dispose();}
