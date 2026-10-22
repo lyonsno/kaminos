@@ -9,6 +9,13 @@ export const KLEIN_PUBLISHED_WEIGHTS='https://huggingface.co/BasinShapers/flux2-
 export const KLEIN_IMAGE_SIZES=[256,384,512,768,1024];
 // Transformer weight levels (models/flux2-klein package): the text encoder, decoder and tokenizer are shared,
 // so a level change swaps only the transformer. 4-bit is the package's full level ("Mint").
+// Landscape and portrait keep the selected size as the long side; the short side is 9/16 of it, to a multiple of 16
+// (the pipeline's requirement).
+export const KLEIN_ASPECTS=Object.freeze(['square','landscape','portrait']);
+export function kleinImageDimensions(size,aspect='square'){
+  const short=Math.round(size*9/16/16)*16;
+  return aspect==='landscape'?{width:size,height:short}:aspect==='portrait'?{width:short,height:size}:{width:size,height:size};
+}
 export const KLEIN_WEIGHT_LEVELS=Object.freeze({'4-bit':'dit','3-bit':'dit-q3','2-bit':'dit-q2'});
 const KLEIN_LIMITS=['maxBufferSize','maxStorageBufferBindingSize','maxStorageBuffersPerShaderStage','maxComputeWorkgroupStorageSize'];
 
@@ -203,12 +210,14 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
       if(!active||!state.canStop||abort.signal.aborted)return false;
       abort.abort(new DOMException('Image generation stopped by operator','AbortError'));set({canStop:false,status:'stopping',progress:'Stopping… waiting for the current GPU work to settle.'});return true;
     },
-    async run({prompt,seed,size=512,level='4-bit'}){
+    async run({prompt,seed,size=512,level='4-bit',aspect='square'}){
       if(active)throw Error('Image generation is already running');
       if(pendingImage)throw Error('Save the generated image before generating another');
       const text=String(prompt||'').trim();if(!text)throw Error('Describe the image to generate');
       if(!KLEIN_IMAGE_SIZES.includes(size))throw Error('Image size must be 256, 384, 512, 768 or 1024');
       if(!Object.hasOwn(KLEIN_WEIGHT_LEVELS,level))throw Error('Weights level must be 4-bit, 3-bit or 2-bit');
+      if(!KLEIN_ASPECTS.includes(aspect))throw Error('Aspect must be square, landscape or portrait');
+      const {width,height}=kleinImageDimensions(size,aspect);
       const reason=unavailable();if(reason)throw Error(reason);
       const scene=context();if(!scene.prototype?.foregroundGpuContext||!scene.host||!scene.handoff)throw Error('Image generation needs the Kaminos shared GPU device and its frame owner.');
       active=true;abort=new AbortController();let phase='weights',previous=null,handoff=null,frameRun=null,route=null,control=null,session=null;
@@ -240,7 +249,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         frameRun=app?await app.beginRun(runId,{routeId:KLEIN_AUTHORING_ROUTE_ID}):await foreground.beginRun(runId);
         route=await session.registerRoute({routeId:KLEIN_AUTHORING_ROUTE_ID,runtimeOptions:{runtimeLabel:'flux2-klein',foregroundOpportunities:frameRun.foregroundOpportunities}});
         control=core.createWebGpuInferenceControl({queue:context().sharedGpu.device.queue,signal:abort.signal,withForeground:frameRun.withForeground});
-        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width:size,height:size,textLength:'fit16',
+        const job=route.enqueue({jobId:runId,execute:invocation=>pipeline.generate({prompt:text,seed,width,height,textLength:'fit16',
           onPhase:value=>{if(!abort.signal.aborted)set(value==='decode'?{stage:'Decoding',percent:null,progress:'Decoding the image…'}:value==='text'?{stage:'Reading prompt',percent:null,progress:'Reading the prompt…'}:{progress:'Swapping weights in from the browser cache…'});},
           onStep:(i,n)=>{if(!abort.signal.aborted)set({stage:'Denoising',percent:i/n*100,progress:`Denoising, step ${i} of ${n}`});},
           schedule:{runtime:route.runtime,invocation,control,signal:abort.signal,targetDutyMs:12,maxInFlight:2,withForeground:frameRun.withForeground}})});
@@ -249,7 +258,7 @@ export function createKleinAuthoringImageGeneration({context,deliver,weights,
         const image=completion.output;
         // Completed pixels win a stop race; they are saved like any other result.
         phase='persistence';
-        const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
+        const provenance={schema:'kaminos.image-generation.v1',route:KLEIN_AUTHORING_ROUTE_ID,model:'FLUX.2 [klein] 4B',prompt:text,seed,width:image.width,height:image.height,weights:base,aspect,weightsLevel:level,transformer:`${base}/${KLEIN_WEIGHT_LEVELS[level]}`,timings:image.timings};
         pendingImage={image,provenance,text,seed};state.pending={name:kleinImageName(text,seed),provenance};
         return await savePending();
       }catch(error){
@@ -271,7 +280,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   const container=document.getElementById('asset-generate');if(!container)throw Error('Generate panel is missing');
   const section=document.createElement('section');section.id='asset-text-image';
   section.innerHTML=`<p>Text → image · FLUX.2 klein</p><textarea id="asset-prompt" rows="2" spellcheck="true" placeholder="One object, e.g. a weathered bronze lantern" aria-label="Image prompt"></textarea>
-    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
+    <div class="asset-text-image-actions"><button type="button" id="asset-text-run">Generate image</button><label>Size <select id="asset-image-size" aria-label="Image size"><option value="256">256 (fastest)</option><option value="384">384</option><option value="512" selected>512</option><option value="768">768 (slower)</option><option value="1024">1024 (slowest)</option></select></label><label>Shape <select id="asset-image-aspect" aria-label="Image shape"><option value="square" selected>Square</option><option value="landscape">Landscape 16:9</option><option value="portrait">Portrait 9:16</option></select></label><label>Weights <select id="asset-image-level" aria-label="Transformer weights"><option value="4-bit" selected>4-bit (full)</option><option value="3-bit">3-bit</option><option value="2-bit">2-bit (jankiest)</option></select></label><label>Seed <input id="asset-seed" type="number" min="0" step="1" aria-label="Seed"></label><button type="button" id="asset-reseed" title="New seed" aria-label="New seed">⟳</button><button type="button" id="asset-text-stop" hidden>Stop</button><button type="button" id="asset-text-retry" hidden>Retry saving image</button></div>
     <div id="asset-text-status" role="status"></div><progress id="asset-text-progress" max="100" aria-label="Image generation progress" hidden></progress>`;
   container.prepend(section);
   // Looked up in the document: the Generate layout may move these controls out of this section.
@@ -292,7 +301,7 @@ export function installKleinImageGeneration({document,controller,assets,meshBusy
   byId('asset-text-retry').onclick=()=>controller.retryPersistence().catch(error=>{byId('asset-text-status').textContent=error.message;});
   const run=()=>{
     const seed=Math.max(0,Math.floor(Number(seedInput.value)||0));
-    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
+    controller.run({prompt:byId('asset-prompt').value,seed,size:Number(byId('asset-image-size').value),level:byId('asset-image-level').value,aspect:byId('asset-image-aspect').value}).then(entry=>{if(entry)reseed();}).catch(error=>{byId('asset-text-status').textContent=error.message;});
   };
   byId('asset-text-run').onclick=run;
   byId('asset-prompt').addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();if(!byId('asset-text-run').disabled)run();}});

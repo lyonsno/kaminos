@@ -97,7 +97,7 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  assert.equal(first.name,'klein-a-bronze-lantern-s42.png');
  assert.equal(h.delivered.length,1);assert.equal(h.delivered[0].file.type,'image/png');
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),h.delivered[0].provenance,'the stored file itself carries the provenance');
- assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
+ assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',aspect:'square',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
  assert.ok(h.log.includes('owner:klein'),'denoising runs while klein owns the kiln foreground');
  assert.equal(h.handoff.owner(),'sf3d','after the image the kiln returns to SF3D so mesh generation keeps interleaving frames');
  assert.ok(h.log.indexOf('finish')>h.log.indexOf('drain'),'route drains before the foreground run finishes');
@@ -272,4 +272,16 @@ test('a first run at 3-bit loads the 3-bit transformer directly, without loading
  await h.service.run({prompt:'lantern',seed:1,level:'3-bit'});
  assert.equal(h.pipelines[0].transformerUrl,'/klein-weights/dit-q3');assert.deepEqual(h.swaps,[]);
  assert.equal(h.delivered[0].provenance.weightsLevel,'3-bit');
+});
+
+test('landscape and portrait keep the selected size as the long side and crop the short side to 16:9, a multiple of 16',async()=>{
+ const h=harness();
+ await h.service.run({prompt:'lantern',seed:1,size:512,aspect:'landscape'});
+ await h.service.run({prompt:'lantern',seed:2,size:384,aspect:'portrait'});
+ await h.service.run({prompt:'lantern',seed:3,size:1024,aspect:'landscape'});
+ await h.service.run({prompt:'lantern',seed:4,size:256});
+ assert.deepEqual(h.generations.map(g=>[g.width,g.height]),[[512,288],[224,384],[1024,576],[256,256]]);
+ assert.deepEqual(h.delivered.map(d=>d.provenance.aspect),['landscape','portrait','landscape','square']);
+ await assert.rejects(h.service.run({prompt:'lantern',seed:5,aspect:'panorama'}),/square, landscape or portrait/);
+ assert.equal(h.generations.length,4,'an unknown aspect is refused before GPU work');
 });
