@@ -1812,34 +1812,14 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-common-gas-transport" data-volume-settings-param="volume_common_gas_transport">
       <span class="slider-val" id="volume-common-gas-transport-val">legacy split</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
-      <span class="slider-label">Master</span>
-      <input type="checkbox" id="volume-procedural-detail-forces" checked>
-      <span class="force-contribution-gloss">Gates the four procedural detail forces below (micro-carrier, shred, fine breakup and its localization). Buoyancy, wind, swirl, lateral excitation, confinement and expansion are not affected.</span>
-      <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
+    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Swirl jostle</span>
+      <input type="range" id="volume-swirl-jostle" data-volume-settings-param="volume_swirl_jostle" min="0" max="2" step="any" value="1">
+      <span class="slider-val" id="volume-swirl-jostle-val">1.00</span>
     </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-micro-carrier">
-      <span class="slider-label">Micro-carrier</span>
-      <input type="checkbox" id="volume-force-micro-carrier" data-volume-settings-param="volume_force_micro_carrier" checked>
-      <span class="force-contribution-gloss">Returns transported microstructure to velocity; feeds articulated lateral motion.</span>
-      <span class="slider-val" id="volume-force-micro-carrier-val">on</span>
-    </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-interface-shred">
-      <span class="slider-label">Interface shred</span>
-      <input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>
-      <span class="force-contribution-gloss">Returns material boundaries and local curl to velocity; feeds interface opening and roughness.</span>
-      <span class="slider-val" id="volume-force-interface-shred-val">on</span>
-    </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-fine-breakup">
-      <span class="slider-label">Fine breakup</span>
-      <input type="checkbox" id="volume-force-fine-breakup" data-volume-settings-param="volume_force_fine_breakup" checked>
-      <span class="force-contribution-gloss">Returns heat, smoke, source and curl to velocity; can disturb coupled reaction regimes.</span>
-      <span class="slider-val" id="volume-force-fine-breakup-val">on</span>
-    </div>
-    <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-fine-breakup-localization">
-      <span class="slider-label">Fine breakup localization</span>
+    <div class="slider-row" data-volume-visual-cost-knob="procedural-excitation">
+      <span class="slider-label">Swirl jostle focus</span>
       <input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0.01" value="0">
-      <span class="force-contribution-gloss">0 keeps legacy broad support; 1 confines Fine breakup to reaction-front, material-interface, and curl-shear support.</span>
       <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
@@ -2867,7 +2847,7 @@ import * as THREE from 'three';
 import { parsePlyPointCloud, createSplatPointSubsetGeometry, replaceSplatPointGeometry, splatPointInsideCrop, chooseSplatCropFrame } from './splat-point-cloud.mjs';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
-import { applyVolumeControlDescriptions } from './volume-control-descriptions.mjs';
+import { applyVolumeControlDescriptions, volumeControlTooltip } from './volume-control-descriptions.mjs';
 applyVolumeControlDescriptions(document);
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
@@ -3095,6 +3075,7 @@ function syncKilnCollisionControl(collision=volumePrototype?.debugState?.().scen
 
 function installKilnCollisionControl(host) {
   const panel=document.createElement('section');panel.className='flame-collision-controls';panel.innerHTML='<h3>Collision</h3><label class="slider-row"><span class="slider-label">Scene collisions</span><input type="checkbox" id="kiln-collision-enabled"></label><p id="kiln-collision-status" class="flame-scope" aria-live="polite"></p><label class="slider-row"><span class="slider-label">Show solid voxels</span><input type="checkbox" id="kiln-collision-voxels"></label><label class="slider-row"><span class="slider-label">Voxel resolution</span><output id="kiln-voxel-resolution" class="flame-scope"></output></label>';
+  for (const input of panel.querySelectorAll('input[id]')) { const text = volumeControlTooltip(input.id); if (text) { input.title = text; input.closest('.slider-row')?.querySelector('.slider-label')?.setAttribute('title', text); } }
   host.append(panel);
   document.getElementById('kiln-collision-voxels').onchange=event=>{collisionVoxelVisible=event.target.checked;syncCollisionVoxelView();window._kaminosDirty?.();};
   const edits=scenePlacementTools.edits;
@@ -17270,13 +17251,10 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeScene', 'volume_scene'],
   ['artisticSwirl', 'volume_artistic_swirl'],
   ['phasedSway', 'volume_phased_sway'],
-  ['proceduralDetailForces', 'volume_procedural_detail_forces'],
+  ['swirlJostle', 'volume_swirl_jostle'],
   ['fineBreakupLocalization', 'volume_fine_breakup_localization'],
   ['commonGasTransport', 'volume_common_gas_transport'],
   ['density', 'volume_density'],
-  ['fire', 'volume_fire'],
-  ['absorption', 'volume_absorption'],
-  ['smoke', 'volume_smoke'],
   ['curl', 'volume_curl'],
   ['microdetail', 'volume_microdetail'],
   ['interfaceShred', 'volume_interface_shred'],
@@ -17284,7 +17262,6 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['projection', 'volume_projection'],
   ['speed', 'volume_speed'],
   ['fireScale', 'volume_fire_scale'],
-  ['detailScale', 'volume_detail_scale'],
   ['plumeHeight', 'volume_plume_height'],
   ['windStrength', 'volume_wind_strength'],
   ['windAngle', 'volume_wind_angle'],
@@ -17309,7 +17286,6 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['volumeResidualStrength', 'volume_residual_strength'],
   ['volumeResidualFeatureDebug', 'volume_residual_feature_debug'],
   ['lookFreeze', 'volume_look_freeze'],
-  ['pyroCarrierView', 'volume_pyro_carrier_view'],
   ['pressureMode', 'volume_pressure_mode'],
   ['pressureSolver', 'volume_pressure_solver'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
@@ -18666,12 +18642,10 @@ function readVolumeControls({quality=viewportDisplay.quality}={}) {
     ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
-    proceduralDetailForces: document.getElementById('volume-procedural-detail-forces').checked,
-    detailForceContributions: {
-      micro: document.getElementById('volume-force-micro-carrier').checked,
-      shred: document.getElementById('volume-force-interface-shred').checked,
-      fine: document.getElementById('volume-force-fine-breakup').checked,
-    },
+    // The procedural-force switches were retired 2026-10-22: Microdetail and
+    // Shred are their own switches; Swirl jostle sets the fine force's strength.
+    proceduralDetailForces: true,
+    swirlJostle: parseFloat(document.getElementById('volume-swirl-jostle').value),
     fineBreakupLocalization: parseFloat(document.getElementById('volume-fine-breakup-localization').value),
     commonGasTransport: document.getElementById('volume-common-gas-transport').checked,
     volumeExposure: 1,
@@ -19046,10 +19020,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-scene-val').textContent = 'Flame';
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
-  document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
-  document.getElementById('volume-force-micro-carrier-val').textContent = c.detailForceContributions.micro ? 'on' : 'off';
-  document.getElementById('volume-force-interface-shred-val').textContent = c.detailForceContributions.shred ? 'on' : 'off';
-  document.getElementById('volume-force-fine-breakup-val').textContent = c.detailForceContributions.fine ? 'on' : 'off';
+  document.getElementById('volume-swirl-jostle-val').textContent = c.swirlJostle.toFixed(2);
   document.getElementById('volume-fine-breakup-localization-val').textContent = `${c.fineBreakupLocalization.toFixed(2)}${c.fineBreakupLocalization === 0 ? ' broad' : ' localized'}`;
   {
     const transportConfig = resolveTransportConfig(c);
@@ -20198,9 +20169,6 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_phased_sway')) {
     setVolumeControlValue('volume-phased-sway', params.get('volume_phased_sway'));
   }
-  if (params.has('volume_procedural_detail_forces')) {
-    setVolumeControlValue('volume-procedural-detail-forces', params.get('volume_procedural_detail_forces'));
-  }
   for (const [id, param] of [
     ['volume-raymarch-mode', 'volume_raymarch_mode'],
     ['volume-optical-tolerance', 'volume_optical_tolerance'],
@@ -20208,9 +20176,7 @@ async function initKaminosVolumeRoute() {
     ['volume-ray-noise-animated', 'volume_ray_noise_animated'],
     ['volume-quadrature-jitter', 'volume_quadrature_jitter'],
     ['volume-flame-priority', 'volume_flame_priority'],
-    ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
-    ['volume-force-interface-shred', 'volume_force_interface_shred'],
-    ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
+    ['volume-swirl-jostle', 'volume_swirl_jostle'],
     ['volume-pressure-solver', 'volume_pressure_solver'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
@@ -20663,7 +20629,7 @@ async function initKaminosVolumeRoute() {
     control.addEventListener('blur', confirm);
   }
 
-  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
+  for (const id of ['volume-scene', 'volume-resolution', 'emitter-assay-family', 'volume-artistic-swirl', 'volume-phased-sway', 'volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-density', 'volume-curl', 'volume-microdetail', 'volume-interface-shred', 'volume-fire-licks', 'volume-projection', 'volume-speed', 'volume-steps', 'volume-adaptive-rays', 'volume-occupancy-skip', 'volume-fire-scale', 'volume-plume-height', 'volume-wind-strength', 'volume-wind-angle', 'volume-wind-height', 'volume-render-scale', 'volume-residual-mode', 'volume-residual-model-url', 'volume-residual-strength', 'volume-residual-feature-debug', 'volume-input-radius', 'volume-flow-rate', 'volume-grid-overlay', 'volume-flow-debug', 'volume-oracle-activity-cue', 'volume-oracle-activity-display', 'volume-oracle-activity-curl-noise', 'volume-oracle-activity-vorticity', 'volume-oracle-activity-material', 'volume-look-freeze', 'volume-pyro-fire-lock', 'volume-pressure-mode', 'volume-pressure-tier-overlay', 'volume-pressure-tier-lower-max', 'volume-pressure-tier-hero-min', 'volume-pressure-tier-hero-max', 'volume-canonical-spread', 'volume-canonical-centerline', 'volume-canonical-body-balance']) {
     document.getElementById(id)?.addEventListener('input', syncControls);
     document.getElementById(id)?.addEventListener('change', syncControls);
   }

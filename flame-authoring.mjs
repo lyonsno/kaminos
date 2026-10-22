@@ -146,7 +146,7 @@ export const FLAME_PROPERTY_GROUPS = [
   ] },
   { name:'Carriers & added forces', view:'motion', fields:[
     ['volume-microdetail','Microdetail'], ['volume-interface-shred','Shred'],
-    ['volume-fire-licks','Fire licks'], ['volume-fire-scale','Carrier contour scale'],
+    ['volume-fire-licks','Fire licks'], ['volume-swirl-jostle','Swirl jostle'], ['volume-fine-breakup-localization','Swirl jostle focus'], ['volume-fire-scale','Carrier contour scale'],
   ] },
   { name:'Emitter & feed', scope:'emitter', open:true, fields:[
     ['volume-emitter-source-law','Source law'],

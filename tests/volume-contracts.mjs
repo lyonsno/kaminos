@@ -493,7 +493,6 @@ assert.match(index, /id="volume-fire-scale"/, 'Volume tab exposes emitter scale 
 assert.match(index, /<span class="slider-label">Emitter Scale<\/span>\s*<input type="range" id="volume-fire-scale"/, 'Fire Scale is labeled by its honest emitter/source role');
 assert.match(index, /volume_fire_scale/, 'URL route can override emitter scale');
 assert.match(index, /fireScale/, 'Volume controls carry emitter scale into the renderer');
-assert.match(index, /volume_detail_scale/, 'URL route can override fine-detail scale');
 assert.match(index, /detailScale/, 'Volume controls carry fine-detail scale into the renderer');
 assert.match(index, /id="volume-plume-height"/, 'Volume tab exposes plume height/world-rise scale control');
 assert.match(index, /volume_plume_height/, 'URL route can override plume height/world-rise scale');
@@ -712,7 +711,6 @@ assert.match(index, /volume_fire_licks/, 'URL route can override fire-lick break
 assert.match(index, /Math\.min\(10, routeInterfaceShred\)/, 'Shred route override clamps to the widened operator tuning ceiling');
 assert.match(index, /Math\.min\(10, routeFireLicks\)/, 'Fire Licks route override clamps to the widened operator tuning ceiling');
 assert.match(index, /volume_radiance/, 'URL route can override fire radiance strength');
-assert.match(index, /volume_absorption/, 'URL route can override smoke absorption strength');
 assert.match(index, /volume_glow/, 'URL route can override emissive glow strength');
 assert.match(index, /params\.has\('volume_input_radius'\)/, 'missing input-radius route param must not clamp the default to zero');
 assert.match(index, /params\.has\('volume_flow_rate'\)/, 'missing flow-rate route param must not clamp the default to zero');

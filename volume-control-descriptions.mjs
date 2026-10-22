@@ -11,6 +11,8 @@
 // effect changes, change its entry here.
 export const VOLUME_CONTROL_KINDS = Object.freeze(['physical', 'proxy', 'artistic', 'quality', 'conditional', 'diagnostic', 'capture', 'playback', 'inert']);
 export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
+  "volume-swirl-jostle": { kind: "artistic", activeWhen: "always (0 is off)",
+    tooltip: "Authored force that shoves gas sideways across its own swirl wherever there is heat, smoke or fresh source, making the plume ragged at small scale. Stronger with Curl. 0 is off, 1 is the original force, 2 doubles it." },
   "emitter-assay-family": { kind: "conditional", activeWhen: "Shape matters under Filled volume, Shallow primary and Inflow boundary. Under Immersed source the shape is ignored (any non-Cluster family gives the same disc slab) and Cluster is refused.",
     tooltip: "Shape of the fire source: Cluster is the old procedural bowl; the others are analytic shapes sized by Input Radius. Ignored under Immersed source (which always uses a disc and refuses Cluster)." },
   "volume-emitter-source-law": { kind: "conditional", activeWhen: "Emitter is not Cluster (under Cluster, Filled/Shallow/Inflow change nothing and Immersed is refused with an error)",
@@ -93,16 +95,8 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
     tooltip: "Spins hot gas around the box's centre line. An authored stir, not part of the fluid solve; its strength grows with heat and with the Curl slider." },
   "volume-phased-sway": { kind: "artistic", activeWhen: "always",
     tooltip: "Feeds part of each step's sideways motion back in, so smoky or hot gas wobbles more. An authored effect, stronger with Curl." },
-  "volume-procedural-detail-forces": { kind: "artistic", activeWhen: "always",
-    tooltip: "Turns the procedural detail forces (micro-carrier, shred, fine breakup) on or off. Buoyancy, wind, swirl and confinement are unaffected." },
-  "volume-force-micro-carrier": { kind: "artistic", activeWhen: "Master on (both rows hidden, both default on)",
-    tooltip: "Lets the Microdetail slider push the gas, steered by the hidden detail carriers. An authored force, not physics." },
-  "volume-force-interface-shred": { kind: "artistic", activeWhen: "Master on (both rows hidden, both default on)",
-    tooltip: "Lets the Shred slider tear at the edges of the smoke and hot gas, using the local spin. An authored force, not physics." },
-  "volume-force-fine-breakup": { kind: "artistic", activeWhen: "Master on (both rows hidden, both default on)",
-    tooltip: "Adds small curl-driven jostling where heat, smoke or the source are, scaled by the Curl slider. An authored force, not physics." },
-  "volume-fine-breakup-localization": { kind: "conditional", activeWhen: "Master and Fine breakup on (all three rows hidden)",
-    tooltip: "Confines the fine-breakup jostling to flame fronts and smoke edges instead of the whole plume. Does nothing while that force is off." },
+  "volume-fine-breakup-localization": { kind: "conditional", activeWhen: "Swirl jostle above 0",
+    tooltip: "Where Swirl jostle acts: 0 spreads it through the whole hot, smoky plume; 1 confines it to flame fronts, smoke edges and shearing swirl. Does nothing while Swirl jostle is 0." },
   "volume-common-gas-transport": { kind: "conditional", activeWhen: "Advection = Legacy or Undamped (MacCormack forces it on)",
     tooltip: "On: heat, smoke and fuel move exactly with the gas. Off: they slide upward faster than the gas (legacy). MacCormack turns this on by itself." },
   "volume-pressure-solver": { kind: "physical", activeWhen: "always",
@@ -131,10 +125,10 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
     tooltip: "Debug view: swaps the rendered fire for a diagnostic field such as heat, reaction or curl. Does not change the simulation. Set to off for the real look." },
   "volume-curl": { kind: "proxy", activeWhen: "always",
     tooltip: "Turns up swirl-keeping confinement, the heat push and several authored stirring forces together. A bundle of gains, not one physical quantity." },
-  "volume-microdetail": { kind: "conditional", activeWhen: "moves the flow when Master + Micro-carrier forces are on (rows hidden, default on); otherwise only weak indirect couplings",
-    tooltip: "Not drawn. While the hidden detail forces are on (default) it adds an authored push that roughens the flow; otherwise it does almost nothing." },
-  "volume-interface-shred": { kind: "conditional", activeWhen: "moves the flow when Master + Interface-shred forces are on (rows hidden, default on); otherwise only weak indirect couplings",
-    tooltip: "Not drawn. While the hidden shred force is on (default) it tears at smoke and heat edges; otherwise it does almost nothing." },
+  "volume-microdetail": { kind: "artistic", activeWhen: "always (0 is off)",
+    tooltip: "Authored push that roughens the flow, steered by small transported detail carriers near the source and smoke. Not drawn under Physics; it changes only the motion. 0 turns the force off." },
+  "volume-interface-shred": { kind: "artistic", activeWhen: "always (0 is off)",
+    tooltip: "Authored force that tears at the boundary between smoke or hot gas and clear air, along the local swirl, opening the edges into ragged tongues. Not drawn under Physics. 0 turns the force off." },
   "volume-fire-licks": { kind: "proxy", activeWhen: "always",
     tooltip: "Not drawn. Under the Authored reaction it slightly speeds burning and soot making; under Reactant it does almost nothing." },
   "volume-projection": { kind: "proxy", activeWhen: "always",
@@ -200,7 +194,7 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   "volume-physical-soot-burnout-kelvin": { kind: "conditional", activeWhen: "reaction law = Reactant candidate and Soot burnout > 0",
     tooltip: "Center temperature of the soot-removal ramp (150 K either side). Higher lets soot survive to hotter temperatures; lower permits removal in cooler regions. Needs a nonzero burnout rate and oxygen. Uses the same Kelvin per heat conversion as thermal emission." },
   "volume-appearance-model": { kind: "conditional", activeWhen: "Compact applies only under the Reactant reaction law (otherwise falls back to Authored with reason compact-3-requires-the-reactant-law)",
-    tooltip: "Simulation storage test (Reactant law only). Compact keeps 3 detail channels instead of 9. The Physics look does not draw these channels, so changes show up mainly in motion if detail forces are on." },
+    tooltip: "Simulation storage test (Reactant law only). Compact keeps 3 detail channels instead of 9. The Physics look does not draw these channels, so changes show up mainly in motion, through Microdetail and Shred." },
   "volume-raymarch-mode": { kind: "quality", activeWhen: "always",
     tooltip: "How rays integrate the volume. New adaptive spends samples where the image needs them, Standard samples evenly, and Old adaptive is the earlier, faster heuristic." },
   "volume-optical-tolerance": { kind: "conditional", activeWhen: "Ray marcher = New adaptive (disabled otherwise)",
@@ -304,8 +298,14 @@ export const VOLUME_CONTROL_DESCRIPTIONS = Object.freeze({
   "volume-flow-kernel-coherence": { kind: "conditional", activeWhen: "Kernel strength above 0",
     tooltip: "Stretches the flow smoothing further where the flow swirls. Only works when Kernel strength is above 0." },
 });
+// Fire controls that are not part of a saved basin (scene state and views).
+export const VOLUME_SCENE_CONTROL_DESCRIPTIONS = Object.freeze({
+  'kiln-collision-enabled': 'Turns the scene objects marked as colliders into solid cells in the fire grid, so the gas flows around them instead of through them. Saved with the scene.',
+  'kiln-collision-voxels': 'Shows which grid cells the colliders filled, as an overlay. A view only; the simulation is unchanged.',
+});
+
 export function volumeControlTooltip(id) {
-  return VOLUME_CONTROL_DESCRIPTIONS[id]?.tooltip ?? null;
+  return VOLUME_CONTROL_DESCRIPTIONS[id]?.tooltip ?? VOLUME_SCENE_CONTROL_DESCRIPTIONS[id] ?? null;
 }
 
 // Sets each cockpit control's tooltip (its input and its row label) from the

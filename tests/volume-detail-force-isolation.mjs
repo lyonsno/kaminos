@@ -5,26 +5,22 @@ const core = readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8')
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const layout = readFileSync(new URL('../volume-cockpit-layout.mjs', import.meta.url), 'utf8');
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url), 'utf8'));
-// Fail first on the missing production connection, not a missing test import.
-assert.match(core, /uniforms\.set\(detailForceContributionMask\(controlsSnapshot\.detailForceContributions\), 348\)/,
-  'independent force contribution switches must reach the live uniform upload');
+// The procedural-force switches were retired 2026-10-22: micro-carrier and shred
+// run whenever their sliders are above 0, and the fine term carries Swirl jostle.
+assert.match(core, /uniforms\.set\(detailForceContributionMask\(controlsSnapshot\), 348\)/,
+  'the Swirl jostle strength reaches the live uniform upload');
 const {
   detailForceContributionMask,
   detailForceContributionReceipt,
   normalizeFineBreakupLocalization,
   fineBreakupSupportReceipt,
 } = await import('../volume-detail-force-isolation.mjs');
-assert.deepEqual(detailForceContributionMask(), [1, 1, 1, 1]);
-assert.deepEqual(detailForceContributionMask({ micro: false }), [1, 0, 1, 1]);
-assert.deepEqual(detailForceContributionMask({ shred: false }), [1, 1, 0, 1]);
-assert.deepEqual(detailForceContributionMask({ fine: false }), [1, 1, 1, 0]);
-assert.deepEqual(detailForceContributionMask({ micro: false, shred: true, fine: false }), [1, 0, 1, 0]);
-assert.deepEqual(detailForceContributionMask({ micro: false, shred: false, fine: false }), [1, 0, 0, 0]);
-assert.deepEqual(detailForceContributionReceipt({ proceduralDetailForces: false }).effectiveMask, [0, 0, 0, 0]);
-assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'tall_plume' }).effectiveMask, [0, 1, 1, 1]);
-for (const bonfireDetailForces of [0, 0.5, 1]) {
-  assert.deepEqual(detailForceContributionReceipt({ volumeScene: 'bonfire_plume', bonfireDetailForces }).effectiveMask, [0, 1, 1, 1], 'retired scene ablations cannot change the surviving simulator');
-}
+assert.deepEqual(detailForceContributionMask(), [1, 1, 1, 1], 'Swirl jostle defaults to 1, the force as it was');
+assert.deepEqual(detailForceContributionMask({ swirlJostle: 2 }), [1, 1, 1, 2]);
+assert.deepEqual(detailForceContributionMask({ swirlJostle: 9 }), [1, 1, 1, 2], 'clamped to 2');
+assert.deepEqual(detailForceContributionMask({ swirlJostle: 0 }), [1, 1, 1, 0]);
+assert.deepEqual(detailForceContributionReceipt({}).effectiveMask, [0, 1, 1, 1], 'the transported detail term stays suppressed by the single simulator');
+assert.deepEqual(detailForceContributionReceipt({ swirlJostle: 0.5 }).effectiveMask, [0, 1, 1, 0.5]);
 assert.equal(normalizeFineBreakupLocalization(), 0, 'the default preserves the legacy broad Fine Breakup path');
 assert.equal(normalizeFineBreakupLocalization(-1), 0);
 assert.equal(normalizeFineBreakupLocalization(0.625), 0.625);
@@ -63,37 +59,24 @@ assert.doesNotMatch(
   /localizedSupport\s*=\s*[^;]*(source|smoke|heat)/,
   'localized support must not relabel the old broad source/smoke/heat activity as a physical support mask',
 );
-for (const [component, rawCall] of [['y', 'transportedDetailDirection'], ['z', 'interfaceShreddingForce'], ['w', 'fieldDerivedFineScaleBreakup']]) {
+for (const [component, rawCall] of [['y', 'transportedDetailDirection'], ['z', 'interfaceShreddingForce']]) {
   assert.match(core, new RegExp(`if \\(u\\.detail_force_isolation\\.${component} > 0\\.5\\) \\{[\\s\\S]*?${rawCall}\\(`),
-    `${rawCall} must be bypassed when its contribution is disabled`);
+    `${rawCall} keeps its bypass guard`);
 }
+assert.match(core, /if \(u\.detail_force_isolation\.w > 0\.0\) \{[\s\S]*?fieldDerivedFineScaleBreakup\(/, 'Swirl jostle at 0 bypasses the force');
 assert.match(core, /detailForceIsolation: state\.detailForceIsolation/);
 assert.doesNotMatch(index, /id="detail-force-isolation"/, 'the mutually exclusive diagnostic dropdown is removed');
-for (const [id, label, gloss] of [
-  ['volume-force-micro-carrier', 'Micro-carrier', 'transported microstructure'],
-  ['volume-force-interface-shred', 'Interface shred', 'material boundaries'],
-  ['volume-force-fine-breakup', 'Fine breakup', 'coupled reaction regimes'],
-]) {
-  assert.match(index, new RegExp(`<span class="slider-label">${label}<\\/span>[\\s\\S]*?<input type="checkbox" id="${id}"[^>]+checked>[\\s\\S]*?${gloss}`),
-    `${label} exposes a default-on checkbox and a behavioral gloss`);
+for (const id of ['volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup']) {
+  assert.doesNotMatch(index, new RegExp(`id="${id}"`), `${id} is retired`);
+  assert.ok(schema.retiredControls.some(control => control.key === id), `${id} crosses an explicit retirement boundary`);
 }
-for (const [id, param] of [
-  ['volume-force-micro-carrier', 'volume_force_micro_carrier'],
-  ['volume-force-interface-shred', 'volume_force_interface_shred'],
-  ['volume-force-fine-breakup', 'volume_force_fine_breakup'],
-]) {
-  assert.ok(index.includes(`['${id}', '${param}']`), `${id} maps to its exact persisted basin-route key`);
-}
+assert.match(index, /<span class="slider-label">Swirl jostle<\/span>\s*<input type="range" id="volume-swirl-jostle" data-volume-settings-param="volume_swirl_jostle" min="0" max="2"/, 'Swirl jostle is a 0-2 slider');
+assert.match(index, /swirlJostle: parseFloat\(document\.getElementById\('volume-swirl-jostle'\)\.value\)/, 'the cockpit contributes its strength');
+assert.ok(index.includes("['volume-swirl-jostle', 'volume_swirl_jostle']"), 'its route restores before the renderer reads the cockpit');
 assert.match(
   index,
-  /for \(const \[id, param\] of \[[\s\S]*?if \(params\.has\(param\)\) setVolumeControlValue\(id, params\.get\(param\)\)/,
-  'force contribution route mappings restore their persisted off/on state before the renderer reads the cockpit',
-);
-assert.match(index, /detailForceContributions:\s*\{[\s\S]*?micro: document\.getElementById\('volume-force-micro-carrier'\)\.checked[\s\S]*?shred: document\.getElementById\('volume-force-interface-shred'\)\.checked[\s\S]*?fine: document\.getElementById\('volume-force-fine-breakup'\)\.checked/);
-assert.match(
-  index,
-  /<span class="slider-label">Fine breakup localization<\/span>[\s\S]*?<input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0\.01" value="0">/,
-  'the Fine Breakup A/B is a compact default-legacy slider beside its force contribution control',
+  /<span class="slider-label">Swirl jostle focus<\/span>[\s\S]*?<input type="range" id="volume-fine-breakup-localization" data-volume-settings-param="volume_fine_breakup_localization" min="0" max="1" step="0\.01" value="0">/,
+  'the focus slider sits beside Swirl jostle and defaults to the broad path',
 );
 assert.match(index, /fineBreakupLocalization: parseFloat\(document\.getElementById\('volume-fine-breakup-localization'\)\.value\)/,
   'the cockpit contributes the persisted A/B value to the live controls');
@@ -109,67 +92,30 @@ assert.ok(
 assert.match(layout, /\['force', 'Force contributions',[\s\S]*?\['simulation', 'Simulation dynamics'/,
   'force contribution controls sit immediately above simulation dynamics in the source layout');
 const { reconcileVolumeCockpitLayoutDocument } = await import('../volume-cockpit-layout.mjs');
-const forceControlIds = [
-  'volume-procedural-detail-forces',
-  'volume-force-micro-carrier',
-  'volume-force-interface-shred',
-  'volume-force-fine-breakup',
-  'volume-fine-breakup-localization',
-  'volume-speed',
-];
+const forceControlIds = ['volume-swirl-jostle', 'volume-fine-breakup-localization', 'volume-speed'];
 const reconciled = reconcileVolumeCockpitLayoutDocument({
   document: {
     identity: 'kaminos.volume.cockpit-layout.v1',
     layoutId: 'existing-operator-layout',
     label: 'Existing operator layout',
-    groups: [{
-      id: 'organized-simulation',
-      label: 'Simulation dynamics',
-      surface: 'primary',
-      collapsed: false,
-      controlIds: ['volume-procedural-detail-forces', 'volume-speed'],
-    }],
+    groups: [{ id: 'organized-simulation', label: 'Simulation dynamics', surface: 'primary', collapsed: false, controlIds: ['volume-fine-breakup-localization', 'volume-speed'] }],
   },
   authorableControlIds: forceControlIds,
 });
 assert.deepEqual(reconciled.document.groups.map(group => group.id), ['organized-force', 'organized-simulation']);
-assert.deepEqual(reconciled.document.groups[0].controlIds, forceControlIds.slice(0, 5));
+assert.deepEqual(reconciled.document.groups[0].controlIds, forceControlIds.slice(0, 2), 'a saved layout gains Swirl jostle beside its focus slider');
 assert.deepEqual(reconciled.document.groups[1].controlIds, ['volume-speed']);
-assert.deepEqual(reconciled.newControlIds, forceControlIds.slice(1, 5));
+assert.deepEqual(reconciled.newControlIds, ['volume-swirl-jostle']);
 const authoredLayout = {
   identity: 'kaminos.volume.cockpit-layout.v1',
   layoutId: 'operator-authored-force-layout',
   label: 'Operator-authored force layout',
   groups: [
-    {
-      id: 'operator-primary',
-      label: 'My immediate controls',
-      surface: 'primary',
-      collapsed: true,
-      controlIds: ['volume-force-fine-breakup', 'volume-speed'],
-    },
-    {
-      id: 'operator-secondary',
-      label: 'My occasional controls',
-      surface: 'authored-mix',
-      collapsed: false,
-      controlIds: [
-        'volume-procedural-detail-forces',
-        'volume-force-interface-shred',
-        'volume-force-micro-carrier',
-        'volume-fine-breakup-localization',
-      ],
-    },
+    { id: 'operator-primary', label: 'My immediate controls', surface: 'primary', collapsed: true, controlIds: ['volume-swirl-jostle', 'volume-speed'] },
+    { id: 'operator-secondary', label: 'My occasional controls', surface: 'authored-mix', collapsed: false, controlIds: ['volume-fine-breakup-localization'] },
   ],
 };
-const preserved = reconcileVolumeCockpitLayoutDocument({
-  document: authoredLayout,
-  authorableControlIds: forceControlIds,
-});
-assert.deepEqual(
-  preserved.document,
-  authoredLayout,
-  'once every force control is known, reconciliation must preserve the operator-authored grouping, order and collapse state',
-);
+const preserved = reconcileVolumeCockpitLayoutDocument({ document: authoredLayout, authorableControlIds: forceControlIds });
+assert.deepEqual(preserved.document, authoredLayout, 'once every force control is known, reconciliation preserves the operator-authored grouping');
 assert.deepEqual(preserved.newControlIds, []);
-console.log('detail force contributions: independent controls, bypass routing and cockpit placement pass');
+console.log('detail force contributions: Swirl jostle strength, bypass routing and cockpit placement pass');

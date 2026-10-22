@@ -108,10 +108,11 @@ test('help marks show their text through a body-level popover, on hover, focus a
   assert.match(index, /\.slider-help \{ display: none; \}/);
 });
 
-test('the force-contribution rows leave the interface (master and interface shred stay on by default)', () => {
-  for (const id of ['volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup', 'volume-fine-breakup-localization']) {
-    assert.match(index, new RegExp(`<div class="slider-row[^"]*"[^>]*data-volume-ui-retired="${id}"`), `${id} is retired from the interface`);
+test('the hidden force switches are retired; Swirl jostle and its focus are visible (2026-10-22)', () => {
+  for (const id of ['volume-procedural-detail-forces', 'volume-force-micro-carrier', 'volume-force-interface-shred', 'volume-force-fine-breakup']) {
+    assert.doesNotMatch(index, new RegExp(`id="${id}"`), `${id} is retired`);
   }
-  assert.match(index, /<input type="checkbox" id="volume-procedural-detail-forces" checked>/, 'master stays on by default');
-  assert.match(index, /<input type="checkbox" id="volume-force-interface-shred" data-volume-settings-param="volume_force_interface_shred" checked>/, 'interface shred stays on by default');
+  for (const id of ['volume-swirl-jostle', 'volume-fine-breakup-localization']) {
+    assert.doesNotMatch(index, new RegExp(`data-volume-ui-retired="${id}"`), `${id} is visible`);
+  }
 });

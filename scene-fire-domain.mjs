@@ -1,6 +1,7 @@
 // Authored fire records. The single-domain engine consumes these through an
 // adapter; its buffers, bricks and evolving gas are not document identity.
 import {validatePresetSchema} from './volume-settings-preset-contract.mjs';
+import {transferRetiredForceSwitches} from './volume-retired-control-migration.mjs';
 import {checkedPose} from './scene-edit-session.mjs';
 import {normalizeFlameDomainTranslation,normalizeFlameDomainScale,flamePoseToDomain,flamePoseInDomain,immersedControlsForFlamePose,normalizeFlameEmitterPose,FLAME_EMITTER_TYPE,FLAME_EMITTER_SOURCE} from './scene-flame-emitter.mjs';
 export const FIRE_DOMAIN_ID='flame-field';
@@ -114,7 +115,7 @@ export function projectFireSettingsToSchema(settings,rawSchema){
  const inventory=new Set(schema.controls.map(entry=>entry.key));
  // A retired control is stripped from the record but still counts toward the inventory size its additive history is numbered by.
  const retired=new Set((schema.retiredControls||[]).filter(entry=>entry.axis==='domControls').map(entry=>entry.key));
- for(const id of Object.keys(saved))if(retired.has(id))delete saved[id];
+ const retiredSwitches={};for(const id of Object.keys(saved))if(retired.has(id)){retiredSwitches[id]=saved[id]?.value;delete saved[id];}
  for(const id of Object.keys(saved))if(!inventory.has(id))throw Error(`Unsupported authored fire control ${id}`);
  // A record that still carries a control introduced later cannot be missing one introduced earlier: a hole, not history.
  const latestPresent=Math.max(0,...schema.controls.filter(entry=>Number.isSafeInteger(entry.additiveSinceControlCount)&&Object.hasOwn(saved,entry.key)).map(entry=>entry.additiveSinceControlCount));
@@ -123,6 +124,7 @@ export function projectFireSettingsToSchema(settings,rawSchema){
   if(!Object.hasOwn(entry,'additiveDefault')||!Number.isSafeInteger(entry.additiveSinceControlCount)||entry.additiveSinceControlCount<=count||entry.additiveSinceControlCount<latestPresent)throw Error(`Missing authored fire control ${entry.key}`);
   saved[entry.key]={id:entry.key,param:entry.param,tagName:entry.tagName,type:entry.type,value:clone(entry.additiveDefault)};
  }
+ transferRetiredForceSwitches(retiredSwitches,saved);
  result.domControls=saved;
  for(const [axis,entries]of [['rendererControls',schema.rendererControls||[]],['presentationControls',schema.presentationControls||[]]]){
   const values=controls(result[axis],axis),known=new Set(entries.map(entry=>entry.key));

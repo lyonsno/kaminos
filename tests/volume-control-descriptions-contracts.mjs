@@ -63,4 +63,9 @@ assert.match(volumeControlTooltip('volume-immersed-centre-y'), /ceiling|top of t
 const densityRow = index.slice(index.lastIndexOf('<div class="slider-row', index.indexOf('id="volume-density"')), index.indexOf('id="volume-density"'));
 assert.doesNotMatch(densityRow, />Density</, 'the cockpit no longer calls the drawn-soot gain Density');
 assert.doesNotMatch(inspector, /\['volume-density','Density'\]/, 'nor does the flame inspector');
+// Scene controls outside the basin schema that the flame panel shows also explain themselves.
+for (const id of ['kiln-collision-enabled', 'kiln-collision-voxels']) {
+  assert.ok((volumeControlTooltip(id) || '').length >= 40, `${id} is described`);
+}
+assert.match(index, /panel\.querySelectorAll\('input\[id\]'\)\) \{ const text = volumeControlTooltip\(input\.id\)/, 'the collision panel applies them when it is built');
 console.log('volume control descriptions contracts passed');
