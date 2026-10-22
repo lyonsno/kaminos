@@ -19,8 +19,22 @@ export function checkPartial(m){
 }
 function checkGeneration(run){
  if(!run?.id||!['running','completed','stopped','failed','interrupted'].includes(run.status)||!Array.isArray(run.samples))throw Error('Invalid generation history');
+ if(!run.solver||![run.solver.rtol,run.solver.atol].every(v=>Number.isFinite(v)&&v>0)||!Number.isFinite(run.solver.cfgScale))throw Error('Invalid generation solver settings');
  let t=-Infinity;for(const sample of run.samples){if(checkPartial(sample)!==run.skeletonKey||sample.refinement.t<=t)throw Error('Generation sample identity/order differs');t=sample.refinement.t;}
  return run;
+}
+function reconcileGeneration(old,next){
+ if(!old)return next;
+ for(const k of ['skeletonKey','prompt','seed','solver'])if(motionText(old[k])!==motionText(next[k]))throw Error('Generation history identity conflict');
+ for(let i=0;i<Math.min(old.samples.length,next.samples.length);i++)if(motionText(old.samples[i])!==motionText(next.samples[i]))throw Error('Generation history prefix conflict');
+ // An imported snapshot never takes ownership of a live local generation.
+ if(old.status==='running'){
+  if(next.samples.length>old.samples.length)throw Error('Generation history conflicts with live run');return old;
+ }
+ if(next.samples.length<old.samples.length)return old;
+ if(['completed','stopped','failed'].includes(old.status)&&next.status!==old.status&&next.status!=='interrupted')throw Error('Generation history terminal conflict');
+ if(next.samples.length===old.samples.length&&next.status==='interrupted')return old;
+ return next;
 }
 export function createMotionCollection(){
  const rows=new Map(),histories=new Map(),listeners=new Set();
@@ -36,7 +50,7 @@ export function createMotionCollection(){
   read:()=>({count:rows.size,bytes:[...rows.values()].reduce((n,r)=>n+r.bytes,0)}),
   subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn);},
   export:()=>({schema:'kaminos.skeleton-motion-collection.v1',motions:[...rows.values()].map(({id,motion})=>({id,motion})),generations:[...histories.values()]}),
-  async import(value){if(value?.schema!=='kaminos.skeleton-motion-collection.v1'||!Array.isArray(value.motions))throw Error('Invalid motion collection');const prepared=await Promise.all(value.motions.map(r=>prepare(r.motion,r.id)));const runs=(value.generations??[]).map(r=>checkGeneration(JSON.parse(motionText(r))));for(const row of prepared)if(!rows.has(row.id))rows.set(row.id,row);for(const run of runs)if(!histories.has(run.id)){if(run.status==='running')run.status='interrupted';histories.set(run.id,run);}emit();},
+  async import(value){if(value?.schema!=='kaminos.skeleton-motion-collection.v1'||!Array.isArray(value.motions))throw Error('Invalid motion collection');const prepared=await Promise.all(value.motions.map(r=>prepare(r.motion,r.id)));const staged=new Map(histories);for(const r of value.generations??[]){const run=checkGeneration(JSON.parse(motionText(r)));if(run.status==='running')run.status='interrupted';staged.set(run.id,reconcileGeneration(staged.get(run.id),run));}for(const row of prepared)if(!rows.has(row.id))rows.set(row.id,row);for(const [id,run]of staged)histories.set(id,run);emit();},
  };
 }
 // Page-session ownership: closing an inspector/experiment never discards takes.

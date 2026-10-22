@@ -174,18 +174,19 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
     if (seed === null && match < 0) throw new Error('the accepted run\'s noise exists only for captured prompts; choose a browser seed');
     if (!t5 && match < 0) throw new Error('no text encoder loaded: choose one of the captured prompts');
     if (active) throw new Error('a generation is already running');
+    const abort = new AbortController();
+    active = { abort, control: null };
+    let frameRun = null, route = null, result;
+    try {
     const encodeStart = performance.now();
     const caption = t5 ? (await t5.encode(text)).pooled : arrays[bundle.prompts[match].caption];
+    abort.signal.throwIfAborted();
     const encodeMs = performance.now() - encodeStart;
     const prompt = match >= 0 ? bundle.prompts[match] : { text };
     const noise = seed === null ? Float32Array.from(arrays[prompt.referenceNoise]) : gaussianNoise(seed, J * Fe * T);
     const runId = `unimate:${crypto.randomUUID()}`;
-    const abort = new AbortController();
-    active = { abort, control: null };
     scheduler.stats.history.length = 0;
     const started = performance.now();
-    let frameRun = null, route = null, result;
-    try {
       if (cooperative) {
         frameRun = await beginRun(runId, { routeId });
         route = await session.registerRoute({ routeId, runtimeOptions: { runtimeLabel: 'unimate', foregroundOpportunities: frameRun.foregroundOpportunities } });
@@ -203,6 +204,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
       } else {
         result = await solve({ caption, noise, schedule: null, onEvaluation, onStep, onPartial, rtol, atol, cfgScale });
       }
+      abort.signal.throwIfAborted();
       result.solver = {method: "dopri5", rtol, atol, cfgScale, endTime: bundle.outputTimes.at(-1)};
       result.prompt = text;
       result.seed = seed;
@@ -237,7 +239,7 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
     if (snap.status === 'paused' || snap.pauseRequested) { await control.resume(); return 'running'; }
     await control.pause(); return 'paused';
   }
-  function stop(reason = 'stopped by user') { active?.abort.abort(new Error(reason)); }
+  function stop(reason = 'stopped by user') { active?.abort.abort(Object.assign(new Error(reason), {name:'AbortError'})); }
 
   // Switch the generation skeleton (a bundle directory) between runs.
   async function useSkeleton(base) {
@@ -261,7 +263,8 @@ export async function createUniMateGenerator({ device, session, beginRun, routeI
   }
 
   Object.assign(g, { generate, togglePause, stop, useSkeleton, useSkeletonData, encodeText, hasTextEncoder: () => Boolean(t5),
-    get running() { return Boolean(active); }, forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount });
+    forwardFlops: den.forwardFlops, parameterCount: manifest.parameterCount });
+  Object.defineProperty(g, 'running', {get: () => Boolean(active)});
   onStatus({ phase: 'ready', detail: `${manifest.parameterCount.toLocaleString()} parameters${t5 ? ' · type any prompt' : ''}` });
   return g;
 }

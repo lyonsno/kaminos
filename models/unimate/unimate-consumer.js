@@ -97,7 +97,8 @@ export function createUniMateConsumer(host, { weightsBase = `${HUB}/unimate-fp16
       }
       if (running.stopped) throw Object.assign(new Error('stopped'), { name: 'AbortError' });
       report('running', 'solve', prompt, { evaluations: 0, t: 0 });
-      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale, onPartial: onPartial ? sample => onPartial({...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? "browser T5" : "captured embedding"}) : undefined, onEvaluation: e => report('running', 'solve', prompt, { evaluations: e.evaluations, t: Math.min(e.t, 1) }) });
+      const result = await gen.generate({ text: prompt, seed, rtol, atol, cfgScale, onPartial: onPartial ? sample => {if(running.stopped)throw Object.assign(new Error("stopped"),{name:"AbortError"});return onPartial?.({...sample, restFrame: data?.restFrame ?? null, textEncoder: gen.hasTextEncoder() ? "browser T5" : "captured embedding"});} : undefined, onEvaluation: e => report('running', 'solve', prompt, { evaluations: e.evaluations, t: Math.min(e.t, 1) }) });
+      if(running.stopped)throw Object.assign(new Error('stopped'),{name:'AbortError'});
       report('running', 'bake', 'animated .glb');
       const sk = gen.skeleton;
       const glb = exportMotionGlb({ name: asset?.name ?? sk.name, jointNames: sk.jointNames, parents: sk.parents, rest: sk.rest, fps: sk.fps,

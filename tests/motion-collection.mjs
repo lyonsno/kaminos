@@ -27,3 +27,7 @@ const broken=structuredClone(archive);broken.generations[0].samples[0].positions
 await assert.rejects(reopened.import(broken),/positions/);
 assert.equal(reopened.generations()[0].samples.length,1);
 console.log('stopped refinement history survives export/reopen without completed-motion promotion');
+const malformed=structuredClone(archive);delete malformed.generations[0].solver;const clean=createMotionCollection();await assert.rejects(clean.import(malformed),/solver/i);assert.equal(clean.list().length,0);assert.equal(clean.generations().length,0);
+const earlier=structuredClone(archive);earlier.generations[0].status='running';earlier.generations[0].samples=[];
+const merge=createMotionCollection();await merge.import(earlier);await merge.import(archive);assert.equal(merge.generations()[0].samples.length,1,'later imports extend retained histories');assert.equal(merge.generations()[0].status,'stopped');
+const conflict=structuredClone(archive);conflict.generations[0].samples[0].positions[0]=5;await assert.rejects(merge.import(conflict),/conflict/i);
