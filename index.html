@@ -3297,6 +3297,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
+import { createPageGpuLease, leasedService } from './greenroom-lease.mjs';
 import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS, giProxySettingFromControls } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
@@ -27251,6 +27252,14 @@ function setupAuthoringAssets(){
   let trellisAvailability=null;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
   const meshBusy=model=>meshRunning[model];
   const tracked=(model,run)=>async input=>{meshRunning[model]=true;redraw();try{return await run(input);}finally{meshRunning[model]=false;redraw();}};
+  // Every in-page model run (TRELLIS, SF3D, Klein) holds a Greenroom lease, so queued GPU jobs and these runs
+  // wait for each other. Release needs the app GPU host's ledger of model runs to be settled.
+  const pageGpuLease=createPageGpuLease({setInfo,
+    post:async body=>{const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;},
+    unsettledWork:async()=>(await appGpuHost())?.unsettledRuns?.()??[]});
+  addEventListener('pagehide',()=>{for(const [leaseId,reason] of pageGpuLease.pending())
+    navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId,reason})],{type:'application/json'}));});
   // Stored GLB plus its generation origin, as the SF3D service persists its meshes.
   const persistGeneratedMesh=async(glb,generation,label,suffix)=>{
     const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',glb)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -27372,39 +27381,14 @@ function setupAuthoringAssets(){
     if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     meshRunning.trellisPage=true;redraw();
     try{
-      // The run holds a Greenroom lease (greenroom-lease.mjs) for its whole length, so queued GPU jobs wait
-      // for it and it waits for them. A failed release stays owed (retried on page close); a run whose GPU
-      // work did not settle leaves Greenroom blocked on purpose and says what recovery is needed.
-      const {withGreenroomLease}=await loadModule('./greenroom-lease.mjs');
-      const post=async body=>{const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-        const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;};
-      let outcome;
-      try{
-        outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,
-          // The app GPU host's ledger of model runs whose settlement is unresolved (U2Net, TRELLIS).
-          unsettledWork:async()=>(await appGpuHost())?.unsettledRuns?.()??[],
-          onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
-          held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
-            if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
-            return trellisPageRunInner(options);});
-      }catch(error){
-        const handback=error?.greenroomHandback;trellisPageLease=null;
-        if(handback?.state==='release-failed'){trellisPageReleaseOwed=handback.leaseId;setInfo(`Greenroom lease ${handback.leaseId} was not released (${handback.releaseError}); queued GPU jobs wait until it is`);}
-        else if(handback?.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${handback.reason}. Release lease ${handback.leaseId} once this page's GPU work has stopped`);
-        throw error;
-      }
-      const {result,lease}=outcome;trellisPageLease=null;
-      if(lease.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${lease.releaseError}. Release lease ${lease.leaseId} once this page's GPU work has stopped`);
-      else if(lease.releaseError){trellisPageReleaseOwed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
+      // The run holds the page's Greenroom lease for its whole length (pageGpuLease).
+      const {result,lease}=await pageGpuLease.run({label:'TRELLIS',route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,onPhase:options?.onPhase},
+        ()=>trellisPageRunInner(options));
       if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),
         ...(lease.renewError?{renewError:lease.renewError}:{}),...(lease.releaseError?{releaseError:lease.releaseError}:{})};
       return result;
-    }finally{trellisPageLease=null;meshRunning.trellisPage=false;redraw();}
+    }finally{meshRunning.trellisPage=false;redraw();}
   };
-  // A tab closed mid-run (or with a release still owed) frees its GPU work: release rather than leave Greenroom blocked.
-  let trellisPageLease=null,trellisPageReleaseOwed=null;
-  addEventListener('pagehide',()=>{for(const [leaseId,reason] of [[trellisPageLease,'page closed during the run'],[trellisPageReleaseOwed,'page closed with a release owed']])
-    if(leaseId)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId,reason})],{type:'application/json'}));});
   // Witness hook: run in the page and save the GLB.
   window.kaminosTrellisPage=async options=>{
     let out;
@@ -27457,7 +27441,8 @@ function setupAuthoringAssets(){
         return null;
       };
       const sf3d=createSf3dAuthoringGeneration({context:()=>({sharedGpu,prototype:foregroundHandoff()?.recording('sf3d')||frameOwner(),host:compositionHost}),changed:()=>redraw(),blocked:sf3dBlocked});
-      authoringGenerator={...sf3d,run:tracked('sf3d',input=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked}))};
+      authoringGenerator={...sf3d,run:tracked('sf3d',input=>pageGpuLease.run({label:'Stable Fast 3D',route:'sf3d.image-to-mesh.webgpu-local.v0',signal:input?.signal},
+        ()=>runWithKilnHandoff({service:sf3d,input,handoff:foregroundHandoff(),owner:'sf3d',blocked:sf3dBlocked})).then(outcome=>outcome.result))};
     }
     return authoringGenerator;
   };
@@ -27483,6 +27468,7 @@ function setupAuthoringAssets(){
     changed:()=>redraw(),
     blocked:()=>compositionModule?'This scene has another inference/performance host. Use its existing generation controls.':meshBusy('trellisPage')?'TRELLIS is generating on this page.':null,
   });
+  authoringImageGenerator=leasedService(authoringImageGenerator,{lease:pageGpuLease,label:'FLUX.2 klein',route:'flux2-klein.text-to-image.authoring-shared-device.v0'});
   // TRELLIS runs in the GPU queue's own browser, so images can still be made meanwhile.
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
