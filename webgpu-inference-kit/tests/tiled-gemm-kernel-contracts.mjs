@@ -44,4 +44,15 @@ assert.throws(() => createWebGpuTiledGemmShader({ residualAfterActivation: true,
   /residualAfterActivation requires a residual/);
 assert.throws(() => createWebGpuTiledGemmShader({ residual: true, residualAfterActivation: true }),
   /residualAfterActivation requires an activation/);
+// Residual read from another region of the output buffer (word 19 holds its
+// element offset): YOLOv8's C2f appends each bottleneck output, residual from
+// the preceding chunk, to the same concat buffer. No separate res binding.
+const inOutput = createWebGpuTiledGemmShader({ biasM: true, residual: true, residualInOutput: true, residualAfterActivation: true,
+  activation: { expression: 'value/(1.0+exp(-value))' } });
+assert.doesNotMatch(inOutput, /var<storage,read> res:/);
+assert.match(inOutput, /v=tiled_gemm_activate\(v\);v\+=c\[p\.z1\+bat\*p\.c_sb\+m\*p\.c_sm\+n\*p\.c_sn\];c\[p\.c_off/);
+assert.match(createWebGpuTiledGemmShader({ residual: true, residualInOutput: true }), /v\+=c\[p\.z1\+[^;]+;c\[p\.c_off/);
+assert.throws(() => createWebGpuTiledGemmShader({ residualInOutput: true }), /residualInOutput requires a residual/);
+assert.throws(() => createWebGpuTiledGemmShader({ residual: true, residualInOutput: true, types: { c: 'f16packed' } }),
+  /residualInOutput requires an f32 or f16 output/);
 console.log('tiled gemm kernel contracts: passed (264 shader identities)');
