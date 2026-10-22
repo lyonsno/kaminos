@@ -91,3 +91,19 @@ const reshaped = shapes.tensors.map(t => t.name === 'backbone.thrink2.weight' ? 
 assert.throws(() => createMobReconNetwork({ device: fakeDevice(), tensors: tensorsFrom(reshaped, new Set()) }), /backbone\.thrink2: input has 152 channels, weight expects 151/);
 
 console.log('mobrecon contracts: passed');
+
+// ---- Crop coordinates: JS tables equal the float32 emulation that matched OpenCV byte for byte ----
+{
+  const { cropSampleTables, normalizeTable, cropInverseMatrix } = await import('../models/mobrecon/mobrecon-crop.js');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../models/mobrecon/fixtures/crop-tables.json', import.meta.url), 'utf8'));
+  for (const c of fixture.cases) {
+    const t = cropSampleTables(c.box);
+    assert.deepEqual([...t.matrix], c.matrix, `matrix for ${c.box}`);
+    assert.deepEqual([...t.columns], c.columns, `columns for ${c.box}`);
+    assert.deepEqual([...t.rows], c.rows, `rows for ${c.box}`);
+  }
+  assert.deepEqual([...normalizeTable()], fixture.normalize);
+  assert.throws(() => cropInverseMatrix([10, 10, 10, 20]), /invalid crop box/);
+  assert.throws(() => cropInverseMatrix([0, 0, NaN, 1]), /invalid crop box/);
+  console.log('mobrecon crop tables: passed');
+}
