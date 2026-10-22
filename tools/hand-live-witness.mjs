@@ -20,7 +20,7 @@ try {
       const video=document.createElement('video');video.muted=true;video.loop=true;video.src=fixture;
       await new Promise((res,rej)=>{video.onloadeddata=res;video.onerror=rej;video.load();});
       video.currentTime=10;await video.play();window.fixtureVideo=video;
-      return video.captureStream();
+      window.fixtureStream=video.captureStream();return window.fixtureStream;
     };
   },args.fixture);
   report.phase='open';save();await page.goto(args.url);
@@ -93,9 +93,20 @@ try {
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=2);
   report.restart=await read();assert.notEqual(report.restart.sessionId,report.live.sessionId);
   assert(isNewSession(report.restart,report.live.sessionId));
+  if(report.restart.fingerJuice.enabled){
+    report.expiry=await page.evaluate(()=>{
+      window.kaminosWaterSources.reset();
+      return window.kaminosWorkbenchExperiments.read();
+    });
+    assert.match(report.expiry.fingerJuice.error,/expired/);
+    assert.equal(report.expiry.fingerJuice.runtime,null);
+    assert.equal(report.expiry.visible,true,'water expiry hid diagnostic mesh');
+  }
   await page.getByRole('button',{name:'Stop camera',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('STOPPED'));
   report.stopped=await read();assert.equal(report.stopped.running,false);assert.equal(report.stopped.camera,null);
+  report.stoppedTracks=await page.evaluate(()=>window.fixtureStream.getTracks().map(track=>track.readyState));
+  assert(report.stoppedTracks.length>0&&report.stoppedTracks.every(state=>state==='ended'),'camera survived stop after water expiry');
   await page.setViewportSize({width:430,height:932});
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('frame'));
   await page.screenshot({path:out+'/mobile.png'});

@@ -42,29 +42,43 @@ export default {
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
-    let fluid=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0],sourceFlux=360;
+    let fluid=null,fluidError=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0],sourceFlux=360;
+    const useFluid=operation=>{
+      if(!fluid)return null;
+      const owned=fluid;
+      try{return operation(owned);}
+      catch(cause){
+        fluid=null;fluidKey=null;fluidError=String(cause);fluidPacket=idleFingerPacket('fluid_unavailable');
+        try{owned.dispose();}catch(cleanup){fluidError+=`; cleanup: ${cleanup}`;}
+        return null;
+      }
+    };
     const acquisitionControls = {};
     let handedness=inputs.handedness ?? 'right', cropX=.5, cropY=.5, cropSize=.85;
-    const read = () => ({authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
+    const read = () => {
+      const runtime=useFluid(live=>live.read());
+      return {authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
       identity:health.identity,endpoint:endpoint.href,sessionId,running,starting,error,received,
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
       acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
-      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime:fluid?.read()??null}});
+      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime,error:fluidError}};
+    };
     const updateFluid=()=>{
       if(!fluid)return;
       mesh.updateWorldMatrix(true,false);
       const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux}):idleFingerPacket();
       const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters]);
       if(key===fluidKey)return;
-      fluid.setPacket(packet);fluidPacket=packet;fluidKey=key;
+      if(!useFluid(live=>{live.setPacket(packet);return true;}))return;
+      fluidPacket=packet;fluidKey=key;
       if(sessionId)emit({kind:'finger_juice',epochMs:Date.now(),packet,meshMatrix:mesh.matrixWorld.toArray()}).catch(cause=>{error=String(cause);});
     };
     const sync = () => {
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
-        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
+        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidError??fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
       if (overlay && video.videoWidth) {
         const [x0,y0,x1,y1]=acquisitionMode==='detector' && last ? last.cropBox : cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
         overlay.style.borderColor=last?.acquisitionDetails?.fallback?'#ff725e':acquisitionMode==='detector'?'#60e1a1':'#ffd75a';
@@ -75,9 +89,9 @@ export default {
     const emit = value => api('/event',{sessionId,...value});
     const stop = async () => {
       running=false; generation++;
-      updateFluid();fluid?.setPaused(true);
       if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
-      stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;sync();
+      stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;
+      updateFluid();useFluid(live=>live.setPaused(true));sync();
       if (flight) await flight.catch(()=>{});
       if (sessionId) await emit({kind:'stop',epochMs:Date.now(),lastCaptureId:last?.captureId ?? null});
       record({kind:'hand-live.stop',phase:'applied',effective:read()});return read();
@@ -87,7 +101,7 @@ export default {
       frameCallback=video.requestVideoFrameCallback((now,metadata) => {
         flight=infer(ticket,metadata).catch(async cause => {
           error=String(cause); running=false; stream?.getTracks().forEach(track=>track.stop());stream=null; sync();
-          updateFluid();fluid?.setPaused(true);
+          updateFluid();useFluid(live=>live.setPaused(true));
           if(sessionId) await emit({kind:'failure',error,epochMs:Date.now(),submission:lastSubmission}).catch(()=>{});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
@@ -148,6 +162,7 @@ export default {
       try {
         if(fingerJuice&&!fluid){
           fluid=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:2400,densityIterations:3,showSupportGeometry:true},packet:idleFingerPacket()});
+          fluidError=null;
           fluid.setPaused(true);
           if(disposed||ticket!==generation){await fluid.dispose();fluid=null;return read();}
         }
@@ -158,7 +173,7 @@ export default {
         if(disposed || ticket!==generation){acquired.getTracks().forEach(t=>t.stop());return read();}
         stream=acquired;video.srcObject=stream;await video.play();
         if(disposed || ticket!==generation){stream?.getTracks().forEach(t=>t.stop());return read();}
-        running=true;last=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();fluid?.setPaused(false);scene.redraw();schedule(ticket);
+        running=true;last=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();useFluid(live=>live.setPaused(false));scene.redraw();schedule(ticket);
         record({kind:'hand-live.start',phase:'applied',effective:read()});return read();
       } catch(cause) {error=String(cause);stream?.getTracks().forEach(t=>t.stop());stream=null;throw cause;}
       finally {starting=false;sync();}
@@ -213,7 +228,10 @@ export default {
       async dispose(){
         disposed=true;unsubscribe();
         try {await stop();}
-        finally {await fluid?.dispose();captures.close();await scene.dispose();}
+        finally {
+          const owned=fluid;fluid=null;
+          try{await owned?.dispose();}finally{captures.close();await scene.dispose();}
+        }
       },
     };
   },
