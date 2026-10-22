@@ -73,3 +73,11 @@ const {sceneObjectInterests}=await import('../experiments/creature-motion/creatu
  sense(.1);c.step();c.a.sense({time:c.time(),samples:[],status:'unavailable'});c.step();sense(2);c.step();
  assert.equal(c.a.read().startle,null,'An unavailable probe without source identity clears the old geometric baseline');
 }
+
+{
+ const v=createVisualDisturbance(),visual={...shape(),sampleTime:0};
+ v.update(input(0,visual,{active:false}));for(let i=1;i<=20;i++)v.update(input(i*.25,visual,{active:false}));
+ const onset=v.update(input(5.025,visual,{active:true}));
+ assert.ok(Math.abs(onset.dt-.025)<1e-8,'A visible activation uses the last observed off frame, even when its geometry sample is unchanged');
+ assert.ok(onset.triggered,'A long inactive interval does not dilute an abrupt appearance');
+}
