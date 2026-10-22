@@ -10,6 +10,12 @@ import json
 from pathlib import Path
 import numpy as np
 
+def selected_triangles(faces, ids, count):
+    remap = np.full(count, -1, dtype=np.int64)
+    remap[ids] = np.arange(len(ids))
+    mapped = remap[faces]
+    return mapped[(mapped >= 0).all(axis=1)].astype('<u4')
+
 def rows(vertices, faces, material):
     if vertices.ndim != 2 or vertices.shape[1] != 3 or material.shape != (len(vertices), 6):
         raise ValueError('Expected aligned raw vertices and six-channel material rows')
@@ -42,7 +48,8 @@ def main():
         mesh_path=a.checkpoints/'mesh_raw.npz'; texture_path=a.checkpoints/'texture.npz'
         report['sourceHashes']={str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in [mesh_path,texture_path]}
         with np.load(mesh_path) as mesh, np.load(texture_path) as tex:
-            report['phase']='derive'; data,bad=rows(mesh['vertices'],mesh['faces'],tex['tex_np'])
+            faces=mesh['faces']
+            report['phase']='derive'; data,bad=rows(mesh['vertices'],faces,tex['tex_np'])
         report['sourceCount']=len(data); report['fallbackNormals']=bad
         lo=data[:,:3].min(0); hi=data[:,:3].max(0)
         report['sourceBounds']=[lo.tolist(),hi.tolist()]
@@ -54,6 +61,11 @@ def main():
         ids=np.flatnonzero(keep).astype('<u4'); data=data[keep]
         if not len(data): raise ValueError('Empty spatial selection')
         report['phase']='write'; data.tofile(a.output/'surfels.f32');ids.tofile(a.output/'source-ids.u32')
+        triangles=selected_triangles(faces,ids,report['sourceCount'])
+        triangles.tofile(a.output/'triangles.u32')
+        report['triangles']={'file':'triangles.u32','count':len(triangles),
+                             'sha256':hashlib.sha256((a.output/'triangles.u32').read_bytes()).hexdigest(),
+                             'sourceCount':len(faces)}
         report.update(ok=True,phase='done',count=len(data),stride=12,
                       gridSize=512,radius=0.8/512,
                       bounds=[data[:,:3].min(0).tolist(),data[:,:3].max(0).tolist()],
