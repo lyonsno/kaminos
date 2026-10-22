@@ -4,7 +4,7 @@
 // weights named by source module path and BatchNorm folded at packing time.
 // Shapes are static, so every buffer, uniform and bind group is built once and
 // a run is one compute pass of fixed dispatches.
-import { createWebGpuTiledGemmShader, TILED_GEMM_PARAMS_WORDS } from '../../webgpu-inference-kit/src/tiled-gemm-kernel.js';
+import { createStaticGraph, product, runAndRead } from './static-graph.js';
 import { KERNEL_PARAMS, SHADERS } from './mobrecon-kernels.js';
 
 export const MOBRECON_INPUT_SIZE = 128;
@@ -13,82 +13,19 @@ export const MOBRECON_LANDMARKS = 21;
 const OUT_CHANNELS = [32, 64, 128, 256];
 const LEVEL_VERTICES = [778, 389, 195, 98, 49];
 const SPIRAL_LENGTH = 9;
-const GEMM_TILE = Object.freeze({ tm: 2, tn: 2, bk: 16 });
 const RELU = Object.freeze({ expression: 'max(value,0.0)' });
 const HARDTANH_0_4 = Object.freeze({ expression: 'clamp(value,0.0,4.0)' });
-const U = globalThis.GPUBufferUsage ?? { MAP_READ: 0x1, COPY_SRC: 0x4, COPY_DST: 0x8, UNIFORM: 0x40, STORAGE: 0x80 };
-
-const product = shape => shape.reduce((a, b) => a * b, 1);
 
 // tensors: model-resource lease tensors by name ({ buffer, bufferOffset, byteLength, shape, dtype }).
 export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
-  if (!device?.createBuffer) throw new TypeError('GPUDevice required');
-  const owned = [], steps = [], named = new Map(), pipelines = new Map();
-  const weight = name => {
-    const tensor = tensors[name];
-    if (!tensor) throw new Error(`missing MobRecon tensor ${name}`);
-    return tensor;
-  };
-  const weightResource = t => ({ buffer: t.buffer, offset: t.bufferOffset, size: t.byteLength });
-  const buffer = (bytes, usage, tag) => {
-    const b = device.createBuffer({ label: `${label}:${tag}`, size: Math.max(16, bytes), usage });
-    owned.push(b);
-    return b;
-  };
-  // Activation view: element offset into a buffer plus a [C, H, W] or [N, C] shape.
-  const alloc = (shape, tag) => ({ buffer: buffer(product(shape) * 4, U.STORAGE | U.COPY_SRC | U.COPY_DST, tag), offset: 0, shape });
-  const slice = (view, start, count) => {
-    const inner = product(view.shape.slice(1));
-    if (start + count > view.shape[0]) throw new RangeError(`slice ${start}+${count} exceeds ${view.shape[0]}`);
-    return { buffer: view.buffer, offset: view.offset + start * inner, shape: [count, ...view.shape.slice(1)] };
-  };
-  const name = (key, view) => { named.set(key, view); return view; };
-  const dummy = buffer(16, U.STORAGE, 'unused');
-  const whole = view => ({ buffer: view.buffer });
-
-  const pipeline = (key, code) => {
-    if (!pipelines.has(key)) {
-      pipelines.set(key, device.createComputePipeline({ label: `${label}:${key}`, layout: 'auto',
-        compute: { module: device.createShaderModule({ label: `${label}:${key}`, code }), entryPoint: 'main' } }));
-    }
-    return pipelines.get(key);
-  };
-  const uniform = (words, tag) => {
-    const data = new Uint32Array(Math.ceil(words.length / 4) * 4);
-    words.forEach((value, i) => { data[i] = value; });
-    const b = buffer(data.byteLength, U.UNIFORM | U.COPY_DST, `${tag}:params`);
-    device.queue.writeBuffer(b, 0, data);
-    return b;
-  };
-  const record = (key, code, resources, workgroups, tag) => {
-    const p = pipeline(key, code);
-    const bindGroup = device.createBindGroup({ label: `${label}:${tag}`, layout: p.getBindGroupLayout(0),
-      entries: resources.map((resource, binding) => ({ binding, resource })) });
-    steps.push({ pipeline: p, bindGroup, workgroups, label: tag });
-  };
-  const grid1 = n => { const groups = Math.ceil(n / 256); return [Math.min(groups, 65535), Math.ceil(groups / 65535), 1]; };
+  const graph = createStaticGraph({ device, tensors, label, missing: key => `missing MobRecon tensor ${key}` });
+  const { weight, weightResource, alloc, slice, name, whole, dummy, uniform, record, grid1, named, steps } = graph;
   const kernel = (kind, values, resources, threads, tag) => {
     const words = KERNEL_PARAMS[kind].map(field => values[field] ?? 0);
     record(kind, SHADERS[kind], [{ buffer: uniform(words, tag) }, ...resources], grid1(threads), tag);
   };
-
-  // Kit tiled GEMM: C[m, n] = act(sum_k A[m, k] B[k, n] + biasM[m]) (+ R[m, n] after act).
-  // Operands: { resource, offset, sm/sk or sk/sn } with element offsets and strides.
-  function gemm({ M, N, K, a, b, c, biasM = null, residual = null, activation = null, conv = null, pad = 0, bNContiguous = true, tag }) {
-    if (residual && residual.offset !== c.offset) throw new Error(`${tag}: residual and output offsets differ`);
-    const layout = { tile: GEMM_TILE, biasM: Boolean(biasM), residual: Boolean(residual), bNContiguous,
-      residualAfterActivation: Boolean(residual), activation, conv };
-    const key = `gemm:${JSON.stringify(layout)}`;
-    const params = new Uint32Array(TILED_GEMM_PARAMS_WORDS);
-    params.set([M, N, K, 0, a.offset, a.sm, a.sk, 0, b.offset, b.sk, b.sn, b.sb ?? 0, c.offset, c.sm, c.sn, 0, pad, pad, 0, 0]);
-    new Float32Array(params.buffer)[3] = 1;
-    const resources = [a.resource, b.resource];
-    if (biasM) resources.push(biasM);
-    if (residual) resources.push(whole(residual));
-    resources.push(whole(c), { buffer: uniform([...params], tag) });
-    const bm = 16 * GEMM_TILE.tm, bn = 16 * GEMM_TILE.tn;
-    record(key, createWebGpuTiledGemmShader(layout), resources, [Math.ceil(N / bn), Math.ceil(M / bm), 1], tag);
-  }
+  // mobile_unit adds its residual after the ReLU.
+  const gemm = args => graph.gemm({ ...args, residualAfterActivation: true });
 
   // 1x1 conv over [Cin, H, W] (plain GEMM: weight [Cout, Cin] x activation [Cin, HW]).
   function conv1x1(x, prefix, { activation = RELU, out = null, residual = null, bias = true } = {}) {
@@ -279,20 +216,6 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
   name('uv_pred', uv);
 
   let disposed = false;
-  const encode = pass => {
-    for (const step of steps) {
-      pass.setPipeline(step.pipeline);
-      pass.setBindGroup(0, step.bindGroup);
-      pass.dispatchWorkgroups(...step.workgroups);
-    }
-  };
-  const readback = (encoder, view, tag) => {
-    const bytes = product(view.shape) * 4;
-    const staging = device.createBuffer({ label: `${label}:read:${tag}`, size: bytes, usage: U.MAP_READ | U.COPY_DST });
-    encoder.copyBufferToBuffer(view.buffer, view.offset * 4, staging, 0, bytes);
-    return staging;
-  };
-
   return Object.freeze({
     input, outputs: Object.freeze({ mesh, uv }), dispatchCount: steps.length,
     names: () => [...named.keys()],
@@ -302,7 +225,7 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
     encode(encoder) {
       if (disposed) throw new Error('MobRecon network disposed');
       const pass = encoder.beginComputePass({ label: `${label}:network` });
-      encode(pass);
+      graph.encode(pass);
       pass.end();
     },
     // input: Float32Array [3, 128, 128] normalized as the source's base_transform;
@@ -314,29 +237,20 @@ export function createMobReconNetwork({ device, tensors, label = 'mobrecon' }) {
         if (!(values instanceof Float32Array) || values.length !== product(input.shape)) throw new TypeError('Float32Array [3, 128, 128] input required');
         device.queue.writeBuffer(input.buffer, 0, values);
       }
-      const encoder = device.createCommandEncoder({ label: `${label}:run` });
-      this.encode(encoder);
       const reads = [['mesh', mesh], ['uv', uv], ...capture.map(key => {
         const view = named.get(key);
         if (!view) throw new Error(`no MobRecon tensor named ${key}`);
         return [key, view];
-      })].map(([key, view]) => [key, readback(encoder, view, key), view.shape]);
-      device.queue.submit([encoder.finish()]);
-      const out = { captures: {} };
-      for (const [key, staging, shape] of reads) {
-        await staging.mapAsync(1);
-        const data = new Float32Array(staging.getMappedRange().slice(0));
-        staging.unmap();
-        staging.destroy();
-        if (key === 'mesh' || key === 'uv') out[key] = data;
-        else out.captures[key] = { shape, data };
-      }
-      return out;
+      })];
+      const got = await runAndRead(graph, encoder => this.encode(encoder), reads);
+      const captures = {};
+      for (const key of capture) captures[key] = got[key];
+      return { mesh: got.mesh.data, uv: got.uv.data, captures };
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const b of owned) b.destroy();
+      graph.dispose();
     },
   });
 }
