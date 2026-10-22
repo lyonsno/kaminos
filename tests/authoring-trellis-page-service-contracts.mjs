@@ -164,3 +164,14 @@ test('a stopped run saves nothing, even with surfels attached',async()=>{
     persist:async()=>{persisted++;return {};}});
   const running=s.run(input);s.stop();assert.equal(await running,null);assert.equal(persisted,0);
 });
+
+test('the TRELLIS output is chosen on the service: mesh and surfels by default, or surfels only, skipping mesh finishing',async()=>{
+  const seen=[];const {s,states}=service({runPage:async options=>{seen.push(options.finishMesh);return options.finishMesh===false?{glb:null,surfelGlb:new ArrayBuffer(8),surfels:{status:'built'},generation:{runId:'r'},label:'a'}:{glb,generation:{runId:'r'},label:'a'};}});
+  assert.equal(s.output(),'mesh');
+  await s.run(input);
+  s.setOutput('surfels');assert.equal(s.output(),'surfels');
+  await s.run(input);
+  assert.deepEqual(seen,[true,false]);
+  assert.match(s.read().progress,/Surfels saved/);assert.equal(s.read().status,'complete');
+  assert.throws(()=>s.setOutput('voxels'),/mesh or surfels/);
+});

@@ -35,3 +35,13 @@ for(const [name,loadModule] of [
     assert.match(window.__kaminosLastGenerationLevels?.error,/simulated/);
   });
 }
+
+test('a surfels-only run builds GI levels keyed to the stored surfel asset, measured against the raw decode',async()=>{
+  const calls=[];const window={};
+  const {persist,stored}=pagePersist({window,loadModule:async()=>({runGenerationLevels:async args=>{calls.push(args);return {phase:'done',tiers:[]};}})});
+  const saved=await persist({glb:null,surfelGlb:new ArrayBuffer(8),surfels:{status:'built'},generation:{runId:'r'},label:'grass',levelInputs:{decode:{},materialFields:{}}});
+  for(let i=0;i<5;i++)await new Promise(r=>setTimeout(r,0));
+  assert.equal(stored(),1);assert.equal(saved.sha256,'a'.repeat(64));
+  assert.equal(calls.length,1);assert.equal(calls[0].source,'a'.repeat(64));assert.equal(calls[0].reference,'raw-decode');
+  assert.equal(window.__kaminosLastGenerationLevels?.source,'a'.repeat(64));
+});

@@ -27266,9 +27266,26 @@ function setupAuthoringAssets(){
   const sha256Of=async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
   const loadModule=specifier=>import(specifier);
   const persistTrellisPageRun=async out=>{
+    // GI proxy tiers (Stunt Doubles' prepareGenerationLevels) from this run's decode, registered as levels of the stored
+    // asset: the hero mesh, or for a surfels-only run the surfel asset itself (reference 'raw-decode': error measured
+    // against the decode). They build in a worker after the asset is saved; the result never holds or fails it.
+    const startGenerationLevels=(source,reference=null)=>{
+      if(!out.levelInputs)return;
+      const inputs=out.levelInputs;out.levelInputs=null;
+      window.__kaminosLastGenerationLevels={source,phase:'running'};
+      // Not awaited: any failure here, including the runner module failing to load, is a levels report.
+      (async()=>{
+        const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
+        return runGenerationLevels({...inputs,source,...(reference?{reference}:{}),input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
+      })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(report=>{
+        window.__kaminosLastGenerationLevels={source,...report};
+        if(report.phase==='done')setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
+        else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
+    };
     // A surfels-only run (finishMesh:false) stores the surfel asset as the result.
     if(!out.glb){if(!out.surfelGlb)throw Error('TRELLIS run produced neither a mesh nor surfels');
       const saved=await persistGeneratedMesh(out.surfelGlb,{...out.generation,representation:'trellis-surfels',frame:'trellis-source',surfels:undefined},out.label,'TRELLIS surfels');
+      startGenerationLevels(saved.sha256,'raw-decode');
       return {...saved,surfels:{...out.surfels,sha256:saved.sha256,source:saved.source}};}
     let surfels=out.surfels??{status:'not built'};
     if(out.surfelGlb){
@@ -27279,18 +27296,7 @@ function setupAuthoringAssets(){
     const saved={...await persistGeneratedMesh(out.glb,{...out.generation,surfels},out.label,'TRELLIS'),surfels};
     // GI proxy tiers (Stunt Doubles' prepareGenerationLevels) from this run's decode, registered as levels
     // of the stored hero. They build in a worker after the mesh is saved; the result never holds or fails it.
-    if(out.levelInputs){
-      const inputs=out.levelInputs,source=saved.sha256;out.levelInputs=null;
-      window.__kaminosLastGenerationLevels={source,phase:'running'};
-      // Not awaited: any failure here, including the runner module failing to load, is a levels report.
-      (async()=>{
-        const {runGenerationLevels}=await loadModule('./generation-levels-runner.mjs');
-        return runGenerationLevels({...inputs,source,input:`TRELLIS page run ${out.generation?.runId}`,route:out.generation?.route});
-      })().catch(error=>({phase:'worker',error:String(error?.message||error)})).then(report=>{
-        window.__kaminosLastGenerationLevels={source,...report};
-        if(report.phase==='done')setInfo(`GI proxy levels ready for ${out.label}: ${report.tiers?.map(t=>t.faces).join(', ')} faces`);
-        else if(report.phase!=='skipped')console.warn(`GI proxy levels did not finish: ${report.phase}: ${report.error||report.reason||''}`,report);});
-    }
+    startGenerationLevels(saved.sha256);
     return saved;
   };
   // TRELLIS in this page (authoring-trellis-page.mjs) on the app GPU host, with the
@@ -27479,7 +27485,7 @@ function setupAuthoringAssets(){
   authoringImageUI=installKleinImageGeneration({document,controller:authoringImageGenerator,assets:authoringAssets,meshBusy:()=>meshBusy('sf3d')||meshBusy('trellisPage')});
   const openMasks=entry=>window.kaminosOpenImageMasks(entry.source||`/api/read?${new URLSearchParams({root:entry.root,path:entry.path})}`,entry).catch(error=>console.warn('Masks unavailable',error));
   authoringBrowseLayout=installBrowseLayout({document,controller:authoringAssets,openMasks,inScene:()=>new Set(sceneObjects.map(entry=>entry.source).filter(Boolean)),open:mode=>authoringAssetsUI.open(mode)});
-  authoringGenerateLayout=installGenerateLayout({document,openMasks,selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
+  authoringGenerateLayout=installGenerateLayout({document,openMasks,trellisOutput:{get:()=>trellisPage().output(),set:value=>{trellisPage().setOutput(value);redraw();}},selected:()=>authoringAssets.read().selected,trellisSettings:()=>trellisAvailability?.settings||null,queueLine:()=>authoringMeshModel?.value()==='trellis'?authoringTrellisGenerator?.read().queueLine||'':''});redraw();
   window.kaminosAssets={...authoringAssets,open:mode=>authoringAssetsUI.open(mode),close:()=>authoringAssetsUI.close(),panel:()=>authoringAssetsUI.state(),images:authoringImageGenerator};
 }
 
