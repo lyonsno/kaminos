@@ -3,6 +3,20 @@
 <script type="module">
 import {WebGPURenderer,Scene,OrthographicCamera,PerspectiveCamera,RenderTarget,Color,AmbientLight,DataUtils} from '/lib/three.webgpu.js';
 import {createSurfelGlass} from '/trellis-surfel-glass.mjs';
+import {createRawFieldMesh} from '/trellis-raw-mesh.mjs';
+window.runDiagnosticWitness=async()=>{
+ const renderer=new WebGPURenderer();renderer.setSize(64,64);await renderer.init();
+ if(!renderer.backend.isWebGPUBackend)throw Error('Expected WebGPU');
+ const target=new RenderTarget(64,64);renderer.setRenderTarget(target);
+ const camera=new PerspectiveCamera(30,1,.01,10);camera.position.z=1;
+ const row=(x,y)=>[x,y,0,0,0,1,1,0,0,.2,.4,.25],results=[];
+ const controllers=[createRawFieldMesh(new Float32Array([...row(-.5,-.5),...row(.5,-.5),...row(0,.5)]),new Uint32Array([0,1,2]),{stride:12,count:3,triangles:{count:1}}),createSurfelGlass(new Float32Array(row(0,0)),{stride:12,count:1,radius:.3})];
+ try{for(const c of controllers)for(const mode of ['plain','normals','opaque','glass']){
+  c.set({mode});const scene=new Scene();scene.background=new Color(0xffffff);scene.add(c.root,new AmbientLight(0xffffff,1));
+  renderer.render(scene,camera);results.push({state:c.read(),pixel:Array.from(await renderer.readRenderTargetPixelsAsync(target,32,32,1,1))});
+ }}finally{for(const c of controllers)c.dispose();target.dispose();renderer.dispose();}
+ return results;
+};
 window.runSurfaceWitness=async()=>{
  const renderer=new WebGPURenderer();renderer.setSize(64,64);document.body.append(renderer.domElement);await renderer.init();
  if(!renderer.backend.isWebGPUBackend)throw Error('Expected WebGPU, not fallback');

@@ -1,11 +1,11 @@
 import {Mesh, FrontSide} from './lib/three.core.js';
 import {MeshStandardNodeMaterial, MeshPhysicalNodeMaterial} from './lib/three.webgpu.js';
-import {texture, vec4} from './lib/three.tsl.js';
+import {texture, vec4, normalView} from './lib/three.tsl.js';
 
 // An explicit material interpretation, not additional TRELLIS predictions.
 // Screen-space refraction sees opaque scene surfaces, not other glass layers.
 function settings(value) {
-  if(!['opaque','opacity','glass'].includes(value.mode))throw Error('Unknown glass view');
+  if(!['opaque','opacity','glass','plain','normals'].includes(value.mode))throw Error('Unknown glass view');
   for(const [key,min,max] of [['ior',1,2.5],['thickness',0,1]]) {
     if(!Number.isFinite(value[key])||value[key]<min||value[key]>max)throw Error(`Invalid ${key}`);
   }
@@ -29,6 +29,8 @@ export function createGeneratedGlass(root, initial={}) {
     const source=mesh.material;
     const rgba=texture(source.map),alpha=rgba.a.clamp(0,1);
     const solid=copySurface(source,new MeshStandardNodeMaterial());
+    const plain=new MeshStandardNodeMaterial({color:0xbcbcbc,roughness:.8,side:source.side});
+    const normals=new MeshStandardNodeMaterial({side:source.side});normals.fragmentNode=vec4(normalView.mul(.5).add(.5),1);
     solid.maskNode=alpha.greaterThanEqual(.98);
     const hashed=copySurface(source,new MeshStandardNodeMaterial());
     hashed.alphaHash=true;hashed.transparent=false;hashed.depthWrite=true;
@@ -40,10 +42,10 @@ export function createGeneratedGlass(root, initial={}) {
     glass.side=FrontSide;glass.transparent=false;glass.depthWrite=true;
     const shell=new Mesh(mesh.geometry,glass);shell.name='Generated glass (authored optics)';
     mesh.add(shell);
-    return {mesh,source,solid,hashed,glass,shell};
+    return {mesh,source,solid,hashed,glass,shell,plain,normals};
   });
   function apply(){for(const e of entries){
-    e.mesh.material=state.mode==='opaque'?e.source:state.mode==='opacity'?e.hashed:e.solid;
+    e.mesh.material=state.mode==='plain'?e.plain:state.mode==='normals'?e.normals:state.mode==='opaque'?e.source:state.mode==='opacity'?e.hashed:e.solid;
     e.shell.visible=state.mode==='glass';e.glass.ior=state.ior;e.glass.thickness=state.thickness;
   }}
   apply();
@@ -51,7 +53,7 @@ export function createGeneratedGlass(root, initial={}) {
     read:()=>({...state,meshCount:entries.length,route:'screen-space-transmission',opaqueCutoff:.98}),
     set(patch){if(disposed)throw Error('Glass study disposed');state=settings({...state,...patch});apply();return this.read();},
     dispose(){if(disposed)return;disposed=true;for(const e of entries){
-      e.mesh.material=e.source;e.mesh.remove(e.shell);e.solid.dispose();e.hashed.dispose();e.glass.dispose();
+      e.mesh.material=e.source;e.mesh.remove(e.shell);e.solid.dispose();e.hashed.dispose();e.glass.dispose();e.plain.dispose();e.normals.dispose();
     }},
   };
 }
