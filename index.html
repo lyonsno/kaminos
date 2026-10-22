@@ -3976,6 +3976,9 @@ let sceneNavigation = null;
 const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
 window.kaminosGiProxies = {
   handleFor: root => sceneGiProxies.get(root),
+  // A GI pass that reads proxies registers here (returns its release); the Render section reports when none does.
+  registerConsumer: name => { const release = sceneGiProxies.registerConsumer(name); syncSceneDataInspector(); return () => { release(); syncSceneDataInspector(); }; },
+  consumers: () => sceneGiProxies.consumers(),
   select: (root, selection) => sceneGiProxies.select(root, selection),
   state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
     proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
@@ -25487,9 +25490,11 @@ function syncSceneDataInspector() {
     if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
       if(!editing){document.getElementById('object-gi-proxy').checked=setting.enabled;detail.value=setting.selection.faces?`faces:${setting.selection.faces}`:'error';if(setting.selection.maxError!=null)error.value=String(setting.selection.maxError);}
       detail.disabled=!setting.enabled;error.closest('label').hidden=detail.value!=='error';error.disabled=!setting.enabled;
-      const h=sceneGiProxies.get(entry.object);
-      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?'Off: no GI proxy is held for this object.'
-        :!h||h.state==='resolving'?'Loading the GI proxy…':h.state==='loaded'?`Using the ${h.effective.faces}-face tier${h.error?.relative?.p95!=null?`, p95 error ${(h.error.relative.p95*100).toFixed(2)}% of its size`:''}.`
+      const h=sceneGiProxies.get(entry.object),consumers=sceneGiProxies.consumers();
+      // Not silent when nothing renders with proxies: the scene's GI is screen-space and sees only drawn geometry.
+      const unused=consumers.length?'':' No GI pass uses proxies yet: the scene GI sees only the drawn mesh, so this setting does not change the image.';
+      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?`Off: no GI proxy is held for this object.${unused}`
+        :!h||h.state==='resolving'?'Loading the GI proxy…':h.state==='loaded'?`${consumers.length?'Using':'Holding'} the ${h.effective.faces}-face tier${h.error?.relative?.p95!=null?`, p95 error ${(h.error.relative.p95*100).toFixed(2)}% of its size`:''}.${unused}`
         :h.state==='no-tiers'?(h.reason?`No GI proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only generated meshes have stored GI tiers.'
         :h.state==='failed'?`GI proxy failed: ${h.failure}`:'';}}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';

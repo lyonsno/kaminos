@@ -26,6 +26,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
   // versions come from one sequence that never restarts, so a request from before a release, a clear or a newer
   // selection can never pass as current; owned is the proxy each root holds, apart from the handle snapshots.
   const handles=new Map(),versions=new Map(),owned=new Map();let sequence=0;
+  // GI passes that read these proxies declare themselves; with none, a proxy setting changes nothing on screen.
+  const consumers=new Map();let consumerSeq=0;
   // Forgetting a root's version is enough: any later request for it takes a larger one, and an earlier one never matches.
   const drop=root=>{disposeTree(owned.get(root));owned.delete(root);handles.delete(root);versions.delete(root);};
   function describe(root){
@@ -70,6 +72,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
     release(root){drop(root);},
+    registerConsumer(name){if(typeof name!=='string'||!name)throw Error('A GI proxy consumer needs a name');const key=++consumerSeq;consumers.set(key,name);return ()=>{consumers.delete(key);};},
+    consumers:()=>[...consumers.values()],
     // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.
     disable(root){drop(root);handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});},
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
