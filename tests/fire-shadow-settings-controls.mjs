@@ -24,6 +24,7 @@ assert.equal(controls.filter(v=>v.type==='range').length,0,'quality uses a singl
 assert.equal(installed.length,6,'world-cell size, solid and medium cost controls use the shared widget');
 await settings.dispose();assert.equal(scrubDisposals,6,'lighting settings must retire all owned number scrubs');
 assert(controls.some(v=>v.value==='screen-animated'),'animated screen grain is exposed');
+for(const mode of ['balanced-pairs','balanced-filter','balanced'])assert(controls.some(v=>v.value===mode),'balanced comparison is exposed: '+mode);
 const cell=controls.find(v=>v.attrs['aria-label']==='World grain cell size');
 await cell.listeners.focus();cell.value='0';await cell.listeners.change();
 assert.equal(cell.value,'.02'.replace(/^\./,'0.'),'rejected edits restore the effective value');

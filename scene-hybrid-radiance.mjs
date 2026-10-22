@@ -7,7 +7,7 @@ import {createPointRegions} from './scene-point-regions.mjs';
 import {validateSceneSourceTransform,sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {deriveSourceGuide} from './scene-source-guide.mjs';
 import {validateSourceSoftness} from './scene-source-softening.mjs';
-import {validateShadowSampling,validateShadowComparison,shadowGrainNode} from './fire-shadow-sampling.mjs';
+import {validateShadowSampling,validateShadowComparison,shadowGrainNode,balancedShadowNode} from './fire-shadow-sampling.mjs';
 import {validateSourceQuadrature} from './fire-source-quadrature.mjs';
 import {validateShadowQuality} from './fire-shadow-quality.mjs';
 import {createShadowFilterPattern} from './fire-shadow-filter.mjs';
@@ -43,7 +43,11 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   function buildPoints(count){
   const sharedPreparation=comparison.implementation==='shared';
   const filterPattern=sharedPreparation?createShadowFilterPattern(filterSamples,device.limits):{count:filterSamples,bytes:0,route:'arithmetic',reason:'legacy-comparison',node:null};
-  const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?positionWorld.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'?THREE.TSL.frameId:null);
+  const balanced=comparison.grain.startsWith('balanced');
+  const grain=comparison.grain==='ordered'?null:shadowGrainNode(comparison.grain==='world'?positionWorld.div(worldCellSize):vec3(screenCoordinate.xy,0),THREE.TSL,comparison.grain==='screen-animated'||balanced?THREE.TSL.frameId:null);
+  const strata=balanced?balancedShadowNode(vec3(screenCoordinate.xy,0),THREE.TSL,THREE.TSL.frameId):null;
+  const pairGrain=balanced&&comparison.grain!=='balanced-filter'?strata:grain;
+  const filterGrain=balanced&&comparison.grain!=='balanced-pairs'?strata:grain;
   points=createPointRegions(device,{count,partition:count>1?'energy':'vertical'});
   smokeShadow=smokeShadowSteps?createFireSmokeShadow(device,{points:points.texture,count,steps:smokeShadowSteps,resolution:smokeShadowResolution,filter:smokeShadowFilter}):null;
   external=new THREE.ExternalTexture(points.texture);
@@ -52,7 +56,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   lights=Array.from({length:count},(_,i)=>{
     const region=textureLoad(external,ivec2(i,0)),energy=textureLoad(external,ivec2(i,1)).rgb;
     const position=region.xyz.mul(scale).add(translation);
-    const filterCoordinates=grain?.coordinates??paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
+    const filterCoordinates=filterGrain?.coordinates??paired.select(vec2(screenCoordinate.x.div(2).floor(),screenCoordinate.y),screenCoordinate.xy);
     const shadow=createShadow({renderer,scene,sourceNode:position,receiverNode:positionWorld,normalNode:normalWorld,requested:true,resolution:shadowResolution,sourceRadius:()=>translation.value.length()+scale.value*sourceRadius,sourceSizeNode:region.w.max(0).sqrt().mul(scale),shadowSoftness,shadowSampling,filterCoordinates,screenAligned:comparison.grain!=='world',sharedPreparation,blockerSamples,filterSamples,filterPattern});
     // Source coefficients use volume-local lengths. Express distance there;
     // scaling the object should not silently scale its radiometric brightness.
@@ -64,6 +68,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
   const currentLights=lights;
   prepareSurfaceSampling=()=>{
     grain?.bits.toStack();
+    strata?.bits.toStack();
     // Derivatives must be evaluated in uniform flow, before source selection.
     for(const light of currentLights)light.shadow.prepareSampling?.();
   };
@@ -72,7 +77,7 @@ export function mountDistributedSceneRadiance({renderer,scene,prototype,device,d
     const sum=vec3(0).toVar();
     const add=indices=>{for(const i of indices)sum.addAssign(currentLights[i].irradiance.mul(2));};
     If(surfaceOn,()=>{if(count===4)If(paired,()=>{
-      If(grain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
+      If(pairGrain?.firstPair??screenCoordinate.x.floor().add(screenCoordinate.y.floor()).mod(2).lessThan(1),()=>add([0,2])).Else(()=>add([1,3]));
     }).Else(()=>{for(const light of currentLights)sum.addAssign(light.irradiance);});
     else for(const light of currentLights)sum.addAssign(light.irradiance);});
     return sum.mul(surfaceGain);

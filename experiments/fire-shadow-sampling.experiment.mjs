@@ -119,7 +119,7 @@ export function createFireShadowSettings({session,document,inputs={},record=()=>
           row.append(select);panel.append(row);return select;
         };
         if(diagnostics)implementationSelector=comparisonControl('Capture implementation',[['shared','Shared preparation + uniform offsets'],['legacy','Before optimization — per-source preparation + arithmetic']],'implementation');
-        grainSelector=comparisonControl('Shadow grain placement',[['ordered','Ordered screen pattern — baseline'],['screen','Scrambled screen grain — stable'],['screen-animated','Scrambled screen grain — animated'],['world','Scrambled world-space grain']],'grain');
+        grainSelector=comparisonControl('Shadow grain placement',[['ordered','Ordered screen pattern — baseline'],['screen','Scrambled screen grain — stable'],['screen-animated','Scrambled screen grain — animated'],['balanced-pairs','Balanced source pairs — animated trial'],['balanced-filter','Balanced filter phases — animated trial'],['balanced','Balanced pairs + filter — animated trial'],['world','Scrambled world-space grain']],'grain');
         cellRow=document.createElement('label');cellRow.textContent='World grain cell size';
         cellInput=document.createElement('input');cellInput.type='number';cellInput.min='0.000001';cellInput.step='any';cellInput.setAttribute('aria-label','World grain cell size');
         cellInput.addEventListener('change',()=>invoke('setShadowComparison',{worldCellSize:Number(cellInput.value)}).catch(failed));
