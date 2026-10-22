@@ -1,0 +1,1996 @@
+{
+"schema": "mobrecon.tensor-shapes.v0",
+"revision": "SeanChenxy/HandMesh@3c87e958:2b634114dadb3248:f32-bn-folded",
+"note": "Names, dtypes and shapes of the packed MobRecon tensors (no values); written from pack-weights.py output.",
+"tensors": [
+{
+"name": "backbone.pre_layer.0.weight",
+"dtype": "f32",
+"shape": [
+64,
+3,
+3,
+3
+]
+},
+{
+"name": "backbone.pre_layer.0.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.pre_layer.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+64,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.pre_layer.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.pre_layer.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+64,
+1,
+1
+]
+},
+{
+"name": "backbone.pre_layer.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.thrink.weight",
+"dtype": "f32",
+"shape": [
+128,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.thrink.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+128,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+128,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+192,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+192,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense1.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.senet1.fc1.weight",
+"dtype": "f32",
+"shape": [
+128,
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet1.fc1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.senet1.fc2.weight",
+"dtype": "f32",
+"shape": [
+256,
+128
+]
+},
+{
+"name": "backbone.dense_stack1.senet1.fc2.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+320,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+320
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+320,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv3.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+384,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv3.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv3.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+384,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv3.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv4.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+448,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv4.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+448
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv4.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+448,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense2.conv4.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack1.senet2.fc1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512
+]
+},
+{
+"name": "backbone.dense_stack1.senet2.fc1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet2.fc2.weight",
+"dtype": "f32",
+"shape": [
+512,
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet2.fc2.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+640,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+640
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+640,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv3.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+768,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv3.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+768
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv3.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+768,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv3.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv4.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+896,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv4.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+896
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv4.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+896,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.dense3.conv4.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1024,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1024
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+512,
+1024,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+512,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink1.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.senet4.fc1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512
+]
+},
+{
+"name": "backbone.dense_stack1.senet4.fc1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet4.fc2.weight",
+"dtype": "f32",
+"shape": [
+512,
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet4.fc2.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink2.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet5.fc1.weight",
+"dtype": "f32",
+"shape": [
+128,
+256
+]
+},
+{
+"name": "backbone.dense_stack1.senet5.fc1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack1.senet5.fc2.weight",
+"dtype": "f32",
+"shape": [
+256,
+128
+]
+},
+{
+"name": "backbone.dense_stack1.senet5.fc2.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+24,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack1.thrink3.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+24
+]
+},
+{
+"name": "backbone.dense_stack1.senet6.fc1.weight",
+"dtype": "f32",
+"shape": [
+12,
+24
+]
+},
+{
+"name": "backbone.dense_stack1.senet6.fc1.bias",
+"dtype": "f32",
+"shape": [
+12
+]
+},
+{
+"name": "backbone.dense_stack1.senet6.fc2.weight",
+"dtype": "f32",
+"shape": [
+24,
+12
+]
+},
+{
+"name": "backbone.dense_stack1.senet6.fc2.bias",
+"dtype": "f32",
+"shape": [
+24
+]
+},
+{
+"name": "backbone.stack1_remap.weight",
+"dtype": "f32",
+"shape": [
+24,
+24,
+1,
+1
+]
+},
+{
+"name": "backbone.stack1_remap.bias",
+"dtype": "f32",
+"shape": [
+24
+]
+},
+{
+"name": "backbone.thrink2.weight",
+"dtype": "f32",
+"shape": [
+128,
+152,
+1,
+1
+]
+},
+{
+"name": "backbone.thrink2.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+128,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+128,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+192,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+192
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+192,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense1.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.senet1.fc1.weight",
+"dtype": "f32",
+"shape": [
+128,
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet1.fc1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.senet1.fc2.weight",
+"dtype": "f32",
+"shape": [
+256,
+128
+]
+},
+{
+"name": "backbone.dense_stack2.senet1.fc2.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+320,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+320
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+320,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv3.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+384,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv3.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+384
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv3.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+384,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv3.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv4.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+448,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv4.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+448
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv4.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+64,
+448,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense2.conv4.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "backbone.dense_stack2.senet2.fc1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512
+]
+},
+{
+"name": "backbone.dense_stack2.senet2.fc1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet2.fc2.weight",
+"dtype": "f32",
+"shape": [
+512,
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet2.fc2.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+640,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+640
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+640,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv3.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+768,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv3.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+768
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv3.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+768,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv3.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv4.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+896,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv4.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+896
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv4.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+128,
+896,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense3.conv4.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.senet3.fc1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1024
+]
+},
+{
+"name": "backbone.dense_stack2.senet3.fc1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet3.fc2.weight",
+"dtype": "f32",
+"shape": [
+1024,
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet3.fc2.bias",
+"dtype": "f32",
+"shape": [
+1024
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1024,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1024
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+768,
+1024,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+768
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1792,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1792
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1792,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense4.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1024,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1024
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+768,
+1024,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+768
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv2.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1792,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv2.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1792
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv2.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1792,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.dense5.conv2.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+1024,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+1024
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+512,
+1024,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+512,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink1.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.senet4.fc1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512
+]
+},
+{
+"name": "backbone.dense_stack2.senet4.fc1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet4.fc2.weight",
+"dtype": "f32",
+"shape": [
+512,
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet4.fc2.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+512,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+512
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+512,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink2.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet5.fc1.weight",
+"dtype": "f32",
+"shape": [
+128,
+256
+]
+},
+{
+"name": "backbone.dense_stack2.senet5.fc1.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "backbone.dense_stack2.senet5.fc2.weight",
+"dtype": "f32",
+"shape": [
+256,
+128
+]
+},
+{
+"name": "backbone.dense_stack2.senet5.fc2.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.0.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.0.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.0.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+256,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.0.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv3x3.0.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv3x3.0.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv3x3.1.weight",
+"dtype": "f32",
+"shape": [
+256,
+1,
+3,
+3
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv3x3.1.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv1x1.weight",
+"dtype": "f32",
+"shape": [
+24,
+256,
+1,
+1
+]
+},
+{
+"name": "backbone.dense_stack2.thrink3.1.conv1x1.bias",
+"dtype": "f32",
+"shape": [
+24
+]
+},
+{
+"name": "backbone.dense_stack2.senet6.fc1.weight",
+"dtype": "f32",
+"shape": [
+12,
+24
+]
+},
+{
+"name": "backbone.dense_stack2.senet6.fc1.bias",
+"dtype": "f32",
+"shape": [
+12
+]
+},
+{
+"name": "backbone.dense_stack2.senet6.fc2.weight",
+"dtype": "f32",
+"shape": [
+24,
+12
+]
+},
+{
+"name": "backbone.dense_stack2.senet6.fc2.bias",
+"dtype": "f32",
+"shape": [
+24
+]
+},
+{
+"name": "backbone.mid_proj.weight",
+"dtype": "f32",
+"shape": [
+256,
+1024,
+1,
+1
+]
+},
+{
+"name": "backbone.conv.weight",
+"dtype": "f32",
+"shape": [
+21,
+24,
+1,
+1
+]
+},
+{
+"name": "backbone.uv_reg.0.weight",
+"dtype": "f32",
+"shape": [
+128,
+256
+]
+},
+{
+"name": "backbone.uv_reg.1.weight",
+"dtype": "f32",
+"shape": [
+64,
+128
+]
+},
+{
+"name": "backbone.uv_reg.2.weight",
+"dtype": "f32",
+"shape": [
+2,
+64
+]
+},
+{
+"name": "decoder3d.de_layer.0.conv.weight",
+"dtype": "f32",
+"shape": [
+256,
+2304
+]
+},
+{
+"name": "decoder3d.de_layer.0.conv.bias",
+"dtype": "f32",
+"shape": [
+256
+]
+},
+{
+"name": "decoder3d.de_layer.1.conv.weight",
+"dtype": "f32",
+"shape": [
+128,
+2304
+]
+},
+{
+"name": "decoder3d.de_layer.1.conv.bias",
+"dtype": "f32",
+"shape": [
+128
+]
+},
+{
+"name": "decoder3d.de_layer.2.conv.weight",
+"dtype": "f32",
+"shape": [
+64,
+1152
+]
+},
+{
+"name": "decoder3d.de_layer.2.conv.bias",
+"dtype": "f32",
+"shape": [
+64
+]
+},
+{
+"name": "decoder3d.de_layer.3.conv.weight",
+"dtype": "f32",
+"shape": [
+32,
+576
+]
+},
+{
+"name": "decoder3d.de_layer.3.conv.bias",
+"dtype": "f32",
+"shape": [
+32
+]
+},
+{
+"name": "decoder3d.head.weight",
+"dtype": "f32",
+"shape": [
+3,
+288
+]
+},
+{
+"name": "decoder3d.head.bias",
+"dtype": "f32",
+"shape": [
+3
+]
+},
+{
+"name": "decoder3d.upsample",
+"dtype": "f32",
+"shape": [
+49,
+21
+]
+},
+{
+"name": "topology.spiral.0",
+"dtype": "i32",
+"shape": [
+778,
+9
+]
+},
+{
+"name": "topology.spiral.1",
+"dtype": "i32",
+"shape": [
+389,
+9
+]
+},
+{
+"name": "topology.spiral.2",
+"dtype": "i32",
+"shape": [
+195,
+9
+]
+},
+{
+"name": "topology.spiral.3",
+"dtype": "i32",
+"shape": [
+98,
+9
+]
+},
+{
+"name": "topology.up.0.index",
+"dtype": "i32",
+"shape": [
+778,
+3
+]
+},
+{
+"name": "topology.up.0.weight",
+"dtype": "f32",
+"shape": [
+778,
+3
+]
+},
+{
+"name": "topology.up.1.index",
+"dtype": "i32",
+"shape": [
+389,
+3
+]
+},
+{
+"name": "topology.up.1.weight",
+"dtype": "f32",
+"shape": [
+389,
+3
+]
+},
+{
+"name": "topology.up.2.index",
+"dtype": "i32",
+"shape": [
+195,
+3
+]
+},
+{
+"name": "topology.up.2.weight",
+"dtype": "f32",
+"shape": [
+195,
+3
+]
+},
+{
+"name": "topology.up.3.index",
+"dtype": "i32",
+"shape": [
+98,
+3
+]
+},
+{
+"name": "topology.up.3.weight",
+"dtype": "f32",
+"shape": [
+98,
+3
+]
+},
+{
+"name": "topology.faces",
+"dtype": "u32",
+"shape": [
+1538,
+3
+]
+}
+]
+}
