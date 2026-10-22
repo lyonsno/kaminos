@@ -21,7 +21,7 @@
 // timeStep; dt = 1 at the reference Speed under the uniform step). Fuel: the
 // existing fuel channel (the inflow stream carries Fuel Fraction). Oxidizer:
 // normalised so ambient air is 1. Thermal state: the existing dimensionless
-// heat channel (Kelvin is only a renderer calibration of it). Soot: the
+// heat channel (its Kelvin mapping drives emission AND soot burnout). Soot: the
 // existing smoke channel's optical units.
 //
 // The existing solver stores velocity in cells per step, so a diffusivity fixed
@@ -44,7 +44,7 @@ export const REACTANT_MODEL = Object.freeze({
     time: 'reference steps: dt = timeStep, 1 at the reference Speed under the uniform step',
     fuel: 'existing fuel channel; the inflow stream carries Fuel Fraction',
     oxidizer: 'normalised oxidizer: ambient air = 1',
-    thermal: 'existing dimensionless heat channel; Kelvin is a renderer calibration',
+    thermal: 'dimensionless heat channel; Kelvin mapping drives emission and soot burnout',
     soot: 'existing smoke channel optical units',
   }),
   ambientOxidizer: 1,
@@ -114,6 +114,29 @@ function finiteOr(value, fallback) {
 }
 function modelOf(controls) {
   return controls?.model ?? REACTANT_MODEL;
+}
+
+// Calibrate a reduced model's complete-burn energy potential, not its ignition
+// or rate law. The reference must account for its own initial sensible heat.
+// This returns a candidate scale; it never changes a basin or model default.
+export function calibrateReactantTemperature({ initialKelvin, finalKelvin, fuel, oxidizer, ambientKelvin = 300 }, model = REACTANT_MODEL) {
+  for (const [key, value] of Object.entries({ initialKelvin, finalKelvin, fuel, oxidizer, ambientKelvin,
+    heatOfCombustion: model.heatOfCombustion, oxidizerRequirement: model.oxidizerRequirement })) {
+    if (!Number.isFinite(value)) throw new TypeError(`${key} must be finite`);
+  }
+  if (!(ambientKelvin > 0 && initialKelvin >= ambientKelvin && finalKelvin > initialKelvin)) {
+    throw new RangeError('reference must have positive ambient, initial >= ambient, and final > initial temperature');
+  }
+  if (!(fuel > 0 && oxidizer > 0 && model.heatOfCombustion > 0 && model.oxidizerRequirement > 0)) {
+    throw new RangeError('reference must have positive reactants and heat of combustion');
+  }
+  const burnableFuel = Math.min(fuel, oxidizer / model.oxidizerRequirement);
+  const heatRise = model.heatOfCombustion * burnableFuel;
+  const kelvinPerHeat = (finalKelvin - initialKelvin) / heatRise;
+  if (!(Number.isFinite(kelvinPerHeat) && kelvinPerHeat > 0)) throw new RangeError('reference scale is not finite and positive');
+  return { ambientKelvin, initialKelvin, finalKelvin, burnableFuel, heatRise, kelvinPerHeat,
+    initialHeat: (initialKelvin - ambientKelvin) / kelvinPerHeat,
+    kelvinPerFuelBurned: kelvinPerHeat * model.heatOfCombustion };
 }
 
 // The local burn: no position, grid level or appearance input.

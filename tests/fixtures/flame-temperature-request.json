@@ -1,0 +1,15 @@
+{
+  "fuel": "CH4",
+  "oxidizer": "O2:1, N2:3.76",
+  "pressurePa": 101325,
+  "cases": [
+    {"initialKelvin": 300, "equivalenceRatio": 0.5},
+    {"initialKelvin": 300, "equivalenceRatio": 0.75},
+    {"initialKelvin": 300, "equivalenceRatio": 1},
+    {"initialKelvin": 300, "equivalenceRatio": 1.25},
+    {"initialKelvin": 300, "equivalenceRatio": 1.5},
+    {"initialKelvin": 300, "equivalenceRatio": 2},
+    {"initialKelvin": 600, "equivalenceRatio": 1},
+    {"initialKelvin": 900, "equivalenceRatio": 1}
+  ]
+}
