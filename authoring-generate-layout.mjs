@@ -40,7 +40,7 @@ export function installGenerateLayout({document,trellisSettings=()=>null,queueLi
     sourceName.textContent=showing?byId('asset-name')?.textContent||'':'No image yet. Generate one in step 1 or pick one in Browse.';
     preview.title=showing?sourceName.textContent:'';
     const model=byId('asset-mesh-model')?.value,t=trellisSettings();
-    settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.':'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
+    settings.textContent=model==='trellis'?(t?`${t} · set on the server for now`:'Settings are set on the server for now'):model==='trellis-page'?(trellisOutput?.get()==='surfels'?'Surfels from the decoded field: no mesh cleanup, UV or bake · f16 decoders · Stop ends it at the next GPU step.':'Settings come from the mounted checkpoint package · f16 decoders · 200k faces · Stop ends it at the next GPU step.'):'Stable Fast 3D runs on this page beside the kiln, in about a minute.';
     outputRow.hidden=!trellisOutput||model!=='trellis-page';if(!outputRow.hidden)outputRow.querySelector('select').value=trellisOutput.get();
     masks.hidden=!openMasks||selected()?.kind!=='image';
     const line=queueLine();queue.textContent=line;queue.hidden=!line;
