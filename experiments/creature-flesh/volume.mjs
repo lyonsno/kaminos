@@ -1,5 +1,17 @@
 import {tetrahedron,sub,dot,inverse,apply} from './elastic.mjs';
 
+export function prepareGpuVolume(source,{density=1}={}){
+ createFleshVolume(source,{density}); // Reuse complete topology/material admission.
+ const {positions,tetrahedra,pinned}=source,nodes=positions.length;
+ const incident=positions.map(()=>[]),neighbours=positions.map(()=>new Set()),mass=new Float32Array(nodes),colours=new Uint32Array(nodes);
+ tetrahedra.forEach((t,e)=>{const m=tetrahedron(t.map(i=>positions[i])).volume*density/4;t.forEach((i,k)=>{mass[i]+=m;incident[i].push([e,k]);t.forEach(j=>{if(j!==i)neighbours[i].add(j);});});});
+ let colourCount=0;
+ for(let i=0;i<nodes;i++){const used=new Set([...neighbours[i]].filter(j=>j<i).map(j=>colours[j]));let c=0;while(used.has(c))c++;colours[i]=c;colourCount=Math.max(colourCount,c+1);}
+ const graph=new Uint32Array(nodes*4+tetrahedra.length*8);let cursor=0;
+ for(let i=0;i<nodes;i++){graph.set([cursor,incident[i].length,colours[i],pinned[i]?1:0],i*4);for(const pair of incident[i]){graph.set(pair,nodes*4+cursor*2);cursor++;}}
+ return{nodes,elements:tetrahedra.length,colourCount,graph,mass,tets:Uint32Array.from(tetrahedra.flat())};
+}
+
 // CPU reference for a small volume. Pose-conditioned elastic metric; the rig
 // supplies the reference, not forces that this solver may feed back into bones.
 export function createFleshVolume({positions,tetrahedra,pinned},{young=30,poisson=.35,bulk=100,density=1,contact=500,damping=.92,iterations=12,lineSearchTrials=8}={}){

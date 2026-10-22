@@ -32,9 +32,11 @@ try{
  },null,{timeout:0}),failure]);
  if(await page.evaluate(()=>window.kaminosWorkbenchExperiments?.state().id)!=='creature-flesh/contact')throw Error(await page.locator('.owner-experiment-status').textContent());
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ if(options.solver==='webgpu-tetrahedral-local-energy'){await page.waitForFunction(()=>window.kaminosCreatureFlesh.read().gpuValidated||window.kaminosCreatureFlesh.read().error);await page.evaluate(()=>window.kaminosCreatureFlesh.physicalState());}
  if(options.physical==='off'){await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('physical',false));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
  report.initial=await page.evaluate(()=>window.kaminosCreatureFlesh.read());
- const admission={caseSha256:options['case-sha'],preparedSha256:options['prepared-sha'],physical:options.physical!=='off'};admitContactState(report.initial,{...admission,steps:0,presented:true});
+ if(options.solver==='webgpu-tetrahedral-local-energy'){await page.evaluate(()=>window.kaminosCreatureFlesh.physicalState());report.initial=await page.evaluate(()=>window.kaminosCreatureFlesh.read());}
+ const admission={caseSha256:options['case-sha'],preparedSha256:options['prepared-sha'],physical:options.physical!=='off',solver:options.solver??'cpu-tetrahedral-local-energy'};admitContactState(report.initial,{...admission,steps:0,presented:true});
  report.phase='initial-capture';await page.screenshot({path:path.join(out,'initial.png')});
  await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',true));await page.screenshot({path:path.join(out,'volume.png')});await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('volume',false));
  if(options.mode==='probe'){
@@ -45,12 +47,13 @@ try{
   report.phase='contact-stroke';save();
   if(options.mode==='motion')await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('motion',true));
   await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('replay');await window.kaminosWorkbenchExperiments.invoke('play',false);});
+  if(options.solver==='webgpu-tetrahedral-local-energy')await page.evaluate(()=>window.kaminosCreatureFlesh.physicalState());
   admission.mode=options.mode;admitContactState(await page.evaluate(()=>window.kaminosCreatureFlesh.read()),{...admission,steps:0});
   fs.mkdirSync(path.join(out,'frames'),{recursive:true});
   for(let i=0;i<180;i++){
-   const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);return window.kaminosCreatureFlesh.read({geometry:false});});
+   const state=await page.evaluate(async()=>{await window.kaminosWorkbenchExperiments.invoke('advance',1);await window.kaminosCreatureFlesh.physicalState();return window.kaminosCreatureFlesh.read({geometry:false});});
    admitContactState(state,{...admission,steps:i+1});
-   const raw=await page.evaluate(()=>({state:window.kaminosCreatureFlesh.read(),...window.kaminosCreatureFlesh.physicalState()}));
+   const raw=await page.evaluate(async()=>{const physical=await window.kaminosCreatureFlesh.physicalState();return{state:window.kaminosCreatureFlesh.read(),...physical};});
    const file=`frames/${String(i+1).padStart(4,'0')}.png`;await page.locator('#viewport').screenshot({path:path.join(out,file)});
    const presented=await page.evaluate(()=>window.kaminosCreatureFlesh.read());admitContactState(presented,{...admission,steps:i+1,presented:true});
    fs.writeFileSync(path.join(out,`frames/${String(i+1).padStart(4,'0')}.json`),JSON.stringify(raw));report.frames.push({file,step:state.steps,frame:state.frame,volume:state.volume});

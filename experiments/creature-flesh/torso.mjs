@@ -3,6 +3,21 @@ const unit=p=>{const n=Math.hypot(...p);if(!(n>1e-10))throw Error('Degenerate to
 const perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
+// Explicit alternative to nearest-surface attachment for the internal volume.
+// A whole section shares its spine blend; skin weights and embedding stay intact.
+export function torsoNodeWeights(prepared,channels){
+ const ids=['pelvis','spine-lumbar','spine-chest'].map(n=>channels.indexOf(n));
+ if(ids.some(i=>i<0))throw Error('Complete torso channel family required');
+ const {sections,crossSection}=prepared.construction;
+ if(!Number.isSafeInteger(sections)||sections<3||!Number.isSafeInteger(crossSection)||crossSection<3||prepared.positions.length!==sections*crossSection**2)throw Error('Matching section lattice required');
+ const out=new Float32Array(prepared.positions.length*channels.length);
+ for(let i=0;i<prepared.positions.length;i++){
+  const t=Math.floor(i/crossSection**2)/(sections-1)*2,segment=Math.min(1,Math.floor(t)),f=t-segment;
+  out[i*channels.length+ids[segment]]=1-f;out[i*channels.length+ids[segment+1]]=f;
+ }
+ return out;
+}
+
 // A provisional mechanical proxy, not inferred anatomy or repaired source skin.
 // Cross-sections use every vertex in the accepted torso-dominant partition;
 // the detailed surface remains untouched, including all disconnected geometry.

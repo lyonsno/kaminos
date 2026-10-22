@@ -40,7 +40,7 @@ const normals=wgslFn(`fn dense_normals(v:u32,
 
 // Uses the renderer supplied by the actual object's draw, never a second device,
 // renderer or animation loop. The output buffers are also its vertex attributes.
-export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,physical=null}){
+export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,physical=null,physicalAttribute:externalPhysical=null}){
  const payload=prepareGpuSkin({rest,triangles,weights,channels});
  const attributes=[],computes=[];
  const input=(array,type)=>{const attr=new StorageBufferAttribute(array,1);attr.name='creature-'+geometry.uuid+'-input-'+attributes.length;attributes.push(attr);return storage(attr,type,array.length).toReadOnly();};
@@ -48,7 +48,8 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,
  const triangleNode=input(payload.triangles,'uint'),offsets=input(payload.offsets,'uint'),faces=input(payload.faces,'uint');
  const ids=physical?Uint32Array.from(physical.bindings):new Uint32Array(payload.vertices*4),pw=physical?Float32Array.from(physical.bindingWeights):new Float32Array(payload.vertices*4),nodes=physical?.positions?.length??1;
  if(ids.length!==payload.vertices*4||pw.length!==ids.length||!Number.isSafeInteger(nodes)||nodes<1||ids.some(i=>i>=nodes)||pw.some(w=>!Number.isFinite(w)||w<0))throw Error('Complete finite physical embedding required');
- const physicalIds=input(ids,'uint'),physicalWeights=input(pw,'float'),physicalAttribute=new StorageBufferAttribute(new Float32Array(nodes*4),4);attributes.push(physicalAttribute);
+ const physicalIds=input(ids,'uint'),physicalWeights=input(pw,'float'),physicalAttribute=externalPhysical??new StorageBufferAttribute(new Float32Array(nodes*4),4);if(!externalPhysical)attributes.push(physicalAttribute);
+ if(physicalAttribute.itemSize!==4||physicalAttribute.count<nodes)throw Error('Physical GPU buffer must contain every node as vec4');
  const physicalOffsets=storage(physicalAttribute,'vec4',nodes).toReadOnly();
  const paletteAttribute=new StorageBufferAttribute(new Float32Array(channels*8),4);paletteAttribute.name='creature-'+geometry.uuid+'-palette';attributes.push(paletteAttribute);
  const palette=storage(paletteAttribute,'vec4',channels*2).toReadOnly();
@@ -65,11 +66,13 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,
  let pending=true,disposed=false,dispatches=0,renderer=null;
  return {
   setOffsets(values){
+   if(externalPhysical)throw Error('Physical offsets are GPU-owned; CPU upload forbidden');
    if(disposed)throw Error('GPU skin is disposed');
    if(!physical||values?.length!==nodes||!values.every(p=>p?.length===3&&p.every(Number.isFinite)))throw Error('Matching finite physical offsets required');
    for(let i=0;i<nodes;i++)physicalAttribute.array.set(values[i],i*4);
    physicalAttribute.needsUpdate=true;pending=true;
   },
+  invalidate(){pending=true;},
   update(matrices){
    if(disposed)throw Error('GPU skin is disposed');
    const {real,dual}=transportDualQuaternions(matrices);
@@ -90,7 +93,7 @@ export function createGpuSkinDeformer({geometry,rest,triangles,weights,channels,
    if(packedPositions.length!==payload.vertices*4||packedNormals.length!==payload.vertices*4)throw Error('GPU output layout differs from vec4 storage');
    return {positions:unpack(packedPositions),normals:unpack(packedNormals),packedPositions,packedNormals,layout:'vec4',backend:'webgpu-dense-dq',dispatches};
   },
-  read:()=>({backend:'webgpu-dense-dq',physicalBackend:physical?'cpu-tetrahedral-local-energy':'none',dispatches,pending,paletteBytes:paletteAttribute.array.byteLength,poseCacheBytes:0,allInfluences:true}),
+  read:()=>({backend:'webgpu-dense-dq',physicalBackend:externalPhysical?'webgpu-tetrahedral-local-energy':physical?'cpu-tetrahedral-local-energy':'none',dispatches,pending,paletteBytes:paletteAttribute.array.byteLength,poseCacheBytes:0,allInfluences:true}),
   dispose(){if(disposed)return;disposed=true;for(const node of computes)node.dispose();/* geometry owns the two output attributes */
    if(renderer)for(const attr of attributes)renderer._attributes.delete(attr);
   },
