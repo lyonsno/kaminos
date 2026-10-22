@@ -165,7 +165,7 @@ body[data-workspace="authoring"] #authoring-burner-slot { display:none; }
 #selected-object-relations, #selected-mesh-properties, #selected-group-properties { padding:12px 0; }
 #selected-object-relations h3, #selected-mesh-properties h3, #selected-group-properties h3 { font-size:12px; margin:12px 0; }
 #selected-object-relations label { display:flex; flex-direction:column; gap:7px; font-size:11px; }
-#object-parent { background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; }
+#object-parent, #object-gi-proxy-detail, #object-gi-proxy-error { background:#25262a; border:1px solid #37383d; color:#d6d7db; padding:7px; }
 #selected-object-relations .btn, #selected-group-properties .btn { margin-top:10px; font-size:11px; }
 #selected-mesh-properties label[hidden] { display:none; }
 #authoring-presets { position:relative; font-size:10px; }
