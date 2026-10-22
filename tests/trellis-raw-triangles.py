@@ -1,3 +1,4 @@
+# kaminos-test: manual — uses the TRELLIS NumPy environment, not Kaminos dependencies
 import importlib.util
 import unittest
 from pathlib import Path
