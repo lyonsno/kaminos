@@ -33,8 +33,7 @@ import { createSceneVolumeTransport } from './scene-volume-transport.mjs';
 import { GRID_HEIGHT_MAX_RATIO, resolveGridHeight, gridHeightForShape, raymarchDomainBox } from './volume-grid-shape.mjs';
 export { GRID_HEIGHT_AUTO_RATIO, GRID_HEIGHT_MIN_RATIO, GRID_HEIGHT_MAX_RATIO, GRID_HEIGHT_DERIVED_LATTICE_WIDTHS, resolveGridHeight, gridHeightStep, gridHeightForShape, raymarchDomainBox, raymarchBoxHitModel } from './volume-grid-shape.mjs';
 import { SCENE_POINT_SMOKE_WGSL, createScenePointBindings } from './scene-point-light.mjs';
-import { DISTRIBUTED_SMOKE_WGSL } from './scene-volume-gather.mjs';
-import { createDistributedSmokeBindings } from './scene-smoke-reconstruction.mjs';
+import { createDistributedSmokeBindings, COMPOSED_SMOKE_WGSL as DISTRIBUTED_SMOKE_WGSL } from './scene-smoke-reconstruction.mjs';
 export { blackbodyXYZ, thermalLinearRGB, linearLuminance, srgbToLinear, sampleThermalLUT, displayPhysicalRGB } from './volume-physical-color.mjs';
 import {
   LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
@@ -20570,6 +20569,11 @@ export function createKaminosVolumePrototype({
       return null;
     }
     sceneVolumeSource ||= createSceneVolumeSource({device, module: shader, uniformBuffer, fluidBuffers, frontBuffers, getReactantTextures: () => reactantTextures,
+      worldRenderUniform,getWorldSmoke:()=>{
+        if(!worldSmoke||state.worldSmoke?.effective!=='one-way-world-field')return null;
+        const map=worldSmokeMapping(worldSmoke.plan,worldSmoke.anchor,productTransform);
+        return {texture:worldSmoke.optical,dimensions:worldSmoke.plan.materialDims,localMin:map.renderMin,localMax:map.renderMax};
+      },
       grid: EMISSIVE_LIGHT_GRID, gridY: EMISSIVE_LIGHT_GRID * gridHeight / gridSize, fluidGrid: gridSize, fluidGridY: gridHeight});
     sceneVolumeSource.encode(encoder, currentFluid, state.frameCount,productTransform);
     if (sceneMediumSource) sceneVolumeSource.encodeOpticalDepth(encoder, sceneMediumSource.position, sceneMediumSource.stepLength);
@@ -28584,6 +28588,7 @@ export function createKaminosVolumePrototype({
       rayStepTelemetry?.dispose();rayStepTelemetry=null;
       this.setActive(false);
       scenePointBindings?.dispose();
+      distributedBindings?.destroy();distributedBindings=null;
       persistentSparseCohortGpuState = null;
       fourArmHeldStateRuntimeState = null;
       fourArmHeldStateResidualGrid = null;
