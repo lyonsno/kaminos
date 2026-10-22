@@ -45,6 +45,7 @@ function context() {
     if (options.register !== false) state.sceneObjects.push({ id: url, type: 'glb', object });
     return object;
   };
+  state.applyGiProxySetting = () => {}; state.sceneGiProxies = { release() {} };
   vm.runInContext(source('const sceneSpotLights=new Map();', 'function groupPivotPose('), state);
   vm.runInContext(source('function greenroomPreviewIsActive()', 'function greenroomPreviewDebugState('), state);
   vm.runInContext(source('function nextGreenroomPreviewGeneration(', 'function updateGreenroomPreviewControls('), state);

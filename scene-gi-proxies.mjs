@@ -70,6 +70,8 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
     get:root=>handles.get(root)??null,
     list:()=>[...handles.entries()].map(([root,h])=>({root,...h})),
     release(root){drop(root);},
+    // GI proxy turned off for this object (its render settings): no proxy held, and the handle says so.
+    disable(root){drop(root);handles.set(root,{...describe(root),state:'disabled',proxyRoot:null,effective:null,levels:[],error:null});},
     // A cleared or reopened scene: every proxy goes, and results still in flight are not published.
     clear(){for(const root of new Set([...handles.keys(),...owned.keys(),...versions.keys()]))drop(root);},
   };

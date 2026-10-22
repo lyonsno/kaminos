@@ -3291,6 +3291,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
 import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
+import { giProxySettingFor, checkedGiProxySetting, canHaveGiProxy, GI_PROXY_FACE_TIERS } from './scene-gi-proxy-settings.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
@@ -5189,6 +5190,8 @@ function setSceneObjectMounted(entry, mounted) {
     if (mounted) scene.add(object);
     else scene.remove(object);
   }
+  // A mesh brought back (undo of a delete, membership restore) takes up its GI proxy setting again.
+  if (mounted) applyGiProxySetting(entry); else if (entry.giProxy) sceneGiProxies.release(entry.object);
 }
 
 function detachAuthoredSceneForPreview(authored) {
@@ -7051,6 +7054,7 @@ function registerSceneObject(object, metadata = {}) {
     collision:checkedObjectCollision(metadata,Object.hasOwn(metadata,'collision')?metadata.collision:metadata.id==='kiln'&&canCollideWithFire(metadata)?{domainId:'flame-field',enabled:true}:null),
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
     ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false}:{}),
+    giProxy:giProxySettingFor({type:metadata.type,giProxy:metadata.giProxy}),
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -7064,6 +7068,7 @@ function registerSceneObject(object, metadata = {}) {
     image: record.image,
     generation:record.generation,
     collision:record.collision,
+    giProxy:record.giProxy?structuredClone(record.giProxy):null,
     renderRoute: record.renderRoute,
     renderCapabilities: record.renderCapabilities,
     renderHandoffSchema: record.renderHandoffSchema,
@@ -7074,7 +7079,7 @@ function registerSceneObject(object, metadata = {}) {
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
   sceneNavigation?.prepare(object);
-  if (record.type === 'glb') sceneGiProxies.attach(object);
+  applyGiProxySetting(record);
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -12206,6 +12211,7 @@ function clearScene({loadRequestId = null} = {}) {
   groupProxies.clear();
   for(const id of meshDataTargets)scenePlacementTools?.edits.unregister(id);meshDataTargets.clear();
   for(const id of colliderEditTargets)scenePlacementTools?.edits.unregister(id);colliderEditTargets.clear();sceneColliderCollection.clear();
+  for(const id of giProxyEditTargets)scenePlacementTools?.edits.unregister(id);giProxyEditTargets.clear();
   for(const id of groupEditTargets)scenePlacementTools?.edits.unregister(id);
   groupEditTargets.clear();
   proceduralMeshes.clear();
@@ -24770,6 +24776,7 @@ function serializeSceneObject(entry) {
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
+    ...(entry.giProxy?{giProxy:structuredClone(entry.giProxy)}:{}),
   };
 }
 
@@ -25415,6 +25422,33 @@ async function importSceneMesh(file,{generation:origin=null,label=null,assetOrig
 }
 const meshDataTargets=new Set();
 const colliderEditTargets=new Set();
+const giProxyEditTargets=new Set();
+// The object's GI proxy follows its render settings: on, the stored tier they choose (loaded off the frame loop);
+// off, no proxy held. The setting is the stored state; the load just follows it.
+function applyGiProxySetting(entry){
+  if(!entry?.giProxy||!entry.object)return;
+  if(entry.giProxy.enabled)sceneGiProxies.select(entry.object,entry.giProxy.selection).then(()=>syncSceneDataInspector());
+  else sceneGiProxies.disable(entry.object);
+}
+function writeObjectGiProxy(id,value){
+  const entry=sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id);
+  if(!entry)throw Error('GI proxy object is absent');
+  entry.giProxy=checkedGiProxySetting(entry,value);
+  if(entry.object.userData.kaminosSceneObject)entry.object.userData.kaminosSceneObject.giProxy=structuredClone(entry.giProxy);
+  if(sceneObjects.includes(entry))applyGiProxySetting(entry);
+  syncSceneDataInspector();window._kaminosDirty?.();
+}
+function ensureObjectGiProxyTarget(id){
+  const entry=sceneObjects.find(record=>record.id===id);
+  if(!canHaveGiProxy(entry))throw Error('Choose a mesh object for GI proxy settings');
+  const target=`@object-gi-proxy:${id}`;
+  if(!giProxyEditTargets.has(target)){
+    scenePlacementTools.edits.register(target,{allowMissing:true,read:()=>{const e=sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id);return e?.giProxy?structuredClone(e.giProxy):null;},
+      check:value=>checkedGiProxySetting(entry,value),write:value=>writeObjectGiProxy(id,value)});
+    giProxyEditTargets.add(target);
+  }
+  return target;
+}
 function writeObjectCollision(id,value) {
   const entry=sceneObjects.find(record=>record.id===id)||sceneMembershipRetainedObjects.get(id);
   if(!entry)throw Error('Collision object is absent');
@@ -25448,6 +25482,16 @@ function syncSceneDataInspector() {
   const duplicate=document.getElementById('object-duplicate');duplicate.disabled=!canDuplicateObject(entry);
   const collisionPanel=document.getElementById('selected-collision-properties');
   if(collisionPanel){collisionPanel.hidden=!canCollideWithFire(entry)||!activeSceneComposition;document.getElementById('object-fire-collision').checked=entry?.collision?.enabled===true;document.getElementById('object-fire-collision-status').textContent=!entry?.collision?.enabled?'Enable to use this object as an obstacle.':isAuthoredKilnCollisionRoute()?'Collision updates on the next simulation step.':'Scene collisions are off in Fire & smoke.';}
+  const renderPanel=document.getElementById('selected-render-properties');
+  if(renderPanel){renderPanel.hidden=!canHaveGiProxy(entry)||!entry?.giProxy;
+    if(!renderPanel.hidden){const setting=entry.giProxy,editing=scenePlacementTools.edits.state().active?.id===`@object-gi-proxy:${entry.id}`,detail=document.getElementById('object-gi-proxy-detail'),error=document.getElementById('object-gi-proxy-error');
+      if(!editing){document.getElementById('object-gi-proxy').checked=setting.enabled;detail.value=setting.selection.faces?`faces:${setting.selection.faces}`:'error';if(setting.selection.maxError!=null)error.value=String(setting.selection.maxError);}
+      detail.disabled=!setting.enabled;error.closest('label').hidden=detail.value!=='error';error.disabled=!setting.enabled;
+      const h=sceneGiProxies.get(entry.object);
+      document.getElementById('object-gi-proxy-status').textContent=!setting.enabled?'Off: no GI proxy is held for this object.'
+        :!h||h.state==='resolving'?'Loading the GI proxy…':h.state==='loaded'?`Using the ${h.effective.faces}-face tier${h.error?.relative?.p95!=null?`, p95 error ${(h.error.relative.p95*100).toFixed(2)}% of its size`:''}.`
+        :h.state==='no-tiers'?(h.reason?`No GI proxy: ${h.reason}.`:'No stored tiers for this mesh.'):h.state==='not-generated'?'Only generated meshes have stored GI tiers.'
+        :h.state==='failed'?`GI proxy failed: ${h.failure}`:'';}}
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
@@ -25500,12 +25544,24 @@ function installSceneConstruction() {
   const collisionInput=document.getElementById('object-fire-collision');
   collisionInput.addEventListener('change',()=>{try{const target=ensureObjectCollisionTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview({domainId:'flame-field',enabled:collisionInput.checked});}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   authoringControlSessions.push(installSceneControlHistory({controls:[collisionInput],edits,id:()=>ensureObjectCollisionTarget(activeSceneObjectId),label:'Set Fire & smoke obstacle',onError:error=>setInfo(error.message)}));
+  // Render: the object's GI proxy (scene-gi-proxy-settings.mjs), on or off and which stored tier.
+  const renderPanel=document.createElement('section');renderPanel.id='selected-render-properties';renderPanel.hidden=true;
+  renderPanel.innerHTML='<h3>Render</h3><label class="slider-row"><span class="slider-label">GI proxy</span><input id="object-gi-proxy" type="checkbox"></label>'
+    +'<label class="slider-row"><span class="slider-label">Proxy detail</span><select id="object-gi-proxy-detail">'+GI_PROXY_FACE_TIERS.map(f=>`<option value="faces:${f}">${f} faces</option>`).join('')+'<option value="error">By error</option></select></label>'
+    +'<label class="slider-row"><span class="slider-label">Max error</span><input id="object-gi-proxy-error" type="number" min="0" step="0.001" value="0.005"></label>'
+    +'<p id="object-gi-proxy-status" class="flame-scope"></p>';
+  collisionPanel.after(renderPanel);scenePlacementTools.addHistoryScope(renderPanel);
+  const giProxyInput=document.getElementById('object-gi-proxy'),giProxyDetail=document.getElementById('object-gi-proxy-detail'),giProxyError=document.getElementById('object-gi-proxy-error');
+  const giProxyControlValue=()=>({enabled:giProxyInput.checked,selection:giProxyDetail.value==='error'?{maxError:Number(giProxyError.value),stat:'p95'}:{faces:Number(giProxyDetail.value.slice(6))}});
+  for(const control of [giProxyInput,giProxyDetail,giProxyError])control.addEventListener('change',()=>{try{const target=ensureObjectGiProxyTarget(activeSceneObjectId);if(edits.state().active?.id===target)edits.preview(giProxyControlValue());}catch(error){setInfo(error.message);syncSceneDataInspector();}});
+  authoringControlSessions.push(installSceneControlHistory({controls:[giProxyInput,giProxyDetail,giProxyError],edits,id:()=>ensureObjectGiProxyTarget(activeSceneObjectId),label:'Set GI proxy',onError:error=>setInfo(error.message)}));
   const groupPanel=document.createElement('section');groupPanel.id='selected-group-properties';groupPanel.hidden=true;
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
+    setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},

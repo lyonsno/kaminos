@@ -18,7 +18,7 @@ test('disabled authored emission survives serialization and source registration'
   const source=readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const context={structuredClone,sceneObjects:[],sceneNavigation:null,window:{},
     LOCAL_LIQUID_EMITTER_TYPE:'water',FLAME_EMITTER_TYPE:'flame',CAMERA_TYPE:'camera',PROCEDURAL_MESH_TYPE:'mesh',
-    checkedObjectCollision:()=>null,canCollideWithFire:()=>false,setActiveSceneObject(){},
+    checkedObjectCollision:()=>null,canCollideWithFire:()=>false,setActiveSceneObject(){},giProxySettingFor:()=>null,applyGiProxySetting(){},
     sceneObjectMetadataFor:object=>object.userData.kaminosSceneObject,
     sceneObjectTransformState:()=>({position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}),getMaterialStateForObject:()=>[]};
   vm.createContext(context);
