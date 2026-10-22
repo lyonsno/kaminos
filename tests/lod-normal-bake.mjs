@@ -182,3 +182,35 @@ test('decode shading normals: a flat edge between oppositely wound faces does no
   const n = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.1, footprint: true, unoriented: true})([0.01, 0.01, 0.001], [0, 0, 1], 0.001);
   assert.ok(n && degrees(unit(n), [0, 0, 1]) < 0.5, `${n}`);
 });
+
+test('decode shading normals take the dominant axis whatever the face order (confirmation review M2)', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
+  const vertices = new Float32Array([0,0,0, 0,0,1, 0,-1,0, 1.6,-1.2,0, -1.6,-1.2,0, 3.2,-2.4,-1, -3.2,-2.4,-1]);
+  const run = order => { const faces = new Uint32Array(order), normals = windingFreeVertexNormals(vertices, faces);
+    const geometry = new THREE.BufferGeometry(); geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3)); geometry.setIndex(new THREE.BufferAttribute(faces, 1));
+    const s = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, bvh: new MeshBVH(geometry), reach: 0.1, footprint: true, unoriented: true})([0.0001, -0.001, 0.001], [1, 0, 0], 0.0001);
+    return {axis: [...normals.subarray(0, 3)], sample: unit(s)}; };
+  const a = run([0,1,2, 0,1,3, 0,1,4, 0,3,5, 0,4,6]), b = run([0,1,3, 0,1,4, 0,1,2, 0,3,5, 0,4,6]);
+  // Vertex 0's accumulated matrix is diag(1.94, 2.56, 0): its dominant axis is y.
+  for (const r of [a, b]) assert.ok(degrees(r.axis, [0, 1, 0]) < 0.5, `axis ${r.axis}`);
+  assert.ok(degrees(a.sample, b.sample) < 0.5, `${a.sample} vs ${b.sample}`);
+});
+
+test('decode axes are the dominant direction of random vertex fans, under any face order', async () => {
+  const {windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
+  let seed = 7; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let trial = 0; trial < 200; trial++) {
+    const k = 3 + Math.floor(rnd() * 6), vertices = new Float32Array((k + 1) * 3), order = [];
+    for (let i = 1; i <= k; i++) { vertices.set([rnd() * 2 - 1, rnd() * 2 - 1, (rnd() * 2 - 1) * 0.6], i * 3); }
+    for (let i = 1; i <= k; i++) order.push(rnd() < 0.5 ? [0, i, i % k + 1] : [0, i % k + 1, i]); // random winding
+    const axis = [...windingFreeVertexNormals(vertices, new Uint32Array(order.flat())).subarray(0, 3)];
+    const shuffled = [...order].sort(() => rnd() - 0.5), again = [...windingFreeVertexNormals(vertices, new Uint32Array(shuffled.flat())).subarray(0, 3)];
+    assert.ok(degrees(axis, again) < 0.5, `trial ${trial}: order changed the axis`);
+    // Rayleigh quotient of the accumulated matrix: the axis must beat every sampled direction.
+    const q = d => order.reduce((sum, [a, b, c]) => { const p = i => [...vertices.subarray(i * 3, i * 3 + 3)];
+      const u = p(b).map((x, j) => x - p(a)[j]), w = p(c).map((x, j) => x - p(a)[j]), n = [u[1]*w[2]-u[2]*w[1], u[2]*w[0]-u[0]*w[2], u[0]*w[1]-u[1]*w[0]], l = Math.hypot(...n);
+      return l ? sum + (l / 2) * ((n[0]*d[0] + n[1]*d[1] + n[2]*d[2]) / l) ** 2 : sum; }, 0);
+    const best = q(axis);
+    for (let s = 0; s < 300; s++) { const d = unit([rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]); assert.ok(q(d) <= best * (1 + 1e-4) + 1e-9, `trial ${trial}: a direction beats the axis`); }
+  }
+});

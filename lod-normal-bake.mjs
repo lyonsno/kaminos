@@ -83,12 +83,36 @@ export function bakeTangentNormalMap({positions, normals, uvs, indices, textureS
   return {pixels, tangents, coveredPixels, unsampled, maxDegrees, texelSize};
 }
 
+// Eigenvector of the largest eigenvalue of a symmetric 3x3 [a00 a01 a02 a11 a12 a22], in closed form
+// (trigonometric eigenvalues, then the strongest cross product of the rows of A - lambda I): no seed,
+// so nothing about face order can steer it. Null when A is zero.
+function dominantAxis(a00, a01, a02, a11, a12, a22) {
+  const p1 = a01*a01 + a02*a02 + a12*a12, trace = a00 + a11 + a22;
+  if (!(trace > 0)) return null;
+  let lambda;
+  if (p1 <= 1e-30 * trace * trace) lambda = Math.max(a00, a11, a22);
+  else {
+    const q = trace / 3, p = Math.sqrt(((a00-q)**2 + (a11-q)**2 + (a22-q)**2 + 2*p1) / 6);
+    const b00 = (a00-q)/p, b11 = (a11-q)/p, b22 = (a22-q)/p, b01 = a01/p, b02 = a02/p, b12 = a12/p;
+    const r = Math.max(-1, Math.min(1, (b00*(b11*b22-b12*b12) - b01*(b01*b22-b12*b02) + b02*(b01*b12-b11*b02)) / 2));
+    lambda = q + 2 * p * Math.cos(Math.acos(r) / 3);
+  }
+  const r0 = [a00-lambda, a01, a02], r1 = [a01, a11-lambda, a12], r2 = [a02, a12, a22-lambda];
+  const cr = (u, v) => [u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+  let best = null, size = 0;
+  for (const c of [cr(r0, r1), cr(r0, r2), cr(r1, r2)]) { const l = Math.hypot(...c); if (l > size) { size = l; best = c; } }
+  if (best && size > 1e-12 * trace * trace) return best.map(x => x / size);
+  // A repeated largest eigenvalue: every row of A - lambda I is nearly parallel, or zero; take the
+  // unit axis whose diagonal entry is largest (any vector in that eigenspace is equally dominant).
+  const k = a00 >= a11 && a00 >= a22 ? 0 : a11 >= a22 ? 1 : 2, v = [0, 0, 0]; v[k] = 1; return v;
+}
+
 // Shading normals for a surface whose winding is not consistent (TRELLIS's raw decode): each vertex
-// takes the principal axis of its faces' area-weighted normal outer products, which neither the
-// winding nor the face order can cancel. The result is an axis: its sign is arbitrary per vertex, so
+// takes the dominant axis of its faces' area-weighted normal outer products, which neither the
+// winding nor the face order can change. The result is an axis: its sign is arbitrary per vertex, so
 // sample it with createHeroNormalSampler({unoriented: true}).
 export function windingFreeVertexNormals(vertices, faces) {
-  const n = vertices.length / 3, m = new Float32Array(n * 6), seed = new Float32Array(n * 3);
+  const n = vertices.length / 3, m = new Float32Array(n * 6);
   for (let t = 0; t < faces.length; t += 3) {
     const a = faces[t]*3, b = faces[t+1]*3, c = faces[t+2]*3;
     const ux = vertices[b]-vertices[a], uy = vertices[b+1]-vertices[a+1], uz = vertices[b+2]-vertices[a+2], wx = vertices[c]-vertices[a], wy = vertices[c+1]-vertices[a+1], wz = vertices[c+2]-vertices[a+2];
@@ -96,19 +120,10 @@ export function windingFreeVertexNormals(vertices, faces) {
     const area = l / 2; x /= l; y /= l; z /= l;
     for (const v of [faces[t], faces[t+1], faces[t+2]]) {
       const o = v * 6; m[o] += area*x*x; m[o+1] += area*x*y; m[o+2] += area*x*z; m[o+3] += area*y*y; m[o+4] += area*y*z; m[o+5] += area*z*z;
-      const s = seed[v*3]*x + seed[v*3+1]*y + seed[v*3+2]*z < 0 ? -area : area; seed[v*3] += s*x; seed[v*3+1] += s*y; seed[v*3+2] += s*z;
     }
   }
   const out = new Float32Array(n * 3);
-  for (let v = 0; v < n; v++) {
-    const o = v * 6; let x = seed[v*3], y = seed[v*3+1], z = seed[v*3+2];
-    if (!(Math.hypot(x, y, z) > 0)) { x = 1; y = 1; z = 1; }
-    for (let i = 0; i < 12; i++) { // power iteration toward the dominant axis
-      const nx = m[o]*x + m[o+1]*y + m[o+2]*z, ny = m[o+1]*x + m[o+3]*y + m[o+4]*z, nz = m[o+2]*x + m[o+4]*y + m[o+5]*z, l = Math.hypot(nx, ny, nz);
-      if (!(l > 0)) break; x = nx / l; y = ny / l; z = nz / l;
-    }
-    const l = Math.hypot(x, y, z); if (l > 0 && m[o] + m[o+3] + m[o+5] > 0) out.set([x / l, y / l, z / l], v * 3);
-  }
+  for (let v = 0; v < n; v++) { const o = v * 6, axis = dominantAxis(m[o], m[o+1], m[o+2], m[o+3], m[o+4], m[o+5]); if (axis) out.set(axis, v * 3); }
   return out;
 }
 
