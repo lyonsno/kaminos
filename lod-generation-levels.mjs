@@ -8,10 +8,10 @@
 // Steps: refuse taken level slots (unless replacing); remesh and bake the low tiers from the decode
 // and field; check each tier's frame against the reference and measure its error against it;
 // bake a tangent-space normal map from the reference's shading; ingest and register each tier.
-// The reference is the hero (default) or the raw decode (its area-weighted vertex normals).
+// The reference is the hero (default) or the raw decode (winding-free vertex normal axes).
 // `report` is updated at every phase and returned, including on failure (with `error`).
 import {prepareLowTiers, readGLBWorldMesh, measureGeometricError, glbNodeWorldMatrices} from './mesh-lod-ladder.mjs';
-import {addNormalMapToGLB, createHeroNormalSampler} from './lod-normal-bake.mjs';
+import {addNormalMapToGLB, createHeroNormalSampler, windingFreeVertexNormals} from './lod-normal-bake.mjs';
 
 export const LOW_TIER_ROUTE = 'closed-remesh+projection+trellis-simplify';
 
@@ -104,15 +104,10 @@ export async function prepareGenerationLevels({decode: {vertices, triangles}, ma
         const db = bounds(dw);
         checkFrame(tier, drift(bounds(readGLBWorldMesh(tier.glb).vertices), db, Math.hypot(...db.hi.map((h, a) => h - db.lo[a]))));
       }
-      const normals = new Float32Array(vertices.length);
-      for (let t = 0; t < triangles.length; t += 3) {
-        const a = triangles[t]*3, b = triangles[t+1]*3, c = triangles[t+2]*3;
-        const ux = vertices[b]-vertices[a], uy = vertices[b+1]-vertices[a+1], uz = vertices[b+2]-vertices[a+2], wx = vertices[c]-vertices[a], wy = vertices[c+1]-vertices[a+1], wz = vertices[c+2]-vertices[a+2];
-        const nx = uy*wz-uz*wy, ny = uz*wx-ux*wz, nz = ux*wy-uy*wx; // area-weighted
-        for (const v of [a, b, c]) { normals[v] += nx; normals[v+1] += ny; normals[v+2] += nz; }
-      }
+      // The decode's winding is not consistent, so its normals are taken as axes that winding cannot cancel.
+      const normals = windingFreeVertexNormals(vertices, triangles);
       const decodeMesh = {vertices, faces: triangles, normals};
-      sampleOptions = tier => ({sampleLocalNormal: createHeroNormalSampler({hero: decodeMesh, THREE, MeshBVH, bvh: closestSource.bvh, reach: 1.25 * tier.error.levelToSource.max, footprint: true}),
+      sampleOptions = tier => ({sampleLocalNormal: createHeroNormalSampler({hero: decodeMesh, THREE, MeshBVH, bvh: closestSource.bvh, reach: 1.25 * tier.error.levelToSource.max, footprint: true, unoriented: true}),
         source: {kind: 'raw-decode', digests: inputDigests}});
     }
     for (const tier of tiers) {

@@ -163,3 +163,22 @@ test('with a footprint the hero sampler averages detail finer than a texel inste
   assert.ok(Math.abs(unitOf(averaged)[0] - 0.243) < 0.01, `the average sees both sides in proportion: ${unitOf(averaged)}`);
   assert.match(footprint.method, /averaged over the texel footprint/);
 });
+
+// Raw-decode winding is not consistent: shading normals must not depend on it (review of ed5c25f7f, M1).
+test('decode shading normals survive inconsistent winding: a shallow fold samples the same up to sign', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
+  const a = Math.PI / 18, vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,-Math.cos(a),Math.sin(a)]);
+  const sample = faces => createHeroNormalSampler({hero: {vertices, faces, normals: windingFreeVertexNormals(vertices, faces)}, THREE, MeshBVH, reach: 0.1, footprint: true, unoriented: true})([0.3, 0.01, 0], [0, 0, 1], 0.001);
+  const consistent = unit(sample(new Uint32Array([0,1,2, 1,0,3]))), reversed = unit(sample(new Uint32Array([0,1,2, 0,1,3])));
+  assert.ok(degrees(consistent, reversed) < 0.5, `${consistent} vs ${reversed}`);
+  assert.ok(degrees(consistent, unit([0, Math.sin(a / 2), Math.cos(a / 2)])) < 2, `${consistent}`);
+});
+
+test('decode shading normals: a flat edge between oppositely wound faces does not cancel', async () => {
+  const THREE = await import('three'), {MeshBVH} = await import('three-mesh-bvh'), {createHeroNormalSampler, windingFreeVertexNormals} = await import('../lod-normal-bake.mjs');
+  const vertices = new Float32Array([0,0,0, 1,0,0, 0,1,0, 0,-1,0]), faces = new Uint32Array([0,1,2, 0,1,3]); // second face reversed
+  const normals = windingFreeVertexNormals(vertices, faces);
+  for (let v = 0; v < 4; v++) assert.ok(Math.abs(Math.abs(normals[v*3+2]) - 1) < 1e-6, `vertex ${v}: ${normals.subarray(v*3, v*3+3)}`);
+  const n = createHeroNormalSampler({hero: {vertices, faces, normals}, THREE, MeshBVH, reach: 0.1, footprint: true, unoriented: true})([0.01, 0.01, 0.001], [0, 0, 1], 0.001);
+  assert.ok(n && degrees(unit(n), [0, 0, 1]) < 0.5, `${n}`);
+});
