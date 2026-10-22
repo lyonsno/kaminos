@@ -210,11 +210,19 @@ export function reconcileVolumeCockpitLayoutDocument({ document: documentValue, 
   if (physicsGroup) {
     physicsGroup.controlIds.splice(physicsGroup.controlIds.indexOf('volume-physical-material-law') + 1, 0, ...physicsMissingIds);
   }
+  // Soot yield (2026-10-21) joins the reactant law's controls in a saved layout.
+  const sootYieldGroup = receipt.missingControlIds.includes('volume-reactant-soot-yield')
+    ? reconciled.groups.find(group => group.controlIds.includes('volume-reactant-cooling-time'))
+    : null;
+  if (sootYieldGroup) {
+    sootYieldGroup.controlIds.splice(sootYieldGroup.controlIds.indexOf('volume-reactant-cooling-time') + 1, 0, 'volume-reactant-soot-yield');
+  }
   const ordinaryMissingControlIds = receipt.missingControlIds
     .filter(controlId => !FORCE_CONTRIBUTION_CONTROL_IDS.includes(controlId)
       && !(cameraGroup && controlId === 'volume-tone-mapping')
       && !(rayGroup && controlId === 'volume-ray-start-noise')
-      && !(physicsGroup && physicsMissingIds.includes(controlId)));
+      && !(physicsGroup && physicsMissingIds.includes(controlId))
+      && !(sootYieldGroup && controlId === 'volume-reactant-soot-yield'));
   if (ordinaryMissingControlIds.length) {
     let newControls = reconciled.groups.find(group => group.id === 'new-controls');
     if (!newControls) {
@@ -498,7 +506,10 @@ export function syncVolumeCockpitModeAvailability(documentRef, c, physicalColor 
     const input = documentRef.getElementById(id);
     if (!input) continue;
     input.disabled = Boolean(inactiveReason);
-    input.title = inactiveReason;
+    // The control's description (set at startup) stays; an unavailable control
+    // shows why first.
+    const description = input.dataset?.volumeDescription || '';
+    input.title = inactiveReason ? (description ? `${inactiveReason} ${description}` : inactiveReason) : description;
   }
   syncVolumeCockpitControlVisibility(documentRef);
 }

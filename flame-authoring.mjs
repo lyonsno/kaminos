@@ -1,4 +1,5 @@
 import {PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS} from './volume-physics-appearance.mjs';
+import {volumeControlTooltip} from './volume-control-descriptions.mjs';
 
 // Standalone presets do not contain the emitter pose. Store its effective
 // aperture, not a raw slider value whose meaning depends on that missing pose.
@@ -118,13 +119,19 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-ray-start-noise','Blue noise'], ['volume-ray-noise-animated','Animate noise'], ['volume-quadrature-jitter','Interior jitter'],
     ['volume-flame-priority','Flame priority'], ['volume-render-scale','Screen resolution (%)'],
   ] },
+  // Operator 2026-10-21: the combustion controls and Glow gain lead the first panel.
+  { name:'Combustion', view:'look', open:true, fields:[
+    ['volume-reaction-law','Reaction law'], ['volume-reactant-mixing-time','Mixing time'],
+    ['volume-reactant-cooling-time','Cooling time'], ['volume-reactant-soot-yield','Soot yield'],
+    ['volume-heat-release-expansion','Heat release'], ['volume-physical-thermal','Glow gain'],
+  ] },
   { name:'Appearance', view:'look', open:true, fields:[
     ['volume-tone-mapping','Tone mapping'], ['volume-physical-exposure','Exposure (EV)'],
     ['volume-physical-white','White balance (K)'], ['volume-physical-knee','Highlight knee'],
-    ['volume-physical-thermal','Thermal response'], ['volume-physical-clean','Clean flame'],
+    ['volume-physical-clean','Clean flame'],
     ] },
   { name:'Smoke', view:'look', open:true, fields:[
-    ['volume-density','Density'], ['volume-physical-smoke-extinction','Extinction'],
+    ['volume-density','Soot display gain'], ['volume-physical-smoke-extinction','Extinction'],
     ['volume-physical-smoke-albedo','Albedo'], ['volume-physical-ambient','Ambient light'],
     ['volume-smoke','Smoke amount'],
   ] },
@@ -166,10 +173,6 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-wind-model','Wind model'], ['volume-wind-strength','Wind strength'],
     ['volume-wind-angle','Wind direction'], ['volume-wind-height','Wind height'],
     ['volume-wind-gust','Gust strength'], ['volume-wind-gust-period','Gust period'], ['volume-wind-gust-veer','Gust veer'],
-  ] },
-  { name:'Combustion', view:'motion', fields:[
-    ['volume-reaction-law','Reaction law'], ['volume-reactant-mixing-time','Mixing time'],
-    ['volume-reactant-cooling-time','Cooling time'], ['volume-heat-release-expansion','Heat expansion'],
   ] },
   { name:'Simulation', view:'quality', fields:[
     ['volume-pressure-solver','Pressure solver'], ['volume-projection','Projection'],
@@ -282,7 +285,6 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       }
       field.setAttribute('aria-label',`Flame ${label}`);
       field.dataset.authoringDragStep=source.dataset.authoringDragStep||(source.step==='any'?'.01':source.step||'.01');
-      if(id==='volume-render-scale')field.title='Raymarch width and height as a percentage of the viewport';
       function syncField(force=false) {
         const bounds=readControlBounds(id);
         if(bounds)syncFlameRangeBounds(source,bounds);
@@ -293,7 +295,6 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
         if(force!==true&&document.activeElement===field)return;
         if(field.type==='checkbox')field.checked=source.type==='checkbox'?source.checked:Number(source.value)>=.5;else field.value=String(flameControlDisplayValue(id,source.value));
       }
-      if(id==='emitter-assay-family')field.title='Placeable flame shapes. Cluster bowl is available in Workbench.';
       const eventName=source.tagName==='SELECT'||field.type==='checkbox'?'change':'input';
       field.addEventListener(eventName,()=>{
         if(id==='emitter-assay-family'&&!authoredFlameShapeOptions(source.options).some(option=>option.value===field.value)){syncField(true);onError(Error('Cluster bowl is not a placeable flame; use Workbench'));return;}
@@ -306,7 +307,7 @@ export function createFlameInspector({ document, host, sharedHost = host, listBa
       aliases.push(syncField);syncField();row.append(grip,field);section.append(row);
       const record={id,row,source,emission:group.name==='Emission',searchText:`${group.name} ${label} ${id}`.toLowerCase()};
       rows.push(record);sectionRows.push(record);
-      grip.title=source.closest('.slider-row')?.querySelector('[title]')?.title||label;
+      grip.title=volumeControlTooltip(id)||label;field.title=grip.title;
     }
     if(group.name==='Emission')section.append(runtimeStatus);
     if(group.name==='Material')section.append(appearanceStatus);

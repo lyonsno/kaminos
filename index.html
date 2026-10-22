@@ -1313,7 +1313,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Look lab freeze: pixel-stable pin for simulation steps and shader time.</span>
     <div class="volume-control-section" data-volume-control-section="reaction-front-extractor">
       <div class="volume-control-section-title">Reaction Front Extractor</div>
-      <span class="slider-help">CPU atlas only: thresholds and structural gates shape the debug shell candidate without changing rendered fire.</span>
+      <span class="slider-help">CPU atlas only: these thresholds and gates shape a debug atlas image built on frame readback. They do not change the fire or the rendered image.</span>
       <div class="slider-row">
         <span class="slider-label">Reaction live</span>
         <select id="volume-reaction-live-view" class="select-input">
@@ -1333,7 +1333,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help">reaction-live-view-shader-inspect-v0: full-size primary viewer of live shader-side support fields; atlas threshold sliders remain CPU-capture controls until parity uniforms land.</span>
       <div class="volume-control-section-title">Boundary fire</div>
-      <span class="slider-help">reaction-boundary-fire-controls-v0: shades the boundary sheet as clean-to-sooty hydrocarbon radiance. Smoke tint/extinction still comes from the raymarch.</span>
+      <span class="slider-help">Debug structure inputs. The boundary-fire painting they fed is retired and the Physics look ignores this structure, so they show only in a Structure view and, with Flame priority above 0, in where ray steps land.</span>
       <div class="slider-row">
         <span class="slider-label">Structure source</span>
         <select id="volume-boundary-sidecar-source" class="select-input">
@@ -1373,8 +1373,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <input type="range" id="volume-flow-kernel-coherence" data-volume-settings-role="renderer" min="0" max="2" step="0.05" value="1.00">
         <span class="slider-val" id="volume-flow-kernel-coherence-val">1.00</span>
       </div>
-      <span class="slider-help">Splat authority: support heat/reaction/front/interface, bake blur, baked ridge, and ridge select/cut shape candidate fields; splat radius/sharpness shape raster support. Step width and boundary display/color controls remain raymarch-only.</span>
-      <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
+      <span class="slider-help">Flow kernel: smooths each rendered sample along the local flow for a streaked, softer look (render only; strength 0 is off). Bake blur and Baked ridge shape the baked structure field, seen in a Structure view.</span>
+      <span class="slider-help">Prefilters the baked structure field. Any Structure view replaces the picture with one of its channels in false colour and switches the Physics look off while shown.</span>
       <div class="slider-row">
         <span class="slider-label">Bake blur</span>
         <input type="range" id="volume-boundary-sidecar-blur" min="0" max="1" step="0.02" value="0.45">
@@ -1392,7 +1392,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
       <div class="volume-control-section-title">Physics appearance</div>
-      <span class="slider-help">Material law = Physics (reactant law, Emissive transport): soot glows as a blackbody at the temperature the heat field implies (300 K + Kelvin per heat &times; heat), absorbs and scatters with Smoke extinction and Smoke albedo, and fresh burning adds the reaction spectrum (Clean emission). No appearance carrier is drawn. Thermal emission scales the glow; Exposure EV, Highlight knee, Camera white K and Tone mapping grade it; Density scales the soot. Dimmed controls do nothing under this law.</span>
+      <span class="slider-help">Physics is the material law, under every reaction law: soot glows as a blackbody at the temperature the transported heat implies (300 K + Kelvin per heat &times; heat), and absorbs and scatters by Smoke extinction and Smoke albedo. Fresh burning adds the reaction&rsquo;s own light (Clean emission), which exists only under the Reactant reaction law. Thermal emission is an artistic gain on the soot glow; 1 keeps the glow consistent with how dark the soot is. Exposure EV, Camera white K and Tone mapping grade the picture and also the light the flame throws on the scene; Highlight knee applies only to the Custom curve. Soot display gain scales the soot the renderer draws (not the simulated soot); because the picture uses soot &times; Smoke extinction, the two trade off one-for-one in the image, though they mean different things. Under the Reactant law, Soot yield sets how much soot the simulation makes. Physics draws in the ordinary view; a field view, a Structure view or Residual switches it off.</span>
       <div class="slider-row">
         <span class="slider-label" title="Calibration of the dimensionless heat field: T = 300 K + this × heat.">Kelvin per heat</span>
         <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1600">
@@ -1410,7 +1410,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
       <div class="volume-control-section-title">Wavelet turbulence</div>
-      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved four-to-eight-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
+      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved eight-to-eleven-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
       <div class="slider-row">
         <span class="slider-label" title="Fraction of the sub-grid deficit filled per reference step. 0 = off (kernel unchanged); 1 = fill it every step.">Wavelet turbulence</span>
         <input type="range" id="volume-wavelet-turbulence" min="0" max="1" step="any" value="0">
@@ -1428,7 +1428,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
-        <span class="slider-label" id="volume-physical-thermal-label">Thermal emission</span>
+        <span class="slider-label" id="volume-physical-thermal-label">Glow gain</span>
         <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
         <span class="slider-val" id="volume-physical-thermal-val">1</span>
       </div>
@@ -1599,7 +1599,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="immersed-source">Immersed source (anywhere, any direction)</option>
       </select>
       <span class="slider-val" id="volume-emitter-source-law-val">legacy-volume</span>
-      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp at 0.52 per component, then max() floors on smoke, heat and fuel. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply.</span>
+      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp to &minus;0.34&hellip;0.52 per component, then max() floors on smoke, heat and fuel: an authored forcing, not a source in the pressure solve. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply. Immersed source creates gas inside a disc slab placed by the flame source object, also inside the pressure solve. Inflow and Immersed need the converged open-top solver; without it they quietly add no gas. Under the Cluster emitter this selector does nothing.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-law">
       <span class="slider-label">Source Depth (volume-local)</span>
@@ -1654,7 +1654,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="bed">Porous bed</option>
       </select>
       <span class="slider-val" id="volume-emitter-aperture-pattern-val">shape</span>
-      <span class="slider-help">Under the inflow law the floor opening is a coverage map built from the chosen pattern on the family's geometry: the ring radius is the pattern's reach, the tube radius its line weight. Count is the number of jets, rings or spiral turns; Ratio is the inner rings' share of the flux; Seed places the jets and shapes the bed. Swirl adds a tangential velocity to the entering gas, which the open-top solve turns into a fire whirl.</span>
+      <span class="slider-help">The opening (on the floor under Inflow, in the source disc under Immersed) is a coverage map built from the chosen pattern: the whole shape, a ring of jets, a slot, or a patchy porous bed. Count is the number of jets; Seed places the jets and shapes the bed; Line weight thickens the bands. Swirl spins the entering gas under Inflow only, and strong swirl can twist the plume into a whirl.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Aperture count</span>
@@ -1801,7 +1801,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-artistic-swirl" checked>
       <span class="slider-val" id="volume-artistic-swirl-val">on</span>
     </div>
-    <span class="slider-help">Optional macro rotation around the vertical axis; it is not part of the base fluid solve.</span>
+    <span class="slider-help">Authored rotation of hot gas around the box&rsquo;s central vertical axis, stronger with heat and with Curl. Not part of the fluid solve.</span>
     <div class="slider-row" data-volume-visual-cost-knob="artistic-motion">
       <span class="slider-label">Transported lateral excitation</span>
       <input type="checkbox" id="volume-phased-sway" checked>
@@ -1815,7 +1815,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
       <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
-      <span class="force-contribution-gloss">Gates all active force contributions; transported material fields and prior velocity remain.</span>
+      <span class="force-contribution-gloss">Gates the four procedural detail forces below (micro-carrier, shred, fine breakup and its localization). Buoyancy, wind, swirl, lateral excitation, confinement and expansion are not affected.</span>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
     </div>
     <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-micro-carrier">
@@ -1843,7 +1843,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Density</span>
+      <span class="slider-label">Soot display gain</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
       <span class="slider-val" id="volume-density-val">4.20</span>
     </div>
@@ -1930,7 +1930,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="gusty">Gusty</option>
       </select>
       <span class="slider-val" id="volume-wind-model-val">steady</span>
-      <span class="slider-help">Off: no wind at all, whatever Wind Strength holds. Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+      <span class="slider-help">Off: no wind at all, whatever Wind Strength holds. Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a seeded random signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength wanders around the slider, typically by &plusmn;0.45 &times; gust and reaching (1 &plusmn; gust) only at the clamp, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle; the gust period is how long a gust lasts, not a repeating cycle. No per-cell noise; saved basins are unchanged on Steady.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Gust</span>
@@ -2037,7 +2037,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-residual-feature-debug" min="0" max="1" step="1" value="0">
       <span class="slider-val" id="volume-residual-feature-debug-val">off</span>
     </div>
-    <span class="slider-help">False-color residual feature plane: orange=radiance/fire, blue=interface/smoke authority.</span>
+    <span class="slider-help">False-colour residual feature inputs (orange = radiance/fire, blue = interface/smoke). Shows only with Residual on and a model loaded; the radiance part is now mostly empty.</span>
     <div class="slider-row">
       <span class="slider-label">Residual Model</span>
       <input type="text" id="volume-residual-model-url" class="text-input" value="" placeholder="artifacts/.../browser-direct-rs018.json">
@@ -2131,7 +2131,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-pyro-carrier-view-val">normal</span>
     </div>
-    <span class="slider-help">Choose which carrier is allowed to speak; paint is separate.</span>
+    <span class="slider-help">Retired: the legacy pyro carriers this chose between are always zero now, so it has no effect.</span>
     <div class="slider-row" data-volume-ui-retired="volume-pressure-mode">
       <span class="slider-label">Pressure</span>
       <select id="volume-pressure-mode" class="select-input">
@@ -2168,7 +2168,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-reaction-law-val">authored-tall-plume</span>
     </div>
-    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box, and Fire Licks / Interface Shred shape only the look. Tall plume scene with the inflow or immersed source only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
+    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box. Fire Licks and Interface Shred are not drawn; under Authored, Fire Licks also speeds the authored burn. Inflow or immersed source and shared gas transport (Common gas transport, or MacCormack) only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
       <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.25" max="30" step="any" value="3">
@@ -2182,6 +2182,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
+      <span class="slider-label">Soot yield</span>
+      <input type="range" id="volume-reactant-soot-yield" data-volume-settings-param="volume_reactant_soot_yield" min="0" max="6" step="any" value="2">
+      <span class="slider-val" id="volume-reactant-soot-yield-val">2.00</span>
+    </div>
+    <span class="slider-help">Reactant candidate: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
+    <div class="slider-row">
       <span class="slider-label">Appearance model</span>
       <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
         <option value="authored">Authored (nine carriers)</option>
@@ -2189,7 +2195,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-appearance-model-val">authored</span>
     </div>
-    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; every slider and every renderer formula is unchanged, so the only question is whether three channels carry the look. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, and in the Old adaptive ray marcher&rsquo;s step choice. Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -2224,7 +2230,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-confinement-val">Curl slider</span>
     </div>
-    <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one small confinement epsilon per Advection scheme, applied uniformly, with thermal expansion held at its Curl-0 baseline (0.048). The epsilon values are provisional choices from the 2026-09-25 enstrophy sweep on one basin: under MacCormack velocity the domain-mean enstrophy did not distinguish 0.010 from zero and rose only near 0.1, and the first-order sweep showed no response to epsilon; legacy and MacCormack-all inherit those values unmeasured. The sweep did not isolate what part of the authored Curl law raises enstrophy (it also changes expansion and weighting), so this is a reversible comparison candidate for the live ladder, not a demonstrated physical level. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds the procedural detail forces and Bonfire terms while those are on).</span>
+    <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one small confinement epsilon per Advection scheme, applied uniformly, with thermal expansion held at its Curl-0 baseline (0.048). The epsilon values are provisional choices from the 2026-09-25 enstrophy sweep on one basin: under MacCormack velocity the domain-mean enstrophy did not distinguish 0.010 from zero and rose only near 0.1, and the first-order sweep showed no response to epsilon; legacy and MacCormack-all inherit those values unmeasured. The sweep did not isolate what part of the authored Curl law raises enstrophy (it also changes expansion and weighting), so this is a reversible comparison candidate for the live ladder, not a demonstrated physical level. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds Artistic swirl, the lateral excitation, the procedural detail forces and Bonfire terms while those are on).</span>
     <div class="slider-row">
       <span class="slider-label">Time step</span>
       <select id="volume-time-step" class="select-input" data-volume-settings-param="volume_time_step">
@@ -2233,7 +2239,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-time-step-val">legacy</span>
     </div>
-    <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace but not the inlet velocity, edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance and every per-step velocity increment by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. The bounded emitter is not a prescribed boundary: each step it adds its inlet and entrainment velocities to the flow and then clamps at 0.52 per component, so those additions scale with Speed like every other increment while the clamp does not. Uniform needs the shared gas characteristic on a non-legacy scheme (Undamped with Common gas transport, or a MacCormack scheme): the legacy scheme's fixed clamp and 0.982 per-step damping and the split scalar layers' fixed backtraces are not time-step aware. The scalar channels' decays, reaction, conversion and the boundary sponges follow the same step (a per-step survival becomes rate^Speed, an increment is multiplied by Speed), as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max() birth floors stay per step. That makes the authored coefficients one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme (at equal simulated time, first-order scalars lose most of their heat and smoke at low Speed while MacCormack all fields keeps most of it, measured on one basin), so judge the motion live. The 8-cell transport bound caps displacement per step, so a very large Speed is limited by resolution rather than allowed to skip cells.</span>
+    <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace (and wind, column lift and, with Link momentum on, the emitter&rsquo;s push) but not edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance and every per-step velocity increment by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. The bounded emitter is not a prescribed boundary: each step it adds its inlet and entrainment velocities to the flow and then clamps at 0.52 per component, so those additions scale with Speed like every other increment while the clamp does not. Uniform needs the shared gas characteristic on a non-legacy scheme (Undamped with Common gas transport, or a MacCormack scheme): the legacy scheme's fixed clamp and 0.982 per-step damping and the split scalar layers' fixed backtraces are not time-step aware. The scalar channels' decays, reaction, conversion and the boundary sponges follow the same step (a per-step survival becomes rate^Speed, an increment is multiplied by Speed), as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max() birth floors stay per step. That makes the authored coefficients one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme (at equal simulated time, first-order scalars lose most of their heat and smoke at low Speed while MacCormack all fields keeps most of it, measured on one basin), so judge the motion live. The 8-cell transport bound caps displacement per step, so a very large Speed is limited by resolution rather than allowed to skip cells.</span>
     <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-overlay">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
@@ -2890,6 +2896,8 @@ import * as THREE from 'three';
 import { parsePlyPointCloud, createSplatPointSubsetGeometry, replaceSplatPointGeometry, splatPointInsideCrop, chooseSplatCropFrame } from './splat-point-cloud.mjs';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
+import { applyVolumeControlDescriptions } from './volume-control-descriptions.mjs';
+applyVolumeControlDescriptions(document);
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
@@ -18744,6 +18752,7 @@ function readVolumeControls() {
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
+    reactantSootYield: parseFloat(document.getElementById('volume-reactant-soot-yield').value),
     appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
@@ -18912,6 +18921,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
   document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
   document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
+  document.getElementById('volume-reactant-soot-yield-val').textContent = c.reactantSootYield.toFixed(2);
   document.getElementById('volume-appearance-model-val').textContent = c.appearanceModel;
   document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
@@ -19716,7 +19726,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-reactant-soot-yield', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -20412,6 +20422,7 @@ async function initKaminosVolumeRoute() {
     'volume-reaction-law',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
+    'volume-reactant-soot-yield',
     'volume-appearance-model',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',

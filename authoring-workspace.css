@@ -101,7 +101,7 @@ body[data-workspace=authoring] .authoring-splitter { display:block; grid-row:2; 
 #flame-basin-current { overflow-wrap:anywhere; }
 
 .flame-control-inspector { min-width:0; }
-.flame-inspector-navigation { margin:14px 0 4px; }
+.flame-inspector-navigation { position:sticky; top:-14px; z-index:3; margin:0 -14px 4px; padding:14px 14px 0; background:#1b1c1e; } /* top: the inspector body pads 14px; sticking at its padding edge leaves no gap for scrolled rows */
 .flame-inspector-navigation input[type=search] { box-sizing:border-box; width:100%; height:32px; padding:6px 9px; color:#d6d7db; background:#202125; border:1px solid #404248; border-radius:4px; font:inherit; font-size:11px; }
 .flame-inspector-navigation input[type=search]:focus { outline:1px solid #aa987b; outline-offset:1px; }
 .flame-inspector-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0; border-bottom:1px solid #3d3e43; margin-top:8px; }

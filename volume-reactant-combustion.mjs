@@ -87,10 +87,14 @@ export const REACTANT_CONTROL_DEFAULTS = Object.freeze({
   // How quickly the thermal state decays (e-folding, reference steps); the
   // default is the authored heat survival 0.982 per step.
   coolingTimeSteps: -1 / Math.log(0.982),
+  // Soot made per unit fuel burned (operator, 2026-10-21: a real control, not a
+  // hidden constant). The default is the model value.
+  sootYield: REACTANT_MODEL.sootYield,
 });
 export const REACTANT_CONTROL_RANGES = Object.freeze({
   mixingTimeSteps: Object.freeze([0.25, 30]),
   coolingTimeSteps: Object.freeze([5, 300]),
+  sootYield: Object.freeze([0, 6]),
 });
 export const REACTANT_DIAGNOSTIC_CLASSES = Object.freeze(['ambient', 'no-contact', 'air-starved', 'too-cold', 'mixing-limited', 'burning', 'depleted', 'products']);
 // Burning means at least 1e-3 fuel per reference step (on the saved basin the cells
@@ -291,13 +295,19 @@ export function resolveReactantCombustionConfig(controls = {}, options = {}) {
   const [coolLo, coolHi] = REACTANT_CONTROL_RANGES.coolingTimeSteps;
   const mixingTimeSteps = clamp(finiteOr(controls.reactantMixingTime, REACTANT_CONTROL_DEFAULTS.mixingTimeSteps), mixLo, mixHi);
   const coolingTimeSteps = clamp(finiteOr(controls.reactantCoolingTime, REACTANT_CONTROL_DEFAULTS.coolingTimeSteps), coolLo, coolHi);
-  const { model, overridden } = resolveModel(controls.reactantModelOverrides);
+  const [yieldLo, yieldHi] = REACTANT_CONTROL_RANGES.sootYield;
+  const sootYield = clamp(finiteOr(controls.reactantSootYield, REACTANT_CONTROL_DEFAULTS.sootYield), yieldLo, yieldHi);
+  const resolved = resolveModel(controls.reactantModelOverrides);
+  const overridden = resolved.overridden;
+  // The control sets the yield; a debug model override still wins.
+  const model = overridden.includes('sootYield') ? resolved.model : Object.freeze({ ...resolved.model, sootYield });
   const requested = {
     law: lawRequested,
     volumeScene: String(controls.volumeScene ?? ''),
     emitterSourceLaw: String(controls.emitterSourceLaw ?? 'legacy-volume'),
     mixingTimeSteps: finiteOr(controls.reactantMixingTime, REACTANT_CONTROL_DEFAULTS.mixingTimeSteps),
     coolingTimeSteps: finiteOr(controls.reactantCoolingTime, REACTANT_CONTROL_DEFAULTS.coolingTimeSteps),
+    sootYield: finiteOr(controls.reactantSootYield, REACTANT_CONTROL_DEFAULTS.sootYield),
     modelOverrides: overridden.length ? Object.fromEntries(overridden.map(key => [key, Number(controls.reactantModelOverrides[key])])) : null,
   };
   const off = reason => ({ identity: REACTANT_COMBUSTION_IDENTITY, requested, effective: { admitted: false, reason, law: REACTION_LAW_AUTHORED } });

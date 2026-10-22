@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 139,
+  "controlCount": 140,
   "controls": [
     {
       "key": "volume-physical-white",
@@ -986,6 +986,14 @@
       "type": "range",
       "additiveDefault": 1,
       "additiveSinceControlCount": 259
+    },
+    {
+      "key": "volume-reactant-soot-yield",
+      "param": "volume_reactant_soot_yield",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 260
     }
   ],
   "retiredControls": [
