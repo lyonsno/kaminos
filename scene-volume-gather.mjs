@@ -9,6 +9,7 @@ import {createBvhReproject} from './scene-bvh-reproject.mjs';
 import {normalizeSourceGuide,sourceGuidePoint,SOURCE_GUIDE_WGSL} from './scene-source-guide.mjs';
 import {sceneSourceDomain,sceneLightingDomain} from './scene-volume-source.mjs';
 import {packSceneSmokeLights} from './scene-smoke-lights.mjs';
+import {EXTERIOR_MEDIUM_WGSL,NO_EXTERIOR_MEDIUM_WGSL} from './scene-exterior-medium.mjs';
 export {sourceGuideRaySample,sourceGuidePdf,deriveSourceGuide} from './scene-source-guide.mjs';
 export {sourceRaySample,integrateCellRay} from './scene-source-aware.mjs';
 export {DISTRIBUTED_SMOKE_WGSL} from './scene-smoke-reconstruction.mjs';
@@ -40,10 +41,15 @@ export function receiverDispatch(count,limit) {
   return [Math.min(groups,limit),Math.ceil(groups/limit)];
 }
 
-export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false}) {
+export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[],volumeGrid=16,sourceDimensions=[volumeGrid,volumeGrid*2,volumeGrid],directions=24,smokeRefinement=4,angularRotation=0,angularPattern='fixed',worldGeometry=false,receiverBounds=null,exteriorMedium=false}) {
   if(worldGeometry&&receivers.length)throw new Error('world BVH mode requires smoke-only receivers');
   lightingDirections(directions); // Validate before allocating shared resources.
-  const domain=sceneSourceDomain(sourceDimensions),volumeHeight=volumeGrid*sourceDimensions[1]/sourceDimensions[0];
+  const domain=sceneSourceDomain(sourceDimensions),bounds=receiverBounds??domain;
+  if(![bounds.lo,bounds.hi].every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))||bounds.hi.some((v,a)=>v<=bounds.lo[a]))throw Error('finite ordered receiver bounds required');
+  const receiverPitch=(bounds.hi[0]-bounds.lo[0])/volumeGrid;
+  const shape=bounds.hi.map((v,a)=>(v-bounds.lo[a])/receiverPitch);
+  if(shape.some(v=>Math.abs(v-Math.round(v))>1e-6)||Math.round(shape[2])!==volumeGrid)throw Error('receiver bounds must describe cubic cells and matching depth');
+  const volumeHeight=Math.round(shape[1]);
   // The natural runtime's 16-wide receiver lattice represents every admitted
   // source aspect exactly. Reject incompatible custom lattices, never crop or
   // round the domain and silently change the meaning of its camera lookup.
@@ -57,7 +63,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   receivers.forEach((r,i)=>receiverValues.set([...r.position,r.twoSided?2:1,...r.normal,0],i*8));
   for(let z=0;z<volumeGrid;z++) for(let y=0;y<volumeHeight;y++) for(let x=0;x<volumeGrid;x++) {
     const id=receivers.length+x+volumeGrid*(y+volumeHeight*z);
-    receiverValues.set([-1+(x+.5)*2/volumeGrid,-1+(y+.5)*2/volumeGrid,-1+(z+.5)*2/volumeGrid,0,0,0,0,0],id*8);
+    receiverValues.set([bounds.lo[0]+(x+.5)*receiverPitch,bounds.lo[1]+(y+.5)*receiverPitch,bounds.lo[2]+(z+.5)*receiverPitch,0,0,0,0,0],id*8);
   }
   const resources=[];
   function buffer(label,data,usage=GPUBufferUsage.STORAGE,owner=resources) {
@@ -72,6 +78,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   let geometryTransforms=geometry.matrices;
   const receiverBuffer=buffer('surface and smoke receivers',receiverValues,GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC);
   const params=buffer('distributed transport parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
+  const exteriorParams=exteriorMedium?buffer('exterior medium bounds and step',new Float32Array(8),GPUBufferUsage.UNIFORM):null;
   const environmentParams=buffer('smoke environment parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
   const sceneLightParams=buffer('smoke scene-light parameters',new Float32Array(4),GPUBufferUsage.UNIFORM);
   let sceneLightBuffer=buffer('actual smoke scene lights',new Float32Array(16),GPUBufferUsage.STORAGE,[]);
@@ -90,7 +97,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
   const surface=device.createTexture({label:'direct flame surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const surfaceBack=device.createTexture({label:'direct flame back surface irradiance',size:[surfaceWidth,surfaceHeight],format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
   const smoke=device.createTexture({label:'direct flame mean incident radiance',dimension:'3d',size:volumeDimensions,format:'rgba32float',usage:GPUTextureUsage.STORAGE_BINDING|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_SRC});
-  const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement});
+  const preparedSmoke=createPreparedSmoke(device,{nodes,triangles,nodeCount:geometry.nodeCount,source:smoke,coarseDimensions:volumeDimensions,factor:smokeRefinement,localMin:bounds.lo,pitch:receiverPitch});
   const smokeReconstruction=preparedSmoke.metadata;
   const dispatchLimit=device.limits.maxComputeWorkgroupsPerDimension;
   // Geometry, material bindings, outputs and smoke reconstruction are shared.
@@ -117,7 +124,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const environmentDirections=sourcePattern()?buffer('uniform environment directions',new Float32Array(lightingDirections(directions,angularRotation).flatMap(d=>[...d,0])),GPUBufferUsage.STORAGE,owned):null;
       const environmentHits=sourcePattern()?buffer('cached environment solid distances',new Float32Array(volumeCount*directions),GPUBufferUsage.STORAGE,owned):null;
       const constants=`const DISPATCH_WIDTH:u32=${dispatchLimit*64}u;const DIRECTION_COUNT:u32=${directions}u;override CACHE_START:u32=0u;const SURFACE_COUNT:u32=${receivers.length}u;const RECEIVER_COUNT:u32=${total}u;const NODE_COUNT:u32=${geometry.nodeCount}u;const VOLUME_GRID:u32=${volumeGrid}u;const VOLUME_HEIGHT:u32=${volumeHeight}u;const SURFACE_WIDTH:u32=${surfaceWidth}u;`;
-      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};`+constants+GATHER_WGSL_BODY+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL)});
+      const module=device.createShaderModule({label:'distributed volume ray gather',code:`const SOURCE_PATTERN:bool=${sourcePattern()};const SPATIAL_PATTERN:bool=${angularPattern==='spatial'};`+constants+GATHER_WGSL_BODY+(exteriorMedium?EXTERIOR_MEDIUM_WGSL:NO_EXTERIOR_MEDIUM_WGSL)+(sourcePattern()?SOURCE_ENVIRONMENT_WGSL:'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}')+(angularPattern==='guided'?SOURCE_GUIDE_WGSL:SOURCE_AWARE_WGSL)});
       if(!sceneLightPipeline)sceneLightPipeline=device.createComputePipeline({label:'cache scene-light smoke visibility',layout:'auto',compute:{module,entryPoint:'cacheSceneLights'}});
       const cache=device.createComputePipeline({label:'cache static solid ray intersections',layout:'auto',compute:{module,entryPoint:'cacheGeometry',constants:{CACHE_START:prefix?.capacity||0}}});
       const cacheGroup=device.createBindGroup({layout:cache.getBindGroupLayout(0),entries:[nodes,triangles,receiverBuffer,directionBuffer,distances].map((b,binding)=>({binding,resource:{buffer:b}}))});
@@ -155,6 +162,10 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
     setRetainComparisons(value){retainComparisons=!!value;if(!retainComparisons)pruneComparisons();},
     encode(field,{gain=1,stepLength=2/field.dimensions[0],smokeEnabled=true,sourceSoftness=0,surfaceReconstruction=0,surfaceScattering=false,environment=null,sceneLights}={}) {
       if(field.status!=='encoded'||!field.texture) throw new Error('distributed gather needs current raw emission/extinction');
+      const exterior=exteriorMedium?field.exterior:null;
+      if(exteriorMedium&&(!exterior?.texture||exterior.status!=='encoded'||exterior.generation!==field.generation||exterior.frame!==field.frame))throw Error('exterior transport requires same-generation world extinction');
+      if(exterior)device.queue.writeBuffer(exteriorParams,0,new Float32Array([...exterior.localMin,receiverPitch,...exterior.localMax,0]));
+      const exteriorEntries=exterior?[{binding:18,resource:exterior.texture.createView()},{binding:19,resource:{buffer:exteriorParams}}]:[];
       if(environment&&!environment.texture?.createView)throw Error('smoke environment requires a native GPU texture');
       const environmentTexture=environment?.texture??darkEnvironment;
       const punctual=packSceneSmokeLights(sceneLights);
@@ -199,15 +210,15 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
       const lightingTexture=softening?softening.encode(encoder,field.texture,sourceSoftness):field.texture;
       device.queue.writeBuffer(params,0,new Float32Array([gain,stepLength,smokeEnabled||surfaceScattering?total:receivers.length,directions]));
       device.queue.writeBuffer(environmentParams,0,new Float32Array([environment?1:0,directions,0,0]));
-      if(state.sourceTexture!==lightingTexture||state.environmentTexture!==environmentTexture||state.sceneLightBuffer!==sceneLightBuffer) {
+      if(state.sourceTexture!==lightingTexture||state.environmentTexture!==environmentTexture||state.sceneLightBuffer!==sceneLightBuffer||state.exteriorTexture!==exterior?.texture) {
         const entries=[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},
           {binding:4,resource:{buffer:state.distances}},{binding:5,resource:lightingTexture.createView()},
           {binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
-          {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries()];
+          {binding:8,resource:{buffer:params}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries(),...exteriorEntries];
         const gatherGroup=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries});
         const volumeGroup=device.createBindGroup({layout:state.gatherVolume.getBindGroupLayout(0),entries});
-        Object.assign(state,{sourceTexture:lightingTexture,environmentTexture,sceneLightBuffer,gatherGroup,volumeGroup});
+        Object.assign(state,{sourceTexture:lightingTexture,environmentTexture,sceneLightBuffer,gatherGroup,volumeGroup,exteriorTexture:exterior?.texture});
       }
       if(environment&&(smokeEnabled||surfaceScattering)&&state.environmentCache&&!state.environmentCacheBuilt){
         const pass=encoder.beginComputePass({label:'cache environment visibility'});
@@ -240,7 +251,7 @@ export function createVolumeGather(device,{geometry,receivers,surfaceTriangles=[
         const group=device.createBindGroup({layout:state.gather.getBindGroupLayout(0),entries:[
           {binding:2,resource:{buffer:receiverBuffer}},{binding:3,resource:{buffer:state.directionBuffer}},{binding:4,resource:{buffer:state.distances}},
           {binding:5,resource:scatteredSource.texture.createView()},{binding:6,resource:surface.createView()},{binding:7,resource:smoke.createView()},
-          {binding:8,resource:{buffer:surfaceParams}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries()]});
+          {binding:8,resource:{buffer:surfaceParams}},{binding:9,resource:surfaceBack.createView()},...guideEntries(),...environmentEntries(state),...sceneLightEntries(),...exteriorEntries]});
         const surfacePass=encoder.beginComputePass({label:'primary plus smoke scattered light to surfaces'});
         surfacePass.setPipeline(state.gather);surfacePass.setBindGroup(0,group);surfacePass.dispatchWorkgroups(...receiverDispatch(receivers.length,dispatchLimit));surfacePass.end();
         }
@@ -456,7 +467,7 @@ fn firstSolid(p:vec3<f32>,d:vec3<f32>)->f32 {
 }
 fn integrateRay(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec4<f32> {
   let span=interval(p,d,vec3<f32>(-1.0),sourceDomainHi(),limit);
-  if(span.y<=span.x){return vec4<f32>(0.0,0.0,0.0,1.0);}
+  if(span.y<=span.x){return vec4<f32>(0.0,0.0,0.0,exteriorTransmission(p,d,limit));}
   let count=u32(ceil((span.y-span.x)/settings.y));let ds=(span.y-span.x)/f32(count);
   let dims=textureDimensions(coefficients);let pitch=2.0/f32(dims.x);
   var radiance=vec3<f32>(0.0);var transmission=1.0;
@@ -468,7 +479,7 @@ fn integrateRay(p:vec3<f32>,d:vec3<f32>,limit:f32)->vec4<f32> {
     if(tau>=0.001){weight=(1.0-exp(-tau))/sigma;}
     radiance+=transmission*m.rgb*weight;transmission*=exp(-tau);
   }
-  return vec4<f32>(radiance,transmission);
+  return vec4<f32>(radiance*exteriorSourceTransmission(p,d,limit),transmission*exteriorTransmission(p,d,limit));
 }
 fn gatherReceiver(receiver:u32) {
   let id=vec3<u32>(receiver,0u,0u);
@@ -491,7 +502,7 @@ fn gatherReceiver(receiver:u32) {
     if(r.position.w>0.5){weight*=12.566370614359172*select(max(0.0,cosine),abs(cosine),r.position.w>1.5);}
     if(weight>0.0){
       var incident=vec3<f32>(0.0);
-      if(SOURCE_PATTERN){incident=integrateCells(receiverOrigin(r,d),d,firstHits[address]);}
+      if(SOURCE_PATTERN){incident=integrateCells(receiverOrigin(r,d),d,firstHits[address])*exteriorSourceTransmission(receiverOrigin(r,d),d,firstHits[address]);}
       else {
         let integrated=integrateRay(receiverOrigin(r,d),d,firstHits[address]);incident=integrated.rgb;
         // A solid beyond the volume still blocks the sky. Reuse this ray's
@@ -540,4 +551,4 @@ fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{
   return sky;
 }
 `;
-export const GATHER_WGSL=GATHER_WGSL_BODY+'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}'+SOURCE_AWARE_WGSL;
+export const GATHER_WGSL=GATHER_WGSL_BODY+NO_EXTERIOR_MEDIUM_WGSL+'fn sourceEnvironment(receiver:u32,p:vec3<f32>)->vec3<f32>{return vec3<f32>(0.0);}'+SOURCE_AWARE_WGSL;
