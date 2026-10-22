@@ -9,7 +9,7 @@ const body=source.slice(start,source.indexOf('\n  }',start)+4);
 test('world collision receives current remaining-material masks, including their removal',()=>{
   const mask={objectId:'burning-log',revision:17,texture:{}},calls=[];
   let masks=[mask];
-  const ctx={getSceneCollision:()=>({requested:true,id:'burning-log',object:{}}),
+  const ctx={intermediateFlow:null,getSceneCollision:()=>({requested:true,id:'burning-log',object:{}}),
     worldSmoke:{anchor:{translate:[0,0,0],scale:1},encode:()=>({})},
     worldSolidProducer:{update(...args){calls.push(args);return {triangleCount:0};}},
     gpuThermalConsumer:{materialMasks:()=>masks},controlsSnapshot:{worldSmokeExtent:2},

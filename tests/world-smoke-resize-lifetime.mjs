@@ -11,7 +11,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
   const textures=[],bound=[],anchor={translate:[0,0,0],scale:1};
   const createWorldSmoke=(_device,plan)=>{const optical={destroyed:false};textures.push(optical);return {optical,anchor,encode(){return {flowDims:plan.flowDims,materialDims:plan.materialDims};},destroy(){optical.destroyed=true;}};};
   const oldPlan=worldSmokePlan({flow:16,material:32,extent:3,fineHeightRatio:2});
-  const ctx={worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
+  const ctx={intermediateFlow:null,intermediateSolidProducer:null,intermediateKey:null,worldSmoke:createWorldSmoke(null,oldPlan),worldSmokeKey:JSON.stringify(oldPlan),worldSolidProducer:{destroy(){}},worldRenderUniform:{},
     controlsSnapshot:{worldSmoke:'on',worldSmokeFlow:16,worldSmokeMaterial:32,worldSmokeExtent:4},uniforms:new Float32Array(512),uniformBuffer:{},OPEN_WORLD_UNIFORM_OFFSET:472,
     resolvePressureSolverConfig:()=>({effective:{solver:'converged'}}),PRESSURE_SOLVER_CONVERGED:'converged',IMMERSED_SOURCE_LAW:'immersed-source',
     encodeFollowingDomain(){},encodeGpuThermalConsumer(){},gpuThermalConsumer:null,
@@ -24,7 +24,7 @@ test('world resize never destroys a texture referenced by the pending fine frame
     refreshSceneCollision(){},ensureAppearanceLayout(){},resolveTransportConfig:()=>({effective:{predictorPass:false}}),ensureTransportPredictorBuffer(){},
     computePipeline:{},transportPredictBindGroup:{},encodeAnalyticEmitterInjection(){},encodePressureProjection(){return false;},updateSimCostLedger(){},Float32Array};
   ctx.uniforms[368]=2;ctx.rebuildFluidBindGroups();vm.createContext(ctx);
-  vm.runInContext(['prepareWorldSmoke','encodeWorldSmoke','encodeSim'].map(grab).join('\n'),ctx);
+  vm.runInContext(['retireIntermediateFlow','prepareWorldSmoke','encodeWorldSmoke','encodeSim'].map(grab).join('\n'),ctx);
   const encoder={beginComputePass(){return {setPipeline(){},setBindGroup(_i,g){if(g.texture)bound.push(g.texture);},dispatchWorkgroups(){},end(){}};}};
   ctx.encodeSim(encoder);
   assert.equal(textures.length,2,'resize allocates exactly one replacement');

@@ -1,5 +1,5 @@
 import { PHYSICAL_COLOR_WGSL, PHYSICAL_COLOR_UNIFORM_FLOATS, THERMAL_LUT, THERMAL_LUT_COUNT, EMISSIVE_UNIFORM_OFFSET } from './volume-physical-color.mjs';
-import { createWorldSmoke, worldSmokePlan, worldSmokeMapping } from './volume-world-smoke.mjs';
+import { createWorldSmoke, worldSmokePlan, worldSmokeMapping, intermediateFlowPlan } from './volume-world-smoke.mjs';
 import { WORLD_SMOKE_OPTICS_WGSL } from './volume-world-smoke-optics.mjs';
 import { createGpuSceneSolidProducer } from './scene-solid-gpu.mjs';
 import { AGX_WGSL } from './volume-agx.mjs';
@@ -11526,6 +11526,11 @@ export function createKaminosVolumePrototype({
   let sceneSolidGeometryCache = null;
   let sceneSolidSupportCache = null;
   let worldSmoke = null, worldSolidProducer = null, worldSmokeKey = null;
+  let intermediateFlow=null, intermediateSolidProducer=null, intermediateKey=null;
+  function retireIntermediateFlow(){
+    intermediateFlow?.destroy();intermediateSolidProducer?.destroy();
+    intermediateFlow=null;intermediateSolidProducer=null;intermediateKey=null;
+  }
   let worldOpticalFallback = null, worldRenderUniform = null;
   let worldSmokeOverlay = 'off';
   // All fluid bind groups include the optical texture, including compute passes
@@ -11551,11 +11556,22 @@ export function createKaminosVolumePrototype({
     device.queue.writeBuffer(uniformBuffer,OPEN_WORLD_UNIFORM_OFFSET*4,uniforms.subarray(OPEN_WORLD_UNIFORM_OFFSET,OPEN_WORLD_UNIFORM_OFFSET+4));
     const key=JSON.stringify(plan);
     if(!worldSmoke||worldSmokeKey!==key){
+      retireIntermediateFlow();
       worldSmoke?.destroy();worldSolidProducer?.destroy();
       worldSolidProducer=createGpuSceneSolidProducer(device,{grid:plan.flowDims[0],gridHeight:plan.flowDims[1]});
       worldSmoke=createWorldSmoke(device,plan,{translate:[...productTransform.translate],scale:productTransform.scale});worldSmokeKey=key;
       rebuildFluidBindGroups();
     }
+    if(controlsSnapshot.worldSmokeIntermediate==='on'){
+      const middlePlan=intermediateFlowPlan(plan,[gridSize,gridHeight,gridSize]);
+      const middleKey=JSON.stringify(middlePlan);
+      if(intermediateKey!==middleKey){
+        retireIntermediateFlow();
+        intermediateFlow=createWorldSmoke(device,middlePlan,worldSmoke.anchor,{borrowMaterial:worldSmoke.materialResources()});
+        intermediateSolidProducer=createGpuSceneSolidProducer(device,{grid:middlePlan.flowDims[0],gridHeight:middlePlan.flowDims[1]});
+        intermediateKey=middleKey;
+      }
+    }else{retireIntermediateFlow();}
     return plan;
   }
   function encodeWorldSmoke(encoder, plan, timing=null) {
@@ -11570,7 +11586,20 @@ export function createKaminosVolumePrototype({
     }
     const time=resolveTimeStepConfig(controlsSnapshot).effective;
     const physics=resolvePhysicsAppearance(controlsSnapshot,{reactantAdmitted:true,emissiveRouteEffective:true});
-    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing})};
+    const input={fineBuffer:fluidBuffers[currentFluid],reactionTexture:reactantTextures[currentFluid],fineDims:[gridSize,gridHeight,gridSize],fineVelocityMode:resolveVelocityStaggeringConfig(controlsSnapshot).effective.mode,transform:productTransform,time,reactant:state.reactantCombustion,physics};
+    let intermediateState={effective:'off'};
+    if(intermediateFlow){
+      let middleSolids;
+      if(source?.requested&&source.object){
+        const a=intermediateFlow.anchor,p=intermediateFlow.plan;
+        const produced=intermediateSolidProducer.update(source.objects||[{id:source.id,object:source.object}],{translate:a.translate,scale:a.scale*(-p.min[0])},{grid:p.flowDims[0],gridHeight:p.flowDims[1]},{materialMasks:gpuThermalConsumer?.materialMasks?.()??[]});
+        if(produced.triangleCount>0){intermediateSolidProducer.encode(encoder);middleSolids=intermediateSolidProducer.texture;}
+      }
+      const result=intermediateFlow.encode(encoder,{...input,materialIndex:worldSmoke.materialResources().index,solids:middleSolids});
+      const p=intermediateFlow.plan;
+      intermediateState={effective:'two-fine-cell-flow',steps:result.steps,flowDims:p.flowDims,flowPitch:p.flowPitch,flowCells:p.flowCells,min:p.min,max:p.max,extraMaterialCells:0,allocatedFlowBytes:p.flowCells*56,pressureIterations:result.pressureIterations,overlapCells:2,handoff:'projected-velocity-blend-before-world-material',fineFeedback:false};
+    }
+    state.worldSmoke={requested:true,effective:'one-way-world-field',...worldSmoke.encode(encoder,{...input,transitionCells:Number(controlsSnapshot.worldSmokeTransition??0),solids,collisionSource,timing,intermediate:intermediateFlow}),intermediate:intermediateState};
     const map=worldSmokeMapping(plan,worldSmoke.anchor,productTransform);
     Object.assign(state.worldSmoke,{min:[...plan.min],max:[...plan.max],fineDims:[gridSize,gridHeight,gridSize],fineTransform:{translate:[...productTransform.translate],scale:productTransform.scale},raymarch:{policy:'shared-quality-material-cell-step',reference:'160-steps-adaptive-off-half-cell',steps:uniforms[22],adaptive:controlsSnapshot.adaptiveRays,sampleTelemetry:'includes-exterior'}});
     device.queue.writeBuffer(worldRenderUniform,0,new Float32Array([...map.renderMin,map.renderPitch,...map.renderMax,1]));
@@ -12537,6 +12566,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyFluidState() {
+    retireIntermediateFlow();
     worldSmoke?.destroy();worldSmoke=null;worldSolidProducer?.destroy();worldSolidProducer=null;worldSmokeKey=null;
     if(worldRenderUniform)device.queue.writeBuffer(worldRenderUniform,0,new Float32Array(8));
     separatedPressure?.destroy();

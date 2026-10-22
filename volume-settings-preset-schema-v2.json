@@ -1,7 +1,8 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 148,
+  "controlCount": 149,
   "controls": [
+    {"key":"volume-world-smoke-intermediate","param":"volume_world_smoke_intermediate","tagName":"SELECT","type":"select-one","additiveDefault":"off","allowedValues":["off","on"],"additiveSinceControlCount":268},
     {"key":"volume-world-smoke-transition","param":"volume_world_smoke_transition","tagName":"SELECT","type":"select-one","additiveDefault":"0","allowedValues":["0","1","2"],"additiveSinceControlCount":267},
     {"key":"volume-wavelet-octave1-weight","param":"volume_wavelet_octave1_weight","tagName":"INPUT","type":"range","additiveDefault":1,"additiveSinceControlCount":265},
     {"key":"volume-wavelet-octave2-weight","param":"volume_wavelet_octave2_weight","tagName":"INPUT","type":"range","additiveDefault":1,"additiveSinceControlCount":266},

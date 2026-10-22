@@ -82,7 +82,8 @@ if(typeof window==='undefined'){
     if(report.runtime.source.commit!==report.source||report.runtime.source.repoRoot!==report.root)throw Error('Source mismatch');
     await page.goto(origin+'/volume-world-smoke.mjs');report.phase='native-contracts';
     report.probe=await page.evaluate(async()=>{const m=await import('/world-smoke-contract-witness.mjs');return m.probeWorldSmokeContracts();});
-    report.status=report.probe.passed?'passed':'failed';report.phase='complete';if(!report.probe.passed)process.exitCode=1;
+    report.intermediate=await page.evaluate(async()=>{const m=await import('/world-intermediate-witness.mjs');return m.probeIntermediateFlow();});
+    report.status=report.probe.passed&&report.intermediate.passed?'passed':'failed';report.phase='complete';if(report.status==='failed')process.exitCode=1;
   }catch(error){report.status='failed';report.error=String(error.stack||error);process.exitCode=1;}
   finally{await fs.writeFile(out+'/report.json',JSON.stringify(report,null,2));await browser?.close();}
   console.log(JSON.stringify(report));

@@ -2177,6 +2177,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row"><span class="slider-label">World material width</span><select id="volume-world-smoke-material" class="select-input" data-volume-settings-param="volume_world_smoke_material"><option>16</option><option selected>32</option><option>48</option><option>64</option></select></div>
     <div class="slider-row"><span class="slider-label">World extent / fine width</span><select id="volume-world-smoke-extent" class="select-input" data-volume-settings-param="volume_world_smoke_extent"><option>2</option><option selected>3</option><option>4</option><option>6</option></select></div>
     <div class="slider-row"><span class="slider-label" title="Experimental: continue outward fine-grid velocity into a narrow coarse collar before world pressure projection. No extra material or radial kick.">Momentum collar</span><select id="volume-world-smoke-transition" class="select-input" data-volume-settings-param="volume_world_smoke_transition"><option value="0" selected>Off (baseline)</option><option value="1">1 coarse cell</option><option value="2">2 coarse cells</option></select></div>
+    <div class="slider-row"><span class="slider-label" title="Transport and project velocity at twice the fine cell width in a padded region. Shares world material; two-cell blend into far flow.">Intermediate flow</span><select id="volume-world-smoke-intermediate" class="select-input" data-volume-settings-param="volume_world_smoke_intermediate"><option value="off" selected>Off (baseline)</option><option value="on">2× fine cell width</option></select></div>
     <span class="slider-help">Experimental world-anchored smoke: independent coarse flow/pressure and finer material transport/reaction. Requires reactant emission. One-way fine-to-world transfer; no pressure feedback into the flame. World dimensions restart only the world field. Material width must be at least flow width. Bounds anchor when enabled; a fine-grid rebuild clears this experimental field.</span>
     <span class="slider-help">First material/dynamics separation checkpoint: only pressure is cheaper. Material transport, reaction, forces, lighting and rendering keep their current resolution and cadence. Half dimensions gives 1/8 as many pressure cells, with coarser obstacle boundaries. Requires converged pressure; floor-inflow and joined routes retain original pressure with an explicit reason. Switch live without clearing the flame. Same resolution is the transfer parity control.</span>
     <span class="slider-help">Legacy keeps the damped 1-3 pass Jacobi with material-weighted partial projection. Converged runs red-black SOR on a consistent compact operator and applies a 0-1 gain on the correction; the gain is Projection, and in the Bonfire scene the gain is Projection × its projection ablation. At effective gain 1.0 the carried velocity is divergence-free up to the solver residual and the velocity bound; below 1.0 it is a partial projection that leaves (1 − gain) of the divergence. When Heat release is above 0 the converged solve targets that expansion instead of zero: at gain 1.0 the divergence converges to the target S, and a partial projection leaves (1 − gain) × D(v_before) + gain × S. Pressure iterations 0 (route override or the GPU-pressure impostor tier) or gain 0 turns pressure work off in either mode. Open top vents pressure through the upper face so buoyant gas can leave. The residual readout measures the velocity actually carried forward.</span>
@@ -17171,6 +17172,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureSolver', 'volume_pressure_solver'],
   ['pressureResolution', 'volume_pressure_resolution'],
   ['worldSmoke', 'volume_world_smoke'], ['worldSmokeFlow', 'volume_world_smoke_flow'], ['worldSmokeMaterial', 'volume_world_smoke_material'], ['worldSmokeExtent', 'volume_world_smoke_extent'], ['worldSmokeTransition', 'volume_world_smoke_transition'],
+  ['worldSmokeIntermediate', 'volume_world_smoke_intermediate'],
   ['pressureSolverIterations', 'volume_pressure_solver_iterations'],
   ['advectionScheme', 'volume_advection_scheme'],
   ['confinement', 'volume_confinement'],
@@ -18803,6 +18805,7 @@ function readVolumeControls() {
     worldSmokeMaterial: Number(document.getElementById('volume-world-smoke-material').value),
     worldSmokeExtent: Number(document.getElementById('volume-world-smoke-extent').value),
     worldSmokeTransition: Number(document.getElementById('volume-world-smoke-transition').value),
+    worldSmokeIntermediate: document.getElementById('volume-world-smoke-intermediate').value,
     heatReleaseExpansion: parseFloat(document.getElementById('volume-heat-release-expansion').value),
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
@@ -20111,6 +20114,7 @@ async function initKaminosVolumeRoute() {
     ['volume-pressure-solver', 'volume_pressure_solver'],
     ['volume-pressure-resolution', 'volume_pressure_resolution'],
     ['volume-world-smoke', 'volume_world_smoke'], ['volume-world-smoke-flow', 'volume_world_smoke_flow'], ['volume-world-smoke-material', 'volume_world_smoke_material'], ['volume-world-smoke-extent', 'volume_world_smoke_extent'], ['volume-world-smoke-transition', 'volume_world_smoke_transition'],
+    ['volume-world-smoke-intermediate', 'volume_world_smoke_intermediate'],
     ['volume-pressure-solver-iterations', 'volume_pressure_solver_iterations'],
     ['volume-advection-scheme', 'volume_advection_scheme'],
     ['volume-confinement', 'volume_confinement'],
@@ -20513,6 +20517,7 @@ async function initKaminosVolumeRoute() {
     'volume-pressure-solver',
     'volume-pressure-resolution',
     'volume-world-smoke', 'volume-world-smoke-flow', 'volume-world-smoke-material', 'volume-world-smoke-extent', 'volume-world-smoke-transition',
+    'volume-world-smoke-intermediate',
     'volume-pressure-solver-iterations',
     'volume-advection-scheme',
     'volume-confinement',

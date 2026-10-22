@@ -125,6 +125,7 @@ export const FLAME_PROPERTY_GROUPS = [
   { name:'World smoke', view:'quality', open:true, scope:'One-way, world-anchored field. Changing its dimensions resets only this field; fine pressure stays independent. Material width must be ≥ flow width.', fields:[
     ['volume-world-smoke','World smoke'], ['volume-world-smoke-flow','Flow width'], ['volume-world-smoke-material','Material width'], ['volume-world-smoke-extent','Extent / fine width'],
     ['volume-world-smoke-transition','Momentum collar (experimental)'],
+    ['volume-world-smoke-intermediate','Intermediate flow (experimental)'],
   ] },
   // Operator 2026-10-21: the combustion controls and Glow gain lead the first panel.
   { name:'Combustion', view:'look', open:true, fields:[
