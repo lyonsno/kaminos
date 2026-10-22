@@ -17,6 +17,10 @@ v.configure({alignment:{position:[10,0,0]}});assert.equal(v.read().status,'not c
 target.position.x=1;v.refresh();assert.equal(v.read().status,'not computed','moving target invalidates claims');
 await v.compute();target.geometry.attributes.position.setX(0,20);target.geometry.attributes.position.needsUpdate=true;v.refresh();
 assert.equal(v.read().status,'not computed','editing geometry invalidates claims');
+await v.compute();const replacement=new T.BufferAttribute(target.geometry.attributes.position.array.slice(),3);replacement.version=target.geometry.attributes.position.version;target.geometry.setAttribute('position',replacement);v.refresh();
+assert.equal(v.read().status,'not computed','replacing a position buffer invalidates claims');
+assert.equal(v.diagnostic.visible,false);assert.equal(v.read().summary,null);
+await v.compute();const replacementIndex=new T.BufferAttribute(target.geometry.index.array.slice(),1);replacementIndex.version=target.geometry.index.version;target.geometry.setIndex(replacementIndex);v.refresh();assert.equal(v.read().status,'not computed','replacing index buffer invalidates claims');
 const pending=v.compute();v.dispose();await pending;assert.equal(target.material,original);assert.equal(target.visible,true);
 assert.throws(()=>v.configure({target:false}),/disposed/);
 console.log('registration viewer: full overlapping claims, isolation, invalidation, cancellation and restoration pass');

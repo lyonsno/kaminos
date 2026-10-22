@@ -48,11 +48,13 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
  const state={alignment:{position:[0,0,0],rotation:[0,Math.PI/2,0],scale:1},parts:Object.fromEntries(parts.map(p=>[p.id,{visible:true,color:p.color}])),solo:null,reference:true,referenceOpacity:.32,wireframe:false,xray:false,target:true,targetOpacity:1,claims:false,claimOpacity:.85,mode:'claims',threshold:.5,falloff:.035};
  let disposed=false,generation=0,field=null,status='not computed',progress=0,mesh=null,summary=null,computedSignature=null;
  const originalTargetVisible=target.visible;
+ const bufferIds=new WeakMap();let nextBufferId=0;
+ const bufferKey=b=>{if(!b)return null;if(!bufferIds.has(b))bufferIds.set(b,++nextBufferId);return [bufferIds.get(b),b.version,b.count];};
  const active=id=>state.parts[id].visible&&(!state.solo||state.solo===id);
  const signature=()=>{
   ghost.updateMatrixWorld(true);target.updateWorldMatrix(true,true);
   const surfaces=[];
-  target.traverse(node=>{if(node.isMesh){const g=node.geometry,p=g.attributes.position,i=g.index;surfaces.push([node.uuid,node.matrixWorld.elements,g.uuid,p?.version,p?.count,i?.version,i?.count]);}});
+  target.traverse(node=>{if(node.isMesh){const g=node.geometry;surfaces.push([node.uuid,node.matrixWorld.elements,g.uuid,bufferKey(g.attributes.position),bufferKey(g.index)]);}});
   return JSON.stringify([ghost.matrixWorld.elements,surfaces]);
  };
  function invalidate(){generation++;field=null;summary=null;computedSignature=null;status='not computed';progress=0;diagnostic.visible=false;}

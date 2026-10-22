@@ -28,13 +28,18 @@ try{
  ws=new WebSocket(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);await new Promise((r,j)=>{ws.onopen=r;ws.onerror=j;});
  ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);pending.delete(m.id);if(m.error)p?.reject(Error(JSON.stringify(m.error)));else p?.resolve(m.result);}else if(m.method==='Runtime.exceptionThrown')report.errors.push(m.params);else if(m.method==='Runtime.consoleAPICalled'||m.method==='Log.entryAdded'){(report.console??=[]).push(m.params);}};
  report.browser=await rpc('Browser.getVersion');await rpc('Runtime.enable');await rpc('Log.enable');await rpc('Page.enable');
- await rpc('Page.addScriptToEvaluateOnNewDocument',{source:`{const decode=globalThis.createImageBitmap;globalThis.createImageBitmap=async function(...args){try{return await decode(...args);}catch(error){console.error('Image decode failed',error.name,error.message);throw error;}}}`});
  await rpc('Page.navigate',{url:args.url});report.phase='load';save();
+ if(args.diagnose){
+ await evaluate(`import('/lib/three.webgpu.js').then(T=>{for(const name of ['ImageBitmapLoader','TextureLoader']){const original=T[name].prototype.load;T[name].prototype.load=function(url,ok,progress,bad){try{return original.call(this,url,ok,progress,error=>{console.error('Texture loader detail',name,String(error),error?.stack);bad?.(error);});}catch(error){console.error('Texture loader synchronous detail',name,String(error),error?.stack);throw error;}}}})`);
+ await evaluate(`{const original=Response.prototype.blob;Response.prototype.blob=async function(){try{return await original.call(this);}catch(e){console.error('Response blob failed',this.url,String(e));throw e;}};const revoke=URL.revokeObjectURL;URL.revokeObjectURL=function(url){console.log('Blob revoked',url,new Error().stack);return revoke.call(this,url);};}`);
+ }
  let state;for(let i=0;i<120;i++){state=await evaluate('window.kaminosWorkbenchExperiments?.state()');if(state?.id==='part-claims'&&state?.status!=='opening')break;await sleep(500);}
  report.state=state;report.initial=await evaluate('window.kaminosWorkbenchExperiments.read()');report.effectiveUrl=await evaluate('location.href');save();
  check('actual requested target loaded',report.initial?.targetUrl?.includes('elaborated-arm.glb'));
  check('four source parts',Object.keys(report.initial.parts).length===4);
  await sleep(1000);await screenshot('overlay');
+ if(args.diagnose){await rpc('Page.navigate',{url:'chrome://blob-internals/'});await sleep(500);report.blobInternals=await evaluate('document.body.innerText');throw Error('Diagnostic-only run');}
+ check('target PBR textures loaded',report.initial.targetMaterials.length>0&&report.initial.targetMaterials.every(m=>m.baseColor&&m.roughness&&m.metalness));
  report.phase='claim computation';save();
  report.computed=await evaluate("window.kaminosWorkbenchExperiments.invoke('compute')");
  check('all triangle claims completed',report.computed.status==='computed'&&report.computed.summary.triangles>0);
@@ -53,6 +58,7 @@ try{
  report.reopened=await evaluate('window.kaminosWorkbenchExperiments.read()');
  check('recipe retains solo and opacity',report.reopened.solo==='rod'&&report.reopened.referenceOpacity===.6);
  check('reopen does not misrepresent cached claims',report.reopened.status==='not computed');
+ check('reopen retains PBR textures',report.reopened.targetMaterials.length>0&&report.reopened.targetMaterials.every(m=>m.baseColor&&m.roughness&&m.metalness));
  await sleep(1000);await screenshot('reopened');assertRenderedEvidence(report);
  report.status='passed';report.phase='complete';save();
 }catch(error){report.status='failed';report.error=error.stack;save();process.exitCode=1;if(ws?.readyState===1)try{await screenshot('failure');}catch{}}
