@@ -3,7 +3,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
-const {values:args}=parseArgs({options:Object.fromEntries(['url','fixture','output','browser','playwright'].map(k=>[k,{type:'string'}]))});
+const {values:args}=parseArgs({options:Object.fromEntries(['url','fixture','output','browser','playwright','experiment'].map(k=>[k,{type:'string'}]))});
 const out=resolve(args.output);mkdirSync(out,{recursive:true});
 const report={status:'failed',phase:'setup',input:'retained_camera_fixture_not_operator_live',fixture:args.fixture,url:args.url,browser:args.browser,errors:[]};
 const save=()=>writeFileSync(out+'/report.json',JSON.stringify(report,null,2));save();let browser;
@@ -12,6 +12,7 @@ const isNewSession = (state, previous) => state.sessionId !== previous && state.
 try {
   const {chromium}=await import(pathToFileURL(resolve(args.playwright)));
   browser=await chromium.launchPersistentContext(out+'/profile',{headless:true,executablePath:args.browser,
+    recordVideo:{dir:out+'/video',size:{width:1600,height:1000}},
     viewport:{width:1600,height:1000},args:['--use-mock-keychain','--password-store=basic','--autoplay-policy=no-user-gesture-required']});
   const page=await browser.newPage();page.on('pageerror',e=>report.errors.push(String(e)));
   await page.addInitScript(fixture=>{
@@ -23,13 +24,22 @@ try {
     };
   },args.fixture);
   report.phase='open';save();await page.goto(args.url);
-  await page.waitForFunction(()=>window.kaminosWorkbenchExperiments?.state().id==='hand-live');
+  await page.waitForFunction(id=>window.kaminosWorkbenchExperiments?.state().id===id,args.experiment??'hand-live');
   const read=()=>page.evaluate(()=>window.kaminosWorkbenchExperiments.read());
   report.initial=await read();assert.equal(report.initial.running,false);
+  const endpoint=report.initial.endpoint.replace(/\/$/,'');
+  const cors={'Access-Control-Allow-Origin':new URL(args.url).origin};
   await page.getByRole('button',{name:'Start camera',exact:true}).click();
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>=5);
   report.phase='visible_mesh';report.live=await read();save();
   assert.equal(report.live.visible,true);assert.equal(report.live.interactionAuthority,false);
+  if(report.live.fingerJuice.enabled){
+    assert.equal(report.live.fingerJuice.runtime.failure,null);
+    assert(report.live.fingerJuice.runtime.frameCount>0);
+    assert.equal(report.live.fingerJuice.runtime.effectiveRoute,'kaminos/finger-fluid/local-analytic-host-frame-v0');
+    assert.equal(report.live.fingerJuice.packet.route_identity,'mobrecon-native-mesh-finger-juice-v1');
+    assert(report.live.fingerJuice.packet.emitters.some(e=>e.active),'fixture produced no jets');
+  }
   await page.screenshot({path:out+'/desktop.png'});
   const first=await page.locator('#kaminos-host-renderer-canvas').screenshot();
   await page.waitForFunction(()=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/(\d+) meshes/)?.[1])>8);
@@ -48,6 +58,7 @@ try {
     assert.equal(await page.getByRole('spinbutton',{name:'Detector threshold',exact:true}).inputValue(),'1');
     await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('NO DETECTION: MANUAL CROP FALLBACK'));
     report.miss=await read();assert.equal(report.miss.visible,true);assert.equal(report.miss.acquisitionDetails.fallback,true);
+    if(report.miss.fingerJuice.enabled)assert.equal(report.miss.fingerJuice.packet.emitters.some(e=>e.active),false);
     assert.equal(report.miss.acquisitionDetails.captureId,report.miss.captureId);assert.equal(report.miss.acquisitionDetails.detectorThreshold,1);
     await page.screenshot({path:out+'/miss.png'});
     await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('setAcquisition',{mode:'detector',threshold:.18}));
@@ -55,10 +66,11 @@ try {
     report.reacquired=await read();assert.equal(report.reacquired.acquisition,'wilor_yolo_detector_bbox_only');
     assert.equal(report.reacquired.acquisitionDetails.captureId,report.reacquired.captureId);assert.equal(report.reacquired.acquisitionDetails.detectorThreshold,.18);
   }
-  await page.route('http://127.0.0.1:8791/frame',route=>route.fulfill({status:503,contentType:'application/json',
-    headers:{'Access-Control-Allow-Origin':'http://127.0.0.1:8498'},body:JSON.stringify({error:'witness_inference_failure'})}));
+  await page.route(endpoint+'/frame',route=>route.fulfill({status:503,contentType:'application/json',
+    headers:cors,body:JSON.stringify({error:'witness_inference_failure'})}));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('witness_inference_failure'));
   report.failure=await read();assert.equal(report.failure.running,false);assert.equal(report.failure.visible,true);
+  if(report.failure.fingerJuice.enabled)assert.equal(report.failure.fingerJuice.packet.emitters.some(e=>e.active),false);
   report.failedSubmission=await page.evaluate(async()=>{
     const opened=indexedDB.open('hand-live-diagnostic',1);
     const db=await new Promise((resolve,reject)=>{opened.onsuccess=()=>resolve(opened.result);opened.onerror=()=>reject(opened.error);});
@@ -74,7 +86,7 @@ try {
   await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+5000;});
   await page.waitForFunction(age=>Number(document.querySelector('[data-hand-live-status]')?.textContent.match(/sample age (\d+) ms/)?.[1])>age+4000,beforeAge);
   await page.screenshot({path:out+'/failure.png'});
-  await page.unroute('http://127.0.0.1:8791/frame');
+  await page.unroute(endpoint+'/frame');
   assert.equal(isNewSession(report.failure,report.live.sessionId),false);
   assert.equal(isNewSession({...report.failure,starting:true},report.live.sessionId),false);
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
@@ -87,7 +99,7 @@ try {
   await page.setViewportSize({width:430,height:932});
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('frame'));
   await page.screenshot({path:out+'/mobile.png'});
-  await page.route('http://127.0.0.1:8791/frame',route=>route.abort('connectionfailed'));
+  await page.route(endpoint+'/frame',route=>route.abort('connectionfailed'));
   await page.evaluate(()=>window.kaminosWorkbenchExperiments.invoke('start'));
   await page.waitForFunction(()=>document.querySelector('[data-hand-live-status]')?.textContent.includes('Failed to fetch'));
   report.transportFailure=await page.evaluate(async()=>{
@@ -99,15 +111,16 @@ try {
     } finally {db.close();}
   });
   assert(report.transportFailure?.request?.image,'connection failure lost source pixels');
-  await page.route('http://127.0.0.1:8791/event',route=>route.abort('connectionfailed'));
+  await page.route(endpoint+'/event',route=>route.abort('connectionfailed'));
   report.closeFailure=await page.evaluate(async()=>{
     try {await window.kaminosWorkbenchExperiments.close();return null;}catch(error){return String(error);}
   });
   assert(report.closeFailure,'backend loss must remain visible');
   report.registryAfterClose=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
   assert.equal(report.registryAfterClose.filter(row=>row.label==='MobRecon native diagnostic').length,0,'backend loss leaked registered mesh');
-  await page.unroute('http://127.0.0.1:8791/frame');await page.unroute('http://127.0.0.1:8791/event');
-  report.reopened=await page.evaluate(()=>window.kaminosWorkbenchExperiments.open('hand-live'));
+  await page.unroute(endpoint+'/frame');await page.unroute(endpoint+'/event');
+  assert.equal(await page.evaluate(()=>window.kaminosLocalLiquidState().mounted),false,'closed experiment leaked water host');
+  report.reopened=await page.evaluate(id=>window.kaminosWorkbenchExperiments.open(id),args.experiment??'hand-live');
   assert.equal(report.reopened.running,false);assert.equal(report.reopened.visible,false);
   report.registryAfterReopen=await page.evaluate(()=>window.kaminosSceneObjectDebugState());
   assert.equal(report.registryAfterReopen.filter(row=>row.label==='MobRecon native diagnostic').length,1,'reopen duplicated mesh');

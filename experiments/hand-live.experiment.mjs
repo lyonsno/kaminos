@@ -1,19 +1,27 @@
 import {Mesh, BufferGeometry, BufferAttribute, MeshNormalMaterial, DoubleSide} from '../lib/three.core.js';
 import {cameraCrop, liveMeshFrame} from './hand-live-contract.mjs';
 import {openCaptureStore} from './hand-live-retention.mjs';
+import {nativeFingerPacket,idleFingerPacket} from './hand-live-fluid.mjs';
 
 export default {
   id: 'hand-live', title: 'Live MobRecon hand',
   async create({host, inputs, record}) {
     const document = host.controls.document;
+    const fingerJuice=inputs.fingerJuice===true;
     const endpoint = new URL(inputs.endpoint ?? 'http://127.0.0.1:8791');
     if (endpoint.hostname !== '127.0.0.1' || endpoint.protocol !== 'http:') throw Error('local diagnostic endpoint required');
-    const api = async (path, body) => {
+    let apiTail=Promise.resolve();
+    const requestApi = async (path, body) => {
       const response = await fetch(new URL(path,endpoint), body === undefined ? {cache:'no-store'} :
         {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const value = await response.json();
       if (!response.ok) throw Error(value.error ?? `HTTP ${response.status}`);
       return value;
+    };
+    const api=(path,body)=>{
+      const request=apiTail.then(()=>requestApi(path,body));
+      apiTail=request.catch(()=>{});
+      return request;
     };
     const health = await api('/health');
     if (health.status !== 'loaded' || health.identity?.model !== 'mobrecon_densestack_spiralconv' ||
@@ -34,6 +42,7 @@ export default {
     const canvas = document.createElement('canvas'), context=canvas.getContext('2d');
     let stream, sessionId, running=false, starting=false, disposed=false, generation=0, frameCallback, flight;
     let status, button, overlay, error=null, last=null, received=0, lastSubmission=null;
+    let fluid=null,fluidPacket=idleFingerPacket(),fluidKey=null,displayCenter=[0,0,0],sourceFlux=360;
     const acquisitionControls = {};
     let handedness=inputs.handedness ?? 'right', cropX=.5, cropY=.5, cropSize=.85;
     const read = () => ({authority:'live_native_diagnostic_not_interaction',interactionAuthority:false,
@@ -41,11 +50,21 @@ export default {
       captureId:last?.captureId ?? null,captureAgeMs:last ? Date.now()-last.captureEpochMs : null,
       visible:mesh.visible,handedness,crop:{x:cropX,y:cropY,size:cropSize},
       acquisitionMode,cropPadding,detectorThreshold,acquisition:last?.acquisition ?? null,
-      acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null});
+      acquisitionDetails:last?.acquisitionDetails ?? null,camera:stream?.getVideoTracks()[0]?.getSettings() ?? null,
+      fingerJuice:{enabled:fingerJuice,packet:fluidPacket,runtime:fluid?.read()??null}});
+    const updateFluid=()=>{
+      if(!fluid)return;
+      mesh.updateWorldMatrix(true,false);
+      const packet=last?nativeFingerPacket(last,{nowMs:Date.now(),running,center:displayCenter,matrix:mesh.matrixWorld,sourceFlux}):idleFingerPacket();
+      const key=JSON.stringify([packet.source_frame_id,packet.authority.reason,packet.emitters]);
+      if(key===fluidKey)return;
+      fluid.setPacket(packet);fluidPacket=packet;fluidKey=key;
+      if(sessionId)emit({kind:'finger_juice',epochMs:Date.now(),packet,meshMatrix:mesh.matrixWorld.toArray()}).catch(cause=>{error=String(cause);});
+    };
     const sync = () => {
       if (button) {button.textContent=running?'Stop camera':starting?'Starting camera':'Start camera';button.disabled=starting;}
       if (status) status.textContent = error ? `Stopped: ${error}${last ? ` | last computed mesh retained | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms` : ''}` :
-        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | diagnostic, no interaction`;
+        `${running?'LIVE CAMERA':'STOPPED'} | MobRecon / CPU | ${received} meshes${last?` | sample age ${Math.round(Date.now()-last.captureEpochMs)} ms`:''} | ${last?.acquisitionDetails?.fallback?'NO DETECTION: MANUAL CROP FALLBACK':last?.acquisition==='wilor_yolo_detector_bbox_only'?'YOLO / MLX crop':acquisitionMode==='detector'?'AUTO: awaiting detection':'MANUAL CROP'} | ${fingerJuice?`Finger Juice: ${fluidPacket.authority.reason??(fluidPacket.emitters.filter(e=>e.active).map(e=>e.id).join(', ')||'no extended fingers')}`:'diagnostic, no interaction'}`;
       if (overlay && video.videoWidth) {
         const [x0,y0,x1,y1]=acquisitionMode==='detector' && last ? last.cropBox : cameraCrop(video.videoWidth,video.videoHeight,cropX,cropY,cropSize);
         overlay.style.borderColor=last?.acquisitionDetails?.fallback?'#ff725e':acquisitionMode==='detector'?'#60e1a1':'#ffd75a';
@@ -56,6 +75,7 @@ export default {
     const emit = value => api('/event',{sessionId,...value});
     const stop = async () => {
       running=false; generation++;
+      updateFluid();fluid?.setPaused(true);
       if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
       stream?.getTracks().forEach(track=>track.stop()); stream=null;video.srcObject=null;sync();
       if (flight) await flight.catch(()=>{});
@@ -67,6 +87,7 @@ export default {
       frameCallback=video.requestVideoFrameCallback((now,metadata) => {
         flight=infer(ticket,metadata).catch(async cause => {
           error=String(cause); running=false; stream?.getTracks().forEach(track=>track.stop());stream=null; sync();
+          updateFluid();fluid?.setPaused(true);
           if(sessionId) await emit({kind:'failure',error,epochMs:Date.now(),submission:lastSubmission}).catch(()=>{});
         }).finally(()=>{flight=null;schedule(ticket);});
       });
@@ -97,15 +118,16 @@ export default {
       // Display-only centering and fixed scale; native predictions stay untouched on disk.
       const center=[0,0,0];
       for(let i=0;i<positions.length;i++) center[i%3]+=positions[i]/778;
+      displayCenter=center;
       for(let i=0;i<positions.length;i++) positions[i]=(positions[i]-center[i%3])*(i%3===1?-1:1);
       geometry.setAttribute('position',new BufferAttribute(positions,3));
       geometry.setIndex(health.faces.flatMap(f=>result.handedness==='left'?[f[0],f[2],f[1]]:f));
       geometry.computeVertexNormals();geometry.computeBoundingSphere();mesh.visible=true;
-      last=result;received++;scene.redraw();sync();
+      last=result;received++;updateFluid();scene.redraw();sync();
       await emit({kind:'presented',captureId:capture.captureId,epochMs:Date.now(),view:scene.readView(),
         displayTransform:{center,scale:5,invertY:true}});
     };
-    const frame = () => scene.setView({position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
+    const frame = () => scene.setView(fingerJuice?{position:[0,2.3,document.defaultView.innerWidth<600?7:5],target:[0,.7,0]}:{position:[0,1.5,document.defaultView.innerWidth<600?6:4.2],target:[0,1.5,0]});
     const setAcquisition = value => {
       if (!['manual','detector'].includes(value.mode) || (value.mode==='detector' && !health.identity.detector)) throw Error('requested acquisition unavailable');
       const padding=Number(value.padding ?? cropPadding), threshold=Number(value.threshold ?? detectorThreshold);
@@ -117,13 +139,18 @@ export default {
       record({kind:'hand-live.acquisition',phase:'applied',effective:read()});return read();
     };
     frame();
-    const unsubscribe=scene.onFrame(sync);
+    const unsubscribe=scene.onFrame(()=>{updateFluid();sync();});
     const start = async () => {
       if(running || starting) return read();
       if(disposed) throw Error('experiment closed');
       if(flight) await flight;
       starting=true;error=null;sync();const ticket=++generation;
       try {
+        if(fingerJuice&&!fluid){
+          fluid=await host.fluid.openInlets({setup:{schema:'kaminos.local-liquid-setup.v1',support:'retained_analytical_basin',particleCount:2400,densityIterations:3,showSupportGeometry:true},packet:idleFingerPacket()});
+          fluid.setPaused(true);
+          if(disposed||ticket!==generation){await fluid.dispose();fluid=null;return read();}
+        }
         const created=await api('/session',{source:'browser_camera',handedness,pixelBasis:'unmirrored_camera'});
         sessionId=created.sessionId;
         if(disposed || ticket!==generation) return read();
@@ -131,13 +158,16 @@ export default {
         if(disposed || ticket!==generation){acquired.getTracks().forEach(t=>t.stop());return read();}
         stream=acquired;video.srcObject=stream;await video.play();
         if(disposed || ticket!==generation){stream?.getTracks().forEach(t=>t.stop());return read();}
-        running=true;last=null;received=0;mesh.visible=false;scene.redraw();schedule(ticket);
+        running=true;last=null;received=0;mesh.visible=false;fluidKey=null;updateFluid();fluid?.setPaused(false);scene.redraw();schedule(ticket);
         record({kind:'hand-live.start',phase:'applied',effective:read()});return read();
       } catch(cause) {error=String(cause);stream?.getTracks().forEach(t=>t.stop());stream=null;throw cause;}
       finally {starting=false;sync();}
     };
     return {
-      read,operations:{start,stop,frame,setAcquisition},
+      read,operations:{start,stop,frame,setAcquisition,setSourceFlux(value){
+        if(!Number.isFinite(value)||value<0)throw Error('Invalid source flux');sourceFlux=value;updateFluid();
+        record({kind:'hand-live.flux',phase:'applied',effective:{sourceFlux}});return read();
+      }},
       mount({root,document,invoke}) {
         const preview=document.createElement('div');preview.style.cssText='position:relative;overflow:hidden';
         overlay=document.createElement('div');overlay.style.cssText='position:absolute;border:2px solid #ffd75a;pointer-events:none;box-sizing:border-box';
@@ -149,6 +179,12 @@ export default {
         const frameButton=document.createElement('button');frameButton.textContent='Frame hand';frameButton.onclick=()=>invoke('frame');
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
+        if(fingerJuice){
+          const label=document.createElement('label');label.textContent='Particles / second';
+          const input=document.createElement('input');input.type='number';input.min='0';input.step='60';input.value=sourceFlux;
+          input.setAttribute('aria-label','Particles per second');input.onchange=()=>invoke('setSourceFlux',Number(input.value)).catch(cause=>{error=String(cause);sync();});
+          label.append(input);root.append(label);
+        }
         const modeSelect=document.createElement('select');modeSelect.setAttribute('aria-label','Crop mode');
         for(const [value,label] of [['detector','Automatic crop'],['manual','Manual crop']]) {
           const option=document.createElement('option');option.value=value;option.textContent=label;
@@ -177,7 +213,7 @@ export default {
       async dispose(){
         disposed=true;unsubscribe();
         try {await stop();}
-        finally {captures.close();await scene.dispose();}
+        finally {await fluid?.dispose();captures.close();await scene.dispose();}
       },
     };
   },
