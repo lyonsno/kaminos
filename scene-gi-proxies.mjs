@@ -58,7 +58,7 @@ export function createGiProxyRegistry({THREE,fetchJson=async url=>{const r=await
       if(selection.maxError!=null){query.set('maxError',String(selection.maxError));query.set('stat',selection.stat??'p95');}
       const set=await fetchJson(`/api/mesh-lods?${query}`);
       const levels=(set.levels??[]).map(l=>({sha:l.sha256,faces:l.faces,closed:l.closed??null}));
-      if(!set.choice)return settle({...base,levels,state:'no-tiers',reason:'no stored tiers for this hero'});
+      if(!set.choice)return settle({...base,levels,state:'no-tiers',reason:base.heroSha?'no stored tiers for this hero mesh':'no stored tiers for this surfel asset yet'});
       const choice=set.choice,bytes=await fetchBytes(choice.source);
       if(await digest(bytes)!==choice.sha256)throw Error('GI proxy content does not match its sha');
       const proxyRoot=await parseGlb(bytes);proxyRoot.matrixAutoUpdate=false;proxyRoot.updateMatrix?.();
