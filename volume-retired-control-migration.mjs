@@ -121,9 +121,22 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
   const savedDomControlCount = Object.keys(preset.domControls || {}).length + retiredDomControlsPresent;
   // A record that still carries a control introduced later cannot be missing
   // one introduced earlier: that is a hole in a current record, not history.
-  const latestPresentIntroducedAt = Math.max(0, ...(schema.controls || [])
-    .filter(control => Number.isSafeInteger(Number(control.additiveSinceControlCount)) && Object.hasOwn(preset.domControls || {}, control.key))
-    .map(control => Number(control.additiveSinceControlCount)));
+  // Match scene restoration: independent additions have their own chronology.
+  // Freeze history before inserting defaults so schema ordering cannot change
+  // admission, and keep retired controls in the legacy inventory count.
+  const lineage = control => control.additiveLineage ?? 'legacy';
+  const present = (schema.controls || []).filter(control => Object.hasOwn(preset.domControls || {}, control.key));
+  const independentCount = present.filter(control => lineage(control) !== 'legacy').length;
+  const histories = new Map();
+  for (const control of schema.controls || []) {
+    const name = lineage(control);
+    if (histories.has(name)) continue;
+    const members = present.filter(entry => lineage(entry) === name);
+    histories.set(name, {
+      count: name === 'legacy' ? savedDomControlCount - independentCount : members.length,
+      latest: Math.max(0, ...members.map(entry => Number(entry.additiveSinceControlCount) || 0)),
+    });
+  }
   for (const control of schema.controls || []) {
     const introducedAt = Number(control.additiveSinceControlCount);
     if (!Number.isSafeInteger(introducedAt)) continue;
@@ -134,7 +147,8 @@ export function migrateRetiredVolumeSettingsPresetDocument(documentValue, schema
     // every additive control introduced after it takes its declared default;
     // one introduced before it and still missing is a hole, not history.
     if (Object.hasOwn(preset.domControls, control.key)) continue;
-    if (savedDomControlCount >= introducedAt || introducedAt < latestPresentIntroducedAt) {
+    const history = histories.get(lineage(control));
+    if (history.count >= introducedAt || introducedAt < history.latest) {
       throw new Error(`settings preset cannot bridge additive control history at ${control.key}`);
     }
     if (route.searchParams.has(control.param)) {
