@@ -237,7 +237,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
      const result=await probe.sample(points);
      if(disposed||!attention)return;
      const flame=flames?.read()?.[0]??null;
-     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
+     attention.sense({time:clock/1000,status:result.status,sourcePower:result.source?.power??null,sourceVisual:result.source?.visual??null,samples:result.values?.map((v,i)=>({point:points[i].position,luminance:v.luminance}))??null,source:flame?{id:flame.id,label:flame.label,point:flame.point}:null});
     }catch(error){if(!disposed&&attention)attention.sense({time:clock/1000,status:'unavailable',samples:null});record({kind:'attention.light',phase:'failed',error:error.message});}
     finally{lightBusy=false;}
    };

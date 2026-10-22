@@ -10629,12 +10629,12 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   const farFieldStrength = uniform(baseFarStrength);
   const blackMetaTexture = sharedGpu.device.createTexture({
     label: 'kaminos fire light field black meta placeholder',
-    size: { width: 2, height: 1, depthOrArrayLayers: 1 },
+    size: { width: 4, height: 1, depthOrArrayLayers: 1 },
     format: 'rgba16float',
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
   });
   const metaExternalTexture = new THREE.ExternalTexture(blackMetaTexture);
-  metaExternalTexture.image = { width: 2, height: 1, depth: 1 };
+  metaExternalTexture.image = { width: 4, height: 1, depth: 1 };
   metaExternalTexture.format = THREE.RGBAFormat;
   metaExternalTexture.type = THREE.HalfFloatType;
   metaExternalTexture.colorSpace = THREE.NoColorSpace;
@@ -10702,8 +10702,12 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
   // (fire-irradiance-far-field-meta-v0); receivers add a true 1/r^2 radial
   // term from that center, N.L shaded and NOT clipped to the lattice box,
   // so side walls and out-of-box geometry receive real fire light.
-  const metaCore = metaTextureNode.sample(vec2(0.25, 0.5));
-  const metaColor = metaTextureNode.sample(vec2(0.75, 0.5));
+  const metaCore = metaTextureNode.sample(vec2(0.125, 0.5));
+  const metaColor = metaTextureNode.sample(vec2(0.375, 0.5));
+  const emissionCenter = metaTextureNode.sample(vec2(0.625, 0.5));
+  const emissionVariance = metaTextureNode.sample(vec2(0.875, 0.5));
+  const emissionWorldCenter = fieldWorldMin.add(emissionCenter.xyz.mul(fieldWorldMax.sub(fieldWorldMin)));
+  const emissionWorldRadius = emissionVariance.xyz.mul(fieldWorldMax.sub(fieldWorldMin).pow(2)).dot(vec3(1)).max(0).sqrt().mul(2).mul(emissionCenter.w);
   const fireCenterWorld = fieldWorldMin.add(metaCore.xyz.mul(fieldWorldMax.sub(fieldWorldMin)));
   const firePower = metaCore.w;
   // Fire light arriving at a world point with a surface normal, before shadow
@@ -10868,17 +10872,18 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     lightProbe.positions = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
     lightProbe.normals = new THREE.StorageInstancedBufferAttribute(new Float32Array(count * 4), 4);
     // One extra slot after the points carries the fire's own output (color, power).
-    lightProbe.results = new THREE.StorageInstancedBufferAttribute(new Float32Array((count + 1) * 4), 4);
+    lightProbe.results = new THREE.StorageInstancedBufferAttribute(new Float32Array((count + 2) * 4), 4);
     const positionsNode = TSL.storage(lightProbe.positions, 'vec4', count);
     const normalsNode = TSL.storage(lightProbe.normals, 'vec4', count);
-    const resultsNode = TSL.storage(lightProbe.results, 'vec4', count + 1);
+    const resultsNode = TSL.storage(lightProbe.results, 'vec4', count + 2);
     lightProbe.node = Fn(() => {
-      const point = positionsNode.element(TSL.instanceIndex).xyz;
-      const normal = normalsNode.element(TSL.instanceIndex).xyz.normalize();
+      const pointIndex = TSL.instanceIndex.min(TSL.uint(count - 1));
+      const point = positionsNode.element(pointIndex).xyz;
+      const normal = normalsNode.element(pointIndex).xyz.normalize();
       const visible = shadow ? fireShadow.visibilityAt(point, normal) : float(1.0);
       const atPoint = vec4(fireLightAt(point, normal).signal.mul(visible).mul(fireLightFieldStrength), visible);
-      resultsNode.element(TSL.instanceIndex).assign(TSL.select(TSL.instanceIndex.equal(TSL.uint(count)), vec4(metaColor.rgb, firePower.mul(fireLightFieldStrength)), atPoint));
-    })().compute(count + 1);
+      resultsNode.element(TSL.instanceIndex).assign(TSL.select(TSL.instanceIndex.equal(TSL.uint(count)), vec4(metaColor.rgb, firePower.mul(fireLightFieldStrength)), TSL.select(TSL.instanceIndex.equal(TSL.uint(count + 1)), vec4(emissionWorldCenter, emissionWorldRadius), atPoint)));
+    })().compute(count + 2);
   };
   const probeLight = async (points, { shadow = true } = {}) => {
     if (!Array.isArray(points) || points.some(p => !Array.isArray(p?.position) || p.position.length !== 3 || !p.position.every(Number.isFinite)))
@@ -10898,7 +10903,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
     try {
       const raw = await run;
       const n = points.length * 4;
-      return { status: 'effective', identity: 'fire-light-field-world-point-probe-v0', source: { color: [raw[n], raw[n + 1], raw[n + 2]], power: raw[n + 3] }, values: points.map((_, i) => ({
+      return { status: 'effective', identity: 'fire-light-field-world-point-probe-v0', source: { color: [raw[n], raw[n + 1], raw[n + 2]], power: raw[n + 3], visual: passState.lightField?.visualExtentIdentity === 'undiffused-emission-moments-v1' ? {center: [raw[n + 4], raw[n + 5], raw[n + 6]], radius: raw[n + 7], provenance: 'undiffused-emission-moments-v1'} : null }, values: points.map((_, i) => ({
         rgb: [raw[i * 4], raw[i * 4 + 1], raw[i * 4 + 2]], visibility: raw[i * 4 + 3],
         luminance: raw[i * 4] * 0.2126 + raw[i * 4 + 1] * 0.7152 + raw[i * 4 + 2] * 0.0722 })) };
     } finally { lightProbe.busy = null; }
@@ -10935,7 +10940,7 @@ function createFireLightFieldReceiverPass(baseOutputNode, sceneDepthNode, sceneN
       const adoptionKey = `${lightField.generation}:${lightField.atlasWidth}x${lightField.atlasHeight}`;
       if (passState.adoptionKey !== adoptionKey) {
         atlasTextureNode.value = makeAdoptedAtlasTexture(lightField.atlasTexture, lightField.atlasWidth, lightField.atlasHeight);
-        if (lightField.metaTexture) {
+        if (lightField.metaTexture && lightField.metaWidth === 4 && lightField.visualExtentIdentity === 'undiffused-emission-moments-v1') {
           const adoptedMeta = makeAdoptedAtlasTexture(lightField.metaTexture, lightField.metaWidth, lightField.metaHeight);
           adoptedMeta.minFilter = THREE.NearestFilter;
           adoptedMeta.magFilter = THREE.NearestFilter;
