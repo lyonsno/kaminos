@@ -66,3 +66,10 @@ const {sceneObjectInterests}=await import('../experiments/creature-motion/creatu
  assert.equal(next.visual.radius,first.visual.radius*3);assert.equal(next.visual.center[0],2);
  box.visible=false;assert.equal(read()[0].active,false,'Ordinary object visibility supplies an observed appearance transition');
 }
+
+{
+ const c=animal();c.fire.active=true;c.step();
+ const sense=radius=>c.a.sense({time:c.time(),source:c.fire,sourceVisual:{center:[...c.fire.point],radius,provenance:'async-test'},samples:[{point:[0,0,0],luminance:1}]});
+ sense(.1);c.step();c.a.sense({time:c.time(),samples:[],status:'unavailable'});c.step();sense(2);c.step();
+ assert.equal(c.a.read().startle,null,'An unavailable probe without source identity clears the old geometric baseline');
+}
