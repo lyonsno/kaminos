@@ -1,4 +1,5 @@
-import {Node,RenderTarget,NodeMaterial,QuadMesh,Matrix4,Vector2,HalfFloatType,UnsignedByteType,RGBAFormat,RedFormat,NearestFilter,RendererUtils,TSL} from './lib/three.webgpu.js';
+import GIConvergence from './scene-gi-convergence.mjs';
+import {Node,RenderTarget,NodeMaterial,QuadMesh,Matrix4,Vector2,HalfFloatType,FloatType,RGBAFormat,RedFormat,NearestFilter,RendererUtils,TSL} from './lib/three.webgpu.js';
 const {Fn,NodeUpdateType,uniform,texture,passTexture,uv,vec2,vec3,vec4,float,If,outputStruct,getViewPosition,logarithmicDepthToViewZ,viewZToPerspectiveDepth,min,max,abs,dot,luminance,context,reference,mix}=TSL;
 
 // Reproject estimated diffuse lighting and visibility, leaving current-frame
@@ -10,16 +11,18 @@ export default class SceneGIHistory extends Node {
     super('vec4');
     Object.assign(this,{ao,gi,depth,normal,camera});
     this.updateBeforeType=NodeUpdateType.FRAME;
-    this.resolutionScale=1;this.frames=0;this.pendingFrames=0;this.size=[1,1];this.resetReason='initial';
+    this.resolutionScale=1;this.frames=0;this.pendingFrames=0;this.refine=true;this.size=[1,1];this.resetReason='initial';
+    this.activity=true;this.stableFrames=0;this.epoch=0;this.converged=false;this.checkPending=false;this.nextCheck=64;this.passingChecks=0;this.lastError=null;this.checkFailure=null;
+    this.progressive=uniform(false);this.gain=uniform(5);this.tolerance=uniform(.01);
     this.valid=uniform(false);this.weight=uniform(.9);this.resolution=uniform(new Vector2(1,1));
     this.previousView=uniform(new Matrix4());this.previousProjection=uniform(new Matrix4());
     this.currentWorld=uniform(camera.matrixWorld);this.inverseProjection=uniform(camera.projectionMatrixInverse);
     this.targets=Array.from({length:2},()=>{
-      const target=new RenderTarget(1,1,{count:3,depthBuffer:false});
+      const target=new RenderTarget(1,1,{count:4,depthBuffer:false});
       for(const [i,map] of target.textures.entries()) {
-        map.type=i===0?UnsignedByteType:HalfFloatType;map.format=i===0?RedFormat:RGBAFormat;
+        map.type=i===2?HalfFloatType:FloatType;map.format=(i===0||i===3)?RedFormat:RGBAFormat;
         map.minFilter=map.magFilter=NearestFilter;map.generateMipmaps=false;
-        map.name=['GI history visibility','GI history irradiance','GI history surface'][i];
+        map.name=['GI history visibility','GI history irradiance','GI history surface','GI sample variance'][i];
       }
       return target;
     });
@@ -27,35 +30,56 @@ export default class SceneGIHistory extends Node {
     this.outputAO=passTexture(this,this.targets[0].textures[0]);
     this.outputGI=passTexture(this,this.targets[0].textures[1]);
     this.oldAO=texture(this.targets[0].textures[0]);this.oldGI=texture(this.targets[0].textures[1]);
-    this.oldSurface=texture(this.targets[0].textures[2]);
+    this.oldSurface=texture(this.targets[0].textures[2]);this.oldVariance=texture(this.targets[0].textures[3]);
+    this.convergence=new GIConvergence(this.oldGI,this.oldAO,this.oldVariance,this.gain,this.tolerance);
     this.material=new NodeMaterial();this.material.name='Reproject indirect lighting';
     this.quad=new QuadMesh(this.material);this.quad.name=this.material.name;
   }
   getAONode(){return this.outputAO;}
   getGINode(){return this.outputGI;}
   requestFrames(){
-    // After N accepted blends, at most weight^N of the initial estimate remains.
-    // This is a first-estimate influence bound, not a noise-convergence claim.
-    const weight=this.weight.value;
-    this.pendingFrames=weight===0?1:1+Math.ceil(Math.log(.01)/Math.log(weight));
+    // A host activity signal invalidates stationary refinement, while moving
+    // frames may still reproject the responsive history.
+    this.activity=true;this.stableFrames=0;this.converged=false;this.nextCheck=64;
+    this.pendingFrames=this.weight.value===0?1:1+Math.ceil(Math.log(.01)/Math.log(this.weight.value));
+    this.passingChecks=0;this.lastError=null;this.checkFailure=null;this.epoch++;
   }
-  needsFrame(){return this.pendingFrames>0;}
+  needsFrame(){return this.refine?!this.converged:this.pendingFrames>0;}
   reset(reason='explicit'){this.valid.value=false;this.resetReason=reason;this.requestFrames();}
+  state(){return {stableFrames:this.stableFrames,converged:this.converged,checkPending:this.checkPending,
+    estimatedRelativeError:this.lastError===null?null:this.lastError*this.tolerance.value,
+    tolerance:this.tolerance.value,passingChecks:this.passingChecks,checkFailure:this.checkFailure,
+    refine:this.refine,pendingFrames:this.refine?null:this.pendingFrames,mode:this.progressive.value?'progressive':'responsive'};}
   renderFrame(renderer,width,height) {
     if(width!==this.size[0]||height!==this.size[1]) {
       for(const target of this.targets)target.setSize(width,height);
       this.size=[width,height];this.resolution.value.set(width,height);this.reset('resize');
     }
+    this.progressive.value=this.refine&&!this.activity;
+    this.stableFrames=this.activity?0:this.stableFrames+1;this.activity=false;
     const target=this.targets[this.writeIndex];
     renderer.setRenderTarget(target);
     this.quad.render(renderer);
     // Publish only a completed render. Texture samples retain references to
     // these nodes, so cached receiving/filter graphs follow each target swap.
     this.outputAO.value=target.textures[0];this.outputGI.value=target.textures[1];
-    this.oldAO.value=target.textures[0];this.oldGI.value=target.textures[1];this.oldSurface.value=target.textures[2];
+    this.oldAO.value=target.textures[0];this.oldGI.value=target.textures[1];this.oldSurface.value=target.textures[2];this.oldVariance.value=target.textures[3];
     this.previousView.value.copy(this.camera.matrixWorldInverse);
     this.previousProjection.value.copy(this.camera.projectionMatrix);
     this.writeIndex=1-this.writeIndex;this.valid.value=true;this.frames++;this.pendingFrames=Math.max(0,this.pendingFrames-1);
+    if(this.progressive.value&&!this.checkPending&&this.stableFrames>=this.nextCheck){
+      const epoch=this.epoch;
+      const reduced=this.convergence.draw(renderer,width,height);
+      this.checkPending=true;this.nextCheck=this.stableFrames*2;
+      renderer.readRenderTargetPixelsAsync(reduced,0,0,1,1).then(data=>{
+        if(epoch!==this.epoch)return;
+        const error=data[0];
+        if(!Number.isFinite(error))throw Error('Non-finite GI refinement error');
+        this.lastError=error;this.passingChecks=error<=1?this.passingChecks+1:0;
+        this.converged=this.passingChecks>=2;
+      }).catch(error=>{if(epoch===this.epoch)this.checkFailure=String(error);})
+        .finally(()=>{this.checkPending=false;});
+    }
   }
   updateBefore(frame) {
     const {renderer}=frame;
@@ -68,9 +92,9 @@ export default class SceneGIHistory extends Node {
   }
   setup(builder) {
     this.ao.build(builder);this.gi.build(builder);
-    const visibility=TSL.property('float'),irradiance=TSL.property('vec3'),surface=TSL.property('vec4');
+    const visibility=TSL.property('float'),irradiance=TSL.property('vec3'),surface=TSL.property('vec4'),sampleCount=TSL.property('float'),variance=TSL.property('float');
     const resolve=Fn(()=>{
-      const coords=uv();surface.assign(vec4(0));
+      const coords=uv();surface.assign(vec4(0));sampleCount.assign(0);variance.assign(0);
       let depth=this.depth.sample(coords).r;
       if(builder.renderer.logarithmicDepthBuffer===true) {
         const z=logarithmicDepthToViewZ(depth,reference('near','float',this.camera),reference('far','float',this.camera));
@@ -78,6 +102,7 @@ export default class SceneGIHistory extends Node {
       }
       visibility.assign(this.ao.sample(coords).r);irradiance.assign(this.gi.sample(coords).rgb);
       If(depth.lessThan(1),()=>{
+        sampleCount.assign(this.progressive.select(float(1),float(0)));
         const view=getViewPosition(coords,depth,this.inverseProjection).toVar();
         const world=this.currentWorld.mul(vec4(view,1)).toVar();
         const worldNormal=this.currentWorld.mul(vec4(this.normal.sample(coords).rgb,0)).xyz.normalize().toVar();
@@ -92,6 +117,15 @@ export default class SceneGIHistory extends Node {
           const depthAgrees=abs(metadata.a.sub(expectedDepth)).lessThanEqual(max(.01,expectedDepth.mul(.002)));
           const normalAgrees=dot(metadata.rgb,worldNormal).greaterThan(.9);
           If(depthAgrees.and(normalAgrees),()=>{
+            If(this.progressive.and(this.oldGI.sample(priorUV).a.greaterThan(0)),()=>{
+              const prior=this.oldGI.sample(priorUV).toVar();
+              const oldAO=this.oldAO.sample(priorUV).r.toVar();
+              sampleCount.assign(prior.a.add(1));
+              const delta=vec4(irradiance.sub(prior.rgb).mul(this.gain),visibility.sub(oldAO)).toVar();
+              irradiance.assign(prior.rgb.add(irradiance.sub(prior.rgb).div(sampleCount)));
+              visibility.assign(oldAO.add(visibility.sub(oldAO).div(sampleCount)));
+              variance.assign(this.oldVariance.sample(priorUV).r.add(dot(delta,delta).mul(prior.a.div(sampleCount))));
+            }).ElseIf(this.progressive.not(),()=>{
             const lowerGI=irradiance.toVar(),upperGI=irradiance.toVar();
             const lowerAO=visibility.toVar(),upperAO=visibility.toVar();
             // Current-frame neighborhood bounds reject vanished illumination
@@ -108,15 +142,16 @@ export default class SceneGIHistory extends Node {
             const blend=this.weight.div(float(1).add(change.mul(4)));
             irradiance.assign(mix(irradiance,oldColor,blend));
             visibility.assign(mix(visibility,oldVisibility,this.weight));
+            });
           });
         });
       });
       return vec4(0);
     });
     this.material.contextNode=context(builder.getSharedContext());
-    this.material.colorNode=resolve();this.material.outputNode=outputStruct(visibility,vec4(irradiance,1),surface);
+    this.material.colorNode=resolve();this.material.outputNode=outputStruct(visibility,vec4(irradiance,sampleCount),surface,variance);
     this.material.needsUpdate=true;
     return this.outputAO;
   }
-  dispose(){super.dispose();for(const t of this.targets)t.dispose();this.material.dispose();}
+  dispose(){this.epoch++;this.convergence.dispose();super.dispose();for(const t of this.targets)t.dispose();this.material.dispose();}
 }

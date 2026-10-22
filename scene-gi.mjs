@@ -109,9 +109,9 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
           throw new Error('Received bounce is unavailable for custom fragment materials');
         }
       });
-      if(['mode','radius','thickness','slices','steps','resolutionScale','temporal'].some(key=>next[key]!==settings[key]))history.reset('estimator-settings');
+      if(['mode','radius','thickness','slices','steps','resolutionScale','temporal','temporalRefine','gain'].some(key=>next[key]!==settings[key]))history.reset('estimator-settings');
       settings = next;
-      history.resolutionScale=next.resolutionScale;history.weight.value=next.temporalWeight;
+      history.resolutionScale=next.resolutionScale;history.weight.value=next.temporalWeight;history.gain.value=next.gain;history.refine=next.temporalRefine;
       effect.useTemporalFiltering=next.temporal;
       effect.radius.value = settings.radius; effect.thickness.value = settings.thickness;
       effect.sliceCount.value = settings.slices; effect.stepCount.value = settings.steps;
@@ -144,15 +144,15 @@ export function createSceneGI(scene, camera, aoIntensity, {receiveWeight=()=>1,f
       const attachment=kind==='surface'?target.textures.indexOf(surfaceLighting.capture.value):kind==='receiving'?0:1;
       const data=await renderer.readRenderTargetPixelsAsync(target,0,0,target.width,target.height,attachment);
       let sum=0,max=0,nonzero=0,finite=true,covered=0;
-      for(let i=0;i<data.length;i++)if(i%4<3){const v=DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
+      for(let i=0;i<data.length;i++)if(i%4<3){const v=data instanceof Float32Array?data[i]:DataUtils.fromHalfFloat(data[i]);finite&&=Number.isFinite(v);sum+=v;max=Math.max(max,v);if(v>0)nonzero++;}
       if(kind==='surface')for(let i=3;i<data.length;i+=4)if(DataUtils.fromHalfFloat(data[i])>.5)covered++;
       const bytes=new Uint8Array(data.buffer,data.byteOffset,data.byteLength),chunks=[];
       // Chunk only the JS call arguments, not the evidence. Preserve every byte.
       for(let i=0;i<bytes.length;i+=16384)chunks.push(String.fromCharCode(...bytes.subarray(i,i+16384)));
-      return {kind,source:kind==='surface'?'opaque-source-flame-irradiance':kind==='receiving'?'receiving':kind==='incoming'&&settings.temporal?'temporal-result':'current-estimate',estimatorFrames:frames,historyFrames:history.frames,view:settings.view,width:target.width,height:target.height,format:'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite,...(kind==='surface'?{covered}:{})}};
+      return {kind,source:kind==='surface'?'opaque-source-flame-irradiance':kind==='receiving'?'receiving':kind==='incoming'&&settings.temporal?'temporal-result':'current-estimate',estimatorFrames:frames,historyFrames:history.frames,view:settings.view,width:target.width,height:target.height,format:data instanceof Float32Array?'rgba32f-little-endian':'rgba16f-little-endian',base64:btoa(chunks.join('')),stats:{sum,max,nonzero,finite,...(kind==='surface'?{covered}:{})}};
     },
     debugState:()=>({identity:'three-ssilvb-scene-gi-v1',...settings,estimator:{...estimator},frames,
-      history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:34,weight:history.weight.value,pendingFrames:history.pendingFrames,settlingInitialInfluence:.01},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
+      history:{enabled:settings.temporal,frames:history.frames,valid:history.valid.value,resetReason:history.resetReason,bytesPerPixel:64,weight:history.weight.value,...history.state()},source:'opaque-linear-lit-surfaces',receiver:'opaque-physical-material-diffuse',
       resolution:[effect._ssgiRenderTarget.width,effect._ssgiRenderTarget.height],
       sourcePasses:1+(comparison?.read().additionalSourcePasses??0),sourceComparison:comparison?.read()??null,receivingPasses:1,sourceSamples:source.renderTarget.samples,receivingSamples:route().beauty.renderTarget.samples,
       filtering:settings.denoise>0,filterImplementation,filterFrames:filterImplementation==='shared'?{ao:filters.get(filterKey(settings.temporal))?.shared.frames??0,gi:filters.get(filterKey(settings.temporal))?.shared.frames??0}: {...filterFrames},
