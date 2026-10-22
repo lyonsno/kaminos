@@ -1,5 +1,6 @@
 // kaminos-test: node
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {createVolumeGather} from '../scene-volume-gather.mjs';
 import {createSceneVolumeSource} from '../scene-volume-source.mjs';
 import {exteriorSegments} from '../scene-exterior-medium.mjs';
@@ -36,4 +37,11 @@ assert.deepEqual(producer.describe().exterior.localMin,bounds.lo);
 world=null;producer.encode(device.createCommandEncoder(),0,10);
 assert.equal(producer.describe().exterior,null,'disabled world must not retain stale lighting support');
 producer.destroy();
+// The ordinary joined material has both an exterior and a fine scattering
+// site. Execute the native-host production substitution on both sites.
+const core=readFileSync(new URL('../volume-core.js',import.meta.url),'utf8');
+const host=core.split('function renderSceneTransportHost() {')[1].split('function ')[0];
+const substitution=host.match(/code=code(\.replace(?:All)?\('medium\.scattering \* incidentAt\(p\)','medium\.scattering \* distributedMeanIncident\(p\)'\))/)[1];
+const substituted=new Function('code',`return code${substitution}`)('medium.scattering * incidentAt(p); medium.scattering * incidentAt(p)');
+assert.equal(substituted.match(/distributedMeanIncident/g)?.length,2,'native host must light both fine and exterior material sites');
 console.log('exterior receivers preserve fine source bounds and actual world coordinates');
