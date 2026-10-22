@@ -11,13 +11,11 @@
 /* Horizontal trackpad gestures belong to the editor, never browser history. */
 html, body { overscroll-behavior-x: none; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
-
 /* Sidebar */
 #sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; contain: layout paint; overscroll-behavior: contain; scrollbar-gutter: stable; isolation: isolate; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
 h1 { font-size: 15px; font-weight: 700; margin-bottom: 4px; color: #fff; letter-spacing: -0.3px; }
 .subtitle { font-size: 11px; color: #555; margin-bottom: 16px; font-family: 'SF Mono', 'Fira Code', monospace; }
 h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
@@ -679,8 +677,9 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <section id="local-liquid-performance" hidden>
       <h2>Water Simulation</h2>
       <div class="panel">
-        <label class="slider-row"><span class="slider-label">Show support</span><input id="local-liquid-support-visible" type="checkbox"></label>
-        <p class="hint">Water collides with the fixed analytical basin and rock. Show support reveals that geometry; hiding it keeps the same collision surface.</p>
+        <label class="slider-row"><span class="slider-label">Collisions</span><select id="local-liquid-support-mode"><option value="scene_primitives">Scene objects</option><option value="retained_analytical_basin">Legacy playground</option></select></label>
+        <label class="slider-row"><span class="slider-label">Show legacy playground</span><input id="local-liquid-support-visible" type="checkbox"></label>
+        <p class="hint">Scene objects: planes, spheres and bowls with uniform scale collide with water. Add and place them normally. Changing collision mode restarts water; the numerical world bounds remain the simulation container.</p>
         <div class="scene-object-tools">
           <button type="button" class="btn" data-water-budget="12288,1">Draft</button>
           <button type="button" class="btn" data-water-budget="24576,2">Balanced</button>
@@ -1299,15 +1298,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <div id="basin-drive-state" role="status" aria-live="polite">idle</div>
       </div>
     </div>
-    <div class="slider-row">
-      <span class="slider-label">Scene</span>
+    <div class="slider-row" data-volume-ui-retired="volume-scene" data-volume-schema-retired hidden>
+      <span class="slider-label">Simulator</span>
       <select id="volume-scene" class="select-input">
-        <option value="tall_plume" selected>Tall plume (prototype)</option>
-        <option value="compact_plume">Compact plume (superseded)</option>
-        <option value="canonical_plume">Canonical plume (superseded)</option>
-        <option value="bonfire_plume">Bonfire plume (superseded)</option>
+        <option value="flame" selected>Flame</option>
       </select>
-      <span class="slider-val" id="volume-scene-val">prototype</span>
+      <span class="slider-val" id="volume-scene-val">Flame</span>
     </div>
     <div class="slider-row">
       <span class="slider-label">Freeze</span>
@@ -1317,7 +1313,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <span class="slider-help">Look lab freeze: pixel-stable pin for simulation steps and shader time.</span>
     <div class="volume-control-section" data-volume-control-section="reaction-front-extractor">
       <div class="volume-control-section-title">Reaction Front Extractor</div>
-      <span class="slider-help">CPU atlas only: thresholds and structural gates shape the debug shell candidate without changing rendered fire.</span>
+      <span class="slider-help">CPU atlas only: these thresholds and gates shape a debug atlas image built on frame readback. They do not change the fire or the rendered image.</span>
       <div class="slider-row">
         <span class="slider-label">Reaction live</span>
         <select id="volume-reaction-live-view" class="select-input">
@@ -1337,7 +1333,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help">reaction-live-view-shader-inspect-v0: full-size primary viewer of live shader-side support fields; atlas threshold sliders remain CPU-capture controls until parity uniforms land.</span>
       <div class="volume-control-section-title">Boundary fire</div>
-      <span class="slider-help">reaction-boundary-fire-controls-v0: shades the boundary sheet as clean-to-sooty hydrocarbon radiance. Smoke tint/extinction still comes from the raymarch.</span>
+      <span class="slider-help">Debug structure inputs. The boundary-fire painting they fed is retired and the Physics look ignores this structure, so they show only in a Structure view and, with Flame priority above 0, in where ray steps land.</span>
       <div class="slider-row">
         <span class="slider-label">Structure source</span>
         <select id="volume-boundary-sidecar-source" class="select-input">
@@ -1377,8 +1373,8 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <input type="range" id="volume-flow-kernel-coherence" data-volume-settings-role="renderer" min="0" max="2" step="0.05" value="1.00">
         <span class="slider-val" id="volume-flow-kernel-coherence-val">1.00</span>
       </div>
-      <span class="slider-help">Splat authority: support heat/reaction/front/interface, bake blur, baked ridge, and ridge select/cut shape candidate fields; splat radius/sharpness shape raster support. Step width and boundary display/color controls remain raymarch-only.</span>
-      <span class="slider-help">baked-boundary-sidecar-v0: prefilters support/coverage/ridge/footprint before the raymarch. Sidecar views expose the reconstruction channels in the primary viewer.</span>
+      <span class="slider-help">Flow kernel: smooths each rendered sample along the local flow for a streaked, softer look (render only; strength 0 is off). Bake blur and Baked ridge shape the baked structure field, seen in a Structure view.</span>
+      <span class="slider-help">Prefilters the baked structure field. Any Structure view replaces the picture with one of its channels in false colour and switches the Physics look off while shown.</span>
       <div class="slider-row">
         <span class="slider-label">Bake blur</span>
         <input type="range" id="volume-boundary-sidecar-blur" min="0" max="1" step="0.02" value="0.45">
@@ -1396,7 +1392,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <span class="slider-val" id="volume-boundary-sidecar-ridge-val">1.00</span>
       </div>
       <div class="volume-control-section-title">Physics appearance</div>
-      <span class="slider-help">Material law = Physics (reactant law, Emissive transport): soot glows as a blackbody at the temperature the heat field implies (300 K + Kelvin per heat &times; heat), absorbs and scatters with Smoke extinction and Smoke albedo, and fresh burning adds the reaction spectrum (Clean emission). No appearance carrier is drawn. Thermal emission scales the glow; Exposure EV, Highlight knee, Camera white K and Tone mapping grade it; Density scales the soot. Dimmed controls do nothing under this law.</span>
+      <span class="slider-help">Physics is the material law, under every reaction law: soot glows as a blackbody at the temperature the transported heat implies (300 K + Kelvin per heat &times; heat), and absorbs and scatters by Smoke extinction and Smoke albedo. Fresh burning adds the reaction&rsquo;s own light (Clean emission), which exists only under the Reactant reaction law. Thermal emission is an artistic gain on the soot glow; 1 keeps the glow consistent with how dark the soot is. Exposure EV, Camera white K and Tone mapping grade the picture and also the light the flame throws on the scene; Highlight knee applies only to the Custom curve. Soot display gain scales the soot the renderer draws (not the simulated soot); because the picture uses soot &times; Smoke extinction, the two trade off one-for-one in the image, though they mean different things. Under the Reactant law, Soot yield sets how much soot the simulation makes. Physics draws in the ordinary view; a field view, a Structure view or Residual switches it off.</span>
       <div class="slider-row">
         <span class="slider-label" title="Calibration of the dimensionless heat field: T = 300 K + this × heat.">Kelvin per heat</span>
         <input type="range" id="volume-physical-kelvin-per-heat" min="100" max="6000" step="any" value="1600">
@@ -1414,7 +1410,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-physics-appearance-state">Physics appearance: off</span>
       <div class="volume-control-section-title">Wavelet turbulence</div>
-      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved four-to-eight-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
+      <span class="slider-help">Simulation: the eddies the grid cannot carry (under about four cells) are relaxed toward divergence-free curl noise whose strength follows the resolved eight-to-eleven-cell motion down the Kolmogorov slope, on noise coordinates that travel with the gas. Energy comes from the flow, so still air stays still; detail is only added where the gas carries less sub-grid motion than the cascade predicts (times Wavelet strength), never removed. 0 = off.</span>
       <div class="slider-row">
         <span class="slider-label" title="Fraction of the sub-grid deficit filled per reference step. 0 = off (kernel unchanged); 1 = fill it every step.">Wavelet turbulence</span>
         <input type="range" id="volume-wavelet-turbulence" min="0" max="1" step="any" value="0">
@@ -1442,7 +1438,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
-        <span class="slider-label" id="volume-physical-thermal-label">Thermal emission</span>
+        <span class="slider-label" id="volume-physical-thermal-label">Glow gain</span>
         <input type="range" id="volume-physical-thermal" min="0" max="20" step="any" value="1">
         <span class="slider-val" id="volume-physical-thermal-val">1</span>
       </div>
@@ -1613,7 +1609,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="immersed-source">Immersed source (anywhere, any direction)</option>
       </select>
       <span class="slider-val" id="volume-emitter-source-law-val">legacy-volume</span>
-      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp at 0.52 per component, then max() floors on smoke, heat and fuel. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply.</span>
+      <span class="slider-help">Filled volume and Shallow primary add velocity and material inside the emitter every step: a per-step increment, then a clamp to &minus;0.34&hellip;0.52 per component, then max() floors on smoke, heat and fuel: an authored forcing, not a source in the pressure solve. Inflow boundary puts the emitter's footprint on the floor face as a prescribed inflow: the pressure solve carries that flux through the floor, the floor cells take in the inflow's fuel and temperature in proportion to that flux each step, and the backtrace below the floor reads the inflow velocity, so nothing is pushed in the interior and nothing is clamped. It needs the converged open-top pressure solver and an upright emitter; Inlet Δv is then the inflow velocity, and Link momentum, Shear width, Edge entrainment and Source depth do not apply. Immersed source creates gas inside a disc slab placed by the flame source object, also inside the pressure solve. Inflow and Immersed need the converged open-top solver; without it they quietly add no gas. Under the Cluster emitter this selector does nothing.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-law">
       <span class="slider-label">Source Depth (volume-local)</span>
@@ -1668,7 +1664,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="bed">Porous bed</option>
       </select>
       <span class="slider-val" id="volume-emitter-aperture-pattern-val">shape</span>
-      <span class="slider-help">Under the inflow law the floor opening is a coverage map built from the chosen pattern on the family's geometry: the ring radius is the pattern's reach, the tube radius its line weight. Count is the number of jets, rings or spiral turns; Ratio is the inner rings' share of the flux; Seed places the jets and shapes the bed. Swirl adds a tangential velocity to the entering gas, which the open-top solve turns into a fire whirl.</span>
+      <span class="slider-help">The opening (on the floor under Inflow, in the source disc under Immersed) is a coverage map built from the chosen pattern: the whole shape, a ring of jets, a slot, or a patchy porous bed. Count is the number of jets; Seed places the jets and shapes the bed; Line weight thickens the bands. Swirl spins the entering gas under Inflow only, and strong swirl can twist the plume into a whirl.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="source-profile">
       <span class="slider-label">Aperture count</span>
@@ -1815,7 +1811,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="checkbox" id="volume-artistic-swirl" checked>
       <span class="slider-val" id="volume-artistic-swirl-val">on</span>
     </div>
-    <span class="slider-help">Optional macro rotation around the vertical axis; it is not part of the base fluid solve.</span>
+    <span class="slider-help">Authored rotation of hot gas around the box&rsquo;s central vertical axis, stronger with heat and with Curl. Not part of the fluid solve.</span>
     <div class="slider-row" data-volume-visual-cost-knob="artistic-motion">
       <span class="slider-label">Transported lateral excitation</span>
       <input type="checkbox" id="volume-phased-sway" checked>
@@ -1829,7 +1825,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-procedural-detail-forces">
       <span class="slider-label">Master</span>
       <input type="checkbox" id="volume-procedural-detail-forces" checked>
-      <span class="force-contribution-gloss">Gates all active force contributions; transported material fields and prior velocity remain.</span>
+      <span class="force-contribution-gloss">Gates the four procedural detail forces below (micro-carrier, shred, fine breakup and its localization). Buoyancy, wind, swirl, lateral excitation, confinement and expansion are not affected.</span>
       <span class="slider-val" id="volume-procedural-detail-forces-val">on</span>
     </div>
     <div class="slider-row force-contribution-row" data-volume-visual-cost-knob="procedural-excitation" data-volume-ui-retired="volume-force-micro-carrier">
@@ -1857,7 +1853,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <span class="slider-val" id="volume-fine-breakup-localization-val">0.00 broad</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
-      <span class="slider-label">Density</span>
+      <span class="slider-label">Soot display gain</span>
       <input type="range" id="volume-density" min="0.35" max="6" step="0.05" value="4.2">
       <span class="slider-val" id="volume-density-val">4.20</span>
     </div>
@@ -1944,7 +1940,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
         <option value="gusty">Gusty</option>
       </select>
       <span class="slider-val" id="volume-wind-model-val">steady</span>
-      <span class="slider-help">Off: no wind at all, whatever Wind Strength holds. Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a slow deterministic signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength breathes between (1 − gust) and (1 + gust) times the slider, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle, over the gust period. No per-cell noise; saved basins are unchanged on Steady.</span>
+      <span class="slider-help">Off: no wind at all, whatever Wind Strength holds. Steady is the authored wind: one constant strength and angle, applied where there is smoke or heat. Gusty drives the same wind with a seeded random signal from the simulation clock (the gust period is simulated seconds under the uniform time step, so there it follows Speed; the legacy time step counts steps): strength wanders around the slider, typically by &plusmn;0.45 &times; gust and reaching (1 &plusmn; gust) only at the clamp, never above the wind ceiling of 1.5 (the receipt says when it saturates), and the direction veers by up to the veer angle; the gust period is how long a gust lasts, not a repeating cycle. No per-cell noise; saved basins are unchanged on Steady.</span>
     </div>
     <div class="slider-row" data-volume-visual-cost-knob="occupied-volume">
       <span class="slider-label">Gust</span>
@@ -2051,7 +2047,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-residual-feature-debug" min="0" max="1" step="1" value="0">
       <span class="slider-val" id="volume-residual-feature-debug-val">off</span>
     </div>
-    <span class="slider-help">False-color residual feature plane: orange=radiance/fire, blue=interface/smoke authority.</span>
+    <span class="slider-help">False-colour residual feature inputs (orange = radiance/fire, blue = interface/smoke). Shows only with Residual on and a model loaded; the radiance part is now mostly empty.</span>
     <div class="slider-row">
       <span class="slider-label">Residual Model</span>
       <input type="text" id="volume-residual-model-url" class="text-input" value="" placeholder="artifacts/.../browser-direct-rs018.json">
@@ -2145,7 +2141,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-pyro-carrier-view-val">normal</span>
     </div>
-    <span class="slider-help">Choose which carrier is allowed to speak; paint is separate.</span>
+    <span class="slider-help">Retired: the legacy pyro carriers this chose between are always zero now, so it has no effect.</span>
     <div class="slider-row" data-volume-ui-retired="volume-pressure-mode">
       <span class="slider-label">Pressure</span>
       <select id="volume-pressure-mode" class="select-input">
@@ -2198,7 +2194,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-reaction-law-val">authored-tall-plume</span>
     </div>
-    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box, and Fire Licks / Interface Shred shape only the look. Tall plume scene with the inflow or immersed source only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
+    <span class="slider-help">Authored keeps the existing tall-plume reaction. Reactant candidate replaces it with one local burn: fuel and oxidizer (ambient air carries oxidizer; the inlet stream brings fuel at Fuel Fraction and no oxidizer) burn where they share a cell and the heat is in or above the ignition band, and that one burned amount sets the fuel and oxidizer loss, the heat release, the soot (smoke) made and the Heat release expansion. Contact comes from the flow plus one named neighbour exchange; nothing depends on height in the box. Fire Licks and Interface Shred are not drawn; under Authored, Fire Licks also speeds the authored burn. Inflow or immersed source and shared gas transport (Common gas transport, or MacCormack) only; otherwise the receipt says NOT ADMITTED. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Mixing time</span>
       <input type="range" id="volume-reactant-mixing-time" data-volume-settings-param="volume_reactant_mixing_time" min="0.25" max="30" step="any" value="3">
@@ -2212,6 +2208,12 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
     </div>
     <span class="slider-help">Reactant candidate: how quickly heat fades, in reference steps (heat keeps e^(−dt/time) per step). 55 matches the authored cooling. Longer keeps burned gas hot and glowing further up and keeps neighbouring fuel above ignition; shorter lets the flame starve itself of heat.</span>
     <div class="slider-row">
+      <span class="slider-label">Soot yield</span>
+      <input type="range" id="volume-reactant-soot-yield" data-volume-settings-param="volume_reactant_soot_yield" min="0" max="6" step="any" value="2">
+      <span class="slider-val" id="volume-reactant-soot-yield-val">2.00</span>
+    </div>
+    <span class="slider-help">Reactant candidate: soot made per unit of fuel burned, in the simulation (2 is the model default; older basins without this control load with 2). It changes how much soot exists, so smoke amount, darkness, glow and shadowing all follow; it does not change the heat released. 0 burns clean.</span>
+    <div class="slider-row">
       <span class="slider-label">Appearance model</span>
       <select id="volume-appearance-model" class="select-input" data-volume-settings-param="volume_appearance_model">
         <option value="authored">Authored (nine carriers)</option>
@@ -2219,7 +2221,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-appearance-model-val">authored</span>
     </div>
-    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; every slider and every renderer formula is unchanged, so the only question is whether three channels carry the look. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
+    <span class="slider-help">A/B of the appearance state. Authored stores nine appearance channels per cell (flame, ember, flame detail, combustion front, micro smoke, interface shred, fire lick, ember fleck, material detail) plus a separate front field. Compact stores three (flame, interface shred, combustion front) and rebuilds the other six wherever they are read, by fixed ratios fitted on the saved basin; the Physics look draws none of these channels, so the choice shows mainly in motion, where detail forces read them, and in the Old adaptive ray marcher&rsquo;s step choice. Compact needs the Reactant reaction law; otherwise Authored runs. Known limit: the separate front field is approximated by one ratio of the stored front. Saved basins load on Authored.</span>
     <div class="slider-row">
       <span class="slider-label">Solver Sweeps</span>
       <input type="range" id="volume-pressure-solver-iterations" min="4" max="240" step="4" value="60" data-volume-settings-param="volume_pressure_solver_iterations">
@@ -2254,7 +2256,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-confinement-val">Curl slider</span>
     </div>
-    <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one small confinement epsilon per Advection scheme, applied uniformly, with thermal expansion held at its Curl-0 baseline (0.048). The epsilon values are provisional choices from the 2026-09-25 enstrophy sweep on one basin: under MacCormack velocity the domain-mean enstrophy did not distinguish 0.010 from zero and rose only near 0.1, and the first-order sweep showed no response to epsilon; legacy and MacCormack-all inherit those values unmeasured. The sweep did not isolate what part of the authored Curl law raises enstrophy (it also changes expansion and weighting), so this is a reversible comparison candidate for the live ladder, not a demonstrated physical level. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds the procedural detail forces and Bonfire terms while those are on).</span>
+    <span class="slider-help">Curl slider is the law every saved basin was authored under: Curl sets the vorticity-confinement amount (0.034 + Curl × 0.044, concentrated in smoke and heat) and the thermal-expansion gain (0.048 + Curl × 0.019). Calibrated replaces both with one small confinement epsilon per Advection scheme, applied uniformly, with thermal expansion held at its Curl-0 baseline (0.048). The epsilon values are provisional choices from the 2026-09-25 enstrophy sweep on one basin: under MacCormack velocity the domain-mean enstrophy did not distinguish 0.010 from zero and rose only near 0.1, and the first-order sweep showed no response to epsilon; legacy and MacCormack-all inherit those values unmeasured. The sweep did not isolate what part of the authored Curl law raises enstrophy (it also changes expansion and weighting), so this is a reversible comparison candidate for the live ladder, not a demonstrated physical level. Off removes confinement. Under Calibrated or Off the Curl slider no longer drives confinement or expansion (it still feeds Artistic swirl, the lateral excitation, the procedural detail forces and Bonfire terms while those are on).</span>
     <div class="slider-row">
       <span class="slider-label">Time step</span>
       <select id="volume-time-step" class="select-input" data-volume-settings-param="volume_time_step">
@@ -2263,7 +2265,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </select>
       <span class="slider-val" id="volume-time-step-val">legacy</span>
     </div>
-    <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace but not the inlet velocity, edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance and every per-step velocity increment by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. The bounded emitter is not a prescribed boundary: each step it adds its inlet and entrainment velocities to the flow and then clamps at 0.52 per component, so those additions scale with Speed like every other increment while the clamp does not. Uniform needs the shared gas characteristic on a non-legacy scheme (Undamped with Common gas transport, or a MacCormack scheme): the legacy scheme's fixed clamp and 0.982 per-step damping and the split scalar layers' fixed backtraces are not time-step aware. The scalar channels' decays, reaction, conversion and the boundary sponges follow the same step (a per-step survival becomes rate^Speed, an increment is multiplied by Speed), as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max() birth floors stay per step. That makes the authored coefficients one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme (at equal simulated time, first-order scalars lose most of their heat and smoke at low Speed while MacCormack all fields keeps most of it, measured on one basin), so judge the motion live. The 8-cell transport bound caps displacement per step, so a very large Speed is limited by resolution rather than allowed to skip cells.</span>
+    <span class="slider-help">Legacy is the law every saved basin was authored under: Speed scales buoyancy and the advection backtrace (and wind, column lift and, with Link momentum on, the emitter&rsquo;s push) but not edge entrainment, thermal expansion or confinement, so lowering Speed lets the injected momentum win and the plume sloshes instead of rising slower. Uniform reads every authored coefficient at Speed 1 and multiplies the transport distance and every per-step velocity increment by Speed, so Speed changes the rate of the same dynamics; at Speed 1 the two modes are identical. The bounded emitter is not a prescribed boundary: each step it adds its inlet and entrainment velocities to the flow and then clamps at 0.52 per component, so those additions scale with Speed like every other increment while the clamp does not. Uniform needs the shared gas characteristic on a non-legacy scheme (Undamped with Common gas transport, or a MacCormack scheme): the legacy scheme's fixed clamp and 0.982 per-step damping and the split scalar layers' fixed backtraces are not time-step aware. The scalar channels' decays, reaction, conversion and the boundary sponges follow the same step (a per-step survival becomes rate^Speed, an increment is multiplied by Speed), as do the Bonfire scene's diffusion and symmetry blends and the wall velocity sponge; the emitter's per-component clamp and the max() birth floors stay per step. That makes the authored coefficients one law across Speeds; how the fire itself changes with Speed still depends on the Advection scheme (at equal simulated time, first-order scalars lose most of their heat and smoke at low Speed while MacCormack all fields keeps most of it, measured on one basin), so judge the motion live. The 8-cell transport bound caps displacement per step, so a very large Speed is limited by resolution rather than allowed to skip cells.</span>
     <div class="slider-row" data-volume-ui-retired="volume-pressure-tier-overlay">
       <span class="slider-label">Tier Overlay</span>
       <input type="range" id="volume-pressure-tier-overlay" min="0" max="1" step="0.05" value="0">
@@ -2284,17 +2286,17 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       <input type="range" id="volume-pressure-tier-hero-max" min="0.02" max="0.98" step="0.01" value="0.22">
       <span class="slider-val" id="volume-pressure-tier-hero-max-val">0.22</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-spread" data-volume-schema-retired hidden>
       <span class="slider-label">Can Spread</span>
       <input type="range" id="volume-canonical-spread" min="0" max="1.6" step="0.05" value="1">
       <span class="slider-val" id="volume-canonical-spread-val">1.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-centerline" data-volume-schema-retired hidden>
       <span class="slider-label">Can Center</span>
       <input type="range" id="volume-canonical-centerline" min="0" max="1.8" step="0.05" value="1">
       <span class="slider-val" id="volume-canonical-centerline-val">1.00</span>
     </div>
-    <div class="slider-row">
+    <div class="slider-row" data-volume-ui-retired="volume-canonical-body-balance" data-volume-schema-retired hidden>
       <span class="slider-label">Can Body</span>
       <input type="range" id="volume-canonical-body-balance" min="0" max="1.5" step="0.05" value="0">
       <span class="slider-val" id="volume-canonical-body-balance-val">0.00</span>
@@ -2533,7 +2535,7 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
 
 <div id="viewport">
   <div class="viewport-flame-problems" id="viewport-flame-settings-problems" role="alert" hidden></div>
-  <button id="volume-viewer-play" type="button" hidden title="Pause / play the fire (look-lab Freeze)" aria-label="Pause the fire" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
+  <button id="volume-viewer-play" type="button" hidden title="Pause / play the scene simulations" aria-label="Pause scene" data-state="playing"><svg viewBox="0 0 12 12" aria-hidden="true"><g class="pause-glyph" fill="currentColor"><rect x="2.2" y="1.5" width="2" height="9" rx="0.6"/><rect x="7.8" y="1.5" width="2" height="9" rx="0.6"/></g><path class="play-glyph" d="M3 1.6 L10.4 6 L3 10.4 Z" fill="currentColor" style="display:none"/></svg></button>
   <nav class="scene-top-menu" aria-label="Scene menu">
     <div id="scene-add-menu">
       <button type="button" id="scene-add-menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="scene-add-menu-popup" title="Add scene object (Shift+A)">Add</button>
@@ -2920,6 +2922,8 @@ import * as THREE from 'three';
 import { parsePlyPointCloud, createSplatPointSubsetGeometry, replaceSplatPointGeometry, splatPointInsideCrop, chooseSplatCropFrame } from './splat-point-cloud.mjs';
 import { createFireLightFieldShadow } from './fire-light-field-shadow.mjs';
 import { PHYSICS_APPEARANCE_UNCOUPLED_CONTROLS } from './volume-physics-appearance.mjs';
+import { applyVolumeControlDescriptions } from './volume-control-descriptions.mjs';
+applyVolumeControlDescriptions(document);
 import { renderingChannelsForMode, sceneSourceIntensityForMode, parseSceneSourcePosition } from './rendering-channel-controls.mjs';
 import { bindSceneLightEditInteraction, lightingEditStatus } from './scene-light-edit-interaction.mjs';
 import { createSceneEmissiveCamera, applySceneEmissiveCamera, bindSceneExposureControls } from './scene-emissive-camera.mjs';
@@ -2987,7 +2991,7 @@ import { FIRE_ACTOR_LIVE_PARITY_IDENTITY } from './fire-actor-live-parity-contra
 import { FULL_SUPPORT_STAGE_A, admitFullSupportStageA } from './volume-full-support-cockpit.mjs';
 import { admitStageBCockpitManifest } from './volume-stage-b-cockpit-consumer.mjs';
 import { loadPersistentSparseCohortState } from './volume-persistent-sparse-cohort.mjs';
-import { DEFAULT_VOLUME_SCENE, volumeSceneReceipt } from './volume-scene-ontology.mjs';
+import { DEFAULT_VOLUME_SCENE, normalizeVolumeScene, volumeSceneReceipt } from './volume-scene-ontology.mjs';
 import {
   describeVolumeSettingsPresetAppliedDifferences,
   describeVolumeSettingsPartialSave,
@@ -3090,6 +3094,7 @@ function refreshRenderingControls() {
   window._kaminosDirty?.();
 }
 let ordinarySceneDepthProvider = null;
+let authoredWaterFlameTransportActive = false;
 let compositionHost = null;
 
 // Fire light-field route params may ride the URL HASH as well as the query:
@@ -3329,6 +3334,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader as ThreeGLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { trellisSurfelsGLTFPlugin, configureSurfelRendering } from './trellis-surfels.mjs';
+import { createGiProxyRegistry } from './scene-gi-proxies.mjs';
 // Every GLB this page loads understands TRELLIS surfel assets (trellis-surfels.mjs); other GLBs are unaffected.
 class GLTFLoader extends ThreeGLTFLoader { constructor(manager) { super(manager); this.register(trellisSurfelsGLTFPlugin(THREE)); } }
 // Surfel detail follows the drawing buffer's real height (backing pixels), read at every LOD update.
@@ -4008,6 +4014,21 @@ window.__kaminosFingerFluidBenchDebugState = () => fingerFluidBenchState;
 let volumePrimitives = [];
 let sceneObjects = [];
 let sceneNavigation = null;
+// GI proxy handles (scene-gi-proxies.mjs): a stored low tier of each TRELLIS object's hero, loaded off the frame
+// loop and never in the scene. The GI renderer reads them via window.kaminosGiProxies; pass policy is its own.
+const sceneGiProxies = createGiProxyRegistry({ THREE, parseGlb: async bytes => (await new GLTFLoader().parseAsync(bytes, '')).scene });
+window.kaminosGiProxies = {
+  handleFor: root => sceneGiProxies.get(root),
+  select: (root, selection) => sceneGiProxies.select(root, selection),
+  state: () => sceneGiProxies.list().map(({ root, proxyRoot, surfels, placement, ...h }) => ({ id: root.userData?.kaminosSceneObject?.id ?? null, ...h,
+    proxyLoaded: !!proxyRoot, ...(surfels ? { surfels: { levels: surfels.levels, coarsest: surfels.coarsest } } : {}) })),
+  // On demand: each loaded proxy's world bounds as placed, beside the drawn object's (should agree to tier error).
+  alignment: () => { scene.updateMatrixWorld(true); return sceneGiProxies.list().filter(h => h.proxyRoot).map(({ root, proxyRoot, placement }) => {
+    const box = o => { const b = new THREE.Box3().setFromObject(o, true); return { min: b.min.toArray(), max: b.max.toArray() }; };
+    const placed = new THREE.Group(); placed.matrixAutoUpdate = false; placed.matrix.copy(scene.matrixWorld).multiply(placement(scene)); placed.add(proxyRoot);
+    placed.updateMatrixWorld(true); const proxy = box(placed); placed.remove(proxyRoot);
+    return { id: root.userData?.kaminosSceneObject?.id ?? null, object: box(root), proxy }; }); },
+};
 const sceneMembershipEditTargets = new Set();
 const sceneMembershipRetainedObjects = new Map();
 const sceneMembershipDisposers = new WeakMap();
@@ -4017,6 +4038,7 @@ let localLiquidSetup = null;
 let localLiquidHost = null;
 let localLiquidFailure = null;
 let localLiquidPaused = false;
+let sceneViewerPaused = null;
 let localLiquidGeneration = 0;
 let authoredWaterReleaseRequest = 0;
 const sceneLoadRequests = createSceneLoadRequests();
@@ -4028,7 +4050,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
     const { createAuthoredWaterHost } = await import('./authored-water-host.mjs');
     return createAuthoredWaterHost({
       renderer, scene, camera, pipeline: renderPipeline, device: sharedGpu?.device,
-      setup, emitters, isCurrent, redraw:()=>window._kaminosDirty?.(),
+      setup, emitters, isCurrent, readColliders:()=>sceneObjects, redraw:()=>window._kaminosDirty?.(),
       getDisplayPolicy:()=>getLocalLiquidDisplayPolicy?.(),decorateOutput:output=>selectionFeedback.output(output),
     });
   },
@@ -4039,6 +4061,7 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   onMounted: host => {
     if (localLiquidSetup) host.setEmitters(localLiquidEmitterState().emitters);
     if(host.state().mode==='finite_drop'){localLiquidPaused=true;setAuthoredWaterPreviewVisible(false);}
+    else if(sceneViewerPaused!==null)localLiquidPaused=sceneViewerPaused;
     host.setPaused(localLiquidPaused);
   },
 });
@@ -6880,7 +6903,7 @@ async function applyLocalLiquidPerformance(values) {
     throw Error('Finish the current scene action before restarting water');
   }
   const next = normalizeLocalLiquidSetup({...localLiquidSetup,
-    particleCount:values.particleCount, densityIterations:values.densityIterations});
+    particleCount:values.particleCount, densityIterations:values.densityIterations,support:values.support??localLiquidSetup.support});
   const capacity = measureFingerFluidParticleAllocationCapacity(sharedGpu.device.limits);
   const admission = evaluateFingerFluidParticleAllocationRequest(next.particleCount, capacity);
   if (!admission.ok) throw Error(admission.reason);
@@ -6900,6 +6923,7 @@ async function applyLocalLiquidPerformance(values) {
 }
 
 function refreshLocalLiquidPerformance() {
+  syncVolumeViewerPlay();
   const panel = document.getElementById('local-liquid-performance');
   if (!panel) return;
   panel.hidden = !localLiquidSetup || localLiquidEmitterRecords().some(r=>r.localLiquidEmitter.mode==='finite_drop') || (document.body.dataset.workspace==='authoring' && activeSceneFieldId!=='water-field');
@@ -6909,6 +6933,8 @@ function refreshLocalLiquidPerformance() {
     document.getElementById('local-liquid-particles').value = localLiquidSetup.particleCount;
     document.getElementById('local-liquid-iterations').value = localLiquidSetup.densityIterations;
     document.getElementById('local-liquid-support-visible').checked = localLiquidSetup.showSupportGeometry;
+    document.getElementById('local-liquid-support-visible').closest('label').hidden=localLiquidSetup.support==='scene_primitives';
+    document.getElementById('local-liquid-support-mode').value=localLiquidSetup.support;
     panel.dataset.setup = signature;
   }
   const loading = localLiquidHostMount.isLoading();
@@ -6926,6 +6952,9 @@ function refreshLocalLiquidPerformance() {
 }
 
 window.kaminosSetLocalLiquidPerformance = applyLocalLiquidPerformance;
+document.getElementById('local-liquid-support-mode').addEventListener('change',event=>{
+  applyLocalLiquidPerformance({...localLiquidSetup,support:event.target.value}).catch(error=>{refreshLocalLiquidPerformance();setInfo(error.message);});
+});
 window.kaminosSetLocalLiquidSupportVisible = value => {
   assertSceneConstructionAvailable();
   if(!localLiquidSetup)throw Error('Add a Water Emitter first');
@@ -6936,6 +6965,7 @@ document.getElementById('local-liquid-support-visible').addEventListener('change
   catch(error){refreshLocalLiquidPerformance();setInfo(error.message);}
 });
 window.kaminosPauseLocalLiquid = paused => {
+  sceneViewerPaused=null;
   localLiquidPaused = Boolean(paused);
   localLiquidHost?.setPaused(localLiquidPaused);
   authoredWaterControls?.refreshStatus();
@@ -7088,6 +7118,7 @@ function registerSceneObject(object, metadata = {}) {
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
   sceneNavigation?.prepare(object);
+  if (record.type === 'glb') sceneGiProxies.attach(object);
   if (metadata.groupLabel) {
     createSceneGroupForObjects([id], metadata.groupLabel, {
       source: metadata.groupSource ?? metadata.source,
@@ -10370,6 +10401,7 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     transformControls.visible = false;
   }
   scene.remove(entry.object);
+  sceneGiProxies.release(entry.object);
   if(entry.type===CAMERA_TYPE)sceneCameras?.membershipChanged();
   const retainForMembershipHistory = ['glb','light',CAMERA_TYPE,PROCEDURAL_MESH_TYPE,LOCAL_LIQUID_EMITTER_TYPE].includes(entry.type) && (Boolean(editId) || preserveForMembershipHistory || (
     !recordHistory
@@ -11709,7 +11741,7 @@ async function initScene() {
       const selectedReason=()=>selection.ids.length?null:'Select an object or simulation volume first';
       const command=(id,category,label,run,{aliases=[],shortcut='',disabled=()=>null}={})=>({id,category,label,run,aliases,shortcut,disabled});
       const result=[
-        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
+        ...[['box','Cube',['box','mesh primitive']],['plane','Plane',['mesh primitive']],['sphere','Sphere',['mesh primitive']],['bowl','Bowl',['cup','basin','water container']],['cylinder','Cylinder',['mesh primitive']],['annular','Annular plate',['ring','mesh primitive']]].map(([kind,label,aliases])=>command('add.'+kind,'Add',label,()=>addProceduralMesh(kind),{aliases})),
         command('add.camera','Add','Camera',()=>addAuthoredCamera()),
         command('add.light','Add','Spot Light',()=>addSceneSpotLight(),{aliases:['lamp','lighting']}),
         command('add.water','Add','Water Emitter',()=>addLocalLiquidEmitter(),{aliases:['fluid','liquid','source']}),
@@ -11771,6 +11803,41 @@ async function initScene() {
     || isAuthoredKilnCollisionRoute();
 
   let sceneRenderedForVolume = false;
+  let ordinarySceneTransportFrame = null;
+  let transportPrototype = null;
+  let transportCanvasVisibility = '';
+  const consumeSceneTransportFrame=frame=>{
+    ordinarySceneTransportFrame=frame;
+    try{return frame.renderHost();}finally{ordinarySceneTransportFrame=null;}
+  };
+  function syncAuthoredWaterFlameTransport() {
+    syncWaterProxy();
+    const prototype=volumePrototype;
+    const wanted=fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1'
+      &&ordinaryDepthEnabled
+      &&isSceneItemVisible('flame-field')&&isSceneItemVisible('water-field')
+      &&localLiquidHost?.supportsVolumeTransport===true&&localLiquidHost.presentation==='full'&&viewportDisplay.fire==='full'
+      &&prototype?.isActive?.()===true;
+    if(transportPrototype&&(!wanted||transportPrototype!==prototype)) {
+      transportPrototype.setSceneTransportConsumer(null);
+      if(!fireProxySync?.state().presentationSuppressed)transportPrototype.canvasElement().style.visibility=transportCanvasVisibility;
+      transportPrototype=null;
+    }
+    // Release the proxy's temporary canvas hiding before transport snapshots
+    // ordinary presentation. Later proxy reconciliation is then idempotent.
+    syncFireProxy();
+    if(wanted&&!transportPrototype) {
+      prototype.setSceneTransportConsumer(consumeSceneTransportFrame);
+      transportCanvasVisibility=prototype.canvasElement().style.visibility;
+      transportPrototype=prototype;
+    }
+    authoredWaterFlameTransportActive=!!transportPrototype;
+    if(transportPrototype)transportPrototype.canvasElement().style.visibility='hidden';
+  }
+  window.kaminosWaterFlameRenderingState=()=>({requested:fireLightFieldRouteParams().get('volume_light_field_water_transport')==='1',
+    registered:!!transportPrototype,effective:!!transportPrototype&&!!localLiquidHost?.state().lastFrame?.volumeTransport,
+    lastFrame:localLiquidHost?.state().lastFrame??null,source:volumePrototype?.debugState().sceneTransport??null,
+    refraction:'existing-screen-space-scene-query',displayTransform:'one-final-scene-camera'});
   let foregroundServiceActive = false;
   let insideForegroundFrame = false;
   let sceneFrameCount = 0;
@@ -11798,6 +11865,7 @@ async function initScene() {
 
   function renderSceneFrame() {
     if(exclusiveInspectionRender&&!manualInspectionRender)return false;
+    if(authoredWaterFlameTransportActive&&!ordinarySceneTransportFrame)return false;
     renderer.toneMapping = document.getElementById('volume-tone-mapping').value === 'custom' ? THREE.ACESFilmicToneMapping : THREE.AgXToneMapping;
     // Shared-source reset may span an await while this host's RAF keeps
     // running. Keep the previous presented frame until both consumers have
@@ -11808,27 +11876,32 @@ async function initScene() {
     updateAnnularBurnerFrame(t0);
     fireLightFieldPass?.renderShadows();
     sceneExposureControls?.sync();
+    let matchedCameraEffective=false;
     if(sceneEmissiveCamera && (sceneGISettings.mode === 'gtao' || sceneGISettings.view === 'scene')) {
       const requested=document.getElementById('rendering-match-flame-camera').checked;
-      const state=sceneEmissiveCamera.update(requested,window.__kaminosVolumePrototype?.emissiveCameraState());
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective);
+      const physical=window.__kaminosVolumePrototype?.emissiveCameraState();
+      const state=sceneEmissiveCamera.update(requested,physical);
+      matchedCameraEffective=state.effective;
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,state.effective,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
+      localLiquidHost?.setSceneCamera?.(requested,physical);
       const text=!requested?'Off: existing scene camera. Matching affects the whole mesh scene, including environment/rim light; source energy stays unchanged.':state.effective?`Scene camera matched: ${state.toneMapping === 'agx' ? 'AgX' : 'Custom curve'} · white ${state.whiteBalanceKelvin.toFixed(0)} K · EV ${state.exposureEV.toFixed(2)}. Raw lighting unchanged.`:`Requested, inactive: ${state.reason}. Existing scene camera remains in use.`;
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!requested||state.effective;
       if(text!==sceneCameraStatusText){cameraStatus.textContent=text;sceneCameraStatusText=text;}
     } else if(sceneEmissiveCamera) {
-      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false);
+      applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedSceneOutput,false,{linearIntermediate:typeof localLiquidHost?.setSceneCamera==='function'});
+      localLiquidHost?.setSceneCamera?.(false);
       const cameraStatus=document.getElementById('rendering-camera-status');
       cameraStatus.hidden=!document.getElementById('rendering-match-flame-camera').checked;
       cameraStatus.textContent=sceneCameraStatusText='Flame camera matching is inactive while inspecting indirect lighting.';
-    }
+    } else localLiquidHost?.setSceneCamera?.(false);
     syncWaterProxy();
     syncFireProxy();
     // Shadow passes above see authored casters; only the viewport render sees
     // wire materials.
     const shadingReceipt = withViewportVisibility(viewportVisibilityObjects(),isSceneItemVisible,()=>renderWithViewportShading(() => {
       if (localLiquidHost) {
-        try { localLiquidHost.render(); authoredWaterControls?.refreshStatus();
+        try { localLiquidHost.render({volumeTransport:ordinarySceneTransportFrame}); authoredWaterControls?.refreshStatus();
           const state=localLiquidHost.state(),clock=state.clock??{paused:localLiquidHost.paused,step:state.solver?.stepCount??0,timeSeconds:state.solver?.simulatedTimeSeconds??0};
           sharedWorkbench?.update({source:state.mode==='finite_drop'?'Authored finite water':'Continuous water',status:clock.paused?'Paused':'Playing',clock:`tick ${clock.step} · ${clock.timeSeconds.toFixed(4)} s`}); }
         catch (error) {
@@ -11839,6 +11912,7 @@ async function initScene() {
           authoredWaterControls?.refreshStatus();
           sharedWorkbench?.update({source:'Authored water',status:'Stopped',clock:localLiquidFailure});
           refreshLocalLiquidPerformance();
+          applySceneEmissiveCamera(renderPipeline,outlinedSceneOutput,outlinedCameraOutput,matchedCameraEffective);
           renderPipeline.render();
           setInfo(`Local water stopped; scene renderer resumed: ${localLiquidFailure}`);
         }
@@ -11866,6 +11940,7 @@ async function initScene() {
     syncViewportQuality(syncViewportRendererSize);
     controls.update();
     viewProjection?.update();
+    syncAuthoredWaterFlameTransport();
     workbenchSceneFrames.tick(performance.now());
     const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
     const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
@@ -12002,7 +12077,7 @@ async function initScene() {
       // What the viewport shows, as displayed: a fresh frame, then the composed canvases.
       const captureForNotes=async()=>{for(;;){window._kaminosDirty?.();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
           if(!vantageCaptureHeld)break;if(!await viewportOwnForNotes())throw new Error('a sub kept the viewport camera');}
-        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
+        return captureComposedCanvases({host:renderer.domElement,volume:activeSceneComposition&&isSceneItemVisible('flame-field')&&!authoredWaterFlameTransportActive?volumePrototype?.canvasElement?.()??null:null,editorOverlay:transformControls?.getOverlay?.(),document,label:'note'});};
       const notes=installNotes({THREE,document,window,viewport:viewportEl,camera,entries:()=>sceneObjects,
         selection:()=>window.kaminosSelection?.read()??{ids:[],memberIds:[],activeId:null},select:id=>window.selectSceneObject(id),
         readView:readAuthoredCameraView,writeView:view=>{writeAuthoredCameraView(view);window._kaminosDirty?.();},
@@ -12196,6 +12271,7 @@ function clearScene({loadRequestId = null} = {}) {
   localLiquidFailure = null;
   localLiquidPaused = false;
   for(const id of [...sceneSpotLights.keys()])disposeSceneSpotLight(id);
+  sceneGiProxies.clear();
   const registeredObjects = new Set(sceneObjects.map(entry => entry.object));
   for (const entry of sceneObjects) {
     scene.remove(entry.object);
@@ -13955,15 +14031,15 @@ async function activateFingerFluidPyroComposition() {
   };
   compositionSourcePrimitive.simulation = {
     ...compositionSourcePrimitive.simulation,
-    sourceRadius: VOLUME_SCENE_PRESETS.tall_plume.inputRadius,
-    flowRate: VOLUME_SCENE_PRESETS.tall_plume.flowRate,
+    sourceRadius: VOLUME_SCENE_PRESETS.flame.inputRadius,
+    flowRate: VOLUME_SCENE_PRESETS.flame.flowRate,
   };
   volumePrototype.setVolumePrimitives([compositionSourcePrimitive]);
   volumePrototype.setLiquidFireContactTransferEnabled(true, { reason: 'physical-contact-from-start' });
   setFingerFluidPyroCompositionPilotEnabled(false);
   volumePrototype.setControls({
     volumeScene: 'tall_plume',
-    ...VOLUME_SCENE_PRESETS.tall_plume,
+    ...VOLUME_SCENE_PRESETS.flame,
     resolution: 96,
     renderScale: 0.85,
     fireRenderMode: 'stock',
@@ -15481,60 +15557,8 @@ const FIRESIM_LOOK_FIELDS = [
 ];
 
 const VOLUME_SCENE_PRESETS = {
-  canonical_plume: {
-    label: 'simple',
-    density: 5.40,
-    fire: 0.00,
-    radiance: 0.00,
-    absorption: 1.35,
-    glow: 0.00,
-    smoke: 2.60,
-    curl: 0.90,
-    microdetail: 0.00,
-    interfaceShred: 0.00,
-    fireLicks: 0.00,
-    projection: 0.65,
-    speed: 4.20,
-    inputRadius: 0.12,
-    flowRate: 0.45,
-    fireScale: 0.86,
-    detailScale: 0.75,
-    plumeHeight: 1.45,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  compact_plume: {
-    label: 'compact',
-    density: 4.20,
-    fire: 1.40,
-    radiance: 1.65,
-    absorption: 0.85,
-    glow: 1.15,
-    smoke: 2.80,
-    curl: 2.65,
-    microdetail: 2.50,
-    interfaceShred: 2.50,
-    fireLicks: 1.65,
-    projection: 0.65,
-    speed: 5.00,
-    inputRadius: 0.12,
-    flowRate: 0.15,
-    fireScale: 0.86,
-    detailScale: 1.75,
-    plumeHeight: 1.45,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  tall_plume: {
-    label: 'tall',
+  flame: {
+    label: 'Flame',
     density: 6.00,
     fire: 1.15,
     radiance: 3.00,
@@ -15551,32 +15575,6 @@ const VOLUME_SCENE_PRESETS = {
     flowRate: 0.45,
     fireScale: 0.35,
     detailScale: 3.20,
-    plumeHeight: 2.20,
-    windStrength: 0.00,
-    windAngle: 0,
-    windHeight: 0.15,
-    canonicalSpread: 1.00,
-    canonicalCenterline: 1.00,
-    canonicalBodyBalance: 0.00,
-  },
-  bonfire_plume: {
-    label: 'bonfire',
-    density: 4.80,
-    fire: 0.95,
-    radiance: 1.90,
-    absorption: 1.45,
-    glow: 1.05,
-    smoke: 2.80,
-    curl: 3.40,
-    microdetail: 2.50,
-    interfaceShred: 1.85,
-    fireLicks: 4.25,
-    projection: 0.85,
-    speed: 5.00,
-    inputRadius: 0.16,
-    flowRate: 0.24,
-    fireScale: 0.78,
-    detailScale: 2.75,
     plumeHeight: 2.20,
     windStrength: 0.00,
     windAngle: 0,
@@ -16699,10 +16697,7 @@ function normalizeVolumePressureMode(value) {
 }
 
 function defaultVolumePressureIterationsForScene(scene) {
-  const normalized = String(scene || '').toLowerCase();
-  if (normalized === 'tall_plume') return 2;
-  if (normalized === 'bonfire_plume') return 8;
-  return 4;
+  return 2;
 }
 
 function volumePressureModeFromRoute(strategy, iterations) {
@@ -16793,6 +16788,13 @@ function volumeAperturePatternValue(select) {
 }
 
 function setVolumeControlValue(id, value) {
+  if (id === 'volume-scene') {
+    const select = document.getElementById(id);
+    if (!select) return;
+    select.dataset.volumeSceneRequest = String(value);
+    select.value = normalizeVolumeScene(value);
+    return;
+  }
   if (id === 'volume-render-scale') {
     setVolumeRenderScaleControlValue(value);
     return;
@@ -16947,21 +16949,6 @@ function hideVolumeLegacyPyroSurfaceForTopologyBranch() {
   }
 }
 
-function syncCanonicalVolumeControlVisibility(volumeScene) {
-  const canonical = volumeScene === 'canonical_plume';
-  for (const id of CANONICAL_VOLUME_HIDDEN_CONTROLS) {
-    const row = volumeControlRow(id);
-    if (row) row.style.display = canonical ? 'none' : '';
-  }
-  for (const id of NON_CANONICAL_VOLUME_HIDDEN_CONTROLS) {
-    const row = volumeControlRow(id);
-    if (row) row.style.display = canonical ? '' : 'none';
-  }
-  for (const id of CANONICAL_VOLUME_HIDDEN_SECTIONS) {
-    const section = document.getElementById(id);
-    if (section) section.style.display = canonical ? 'none' : '';
-  }
-}
 
 function volumeSceneControlId(key) {
   const explicit = {
@@ -16979,9 +16966,9 @@ function volumeSceneControlId(key) {
 
 function applyVolumeScenePreset(scene, options = {}) {
   supersedeVolumeRebuildHolds();
-  const normalizedScene = Object.hasOwn(VOLUME_SCENE_PRESETS, scene) ? scene : DEFAULT_VOLUME_SCENE;
+  const normalizedScene = DEFAULT_VOLUME_SCENE;
   const preset = VOLUME_SCENE_PRESETS[normalizedScene];
-  setVolumeControlValue('volume-scene', normalizedScene);
+  setVolumeControlValue('volume-scene', scene);
   for (const [key, value] of Object.entries(preset)) {
     if (key === 'label') continue;
     setVolumeControlValue(volumeSceneControlId(key), typeof value === 'number' ? value.toFixed(2) : value);
@@ -17399,6 +17386,9 @@ function describeFlameSettingsProblems() {
   if (clamps.length) parts.push(`Clamped to range: ${clamps.map(clamp => clamp.message).join('; ')}`);
   const basin = window.__kaminosFlameBasinClampReport;
   if (basin?.clamps?.length) parts.push(`Basin ${basin.label} was clamped to range: ${basin.clamps.map(clamp => clamp.message).join('; ')}`);
+  const sceneMigration = window.__kaminosVolumeSettingsPresetReceipt?.serverProjection?.sceneMigration
+    || volumeSceneReceipt(document.getElementById('volume-scene')?.dataset.volumeSceneRequest);
+  if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
   return { text: parts.join(' || '), warning: parts.length > 0 };
 }
 
@@ -18490,6 +18480,7 @@ function linkedVolumeEmitterInletVelocity() {
 
 function readVolumeControls() {
   const volumeScene = document.getElementById('volume-scene').value;
+  const volumeSceneRequested = document.getElementById('volume-scene').dataset.volumeSceneRequest || volumeScene;
   const pressureConfig = volumePressureConfigForMode(document.getElementById('volume-pressure-mode').value, volumeScene);
   const params = new URLSearchParams(window.location.search);
   const reactionLiveView = normalizeReactionFrontLiveView(document.getElementById('volume-reaction-live-view')?.value);
@@ -18533,6 +18524,7 @@ function readVolumeControls() {
   };
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
+    volumeSceneRequested,
     ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
@@ -18815,6 +18807,7 @@ function readVolumeControls() {
     reactionLaw: document.getElementById('volume-reaction-law').value || 'authored-tall-plume',
     reactantMixingTime: parseFloat(document.getElementById('volume-reactant-mixing-time').value),
     reactantCoolingTime: parseFloat(document.getElementById('volume-reactant-cooling-time').value),
+    reactantSootYield: parseFloat(document.getElementById('volume-reactant-soot-yield').value),
     appearanceModel: document.getElementById('volume-appearance-model').value || 'authored',
     velocityStaggering: document.getElementById('volume-velocity-staggering').value || 'collocated',
     immersedCentreX: parseFloat(document.getElementById('volume-immersed-centre-x').value),
@@ -18918,7 +18911,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-ray-step-stats').hidden=!c.rayStepTelemetry;
   const kneeRow = document.getElementById('volume-physical-knee').closest('.slider-row');
   kneeRow.style.display = c.toneMapping === 'custom' ? '' : 'none';
-  document.getElementById('volume-scene-val').textContent = (VOLUME_SCENE_PRESETS[c.volumeScene] || VOLUME_SCENE_PRESETS.compact_plume).label;
+  document.getElementById('volume-scene-val').textContent = 'Flame';
   document.getElementById('volume-artistic-swirl-val').textContent = c.artisticSwirl ? 'on' : 'off';
   document.getElementById('volume-phased-sway-val').textContent = c.phasedSway ? 'on' : 'off';
   document.getElementById('volume-procedural-detail-forces-val').textContent = c.proceduralDetailForces ? 'on' : 'off';
@@ -18983,6 +18976,7 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-reaction-law-val').textContent = c.reactionLaw;
   document.getElementById('volume-reactant-mixing-time-val').textContent = c.reactantMixingTime.toFixed(1);
   document.getElementById('volume-reactant-cooling-time-val').textContent = c.reactantCoolingTime.toFixed(0);
+  document.getElementById('volume-reactant-soot-yield-val').textContent = c.reactantSootYield.toFixed(2);
   document.getElementById('volume-appearance-model-val').textContent = c.appearanceModel;
   document.getElementById('volume-grid-height-ratio-val').textContent = volumeGridHeightRatioLabel(c.gridHeightRatio);
   document.getElementById('volume-velocity-staggering-val').textContent = c.velocityStaggering;
@@ -19076,7 +19070,6 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);
-  syncCanonicalVolumeControlVisibility(c.volumeScene);
   syncVolumeCockpitControlVisibility(document);
   syncRayBudgetGamutFromControls();
 }
@@ -19258,23 +19251,27 @@ function syncPhysicsAppearanceCockpit(physics) {
         : `Physics appearance: NOT DRAWN (${physics.reason})${physics.effective.sootBurnout ? ' · soot burnout still runs' : ''}`;
   }
 }
-function syncVolumeViewerPlay(s) {
-  const button = document.getElementById('volume-viewer-play');
-  if (!button) return;
-  button.hidden = !document.getElementById('kaminos-volume-canvas')?.classList.contains('active');
-  const frozen = Number(document.getElementById('volume-look-freeze')?.value) >= 0.5;
-  button.dataset.state = frozen ? 'paused' : 'playing';
-  button.setAttribute('aria-label', frozen ? 'Play the fire' : 'Pause the fire');
-  button.querySelector('.pause-glyph').style.display = frozen ? 'none' : '';
-  button.querySelector('.play-glyph').style.display = frozen ? '' : 'none';
+function sceneViewerPlaybackState(s=volumePrototype?.debugState?.()) {
+  const fire=!!s?.active,water=!!localLiquidHost;
+  const firePaused=Number(document.getElementById('volume-look-freeze')?.value)>=0.5;
+  return {present:fire||water,paused:!(fire&&!firePaused||water&&!localLiquidPaused)};
 }
-document.getElementById('volume-viewer-play')?.addEventListener('click', () => {
-  const freeze = document.getElementById('volume-look-freeze');
-  if (!freeze) return;
-  freeze.value = Number(freeze.value) >= 0.5 ? '0' : '1';
-  freeze.dispatchEvent(new Event('input', { bubbles: true }));
-  freeze.dispatchEvent(new Event('change', { bubbles: true }));
-  syncVolumeViewerPlay();
+function syncVolumeViewerPlay(s) {
+  const button=document.getElementById('volume-viewer-play');if(!button)return;
+  const state=sceneViewerPlaybackState(s);
+  button.hidden=!state.present;
+  button.dataset.state=state.paused?'paused':'playing';
+  button.setAttribute('aria-label',state.paused?'Play scene':'Pause scene');
+  button.querySelector('.pause-glyph').style.display=state.paused?'none':'';
+  button.querySelector('.play-glyph').style.display=state.paused?'':'none';
+}
+document.getElementById('volume-viewer-play')?.addEventListener('click',()=>{
+  const paused=!sceneViewerPlaybackState().paused;
+  const freeze=document.getElementById('volume-look-freeze');
+  if(freeze){freeze.value=paused?'1':'0';freeze.dispatchEvent(new Event('input',{bubbles:true}));freeze.dispatchEvent(new Event('change',{bubbles:true}));}
+  if(localLiquidHost)window.kaminosPauseLocalLiquid(paused);
+  sceneViewerPaused=paused;
+  syncVolumeViewerPlay();window._kaminosDirty?.();
 });
 function refreshVolumeReadout() {
   if (!volumePrototype) return;
@@ -19364,9 +19361,7 @@ function refreshVolumeReadout() {
   const sceneReceipt = s.volumeSceneAuthority || volumeSceneReceipt(s.volumeScene);
   document.getElementById('volume-backend').textContent = s.backend || 'unknown';
   document.getElementById('volume-scene-state').textContent = sceneReceipt.effective;
-  document.getElementById('volume-scene-authority').textContent = sceneReceipt.status === 'prototype'
-    ? `${sceneReceipt.status} / ${sceneReceipt.authority}`
-    : `${sceneReceipt.status} -> ${sceneReceipt.supersededBy}`;
+  document.getElementById('volume-scene-authority').textContent = sceneReceipt.migrationNote || sceneReceipt.authority;
   const settingsPresetButton = document.getElementById('settings-preset-save');
   if (settingsPresetButton) {
     settingsPresetButton.disabled = false;
@@ -19424,8 +19419,7 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   if (vantageCaptureHeld) { setInfo('The agent sub is taking a picture'); return; }
-  const sceneName = document.getElementById('volume-scene')?.value || DEFAULT_VOLUME_SCENE;
-  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  const frame = DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
   controls.update();
@@ -19651,7 +19645,7 @@ async function initKaminosVolumeRoute() {
   const shouldApplyDefaultVolumeSmokeTallPreset =
     params.get('kaminos_volume_smoke') === '1' &&
     !params.has('settings_preset') &&
-    (!params.get('volume_scene') || params.get('volume_scene') === 'tall_plume') &&
+    (!params.get('volume_scene') || ['flame', 'tall_plume'].includes(params.get('volume_scene'))) &&
     !params.get('volume_tall_preset') &&
     !params.get('volume_canonical_preset');
   if (shouldApplyDefaultVolumeSmokeTallPreset) await applyDefaultVolumeSmokeBasin(params);
@@ -19671,7 +19665,7 @@ async function initKaminosVolumeRoute() {
   const routeVolumeScene = params.get('volume_scene');
   const routeTallPlumeOperatorPreset = params.get('volume_tall_preset');
   const routeCanonicalMacroPreset = params.get('volume_canonical_preset');
-  if (routeVolumeScene && !(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume')) {
+  if (routeVolumeScene && !shouldApplyDefaultVolumeSmokeTallPreset) {
     applyVolumeScenePreset(routeVolumeScene, { keepBudgetPreset: true });
   }
   if (routeTallPlumeOperatorPreset) {
@@ -19792,7 +19786,7 @@ async function initKaminosVolumeRoute() {
   // select shows the family shape the map falls back to, and the request is
   // kept beside it so the controls snapshot still sends it to the resolver and
   // the receipt names the fallback. Authoring a new pattern clears it.
-  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
+  const VOLUME_ROUTE_RESTORED_CONTROL_IDS = ['volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-reactant-soot-yield', 'volume-appearance-model', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer'];
   for (const id of VOLUME_ROUTE_RESTORED_CONTROL_IDS) {
     const param = document.getElementById(id)?.dataset.volumeSettingsParam;
     if (!param || !params.has(param)) continue;
@@ -20495,6 +20489,7 @@ async function initKaminosVolumeRoute() {
     'volume-reaction-law',
     'volume-reactant-mixing-time',
     'volume-reactant-cooling-time',
+    'volume-reactant-soot-yield',
     'volume-appearance-model',
     'volume-velocity-staggering',
     'volume-immersed-centre-x',
@@ -21898,7 +21893,9 @@ function flameSettingsState(preset=readVolumeSettingsValues(),source=activeVolum
     sourcePose:flameEmitterPose});
   // The applied controls may be remapped below; the immutable source receipt
   // must remain separate even when its preset shares the input control graph.
-  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.source=source ? structuredClone({presetId:source.presetId,label:source.label,preset:source.preset,...(source.serverProjection?{serverProjection:source.serverProjection}:{}),...(source.sourceSizeRecovery?{sourceSizeRecovery:source.sourceSizeRecovery}:{})}) : null;
+  state.volumeSceneRequested=source?.serverProjection?.sceneMigration?.requested
+    ?? (arguments.length ? DEFAULT_VOLUME_SCENE : document.getElementById('volume-scene').dataset.volumeSceneRequest || DEFAULT_VOLUME_SCENE);
   // Applying a look preset keeps the source where the author put it. Its feed
   // coefficients are replaced; preset centre/aim are only startup defaults.
   if(arguments.length && state.domControls['volume-emitter-source-law']?.value==='immersed-source') {
@@ -22027,6 +22024,7 @@ function checkFlameSettingsState(state) {
 }
 function writeFlameSettingsState(state) {
   supersedeVolumeRebuildHolds();
+  setVolumeControlValue('volume-scene', state.volumeSceneRequested ?? state.source?.serverProjection?.sceneMigration?.requested ?? DEFAULT_VOLUME_SCENE);
   for(const axis of ['domControls','rendererControls'])for(const [id,descriptor] of Object.entries(state[axis])) {
     const control=document.getElementById(id);
     if(control?.type==='range')applyVolumeRangeSavedValue(control,Number(descriptor.rawValue??descriptor.value));
@@ -24846,7 +24844,7 @@ function serializeSceneObject(entry) {
     ...(object?.userData?.kaminosLeveling ? { arrivalLeveling: structuredClone(object.userData.kaminosLeveling) } : {}),
 
     ...(entry.type==='light'?{light:structuredClone(entry.light)}:{}),
-    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface)} : {}),
+    ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
   };
 }
@@ -25210,7 +25208,7 @@ window.captureComposition = ({ result = false, cameraView = null, cameraObject=n
     const capture = captureComposedCanvases({
       crop,
       host: renderer.domElement,
-      volume: activeSceneComposition && isSceneItemVisible('flame-field') ? volumePrototype.canvasElement() : null,
+      volume: activeSceneComposition && isSceneItemVisible('flame-field') && !authoredWaterFlameTransportActive ? volumePrototype.canvasElement() : null,
       document, label,
       simulation: activeSceneComposition ? { frameCount: state.frameCount, simStepCount: state.simStepCount, effectiveRoute: state.effectiveRoute, backend: state.backend } : null,
     });
@@ -25511,6 +25509,12 @@ function ensureObjectCollisionTarget(id) {
   }
   return target;
 }
+function setObjectWaterCollision(id,enabled){
+  assertSceneConstructionAvailable();if(typeof enabled!=='boolean')throw Error('Water collision must be Boolean');
+  const entry=sceneObjects.find(record=>record.id===id);if(entry?.type!==PROCEDURAL_MESH_TYPE||!['plane','sphere','bowl'].includes(entry.geometry.kind))throw Error('Water collision supports planes, spheres and bowls');
+  const record=serializeSceneObject(entry);record.waterCollision=enabled;
+  return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
+}
 function syncSceneDataInspector() {
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
@@ -25523,6 +25527,7 @@ function syncSceneDataInspector() {
   const choice=document.getElementById('object-parent');choice.replaceChildren(...[['','None'],...sceneGroups.map(g=>[g.id,g.label])].map(([id,label])=>{const option=document.createElement('option');option.value=id;option.textContent=label;return option;}));choice.value=entry?.groupId||'';
   if(!primitive.hidden){
     document.getElementById('geometry-kind').textContent=entry.geometry.kind;
+    const waterCollision=document.getElementById('object-water-collision');if(waterCollision){waterCollision.closest('label').hidden=!['plane','sphere','bowl'].includes(entry.geometry.kind);waterCollision.checked=entry.waterCollision!==false;}
     for(const input of primitive.querySelectorAll('[data-geometry-param]')){const key=input.dataset.geometryParam;input.closest('label').hidden=!(key in GEOMETRY_DEFAULTS[entry.geometry.kind]);if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.geometry.parameters[key]??'';}
     for(const input of primitive.querySelectorAll('[data-surface-param]'))if(document.activeElement!==input || !scenePlacementTools.edits.state().active)input.value=entry.surface[input.dataset.surfaceParam];
   }
@@ -25548,10 +25553,13 @@ function installSceneConstruction() {
     authoringControlSessions.push(installSceneControlHistory({controls:[input],edits,id:()=>ensureMeshDataTarget(activeSceneObjectId),label:`Edit ${label}`,onError:error=>setInfo(error.message)}));
     if(type==='number'){const scrub=installRelativeNumberDrag({grip:row.querySelector('span'),input,step});edits.subscribe(state=>{if(!state.active)scrub.stop();});}
   }
-  for(const key of ['width','height','depth','radius'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
+  for(const key of ['width','height','depth','radius','thickness'])field(panel.querySelector('#mesh-shape-fields'),key,key[0].toUpperCase()+key.slice(1),'number',.01,true);
   field(panel.querySelector('#mesh-surface-fields'),'color','Color','color',0,false);
   field(panel.querySelector('#mesh-surface-fields'),'roughness','Roughness','number',.01,false);
   field(panel.querySelector('#mesh-surface-fields'),'metalness','Metallic','number',.01,false);
+  const waterCollisionRow=document.createElement('label');waterCollisionRow.className='slider-row';waterCollisionRow.innerHTML='<span class="slider-label">Water collision</span><input type="checkbox" id="object-water-collision"><span class="flame-scope">Plane, sphere or bowl · uniform scale</span>';panel.append(waterCollisionRow);
+  const waterCollisionInput=waterCollisionRow.querySelector('input');
+  waterCollisionInput.addEventListener('change',()=>{try{setObjectWaterCollision(activeSceneObjectId,waterCollisionInput.checked);}catch(error){setInfo(error.message);syncSceneDataInspector();}});
   const lightPanel=document.createElement('section');lightPanel.id='selected-spot-properties';lightPanel.hidden=true;lightPanel.innerHTML='<h3>Light · Spot</h3>';panel.after(lightPanel);
   for(const [key,label,type,step] of [['enabled','Enabled','checkbox',0],['color','Color','color',0],['intensity','Power','number',1],['angle','Cone angle','number',.2],['penumbra','Blend','number',.01]]){
     const row=document.createElement('label');row.className='slider-row';row.innerHTML=`<span class="slider-label">${label}</span><input type="${type}" class="transform-input" ${type==='number'?'step="any"':''}>`;lightPanel.append(row);const input=row.querySelector('input');input.dataset.lightParam=key;
@@ -25572,6 +25580,7 @@ function installSceneConstruction() {
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     ungroup:id=>editSceneGroups(groups=>{const i=groups.findIndex(g=>g.id===id);if(i<0)throw Error('Group is absent');groups.splice(i,1);},'Ungroup objects'),
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
@@ -27120,8 +27129,40 @@ function setupAuthoringAssets(){
   const trellisPageRun=async options=>{
     if(meshBusy('sf3d')||meshBusy('trellis')||meshBusy('trellisPage')||authoringImageGenerator?.busy())throw Error('Another model is generating');
     meshRunning.trellisPage=true;redraw();
-    try{return await trellisPageRunInner(options);}finally{meshRunning.trellisPage=false;redraw();}
+    try{
+      // The run holds a Greenroom lease (greenroom-lease.mjs) for its whole length, so queued GPU jobs wait
+      // for it and it waits for them. A failed release stays owed (retried on page close); a run whose GPU
+      // work did not settle leaves Greenroom blocked on purpose and says what recovery is needed.
+      const {withGreenroomLease}=await loadModule('./greenroom-lease.mjs');
+      const post=async body=>{const r=await fetch('/api/gpu-lease',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const json=await r.json();if(!r.ok)throw Error(json.error||`HTTP ${r.status}`);return json;};
+      let outcome;
+      try{
+        outcome=await withGreenroomLease({post,runId:crypto.randomUUID(),route:'trellis2.image-generation.webgpu.v0',signal:options?.signal,
+          // The app GPU host's ledger of model runs whose settlement is unresolved (U2Net, TRELLIS).
+          unsettledWork:async()=>(await appGpuHost())?.unsettledRuns?.()??[],
+          onWait:wait=>{options?.onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`TRELLIS waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
+          held=>{trellisPageLease=held.status==='held'?held.leaseId:null;
+            if(held.status==='unconfigured')setInfo('TRELLIS runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it');
+            return trellisPageRunInner(options);});
+      }catch(error){
+        const handback=error?.greenroomHandback;trellisPageLease=null;
+        if(handback?.state==='release-failed'){trellisPageReleaseOwed=handback.leaseId;setInfo(`Greenroom lease ${handback.leaseId} was not released (${handback.releaseError}); queued GPU jobs wait until it is`);}
+        else if(handback?.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${handback.reason}. Release lease ${handback.leaseId} once this page's GPU work has stopped`);
+        throw error;
+      }
+      const {result,lease}=outcome;trellisPageLease=null;
+      if(lease.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${lease.releaseError}. Release lease ${lease.leaseId} once this page's GPU work has stopped`);
+      else if(lease.releaseError){trellisPageReleaseOwed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
+      if(result?.generation)result.generation.gpuLease={status:lease.status,...(lease.leaseId?{leaseId:lease.leaseId}:{}),
+        ...(lease.renewError?{renewError:lease.renewError}:{}),...(lease.releaseError?{releaseError:lease.releaseError}:{})};
+      return result;
+    }finally{trellisPageLease=null;meshRunning.trellisPage=false;redraw();}
   };
+  // A tab closed mid-run (or with a release still owed) frees its GPU work: release rather than leave Greenroom blocked.
+  let trellisPageLease=null,trellisPageReleaseOwed=null;
+  addEventListener('pagehide',()=>{for(const [leaseId,reason] of [[trellisPageLease,'page closed during the run'],[trellisPageReleaseOwed,'page closed with a release owed']])
+    if(leaseId)navigator.sendBeacon?.('/api/gpu-lease',new Blob([JSON.stringify({action:'release',leaseId,reason})],{type:'application/json'}));});
   // Witness hook: run in the page and save the GLB.
   window.kaminosTrellisPage=async options=>{
     let out;

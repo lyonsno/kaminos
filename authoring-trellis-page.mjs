@@ -99,7 +99,8 @@ export async function runTrellisInPage({appGpu,manifest:source,fetchTensor,pixel
         wallMs:Math.round(p.endMs-p.startMs),gpuMs:p.gpuStart==null?null:Math.round(((p===phases.at(-1)?gpu?.totalGpuMs??p.gpuEnd:p.gpuEnd)-p.gpuStart)*10)/10}))};
       const report=await run.finish().catch(error=>({status:'held',error}));
       released=report?.status==='released';
-      if(!released)failure=Error(`TRELLIS GPU route was not released: ${report?.status}${report?.error?` (${report.error.message})`:''}`);
+      // gpuRouteHeld: GPU work did not settle, so a holder of the GPU (a Greenroom lease) must not hand it back.
+      if(!released)failure=Object.assign(Error(`TRELLIS GPU route was not released: ${report?.status}${report?.error?` (${report.error.message})`:''}`),{gpuRouteHeld:true});
     }else released=true;
     // A held run keeps its tensors; disposing under it would free resources still in use.
     if(released){asset?.dispose();generation?.dispose();await host.dispose();}

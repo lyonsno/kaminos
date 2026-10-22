@@ -9,15 +9,17 @@ import { scoreHeads, gemmShader, gemmShaderV2, gemmShaderV3, gemmVersionFor, rms
 
 const HEAD = 128;
 
-// Rotate-half RoPE table [pos][128][cos, sin] following transformers' default rope in f32.
-export function qwenRopeTable(L, theta) {
+// Rotate-half RoPE table [row][128][cos, sin] following transformers' default rope in f32.
+// Row r rotates by positions[r] (default r); FLUX.3 gives its padding rows position 1.
+export function qwenRopeTable(L, theta, positions = null) {
   const half = HEAD / 2;
   const inv = Array.from({ length: half }, (_, i) => Math.fround(1 / Math.fround(Math.pow(theta, Math.fround((2 * i) / HEAD)))));
   const out = new Float32Array(L * HEAD * 2);
-  for (let p = 0; p < L; p++) {
+  for (let r = 0; r < L; r++) {
+    const p = positions ? positions[r] : r;
     for (let d = 0; d < HEAD; d++) {
       const f = Math.fround(inv[d % half] * p);
-      out[(p * HEAD + d) * 2] = Math.cos(f); out[(p * HEAD + d) * 2 + 1] = Math.sin(f);
+      out[(r * HEAD + d) * 2] = Math.cos(f); out[(r * HEAD + d) * 2 + 1] = Math.sin(f);
     }
   }
   return out;
@@ -112,7 +114,8 @@ export class KleinTextEncoder {
       c: out, cRs: N, M: rows, N, K, epilogue, label: 'te.linear' });
   }
 
-  allocate(L) {
+  // `positions` (optional, length L): RoPE position per row, for pipelines that place padding specially.
+  allocate(L, positions = null) {
     for (const b of Object.values(this.act ?? {})) b.destroy();
     const D = this.D, F = this.F, QH = this.QH, KVH = this.KVH;
     const f = n => this.buffer(n * 4);
@@ -122,7 +125,7 @@ export class KleinTextEncoder {
       q: f(QH * L * HEAD), k: f(KVH * L * HEAD), vt: f(KVH * L * HEAD), o: f(QH * L * HEAD), scores: f(Math.min(QH, scoreHeads(L, QH / KVH)) * L * L),
       attn: f(L * QH * HEAD), rope: f(L * HEAD * 2), mask: this.buffer(L * 4),
     };
-    this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta));
+    this.device.queue.writeBuffer(this.act.rope, 0, qwenRopeTable(L, this.cfg.rope_theta, positions));
   }
 
   // embeddings: Float32Array [L][D] (host-gathered rows); mask: Int32Array [L].

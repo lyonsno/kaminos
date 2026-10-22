@@ -67,7 +67,9 @@ async function generate(job) {
 }
 
 window.kleinReady = (async () => {
-  demo = await createKleinDemo({ canvas: $('scene'), urls, kernels, limits: q.get('limits') ?? 'adapter',
+  // ?model=flux3 runs FLUX.3 Klein on the same page (weights from ?te= / ?dit= / ?vae=).
+  const Pipeline = q.get('model') === 'flux3' ? (await import('/flux3-klein/flux3-pipeline.js')).Flux3Pipeline : undefined;
+  demo = await createKleinDemo({ canvas: $('scene'), urls, kernels, limits: q.get('limits') ?? 'adapter', Pipeline,
     onStatus: s => { status.textContent = s.totalBytes ? `Loading weights: ${(s.loadedBytes / 1e9).toFixed(2)} of ${(s.totalBytes / 1e9).toFixed(2)} GB…` : `Loading ${s.detail}…`; } });
   const gb = Object.values(demo.residentBytes).reduce((a, b) => a + b, 0) / 1e9;
   const ls = demo.pipeline.loadStats;

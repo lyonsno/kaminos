@@ -248,7 +248,7 @@ assert.match(indexSource, /volumePrototype\.setLiquidFireContactDescriptor/, 'th
 assert.match(indexSource, /volumePrototype\.setActive\(true\)/, 'the route runs the Pyro simulator for visual smoke');
 const compositionActivationSource = indexSource.match(/async function activateFingerFluidPyroComposition\(\)[\s\S]*?\n}\n\nasync function sampleFingerFluidPyroComposition/)?.[0] || '';
 assert.match(compositionActivationSource, /volumeScene:\s*'tall_plume'/, 'composition requests the only currently valid Pyro fire preset');
-assert.match(compositionActivationSource, /\.\.\.VOLUME_SCENE_PRESETS\.tall_plume/, 'composition installs the complete canonical tall-plume preset instead of retaining stale compact-plume controls');
+assert.match(compositionActivationSource, /\.\.\.VOLUME_SCENE_PRESETS\.flame/, 'composition installs the complete canonical tall-plume preset instead of retaining stale compact-plume controls');
 assert.match(compositionActivationSource, /resolution:\s*96[\s\S]*renderScale:\s*0\.85/, 'composition keeps its proven shared-scene resolution and render budget instead of importing the standalone 160-cubed basin cost');
 assert.match(compositionActivationSource, /fireRenderMode:\s*'stock'/, 'composition bypasses the topology-shell diagnostic and renders the actual tall-plume fire field');
 assert.match(compositionActivationSource, /boundarySplatMode:\s*'learned'/, 'composition explicitly activates the learned live boundary-splat renderer instead of inheriting the operator panel default');
@@ -336,7 +336,7 @@ assert.match(volumeSource, /setSimulationPaused\(paused\)/, 'Pyro exposes a comp
 assert.match(indexSource, /kaminosFingerFluidPyroSetSimulationPaused/, 'composition exposes an explicit render-live witness checkpoint control');
 assert.match(witnessSource, /kaminosFingerFluidPyroCompositionDebugState[\s\S]*kaminosFingerFluidPyroSetSimulationPaused\(true\)/, 'visual witness pauses Pyro compute from cheap state before the mature dry frame can be skipped');
 assert.match(witnessSource, /kaminosFingerFluidPyroSetSimulationPaused\(false\)[\s\S]*progressionDeadline/, 'visual witness resumes the unchanged simulation before waiting for physical contact');
-assert.match(compositionActivationSource, /sourceRadius:\s*VOLUME_SCENE_PRESETS\.tall_plume\.inputRadius[\s\S]*flowRate:\s*VOLUME_SCENE_PRESETS\.tall_plume\.flowRate/, 'downstream geometry preserves the valid tall-plume source dynamics');
+assert.match(compositionActivationSource, /sourceRadius:\s*VOLUME_SCENE_PRESETS\.flame\.inputRadius[\s\S]*flowRate:\s*VOLUME_SCENE_PRESETS\.flame\.flowRate/, 'downstream geometry preserves the valid tall-plume source dynamics');
 assert.match(volumeSource, /const sourceContactRadius\s*=\s*Math\.max\(0\.12,\s*sourcePrimitive\.radius \* 1\.5\)[\s\S]*sourceQuenchRadius:\s*sourceContactRadius/, 'burner contact follows source scale with only a bounded sparse-carrier support margin');
 assert.match(volumeSource, /sourceContactRadius:\s*state\.liquidFireSourceContactRadius/, 'composition witness exposes the effective physical burner neighborhood');
 assert.match(witnessSource, /sourceContactWetness[^\n]+0/, 'visual witness detects the first actual burner contact instead of waiting on a clock gate');

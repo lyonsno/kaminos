@@ -13,7 +13,7 @@ function sourceBetween(source, startMarker, endMarker) {
 
 const raymarch = sourceBetween(
   core,
-  'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {',
+  'fn raymarchVolume(in: VSOut,',
   'fn fs(in: VSOut) -> @location(0) vec4<f32> {',
 );
 
@@ -59,7 +59,7 @@ assert.match(
 );
 assert.match(
   raymarch,
-  /let\s+visibleDetailOverlayGain\s*=\s*mix\(1\.0, 0\.35, detailScaleArtifactQuarantine\);/,
+  /let\s+visibleDetailOverlayGain\s*=\s*\(0\.35\);/,
   'transported detail must preserve the inherited tall-plume amplitude quarantine',
 );
 assert.match(
@@ -180,8 +180,8 @@ const retiredPyroMutations = [
   [
     'aliased reserved-array read',
     source => source.replace(
-      'fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {',
-      `fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool) -> RaymarchResult {
+      'fn raymarchVolume(in: VSOut,',
+      `fn raymarchVolume(in: VSOut,
   let renamedReservedCells = u.pyro_detail_cells;
   let leakedReservedCell = renamedReservedCells[0u];`,
     ),

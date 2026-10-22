@@ -36,8 +36,8 @@ function assertInitialFieldPeriodicityBoundary(source) {
   assert.doesNotMatch(seedHash, /Math\.(?:sin|cos|tan|atan2|random)\s*\(/, 'the initial-state dephasing helper must be deterministic and nonperiodic');
   assert.doesNotMatch(seedHash, /\b(?:time|frame|detailScale|seedDetailFrequency)\b/i, 'the initial-state dephasing helper must not receive clock or Detail Scale authority');
   assert.match(seedHash, /Math\.imul\s*\(/, 'the initial-state dephasing helper uses integer mixing rather than a hidden wave');
-  assert.match(initialFluid, /const seedKeyX = isBonfireInitialScene\s*\?\s*Math\.round\(Math\.abs\(dx\)/, 'Bonfire seed dephasing mirrors the source-relative X coordinate');
-  assert.match(initialFluid, /const seedKeyZ = isBonfireInitialScene\s*\?\s*Math\.round\(Math\.abs\(dz\)/, 'Bonfire seed dephasing mirrors the source-relative Z coordinate');
+  assert.match(initialFluid, /const seedKeyX = x;/, 'Flame seeds use the cell X coordinate');
+  assert.match(initialFluid, /const seedKeyZ = z;/, 'Flame seeds use the cell Z coordinate');
   assert.match(initialFluid, /const seedNoiseA = deterministicInitialSeedUnit\(seedKeyX, seedKeyY, seedKeyZ, 0x[\da-f]+\);/i, 'initial fields own an explicit deterministic spatial dephasing channel');
   assert.match(initialFluid, /const seedNoiseB = deterministicInitialSeedUnit\(seedKeyX, seedKeyY, seedKeyZ, 0x[\da-f]+\);/i, 'initial fields own a second decorrelated deterministic spatial dephasing channel');
   assert.match(initialFluid, /const seedNoiseC = deterministicInitialSeedUnit\(seedKeyX, seedKeyY, seedKeyZ, 0x[\da-f]+\);/i, 'initial fields own a third decorrelated deterministic spatial dephasing channel');
@@ -50,7 +50,7 @@ function assertInitialFieldPeriodicityBoundary(source) {
   );
   for (const name of [
     'seedMaterialDetail',
-    'seedBonfireFlame',
+    'seedFlame',
     'seedVisibleFireCarrier',
     'seedMicroSmoke',
     'seedInterfaceShred',

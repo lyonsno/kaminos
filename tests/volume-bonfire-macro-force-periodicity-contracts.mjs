@@ -39,43 +39,27 @@ function assertBonfireMacroForceBoundary(source) {
   );
   assert.match(
     detailForceRegion,
-    /let detailLateral = vec2<f32>\(rawDetailForce\.x, rawDetailForce\.z\) \* bonfireDetailLateralDamping;/,
+    /let detailLateral = vec2<f32>\(rawDetailForce\.x, rawDetailForce\.z\) \* 1\.0;/,
     'Bonfire detail forcing must retain the raw operator result instead of replacing it with an analytic symmetric field',
   );
   assert.match(
     detailForceRegion,
-    /let microLateral = vec2<f32>\(rawMicroForce\.x, rawMicroForce\.z\) \* bonfireDetailLateralDamping;/,
+    /let microLateral = vec2<f32>\(rawMicroForce\.x, rawMicroForce\.z\) \* 1\.0;/,
     'Bonfire micro forcing must retain the raw operator result instead of replacing it with an analytic symmetric field',
   );
   assert.match(
     detailForceRegion,
-    /let shredLateral = vec2<f32>\(rawShredForce\.x, rawShredForce\.z\) \* bonfireDetailLateralDamping;/,
+    /let shredLateral = vec2<f32>\(rawShredForce\.x, rawShredForce\.z\) \* 1\.0;/,
     'Bonfire shred forcing must retain the raw operator result instead of replacing it with an analytic symmetric field',
   );
   assert.match(
     detailForceRegion,
-    /let fineBreakupLateral = vec2<f32>\(rawFineBreakup\.x, rawFineBreakup\.z\) \* bonfireDetailLateralDamping;/,
+    /let fineBreakupLateral = vec2<f32>\(rawFineBreakup\.x, rawFineBreakup\.z\) \* 1\.0;/,
     'Bonfire fine breakup must retain the raw operator result instead of replacing it with an analytic symmetric field',
   );
 
-  const bonfireMacroRegion = sourceBetween(
-    source,
-    '  let bonfireUpperDepinchBand =',
-    '  let windMaterialCoupling =',
-  );
-  assert.doesNotMatch(
-    bonfireMacroRegion,
-    /\b(?:sin|cos)\s*\(/,
-    'Bonfire-specific recentering and depinching must not hide a replacement periodic macro force',
-  );
-  assert.match(bonfireMacroRegion, /bonfireUpperDepinchOutflow/, 'field-independent geometric depinching remains explicit');
-  assert.match(bonfireMacroRegion, /bonfireNonWindCenteringForce/, 'bounded symmetric recentering remains explicit');
-  assert.match(
-    source,
-    /vel = vel \+ bonfireReferenceConfinement \* bonfireScene \* bonfireInstabilityProbe \* 1\.6;/,
-    'the instability probe may retain only transported-field reference confinement after periodic rolls retire',
-  );
-  assert.match(source, /vel = vel \+ confinement \*/, 'transported vorticity confinement remains active');
+  assert.doesNotMatch(source, /let bonfireUpperDepinchBand|let bonfireNonWindCenteringForce|vel = vel \\+ bonfireReferenceConfinement/, 'retired Bonfire forces stay absent');
+  assert.match(source, /vel = vel \+ confinement;/, 'transported vorticity confinement remains active');
   assert.match(source, /thermalBuoyancyForce\(/, 'thermal buoyancy remains active');
 
   assert.match(
@@ -169,8 +153,8 @@ const falseClosureMutations = [
   [
     'restored periodic macro helper',
     source => source.replace(
-      'fn bonfireEntrainedLift(',
-      'fn bonfireZeroMeanPlumeRoll() -> f32 { return sin(0.0); }\n\nfn bonfireEntrainedLift(',
+      'fn thermalBuoyancyForce(',
+      'fn bonfireZeroMeanPlumeRoll() -> f32 { return sin(0.0); }\n\nfn thermalBuoyancyForce(',
     ),
   ],
   [

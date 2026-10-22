@@ -2,6 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { normalizeVolumeScene } from './volume-scene-ontology.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -115,28 +116,18 @@ const COMPACT_MATRIX_SCENARIOS = [
   {
     id: 'tall-plume-scale',
     label: 'Tall Plume Scale',
-    volumeScene: 'tall_plume',
+    volumeScene: 'flame',
     simGrid: 128,
     raySteps: 96,
     renderScale: 0.85,
     adaptiveRays: 0.65,
     occupancySkip: 0.50,
   },
-  {
-    id: 'bonfire-plume-scale',
-    label: 'Bonfire Plume Scale',
-    volumeScene: 'bonfire_plume',
-    simGrid: 128,
-    raySteps: 96,
-    renderScale: 0.85,
-    adaptiveRays: 0.65,
-    occupancySkip: 0.45,
-  },
 ];
 
 const TALL_PLUME_PERFORMANCE_BASE = {
   performanceMatrixId: PERFORMANCE_MATRIX_ID,
-  volumeScene: 'tall_plume',
+  volumeScene: 'flame',
   tallPreset: 'operator_fire_0622',
   reactionFuel: 1,
   density: 3.05,
@@ -496,7 +487,8 @@ function checkNumber(checks, run, effective, runKey, effectiveKey = runKey, epsi
 
 function checkExact(checks, run, effective, runKey, effectiveKey = runKey) {
   if (run[runKey] === undefined) return;
-  if (String(effective[effectiveKey]) !== String(run[runKey])) {
+  const expected = runKey === 'volumeScene' ? normalizeVolumeScene(run[runKey]) : run[runKey];
+  if (String(effective[effectiveKey]) !== String(expected)) {
     throwSweepFailure('stale-default-config', 'validation', `${runKey} requested ${run[runKey]} but effective ${effectiveKey} was ${effective[effectiveKey]}`, {
       scenarioId: run.id,
       runKey,
@@ -657,16 +649,16 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedTallPlumePressureIterationStrategy = effective.volumeScene === 'tall_plume' && Number(effective.pressureProjectionIterations) === 2
+  const expectedTallPlumePressureIterationStrategy = effective.volumeScene === 'flame' && Number(effective.pressureProjectionIterations) === 2
     ? TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2
     : TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE;
-  const expectedTallPlumePressureTierStrategy = effective.volumeScene === 'tall_plume' && effective.pressureStrategy === 'spatial_tiers'
+  const expectedTallPlumePressureTierStrategy = effective.volumeScene === 'flame' && effective.pressureStrategy === 'spatial_tiers'
     ? TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
   const expectedPressureProjectionReadStrategy = expectedTallPlumePressureTierStrategy === TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY
     ? PRESSURE_PROJECTION_READ_STRATEGY_COMPOSITE
     : PRESSURE_PROJECTION_READ_STRATEGY_SINGLE_BUFFER;
-  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'tall_plume' && expectedTallPlumePressureTierStrategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY ? 2 : 0;
+  const expectedTallPlumePressureIterationTarget = effective.volumeScene === 'flame' && expectedTallPlumePressureTierStrategy !== TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY ? 2 : 0;
   if (
     ledger.tallPlumePressureIterationStrategy !== expectedTallPlumePressureIterationStrategy ||
     Number(ledger.tallPlumePressureIterationTarget) !== expectedTallPlumePressureIterationTarget ||
@@ -832,7 +824,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedDetailCoherenceStrategy = effective.volumeScene === 'tall_plume'
+  const expectedDetailCoherenceStrategy = effective.volumeScene === 'flame'
     ? TALL_PLUME_DETAIL_COHERENCE_STRATEGY_TRANSPORTED_PHASE_ANCHOR
     : TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE;
   if (
@@ -856,7 +848,7 @@ function validateWitness(run, witness, effective) {
       ledger,
     });
   }
-  const expectedTransitionBandStrategy = effective.volumeScene === 'tall_plume'
+  const expectedTransitionBandStrategy = effective.volumeScene === 'flame'
     ? TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT
     : TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE;
   if (

@@ -65,7 +65,7 @@ test('walls: the in-kernel sponges, top fades and floor clamp are off in joined 
   for (const name of ['smokeTopFade', 'heatTopFade', 'fireTopFade']) {
     assert.match(shader, new RegExp(`let ${name} = select\\(${name}Standalone, 1\\.0, joinedBoundary\\(\\)\\);`), `${name} off in joined mode`);
   }
-  assert.match(shader, /vel\.y = mix\(max\(vel\.y, -0\.015\), vel\.y, max\(bonfireScene, select\(0\.0, 1\.0, joinedBoundary\(\) \|\| openWorldBoundary\(\)\)\)\);/);
+  assert.ok(shader.includes('vel.y = mix(max(vel.y, -0.015), vel.y, select(0.0, 1.0, joinedBoundary() || openWorldBoundary()));'));
   const face = shader.slice(shader.indexOf('fn csFaceForces('), shader.indexOf('\n}\n', shader.indexOf('fn csFaceForces(')));
   assert.match(face, /let openX = sceneFaceOpen\(c, 0u\) && \(gid\.x \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);
   assert.match(face, /let openZ = sceneFaceOpen\(c, 2u\) && \(gid\.z \+ 1u < GRID \|\| joinedBoundary\(\) \|\| openWorldBoundary\(\)\);/);

@@ -1,5 +1,5 @@
 // FLUX.3 Klein transformer forward on WebGPU, text-to-image only.
-// Mirrors diffusers Flux3Transformer2DModel (flow_map=True) without the reference-image mode:
+// Mirrors diffusers Flux3Transformer2DModel (flow_map true or false) without the reference-image mode:
 // timestep and flow-map target embeddings, per-mode modulation, text and image per-mode blocks
 // (each mode attends within itself), joint single blocks over [txt; img] with per-mode
 // modulation, AdaLN output norm and projection. Every block is one LayerNorm feeding parallel
@@ -107,7 +107,7 @@ export class Flux3Transformer extends KleinTransformer {
     await this.sched.flush(`temb.${prefix}`);
   }
 
-  // `tModel`: this step's sigma * 1000; `targetModel`: the sigma this step jumps to, * 1000.
+  // `tModel`: this step's sigma * 1000; `targetModel`: the sigma this step jumps to, * 1000 (flow maps only).
   async forward({ tModel, targetModel }, taps = null) {
     const a = this.act, D = this.D, enc = this.sched;
     const { imgTokens: Li, txtTokens: Lt, L } = this.shape;
@@ -124,8 +124,11 @@ export class Flux3Transformer extends KleinTransformer {
     copy(a.temb, a.tembImg);
     await this.embedTime(enc, 0, 'time', a.temb);
     copy(a.temb, a.tembZero);
-    await this.embedTime(enc, targetModel, 'target', a.target);
-    for (const t of [a.tembImg, a.tembZero]) this.dispatch(enc, add, [t, a.target, this.uniform([D, this.f32bits(1), 0, 0])], Math.ceil(D / 256));
+    // Flow-map (step-distilled) checkpoints also embed the timestep each step jumps to; the base does not.
+    if (this.cfg.flow_map) {
+      await this.embedTime(enc, targetModel, 'target', a.target);
+      for (const t of [a.tembImg, a.tembZero]) this.dispatch(enc, add, [t, a.target, this.uniform([D, this.f32bits(1), 0, 0])], Math.ceil(D / 256));
+    }
     this.dispatch(enc, silu, [a.tembImg, a.siluImg], Math.ceil(D / 256));
     this.dispatch(enc, silu, [a.tembZero, a.siluZero], Math.ceil(D / 256));
     await flush('model/temb_img', a.tembImg, 1, D);

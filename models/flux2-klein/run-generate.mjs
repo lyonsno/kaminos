@@ -1,6 +1,6 @@
 // Batch text-to-image through generate.html in an independent Chrome for Testing.
 // Usage: node run-generate.mjs --chrome <exe> (--te <dir> --dit <dir> --vae <dir> | --weights-url <base> | --weights-dir <dir>)
-//        --prompts <dir of .txt> --out <dir> [--seed-base 7000] [--size 512] [--only name,name]
+//        --prompts <dir of .txt> --out <dir> [--seed-base 7000] [--size 512] [--only name,name] [--model flux3 --steps 16]
 // Prompt files are taken in sorted order; seed = seed-base + 1-based index. Writes <name>.png and report.json.
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -44,11 +44,14 @@ try {
   const pageRoots = report.roots ? { '/te/': report.roots.te, '/dit/': report.roots.dit, '/vae/': report.roots.vae } : {};
   if (opt('--origin')) report.origin = opt('--origin');
   else ({ server } = await startServer({ ...pageRoots,
-    '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))), '/': here }).then(s => { report.origin = s.origin; return s; }));
+    '/webgpu-inference-kit/': path.resolve(opt('--kit', path.join(here, '../../webgpu-inference-kit'))),
+    // FLUX.3 Klein's modules import FLUX.2 Klein's from ../flux2-klein.
+    '/flux3-klein/': path.join(here, '../flux3-klein'), '/flux2-klein/': here, '/': here }).then(s => { report.origin = s.origin; return s; }));
   const weightQuery = report.weightsUrl ? `weights=${encodeURIComponent(report.weightsUrl)}` : 'te=/te&dit=/dit&vae=/vae';
   browser = await launchChrome(opt('--chrome'), [], report);
   report.phase = 'load';
-  const kq = `&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}&vaeAct=${opt('--vae-act', 'f16')}&memory=${opt('--memory', 'all')}&limits=${opt('--limits', 'adapter')}`;
+  const kq = `${opt('--model') ? `&model=${opt('--model')}` : ''}&gemm=${opt('--gemm-version', '2')}&shared=${opt('--shared-type', 'f16')}&vaeAct=${opt('--vae-act', 'f16')}&memory=${opt('--memory', 'all')}&limits=${opt('--limits', 'adapter')}`;
+  report.model = opt('--model', 'flux2-klein');
   report.requestedKernels = { gemmVersion: Number(opt('--gemm-version', '2')), sharedType: opt('--shared-type', 'f16'), vaeActType: opt('--vae-act', 'f16'), residency: opt('--memory', 'all'), limits: opt('--limits', 'adapter') };
   // --loads N reloads the page N times in one browser profile (cache-hit evidence); the batch runs on the last load.
   report.loads = [];

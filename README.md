@@ -117,6 +117,11 @@ image features in memory so subsequent prompts can reuse them. The
 in kit 0.1.55, provides the upload/prompt interface and export controls.
 See its guide for model setup, usage and performance measurements.
 
+To embed SAM without the Kaminos application, use the
+[SAM application quickstart](webgpu-inference-kit/docs/sam-getting-started.md):
+prepare the pinned model with the Node-only `kaminos-sam-model` command, then
+call `createSam3Segmenter().segment(imageFile, prompt)` from the npm package.
+
 The package includes a complete minimal port, an executable render-plus-inference
 walkthrough, focused integration documentation, and runtime contracts for
 admission, scheduling, lifecycle, resources, and receipts.

@@ -130,8 +130,8 @@ assert.throws(
 );
 
 const supportedSampleBranchMutation = core.replace(
-  '    let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;',
-  '    if (!fullGridCapture && directSupport > 0.0001) { continue; }\n    let extinction = rawExtinction + tallPlumeTransitionWisps * absorptionGain * 0.34;',
+  '    let extinction = rawExtinction + flameTransitionWisps * absorptionGain * 0.34;',
+  '    if (!fullGridCapture && directSupport > 0.0001) { continue; }\n    let extinction = rawExtinction + flameTransitionWisps * absorptionGain * 0.34;',
 );
 assert.notEqual(supportedSampleBranchMutation, core, 'supported-sample mutation fixture reaches the production loop');
 assert.throws(

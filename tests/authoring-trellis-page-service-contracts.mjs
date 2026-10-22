@@ -64,14 +64,33 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
   const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
   const a=html.indexOf('  const trellisPageRun=async options=>{'),b=html.indexOf('  // Witness hook',a);
   assert.ok(a>0&&b>a,'the reserving wrapper exists');
-  let release,fail=false;const meshRunning={sf3d:false,trellis:false,trellisPage:false};
-  const ctx={meshRunning,meshBusy:m=>meshRunning[m],redraw(){},authoringImageGenerator:{busy:()=>false},Error,
-    trellisPageRunInner:()=>new Promise((res,rej)=>{release=()=>fail?rej(Error('boom')):res('done');})};
+  let release,fail=false;const meshRunning={sf3d:false,trellis:false,trellisPage:false},events=[];
+  const lease=await import('../greenroom-lease.mjs');
+  const ctx={meshRunning,meshBusy:m=>meshRunning[m],redraw(){},authoringImageGenerator:{busy:()=>false},Error,JSON,URLSearchParams,setInfo(){},
+    location:{search:''},crypto:{randomUUID:()=>'run-1'},addEventListener(){},navigator:{},Blob,setTimeout,clearTimeout,
+    loadModule:async()=>lease,unsettled:[],appGpuHost:async()=>({unsettledRuns:()=>ctx.unsettled}),
+    // The server's Greenroom lease: held for the run, released after it.
+    fetch:async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-run-1',ttlSeconds:120}:{status:'released'}};},
+    trellisPageRunInner:()=>{events.push('run');return new Promise((res,rej)=>{release=()=>fail?rej(Error('boom')):res({generation:{runId:'r'}});});}};
   vm.runInNewContext(html.slice(a,b)+'\nthis.run=trellisPageRun;',ctx);
   const first=ctx.run({});assert.equal(meshRunning.trellisPage,true,'reserved before any await');
   await assert.rejects(ctx.run({}),/Another model/);
-  release();assert.equal(await first,'done');assert.equal(meshRunning.trellisPage,false);
-  fail=true;const second=ctx.run({});release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
+  while(!release)await new Promise(r=>setTimeout(r,0));
+  release();const done=await first;assert.equal(meshRunning.trellisPage,false);
+  assert.deepEqual(events,['claim','run','release'],'the run happens inside a held Greenroom lease');
+  assert.deepEqual(JSON.parse(JSON.stringify(done.generation.gpuLease)),{status:'held',leaseId:'kaminos-page-run-1'},'the generation records its lease');
+  fail=true;release=null;events.length=0;const second=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
+  release();await assert.rejects(second,/boom/);assert.equal(meshRunning.trellisPage,false,'released on failure too');
+  assert.deepEqual(events,['claim','run','release'],'and the lease is released on failure');
+  // A model run the app GPU host still counts unsettled keeps Greenroom blocked, whatever the error looks like.
+  fail=true;release=null;events.length=0;ctx.unsettled=['trellis-frame-run'];const held=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
+  release();await assert.rejects(held,/boom/);assert.deepEqual(events,['claim','run'],'no release while the host has an unsettled run');ctx.unsettled=[];
+  // A server with no Greenroom: the run goes ahead unleased, and says so when it starts, not afterwards.
+  const infos=[];ctx.setInfo=m=>infos.push(m);fail=false;release=null;events.length=0;
+  ctx.fetch=async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>({status:'unconfigured'})};};
+  const third=ctx.run({});while(!release)await new Promise(r=>setTimeout(r,0));
+  assert.ok(infos.some(m=>/without a Greenroom lease/.test(m)),'announced before the run finishes');
+  release();assert.equal((await third).generation.gpuLease.status,'unconfigured');assert.deepEqual(events,['claim','run']);
 });
 
 test('the service prepares its own input and shows the cutout it used',async()=>{

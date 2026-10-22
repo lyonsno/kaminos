@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 151,
+  "controlCount": 148,
   "controls": [
     {"key":"volume-world-smoke-transition","param":"volume_world_smoke_transition","tagName":"SELECT","type":"select-one","additiveDefault":"0","allowedValues":["0","1","2"],"additiveSinceControlCount":267},
     {"key":"volume-wavelet-octave1-weight","param":"volume_wavelet_octave1_weight","tagName":"INPUT","type":"range","additiveDefault":1,"additiveSinceControlCount":265},
@@ -73,12 +73,6 @@
       "tagName": "INPUT",
       "type": "range",
       "additiveDefault": "0.6"
-    },
-    {
-      "key": "volume-scene",
-      "param": "volume_scene",
-      "tagName": "SELECT",
-      "type": "select-one"
     },
     {
       "key": "emitter-assay-family",
@@ -914,24 +908,6 @@
       "type": "range"
     },
     {
-      "key": "volume-canonical-spread",
-      "param": "volume_canonical_spread",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-canonical-centerline",
-      "param": "volume_canonical_centerline",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
-      "key": "volume-canonical-body-balance",
-      "param": "volume_canonical_body_balance",
-      "tagName": "INPUT",
-      "type": "range"
-    },
-    {
       "key": "volume-grid-height-ratio",
       "param": "volume_grid_height_ratio",
       "tagName": "INPUT",
@@ -1026,6 +1002,14 @@
       "type": "range",
       "additiveDefault": 1,
       "additiveSinceControlCount": 259
+    },
+    {
+      "key": "volume-reactant-soot-yield",
+      "param": "volume_reactant_soot_yield",
+      "tagName": "INPUT",
+      "type": "range",
+      "additiveDefault": 2,
+      "additiveSinceControlCount": 260
     }
   ],
   "retiredControls": [
@@ -1908,6 +1892,34 @@
       "param": "volume_pyro_overdrive",
       "tagName": "INPUT",
       "type": "range"
+    },
+    {
+      "key": "volume-scene",
+      "param": "volume_scene",
+      "tagName": "SELECT",
+      "type": "select-one",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-canonical-spread",
+      "param": "volume_canonical_spread",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-canonical-centerline",
+      "param": "volume_canonical_centerline",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
+    },
+    {
+      "key": "volume-canonical-body-balance",
+      "param": "volume_canonical_body_balance",
+      "tagName": "INPUT",
+      "type": "range",
+      "axis": "domControls"
     }
   ],
   "rendererControls": [

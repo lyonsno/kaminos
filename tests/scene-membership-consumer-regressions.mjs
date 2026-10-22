@@ -33,7 +33,7 @@ function makeSceneContext({ reloadObject = () => ({}) } = {}) {
   const context = vm.createContext({
     structuredClone,canCollideWithFire,
     writeObjectCollision(id,value){const entry=sceneObjects.find(e=>e.id===id);entry.collision=checkedObjectCollision(entry,value);},
-    FLAME_EMITTER_ID: '@flame-emitter',CAMERA_TYPE:'camera',sceneCameras:null,
+    FLAME_EMITTER_ID: '@flame-emitter',CAMERA_TYPE:'camera',sceneCameras:null,sceneGiProxies:{attach(){},release(){}},
     PROCEDURAL_MESH_TYPE:'procedural-mesh',compoundRetentionTargets:new Map(),RIM_LIGHT_ID: '@rim-light',
     LOCAL_LIQUID_EMITTER_TYPE: 'local-liquid-emitter',
     sceneObjects,

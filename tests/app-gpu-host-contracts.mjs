@@ -34,3 +34,28 @@ test('without a shared device there is no app host',()=>{
  const f=fixture();
  assert.throws(()=>createAppGpuHost({sharedGpu:null,host:f.host,kit:f.kit,frameOwner:()=>f.owner}),/shared GPU device/);
 });
+
+test('a model run whose finish rejects is marked as still holding the GPU (a Greenroom lease must not be handed back)',async()=>{
+ const f=fixture();
+ const failing={...f.kit,createWebGpuForegroundService:options=>{const real=createWebGpuForegroundService(options);
+   let failed=0;return {...real,beginRun:async(...args)=>{const run=await real.beginRun(...args);
+     return {...run,finish:async()=>{const receipt=await run.finish();if(failed++===0)throw Error('finish receipt clock failed');return receipt;}};}};}};
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit:failing,frameOwner:()=>f.owner});
+ const run=await app.beginRun('u2net:1',{routeId:'u2net.foreground-removal'});
+ const error=await run.finish().catch(e=>e);
+ assert.match(error.message,/finish receipt clock failed/);assert.equal(error.gpuRouteHeld,true);
+ const ok=await app.beginRun('klein:1',{routeId:'flux2-klein'}).catch(e=>e);
+ if(ok?.finish){const settled=await ok.finish();assert.ok(!settled?.gpuRouteHeld);}
+});
+
+test('the host keeps a ledger of runs whose settlement is unresolved: a settled run leaves it, a rejected finish stays',async()=>{
+ const f=fixture();let failNext=true;
+ const kit={...f.kit,createWebGpuForegroundService:options=>{const real=createWebGpuForegroundService(options);
+   return {...real,beginRun:async(...args)=>{const run=await real.beginRun(...args);
+     return {...run,finish:async()=>{const r=await run.finish();if(failNext){failNext=false;throw Error('finish receipt clock failed');}return r;}};}};}};
+ const app=createAppGpuHost({sharedGpu:{adapter:f.adapter,device:f.device,queue:f.device.queue},host:f.host,kit,frameOwner:()=>f.owner});
+ const a=await app.beginRun('u2net:1',{routeId:'u2net.foreground-removal'});assert.deepEqual(app.unsettledRuns(),['u2net:1'],'an active run is unsettled');
+ await a.finish().catch(()=>{});assert.deepEqual(app.unsettledRuns(),['u2net:1'],'a rejected finish never settles it');
+ const b=await app.beginRun('klein:1',{routeId:'flux2-klein'});await b.finish();
+ assert.deepEqual(app.unsettledRuns(),['u2net:1'],'a settled run leaves the ledger');
+});

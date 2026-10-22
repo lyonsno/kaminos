@@ -18,7 +18,7 @@ assert.deepEqual(retired, {
   type: 'checkbox',
 });
 
-const activeDescriptor = schema.controls.find(control => control.key === 'volume-scene');
+const activeDescriptor = schema.controls.find(control => control.key === 'emitter-assay-family');
 const hash = '7'.repeat(64);
 function parentPresetArtifact(retiredEntry = {}) {
   return {
@@ -32,7 +32,7 @@ function parentPresetArtifact(retiredEntry = {}) {
       kind: 'settings-preset',
       schemaIdentity: schema.identity,
       savedAt: '2026-09-05T18:00:00Z',
-      route: 'http://kaminos.invalid/?kaminos_volume_smoke=1&volume_scene=bonfire&volume_procedural_transport_slip=true',
+      route: 'http://kaminos.invalid/?kaminos_volume_smoke=1&volume_emitter_family=bonfire&volume_procedural_transport_slip=true',
       domControls: {
         [activeDescriptor.key]: { ...activeDescriptor, id: activeDescriptor.key, value: 'bonfire' },
         [retired.key]: { ...retired, id: retired.key, value: true, ...retiredEntry },
@@ -141,9 +141,9 @@ assert.equal(legacyFineBreakupReceipt.preset.domControls[commonGasTransport.key]
   'both 209- and 210-control basins retain the legacy gas transport law');
 assert.equal(validateVolumeSettingsPresetDocument(currentPresetArtifact(), parentArtifact.presetId, schema)
   .preset.domControls[commonGasTransport.key].value, false);
-const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength']
+const flameDoctorControls = ['volume-pressure-solver', 'volume-pressure-solver-iterations', 'volume-advection-scheme', 'volume-confinement', 'volume-time-step', 'volume-emitter-fuel-fraction', 'volume-emitter-inlet-temperature', 'volume-emitter-aperture-pattern', 'volume-emitter-aperture-count', 'volume-emitter-aperture-ratio', 'volume-emitter-aperture-seed', 'volume-emitter-swirl', 'volume-wind-model', 'volume-wind-gust', 'volume-wind-gust-period', 'volume-wind-gust-veer', 'volume-emitter-line-weight', 'volume-emitter-jet-jitter', 'volume-emitter-inlet-turbulence', 'volume-emitter-inlet-turbulence-scale', 'volume-emitter-puff', 'volume-emitter-puff-period', 'volume-heat-release-expansion', 'volume-velocity-staggering', 'volume-immersed-centre-x', 'volume-immersed-centre-y', 'volume-immersed-centre-z', 'volume-immersed-yaw', 'volume-immersed-pitch', 'volume-immersed-radius', 'volume-immersed-thickness', 'volume-immersed-speed', 'volume-immersed-fuel', 'volume-immersed-temperature', 'volume-immersed-momentum-gain', 'volume-immersed-cap-fraction', 'volume-immersed-back-wall', 'volume-grid-height-ratio', 'volume-reaction-law', 'volume-reactant-mixing-time', 'volume-reactant-cooling-time', 'volume-physical-kelvin-per-heat', 'volume-physical-soot-burnout-rate', 'volume-physical-soot-burnout-kelvin', 'volume-appearance-model', 'volume-wavelet-turbulence', 'volume-wavelet-octaves', 'volume-wavelet-strength', 'volume-reactant-soot-yield']
   .map(key => schema.controls.find(control => control.key === key));
-assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259],
+assert.deepEqual(flameDoctorControls.map(control => control?.additiveSinceControlCount), [212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231, 232, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260],
   'the pressure solver, solver sweeps, advection scheme, confinement mode, time-step mode, the inflow-boundary emitter controls (fuel fraction, inlet temperature), the aperture pattern controls and swirl, the wind model controls, the grid height ratio, the reaction-law controls and the physics-appearance controls and the appearance model declare successive additive counts after common gas transport');
 // A hole is not history: a record that still carries a control introduced later
 // (wavelet strength, 259) cannot be missing one introduced earlier (pressure solver, 212).

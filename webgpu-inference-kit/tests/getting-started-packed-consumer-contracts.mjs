@@ -25,7 +25,7 @@ try {
     ['pack', packageRoot, '--pack-destination', temporaryRoot, '--json'],
     temporaryRoot,
   ));
-  assert.equal(packOutput[0].version, '0.1.58');
+  assert.equal(packOutput[0].version, '0.1.59');
   assert.ok(
     packOutput[0].files.every(row => !/(?:^|\/)(__pycache__\/|[^/]+\.pyc$)/.test(row.path)),
     'generated Python bytecode must stay out of the published package',
@@ -35,7 +35,8 @@ try {
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/minimal-model-port-runner.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.mjs'));
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/render-plus-inference.html'));
-  for (const file of ['examples/sam-image.html', 'examples/sam-image.mjs', 'docs/sam-image-example.md']) {
+  for (const file of ['examples/sam-image.html', 'examples/sam-image.mjs', 'docs/sam-image-example.md',
+    'docs/sam-getting-started.md', 'models/sam3-native.json', 'tools/sam-model.mjs', 'src/sam3-segmenter.js']) {
     assert.ok(packOutput[0].files.some(row => row.path === file), `SAM consumer package missing ${file}`);
   }
   assert.ok(packOutput[0].files.some(row => row.path === 'examples/assets/brightness-still-life.jpg'));
@@ -44,6 +45,15 @@ try {
   await writeFile(join(temporaryRoot, 'package.json'), '{"type":"module","private":true}\n');
   run('npm', ['install', '--ignore-scripts', '--no-package-lock', tarball], temporaryRoot);
   const installedRoot = join(temporaryRoot, 'node_modules/@kaminos/webgpu-inference-kit');
+  assert.match(run('node', [join(installedRoot, 'tools/sam-model.mjs'), '--help'], temporaryRoot), /--out/);
+  assert.match(run('node', [join(temporaryRoot, 'node_modules/.bin/kaminos-sam-model'), '--help'], temporaryRoot), /--out/);
+  const recipe = JSON.parse(await readFile(join(installedRoot, 'models/sam3-native.json'), 'utf8'));
+  assert.equal(recipe.schema, 'kaminos.sam3-portable-model-recipe.v1');
+  assert.equal(recipe.modelPackage.shape.imageHeight, 1008);
+  assert.equal(recipe.modelPackage.shape.maskHeight, 288);
+  assert.equal(Object.keys(recipe.tensors).length, recipe.modelPackage.weights.length);
+  assert.ok(recipe.assets.some(row => row.file === 'SAM-LICENSE.txt'));
+  assert.doesNotMatch(JSON.stringify(recipe), /\/Users\/|\/private\/tmp\//);
   await mkdir(join(installedRoot, 'tests'));
   await copyFile(
     join(packageRoot, 'tests/package-entrypoints-contracts.mjs'),
@@ -55,10 +65,12 @@ try {
 import { runMinimalModelPort } from '@kaminos/webgpu-inference-kit/examples/minimal-model-port';
 import { createRenderPlusInferenceExample } from '@kaminos/webgpu-inference-kit/examples/render-plus-inference';
 import { createSamImageExample, createSamImagePixels } from '@kaminos/webgpu-inference-kit/examples/sam-image';
+import { createSam3Segmenter } from '@kaminos/webgpu-inference-kit/sam';
 import { createMinimalWebGpuTestSurface } from './fake-device.mjs';
 
 if (typeof createRenderPlusInferenceExample !== 'function') throw new Error('render-plus-inference export unavailable');
 if (typeof createSamImageExample !== 'function' || typeof createSamImagePixels !== 'function') throw new Error('SAM image example exports unavailable');
+if (typeof createSam3Segmenter !== 'function') throw new Error('SAM segmenter export unavailable');
 
 const surface = createMinimalWebGpuTestSurface();
 const report = await runMinimalModelPort({

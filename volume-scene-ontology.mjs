@@ -1,48 +1,27 @@
-export const DEFAULT_VOLUME_SCENE = 'tall_plume';
-
+// Old scene names are input compatibility, never alternative simulation laws.
+export const DEFAULT_VOLUME_SCENE = 'flame';
 export const VOLUME_SCENE_ONTOLOGY = Object.freeze({
-  tall_plume: Object.freeze({
-    label: 'Tall plume',
-    status: 'prototype',
-    authority: 'tall-plume-prototype-authority-v0',
-    supersededBy: null,
-  }),
-  compact_plume: Object.freeze({
-    label: 'Compact plume',
-    status: 'superseded',
-    authority: 'compatibility-only-no-prototype-authority-v0',
-    supersededBy: 'tall_plume',
-  }),
-  canonical_plume: Object.freeze({
-    label: 'Canonical plume',
-    status: 'superseded',
-    authority: 'compatibility-only-no-prototype-authority-v0',
-    supersededBy: 'tall_plume',
-  }),
-  bonfire_plume: Object.freeze({
-    label: 'Bonfire plume',
-    status: 'superseded',
-    authority: 'compatibility-only-no-prototype-authority-v0',
-    supersededBy: 'tall_plume',
+  flame: Object.freeze({
+    label: 'Flame', status: 'active', authority: 'single-flame-simulator-v1', supersededBy: null,
   }),
 });
 
 export function volumeSceneReceipt(value) {
-  const raw = value == null || value === '' ? DEFAULT_VOLUME_SCENE : String(value);
-  const supported = Object.hasOwn(VOLUME_SCENE_ONTOLOGY, raw);
-  const effective = supported ? raw : DEFAULT_VOLUME_SCENE;
-  const definition = VOLUME_SCENE_ONTOLOGY[effective];
+  const requested = value == null || value === '' ? DEFAULT_VOLUME_SCENE : String(value);
+  const migrated = requested !== DEFAULT_VOLUME_SCENE;
+  const dynamicsChanged = migrated && requested !== 'tall_plume';
   return {
-    identity: 'kaminos-volume-scene-authority-v0',
-    requested: raw,
-    effective,
-    status: definition.status,
-    authority: definition.authority,
-    supersededBy: definition.supersededBy,
-    fallbackReason: supported ? null : `unsupported-volume-scene:${raw}`,
+    identity: 'kaminos-volume-scene-authority-v1',
+    requested,
+    effective: DEFAULT_VOLUME_SCENE,
+    ...VOLUME_SCENE_ONTOLOGY.flame,
+    migrated,
+    dynamicsChanged,
+    migrationNote: migrated ? (dynamicsChanged
+      ? `Simulation mode ${requested} retired; retained parameter values now run under Flame dynamics.`
+      : 'Simulation mode tall_plume renamed to Flame; saved parameter values are retained.') : null,
+    fallbackReason: null,
   };
 }
 
-export function normalizeVolumeScene(value) {
-  return volumeSceneReceipt(value).effective;
-}
+export function normalizeVolumeScene() { return DEFAULT_VOLUME_SCENE; }

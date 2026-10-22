@@ -124,7 +124,7 @@ assert.match(VOLUME_EMITTER_FIELD_COMMIT_WGSL, /let committedMicroLayer = vec4<f
 assert.match(injectionShader, /let candidateVelocityDensity = vec4<f32>\(injectedVelocity, 0\.0\);/, 'the shallow law writes the reserved density lane as zero');
 assert.match(coreSource, /let fixedSourceDephase = step\(0\.5, u\.reserved_source_extension_0\.x\);/, 'the fixed-grid source perturbation has an executable ablation gate');
 assert.match(coreSource, /let sourceStartupDephase = sourceSpatialDephase \* sourceStartupAuthority \* fixedSourceDephase;/, 'the ordinary source dephase obeys the ablation gate');
-assert.match(coreSource, /let startupDephase = staticDephase \* startupAuthority \* fixedSourceDephase;/, 'the Bonfire fixed-grid dephase obeys the same ablation gate');
+assert.doesNotMatch(coreSource, /let startupDephase = staticDephase/, 'retired Bonfire dephasing stays absent');
 
 const calls = [];
 const prototype = {

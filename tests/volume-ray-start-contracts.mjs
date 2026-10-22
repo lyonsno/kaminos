@@ -16,8 +16,13 @@ for (const rayStartNoise of [true, false, false, true]) {
 assert.match(core, /let rayPhase = rayStartPhaseAtFrame\(in\.pos\.xy, u\.reserved_render_controls\.w, fullGridCapture, u\.occupancy_controls\.y\)/,
   'the actual camera marcher must offset starts by per-pixel noise while preserving full-grid capture');
 assert.match(core,/let jitter = dtBase \* rayPhase;/);
-assert.match(core,/opticalStepInitPhased\(startT, endT, dtBase, select\(-1\.0, rayPhase, u\.reserved_render_controls\.w > 0\.5\)\)/,
-  'both optical modes must consume the same phase without moving ray entry');
+const phaseStart=core.match(/opticalStepInitPhased\((.+), endT, dtBase, select\(-1\.0, rayPhase, u\.reserved_render_controls\.w > 0\.5\)\)/)?.[1];
+assert.ok(phaseStart,'both optical modes retain the same per-pixel phase');
+for(const [sceneDepthStartT,expected] of [[0,.5],[.25,.5],[2,2]]) {
+ assert.equal(runInNewContext(phaseStart,{max:Math.max,startT:.5,sceneDepthStartT}),expected,
+  'segmented optical stepping starts inside both the volume and its owned depth interval');
+}
+
 const schema = JSON.parse(readFileSync(new URL('../volume-settings-preset-schema-v2.json', import.meta.url)));
 assert.deepEqual(schema.rendererControls.find(c => c.key === 'volume-ray-start-noise'),
   {key:'volume-ray-start-noise',param:'volume_ray_start_noise',tagName:'INPUT',type:'checkbox',additiveDefault:true});

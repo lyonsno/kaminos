@@ -22,11 +22,11 @@ assert.match(irradiance.slice(0, irradiance.indexOf('irradianceSeedPipeline = de
 // the kiln branch's scene-depth clipping and preserved sample positions.
 const multiplier = Number(source.match(/const VOLUME_VERTICAL_DOMAIN_EXTENT_MULTIPLIER = (\d+);/)?.[1]);
 assert.equal(multiplier, 2, 'tall domain is 1x2x1');
-const raymarch = source.slice(source.indexOf('fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool)'));
+const raymarch = source.slice(source.indexOf('fn raymarchVolume(in: VSOut,'));
 for (const [expression, meaning] of [
   ['let domainHalfY = f32(GRID_Y) / f32(GRID);', 'the raymarch box half-height follows the grid shape (grid height control)'],
   ['let hit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd, vec3<f32>(1.0, domainHalfY, 1.0));', 'raymarch box spans world y [-1, -1 + 2 GRID_Y/GRID] (y [-1, 3] at the auto height)'],
-  ['if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, 0.0)) {', 'scene depth in front of the box is a miss'],
+  ['if (!fullGridCapture && min(hit.y, sceneDepthEndT) <= max(hit.x, sceneDepthStartT)) {', 'scene depth in front of the box is a miss'],
   ['let endT = select(min(hit.y, sceneDepthEndT), 2.0 * domainHalfY, fullGridCapture);', 'full-grid capture spans the tall box (4.0 at the auto height)'],
   ['let dtBase = (select(endT, select(hit.y, 2.0 * domainHalfY, fullGridCapture), preserveSamplePositions) - startT) / steps;',
     'depth clipping keeps ordinary sample positions stable'],

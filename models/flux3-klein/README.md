@@ -5,7 +5,7 @@ flow-map checkpoint), text-to-image only. Built on the FLUX.2 Klein port: every 
 LayerNorm feeding parallel attention and SwiGLU, so the packer fuses each into FLUX.2's single-stream
 layout and the GEMM, attention, norm and duty-scheduling kernels are reused unchanged.
 
-Present: the transformer.
+Present: text-to-image end to end. On an M4 Max a 512 × 512 image takes about 23 s (16 steps at about 1.35 s each with the product kernels, text 0.2 s, decode 0.4 s), with a 5.4 GB GPU peak.
 
 - `pack-flux3-transformer.py`: per-block bundles, int4 blocks and int8 globals by default (2.85 GB),
   leaving out the reference-image mode that text-to-image never runs.
@@ -17,11 +17,32 @@ Present: the transformer.
   against diffusers' own transformer in float32 on the same quantized weights and real text features,
   every block compared, then timing.
 
-Not yet: the text encoder (Qwen3-VL, layers 0-31), VAE decode (FLUX.2's), the page.
+- Text encoder: the Qwen3-VL text model has Qwen3-4B's shapes, so FLUX.2 Klein's encoder runs it.
+  `../flux2-klein/pack-text-encoder.py` with the layout options in its docstring packs layers 0-31
+  (hidden states 4, 8, ..., 32 are read) at int4, 1.82 GB plus the range-fetched f16 embedding table;
+  `flux3-prompt.js` frames the prompt (chat template without a think block, padded to a multiple of
+  80, padding at RoPE position 1, which `KleinTextEncoder.allocate` now accepts). With `--te` the
+  witness checks the framing, every tapped hidden state and the prompt embeddings, then runs the
+  transformer on the browser's own text features.
+
+- Decoder: FLUX.3 ships FLUX.2's VAE at higher precision (rounded to bf16, every tensor equals
+  FLUX.2's), so FLUX.2 Klein's f16 VAE pack decodes FLUX.3 latents.
+- `flux3-pipeline.js`: `Flux3Pipeline` extends `KleinPipeline`, overriding only its model hooks
+  (transformer class, prompt framing, RoPE ids, schedule); weight caching, lean residency,
+  precompile, prompt reuse, live previews (same latent space) and decoding are Klein's. FLUX.2 Klein's
+  `generate.html` runs it with `?model=flux3`, and `run-generate.mjs --model flux3 --steps 16` batches it.
+
+- Few-step variant: the base checkpoint (`flux-3-image-klein-base`, no flow map) with the community
+  4-step distill LoRA `Muinez/flux3-klein-distil-4step` merged in at pack time
+  (`pack-flux3-transformer.py --lora <file>`, `flux3_lora.py` finishes the LoRA's key conversion).
+  The manifest records the recipe (shift 3, 4 steps; 2-3 also work), which `Flux3Pipeline` follows.
+  Same size as the distilled pack (2.83 GB); a 512 image takes 4 transformer steps instead of 16.
+
+Not yet: hosted weights and a public page.
 
     python pack-flux3-transformer.py --model-dir <snapshot> --out <weights>
     python export-flux3-reference.py --model-dir <snapshot> --out <ref> --prompt-file <txt>
     node run-flux3-transformer-witness.mjs --chrome <Chrome for Testing> --weights <weights> --ref <ref> \
-        --out <report.json> [--timing-size 512] [--profile]
+        --out <report.json> [--te <text-encoder dir>] [--timing-size 512] [--profile]
 
 The reference export needs diffusers with FLUX.3 support (main after 0.41.0) and torchvision.

@@ -77,13 +77,13 @@ test('the main kernel burns once, locally, through the module law', () => {
 
 test('under the reactant law the authored reaction terms yield to the single burn and appearance is fed one way', () => {
   assert.match(mainKernel, /let smokeFromHeat = select\(heatToSmokeConversion\(heat, fuel, p\.y\), u\.reactant_combustion_b\.z \* reactantFreshBurnRate, reactantOn\);/, 'soot from the burn, no smoke from heat');
-  assert.match(mainKernel, /let tallPlumePilotReaction = select\(authoredTallPlumePilotReaction, 0\.0, reactantOn\);/, 'no memory pilot');
-  assert.match(mainKernel, /let tallPlumeFuelHeatReaction = select\(tallPlumeScene \* max\(tallPlumeLiveReaction, tallPlumePilotReaction\), tallPlumeScene \* \(1\.0 - exp\(-reactantFreshBurnRate \/ max\(u\.reactant_combustion_d\.x, 1e-6\)\)\), reactantOn\);/, 'the appearance reaction signal is the fresh burn');
-  assert.match(mainKernel, /let fuelConsumption = select\(tallPlumeFuelHeatReaction \* \(0\.012 \+ inputFlow \* 0\.010 \+ fireLickAmount \* 0\.002\) \+ tallPlumePilotReaction \* 0\.006, reactantFreshBurnRate, reactantOn\);/, 'Fire Licks no longer reaches consumption under the candidate');
-  assert.match(mainKernel, /let tallPlumeReactionSmokeBirth = select\([^\n]*, 0\.0, reactantOn\);/);
-  assert.match(mainKernel, /if \(!reactantOn\) \{\n\s*heat = heat \+ \(tallPlumeFuelHeatReaction \* mix\(0\.0, 0\.16, tallPlumeScene\) \+ tallPlumePilotReaction \* 0\.030\) \* timeStep;\n\s*\}/, 'the authored heat release runs only under the authored law');
+  assert.match(mainKernel, /let flamePilotReaction = select\(authoredFlamePilotReaction, 0\.0, reactantOn\);/, 'no memory pilot');
+  assert.match(mainKernel, /let flameFuelHeatReaction = select\(1\.0 \* max\(flameLiveReaction, flamePilotReaction\), 1\.0 \* \(1\.0 - exp\(-reactantFreshBurnRate \/ max\(u\.reactant_combustion_d\.x, 1e-6\)\)\), reactantOn\);/, 'the appearance reaction signal is the fresh burn');
+  assert.match(mainKernel, /let fuelConsumption = select\(flameFuelHeatReaction \* \(0\.012 \+ inputFlow \* 0\.010 \+ fireLickAmount \* 0\.002\) \+ flamePilotReaction \* 0\.006, reactantFreshBurnRate, reactantOn\);/, 'Fire Licks no longer reaches consumption under the candidate');
+  assert.match(mainKernel, /let flameReactionSmokeBirth = select\([^\n]*, 0\.0, reactantOn\);/);
+  assert.match(mainKernel, /if \(!reactantOn\) \{\n\s*heat = heat \+ \(flameFuelHeatReaction \* \(0\.16\) \+ flamePilotReaction \* 0\.030\) \* timeStep;\n\s*\}/, 'the authored heat release runs only under the authored law');
   assert.match(mainKernel, /if \(reactantOn\) \{[^}]*textureStore\(burnRate, cellI, vec4<f32>\(u\.heat_release\.x \* reactantFreshBurnRate \+ immersedTarget \+ residentDivergence, 0\.0, 0\.0, 0\.0\)\);\n\s*\} else \{\n\s*let fuelBurnRate = heat \* 0\.018 \+ fuelConsumption;/, 'expansion follows the same burned amount plus explicitly supplied resident gas; the authored burn is the else branch');
-  assert.match(mainKernel, /let tallPlumeNormalizedFlameHeight = select\(clamp\(\(p\.y \+ 0\.84\) \/ 1\.58, 0\.0, 1\.0\), 0\.0, reactantOn\);/, 'no box-height survival demand under the candidate');
+  assert.match(mainKernel, /let flameNormalizedFlameHeight = select\(clamp\(\(p\.y \+ 0\.84\) \/ 1\.58, 0\.0, 1\.0\), 0\.0, reactantOn\);/, 'no box-height survival demand under the candidate');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, inflowFraction\);/, 'the inflow brings the stream oxidizer');
   assert.match(mainKernel, /oxidizer = mix\(oxidizer, u\.reactant_combustion_c\.w, immersedEntry\);/);
   assert.match(mainKernel, /oxidizer = u\.reactant_combustion_c\.z - \(u\.reactant_combustion_c\.z - oxidizer\) \* stepRate\(mix\(0\.20, 1\.0, materialWallFade\) \* mix\(0\.58, 1\.0, materialHeatTopFade\)\);/, 'sponges relax oxidizer toward ambient air');
@@ -91,9 +91,9 @@ test('under the reactant law the authored reaction terms yield to the single bur
 });
 
 test('under the reactant law the volumetric emitter births no heat or fuel: supply enters only through the inflow and immersed entries', () => {
-  assert.match(mainKernel, /heat = max\(heat, select\(mix\(mix\(mix\(columnHeatBirth, tallPlumeHeatBirth, tallPlumeScene\), canonicalHeatBirth, canonicalPlumeScene\), bonfireHeatBirth, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked, oxidizer-free heat birth');
-  assert.match(mainKernel, /fuel = max\(fuel, select\(mix\(tallPlumeFuelInjection, bonfireInjectedFuel, bonfireScene\), 0\.0, reactantOn\)\);/, 'no height-masked fuel injection without oxidizer accounting');
-  assert.match(mainKernel, /let columnSmokeBirthForScene = select\(mix\(columnSmokeBirth, tallPlumeSmokeBirth, tallPlumeScene\), 0\.0, reactantOn\);/, 'soot only from the burned amount');
+  assert.match(mainKernel, /heat = max\(heat, select\(\(\(\(flameHeatBirth\)\)\), 0\.0, reactantOn\)\);/, 'no height-masked, oxidizer-free heat birth');
+  assert.match(mainKernel, /fuel = max\(fuel, select\(\(flameFuelInjection\), 0\.0, reactantOn\)\);/, 'no height-masked fuel injection without oxidizer accounting');
+  assert.match(mainKernel, /let columnSmokeBirthForScene = select\(\(flameSmokeBirth\), 0\.0, reactantOn\);/, 'soot only from the burned amount');
   for (const [field, channel, gain] of [['smoke', 'x', '0\\.76'], ['heat', 'y', '0\\.92'], ['fuel', 'z', '0\\.72']]) {
     assert.match(mainKernel, new RegExp(`${field} = max\\(${field}, select\\(externalInjection\\.material\\.${channel} \\* ${gain}, 0\\.0, reactantOn\\)\\);`), `external emitters inject no ${field} under the candidate (no oxidizer accounting)`);
   }
@@ -118,7 +118,7 @@ test('the authored law is untouched when the candidate is not admitted', () => {
     'var fuel = material.z * stepRate(0.990);',
     'let fuelBurned = min(fuel, fuelBurnRate * timeStep);',
     'textureStore(burnRate, cellI, vec4<f32>(u.heat_release.x * fuelBurned / max(timeStep, 1e-6) + immersedTarget, 0.0, 0.0, 0.0));',
-    'smoke = smoke + tallPlumeReactionSmokeBirth * timeStep;',
+    'smoke = smoke + flameReactionSmokeBirth * timeStep;',
   ];
   for (const line of authoredLines) assert.ok(mainKernel.includes(line), line);
   assert.deepEqual(core.reactantCombustionUniformValues(core.resolveReactantCombustionConfig({})), new Array(16).fill(0), 'zero uniforms keep reactantLawOn() false');

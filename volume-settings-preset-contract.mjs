@@ -1,4 +1,5 @@
 import { migrateRetiredVolumeSettingsPresetDocument, validateRetiredVolumeControlInventory } from './volume-retired-control-migration.mjs';
+import { volumeSceneReceipt } from './volume-scene-ontology.mjs';
 
 export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 export const VOLUME_SETTINGS_PRESET_VISUAL_VIEWS = Object.freeze({
@@ -179,7 +180,12 @@ export function validateVolumeSettingsPresetSourceIdentity(requestedSource, effe
 function volumeSettingsPresetServerProjection(document) {
   const projection = document?.schemaProjection || {};
   const list = value => (Array.isArray(value) ? value : []);
+  const scene = document?.preset?.domControls?.['volume-scene']
+    || list(projection.retiredControlsStripped).find(entry => entry?.id === 'volume-scene');
+  const requested = scene?.rawValue ?? scene?.value;
+  const sceneMigration = requested == null ? null : volumeSceneReceipt(requested);
   return Object.freeze({
+    ...(sceneMigration?.migrated ? { sceneMigration: Object.freeze(sceneMigration) } : {}),
     defaultsApplied: Object.freeze(list(projection.defaultsApplied).map(String)),
     retiredControlIds: Object.freeze(list(projection.retiredControlsStripped).map(entry => String(entry?.id))),
     carriedControls: Object.freeze(list(projection.carriedControls).map(entry => Object.freeze({ ...entry }))),
@@ -194,6 +200,8 @@ function volumeSettingsPresetServerProjection(document) {
 // does not mean the controls hold exactly the saved values.
 export function describeVolumeSettingsPresetProjection(projection) {
   const parts = [];
+  const sceneMigration = projection?.sceneMigration;
+  if (sceneMigration?.migrated) parts.push(sceneMigration.migrationNote);
   const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
   const carried = projection?.carriedControls || [];
   const replaced = projection?.unsupportedValuesDefaulted || [];
@@ -207,7 +215,7 @@ export function describeVolumeSettingsPresetProjection(projection) {
   if (defaults.length) parts.push(`${plural(defaults.length, 'newer control')} at defaults`);
   const retired = projection?.retiredControlIds || [];
   if (retired.length) parts.push(`${plural(retired.length, 'retired control')} dropped`);
-  return { text: parts.join(' | '), warning: Boolean(carried.length || replaced.length) };
+  return { text: parts.join(' | '), warning: Boolean(carried.length || replaced.length || sceneMigration?.dynamicsChanged) };
 }
 
 // A basin loaded across branches with carried or replaced values cannot be

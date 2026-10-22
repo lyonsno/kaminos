@@ -8,6 +8,21 @@ Kaminos WebGPU Inference Kit gives model ports a shared session and device lifec
 npm install @kaminos/webgpu-inference-kit
 ```
 
+## Segment Images With SAM 3
+
+Install the native-resolution model once with `npx kaminos-sam-model --out public/models/sam3`, then use it in an ordinary browser application:
+
+```js
+import { createSam3Segmenter } from '@kaminos/webgpu-inference-kit/sam';
+
+const sam = createSam3Segmenter({ manifestUrl: '/models/sam3/tensor-manifest.json' });
+const result = await sam.segment(imageFile, 'windows');
+const mask = result.mask(); // source-resolution Uint8Array: 0 or 1 per pixel
+await sam.close();
+```
+
+No Python, MLX, diagnostic server or Kaminos application is needed. Model setup downloads a pinned checkpoint and verifies every converted weight. The model files are about 3.4 GB and use Meta's SAM License. [Start with SAM](./docs/sam-getting-started.md) for setup, instance selection, resource ownership and shared-session integration.
+
 ## Turn A Photograph Into A Surface You Can Relight
 
 [![Four synchronized views compare the original photograph, recovered depth, image-based relighting and inferred materials with glow](https://raw.githubusercontent.com/lyonsno/kaminos/main/demos/material-photo/comparison.png)](https://lyonsno.github.io/kaminos/inference-kit/material-photo/)

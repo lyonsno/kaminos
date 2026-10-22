@@ -68,24 +68,26 @@ function kitDouble(log){
  };
 }
 
-function harness({features=['shader-f16'],gate=null,deliverFails=0}={}){
+function harness({features=['shader-f16'],gate=null,deliverFails=0,swapFails=0}={}){
+ let swapFailures=swapFails;const pipelines=[];
  let deliverFailures=deliverFails;
  const log=[],delivered=[],prototype=prototypeDouble(),host={setForegroundServiceActive:value=>log.push(`active:${value}`),runForegroundFrame:run=>run()};
  const handoff=createForegroundHandoff({prototype,host,waitFrame:tick});
  const device={features:new Set(features),queue:{submit(){}}};
- let loads=0,generations=[];
+ let loads=0,generations=[];const swaps=[];
  const service=createKleinAuthoringImageGeneration({
   context:()=>({sharedGpu:{device,queue:device.queue},prototype,host,handoff}),
   kit:async()=>kitDouble(log),
   weights:async()=>'/klein-weights',
-  createPipeline:(givenDevice,urls)=>{assert.equal(givenDevice,device,'klein must run on the host shared device');assert.deepEqual(urls,{textEncoderUrl:'/klein-weights/te',transformerUrl:'/klein-weights/dit',vaeUrl:'/klein-weights/vae'});
+  createPipeline:(givenDevice,urls)=>{assert.equal(givenDevice,device,'klein must run on the host shared device');pipelines.push(urls);assert.deepEqual({...urls,transformerUrl:undefined},{textEncoderUrl:'/klein-weights/te',transformerUrl:undefined,vaeUrl:'/klein-weights/vae'});
    return{load:async progress=>{loads++;progress('transformer','dit/double00.bin',{loadedBytes:30,totalBytes:120});},
+    loadTransformer:async(url,progress)=>{swaps.push(url);if(swapFailures-->0)throw Error('bundle download failed');progress?.('transformer','double00.bin',{loadedBytes:10,totalBytes:20});return {downloadedBytes:0};},
     generate:async request=>{generations.push(request);log.push(`owner:${handoff.owner()}`);request.onPhase('text');request.onStep(2,4);if(gate)await gate.promise;
      if(request.schedule.signal.aborted)throw request.schedule.signal.reason;return{rgba:new Uint8ClampedArray(request.width*request.height*4),width:request.width,height:request.height,timings:{totalMs:5}};}};},
   encodePng:async(rgba,width,height)=>{assert.equal(rgba.length,width*height*4);return new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),c=>c.charCodeAt(0))],{type:'image/png'});},
   deliver:async(file,provenance)=>{if(deliverFailures-->0)throw Error('image inbox unavailable');delivered.push({file,provenance});return{source:`/api/read?root=image-inbox&path=${file.name}`,name:file.name};},
  });
- return {service,log,delivered,handoff,prototype,generations,loads:()=>loads};
+ return {service,log,delivered,handoff,prototype,generations,swaps,pipelines,loads:()=>loads};
 }
 
 test('a prompt becomes a saved image on the shared device while the kiln stays on the foreground service',async()=>{
@@ -95,7 +97,7 @@ test('a prompt becomes a saved image on the shared device while the kiln stays o
  assert.equal(first.name,'klein-a-bronze-lantern-s42.png');
  assert.equal(h.delivered.length,1);assert.equal(h.delivered[0].file.type,'image/png');
  assert.deepEqual(module.readPngProvenance(new Uint8Array(await h.delivered[0].file.arrayBuffer())),h.delivered[0].provenance,'the stored file itself carries the provenance');
- assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',timings:{totalMs:5}});
+ assert.deepEqual(h.delivered[0].provenance,{schema:'kaminos.image-generation.v1',route:'flux2-klein.text-to-image.authoring-shared-device.v0',model:'FLUX.2 [klein] 4B',prompt:'A bronze lantern',seed:42,width:512,height:512,weights:'/klein-weights',weightsLevel:'4-bit',transformer:'/klein-weights/dit',timings:{totalMs:5}});
  assert.ok(h.log.includes('owner:klein'),'denoising runs while klein owns the kiln foreground');
  assert.equal(h.handoff.owner(),'sf3d','after the image the kiln returns to SF3D so mesh generation keeps interleaving frames');
  assert.ok(h.log.indexOf('finish')>h.log.indexOf('drain'),'route drains before the foreground run finishes');
@@ -232,4 +234,42 @@ test('with the app GPU host, klein borrows its session and runs as a klein route
  await service.run({prompt:'lantern',seed:1,size:512});
  assert.deepEqual(log,['host-session','begin:flux2-klein.text-to-image.authoring-shared-device.v0','drain','finish']);
  assert.equal(handoff.has('klein'),false,'no private klein requester when the app owns the frames');
+});
+
+test('the small sizes 256 and 384 reach the pipeline as square images',async()=>{
+ const h=harness();
+ for(const size of [256,384]){await h.service.run({prompt:'lantern',seed:size,size});}
+ assert.deepEqual(h.generations.map(g=>[g.width,g.height]),[[256,256],[384,384]]);
+});
+
+test('the transformer level is chosen per run: 4-bit by default, 3-bit and 2-bit swap only the transformer',async()=>{
+ const h=harness();
+ await h.service.run({prompt:'lantern',seed:1});
+ assert.deepEqual(h.swaps,[],'the default 4-bit level is the one loaded with the pipeline');
+ assert.equal(h.delivered[0].provenance.weightsLevel,'4-bit');
+ await h.service.run({prompt:'lantern',seed:2,level:'3-bit'});
+ assert.deepEqual(h.swaps,['/klein-weights/dit-q3']);assert.equal(h.delivered[1].provenance.weightsLevel,'3-bit');
+ await h.service.run({prompt:'lantern',seed:3,level:'3-bit'});
+ assert.equal(h.swaps.length,1,'a level already loaded is not loaded again');
+ await h.service.run({prompt:'lantern',seed:4,level:'2-bit'});await h.service.run({prompt:'lantern',seed:5,level:'4-bit'});
+ assert.deepEqual(h.swaps,['/klein-weights/dit-q3','/klein-weights/dit-q2','/klein-weights/dit']);
+ assert.equal(h.loads(),1,'the text encoder and decoder load once');
+ await assert.rejects(h.service.run({prompt:'lantern',seed:6,level:'1-bit'}),/4-bit, 3-bit or 2-bit/);
+ assert.equal(h.generations.length,5,'an unknown level is refused before GPU work');
+});
+
+test('KLO-01: a failed transformer swap is never taken for the level that was loaded before it',async()=>{
+ const h=harness({swapFails:1});
+ await h.service.run({prompt:'lantern',seed:1});
+ await assert.rejects(h.service.run({prompt:'lantern',seed:2,level:'3-bit'}),/bundle download failed/);
+ await h.service.run({prompt:'lantern',seed:3,level:'4-bit'});
+ assert.deepEqual(h.swaps,['/klein-weights/dit-q3','/klein-weights/dit'],'returning to 4-bit reloads it: the failed swap destroyed it');
+ assert.equal(h.delivered.at(-1).provenance.weightsLevel,'4-bit');
+});
+
+test('a first run at 3-bit loads the 3-bit transformer directly, without loading 4-bit first',async()=>{
+ const h=harness();
+ await h.service.run({prompt:'lantern',seed:1,level:'3-bit'});
+ assert.equal(h.pipelines[0].transformerUrl,'/klein-weights/dit-q3');assert.deepEqual(h.swaps,[]);
+ assert.equal(h.delivered[0].provenance.weightsLevel,'3-bit');
 });
