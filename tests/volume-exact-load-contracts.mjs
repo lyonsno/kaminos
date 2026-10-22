@@ -71,5 +71,19 @@ assert.equal(patternValue({ value: 'jets', dataset: { volumeRetiredPatternReques
 assert.equal(patternValue({ value: 'ring', dataset: {} }), 'ring');
 assert.doesNotMatch(index.replace(requestSource, ''), /\.dataset\.volumeRetiredPatternRequest(?! =)(?!;)(?! \?)/,
   'no reader outside volumeAperturePatternValue consults the request directly');
+// Observed Chrome for Testing 154 range readback (native004): the accepted
+// temperature reference is serialized to 15 significant digits by the DOM.
+const numericPreset = value => ({ domControls: { 'volume-physical-kelvin-per-heat': { value } } });
+const requestedTemperature = numericPreset(1283.6830556513362);
+const domTemperature = numericPreset('1283.68305565134');
+assert.equal(volumeSettingsPresetControlValuesEqual(requestedTemperature, domTemperature), true,
+  'native range serialization is not a substituted setting');
+assert.deepEqual(volumeSettingsPresetAppliedDifferences(requestedTemperature, domTemperature), []);
+for (const changed of [1283.68305565, 1283.68, 1600, 6000]) {
+  assert.equal(volumeSettingsPresetControlValuesEqual(requestedTemperature, numericPreset(changed)), false);
+  assert.equal(volumeSettingsPresetAppliedDifferences(requestedTemperature, numericPreset(changed)).length, 1);
+}
+assert.equal(volumeSettingsPresetControlValuesEqual(numericPreset(0), numericPreset(1e-20)), false,
+  'no absolute epsilon erases small nonzero settings');
 // Every comparison of basins, not just the load readback, treats '' as shell.
 console.log('volume exact load contracts passed');
