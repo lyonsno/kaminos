@@ -52,3 +52,49 @@ export async function withGreenroomLease({post,runId,route,signal=null,onWait=()
   const releaseError=await release();
   return {result,lease:{...lease,...(renewError?{renewError}:{}),...(releaseError?{releaseError}:{})}};
 }
+
+// The page's one Greenroom lease helper for every in-page model run (TRELLIS, SF3D, Klein). It claims and waits
+// (naming the holder), holds the lease for the run, and reports to the author a release that failed (owed and retried on
+// page close) or a lease kept blocking because GPU work did not settle. unsettledWork is the app GPU host's ledger.
+export function createPageGpuLease({post,unsettledWork,setInfo=()=>{},sleep,retryMs}){
+  let current=null,owed=null;
+  return {
+    async run({label,route,signal=null,onPhase},run){
+      let outcome;
+      try{
+        outcome=await withGreenroomLease({post,runId:globalThis.crypto.randomUUID(),route,signal,unsettledWork,
+          ...(sleep?{sleep}:{}),...(retryMs!=null?{retryMs}:{}),
+          onWait:wait=>{onPhase?.({phase:'waiting-for-gpu',heldBy:wait.heldBy});setInfo(`${label} waits for the GPU: Greenroom ${wait.heldBy?.length?`job ${wait.heldBy.join(', ')}`:'lease'} holds it`);}},
+          held=>{current=held.status==='held'?held.leaseId:null;
+            if(held.status==='unconfigured')setInfo(`${label} runs without a Greenroom lease: this server finds no Greenroom, so queued GPU jobs will not wait for it`);
+            return run(held);});
+      }catch(error){
+        const handback=error?.greenroomHandback;current=null;
+        if(handback?.state==='release-failed'){owed=handback.leaseId;setInfo(`Greenroom lease ${handback.leaseId} was not released (${handback.releaseError}); queued GPU jobs wait until it is`);}
+        else if(handback?.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${handback.reason}. Release lease ${handback.leaseId} once this page's GPU work has stopped`);
+        throw error;
+      }
+      const {lease}=outcome;current=null;
+      if(lease.state==='kept-blocking')setInfo(`Greenroom stays blocked: ${lease.releaseError}. Release lease ${lease.leaseId} once this page's GPU work has stopped`);
+      else if(lease.releaseError){owed=lease.leaseId;setInfo(`Greenroom lease ${lease.leaseId} was not released (${lease.releaseError}); queued GPU jobs wait until it is`);}
+      return outcome;
+    },
+    // Leases to release if the page closes: one held mid-run, one whose release is owed.
+    pending:()=>[[current,'page closed during the run'],[owed,'page closed with a release owed']].filter(([id])=>id),
+  };
+}
+
+// A model service whose run takes the page's Greenroom lease first. While it waits for the GPU it counts as busy (a
+// second run is refused) and Stop cancels the wait; once the model runs, Stop is the service's own.
+export function leasedService(service,{lease,label,route}){
+  let waiting=null;
+  return {...service,
+    busy:()=>!!waiting||service.busy(),
+    stop:()=>{if(waiting&&!waiting.started){waiting.abort.abort();return true;}return service.stop();},
+    async run(input){
+      if(waiting||service.busy())throw Error(`${label} is already running`);
+      const state={abort:new AbortController(),started:false};waiting=state;
+      try{const {result}=await lease.run({label,route,signal:state.abort.signal},()=>{state.started=true;return service.run(input);});return result;}
+      finally{if(waiting===state)waiting=null;}
+    }};
+}

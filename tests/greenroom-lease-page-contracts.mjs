@@ -108,3 +108,36 @@ test('GL-01-C2: a run that ends with nothing unsettled releases as before',async
   await assert.rejects(withGreenroomLease({post:s.post,runId:'r',route:'t',unsettledWork:async()=>[]},async()=>{throw Error('ordinary');}));
   assert.deepEqual(s.actions(),['claim','release']);
 });
+
+// One page helper for every in-page model run (TRELLIS, SF3D, Klein): claim, wait, release, report.
+import {createPageGpuLease,leasedService} from '../greenroom-lease.mjs';
+const pageLease=(script,{unsettled=[]}={})=>{const s=server(script),infos=[];
+  return {s,infos,lease:createPageGpuLease({post:s.post,unsettledWork:async()=>unsettled,setInfo:m=>infos.push(m),sleep:async()=>{},retryMs:0})};};
+
+test('the page helper names the waiting model, holds the lease for the run, and records the lease',async()=>{
+  let n=0;const {s,infos,lease}=pageLease(b=>b.action==='claim'?(n++<1?{status:'waiting',heldBy:['job7']}:{status:'held',leaseId:'kaminos-page-k'}):{status:'released'});
+  const {result,lease:record}=await lease.run({label:'Klein',route:'flux2-klein.text-to-image.authoring-shared-device.v0'},async()=>'image');
+  assert.equal(result,'image');assert.equal(record.status,'held');assert.deepEqual(s.actions(),['claim','claim','release']);
+  assert.ok(infos.some(m=>/Klein waits for the GPU: Greenroom job job7/.test(m)));
+});
+
+test('a leased service reports busy while it waits for the GPU, and Stop cancels the wait without running',async()=>{
+  let release;const gate=new Promise(r=>{release=r;});const calls=[];
+  const service={busy:()=>false,stop:()=>{calls.push('stop');return true;},read:()=>({status:'idle'}),run:async input=>{calls.push(['run',input]);return 'image';}};
+  const s=server(b=>b.action==='claim'?{status:'waiting',heldBy:['job7']}:{status:'released'});
+  const lease=createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){},sleep:()=>gate,retryMs:0});
+  const leased=leasedService(service,{lease,label:'Klein',route:'r'});
+  const run=leased.run({prompt:'p'});await new Promise(r=>setTimeout(r,0));
+  assert.equal(leased.busy(),true,'waiting for the GPU counts as busy, so a second click is refused');
+  await assert.rejects(leased.run({prompt:'again'}),/already/i);
+  assert.equal(leased.stop(),true);release();
+  await assert.rejects(run,/stop/i);assert.deepEqual(calls,[],'the model never ran');assert.equal(leased.busy(),false);
+});
+
+test('a leased service runs the model inside the lease and passes the result through',async()=>{
+  const service={busy:()=>false,stop:()=>false,read:()=>({}),run:async input=>`image:${input.prompt}`};
+  const s=server(b=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-k'}:{status:'released'});
+  const leased=leasedService(service,{lease:createPageGpuLease({post:s.post,unsettledWork:async()=>[],setInfo(){}}),label:'Klein',route:'r'});
+  assert.equal(await leased.run({prompt:'lantern'}),'image:lantern');assert.deepEqual(s.actions(),['claim','release']);
+  assert.equal(leased.read,service.read,'everything but run, busy and stop is the service itself');
+});

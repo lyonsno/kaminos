@@ -72,6 +72,10 @@ test('page TRELLIS is reserved from its first step to its end (index.html wrappe
     // The server's Greenroom lease: held for the run, released after it.
     fetch:async(_,{body})=>{const b=JSON.parse(body);events.push(b.action);return {ok:true,json:async()=>b.action==='claim'?{status:'held',leaseId:'kaminos-page-run-1',ttlSeconds:120}:{status:'released'}};},
     trellisPageRunInner:()=>{events.push('run');return new Promise((res,rej)=>{release=()=>fail?rej(Error('boom')):res({generation:{runId:'r'}});});}};
+  // The page's lease helper, built from the real module over this test's server and host ledger.
+  Object.defineProperty(ctx,'pageGpuLease',{get:()=>lease.createPageGpuLease({setInfo:m=>ctx.setInfo(m),
+    post:async body=>{const r=await ctx.fetch('/api/gpu-lease',{body:JSON.stringify(body)});return r.json();},
+    unsettledWork:async()=>(await ctx.appGpuHost())?.unsettledRuns?.()??[]})});
   vm.runInNewContext(html.slice(a,b)+'\nthis.run=trellisPageRun;',ctx);
   const first=ctx.run({});assert.equal(meshRunning.trellisPage,true,'reserved before any await');
   await assert.rejects(ctx.run({}),/Another model/);
