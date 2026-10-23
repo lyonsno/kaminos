@@ -10,6 +10,13 @@ export const LOCAL_LIQUID_EMITTER_CAPACITY = 5;
 
 const clone = value => structuredClone(value);
 
+// Match the existing finite owner/core step contract. Older scenes omit this
+// field and keep their original 1/240-second authored-drop timestep.
+export function normalizeFiniteWaterTimeStep(value=1/240) {
+  if(!Number.isFinite(value)||value<1/240||value>1/30)throw Error('Finite water physics timestep must be between 1/240 and 1/30 seconds (30–240 ticks per simulated second)');
+  return value;
+}
+
 export function defaultLocalLiquidSetup() {
   return {schema:LOCAL_LIQUID_SCHEMA,support:'scene_primitives',particleCount:49152,densityIterations:3,showSupportGeometry:false};
 }
@@ -74,8 +81,9 @@ function normalizeLocalLiquidSetupCore(value) {
   for(const key of ['particleCount','densityIterations']) {
     if(!Number.isSafeInteger(value[key]) || value[key]<1)throw Error(`Invalid local liquid ${key}`);
   }
+  const timeStep=Object.hasOwn(value,'simulationStepSeconds')?{simulationStepSeconds:normalizeFiniteWaterTimeStep(value.simulationStepSeconds)}:{};
   return {schema:LOCAL_LIQUID_SCHEMA,support:value.support,particleCount:value.particleCount,densityIterations:value.densityIterations,
-    showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
+    ...timeStep,showSupportGeometry:value.showSupportGeometry??true,...(value.waterSampling?{waterSampling:normalizeAuthoredWaterSampling(value.waterSampling)}:{})};
 }
 
 export function normalizeLocalLiquidSetup(value) {
