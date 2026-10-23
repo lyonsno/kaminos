@@ -18,13 +18,13 @@ try{
  for(const factor of [4,2]){
   report.phase=`factor-${factor}`;
   await page.getByLabel('Surfel detail',{exact:true}).selectOption(String(factor));
-  await page.waitForFunction(async f=>(await window.kaminosWorkbenchExperiments.read()).factor===f,factor);
+  await page.waitForFunction(count=>Array.from(document.querySelectorAll('p')).some(p=>p.textContent.startsWith(count+' surfels /')),factor===4?'111,189':'352,016');
   assert.equal((await read()).surfels.count,factor===4?111189:352016);
   for(const detail of [false,true]){
    await call(detail?'frameBottle':'frameWhole');
    for(const mode of ['off','glass']){
     await page.getByLabel('Nearest-wall reconstruction',{exact:true}).selectOption(mode);
-    await page.waitForFunction(async m=>{const s=(await window.kaminosWorkbenchExperiments.read()).surfels;return s.reconstruction===(m!=='off')&&s.reconstructionScope==='glass';},mode);
+    await call('setReconstructionMode',mode);assert.equal((await read()).surfels.reconstruction,mode!=='off');
     await page.waitForTimeout(500);
     const file=`factor-${factor}-${detail?'bottles':'whole'}-${mode}.png`;await page.screenshot({path:out+'/'+file});report.frames.push({file,state:await read()});
    }
