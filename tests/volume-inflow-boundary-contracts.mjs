@@ -177,7 +177,7 @@ test('the inflow resolver admits only a converged open-top solve and packs the a
   assert.equal(closedTop.effective.projection, null);
   const physicalColor = await import('../volume-physical-color.mjs');
   assert.equal(core.INFLOW_UNIFORM_OFFSET, physicalColor.PHYSICAL_COLOR_UNIFORM_FLOATS, 'the inflow slots follow the physical colour block (thermal LUT and emissive floats), the last occupied slots');
-  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 12 + 4, 'the inflow block, then heat release, velocity staggering, the immersed source, the grid shape, the reactant combustion block, the joined boundary and wavelet turbulence');
+  assert.equal(core.VOLUME_UNIFORM_FLOATS, core.INFLOW_UNIFORM_OFFSET + 12 + 4 + 4 + 24 + 8 + 16 + 12 + 4 + 4, 'the inflow block, heat release, staggering, immersed source, shape, reactant, joined boundary, wavelet and continuous detail');
   assert.equal(core.VOLUME_UNIFORM_FLOATS % 4, 0, 'vec4 aligned');
 });
 

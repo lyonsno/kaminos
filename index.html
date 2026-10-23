@@ -1428,6 +1428,21 @@ body.composition-authoring #transform-bar { max-width: calc(100% - 24px); width:
       </div>
       <span class="slider-help" id="volume-wavelet-turbulence-state">Wavelet turbulence: off</span>
       <div class="slider-row">
+        <label for="volume-render-detail">Material displacement (cells)</label>
+        <input type="range" id="volume-render-detail" min="0" max="2" step="any" value="0">
+        <span class="slider-val" id="volume-render-detail-val">0.00</span>
+      </div>
+      <div class="slider-row">
+        <label for="volume-render-detail-scale">Noise scale (cells)</label>
+        <input type="range" id="volume-render-detail-scale" min="0.5" max="4" step="any" value="2">
+        <span class="slider-val" id="volume-render-detail-scale-val">2.00</span>
+      </div>
+      <div class="slider-row">
+        <label for="volume-render-detail-fine">Fine noise weight</label>
+        <input type="range" id="volume-render-detail-fine" min="0" max="1" step="any" value="0.35">
+        <span class="slider-val" id="volume-render-detail-fine-val">0.35</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label" id="volume-physical-thermal-label">Glow gain</span>
         <input type="range" id="volume-physical-thermal" min="0" max="40" step="any" value="1">
         <span class="slider-val" id="volume-physical-thermal-val">1</span>
@@ -17182,6 +17197,9 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'waveletTurbulence', id: 'volume-wavelet-turbulence', param: 'volume_wavelet_turbulence', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'waveletOctaves', id: 'volume-wavelet-octaves', param: 'volume_wavelet_octaves', min: 1, max: 2, continuous: false, decimals: 0 },
   { key: 'waveletStrength', id: 'volume-wavelet-strength', param: 'volume_wavelet_strength', min: 0.25, max: 4, continuous: true, decimals: 2 },
+  { key: 'renderDetail', id: 'volume-render-detail', param: 'volume_render_detail', min: 0, max: 2, continuous: true, decimals: 2 },
+  { key: 'renderDetailScale', id: 'volume-render-detail-scale', param: 'volume_render_detail_scale', min: 0.5, max: 4, continuous: true, decimals: 2 },
+  { key: 'renderDetailFine', id: 'volume-render-detail-fine', param: 'volume_render_detail_fine', min: 0, max: 1, continuous: true, decimals: 2 },
   { key: 'physicalWhiteBalance', id: 'volume-physical-white', param: 'volume_physical_white', min: 2500, max: 10000, continuous: true, decimals: 0 },
   { key: 'physicalSmokeExtinction', id: 'volume-physical-smoke-extinction', param: 'volume_physical_smoke_extinction', min: 0, max: 10, continuous: true, decimals: 2 },
   { key: 'physicalSmokeAlbedo', id: 'volume-physical-smoke-albedo', param: 'volume_physical_smoke_albedo', min: 0, max: 1, continuous: true, decimals: 2 },
@@ -18647,7 +18665,7 @@ function readVolumeControls({quality=viewportDisplay.quality}={}) {
   return backOffVolumeLegacyPyroControls(applyVolumeRuntimeQualityLadder({
     volumeScene,
     volumeSceneRequested,
-    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
+    ...Object.fromEntries(REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.filter(field => field.key.startsWith('physical') || field.key.startsWith('wavelet') || field.key.startsWith('renderDetail')).map(field => [field.key, Number(document.getElementById(field.id).value)])),
     artisticSwirl: document.getElementById('volume-artistic-swirl').checked,
     phasedSway: document.getElementById('volume-phased-sway').checked,
     // The procedural-force switches were retired 2026-10-22: Microdetail and

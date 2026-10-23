@@ -417,7 +417,7 @@ const ORGANIZED_GROUPS = [
   ['smoke', 'Smoke, light & material density', /^volume-(physical-(smoke-extinction|smoke-albedo|ambient)|density)$/],
   ['structure', 'Combustion-front structure', /^volume-boundary-sidecar-(source|width)$/],
   ['support', 'Support field & baked ridge', /^volume-boundary-sidecar-(blur|ridge)$/],
-  ['detail', 'Flame detail', /^volume-(fire-scale|microdetail|interface-shred|fire-licks)$/],
+  ['detail', 'Flame detail', /^volume-(fire-scale|microdetail|interface-shred|fire-licks|render-detail|render-detail-scale|render-detail-fine)$/],
   ['budget', 'Raymarch budget', /^volume-(steps|ray-start-noise|adaptive-rays|occupancy-skip|render-scale)$/],
   ['source', 'Simulation source & flow', /^(emitter-assay-family|volume-(scene|emitter-.+|fixed-source-dephase|input-radius|flow-rate|plume-height|wind-.+))$/],
   ['force', 'Force contributions', /^volume-(swirl-jostle|fine-breakup-localization)$/],

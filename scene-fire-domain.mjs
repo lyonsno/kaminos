@@ -9,7 +9,7 @@ export const FIRE_DOMAIN_TYPE='simulation-domain';
 export const FIRE_DOMAIN_SOURCE='kaminos:fire-domain';
 const clone=value=>structuredClone(value);
 const sourceIds=new Set(['emitter-assay-family','volume-input-radius','volume-flow-rate','volume-fixed-source-dephase']);
-const materialIds=new Set(['volume-exposure','volume-density','volume-fire','volume-radiance','volume-absorption','volume-glow','volume-smoke','volume-fire-scale','volume-detail-scale','volume-microdetail','volume-interface-shred','volume-fire-licks']);
+const materialIds=new Set(['volume-exposure','volume-density','volume-fire','volume-radiance','volume-absorption','volume-glow','volume-smoke','volume-fire-scale','volume-detail-scale','volume-microdetail','volume-interface-shred','volume-fire-licks','volume-render-detail','volume-render-detail-scale','volume-render-detail-fine']);
 const sceneIds=new Set(['volume-steps','volume-adaptive-rays','volume-occupancy-skip','volume-render-scale',
  'volume-grid-overlay','volume-flow-debug','volume-pyro-compare','volume-shell-inspect-mode',
  'volume-reaction-live-view','volume-boundary-sidecar-view','volume-pyro-carrier-view','volume-pressure-tier-overlay']);
