@@ -1,4 +1,5 @@
 // kaminos-test: node
+import {resolveSceneMembershipTopology} from '../scene-membership-history.mjs';
 import {sceneContext,runInSceneContext} from './helpers/scene-context.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
 import {createSceneEdits} from '../scene-edit-session.mjs';
@@ -20,7 +21,7 @@ test('actual deletion and membership Undo/Redo preserve a surviving source with 
   clearActiveSceneObjectSelection(){},sceneObjectTransformState:()=>pose,setSceneObjectMounted(){},setFlameDomainTranslation(){},serializeSceneObject:entry=>structuredClone({...entry,object:undefined}),setSceneSelection(){},renderSceneObjectList(){},updateTransformInspector(){},pruneSceneGroups(){},ensureAuthoredFlameEmitter(){},renderVolumeEmitterReceipt(){},volumePrototype:{debugState:()=>({frameCount:1})},volumeEmitterRuntimeFrame:0,routeExternalEmitters:null,
   document:{getElementById:()=>({value:'ring'})},window:{__kaminosVolumeEmitterReceipt:{effective:{family:'ring'}}},emitterCompilerControls:x=>x,readVolumeControls:()=>({emitterSourceLaw:'immersed-source'}),readVolumeSettingsValues:()=>({domControls:{'volume-immersed-fuel':{value:cockpit}}}),setVolumeControlValue:(id,v)=>{if(id==='volume-immersed-fuel')cockpit=Number(v);},applyVolumeEmitterFamilyRuntime:()=>({requested:{immersedControls:{immersedCentreX:0,immersedCentreY:-.5,immersedCentreZ:0,immersedYaw:0,immersedPitch:90}},effective:{family:'ring'}}),
   syncAuthoredFlameSources:()=>published.push(h.sceneObjects.map(x=>[x.id,x.emission.settings['volume-immersed-fuel'].value]))};
- h.checkedRepetition=checkedRepetition;sceneContext(h);vm.runInContext(fn('primaryAuthoredFlameSource')+'\n'+fn('detachSelectionMember')+'\nasync '+fn('writeSelectionMembershipUnchecked')+'\n'+fn('applyVolumeEmitterFamilyRuntimeToCockpit'),h);
+ h.checkedRepetition=checkedRepetition;h.resolveSceneMembershipTopology=resolveSceneMembershipTopology;h.readSelectionMembership=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),liveIds:[],groups:h.sceneGroups||[]});sceneContext(h);vm.runInContext(fn('primaryAuthoredFlameSource')+'\n'+fn('detachSelectionMember')+'\nasync '+fn('writeSelectionMembershipUnchecked')+'\n'+fn('applyVolumeEmitterFamilyRuntimeToCockpit'),h);
  if(html.includes('function projectAuthoredFlameSourceControls('))vm.runInContext(fn('projectAuthoredFlameSourceControls'),h);
  h.applyFlameEmitterPose=p=>h.applyVolumeEmitterFamilyRuntimeToCockpit(h.readVolumeControls(),p);
  h.writeAuthoredFlameEmitterPose=()=>{if(h.projectAuthoredFlameSourceControls)h.projectAuthoredFlameSourceControls();h.applyFlameEmitterPose(pose);h.syncAuthoredFlameSources();};
@@ -47,7 +48,7 @@ for(const removed of [['flame-emitter'],['flame-emitter','other']])test(`members
  h.sceneSelectionMembers=()=>selected;h.clearActiveSceneObjectSelection=()=>{selected=[];};h.setSceneSelection=(ids)=>{for(const id of selected)h.selectionRootState(id);selected=[...ids];};
  h.syncAuthoredFlameSources=()=>published.push(flameSourceInputs(h.sceneObjects.map(h.serializeSceneObject),{controls:shared}));
  h.applyAuthoredScenePose=(id,p)=>h.applySceneObjectTransformState(h.sceneObjects.find(o=>o.id===id).object,p);
- h.checkedRepetition=checkedRepetition;sceneContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose','selectionRootState'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
+ h.checkedRepetition=checkedRepetition;h.resolveSceneMembershipTopology=resolveSceneMembershipTopology;h.readSelectionMembership=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),liveIds:[],groups:h.sceneGroups||[]});sceneContext(h);for(const name of ['primaryAuthoredFlameSource','detachSelectionMember','writeAuthoredFlameEmitterPose','selectionRootState'])vm.runInContext(fn(name),h);vm.runInContext('async '+fn('writeSelectionMembershipUnchecked'),h);
  const snapshot=()=>({objects:h.sceneObjects.map(h.serializeSceneObject),groups:[],selection:{ids:[...selected],activeId:selected.at(-1)??null},domain:[0,0,0],domainFollowSource:false});
  const edits=createSceneEdits({read:()=>null,write(){}});edits.register('@members',{read:snapshot,write:h.writeSelectionMembershipUnchecked,check:v=>v});
  const before=snapshot(),expected=flameSourceInputs(before.objects,{controls:shared});for(const id of removed)h.detachSelectionMember(id);h.clearActiveSceneObjectSelection();edits.recordApplied('@members',before,snapshot(),'Remove sources');

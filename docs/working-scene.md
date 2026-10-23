@@ -37,3 +37,17 @@ explicit `tests/helpers/scene-context.mjs` double for their page dependency;
 those tests do not establish the owner's invariants. Membership/history and
 Workbench-removal integration tests compose the actual owner with their existing
 adapters. Browser exercise remains necessary to assess the composed editor.
+
+Compound membership history separates reconstructible records from live-only
+references through `scene-membership-history.mjs`. It uses the same reloadability
+criterion as individual object membership history. Undo/Redo restores the
+reconstructible records; current live-only roots and their group relationships
+remain under their owner. Their evolving transforms/materials are not copied into
+compound history. References to a closed root are pruned, and a newly opened
+experiment survives replay. Topology is resolved after asynchronous source loads.
+
+A selection containing a live-only member cannot be removed as an undoable
+membership edit: it is refused before changing any root. Close its owner instead.
+Reloadable Workbench assets retain the existing individual-object Undo and scoped
+resource-disposal behavior. This distinction does not add a checkpoint or replay
+facility for evolved experiment state.

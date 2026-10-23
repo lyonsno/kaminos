@@ -3268,7 +3268,7 @@ import { installScenePlacementTools } from './scene-placement-tools.mjs';
 import { installPolyEditMode } from './poly-edit-host.mjs';
 import { createViewProjection } from './view-projection.mjs';
 import { moveOrigin, separateSelection, sliceSelection } from './poly-separate-selection.mjs';
-import { restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
+import { captureSceneMembership, resolveSceneMembershipTopology, restoreSceneObjectGroups as restoreSceneObjectGroupsState } from './scene-membership-history.mjs';
 import { installSceneControlHistory, installRelativeNumberDrag } from './scene-control-history.mjs';
 import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
@@ -25892,10 +25892,12 @@ function setupSelectionTransforms(){
     transform:patch=>{if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Transform simulation volumes individually');return selectionTransforms.apply(patch);},settings:patch=>{scenePlacementTools.finish(false);const next={...transformPreferences,...patch};selectionFrame({test:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}},'test',next);transformPreferences=next;if(workingScene.selection.ids.length)setSceneSelection(workingScene.selection.ids,workingScene.selection.activeId);return {...next};}};
 }
 
-function readSelectionMembership(){return {objects:workingScene.objects.map(serializeSceneObject),groups:serializeSceneGroups(),selection:structuredClone(workingScene.selection),field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
+function readSelectionMembership(){return {...captureSceneMembership(workingScene.objects.map(serializeSceneObject),isReloadableSceneObjectRecord),groups:serializeSceneGroups(),selection:structuredClone(workingScene.selection),field:workingScene.activeFieldId,domain:[...flameDomainTranslation],domainScale:flameDomainScale,domainFollowSource:flameDomainFollowSource,activeCameraId:sceneCameras?.read().settings.activeId??null};}
 function checkSelectionMembership(raw){
   const value=structuredClone(raw);if(!Array.isArray(value.objects)||!Array.isArray(value.groups))throw Error('Scene membership records are required');
   const ids=new Set();for(const record of value.objects){if(!record.id||ids.has(record.id)||!isReloadableSceneObjectRecord(record))throw Error('Scene member has no retained source');ids.add(record.id);checkedPose(record.transform);}
+  if(value.liveIds!==undefined&&!Array.isArray(value.liveIds))throw Error('Live scene references must be an array');
+  for(const id of value.liveIds??[]){if(typeof id!=='string'||!id||ids.has(id))throw Error('Invalid live scene reference');ids.add(id);}
   for(const group of value.groups){checkedGroupPose(group.transform);if(group.objectIds.some(id=>!ids.has(id)))throw Error('Group refers to an absent scene member');}
   checkedSelection(value.selection.ids,value.selection.activeId);normalizeFlameDomainTranslation(value.domain);normalizeFlameDomainScale(value.domainScale??1);if(value.domainFollowSource!==undefined&&typeof value.domainFollowSource!=='boolean')throw Error('Domain follow-source must be Boolean');return value;
 }
@@ -25906,9 +25908,11 @@ function detachSelectionMember(id){
 }
 async function writeSelectionMembershipUnchecked(value){
   const ids=new Set(value.objects.map(o=>o.id));
+  const current=readSelectionMembership(),live=new Set(current.liveIds);
+  if(value.objects.some(record=>live.has(record.id)))throw Error('Cannot restore authored membership over a live scene registration');
   // Retire selection while its roots still exist; placement redraw reads the old selection.
-  if(workingScene.objects.some(entry=>!ids.has(entry.id)))clearActiveSceneObjectSelection();
-  for(const entry of [...workingScene.objects])if(!ids.has(entry.id))detachSelectionMember(entry.id);
+  if(current.objects.some(entry=>!ids.has(entry.id)))clearActiveSceneObjectSelection();
+  for(const entry of current.objects)if(!ids.has(entry.id))detachSelectionMember(entry.id);
   for(const record of value.objects){
     let entry=workingScene.objects.find(o=>o.id===record.id);
     if(!entry){
@@ -25923,8 +25927,11 @@ async function writeSelectionMembershipUnchecked(value){
     entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};
     if(entry.type===FLAME_EMITTER_TYPE){entry.emissionEnabled=record.emissionEnabled!==false;entry.emission=record.emission?structuredClone(record.emission):undefined;Object.assign(entry.object.userData.kaminosSceneObject,{emissionEnabled:entry.emissionEnabled,emission:entry.emission});}
   }
-  workingScene.reorder(value.objects.map(record=>record.id));
-  workingScene.setGroups(value.groups);for(const group of workingScene.groups)ensureGroupTarget(group);
+  // Loading a retained source can yield: resolve against the live owners now,
+  // after the awaits, so an experiment's concurrent close/open remains final.
+  const topology=resolveSceneMembershipTopology(value,{...readSelectionMembership(),order:workingScene.objects.map(row=>row.id)});
+  workingScene.reorder(topology.ids);
+  workingScene.setGroups(topology.groups);for(const group of workingScene.groups)ensureGroupTarget(group);
   const restoredFlameSource=primaryAuthoredFlameSource();
   authoredFlamePresent=!!restoredFlameSource;
   if(restoredFlameSource)flameEmitterPose=sceneObjectTransformState(restoredFlameSource.object);
@@ -25932,7 +25939,7 @@ async function writeSelectionMembershipUnchecked(value){
   if(authoredFlamePresent&&applyFlameEmitterPose&&window.__kaminosVolumeEmitterReceipt?.effective?.family!=='cluster')writeAuthoredFlameEmitterPose(flameEmitterPose);
   else syncAuthoredFlameSources();
   sceneCameras?.membershipChanged(value.activeCameraId??null);
-  if(value.field&&!value.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(value.selection.ids,value.selection.activeId);
+  if(value.field&&!topology.selection.ids.includes(value.field))setSceneSelection([value.field],value.field);else setSceneSelection(topology.selection.ids,topology.selection.activeId);
   renderSceneObjectList();updateTransformInspector();window._kaminosDirty?.();
 }
 async function writeSelectionMembership(raw){const value=checkSelectionMembership(raw),before=readSelectionMembership();try{await writeSelectionMembershipUnchecked(value);}catch(error){await writeSelectionMembershipUnchecked(before);throw error;}}
@@ -25940,6 +25947,7 @@ function removeSelectedSceneObjects(){
   if(workingScene.selection.ids.some(id=>id==='flame-field'||id==='water-field'))throw Error('Select scene objects without simulation volumes for this operation');
   assertSceneConstructionAvailable();const ids=sceneSelectionMembers();if(!ids.length)return false;
   const before=checkSelectionMembership(readSelectionMembership());
+  if(ids.some(id=>!before.objects.some(record=>record.id===id)))throw Error('Scene member has no retained source; close its owning experiment to remove it');
   for(const id of ids)compoundRetentionTargets.set(id,'@selection-membership');
   for(const id of ids)detachSelectionMember(id);
   clearActiveSceneObjectSelection();
