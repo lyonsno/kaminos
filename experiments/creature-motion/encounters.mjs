@@ -1,5 +1,11 @@
 const unit=p=>{const n=Math.hypot(...p);return n?p.map(v=>v/n):[0,1];};
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1];
+const dot3=(a,b)=>a.reduce((s,v,i)=>s+v*b[i],0),sub=(a,b)=>a.map((v,i)=>v-b[i]),clamp=x=>Math.max(0,Math.min(1,x));
+export function capsuleGap(one,two){
+ const d1=sub(one.b,one.a),d2=sub(two.b,two.a),r=sub(one.a,two.a),a=dot3(d1,d1),e=dot3(d2,d2),f=dot3(d2,r);let s=0,t=0;
+ if(a<=1e-12){t=e>1e-12?clamp(f/e):0;}else{const c=dot3(d1,r);if(e<=1e-12)s=clamp(-c/a);else{const b=dot3(d1,d2),denom=a*e-b*b;s=denom>1e-12?clamp((b*f-c*e)/denom):0;t=(b*s+f)/e;if(t<0){t=0;s=clamp(-c/a);}else if(t>1){t=1;s=clamp((b-c)/a);}}}
+ return Math.hypot(...r.map((v,i)=>v+s*d1[i]-t*d2[i]))-one.radius-two.radius;
+}
 export function encounterSteering(self,others,{seconds,avoidance=true}={}){
  if(!Number.isFinite(seconds)||seconds<0)throw Error('Encounter time must be finite and nonnegative');
  const original=unit(self.direction),force=[...original],right=[original[1],-original[0]];let scale=1,touching=false,neighbours=0;
@@ -7,11 +13,11 @@ export function encounterSteering(self,others,{seconds,avoidance=true}={}){
   if(other.id===self.id)continue;
   const delta=other.position.map((v,i)=>v-self.position[i]),distance=Math.hypot(...delta),radius=self.radius+other.radius;
   const relative=other.direction.map((v,i)=>v*other.speed-original[i]*self.speed),r2=dot(relative,relative),approach=r2>1e-12?Math.max(0,Math.min(1.5,-dot(delta,relative)/r2)):0;
-  const closest=delta.map((v,i)=>v+relative[i]*approach),miss=Math.hypot(...closest),overlap=distance<radius;
+  const closest=delta.map((v,i)=>v+relative[i]*approach),miss=Math.hypot(...closest),gap=self.capsules?.length&&other.capsules?.length?Math.min(...self.capsules.flatMap(a=>other.capsules.map(b=>capsuleGap(a,b)))):distance-radius,overlap=gap<0;
   if(!overlap&&(!avoidance||miss>=radius*1.2||dot(delta,original)<0))continue;
   neighbours++;touching||=overlap;
   const away=distance>1e-9?delta.map(v=>-v/distance):(self.id<other.id?[1,0]:[-1,0]);
-  if(overlap){for(let a=0;a<2;a++)force[a]+=away[a]*(2+4*(1-distance/radius));if(dot(original,away)<-.2)scale=0;else scale=Math.min(scale,.45);}
+  if(overlap){for(let a=0;a<2;a++)force[a]+=away[a]*(2+4*Math.max(0,-gap/radius));if(gap<-.04*radius&&dot(original,away)<-.2)scale=0;else scale=Math.min(scale,.45);}
   else{const urgency=(1-miss/(radius*1.2))/(1+approach);for(let a=0;a<2;a++)force[a]+=urgency*(right[a]*2+away[a]*.45);scale=Math.min(scale,Math.max(.2,Math.min(1,(distance-radius)/(radius*.6))));}
  }
  const desired=unit(force),angle=Math.atan2(original[0]*desired[1]-original[1]*desired[0],dot(original,desired)),turn=Math.max(-1.8*seconds,Math.min(1.8*seconds,angle)),c=Math.cos(turn),s=Math.sin(turn);
