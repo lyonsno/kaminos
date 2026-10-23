@@ -23,6 +23,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
 .field { display: flex; justify-content: space-between; font-size: 11px; margin: 3px 0; padding: 2px 0; }
 .field-key { color: #666; }
 #scene-gi-controls .field { align-items:center; gap:12px; }
+#selected-repetition-properties select { flex:1; min-width:0; padding:5px 7px; border:1px solid #3c3e43; border-radius:4px; background:#26282c; color:#ddd; font:inherit; }
 #scene-gi-controls input[type="number"], #scene-gi-controls select, #scene-gi-mode { min-width:0; width:148px; max-width:55%; box-sizing:border-box; border:1px solid #405157; border-radius:4px; padding:6px; background:#151a1c; color:#ddd; }
 #scene-gi-controls .authoring-number-wrap { width:148px; max-width:55%; flex-shrink:0; }
 #scene-gi-controls .authoring-number-wrap input { width:100%; max-width:none; }
@@ -25799,7 +25800,7 @@ async function makeSceneRepetitionReal(id){
  const plans=owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,false);return {id:entry.id,world:entry.object.matrixWorld.clone(),deltas:sceneRepetitionController.matrices(entry)};});
  if(plans.every(plan=>plan.deltas.length===1))return [];
  try{
-  if(owner.group)owner.record.repetition=null;
+  if(owner.group)repetitionOwner(owner.id).record.repetition=null;
   for(const entry of owner.entries){entry.repetition=null;entry.object.userData.kaminosSceneObject.repetition=null;sceneRepetitionController.clear(entry.object);}
   for(const plan of plans)for(const delta of plan.deltas.slice(1)){
    const copy=duplicateSceneObject(plan.id,{deferRecord:true}),world=delta.clone().multiply(plan.world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();world.decompose(position,rotation,scale);const euler=new THREE.Euler().setFromQuaternion(rotation);
