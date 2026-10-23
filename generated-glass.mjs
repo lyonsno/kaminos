@@ -22,8 +22,10 @@ export function createGeneratedGlass(root, initial={}) {
   let state=settings({mode:'glass',ior:1.45,thickness:.06,...initial}), disposed=false;
   const meshes=[];
   root.traverse(mesh=>{if(mesh.isMesh)meshes.push(mesh);});
-  if(!meshes.length||meshes.some(m=>Array.isArray(m.material)||!m.material?.map||!m.material.isMeshStandardMaterial)) {
-    throw Error('Glass study requires single PBR materials with a base-color texture');
+  const admission=meshes.map(mesh=>({name:mesh.name||mesh.uuid,type:mesh.material?.type??'absent',array:Array.isArray(mesh.material),standard:!!mesh.material?.isMeshStandardMaterial,map:!!mesh.material?.map}));
+  const invalid=admission.filter(row=>row.array||!row.map||!row.standard);
+  if(!meshes.length||invalid.length) {
+    throw Error('Glass study requires single PBR materials with a base-color texture: '+(invalid.map(row=>`${row.name} (${row.type}): ${row.array?'material array':!row.map?'base-color texture missing':'PBR material required'}`).join('; ')||'no mesh surfaces'));
   }
   const entries=meshes.map(mesh=>{
     const source=mesh.material;

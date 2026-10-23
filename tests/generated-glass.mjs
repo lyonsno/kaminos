@@ -38,3 +38,9 @@ test('unsupported assets fail before mutation',()=>{
  assert.throws(()=>createGeneratedGlass(root),/base-color/);
  assert.equal(mesh.material,source);assert.equal(mesh.children.length,0);
 });
+
+test("admission error identifies the failing surface and material requirement",()=>{
+ const root=new Group(),mesh=new Mesh(new BoxGeometry(),new MeshStandardMaterial());mesh.name="untextured-reference";root.add(mesh);
+ assert.throws(()=>createGeneratedGlass(root),error=>/untextured-reference/.test(error.message)&&/MeshStandardMaterial/.test(error.message)&&/base-color texture missing/.test(error.message));
+ mesh.geometry.dispose();mesh.material.dispose();
+});
