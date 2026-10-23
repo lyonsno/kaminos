@@ -116,7 +116,11 @@ test('admission tracks control changes through the real API (JH-02)', () => {
 
 test('the fine step stops before its own projection in joined mode; the producer state is exposed', () => {
   const sim = source.slice(source.indexOf('  function encodeSim(encoder, options = {}) {'), source.indexOf('\n  }\n', source.indexOf('  function encodeSim(encoder, options = {}) {')));
-  assert.match(sim, /    encodeAnalyticEmitterInjection\(encoder\);\n    if \(state\.joinedBoundary\?\.admitted\) \{\n      state\.simStepCount \+= 1;\n      encodeGpuThermalConsumer\(encoder\);\n      updateSimCostLedger\(\);\n      return false;\n    \}\n    const finalTimestampWritten = encodePressureProjection\(encoder, \{/);
+  const injection=sim.indexOf('encodeAnalyticEmitterInjection(encoder)');
+  const joined=sim.indexOf('if (state.joinedBoundary?.admitted)',injection);
+  const projection=sim.indexOf('encodePressureProjection(encoder',joined);
+  assert.ok(injection>=0&&joined>injection&&projection>joined,'joined early return follows injection and precedes local pressure');
+  assert.match(sim.slice(joined,projection), /state\.simStepCount \+= 1;[\s\S]*encodeGpuThermalConsumer\(encoder\);[\s\S]*updateSimCostLedger\(\);\s*return false;/,'joined step returns after publishing its consumer and cost state');
   assert.match(source, /    setJoinedBoundary\(request = \{\}\) \{/);
   assert.match(source, /    joinedProducerState\(\) \{/);
   const api = source.slice(source.indexOf('    joinedProducerState() {'), source.indexOf('    joinedProducerState() {') + 2400);

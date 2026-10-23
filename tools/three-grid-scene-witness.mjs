@@ -64,6 +64,8 @@ try{
   assert.match(state.backend,/^webgpu:/i);assert.doesNotMatch(state.backend,/software|swiftshader/i);assert.equal(state.worldSmoke.effective,'one-way-world-field');
   if(middle==='fields')assert.equal(state.worldSmoke.intermediate.effective,'independent-material-and-flow');
   if(velocity){assert.deepEqual(state.fineGrid.velocityDims,[velocity,velocity*2,velocity]);assert.equal(state.fineGrid.dispatched,true);assert.deepEqual(state.pressureResolution.pressureDims,[pressure,pressure*2,pressure]);}
+  assert.equal(state.pressureSolver.residualProbe.available,!velocity,'Residual availability follows effective velocity route');
+  assert.equal(state.pressureSolver.residualProbe.reason,velocity?'independent-velocity-residual-unavailable':null);
   await page.screenshot({path:path.join(out,name+'.png')});
  }
  report.phase='developed-plume';await save();

@@ -11262,8 +11262,8 @@ export function createKaminosVolumePrototype({
       ...resolvePressureSolverConfig(controlsSnapshot),
       uniform: null,
       residualProbe: {
-        available: !(state.fineGrid?.materialPerVelocity > 1),
-        reason: state.fineGrid?.materialPerVelocity > 1 ? 'independent-velocity-residual-unavailable' : null,
+        available: false,
+        reason: 'fine-grid-not-seated',
         intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
         freshnessFrames: PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES,
         mapTimeoutMs: PRESSURE_RESIDUAL_MAP_TIMEOUT_MS,
@@ -16695,6 +16695,7 @@ export function createKaminosVolumePrototype({
       ...resolvePressureSolverConfig(controlsSnapshot),
       uniform: { converged: uniforms[356], openTop: uniforms[357], omega: uniforms[358], projectionGain: uniforms[359] },
       residualProbe: {
+        ...pressureResidualAvailability(),
         intervalSteps: PRESSURE_RESIDUAL_PROBE_INTERVAL_STEPS,
         freshnessFrames: PRESSURE_RESIDUAL_PROBE_FRESHNESS_FRAMES,
         mapTimeoutMs: PRESSURE_RESIDUAL_MAP_TIMEOUT_MS,
@@ -17298,6 +17299,12 @@ export function createKaminosVolumePrototype({
   }
 
   function fineTransferInputs(){return {fluid:fluidBuffers[currentFluid],prior:fluidBuffers[1-currentFluid],front:frontBuffers[currentFront],quench:quenchBuffers[currentQuench],solid:sceneSolidTexture,reactant:reactantTextures[currentFluid],burn:burnRateTexture,lower:joinedLowerFaceTexture};}
+  function pressureResidualAvailability(){
+    if (!state.fineGrid) return {available:false,reason:'fine-grid-not-seated'};
+    return state.fineGrid.materialPerVelocity > 1
+      ? {available:false,reason:'independent-velocity-residual-unavailable'}
+      : {available:true,reason:null};
+  }
   function prepareFineVelocity(){
     const plan=fineGridPlan({materialDims:[gridSize,gridHeight,gridSize],velocity:Number(controlsSnapshot.fineVelocity??0),pressure:Number(controlsSnapshot.finePressure??0)});
     const previousVelocityDims=state.fineGrid?.velocityDims;
@@ -17306,6 +17313,7 @@ export function createKaminosVolumePrototype({
       lastResidualPartials=null;
     }
     state.fineGrid={...plan,dispatched:false,effective:plan.materialPerVelocity===1?'shared-material-velocity':'independent-material-velocity',step:state.simStepCount};
+    state.pressureSolver.residualProbe={...state.pressureSolver.residualProbe,...pressureResidualAvailability()};
     if(plan.materialPerVelocity===1){fineVelocity?.destroy();fineVelocity=null;return null;}
     const reason=resolvePressureSolverConfig(controlsSnapshot).effective.solver!=='converged'?'Independent fine velocity requires converged pressure':
       state.inflowBoundary?.effective?.admitted?'Independent fine velocity does not yet admit floor inflow':
