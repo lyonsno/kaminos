@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-  <header><a class="brand" href="https://lyonsno.github.io/kaminos/inference-kit/">Kaminos<span>WebGPU Inference Kit</span></a><nav><a href="https://github.com/lyonsno/kaminos/tree/main/models/mobrecon">Source &amp; setup</a><a href="https://lyonsno.github.io/kaminos/inference-kit/">More demos ↗</a></nav></header>
+  <header><a class="brand" href="https://lyonsno.github.io/kaminos/inference-kit/">Kaminos<span>WebGPU Inference Kit</span></a><nav><a href="https://github.com/lyonsno/kaminos/tree/5660d33d3e1df282af6de518ae4d72afbca75940/demos/hand-mesh#model-setup">Source &amp; setup</a><a href="https://lyonsno.github.io/kaminos/inference-kit/">More demos ↗</a></nav></header>
   <main>
     <section class="intro"><p class="eyebrow">MOBRECON / LIVE IN YOUR BROWSER</p><h1>Your hand. In 3D.</h1><p>Open, point, turn. A hand mesh follows your camera on your own GPU.</p></section>
     <section class="workspace" aria-label="Live hand reconstruction">
@@ -20,7 +20,7 @@
         </div>
       </aside>
     </section>
-    <section class="setup" id="setup" aria-labelledby="setup-title"><div><p class="eyebrow">ONE-TIME SETUP</p><h2 id="setup-title">Bring your model files.</h2><p>This model uses separately licensed MANO data. Choose your prepared model folder once; it stays in this browser for your next visit.</p><p class="hint"><a href="https://github.com/lyonsno/kaminos/tree/main/demos/hand-mesh#model-setup">Prepare a model folder</a> · <a href="https://mano.is.tue.mpg.de/license.html">MANO terms</a></p></div><div class="import"><button id="choose">Choose model folder</button><input id="files" type="file" webkitdirectory multiple hidden><p id="models-status" class="hint">Files are read locally. Nothing is uploaded.</p></div></section>
+    <section class="setup" id="setup" aria-labelledby="setup-title"><div><p class="eyebrow">ONE-TIME SETUP</p><h2 id="setup-title">Bring your model files.</h2><p>This model uses separately licensed MANO data. Choose your prepared model folder once; it stays in this browser for your next visit.</p><p class="hint"><a href="https://github.com/lyonsno/kaminos/tree/5660d33d3e1df282af6de518ae4d72afbca75940/demos/hand-mesh#model-setup">Prepare a model folder</a> · <a href="https://mano.is.tue.mpg.de/license.html">MANO terms</a></p></div><div class="import"><button id="choose">Choose model folder</button><input id="files" type="file" webkitdirectory multiple hidden><p id="models-status" class="hint">Files are read locally. Nothing is uploaded.</p></div></section>
     <details><summary>How it works</summary><p>A WiLoR hand detector locates the hand; MobRecon reconstructs its shape. Both neural networks run as WebGPU compute shaders using Kaminos WebGPU Inference Kit. With no accepted detection, reconstruction pauses and the mesh disappears. This shows hand shape and articulation, not calibrated world position.</p></details>
   </main>
   <footer><span>Built with <a href="https://github.com/lyonsno/kaminos/tree/main/webgpu-inference-kit">Kaminos WebGPU Inference Kit</a></span><span><a href="https://github.com/SeanChenxy/HandMesh">MobRecon</a> · <a href="https://github.com/rolpotamias/WiLoR">WiLoR</a> · <a href="https://mano.is.tue.mpg.de/">MANO</a></span></footer>
