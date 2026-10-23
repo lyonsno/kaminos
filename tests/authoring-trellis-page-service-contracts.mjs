@@ -179,3 +179,29 @@ test('the TRELLIS output is chosen on the service: mesh and surfels by default, 
   assert.match(s.read().progress,/Surfels saved/);assert.equal(s.read().status,'complete');
   assert.throws(()=>s.setOutput('voxels'),/mesh or surfels/);
 });
+
+
+test('elapsed progress keeps advancing inside one long phase and its timer ends with the run',async()=>{
+  let now=0,finish,tick,cleared=false;
+  const {s,states}=service({now:()=>now,setInterval:(callback,ms)=>{assert.equal(ms,1000);tick=callback;return 42;},clearInterval:id=>{assert.equal(id,42);cleared=true;},
+    runPage:async({onPhase})=>{onPhase({phase:'sparse-structure-sampling'});return new Promise(resolve=>{finish=()=>resolve({glb,generation:{runId:'clock'},label:'clock'});});}});
+  const running=s.run(input);await new Promise(resolve=>setTimeout(resolve,0));
+  now=18000;assert.equal(typeof tick,'function','an active phase schedules elapsed-time refresh');tick();
+  assert.equal(s.read().progress,'Shape structure · 18s');
+  now=83000;tick();assert.equal(s.read().progress,'Shape structure · 1m 23s','time does not depend on a new model-phase event');
+  assert.ok(states.some(state=>state.progress==='Shape structure · 1m 23s'),'the UI receives the refresh');
+  finish();await running;assert.equal(cleared,true,'no refresh timer remains after completion');
+  const complete=s.read().progress;now=100000;tick();assert.equal(s.read().progress,complete,'a late callback cannot overwrite completion');
+});
+
+test('elapsed refresh is stopped on cancellation, inference failure and persistence failure',async()=>{
+  for(const outcome of ['stop','inference','persistence']){
+    let settle,tick,cleared=false;
+    const {s}=service({setInterval:callback=>{tick=callback;return 7;},clearInterval:id=>{assert.equal(id,7);cleared=true;},
+      runPage:({signal,onPhase})=>{onPhase({phase:'sparse-structure-sampling'});return new Promise((resolve,reject)=>{settle=()=>outcome==='inference'?reject(Error('model failed')):resolve({glb,generation:{runId:'clock'},label:'clock'});signal.addEventListener('abort',()=>reject(signal.reason));});},
+      persist:async()=>{if(outcome==='persistence')throw Error('disk full');return {name:'clock.glb'};}});
+    const running=s.run(input);await new Promise(resolve=>setTimeout(resolve,0));
+    if(outcome==='stop'){s.stop();await running;}else{settle();await assert.rejects(running,outcome==='inference'?/model failed/:/disk full/);}
+    assert.equal(cleared,true,outcome);const status=s.read().status;tick();assert.equal(s.read().status,status);
+  }
+});

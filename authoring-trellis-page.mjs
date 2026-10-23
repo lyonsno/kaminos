@@ -162,7 +162,8 @@ const STAGES=[[/^(dinov3|load-dinov3|checkpoint-loading)/,'Reading the image'],[
   [/^post-model-(mesh-extraction|material-readback|mesh-postprocess)/,'Cleaning the mesh'],[/^post-model-uv/,'Unwrapping UVs'],[/^post-model-(texture-bake|pbr-glb)/,'Baking textures']];
 export function trellisPageStage(phase){return STAGES.find(([pattern])=>pattern.test(String(phase||'')))?.[1]??'Generating';}
 
-export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now()}){
+export function createTrellisPageAuthoringGeneration({availability,runPage,persist,changed=()=>{},blocked=()=>null,now=()=>Date.now(),
+  setInterval=globalThis.setInterval,clearInterval=globalThis.clearInterval}){
   // Output: 'mesh' (the finished mesh, with its surfels beside it) or 'surfels' (surfels only: no mesh finishing).
   let active=false,abort=null,started=0,output='mesh';
   let state={status:'idle',progress:'TRELLIS 2 runs in this page on its GPU; it takes many minutes.',stage:null,percent:null,canStop:false,error:null,results:[],pending:null};
@@ -206,6 +207,12 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
       const reason=unavailable();if(reason)throw Error(reason);
       active=true;abort=new AbortController();started=now();let phase='inference';
       set({status:'running',error:null,inputPreview:null,stage:'Reading the image',canStop:true,progress:'Starting TRELLIS in this page…'});
+      // A model phase can last minutes without another event. This is elapsed time,
+      // not a claim that another model step completed; keep it live until inference ends.
+      const clock=setInterval(()=>{
+        if(active&&state.status==='running')set({progress:`${state.stage} · ${elapsed()}`});
+      },1000);
+      clock?.unref?.();
       const label=(input.label||input.name||'Generated').replace(/\.[^.]+$/,'');
       try{
         const out=await runPage({image:{source:cutout},label,signal:abort.signal,finishMesh:output!=='surfels',onInput:used=>set({inputPreview:{...used,input:input.source}}),onPhase:event=>{
@@ -228,7 +235,7 @@ export function createTrellisPageAuthoringGeneration({availability,runPage,persi
           throw error;
         }
         set({status:'failed',error:`${phase}: ${error?.message||error}`,stage:null});throw error;
-      }finally{active=false;abort=null;state.canStop=false;publish();}
+      }finally{clearInterval(clock);active=false;abort=null;state.canStop=false;publish();}
     },
   };
 }
