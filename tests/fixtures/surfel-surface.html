@@ -43,6 +43,7 @@ window.runGlassWitness=async()=>{
  try{for(const alphas of [[1,.25],[.979,.271],[.625],[.625,.625]]){
   const scene=new Scene();scene.background=new Color(0xffffff);
   const c=createSurfelGlass(new Float32Array(alphas.flatMap(a=>[0,0,0,0,0,1,1,0,0,0,.2,a])),{count:alphas.length,stride:12,radius:.2});
+  c.set({reconstructionScope:'all'}); // Explicit cross-population diagnostic, rather than the glass-only default.
   scene.add(c.root,new AmbientLight(0xffffff,1));
   try{renderer.render(scene,camera);results.push({alphas,pixel:Array.from(await renderer.readRenderTargetPixelsAsync(target,32,32,1,1))});}finally{c.dispose();}
  }}finally{target.dispose();renderer.dispose();}
