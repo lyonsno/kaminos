@@ -25,7 +25,8 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
   const embedding=interpolation==='smooth'?prepareSmoothFleshEmbedding(prepared):prepared,volume=createGpuFleshVolume(prepared),skin=createGpuSkinDeformer({...args,physical:embedding,physicalAttribute:volume.attribute});
   volume.setEnabled(enabled);
   const nodeRest=Float32Array.from(prepared.positions.flat()),weights=torsoNodeWeights(prepared,args.manifest.channels),C=args.channels;
-  let running=false,validated=false,validationStarted=false,error=null,accumulator=0,palette=null,currentRotations=null,lastRotations=null,pending=null,snapshotEpoch=-1,snapshotPose='',poseKey='',offsets=prepared.positions.map(()=>[0,0,0]),pick=null,pickKey='',disposed=false;
+  let running=false,validated=false,validationStarted=false,error=null,accumulator=0,palette=null,currentRotations=null,lastRotations=null,pending=null,snapshotEpoch=-1,snapshotPose='',poseKey='',offsets=prepared.positions.map(()=>[0,0,0]),disposed=false;
+  const boneRest=args.manifest.bones.map(b=>({...b,at:b.restMatrix.slice(0,3).map(r=>r[3]),channel:args.manifest.channels.indexOf(b.name)})),pickRadius=prepared.construction.profile[Math.floor(prepared.construction.sections/2)].radius[0];
   const update=matrices=>{
    skin.update(matrices);palette=matrices;poseKey=matrices.flat().join(',');
    const points=skinTransport(nodeRest,weights,matrices),{real}=transportDualQuaternions(matrices);
@@ -48,11 +49,16 @@ export function createCreatureFleshDeformer({enabled=true,interpolation='smooth'
    capsules(){const p=volume.targets(),c=prepared.construction.crossSection,s=prepared.construction.sections,m=(c-1)/2,centers=[],radii=[];for(let k=0;k<s;k++){const center=p[(k*c+m)*c+m];centers.push(center);radii.push(Math.max(...[p[(k*c+m)*c],p[(k*c+m)*c+c-1],p[(k*c)*c+m],p[(k*c+c-1)*c+m]].map(q=>Math.hypot(...q.map((v,a)=>v-center[a])))));}return [{a:centers[1],b:centers[s-2],radius:radii[Math.floor(s/2)]}];},
    snapshot,mirrorKey:()=>volume.read().epoch+':'+poseKey,
    cpuPositions(base){if(volume.read().steps>0&&!current())throw Error('Pause the creature for an exact physical snapshot/export');return addFleshOffsets(base,embedding,offsets);},
-   // Picking is an explicit current skeletal-pose proxy during live physics;
-   // export/diagnostic geometry above always requires the exact held snapshot.
-   pickGeometry(data,matrices){const key=poseKey+':'+(current()?snapshotEpoch:'pose-proxy');if(pick&&key===pickKey)return pick;const points=skinTransport(data.rest,data.weights,matrices),g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(current()?addFleshOffsets(points,embedding,offsets):points,3));g.setIndex(new THREE.BufferAttribute(data.triangles,1));g.computeBoundingBox();g.computeBoundingSphere();pick?.dispose();pick=g;pickKey=key;return g;},
-   readback:()=>skin.readback(),read:()=>({...skin.read(),flesh:{enabled,interpolation,validated,error,running,pendingSeconds:accumulator,...volume.read(),cpuShape:{current:current(),snapshotEpoch,picking:current()?'physical-snapshot':'current-skeletal-pose-proxy',export:'exact-held-physical-snapshot'}}}),
-   dispose(){if(disposed)return;disposed=true;pick?.dispose();skin.dispose();volume.dispose();},
+   // Selection uses small rig-supported hit shapes, never a dense CPU skin
+   // solve or a GPU readback on the pointer path. Export remains exact/held.
+   raycast(raycaster,hits,object){
+    const world=object.matrixWorld,scale=new THREE.Vector3().setFromMatrixScale(world).x,points=new Map(boneRest.map(b=>[b.name,new THREE.Vector3(...b.at).applyMatrix4(new THREE.Matrix4().fromArray(palette[b.channel])).applyMatrix4(world)]));
+    const shapes=this.capsules().map(c=>({a:new THREE.Vector3(...c.a).applyMatrix4(world),b:new THREE.Vector3(...c.b).applyMatrix4(world),radius:c.radius*scale}));
+    for(const bone of boneRest){const a=points.get(bone.name),b=points.get(bone.parent)??a;shapes.push({a,b,radius:pickRadius*scale*(bone.name==='head'?.5:bone.name.includes('hip')?.4:bone.name.startsWith('tail')?.1:.2)});}
+    let closest=null;for(const shape of shapes){const onRay=new THREE.Vector3(),onAxis=new THREE.Vector3(),d2=raycaster.ray.distanceSqToSegment(shape.a,shape.b,onRay,onAxis);if(d2>shape.radius**2)continue;const along=onRay.clone().sub(raycaster.ray.origin).dot(raycaster.ray.direction),distance=Math.max(0,along-Math.sqrt(Math.max(0,shape.radius**2-d2)));if(distance<raycaster.near||distance>raycaster.far||closest&&distance>=closest.distance)continue;closest={distance,point:raycaster.ray.at(distance,new THREE.Vector3()),object,face:null};}if(closest)hits.push(closest);
+   },
+   readback:()=>skin.readback(),read:()=>({...skin.read(),flesh:{enabled,interpolation,validated,error,running,pendingSeconds:accumulator,...volume.read(),cpuShape:{current:current(),snapshotEpoch,picking:'rig-capsule-selection-proxy',export:'exact-held-physical-snapshot'}}}),
+   dispose(){if(disposed)return;disposed=true;skin.dispose();volume.dispose();},
   };
  };
 }

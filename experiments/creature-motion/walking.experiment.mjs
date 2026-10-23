@@ -174,7 +174,7 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
   stop=session.onFrame(({deltaSeconds,timestampMs})=>{
    if(disposed||!stop)return;
    if(!Number.isFinite(deltaSeconds)||deltaSeconds<0)throw Error('Walking clock requires a finite nonnegative host delta');
-   frameStamp=timestampMs;const from=clock/1000;clock+=deltaSeconds*1000*rate;
+   frameStamp=Number.isFinite(timestampMs)?timestampMs:clock+deltaSeconds*1000;const from=clock/1000;clock+=deltaSeconds*1000*rate;
    const motionDelta=attention?.motionSeconds(from,clock/1000)??deltaSeconds*rate;
    motionClock+=motionDelta*1000;
    try{

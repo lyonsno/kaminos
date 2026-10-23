@@ -74,7 +74,7 @@ export function createFullBodyRuntime({THREE,manifest,rest,triangles,weights,fle
   geometry.boundingSphere=mirror.boundingSphere.clone();geometry.boundingBox=mirror.boundingBox.clone();
   cpuGeometry?.dispose();cpuGeometry=mirror;cpuKey=key;return mirror;
  }
- if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){const visible=mesh.geometry;try{mesh.geometry=deformer.pickGeometry?.(skin,palette())??syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
+ if(deformer){const raycast=mesh.raycast;mesh.raycast=function(...args){if(deformer.raycast)return deformer.raycast(...args,this);const visible=mesh.geometry;try{mesh.geometry=syncCpuGeometry();return raycast.apply(this,args);}finally{mesh.geometry=visible;}};}
  registerExportGeometrySnapshot(mesh,syncCpuGeometry);
  function replaceSkin(candidate){
   active();validate(candidate);

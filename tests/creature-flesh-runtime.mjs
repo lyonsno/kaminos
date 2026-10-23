@@ -9,3 +9,4 @@ r.syncCpuGeometry();offset=.25;epoch++;
 assert.equal(r.syncCpuGeometry().attributes.position.array[0],.25,'held bones must not cache away a changed physical shape');
 r.bones.get('pelvis').position.x=2;r.update();assert.equal(r.syncCpuGeometry().attributes.position.array[0],2.25,'physical residual composes with the current skeletal pose');r.dispose();
 console.log('Current-shape mirror follows physical epoch while bones are held');
+let picked=false;const live=createFullBodyRuntime({THREE,...data,deformerFactory:()=>({update(){},flush(){},dispose(){},read:()=>({backend:'local-test-double'}),raycast(){picked=true;}})});live.mesh.raycast(new THREE.Raycaster(),[]);assert.equal(picked,true,'a live GPU body can supply its selection hit shapes without a dense CPU skin solve');live.dispose();
