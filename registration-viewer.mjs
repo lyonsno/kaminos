@@ -39,13 +39,16 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   });
   return {...p,root,nodes};
  });
+ ghost.updateMatrixWorld(true);
+ const sourceBox=new THREE.Box3();for(const p of layers)for(const {mesh:m}of p.nodes)sourceBox.union(new THREE.Box3().setFromObject(m));
+ const bounds=new THREE.Box3Helper(sourceBox,0x36d6cf);bounds.name='Analytical carrier bounds';bounds.material.depthTest=false;bounds.material.transparent=true;bounds.material.opacity=.75;bounds.renderOrder=30;ghost.add(bounds);
  const targetMaterials=[];
  target.traverse(node=>{if(node.isSkinnedMesh||node.morphTargetInfluences?.length)throw Error('Registration viewer currently consumes static meshes');if(node.isMesh)targetMaterials.push({node,original:node.material});});
  if(!targetMaterials.length)throw Error('Target contains no mesh surfaces');
  const materialCopies=new Map();
  for(const {node,original}of targetMaterials)node.material=Array.isArray(original)?original.map(copyMaterial):copyMaterial(original);
  function copyMaterial(mat){if(!materialCopies.has(mat))materialCopies.set(mat,mat.clone());return materialCopies.get(mat);}
- const state={alignment:{position:[0,0,0],rotation:[0,Math.PI/2,0],scale:1},parts:Object.fromEntries(parts.map(p=>[p.id,{visible:true,color:p.color}])),solo:null,reference:true,referenceOpacity:.32,wireframe:false,xray:false,target:true,targetOpacity:1,claims:false,claimOpacity:.85,mode:'claims',threshold:.5,falloff:.035};
+ const state={alignment:{position:[0,0,0],rotation:[0,Math.PI/2,0],scale:[1,1,1]},parts:Object.fromEntries(parts.map(p=>[p.id,{visible:true,color:p.color}])),solo:null,reference:true,bounds:true,referenceOpacity:.32,wireframe:false,xray:false,target:true,targetOpacity:1,claims:false,claimOpacity:.85,mode:'claims',threshold:.5,falloff:.035};
  let disposed=false,generation=0,field=null,status='not computed',progress=0,mesh=null,summary=null,computedSignature=null;
  const originalTargetVisible=target.visible;
  const bufferIds=new WeakMap();let nextBufferId=0;
@@ -58,10 +61,11 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   return JSON.stringify([ghost.matrixWorld.elements,surfaces]);
  };
  function invalidate(){generation++;field=null;summary=null;computedSignature=null;status='not computed';progress=0;diagnostic.visible=false;}
+ function adoptNativePose(){const a={position:ghost.position.toArray(),rotation:ghost.rotation.toArray().slice(0,3),scale:ghost.scale.toArray()};if(JSON.stringify(a)!==JSON.stringify(state.alignment)){Object.assign(state.alignment,a);invalidate();return true;}return false;}
  function apply(){
-  const a=state.alignment;ghost.position.fromArray(a.position);ghost.rotation.set(...a.rotation);ghost.scale.setScalar(a.scale);
-  ghost.visible=state.reference;
-  for(const p of layers){p.root.visible=active(p.id);for(const {mesh:m}of p.nodes){m.material.color.set(state.parts[p.id].color);m.material.opacity=state.referenceOpacity;m.material.wireframe=state.wireframe;m.material.depthTest=!state.xray;m.renderOrder=state.xray?20:1;}}
+  const a=state.alignment;ghost.position.fromArray(a.position);ghost.rotation.set(...a.rotation);ghost.scale.fromArray(a.scale);
+  bounds.visible=state.bounds;
+  for(const p of layers){p.root.visible=state.reference&&active(p.id);for(const {mesh:m}of p.nodes){m.material.color.set(state.parts[p.id].color);m.material.opacity=state.referenceOpacity;m.material.wireframe=state.wireframe;m.material.depthTest=!state.xray;m.renderOrder=state.xray?20:1;}}
   target.visible=state.target;
   for(const [original,mat]of materialCopies){mat.opacity=original.opacity*state.targetOpacity;mat.transparent=original.transparent||state.targetOpacity<1;mat.depthWrite=state.targetOpacity<1?false:original.depthWrite;mat.needsUpdate=true;}
   diagnostic.visible=Boolean(field&&state.claims);redraw();onChange(read());
@@ -69,9 +73,9 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
  function read(){return {schema:'kaminos.registration-view.v1',...structuredClone(state),status,progress,summary:summary&&structuredClone(summary),method:'independent primitive-solid distance at every target triangle centroid; score exp(-outsideDistance/falloff); not semantic registration',partsSource:parts.map(p=>({id:p.id,primitiveIds:p.primitives.map(o=>o.id)}))};}
  function check(){if(disposed)throw Error('Registration viewer disposed');}
  function configure(patch){
-  check();const next=structuredClone(state);
+  check();adoptNativePose();const next=structuredClone(state);
   for(const [key,value]of Object.entries(patch)){
-   if(['reference','wireframe','xray','target','claims'].includes(key)){if(typeof value!=='boolean')throw Error(`${key} must be boolean`);next[key]=value;}
+   if(['reference','bounds','wireframe','xray','target','claims'].includes(key)){if(typeof value!=='boolean')throw Error(`${key} must be boolean`);next[key]=value;}
    else if(['referenceOpacity','targetOpacity','claimOpacity'].includes(key))next[key]=unit(value,key);
    else if(key==='threshold'){if(!Number.isFinite(value)||value<=0||value>1)throw Error('threshold must be in (0,1]');next[key]=value;}
    else if(key==='falloff'){if(!Number.isFinite(value)||value<=0)throw Error('falloff must be positive');next[key]=value;}
@@ -81,7 +85,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
    else if(key==='alignment'){
     if(value.position!==undefined)next.alignment.position=vector(value.position,'Position');
     if(value.rotation!==undefined)next.alignment.rotation=vector(value.rotation,'Rotation');
-    if(value.scale!==undefined){if(!Number.isFinite(value.scale)||value.scale<=0)throw Error('Scale must be positive');next.alignment.scale=value.scale;}
+    if(value.scale!==undefined){const s=Array.isArray(value.scale)?vector(value.scale,'Scale'):[value.scale,value.scale,value.scale];if(s.some(n=>!Number.isFinite(n)||n===0))throw Error('Scale must be finite and nonzero');next.alignment.scale=s;}
    }else throw Error(`Unknown registration setting ${key}`);
   }
   if(JSON.stringify(next.alignment)!==JSON.stringify(state.alignment)||next.falloff!==state.falloff)invalidate();
@@ -90,9 +94,9 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
  function fitBounds(){
   check(); // Coarse similarity proposal, not an optimized registration.
   configure({alignment:{position:[0,0,0],scale:1}});ghost.updateMatrixWorld(true);target.updateWorldMatrix(true,true);
-  const sourceBox=new THREE.Box3().setFromObject(ghost),targetBox=new THREE.Box3().setFromObject(target),s=sourceBox.getSize(new THREE.Vector3()),t=targetBox.getSize(new THREE.Vector3());
+  const alignedBox=sourceBox.clone().applyMatrix4(ghost.matrixWorld),targetBox=new THREE.Box3().setFromObject(target),s=alignedBox.getSize(new THREE.Vector3()),t=targetBox.getSize(new THREE.Vector3());
   const scale=Math.max(t.x,t.y,t.z)/Math.max(s.x,s.y,s.z);
-  const offset=targetBox.getCenter(new THREE.Vector3()).sub(sourceBox.getCenter(new THREE.Vector3()).multiplyScalar(scale));
+  const offset=targetBox.getCenter(new THREE.Vector3()).sub(alignedBox.getCenter(new THREE.Vector3()).multiplyScalar(scale));
   return configure({alignment:{position:offset.toArray(),scale}});
  }
  function paint(){
@@ -111,11 +115,12 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
   mesh.geometry.attributes.color.needsUpdate=true;summary={triangles:field.count,...counts,perPart};apply();
  }
  async function compute(){
-  check();invalidate();const token=generation;status='computing';progress=0;apply();const startSignature=signature();
+  check();adoptNativePose();invalidate();const token=generation;status='computing';progress=0;apply();const startSignature=signature();
   try{
+  if(ghost.scale.toArray().some(n=>!Number.isFinite(n)||n===0))throw Error('Claim computation requires nondegenerate source scale; restore it with the native gizmo');
   const current=[];target.traverse(n=>{if(n.isMesh)current.push(n);});
   if(current.length!==targetMaterials.length||current.some((n,i)=>n!==targetMaterials[i].node))throw Error('Target mesh hierarchy changed; reopen the viewer to register its surfaces');
-  const prepared=layers.map(p=>p.nodes.map(({mesh:m,record})=>({inverse:m.matrixWorld.clone().invert(),geometry:record.geometry,scale:Math.min(...m.getWorldScale(new THREE.Vector3()).toArray())})));
+  const prepared=layers.map(p=>p.nodes.map(({mesh:m,record})=>({inverse:m.matrixWorld.clone().invert(),geometry:record.geometry,scale:Math.min(...m.getWorldScale(new THREE.Vector3()).toArray().map(Math.abs))})));
   const surfaces=targetMaterials.map(({node})=>({node,position:node.geometry.attributes.position,index:node.geometry.index}));
   const count=surfaces.reduce((n,s)=>n+(s.index?s.index.count:s.position.count)/3,0);
   if(!Number.isInteger(count)||count===0)throw Error('Target must contain complete triangles');
@@ -144,7 +149,7 @@ export function createRegistrationViewer({target,parts,redraw=()=>{},onChange=()
    mesh.renderOrder=5;diagnostic.add(mesh);field={count,scores};computedSignature=startSignature;status='computed';progress=1;state.claims=true;paint();return read();
   }catch(error){if(token===generation){invalidate();status='failed: '+error.message;apply();}throw error;}
  }
- const refresh=()=>{if(field&&signature()!==computedSignature){invalidate();apply();}};
+ const refresh=()=>{if(adoptNativePose()){apply();}else if(field&&signature()!==computedSignature){invalidate();apply();}};
  function dispose(){if(disposed)return;disposed=true;generation++;for(const {node,original}of targetMaterials)node.material=original;target.visible=originalTargetVisible;for(const m of materialCopies.values())m.dispose();ghost.traverse(n=>{n.geometry?.dispose();n.material?.dispose();});if(mesh){mesh.geometry.dispose();mesh.material.dispose();}ghost.removeFromParent();diagnostic.removeFromParent();}
- apply();return {ghost,diagnostic,read,configure,fitBounds,compute,refresh,dispose};
+ apply();return {ghost,bounds,diagnostic,read,configure,fitBounds,compute,refresh,dispose};
 }

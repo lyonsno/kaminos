@@ -4,18 +4,23 @@ import * as T from '../lib/three.core.js';
 import definition from '../experiments/part-claims.experiment.mjs';
 const source={objects:[{id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],provenance:{analyticalCarrier:{parts:{base:['box']}}}};
 const oldFetch=globalThis.fetch;globalThis.fetch=async()=>({ok:true,json:async()=>source});
-let target,view={position:[2,2,2],target:[0,0,0]},refreshes=0;
+source.actuators=[{id:'drive',axis:[1,0,0],hinge:[0,1,0],baseMount:[0,0,0],movingMount:[0,1,1]}];
+let target,view={position:[2,2,2],target:[0,0,0]},refreshes=0;const attachments=[];
 const host={scene:{refreshPresentation:()=>{refreshes++;},open:async()=>({
  loadAsset:async()=>{target=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial());return {id:'target',root:target};},
- attach:async()=>{},redraw(){},onFrame:()=>()=>{},setView:v=>{view=v;},readView:()=>view,dispose:async()=>{},
+ attach:async(root,options)=>{const receipt={id:root.uuid,root,options};attachments.push(receipt);return receipt;},redraw(){},onFrame:()=>()=>{},setView:v=>{view=v;},readView:()=>view,dispose:async()=>{},
 })}};
 try{
  const first=await definition.create({host,inputs:{},record(){}});
+ const firstGuess=attachments.find(a=>a.id===first.read().joints[0].guessObjectId).root;
+ firstGuess.position.set(7,8,9);firstGuess.rotation.set(0,.7,0);firstGuess.scale.set(2,3,4);
  target.position.set(3,4,5);target.rotation.z=.4;target.scale.setScalar(2);
  const recipe=first.operations.recipe();await first.dispose();
  const second=await definition.create({host,inputs:recipe,record(){}});
  assert.deepEqual(target.position.toArray(),[3,4,5],'reopen preserves edited target placement');
- assert.equal(target.rotation.z,.4);assert.deepEqual(target.scale.toArray(),[2,2,2]);assert.equal(refreshes,1);
+ assert.equal(target.rotation.z,.4);assert.deepEqual(target.scale.toArray(),[2,2,2]);assert.equal(refreshes,3);
+ assert.equal(attachments[0].options.presentation,undefined,'source carrier is an ordinary selectable scene registration');
+ assert.deepEqual(second.read().joints[0].guessPose,{position:[7,8,9],rotation:[0,.7,0],scale:[2,3,4]},'manual joint correspondence survives reopening');
  second.operations.configure({solo:'base',referenceOpacity:.6});
  target.scale.x*=-1;
  const reflectedRecipe=second.operations.recipe();await second.dispose();

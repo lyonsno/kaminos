@@ -1,22 +1,26 @@
 // Reusable inspector for any registration-viewer controller; no scene globals.
-export function mountRegistrationControls({root,document,invoke,read,retain}) {
- const inputs=[],listeners=[];
+export function mountRegistrationControls({root,document,invoke,read,retain,controls}) {
+ if(!controls?.installNumberDrag)throw Error('Kaminos number-drag controls are required');
+ const inputs=[],listeners=[],scrubs=[];
  const el=(tag,text,parent=root)=>{const n=document.createElement(tag);if(text)n.textContent=text;parent.append(n);return n;};
  const heading=el('h3','Part claims');heading.style.margin='8px 0';
- el('p','Known mechanism → generated skin. Align the colored ghosts, then compute independent claims.');
+ el('p','Select the analytical carrier and use G / R / S or its gizmo. Cyan axes are authored joints; orange axes are movable manual target guesses.');
  const status=el('p');status.setAttribute('role','status');status.style.whiteSpace='pre-line';
  const call=(name,...args)=>Promise.resolve(invoke(name,...args)).catch(error=>{sync();status.textContent=error.message;});
  function section(title){const d=el('details');d.open=true;el('summary',title,d);return d;}
  function field(parent,label,type,get,set,{min,max,step}={}){
-  const row=el('label',null,parent);row.style.cssText='display:flex;gap:8px;align-items:center;margin:7px 0;justify-content:space-between';
-  el('span',label,row);const input=el('input',null,row);input.type=type;input.setAttribute('aria-label',label);input.style.maxWidth=type==='color'?'44px':'110px';
+  const row=el('label',null,parent);row.className='field';
+  const grip=el('span',label,row);const input=el('input',null,row);input.type=type==='range'?'number':type;input.setAttribute('aria-label',label);if(input.type==='number')input.className='transform-input';
   if(min!==undefined)input.min=min;if(max!==undefined)input.max=max;if(step!==undefined)input.step=step;
   const change=()=>{if(type==='number'&&!input.value.trim())return;set(type==='checkbox'?input.checked:type==='number'||type==='range'?Number(input.value):input.value);};
-  input.addEventListener('input',change);inputs.push({input,get,type});return input;
+  input.addEventListener('input',change);inputs.push({input,get,type});
+  if(input.type==='number'){input.step='any';scrubs.push(controls.installNumberDrag({input,grip,step:step??.01}));input.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Escape')input.blur();});}
+  return input;
  }
- function button(parent,label,fn){const b=el('button',label,parent);b.type='button';b.addEventListener('click',fn);b.style.margin='3px';return b;}
+ function button(parent,label,fn){const b=el('button',label,parent);b.type='button';b.className='btn';b.addEventListener('click',fn);return b;}
+ button(root,'Select analytical carrier',()=>call('selectSource'));button(root,'Select generated arm',()=>call('selectTarget'));
  const visible=section('Layers');
- for(const [key,label]of [['target','Textured return'],['reference','Source ghosts'],['claims','Claim surface'],['wireframe','Ghost wireframe'],['xray','Ghost X-ray']])field(visible,label,'checkbox',s=>s[key],v=>call('configure',{[key]:v}));
+ for(const [key,label]of [['target','Generated return'],['reference','Source ghosts'],['bounds','Source bounds'],['claims','Claim surface'],['wireframe','Ghost wireframe'],['xray','Ghost X-ray']])field(visible,label,'checkbox',s=>s[key],v=>call('configure',{[key]:v}));
  for(const [key,label]of [['targetOpacity','Return opacity'],['referenceOpacity','Ghost opacity'],['claimOpacity','Claim opacity']])field(visible,label,'range',s=>s[key],v=>call('configure',{[key]:v}),{min:0,max:1,step:.01});
  const parts=section('Independent parts');
  for(const id of Object.keys(read().parts)){
@@ -27,16 +31,17 @@ export function mountRegistrationControls({root,document,invoke,read,retain}) {
  }
  button(parts,'Show all',()=>call('configure',{solo:null,parts:Object.fromEntries(Object.keys(read().parts).map(id=>[id,{visible:true}]))}));
  const align=section('Source alignment');
- el('p','Bounds fit is only a starting guess. Rotate and translate the source to match the return.',align);
- for(const [key,label]of [['position','Move'],['rotation','Rotate']])for(let i=0;i<3;i++)field(align,`${label} ${'XYZ'[i]}${key==='rotation'?' °':''}`,'number',s=>s.alignment[key][i]*(key==='rotation'?180/Math.PI:1),v=>{const value=[...read().alignment[key]];value[i]=v*(key==='rotation'?Math.PI/180:1);call('configure',{alignment:{[key]:value}});},{step:key==='rotation'?1:.01});
- field(align,'Uniform scale','number',s=>s.alignment.scale,v=>call('configure',{alignment:{scale:v}}),{min:.000001,step:.01});
+ el('p','The cyan box is the actual source bounds. Move, rotate and scale its selectable carrier in the scene. Bounds fit is only an initial extent match.',align);
  button(align,'Fit bounds',()=>call('fitBounds'));button(align,'Frame comparison',()=>call('frame'));
+ const joints=section('Joint correspondence');
+ el('p','Select an orange guess, place its center and axis on the generated joint, then use “Snap source joint here” in its inspector. A single match preserves scale and does not solve twist around the axis.',joints);
+ for(const joint of read().joints||[])button(joints,`Place ${joint.label}`,()=>call('selectJoint',joint.id));
  const claims=section('Geometric claim proposal');
  el('p','Each part claims independently by distance to its primitive solids. No forced winner. Every triangle is evaluated at its centroid.',claims);
  field(claims,'Falloff distance','number',s=>s.falloff,v=>call('configure',{falloff:v}),{min:.000001,step:.005});
  field(claims,'Strong threshold','range',s=>s.threshold,v=>call('configure',{threshold:v}),{min:.01,max:1,step:.01});
  const compute=button(claims,'Compute claims',()=>call('compute'));listeners.push(s=>{compute.disabled=s.status==='computing';});
- const select=el('select',null,claims);select.setAttribute('aria-label','Claim display');
+ const select=el('select',null,claims);select.className='select-input';select.setAttribute('aria-label','Claim display');
  for(const [value,text]of [['claims','Selected claims · part colors'],['overlap','Contested · magenta'],['residual','Unclaimed · orange']]){const o=el('option',text,select);o.value=value;}
  select.addEventListener('change',()=>call('configure',{mode:select.value,claims:true}));listeners.push(s=>{select.value=s.mode;});
  el('p','Overlap and residual counts always include every part, even hidden ones.',claims);
@@ -45,5 +50,5 @@ export function mountRegistrationControls({root,document,invoke,read,retain}) {
   const c=s.summary;status.textContent=`${s.status}${s.status==='computing'?` · ${Math.round(s.progress*100)}%`:''}${c?`\n${c.triangles.toLocaleString()} triangles · ${c.single.toLocaleString()} single\n${c.overlap.toLocaleString()} contested · ${c.unclaimed.toLocaleString()} unclaimed`:''}`;
   link.href=retain();
  }
- link.addEventListener('click',()=>{link.href=retain();});sync();return {sync,dispose:()=>root.replaceChildren()};
+ link.addEventListener('click',()=>{link.href=retain();});sync();return {sync,dispose:()=>{for(const s of scrubs)s?.stop?.();root.replaceChildren();}};
 }
