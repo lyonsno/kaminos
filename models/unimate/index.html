@@ -145,6 +145,7 @@ const mb = n => (n / 1e6).toFixed(0);
 let demo, current = null;
 const refinement=createRefinementHistory();let followRefinement=true;
 window.__unimateRefinements=refinement.runs;
+function clearRefinementPreview(label){followRefinement=false;$('refinement-status').textContent='Retained histories';$('refinement-info').textContent=label+' in scene · choose a stage to inspect';}
 function showRefinement(){
  const run=refinement.runs[Number($('refinement-run').value)];if(!run)return;
  const index=followRefinement?run.samples.length-1:Number($('refinement-stage').value),sample=run.samples[index];
@@ -169,7 +170,7 @@ async function play(entry) {
   if (!entry.clip) entry.clip = decodeClip(await (await fetch(`clips/${entry.meta.file}`)).json());
   current = entry;
   demo.showClip(entry.clip);
-  $('refinement-status').textContent='Retained histories';$('refinement-info').textContent='Gallery clip in scene · choose a stage to inspect';
+  clearRefinementPreview('Gallery clip');
   state.clip = entry.clip.id;
   for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
   $('now').hidden = false;
@@ -382,7 +383,7 @@ $('skeleton').addEventListener('change', async () => {
     skeletonKey = key; ownRig = null; $('rig-review').hidden = true; $('bones-toggle').hidden = true;
     $('skeleton').querySelector('option[value=__rig]')?.remove();
     showSkeletonPrompts();
-    demo.showGenerationSkeleton();
+    demo.showGenerationSkeleton();clearRefinementPreview('Rest pose of '+skeletonLabel());
     $('now').hidden = true;
     for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
     setStatus(`Ready · ${skeletonLabel()} · type any prompt`);
@@ -431,7 +432,7 @@ async function applyOwnRig() {
   $('skeleton').querySelector('option[value=__rig]').textContent = `${ownRig.name} · ${rig.names.length} joints`;
   $('skeleton').value = '__rig';
   showSkeletonPrompts();
-  demo.showGenerationSkeleton();
+  demo.showGenerationSkeleton();clearRefinementPreview('Rest pose of '+skeletonLabel());
   $('now').hidden = true;
   for (const e of clips) e.chip.setAttribute('aria-pressed', 'false');
   const facing = labels.face ? `facing from ${rig.names[labels.face.right]} / ${rig.names[labels.face.left]}` : 'no facing pair found: as authored';
@@ -510,7 +511,7 @@ window.__unimateApplyRigLabels = async ({ clean, face }) => {
 window.__unimateUseSkeleton = key => { $('skeleton').value = key; $('skeleton').dispatchEvent(new Event('change')); };
 $('pause').addEventListener('click', async () => { const s = await demo.togglePause(); if (s) $('pause').textContent = s === 'paused' ? 'Resume' : 'Pause'; });
 $('stop').addEventListener('click', () => demo.stop());
-$('rest').addEventListener('click', () => { demo.showGenerationSkeleton(); demo.showRest(); $('now').hidden = true; for (const e of clips) e.chip.setAttribute('aria-pressed', 'false'); });
+$('rest').addEventListener('click', () => { demo.showGenerationSkeleton(); demo.showRest(); clearRefinementPreview('Rest pose'); $('now').hidden = true; for (const e of clips) e.chip.setAttribute('aria-pressed', 'false'); });
 window.__unimateGenerate = (prompt, seed = null) => {
   $('prompt').value = typeof prompt === 'number' ? demo.bundle.prompts[prompt].text : prompt;
   $('noise').value = seed === null ? 'reference' : 'seed'; $('seed').hidden = seed === null;

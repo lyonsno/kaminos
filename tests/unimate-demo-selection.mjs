@@ -7,7 +7,7 @@ $('prompt').value='walk';$('seed').value='2';$('noise').value='seed';$('guidance
 const refinement=createRefinementHistory();refinement.begin({prompt:'old',seed:1});refinement.append({t:.2,evaluations:8,motion:{old:true}});refinement.finish('completed');
 let finish;const demo={bundle:{prompts:[{text:'walk'}],skeleton:{fps:30,frames:1,joints:1,name:'rig',parents:[-1],jointNames:['root']}},arrays:{restPositions:new Float32Array(3)},generate:()=>new Promise(r=>{finish=r;}),showPartial:s=>{demo.visible=s.motion;},showClip:c=>{demo.visible=c;}};
 const context=vm.createContext({$,demo,refinement,followRefinement:true,state:{},clips:[],current:null,own:0,ownRig:null,performance,Option:function(){},skeletonLabel:()=> 'rig',setStatus(){},describe:()=>'',addChip:(_meta,clip)=>({clip,chip:{setAttribute(){}}})});
-vm.runInContext(section('function showRefinement(){',"$('refinement-stage').oninput")+section('async function play(entry) {','window.__unimatePlayClip')+section('async function generate() {',"$('generate').addEventListener"),context);
+vm.runInContext(section('function clearRefinementPreview(label){',"$('refinement-stage').oninput")+section('async function play(entry) {','window.__unimatePlayClip')+section('async function generate() {',"$('generate').addEventListener"),context);
 const pending=vm.runInContext('generate()',context);
 $('refinement-run').value='0';$('refinement-stage').value='0';vm.runInContext('followRefinement=false;showRefinement()',context);
 assert.match($('refinement-info').textContent,/20%/);
@@ -18,3 +18,6 @@ assert.match($('refinement-info').textContent,/Final motion/,'old partial label 
 await vm.runInContext('play({clip:{id:"gallery",frames:1},chip:{setAttribute(){}}})',context);
 assert.match($('refinement-info').textContent,/Gallery clip/,'gallery playback must deselect refinement presentation');
 console.log('example completion and gallery playback keep visible motion identity truthful');
+let restClick;elements.set('rest',{addEventListener:(_type,fn)=>{restClick=fn;}});demo.showGenerationSkeleton=()=>{demo.visible='generation skeleton';};demo.showRest=()=>{demo.visible='rest';};
+vm.runInContext(section("$('rest').addEventListener",'window.__unimateGenerate'),context);
+restClick();assert.equal(demo.visible,'rest');assert.match($('refinement-info').textContent,/Rest pose/,'rest must deselect previous motion identity');
