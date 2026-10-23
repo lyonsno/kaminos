@@ -58,14 +58,21 @@ assert.throws(()=>createVolumeGather(capacityDevice,{geometry:capacityGeometry,r
 assert.equal(allocated.filter(b=>!b.destroyed).length,0,'candidate capacity failure must leave no undisposed GPU buffers');
 
 globalThis.GPUShaderStage={FRAGMENT:2};
-let groups=0;
-const device={queue:{writeBuffer(){}},createBuffer(){return {destroy(){}};},createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
+let groups=0;const copies=[];
+const device={limits:{maxBufferSize:1e8,maxStorageBufferBindingSize:1e8},queue:{writeBuffer(){},submit(){}},
+  createBuffer({size}){return {size,destroy(){}};},
+  createCommandEncoder(){return {copyBufferToBuffer(...args){copies.push(args);},finish(){return {};}};},
+  createBindGroupLayout:value=>value,createBindGroup:value=>{groups++;return value;}};
 const bindings=createDistributedSmokeBindings(device);
-const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{},staticPreparations:1,updates:1};
+assert.equal(bindings.layout.entries.filter(e=>e.buffer?.type==='read-only-storage').length,1,
+  'three-region lookup must share one mask binding within the observed native fragment budget');
+const texture={createView:()=>({})},r={identity:'prepared-geometry-visible-v1',texture,masks:{size:16},staticPreparations:1,updates:1};
 const frame={texture,smokeReconstruction:r};
 bindings.update(frame);bindings.update({...frame,generation:2});assert.equal(groups,1,'live coefficient update does not rebuild static bindings');
-bindings.update({...frame,smokeReconstruction:{...r,masks:{}}});assert.equal(groups,2,'same texture with new visibility must rebind');
-bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,3);
+assert.equal(copies.length,3,'initial region masks are copied');
+bindings.update({...frame,smokeReconstruction:{...r,updates:2}});assert.equal(copies.length,3,'radiance-only updates do not copy geometry masks');
+bindings.update({...frame,smokeReconstruction:{...r,masks:{size:16}}});assert.equal(copies.length,6,'new visibility must refresh packed masks');assert.equal(groups,1);
+bindings.update({...frame,smokeReconstruction:{...r,texture:{createView:()=>({})}}});assert.equal(groups,2);
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:0}}),/reconstruction resources/);
 assert.doesNotThrow(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:2,updates:2}}),'moving solids may refresh the same reconstruction resources');
 assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,staticPreparations:NaN}}),/reconstruction resources/);
@@ -75,6 +82,9 @@ assert.throws(()=>bindings.update({...frame,smokeReconstruction:{...r,identity:'
 const exterior={generation:2,frame:3,smokeReconstruction:{...r,localMin:[-3,-3,-3],localMax:[3,9,3]}};
 assert.throws(()=>bindings.update({...frame,generation:1,frame:3,exterior}),/same-generation/);
 assert.doesNotThrow(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior}));
+const beforeMoving=copies.length;
+bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,staticPreparations:2,coarseDimensions:[16,32,16]},exterior});
+assert.equal(copies.length,beforeMoving+2,'same buffers with newly prepared fine/fallback geometry refresh their masks');
 const intermediate={...exterior,smokeReconstruction:{...exterior.smokeReconstruction,localMin:[-2,-2,-2],localMax:[2,6,2],coarseDimensions:[8,16,8]}};
 assert.throws(()=>bindings.update({...frame,generation:2,frame:3,smokeReconstruction:{...r,coarseDimensions:[16,32,16]},exterior:{...exterior,middle:{...intermediate,generation:1}}}),/same-generation/,'stale middle lighting must fail instead of silently presenting');
 bindings.destroy();
