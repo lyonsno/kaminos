@@ -50,3 +50,15 @@ for(const rotated of [false,true])for(const share of [0,.4,1])for(const [right,u
  }
 }
 console.log('Actual muzzle direction improves through distinct neck/head frames and all descendant world transforms stay coherent');
+// Craning recruits more neck as pitch leaves the comfortable range, while
+// preserving the hard total budget and a coherent displaced-head solution.
+{
+ placement=new THREE.Matrix4();const {pose,rigFrame}=fixture();
+ const look=createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:[0,0,1],up:[0,1,0],maxYaw:1,maxPitch:1.15,comfortablePitch:.55,neckShare:.4,craningNeckShare:.75});
+ const at=pitch=>look.apply(pose,{target:position(pose,'head').add(axis(pose,'head',[0,0,1]).multiplyScalar(12*Math.cos(pitch))).add(axis(pose,'head',[0,1,0]).multiplyScalar(12*Math.sin(pitch))).toArray(),strength:1});
+ const low=at(.2),high=at(.95),limit=at(1.5);
+ assert.ok(high.neckShare>low.neckShare+.1,'higher aim recruits progressively more neck');
+ assert.ok(high.residualAngle<.03,'reachable high aim aligns from the displaced head');
+ assert.ok(limit.residualAngle>.2,'hard limit reports remaining error');
+ assert.ok(Math.abs(limit.appliedPitch)<=1.15,'hard pitch budget remains bounded');
+}

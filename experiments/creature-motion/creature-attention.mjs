@@ -65,9 +65,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const o={noticeRadius:3,fieldOfView:1.9,threshold:.12,inspectSeconds:1.6,forgetSeconds:180,inspectedAt:.85,forgottenAt:.3,impulseSeconds:1.2,moveSpeed:.05,moveDistance:.05,
   adaptSeconds:6,glanceSeconds:1,flareAt:.5,lightShadows:false,shadowDepth:.4,shadowAt:.2,shadowReach:.8,lightFloor:.002,darkFraction:.25,lightCell:.25,lightForgetSeconds:30,idleScan:true,scanEvery:[4,9],scanSeconds:1.2,scanStrength:.5,scanDistance:1.5,seed:1,onEvent:()=>{},
   familiarSeconds:180,interruptSeconds:.65,investigateSeconds:1.8,stillSeconds:.18,lossRate:.3,
-  lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:.55,neckShare:.4,reach:1.35,...options};
+  lingerSeconds:2.5,urgencyGain:2.5,keepFraction:.4,minDwellSeconds:1.5,switchMargin:.12,memorySeconds:.8,restSeconds:2,startle:.3,acquireSeconds:.35,releaseSeconds:.6,aimSeconds:.18,maxYaw:1.05,maxPitch:1.15,comfortablePitch:.55,neckShare:.4,craningNeckShare:.75,pursuitRate:.015,pursuitMemorySeconds:1.5,reach:1.35,...options};
  const policy=createAttentionPolicy({minDwellSeconds:o.minDwellSeconds,defaultMemorySeconds:o.memorySeconds,switchMargin:o.switchMargin});
- const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare});
+ const lookFor=p=>createLookPoseModifier({THREE,rigFrame,neck:'neck',head:'head',forward:p.forward,up:p.up,maxYaw:o.maxYaw,maxPitch:o.maxPitch,neckShare:o.neckShare,comfortablePitch:Math.min(o.comfortablePitch,o.maxPitch),craningNeckShare:Math.max(o.neckShare,o.craningNeckShare)});
  let look=lookFor(profile);
  const random=generator(o.seed),memory=new Map(),history=[],pendingLight=[],lightSources=new Map();
  let light={status:'none',time:null,samples:0,last:null,flareArmed:true,powerNow:null,powerUsual:null},shadows=0;
@@ -76,7 +76,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
  const states=new Map(),powerHistory=createSignalFamiliarity({decaySeconds:o.familiarSeconds});
  let interruption=null,powerDropArmed=true,startle=null,onset=null,previousPower=null;
  const localLevels=new Map();
- let gazeLocal=null,perceived=[],engagementId=null;
+ let gazeLocal=null,gaze=null,perceived=[],engagementId=null;
  let weight=0,lastUrgency=0,aim=null,lastTime=null,focus=null,why=null,restUntil=-Infinity,quietSince=0,nextScan=null,scan=null,scans=0,candidates=[],reachable=false,error=null,enabled=true;
 
  const reticle=new THREE.Group();reticle.name='Attention focus';
@@ -145,8 +145,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const head=bones.get('head'),chest=bones.get('spine-chest');
    const headAt=worldPosition(head),body=headAt.clone().sub(worldPosition(chest));body.y=0;
    if(body.lengthSq()<1e-12)throw Error('Creature body heading is degenerate');body.normalize();
+   const actualGaze=gazeLocal?.clone().transformDirection(group.matrixWorld)??new THREE.Vector3(...profile.forward).transformDirection(head.matrixWorld);
    const sight=(point,range=o.noticeRadius,fov=o.fieldOfView)=>{const toward=new THREE.Vector3(...point).sub(headAt),distance=toward.length(),flat=toward.clone();flat.y=0;
-    const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=fov>=2*Math.PI?1:Math.max(0,1-Math.max(0,angle-fov*.5)/(fov*.35));
+    const angle=flat.lengthSq()>1e-12?body.angleTo(flat):0,view=fov>=2*Math.PI?1:Math.max(0,1-Math.max(0,actualGaze.angleTo(toward)-fov*.5)/(fov*.35));
     return {distance,angle,view,visible:view>0&&distance<range};};
    const decay=Math.exp(-dt/o.impulseSeconds),forget=Math.exp(-dt/o.forgetSeconds);
    if(interruption&&time>=interruption.until){remember('settled',time,{id:interruption.id,cause:interruption.cause});interruption=null;restUntil=time+o.restSeconds;}
@@ -160,6 +161,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     lightSources.set(event.id,{id:event.id,label:event.label,point:event.point,interest:event.strength,noticeRadius:Infinity,transient:true,until:time+o.impulseSeconds*3});
    }
    const listed=interests(),ids=new Set(listed.map(x=>x.id));
+   for(const [id,m] of memory)if(m.track&&!ids.has(id))m.track.continuous=false;
    for(const [id,x] of lightSources)if(time>x.until&&focus?.id!==id)lightSources.delete(id);
    const sources=[...listed,...[...lightSources.values()].filter(x=>!ids.has(x.id))];
    // A remembered light event is not a current observation of its source.
@@ -205,7 +207,21 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     // than steady presence; once alerted, the creature looks until it has seen it.
     const wide=active&&source.eventFieldOfView?sight(source.point,range,source.eventFieldOfView):plain;
     if((lit||changed)&&wide.visible){m.alerted=true;m.eventAt=time;}
-    const s=(m.alerted||engagementId===source.id&&perceivedNow)&&active?sight(source.point,range,2*Math.PI):plain;
+    // A light event can give an initial bearing outside view. Once followed,
+    // actual perception owns updates; alertness cannot see hidden transforms.
+    const s=m.alerted&&!m.track&&active?sight(source.point,range,2*Math.PI):plain;
+    const observed=perceivedNow&&plain.visible;
+    let pursuing=false;
+    if(observed){
+     const prior=m.track,elapsed=prior?time-prior.time:0;
+     const velocity=prior?.continuous&&elapsed>0?source.point.map((v,i)=>(v-prior.point[i])/elapsed):[0,0,0];
+     // Reproject both positions from this eye: walking past a static object
+     // must not manufacture source motion or perpetual interest.
+     const rate=prior?.continuous&&elapsed>0?new THREE.Vector3(...prior.point).sub(headAt).angleTo(towardNow)/elapsed:0;
+     const speed=(prior?.continuous?prior.rate:0)+(rate-(prior?.continuous?prior.rate:0))*smooth(.15,dt);
+     m.track={point:[...source.point],velocity,time,rate:speed,continuous:true};
+     pursuing=focus?.id===source.id&&speed>o.pursuitRate;
+    }else if(m.track)m.track.continuous=false;
     const moved=m.last?Math.hypot(...source.point.map((v,i)=>v-m.last[i])):0;
     m.impulse*=decay;m.urgency=(m.urgency??0)*Math.exp(-dt/o.lingerSeconds);
     const visual=source.visual??visualSources.get(source.id);
@@ -247,16 +263,16 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     if(pending>m.impulse&&!attended&&m.eventAt!==time)m.cause=m.forgotten?names.again:m.started?'back to it':'first sight';
     // A look lasts until the thing is inspected, however weak its pull at a distance.
     // An urgent look lingers: its urgency fades over seconds and holds the look.
-    const drive=engagementId===source.id&&perceivedNow?Math.max(.4,m.impulse,m.urgency??0):attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0,m.urgency>.15?m.urgency:0):Math.max(m.impulse,pending);
+    const drive=pursuing?Math.max(.4,m.impulse,m.urgency??0):engagementId===source.id&&perceivedNow?Math.max(.4,m.impulse,m.urgency??0):attended?Math.max(m.impulse,m.familiarity<o.inspectedAt?significance:0,m.urgency>.15?m.urgency:0):Math.max(m.impulse,pending);
     // Only a sudden event can draw the eye beyond comfortable neck reach;
     // presence alone there would be an invisible look.
-    const withinReach=s.angle<=o.reach||m.alerted;
+    const withinReach=s.angle<=o.reach||m.alerted||focus?.id===source.id;
     // Hysteresis: catching the eye takes the full threshold, keeping it less.
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
     candidates.push({visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
-    if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest'});
+    if((!interruption||canRedirect)&&score>(resting?o.startle:0))observations.push({id:source.id,point:source.point,score,reason:m.cause??'authored interest',...(observed&&pursuing?{velocity:m.track.velocity,memorySeconds:o.pursuitMemorySeconds}:{})});
    }
    // Idle looking around: a brief look at a spot beside the path ahead.
    if(o.idleScan&&!interruption){
@@ -285,9 +301,9 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    let want=0;
    if(focus){
     const target=new THREE.Vector3(...focus.point),flat=target.clone().sub(headAt);flat.y=0;
-    // Beyond comfortable reach the head stays put, unless the creature was
-    // alerted by a sudden change: then it turns as far as it can.
-    reachable=flat.lengthSq()<1e-12||body.angleTo(flat)<=o.reach;want=reachable||memory.get(focus.id)?.alerted?1:0;
+    // Acquiring a look and executing an existing look are distinct. A pursued
+    // or remembered bearing still asks for the closest physically lawful pose.
+    reachable=flat.lengthSq()<1e-12||body.angleTo(flat)<=o.reach;want=1;
     const u=memory.get(focus.id)?.urgency??0,quick=1+o.urgencyGain*u;
     aim=aim?aim.lerp(target,smooth(o.aimSeconds/quick,dt)):target;
    }else reachable=false;
@@ -307,9 +323,11 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    const urgency=focus?memory.get(focus.id)?.urgency??0:lastUrgency;if(focus)lastUrgency=urgency;
    weight+=(want-weight)*smooth(want>weight?o.acquireSeconds/(1+o.urgencyGain*urgency):o.releaseSeconds*(1+urgency),dt);
    if(weight<1e-3&&!focus){weight=0;aim=null;}
+   gaze=null;
    if(aim&&weight>0){
     const out=look.apply(poseOf(bones,group),{target:aim.toArray(),strength:Math.min(1,weight)});
     if(out.applied){
+     gaze={requestedYaw:out.requestedYaw,requestedPitch:out.requestedPitch,appliedYaw:out.appliedYaw,appliedPitch:out.appliedPitch,residualAngle:out.residualAngle,neckShare:out.neckShare};
      for(const name of ['neck','head']){const row=out.pose.bones.find(b=>b.name===name);new THREE.Matrix4().fromArray(row.localMatrix).decompose(bones.get(name).position,bones.get(name).quaternion,bones.get(name).scale);}
      bones.get('neck').updateMatrixWorld(true);
     }
@@ -424,12 +442,12 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
   light={...light,status,time,samples:samples.length,last:samples.map(x=>x.luminance)};
  }
  function read(){
-  return {enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
+  return {gaze:gaze?{...gaze}:null,enabled,weight,perceived:structuredClone(perceived),arrested:enabled&&(interruption!==null||Boolean(startle&&lastTime<startle.holdUntil)),startle:startle?structuredClone(startle):null,interruption:interruption?structuredClone(interruption):null,light:{status:light.status,time:light.time,samples:light.samples},reachable,error,profile:structuredClone(profile),
    focus:focus?structuredClone(focus):null,why:why?structuredClone(why):null,aim:aim?aim.toArray():null,
    candidates:structuredClone(candidates).sort((a,b)=>b.score-a.score),history:structuredClone(history),
    familiarity:Object.fromEntries([...memory].map(([id,m])=>[id,m.familiarity])),options:Object.fromEntries(Object.entries(o).filter(([,v])=>typeof v!=='function'&&typeof v!=='object'||Array.isArray(v)))};
  }
- function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
+ function setEnabled(value){if(typeof value!=='boolean')throw Error('Attention enabled must be boolean');enabled=value;if(!value){perceived=[];engagementId=null;policy.reset();focus=null;why=null;scan=null;nextScan=null;interruption=null;startle=null;onset=null;localLevels.clear();visualTrackers.clear();visualSources.clear();previousPower=null;states.clear();powerHistory.gap();light.powerNow=null;light.powerUsual=null;pendingLight.length=0;gazeLocal=null;gaze=null;for(const m of memory.values())delete m.track;weight=0;aim=null;lastTime=null;restUntil=-Infinity;reticle.visible=false;}return read();}
  // A different cast on the same rig has its own muzzle; keep focus and memory.
  function setProfile(next){const replacement=lookFor(next);look=replacement;profile=next;gazeLocal=null;return read();}
  function dispose(){reticle.removeFromParent();reticle.traverse(node=>{node.geometry?.dispose();node.material?.map?.dispose();});ringMaterial.dispose();caption?.material.dispose();}

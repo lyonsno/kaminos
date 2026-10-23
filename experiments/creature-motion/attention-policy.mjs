@@ -40,7 +40,7 @@ function validateObservation(observation, seenIds) {
   if (observation === null || typeof observation !== 'object') {
     throw new Error('observation must be an object');
   }
-  const {id, point, score, reason, memorySeconds} = observation;
+  const {id, point, score, reason, memorySeconds, velocity} = observation;
   if (typeof id !== 'string' || id.length === 0) {
     throw new Error('observation.id must be a nonempty string');
   }
@@ -60,7 +60,9 @@ function validateObservation(observation, seenIds) {
   if (memorySeconds !== undefined && (!isFiniteNumber(memorySeconds) || memorySeconds < 0)) {
     throw new Error(`observation.memorySeconds must be a finite number >= 0 when present (id: ${id})`);
   }
+  if (velocity !== undefined && !isFinitePoint(velocity)) throw new Error(`observation.velocity must be a finite three-component array (id: ${id})`);
   return {
+    ...(velocity === undefined ? {} : {velocity: clonePoint(velocity)}),
     id,
     point: clonePoint(point),
     score,
@@ -94,6 +96,7 @@ function validateUpdateArgs(args, lastTime) {
 function cloneRemembered(remembered) {
   if (!remembered) return null;
   return {
+    ...(remembered.velocity ? {velocity: clonePoint(remembered.velocity)} : {}),
     id: remembered.id,
     point: clonePoint(remembered.point),
     score: remembered.score,
@@ -108,9 +111,15 @@ function toPublicFocus(remembered, time) {
   if (!remembered) return null;
   const expiresAt = remembered.lastObservedAt + remembered.memorySeconds;
   const isRemembered = time > remembered.lastObservedAt;
+  const elapsed = Math.max(0, time - remembered.lastObservedAt);
+  const confidence = remembered.memorySeconds > 0 ? Math.max(0, 1 - elapsed / remembered.memorySeconds) : (isRemembered ? 0 : 1);
+  // Integrate a linearly fading velocity; prediction never refreshes observation time.
+  const horizon = Math.min(elapsed, remembered.memorySeconds);
+  const travel = remembered.memorySeconds > 0 ? horizon * (1 - horizon / (2 * remembered.memorySeconds)) : 0;
   return {
     id: remembered.id,
-    point: clonePoint(remembered.point),
+    point: remembered.point.map((v,i) => v + (remembered.velocity?.[i] ?? 0) * travel),
+    confidence,
     reason: remembered.reason,
     remembered: isRemembered,
     acquiredAt: remembered.acquiredAt,
@@ -163,6 +172,7 @@ export function createAttentionPolicy(options = {}) {
         current = {
           ...current,
           point: clonePoint(observedNow.point),
+          velocity: observedNow.velocity ? clonePoint(observedNow.velocity) : undefined,
           score: observedNow.score,
           reason: observedNow.reason,
           lastObservedAt: time,
@@ -183,6 +193,7 @@ export function createAttentionPolicy(options = {}) {
         current = {
           id: best.id,
           point: clonePoint(best.point),
+          velocity: best.velocity ? clonePoint(best.velocity) : undefined,
           score: best.score,
           reason: best.reason,
           acquiredAt: time,
@@ -199,6 +210,7 @@ export function createAttentionPolicy(options = {}) {
         current = {
           id: best.id,
           point: clonePoint(best.point),
+          velocity: best.velocity ? clonePoint(best.velocity) : undefined,
           score: best.score,
           reason: best.reason,
           acquiredAt: time,
