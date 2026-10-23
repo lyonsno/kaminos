@@ -23,7 +23,8 @@ export function validateFlux3AuthoringResult(r){
     assert.equal(r.output[key],r.expectedSize);assert.equal(r.provenance[key],r.expectedSize);
   }
   assert.ok(r.output.bytes>0&&r.output.distinctRgb>1,'a retained nonblank image');
-  assert.ok(r.frames.after>r.frames.before,'foreground frames advance during inference');
+  const interval=r.frames.inference;
+  assert.ok(interval&&interval.finishedAt>interval.startedAt&&interval.after>interval.before,'foreground frames advance during actual pipeline inference');
   assert.deepEqual(r.gpuErrors,[]);
   return r;
 }
@@ -67,7 +68,17 @@ async function main(){
     report.prompt='A copper kettle with a round handle, isolated on a plain white background, studio product photo';
     report.seed=7006;report.expectedSize=Number(v.size);
     report.phase='generate';await write();
-    await browser.evaluate(`(()=>{window.kaminosAssets.open('generate');
+    // Observe the actual pipeline promise, excluding weight loading and PNG persistence.
+    // This wrapper preserves the production method and its caller; no synthetic work is substituted.
+    await browser.evaluate(`(async()=>{const {Flux3Pipeline}=await import('./models/flux3-klein/flux3-pipeline.js');
+      const original=Flux3Pipeline.prototype.generate;
+      Flux3Pipeline.prototype.generate=async function(options){
+        const interval={before:window.kaminosAppFrameSource()?.completedFrames??0,startedAt:performance.now()};
+        window.flux3SmokeInference=interval;
+        try{return await original.call(this,options);}
+        finally{interval.after=window.kaminosAppFrameSource()?.completedFrames??0;interval.finishedAt=performance.now();}
+      };
+      window.kaminosAssets.open('generate');
       const byId=id=>document.getElementById(id);byId('asset-image-model').value='flux3';byId('asset-image-model').dispatchEvent(new Event('change'));
       byId('asset-image-size').value=${JSON.stringify(v.size)};byId('asset-prompt').value=${JSON.stringify(report.prompt)};byId('asset-seed').value='7006';
       window.flux3SmokeFrames={before:(window.kaminosAppFrameSource()?.completedFrames??0),after:0};
@@ -87,7 +98,7 @@ async function main(){
       const bitmap=await createImageBitmap(blob),canvas=new OffscreenCanvas(bitmap.width,bitmap.height),ctx=canvas.getContext('2d');ctx.drawImage(bitmap,0,0);
       const pixels=ctx.getImageData(0,0,bitmap.width,bitmap.height).data,colors=new Set();for(let i=0;i<pixels.length;i+=4)colors.add((pixels[i]<<16)|(pixels[i+1]<<8)|pixels[i+2]);
       const data=await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});
-      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0},gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
+      return {entry,data,output:{width:bitmap.width,height:bitmap.height,bytes:blob.size,distinctRgb:colors.size},frames:{...window.flux3SmokeFrames,after:window.kaminosAppFrameSource()?.completedFrames??0,inference:window.flux3SmokeInference},gpuErrors:window.flux3SmokeGpuErrors,selected:window.kaminosAssets.read().selected};})()`);
     const bytes=Buffer.from(saved.data,'base64');await fs.writeFile(path.join(out,'generated.png'),bytes);
     report.provenance=readPngProvenance(bytes);report.output={...saved.output,sha256:createHash('sha256').update(bytes).digest('hex')};
     report.entry=saved.entry;report.selected=saved.selected;report.frames=saved.frames;report.gpuErrors=saved.gpuErrors;
