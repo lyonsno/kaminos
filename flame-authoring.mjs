@@ -162,12 +162,11 @@ export const FLAME_PROPERTY_GROUPS = [
     ['volume-emitter-swirl','Swirl'], ['volume-emitter-line-weight','Line weight'],
     ['volume-emitter-jet-jitter','Jet jitter'], ['volume-emitter-inlet-turbulence','Inlet turbulence'],
     ['volume-emitter-inlet-turbulence-scale','Turbulence scale'], ['volume-emitter-puff','Puff strength'],
-    ['volume-emitter-puff-period','Puff correlation time'],
+    ['volume-emitter-puff-period','Puff correlation time'], ['volume-fixed-source-dephase','Source dephasing'],
   ] },
   { name:'Flow response', view:'motion', open:true, fields:[
     ['volume-plume-height','Plume rise shaping'], ['volume-confinement','Confinement'],
     ['volume-curl','Curl gain'], ['volume-artistic-swirl','Artistic swirl'], ['volume-phased-sway','Lateral excitation'],
-    ['volume-fixed-source-dephase','Source dephasing'],
   ] },
   { name:'Wind', view:'motion', open:true, fields:[
     ['volume-wind-model','Wind model'], ['volume-wind-strength','Wind strength'],
