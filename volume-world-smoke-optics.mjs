@@ -6,11 +6,38 @@ export function worldSmokeOverlayGeometry(s) {
  const volume=(lo,hi)=>hi.reduce((p,v,i)=>p*(v-lo[i]),1);
  return {worldMin,worldMax,fineMin,fineMax,finePitch:2*f.scale/s.fineDims[0],materialPitch:(worldMax[0]-worldMin[0])/s.materialDims[0],flowPitch:(worldMax[0]-worldMin[0])/s.flowDims[0],volumeRatio:volume(worldMin,worldMax)/volume(fineMin,fineMax)};
 }
+// Distances are relative to ray entry, as in OpticalStepState.
+export function joinedOpticalRegion(cursor,{end,fine,inner,fineBase,worldBase,band}) {
+ let stop=end;
+ const insideFine=fine[1]>fine[0]&&cursor>=fine[0]&&cursor<fine[1];
+ const insideInner=inner[1]>inner[0]&&cursor>=inner[0]&&cursor<inner[1];
+ for(const hit of [fine,inner])if(hit[1]>hit[0])for(const t of hit)if(t>cursor)stop=Math.min(stop,t);
+ return {stop,base:insideFine?(insideInner?fineBase:Math.min(fineBase,band)):worldBase};
+}
+
 // One ray integral for the fine flame and world material. No alpha-overlay seam.
 export const WORLD_SMOKE_OPTICS_WGSL=/* wgsl */`
 struct WorldSmokeRender { loPitch:vec4<f32>, hiEnabled:vec4<f32>, overlayControls:vec4<f32> }
 @group(0) @binding(20) var worldOptical:texture_3d<f32>;
 @group(0) @binding(21) var<uniform> worldRender:WorldSmokeRender;
+fn joinedOpticalRegion(cursor:f32,end:f32,fine:vec2<f32>,inner:vec2<f32>,fineBase:f32,worldBase:f32,band:f32)->vec2<f32>{
+ var stop=end;
+ let insideFine=fine.y>fine.x&&cursor>=fine.x&&cursor<fine.y;
+ let insideInner=inner.y>inner.x&&cursor>=inner.x&&cursor<inner.y;
+ let hits=array<vec2<f32>,2>(fine,inner);
+ for(var i=0u;i<2u;i++){if(hits[i].y>hits[i].x){
+  for(var j=0u;j<2u;j++){if(hits[i][j]>cursor){stop=min(stop,hits[i][j]);}}
+ }}
+ let localBase=select(min(fineBase,band),fineBase,insideInner);
+ return vec2<f32>(stop,select(worldBase,localBase,insideFine));
+}
+fn joinedOpticalConstrain(s:ptr<function,OpticalStepState>,fine:vec2<f32>,inner:vec2<f32>,fineBase:f32,worldBase:f32,band:f32){
+ if((*s).mask>1u){return;}
+ let region=joinedOpticalRegion((*s).cursor,(*s).end,fine,inner,fineBase,worldBase,band);
+ let minimum=region.y*select(1.0,.5,OPTICAL_STEP_MODE==3u);
+ let maximum=minimum*select(1.0,4.0,OPTICAL_STEP_MODE==2u);
+ opticalStepConstrain(s,minimum,maximum,region.x-(*s).cursor);
+}
 fn worldSmokeOn()->bool{return worldRender.hiEnabled.w>0.5;}
 fn worldSmokeDiagnostic(m:EmissiveMaterial,coarse:bool)->EmissiveMaterial{
  if(worldRender.overlayControls.x<.5||!worldSmokeOn()){return m;}

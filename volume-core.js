@@ -7889,8 +7889,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
   let jitter = dtBase * rayPhase;
   let traceStart = min(startT + jitter, endT);
   var t = startT + jitter;
-  let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5 && !worldActive;
+  let opticalStepping = OPTICAL_STEP_MODE != 0u && !fullGridCapture && !opticalTrace && physicalColorMode > 1.5;
   var opticalStep = opticalStepInitPhased(max(startT, sceneDepthStartT), endT, dtBase, select(-1.0, rayPhase, u.reserved_render_controls.w > 0.5));
+  let blendBand = min(0.5, worldRender.loPitch.w);
+  let innerHit = boxHit(ro - vec3<f32>(0.0, domainHalfY - 1.0, 0.0), rd,
+    vec3<f32>(1.0, domainHalfY, 1.0) - vec3<f32>(blendBand));
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
   if (physicalColorMode > 0.5) { color = vec3<f32>(0.0); }
@@ -7932,7 +7935,11 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
     if (opticalStepping) {
       if (opticalStep.cursor >= opticalStep.end) { break; }
       let priority = clamp(u.occupancy_controls.z, 0.0, 1.0);
-      if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
+      if (worldActive) {
+        joinedOpticalConstrain(&opticalStep, nearHit - vec2<f32>(opticalStep.origin),
+          innerHit - vec2<f32>(opticalStep.origin), dtBase,
+          worldRender.loPitch.w * (80.0 / steps), blendBand);
+      } else if (OPTICAL_STEP_MODE == 2u && priority > 0.0 && opticalStep.mask <= 1u) {
         let remaining = opticalStep.end - opticalStep.cursor;
         let horizon = min(remaining, dtBase * 8.0);
         let guide = flameGuideSegment(ro + rd * (opticalStep.origin + opticalStep.cursor), rd, horizon);
@@ -7967,10 +7974,15 @@ fn raymarchVolume(in: VSOut, sceneDepthEndT: f32, preserveSamplePositions: bool,
       let medium=worldSmokeDiagnostic(worldSmokeMaterial(p,1.0-effectiveRaymarchSmokeSuppressed,selectiveRaymarchFireAuthority),true);
       rayMaterialSamples += 1u;
       let sigma=medium.absorption+medium.scattering;
+      let scatteredSource=medium.scattering * incidentAt(p);
+      if (opticalStepping) {
+        opticalStepObserveWithTolerance(&opticalStep,vec4<f32>(medium.emission+scatteredSource,sigma),u.reserved_render_controls.y);
+        color=opticalStep.transfer.xyz;trans=opticalStep.transfer.w;
+        continue;
+      }
       let interest=clamp(max(sigma*worldRender.loPitch.w,length(medium.emission)*worldRender.loPitch.w),0.0,1.6);
       var ds=min(worldMarchStep(worldRender.loPitch.w,steps,interest,clamp(u.radiance_controls.w,0.0,1.0)),max(.0001,endT-t));
       if(nearHit.y>nearHit.x && t<nearHit.x && t+ds>nearHit.x){ds=nearHit.x-t;}
-      let scatteredSource=medium.scattering * incidentAt(p);
       color+=trans*(medium.emission+scatteredSource)*emissionIntegral(sigma,ds);
       trans*=exp(-sigma*ds);t+=ds;continue;
     }
@@ -20591,7 +20603,7 @@ export function createKaminosVolumePrototype({
           if(!current||sourceFrame!==state.frameCount||sourceStep!==state.simStepCount)throw new Error('Native scene transport frame expired');
           if(!input?.encoder)throw new Error('Native scene transport requires the host encoder');
           const lean=emissiveRaymarchAdmission().eligible&&debugRaymarchShaderSpecialization!=='force-full';
-          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+          const optical=resolveOpticalStepping(debugOpticalStepping,{emissive:lean,exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
           let code=WGSL,lighting=null;
           if(distributedGroup) {
             if(distributedFrame?.generation!==sceneVolumeSource?.describe().generation)throw new Error('Native scene transport lighting is stale');
@@ -20671,7 +20683,7 @@ export function createKaminosVolumePrototype({
     let drawPipeline = selectRaymarchPipeline(targetPipeline);
     const selectEmissive = drawPipeline === leanEmissivePipeline || drawPipeline === leanEmissiveReadbackPipeline;
     const optical = resolveOpticalStepping(debugOpticalStepping, {emissive:selectEmissive,
-      trace:Boolean(options.opticalTrace),exterior:state.joinedRendering?.enabled===true,explicit:debugOpticalSteppingExplicit});
+      trace:Boolean(options.opticalTrace),exterior:state.worldSmoke?.effective==='one-way-world-field',explicit:debugOpticalSteppingExplicit});
     const telemetrySupported=selectEmissive&&!options.opticalTrace&&!options.bindGroup
       &&!nonRidgeOpticalCaptureSession&&!nonRidgeSourceBasisCaptureSession&&productFrameOwner==='prototype';
     if(rayStepTelemetry.ensure(state.width,state.height,controlsSnapshot.rayStepTelemetry===true,
@@ -20684,7 +20696,10 @@ export function createKaminosVolumePrototype({
       flamePriority:optical.mode==='numerical'?uniforms[42]:0,
       quadratureJitterRequested:controlsSnapshot.quadratureJitter!==false,
       quadratureJitter:optical.mode!=='current'&&uniforms[47]>0.5&&uniforms[43]>0.5,
-      guidance:'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts' };
+      guidance:state.worldSmoke?.effective==='one-way-world-field'
+        ? 'fine/world interval boundaries and local grid spacing; no flame-priority guide'
+        : 'coverage-and-active-law-lookahead; guide reads excluded from material-sample counts',
+      integrationDomain:state.worldSmoke?.effective==='one-way-world-field'?'joined-fine-world':'fine' };
     const opticalKey = `:${optical.mode}:stats=${rayStepTelemetry.active}`;
     if ((optical.mode !== 'current'||rayStepTelemetry.active) && !multisampled && !scenePointBindGroup && !distributedGroup) {
       const key = `${targetPipeline === readbackPipeline}:${gridSize}:${gridHeight}${opticalKey}`;

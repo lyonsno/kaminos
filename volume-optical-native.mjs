@@ -10,10 +10,10 @@ export function opticalSteppingConfig({mode = 'numerical', tolerance = 0.001} = 
 }
 
 export function resolveOpticalStepping(config, {emissive, trace = false, exterior = false, explicit = false}) {
-  if (config.mode !== 'current' && (!emissive || trace || exterior)) {
-    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture or joined exterior');
+  if (config.mode !== 'current' && (!emissive || trace)) {
+    if (explicit) throw new Error('optical stepping comparison requires lean emissive beauty, without trace capture');
     return {...opticalSteppingConfig({mode:'current',tolerance:config.tolerance}),requested:config.mode,
-      reason:exterior?'joined-exterior':trace?'diagnostic-trace-capture':'non-emissive-renderer'};
+      reason:trace?'diagnostic-trace-capture':'non-emissive-renderer'};
   }
   return {...config,requested:config.mode,reason:null};
 }

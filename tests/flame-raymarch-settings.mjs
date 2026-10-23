@@ -19,11 +19,11 @@ test('marcher settings persist as additive renderer controls, preserving the num
   assert.equal(controls.get('volume-optical-tolerance')?.additiveDefault,0.001);
   assert.equal(controls.get('volume-ray-step-telemetry')?.additiveDefault,false);
 });
-test('a joined exterior reports the actual old traversal instead of claiming numerical integration',()=>{
+test('a joined exterior reports and executes the requested numerical integration',()=>{
   const effective=resolveOpticalStepping(opticalSteppingConfig(),{emissive:true,exterior:true});
-  assert.equal(effective.mode,'current');assert.equal(effective.requested,'numerical');
-  assert.equal(effective.reason,'joined-exterior');
-  assert.throws(()=>resolveOpticalStepping(opticalSteppingConfig(),{emissive:true,exterior:true,explicit:true}),/exterior/);
+  assert.equal(effective.mode,'numerical');assert.equal(effective.requested,'numerical');
+  assert.equal(effective.reason,null);
+  assert.equal(resolveOpticalStepping(opticalSteppingConfig(),{emissive:true,exterior:true,explicit:true}).mode,'numerical');
 });
 test('editable tolerance rejects values that cannot remain positive finite GPU coefficients',()=>{
   for(const tolerance of [1e-100,1e100])assert.throws(()=>opticalSteppingConfig({tolerance}),/GPU/);
