@@ -10431,8 +10431,14 @@ function removeSceneObjectInternal(id, { recordHistory = true, preserveForMember
     try { scenePlacementTools.edits.assertCanRecordApplied(editId); }
     catch (error) { setInfo(error.message); return false; }
   }
-  if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
-  else if (!recordHistory && sceneObjects[index].type === 'experiment') scenePlacementTools?.edits.discard(entry => entry.id === id);
+  if (sceneObjects[index].type === 'experiment') scenePlacementTools?.edits.discard(entry => {
+    if (entry.id === id) return true;
+    const snapshots = [entry.before, entry.after, entry.historyBefore, entry.historyAfter];
+    if (entry.id === '@scene-selection') return snapshots.some(value => value?.ids?.includes(id));
+    if (entry.id === '@selection-transform') return snapshots.some(value => Object.hasOwn(value?.roots || {}, id));
+    return false;
+  });
+  else if (recordHistory && !editId) scenePlacementTools?.edits.discard(entry => entry.id === id);
   const previousActiveGroupId = activeSceneGroupId;
   const wasActive = activeSceneObjectId === id;
   const [entry] = sceneObjects.splice(index, 1);

@@ -7,6 +7,7 @@ import {canCollideWithFire,checkedObjectCollision} from '../scene-collider.mjs';
 import * as T from '../lib/three.core.js';
 import {createWorkbenchSceneHost,disposeOwnedSceneTree} from '../workbench-scene-host.mjs';
 import registrationExperiment from '../experiments/part-claims.experiment.mjs';
+import {checkedSelection,createSelectionTransformTarget} from '../scene-selection.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const membershipStart = html.indexOf('function membershipEditTargetId(');
@@ -278,26 +279,38 @@ test('removing one selected member prunes it before a surviving selection is pro
 
 test('registration preview clear, rebuild and invalidation preserve usable unrelated Undo',async()=>{
  const savedFetch=globalThis.fetch;
- const source={objects:[{id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],provenance:{analyticalCarrier:{parts:{base:['box']}}}};
+ const source={objects:[{id:'box',type:'procedural-mesh',source:'kaminos:geometry',geometry:{kind:'box',parameters:{width:2,height:2,depth:2}},transform:{position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}}],provenance:{analyticalCarrier:{parts:{base:['box'],second:['box']}}}};
  globalThis.fetch=async url=>{if(url.startsWith('/api/asset-registrations'))throw Error('fixture has no storage');return {ok:true,json:async()=>source};};
- try{for(const operation of ['clear','rebuild','invalidate']){
+ try{for(const operation of ['clear','rebuild','invalidate'])for(const motion of ['direct','combined'])for(const undone of [false,true]){
   const {context,sceneObjects,scene}=makeSceneContext({liveScene:new T.Scene()}),frames=new Set();
   const edits=createSceneEdits({read:id=>{const root=sceneObjects.find(r=>r.id===id)?.object;return root?{position:root.position.toArray(),rotation:root.rotation.toArray().slice(0,3),scale:root.scale.toArray()}:null;},write:(id,p)=>{const root=sceneObjects.find(r=>r.id===id).object;root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}});
   context.scenePlacementTools.edits=edits;context.disposeOwnedSceneTree=disposeOwnedSceneTree;
+  context.scenePlacementTools.selectionChanged=()=>{};
+  Object.assign(context,{checkedSelection,burnerGraphWriting:false,activeSceneComposition:null,localLiquidSetup:null,authoringWorkspace:null,activeSceneFieldId:null,selectionTransformProxy:()=>new T.Group(),selectedSceneObjectEntry:()=>sceneObjects.find(r=>r.id===context.activeSceneObjectId),updateSelectionFeedback(){}});
+  for(const name of ['setSceneSelection','setupSelectionHistory']){const start=html.indexOf(`function ${name}(`);vm.runInContext(html.slice(start,html.indexOf('\n}',start)+2),context);}
+  context.setupSelectionHistory();
+  const readPose=id=>{const root=sceneObjects.find(r=>r.id===id)?.object;if(!root)throw Error(`Selected object ${id} is absent`);return {position:root.position.toArray(),rotation:root.rotation.toArray().slice(0,3),scale:root.scale.toArray()};};
+  const selectionTransform=createSelectionTransformTarget({edits,selection:()=>context.sceneSelection,groups:()=>[],preferences:()=>({pivot:'median',orientation:'world'}),read:readPose,check(){},write:(id,p)=>{const root=sceneObjects.find(r=>r.id===id).object;root.position.fromArray(p.position);root.rotation.set(...p.rotation);root.scale.fromArray(p.scale);}});
   const removeHook=html.match(/removeObject:handle=>(\{[\s\S]*?\n    \}),\n    redraw:/);assert.ok(removeHook,'actual Workbench removal hook');
   const removeObject=vm.runInContext(`handle=>${removeHook[1]}`,context);
   const registerObject=(object,options)=>{const row=makeRecord(object.uuid,object,options);sceneObjects.push(row);return row;};
   const shared=createWorkbenchSceneHost({scene,camera:new T.PerspectiveCamera(),controls:{target:new T.Vector3(),update(){}},loadAsset:async()=>{const root=new T.Mesh(new T.BoxGeometry(),new T.MeshStandardMaterial());scene.add(root);const row=registerObject(root,{type:'glb'});return {id:row.id,root};},registerObject,findObject:root=>sceneObjects.find(r=>r.object===root),removeObject,redraw(){},onFrame:cb=>{frames.add(cb);return()=>frames.delete(cb);}});
-  const host={scene:{...shared,objects:()=>sceneObjects,refreshPresentation(){},setTransform:async(id,p)=>edits.apply(id,p)}};
+  const host={scene:{...shared,objects:()=>sceneObjects,refreshPresentation(){},setTransform:async(id,p)=>edits.apply(id,p),select:id=>context.sceneSelectionHistory.set([id])}};
   const experiment=await registrationExperiment.create({host,inputs:{settings:{alignment:{rotation:[0,0,0]}}},record(){}}),sourceId=experiment.read().sourceObjectId;
   const before=sceneObjects.find(r=>r.id===sourceId).object.position.toArray();edits.apply(sourceId,{position:[.1,0,0]});
   await experiment.operations.compute();await experiment.operations.buildPreview();const pieceId=experiment.read().preview.pieces[0].objectId;
-  edits.apply(pieceId,{position:[5,6,7]});assert.equal(edits.state().undoCount,2);
+  await experiment.operations.selectPiece('base');await experiment.operations.selectPiece('second');
+  if(motion==='direct')edits.apply(pieceId,{position:[5,6,7]});
+  else{context.sceneSelectionHistory.set(experiment.read().preview.pieces.slice(0,2).map(p=>p.objectId));selectionTransform.apply({position:[5,6,7]});}
+  assert.ok(edits.state().undoCount>=4);
+  if(undone)while(edits.state().undoCount>1)await edits.undo();
   if(operation==='clear')await experiment.operations.clearPreview();
   if(operation==='rebuild')await experiment.operations.buildPreview();
   if(operation==='invalidate'){experiment.operations.configure({threshold:.6});for(const tick of frames)tick({});await new Promise(resolve=>setImmediate(resolve));}
   assert.equal(sceneObjects.some(r=>r.id===pieceId),false);assert.equal(edits.state().undoCount,1,`${operation} retires dead preview history`);
+  assert.equal(edits.state().redoCount,0,`${operation} retires unavailable future references`);
   await edits.undo();assert.deepEqual(sceneObjects.find(r=>r.id===sourceId).object.position.toArray(),before,`${operation} preserves earlier carrier Undo`);
+  await edits.redo();assert.deepEqual(sceneObjects.find(r=>r.id===sourceId).object.position.toArray(),[.1,0,0],`${operation} preserves unrelated carrier Redo`);
   await experiment.dispose();
  }}finally{globalThis.fetch=savedFetch;}
 });
