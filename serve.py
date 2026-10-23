@@ -2532,8 +2532,9 @@ PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 def flux3_weights_mounted():
     """Availability is metadata-only: the loader's manifests and payloads must exist.
 
-    The browser checks payload hashes while loading. Do not rehash gigabytes for
-    runtime-config requests, but reject absent/truncated files before model teardown.
+    The browser loader keys its cache by declared digest and checks byte lengths;
+    it does not verify content digests. Reject absent/truncated payloads here before
+    model teardown without reading gigabytes during runtime-config requests.
     """
     if not FLUX3_WEIGHTS_ROOT:
         return False
