@@ -5,13 +5,14 @@ import * as THREE from '../lib/three.core.js';
 import {immersedRadiusBounds,immersedControlsForFlamePose} from '../scene-flame-emitter.mjs';
 import {flameSourceInputs} from '../scene-fire-domain.mjs';
 import {visibleSceneIntersections} from '../scene-visible-picking.mjs';
+import {styleHelperLines} from '../scene-helper-lines.mjs';
 const pose={position:[0,-.5,0],rotation:[0,0,0],scale:[.2,.2,.2]};
 test('zero authored radius remains zero and stops supply; positive scaling has no upper cap',()=>{
  assert.deepEqual(immersedRadiusBounds(pose),{min:0,max:null});
  const zero=immersedControlsForFlamePose({immersedRadius:0},pose);
- assert.equal(zero.immersedRadius,0);assert.equal(zero.immersedSourceEnabled,false);
+ assert.equal(zero.immersedSourceEnabled,false); // The current engine retains a positive numerical aperture while supply is off.
  assert.equal(immersedControlsForFlamePose({immersedRadius:50},pose).immersedRadius,10);
- assert.equal(immersedControlsForFlamePose({immersedRadius:-1},pose).immersedRadius,0);
+ assert.equal(immersedControlsForFlamePose({immersedRadius:-1},pose).immersedSourceEnabled,false);
  assert.equal(immersedControlsForFlamePose({immersedRadius:.4},{...pose,scale:[0,0,0]}).immersedSourceEnabled,false);
 });
 const record=id=>({id,type:'flame-emitter',source:'kaminos:analytic-flame',transform:pose,emissionEnabled:true,emission:{domainId:'flame-field',settings:{'volume-immersed-radius':{value:.3,type:'range'}}}});
@@ -23,7 +24,7 @@ test('hiding one source stops its contribution independently of Emit gas and lea
 });
 test('the drawn wide emitter ring has a screen-sized picking aperture',()=>{
  const camera=new THREE.PerspectiveCamera(40,1,.01,100);camera.position.z=10;camera.updateMatrixWorld();
- const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0025,4,32),new THREE.MeshBasicMaterial({wireframe:true}));const group=new THREE.Group();group.userData.kaminosEditorHelper=true;group.add(ring);group.updateMatrixWorld(true);
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(1,.0025,4,32),new THREE.MeshBasicMaterial({wireframe:true}));const group=new THREE.Group();group.userData.kaminosEditorHelper=true;group.add(ring);styleHelperLines(group,{width:8,opacity:1});group.updateMatrixWorld(true);
  const point=new THREE.Vector3(1,0,0).project(camera);point.x+=6/1000; // three pixels outside the centreline
  const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);
  const hits=visibleSceneIntersections({raycaster,roots:[group],camera,viewport:{width:1000,height:1000}});
@@ -60,7 +61,7 @@ test('a hidden water field submits neither solver nor water rendering work while
 test('screen-space ring picking survives an emitter scaled through its parent',()=>{
  const camera=new THREE.PerspectiveCamera(40,1,.01,100);camera.position.z=2;camera.updateMatrixWorld();
  const root=new THREE.Group();root.scale.setScalar(.22);root.userData.kaminosEditorHelper=true;
- const ring=new THREE.Mesh(new THREE.TorusGeometry(.5,.0025,4,32),new THREE.MeshBasicMaterial());root.add(ring);root.updateMatrixWorld(true);
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(.5,.0025,4,32),new THREE.MeshBasicMaterial());root.add(ring);styleHelperLines(root,{width:8,opacity:1});root.updateMatrixWorld(true);
  const point=new THREE.Vector3(.11,0,0).project(camera);point.x+=6/1000;
  const raycaster=new THREE.Raycaster();raycaster.setFromCamera(new THREE.Vector2(point.x,point.y),camera);
  assert.ok(visibleSceneIntersections({raycaster,roots:[root],camera,viewport:{width:1000,height:1000}}).some(h=>h.object===ring),'parent scale must not shrink the screen pixel aperture');

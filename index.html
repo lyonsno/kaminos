@@ -3326,6 +3326,9 @@ import { installLegacyRangeFields } from './legacy-range-field.mjs';
 import { bindSceneHierarchyRows } from './scene-hierarchy-interaction.mjs';
 import { installAuthoringWorkspace } from './authoring-workspace.mjs';
 import {installSceneVisibility,sceneItemVisible as itemVisible,withViewportVisibility} from './scene-visibility.mjs';
+import {checkedRepetition,repetitionDefaults,repetitionMatrices,repetitionCount,withoutRepetitionCopies} from './scene-repetition.mjs';
+import {createSceneRepetitionController,canRepeatSceneObject} from './scene-repetition-controller.mjs';
+import {installRepetitionInspector} from './scene-repetition-inspector.mjs';
 import {createSceneSimulationActivity} from './scene-simulation-activity.mjs';
 import { installCommandSearch } from './scene-command-search.mjs';
 import { buildSceneOutline, visibleOutlineRows } from './scene-outline-tree.mjs';
@@ -4038,6 +4041,8 @@ const localLiquidHostMount = createGenerationBoundLocalLiquidHostMount({
   },
 });
 let sceneGroups = [];
+let sceneRepetitionController=null,sceneRepetitionInspector=null;
+const repetitionEditTargets=new Set();
 let activeSceneObjectId = null;
 let activeSceneGroupId = null;
 let activeSceneFieldId=null;
@@ -5072,6 +5077,7 @@ function sceneObjectMetadataFor(object) {
 }
 
 function disposeObjectTree(object) {
+  for(const child of [...(object.children||[])])if(child.userData?.kaminosRepetitionCopy)object.remove(child);
   object.traverse(child => {
     if (child.geometry) child.geometry.dispose();
     if (child.material) {
@@ -6182,6 +6188,7 @@ function serializeSceneGroups() {
     id: group.id,
     label: sceneGroupDisplayLabel(group),
     objectIds: [...group.objectIds],
+    ...(group.repetition?{repetition:checkedRepetition(group.repetition)}:{}),
     ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
     source: group.source ?? null,
     createdAt: group.createdAt ?? null,
@@ -6208,6 +6215,7 @@ function createSceneGroupForObjects(objectIds, label = null, metadata = {}) {
     sceneGroups.push(group);
   }
   group.label = label || group.label || id;
+  group.repetition=checkedRepetition(metadata.repetition??group.repetition);
   group.source = metadata.source ?? group.source ?? null;
   group.createdAt = metadata.createdAt ?? group.createdAt ?? new Date().toISOString();
   group.objectIds = [...new Set([...group.objectIds, ...ids])];
@@ -6230,7 +6238,7 @@ function setSceneGroupsFromRecords(groups = [], activeGroupId = null) {
       id: group.id,
       source: group.source,
       createdAt: group.createdAt,
-      type: group.type, transform: group.transform,
+      type: group.type, transform: group.transform, repetition:group.repetition,
       select: false,
     });
   }
@@ -7151,6 +7159,7 @@ function registerSceneObject(object, metadata = {}) {
     localLiquidEmitter: metadata.type === LOCAL_LIQUID_EMITTER_TYPE ? structuredClone(metadata.localLiquidEmitter) : null,
     ...(metadata.type===FLAME_EMITTER_TYPE?{emissionEnabled:metadata.emissionEnabled!==false,...(metadata.emission?{emission:structuredClone(metadata.emission)}:{})}:{}),
     giProxy:giProxySettingFor({type:metadata.type,giProxy:metadata.giProxy}),
+    ...(metadata.repetition?{repetition:checkedRepetition(metadata.repetition)}:{}),
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -7417,6 +7426,7 @@ window.kaminosSceneGroupDebugState = function() {
     id: group.id,
     label: sceneGroupDisplayLabel(group),
     objectIds: [...group.objectIds],
+    ...(group.repetition?{repetition:checkedRepetition(group.repetition)}:{}),
     ...(group.type === GROUP_TYPE ? {type:group.type,transform:structuredClone(group.transform)} : {}),
     source: group.source || null,
     active: group.id === activeSceneGroupId,
@@ -11564,7 +11574,7 @@ async function initScene() {
   window.__kaminosRenderSceneForInspection=()=>{const before=sceneFrameCount;manualInspectionRender=true;try{const result=renderSceneFrame();if(result===false||sceneFrameCount===before)throw new Error('inspection scene draw skipped');return {frame:renderer.info.frame,sceneFrameCount,drawn:true};}finally{manualInspectionRender=false;}};
   const IDLE_THRESHOLD = 3;
 
-  const markDirty = () => { needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
+  const markDirty = () => { sceneRepetitionController?.sync(); needsRender = true; idleFrames = 0; sceneGI.requestHistoryFrames(); };
   controls.addEventListener('change', markDirty);
   transformControls.addEventListener('change', () => {
     markDirty();
@@ -11813,6 +11823,9 @@ async function initScene() {
         command('add.import','Add','Import GLB…',()=>document.getElementById('scene-mesh-file').click(),{aliases:['mesh','model','asset']}),
         ...[['translate','Move','G'],['rotate','Rotate','R'],['scale','Scale','S']].map(([mode,label,shortcut])=>command('transform.'+mode,'Transform',label,()=>{if(!scenePlacementTools.start(mode))throw Error('Could not start transform');},{shortcut,aliases:mode==='translate'?['translate','grab']:mode==='rotate'?['rotation','turn']:['resize','size'],disabled:transformReason})),
         command('object.duplicate','Object','Duplicate',()=>duplicateSelectedSceneObjects({interactive:true}),{aliases:['copy'],shortcut:'Shift D',disabled:duplicateReason}),
+        ...[['circle','Circular Array',['radial','ring','repeat']],['line','Linear Array',['repeat','spacing']]].map(([mode,label,aliases])=>command('repetition.'+mode,'Object',label,()=>addSceneArray(mode),{aliases,disabled:()=>repetitionInspectorTarget()?null:'Select a static mesh or mesh group'})),
+        command('repetition.mirror','Object','Mirror X',()=>{const target=repetitionInspectorTarget();setSceneRepetition(target.id,{...(checkedRepetition(target.settings)||repetitionDefaults()),mirror:[true,false,false]});},{aliases:['symmetry','reflect'],disabled:()=>repetitionInspectorTarget()?null:'Select a static mesh or mesh group'}),
+        command('repetition.realize','Object','Make Repeated Copies Editable',()=>makeSceneRepetitionReal(repetitionInspectorTarget().id),{aliases:['apply array','apply mirror','realize'],disabled:()=>repetitionInspectorTarget()?.settings?null:'Select a repeated mesh or mesh group'}),
         command('object.delete','Object','Delete',()=>removeSelectedSceneObjects(),{aliases:['remove'],disabled:objectReason}),
         command('object.group','Object','Group Selection',()=>groupSelectedObjects(),{disabled:objectReason}),
         command('object.ungroup','Object','Unparent Selection',()=>ungroupSelectedObjects(),{aliases:['ungroup','detach'],disabled:objectReason}),
@@ -25016,6 +25029,7 @@ function serializeSceneObject(entry) {
     ...(entry.type===PROCEDURAL_MESH_TYPE ? {geometry:structuredClone(entry.geometry),surface:structuredClone(entry.surface),...(entry.waterCollision===false?{waterCollision:false}:{})} : {}),
     ...(canCollideWithFire(entry)?{collision:checkedObjectCollision(entry)}:{}),
     ...(entry.giProxy?{giProxy:structuredClone(entry.giProxy)}:{}),
+    ...(entry.repetition?{repetition:checkedRepetition(entry.repetition)}:{}),
   };
 }
 
@@ -25593,7 +25607,7 @@ function duplicateSceneObject(id,{interactive=false,deferRecord=false}={}) {
   else if(entry.type===CAMERA_TYPE)mountAuthoredCamera(record);
   else if(entry.type==='light'){if(entry.id===RIM_LIGHT_ID)setRimLight(sceneLightRuntimeRecipe(record));mountSceneSpotLight(record);}
   else {
-    const copy=cloneSceneObjectHierarchy(entry.object);copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
+    const copy=withoutRepetitionCopies(entry.object,()=>cloneSceneObjectHierarchy(entry.object));copy.traverse(child=>{if(child.geometry)child.geometry=child.geometry.clone();if(child.material)child.material=Array.isArray(child.material)?child.material.map(cloneSceneMaterial):cloneSceneMaterial(child.material);});
     scene.add(copy);registerSceneObject(copy,record);
   }
   if(entry.groupId){const group=sceneGroups.find(g=>g.id===entry.groupId);group?.objectIds.push(copyId);setSceneObjectGroupId(sceneObjects.find(o=>o.id===copyId),entry.groupId);}
@@ -25616,7 +25630,7 @@ function duplicateSceneGroup(id,{interactive=false}={}) {
   const groupId=makeSceneObjectId('group'),copies=[];
   try{
     for(const entry of members)copies.push(duplicateSceneObject(entry.id,{deferRecord:true}));
-    createSceneGroupForObjects(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform)});
+    createSceneGroupForObjects(copies,`${original.label} copy`,{id:groupId,transform:structuredClone(original.transform),repetition:checkedRepetition(original.repetition)});
   }catch(error){for(const copy of copies)removeSceneObjectInternal(copy,{recordHistory:false});throw error;}
   const target=`@group-insertion:${groupId}`;
   function snapshot(){
@@ -25715,6 +25729,7 @@ function setObjectWaterCollision(id,enabled){
   return scenePlacementTools.edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Set water collision');
 }
 function syncSceneDataInspector() {
+  sceneRepetitionInspector?.sync();
   const entry=selectedSceneObjectEntry(),group=selectedSceneGroupEntry();
   const primitive=document.getElementById('selected-mesh-properties');if(!primitive)return;
   const lightPanel=document.getElementById('selected-spot-properties');lightPanel.hidden=entry?.type!=='light';if(!lightPanel.hidden)for(const input of lightPanel.querySelectorAll('[data-light-param]')){const value=entry.light[input.dataset.lightParam];if(input.type==='checkbox')input.checked=value;else if(document.activeElement!==input||!scenePlacementTools.edits.state().active)input.value=value;}
@@ -25745,8 +25760,60 @@ function syncSceneDataInspector() {
   document.getElementById('selected-group-properties').hidden=!group;
   const groupDuplicate=document.getElementById('group-duplicate');if(groupDuplicate)groupDuplicate.disabled=!group||group.objectIds.some(id=>!canDuplicateObject(sceneObjects.find(o=>o.id===id)));
 }
+function repetitionOwner(id){
+ const groupId=id?.startsWith('@group:')?id.slice(7):id,group=sceneGroups.find(g=>g.id===groupId);
+ const record=group||sceneObjects.find(o=>o.id===id);if(!record)throw Error('Select a mesh or mesh group for repetition');
+ const entries=group?group.objectIds.map(id=>sceneObjects.find(o=>o.id===id)):[record];
+ if(!entries.length||entries.some(entry=>!canRepeatSceneObject(entry)))throw Error('Repetition supports static mesh objects and mesh groups');
+ return {id:group?'@group:'+group.id:record.id,record,entries,frame:group?.transform||sceneObjectTransformState(record.object),group};
+}
+function repetitionInspectorTarget(){
+ const id=activeSceneGroupId?'@group:'+activeSceneGroupId:activeSceneObjectId;if(!id)return null;
+ let owner;try{owner=repetitionOwner(id);}catch{return null;}
+ const parent=!owner.group?sceneGroups.find(g=>g.objectIds.includes(id)&&g.repetition):null;
+ const bounds=new THREE.Box3();for(const entry of owner.entries)withoutRepetitionCopies(entry.object,()=>bounds.expandByObject(entry.object));
+ const width=Math.max(.1,bounds.getSize(new THREE.Vector3()).x);
+ return {id:owner.id,label:owner.record.label||owner.id,settings:owner.record.repetition,frame:owner.frame,editId:'@repetition:'+owner.id,parent,suggestedCenter:[owner.frame.position[0]-width*2,owner.frame.position[1],owner.frame.position[2]],effectiveCount:owner.entries[0].object.children.filter(o=>o.userData.kaminosRepetitionCopy).length+1};
+}
+function writeSceneRepetition(id,value){
+ const owner=repetitionOwner(id);owner.record.repetition=checkedRepetition(value);
+ if(!owner.group)owner.record.object.userData.kaminosSceneObject.repetition=owner.record.repetition;
+ sceneRepetitionController.sync();sceneRepetitionInspector?.sync();updateSelectionFeedback();window._kaminosDirty?.();
+}
+function ensureRepetitionTarget(id){
+ const owner=repetitionOwner(id),target='@repetition:'+owner.id;
+ if(polyEdit?.active())throw Error('Leave Edit Mode to change repetition');
+ if(!repetitionEditTargets.has(target)){scenePlacementTools.edits.register(target,{read:()=>checkedRepetition(repetitionOwner(owner.id).record.repetition),check:checkedRepetition,write:value=>writeSceneRepetition(owner.id,value)});repetitionEditTargets.add(target);}
+ return target;
+}
+function sceneRepetitionState(id){
+ const owner=repetitionOwner(id);sceneRepetitionController.sync();
+ return {id:owner.id,settings:checkedRepetition(owner.record.repetition),members:owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,true);return {id:entry.id,placements:[entry.object,...entry.object.children.filter(c=>c.userData.kaminosRepetitionCopy)].map(object=>({worldMatrix:object.matrixWorld.toArray(),meshes:(()=>{const meshes=[];function visit(child){if(child!==object&&child.userData.kaminosRepetitionCopy)return;if(child.isMesh)meshes.push({geometry:child.geometry.uuid,material:Array.isArray(child.material)?child.material.map(m=>m.uuid):child.material.uuid});for(const item of child.children)visit(item);}visit(object);return meshes;})()}))};})};
+}
+function setSceneRepetition(id,value){assertSceneConstructionAvailable();const target=ensureRepetitionTarget(id);return scenePlacementTools.edits.apply(target,checkedRepetition(value),'Edit repetition');}
+function addSceneArray(mode){const target=repetitionInspectorTarget();if(!target)throw Error('Select a static mesh or mesh group');const settings={...(checkedRepetition(target.settings)||repetitionDefaults()),mode};if(mode==='circle'&&settings.space==='world'&&new THREE.Vector3(...settings.center).distanceTo(new THREE.Vector3(...target.frame.position))<1e-8)settings.center=target.suggestedCenter;return setSceneRepetition(target.id,settings);}
+async function makeSceneRepetitionReal(id){
+ assertSceneConstructionAvailable();const owner=repetitionOwner(id);
+ if(!owner.group&&sceneGroups.some(g=>g.objectIds.includes(owner.id)&&g.repetition))throw Error('Select the parent group to make its repeated copies editable');
+ sceneRepetitionController.sync();const before=checkSelectionMembership(readSelectionMembership()),copies=[];
+ const plans=owner.entries.map(entry=>{entry.object.updateWorldMatrix(true,false);return {id:entry.id,world:entry.object.matrixWorld.clone(),deltas:sceneRepetitionController.matrices(entry)};});
+ if(plans.every(plan=>plan.deltas.length===1))return [];
+ try{
+  if(owner.group)owner.record.repetition=null;
+  for(const entry of owner.entries){entry.repetition=null;entry.object.userData.kaminosSceneObject.repetition=null;sceneRepetitionController.clear(entry.object);}
+  for(const plan of plans)for(const delta of plan.deltas.slice(1)){
+   const copy=duplicateSceneObject(plan.id,{deferRecord:true}),world=delta.clone().multiply(plan.world),position=new THREE.Vector3(),rotation=new THREE.Quaternion(),scale=new THREE.Vector3();world.decompose(position,rotation,scale);const euler=new THREE.Euler().setFromQuaternion(rotation);
+   applyAuthoredScenePose(copy,{position:position.toArray(),rotation:[euler.x,euler.y,euler.z],scale:scale.toArray()});compoundRetentionTargets.set(copy,'@selection-membership');copies.push(copy);
+  }
+  setSceneSelection([...owner.entries.map(o=>o.id),...copies],copies.at(-1));
+  scenePlacementTools.edits.recordApplied('@selection-membership',before,readSelectionMembership(),'Make repeated copies editable');
+ }catch(error){await writeSelectionMembership(before);throw error;}
+ sceneRepetitionController.sync();setInfo(`Made ${copies.length} copies editable · Undo restores repetition`);return copies;
+}
+
 function installSceneConstruction() {
   const edits=scenePlacementTools.edits;
+  sceneRepetitionController=createSceneRepetitionController({objects:()=>sceneObjects,groups:()=>sceneGroups,readPose:sceneObjectTransformState});
   edits.register('@scene-groups',{read:()=>({groups:serializeSceneGroups()}),check:value=>({groups:checkedSceneGroups(value.groups)}),write:value=>writeSceneGroups(value.groups)});
   const host=document.getElementById('authoring-type-anchor')||document.getElementById('selected-flame-properties');
   const panel=document.createElement('section');panel.id='selected-mesh-properties';panel.hidden=true;
@@ -25806,6 +25873,7 @@ function installSceneConstruction() {
   groupPanel.innerHTML='<h3>Group</h3><p>Its frame places all members together. Select a member to edit its own data.</p><button type="button" class="btn" id="group-duplicate">Duplicate · Shift D</button><button type="button" class="btn" id="object-ungroup">Ungroup</button>';
   relations.after(groupPanel);
   window.kaminosSceneAuthoring={addFlameEmitter:addFirstFlameField,addWaterEmitter:addLocalLiquidEmitter,addLight:addSceneSpotLight,read:()=>({objects:readAuthoredFireObjects(),groups:serializeSceneGroups(),activeFieldId:activeSceneFieldId}),setFireSettings:editOwnedFireSettings,addMesh:addProceduralMesh,importMesh:importSceneMesh,duplicate:duplicateSceneSelection,group:groupSceneObjects,attach:attachSceneObject,
+    setRepetition:(id,value)=>setSceneRepetition(id,value),repetitionState:sceneRepetitionState,makeCopiesEditable:makeSceneRepetitionReal,
     setWaterCollision:setObjectWaterCollision,
     setCollision:(id,value)=>{assertSceneConstructionAvailable();if(!activeSceneComposition)throw Error('Fire & smoke is not mounted');const target=ensureObjectCollisionTarget(id);return edits.apply(target,typeof value==='boolean'?{domainId:'flame-field',enabled:value}:value,'Set Fire & smoke obstacle');},
     setGiProxy:(id,value)=>edits.apply(ensureObjectGiProxyTarget(id),value,'Set GI proxy'),
@@ -25813,6 +25881,8 @@ function installSceneConstruction() {
     setGeometry:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.geometry=checkedGeometry({kind:patch.kind||record.geometry.kind,parameters:{...(patch.kind&&patch.kind!==record.geometry.kind?{}:record.geometry.parameters),...patch.parameters}});edits.apply(ensureMeshDataTarget(id),record,'Edit geometry');return record;},
     setLight:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.light={...record.light,...patch};edits.apply(ensureMeshDataTarget(id),checkedSceneLightRecord(record),'Edit light');return record;},
     setMaterial:(id,patch)=>{assertSceneConstructionAvailable();const record=serializeSceneObject(sceneObjects.find(o=>o.id===id));record.surface={...record.surface,...patch};edits.apply(ensureMeshDataTarget(id),checkedProceduralMesh(record),'Edit material');return record;}};
+  sceneRepetitionInspector=installRepetitionInspector({document,host:groupPanel,target:repetitionInspectorTarget,edits,editId:()=>ensureRepetitionTarget(repetitionInspectorTarget()?.id),set:value=>setSceneRepetition(repetitionInspectorTarget()?.id,value),makeReal:()=>makeSceneRepetitionReal(repetitionInspectorTarget()?.id),selectGroup:id=>window.selectSceneGroup(id),usePivot:()=>controls.target.toArray(),history:installSceneControlHistory,numberDrag:installRelativeNumberDrag,onError:error=>setInfo(error.message)});
+  scenePlacementTools.addHistoryScope(sceneRepetitionInspector.panel);
   document.getElementById('object-parent').onchange=e=>{try{attachSceneObject(activeSceneObjectId,e.target.value||null);}catch(error){setInfo(error.message);}};
   document.getElementById('object-duplicate').onclick=()=>{try{duplicateSceneObject(activeSceneObjectId,{interactive:true});document.activeElement?.blur?.();}catch(error){setInfo(error.message);}};
   document.getElementById('group-duplicate').onclick=()=>{try{duplicateSceneGroup(activeSceneGroupId,{interactive:true});document.activeElement?.blur?.();}catch(error){setInfo(error.message);}};
@@ -25990,6 +26060,7 @@ async function writeSelectionMembershipUnchecked(value){
       else {await addSceneObjectFromSource(record);entry=sceneObjects.find(o=>o.id===record.id);}
     }
     const existing=serializeSceneObject(entry);
+    entry.repetition=checkedRepetition(record.repetition);
     if(JSON.stringify(existing.transform)!==JSON.stringify(record.transform))applyAuthoredScenePose(record.id,record.transform);
     if(entry.type==='light'&&JSON.stringify(entry.light)!==JSON.stringify(record.light))mountSceneSpotLight(record);
     entry.label=record.label;entry.groupId=record.groupId;entry.object.userData.kaminosSceneObject={...entry.object.userData.kaminosSceneObject,label:record.label,groupId:record.groupId};

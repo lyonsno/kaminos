@@ -118,6 +118,7 @@ export function installAuthoringWorkspace({ document, initialMode = 'workbench',
   move(byId('selected-render-properties'), 'authoring-type-slot');
   move(byId('selected-object-relations'), 'authoring-type-slot');
   move(byId('selected-group-properties'), 'authoring-type-slot');
+  move(byId('selected-repetition-properties'), 'authoring-type-slot');
   move(byId('selected-assembly-properties'), 'authoring-type-slot');
   move(byId('authoring-source-environment'), 'authoring-world-slot');
   move(byId('authoring-source-render'), 'authoring-render-slot');
