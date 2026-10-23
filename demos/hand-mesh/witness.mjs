@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
 import { launchChrome } from '../../models/supermat/chrome-cdp.mjs';
 import { verifyHandDemoReport } from './witness-checks.js';
+import { verifyVideoResponse } from './witness-input.js';
 
 const { values: args } = parseArgs({ options: Object.fromEntries(['out', 'base', 'chrome', 'models', 'fixture', 'fixture-file', 'expected-root', 'page'].map(key => [key, { type: 'string' }])) });
 if (!args.out) throw Error('--out required');
@@ -27,6 +28,15 @@ try {
   await call('Page.enable'); await call('Runtime.enable'); await call('DOM.enable');
   await call('Page.addScriptToEvaluateOnNewDocument', { source: `
     window.__handWitness = { errors: [], tracks: [], failCamera: false, delayCamera: false };
+    const verifyVideoResponse = ${verifyVideoResponse.toString()};
+    let verifiedFixture;
+    window.__loadHandFixture = async () => {
+      verifiedFixture ??= verifyVideoResponse({response: await fetch(${JSON.stringify(args.fixture)}),expectedSha256:${JSON.stringify(report.input.sha256)},sourceUrl:${JSON.stringify(args.fixture)}});
+      const result=await verifiedFixture;
+      __handWitness.playback=result.identity;
+      __handWitness.fixtureObjectURL ??= URL.createObjectURL(result.blob);
+      return result.identity;
+    };
     addEventListener('error', e => __handWitness.errors.push(e.message));
     addEventListener('unhandledrejection', e => __handWitness.errors.push(String(e.reason)));
     const original = GPUAdapter.prototype.requestDevice;
@@ -34,7 +44,8 @@ try {
     navigator.mediaDevices.getUserMedia = async () => {
       if (__handWitness.failCamera) throw Error('injected camera failure');
       if (__handWitness.delayCamera) await new Promise(resolve=>__handWitness.resolveCamera=resolve);
-      const video = document.createElement('video'); video.muted=true;video.loop=true;video.src=${JSON.stringify(args.fixture)};
+      await __loadHandFixture();
+      const video = document.createElement('video'); video.muted=true;video.loop=true;video.src=__handWitness.fixtureObjectURL;
       await new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=()=>reject(Error('fixture failed'));video.load();});
       video.currentTime=10;await video.play();
       const stream=video.captureStream();__handWitness.tracks.push(...stream.getTracks());return stream;
@@ -68,6 +79,8 @@ try {
   report.url = `${args.base}${args.page || '/demos/hand-mesh/'}`;
   await call('Page.navigate', { url: report.url });
   await step('open', async () => { await wait('Boolean(window.handMeshDemo)'); await shot('before-import'); });
+  report.phase = 'verify-input'; await save();
+  report.playback = await evaluate('__loadHandFixture()'); await save();
   await step('import', async () => { await importFolder(args.models); await wait('Boolean(window.handMeshDemo.read().error) || (Boolean(window.handMeshDemo.read().identity) && !window.handMeshDemo.read().loading)'); if ((await read()).error) throw Error((await read()).error); await shot('loaded'); });
   await step('live', async () => {
     // The deterministic fixture has accepted real detections at 0.18; this

@@ -46,7 +46,7 @@ function schedule(current) {
   if (!running || current !== ticket || disposed) return;
   callback = video.requestVideoFrameCallback(() => {
     if (!running || current !== ticket || disposed) return;
-    flight = (async () => {
+    const currentFlight = (async () => {
       const result = await route.infer({ source: video, width: video.videoWidth, height: video.videoHeight, handedness: $('hand').value,
         acquisition: { mode: 'detector', threshold: Number($('threshold').value), padding: 1.4, onMiss: 'skip' } });
       if (!running || current !== ticket || disposed) return;
@@ -59,7 +59,8 @@ function schedule(current) {
       running = false; starting = false; ticket++;
       stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null;
       empty('Camera stopped. Try again.'); status(error); buttons();
-    }).finally(() => { flight = null; schedule(current); });
+    }).finally(() => { if (flight === currentFlight) flight = null; schedule(current); });
+    flight = currentFlight;
   });
 }
 async function start() {
@@ -67,6 +68,8 @@ async function start() {
   const current = ++ticket;
   starting = true; error = null; buttons(); status('Waiting for camera permission…');
   try {
+    if (flight) await flight;
+    if (current !== ticket || disposed) return;
     const acquired = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
     if (current !== ticket || disposed) { acquired.getTracks().forEach(track => track.stop()); return; }
     stream = acquired; video.srcObject = stream; await video.play();
