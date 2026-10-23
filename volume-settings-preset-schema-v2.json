@@ -1,6 +1,6 @@
 {
   "identity": "kaminos-volume-settings-preset-schema-v2",
-  "controlCount": 149,
+  "controlCount": 158,
   "controls": [
     {"key":"volume-fine-velocity","param":"volume_fine_velocity","tagName":"INPUT","type":"number","additiveDefault":"0","additiveSinceControlCount":276},
     {"key":"volume-fine-pressure","param":"volume_fine_pressure","tagName":"INPUT","type":"number","additiveDefault":"0","additiveSinceControlCount":277},

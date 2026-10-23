@@ -10,13 +10,14 @@ test('observed pre-composition scene migrates independent soot history without a
  const result=fire.projectFireSettingsToSchema(settings,schema);
  assert.equal(result.domControls['volume-reactant-soot-yield'].value,2);
  assert.equal(result.domControls['volume-world-smoke-intermediate'].value,'off');
+ for(const e of schema.controls.filter(e=>e.additiveSinceControlCount>=269))assert.equal(result.domControls[e.key].value,e.additiveDefault);
  for(const entry of schema.controls)if(settings.domControls[entry.key])assert.deepEqual(result.domControls[entry.key],settings.domControls[entry.key]);
  const hole=structuredClone(settings);delete hole.domControls['volume-pressure-solver'];
  assert.throws(()=>fire.projectFireSettingsToSchema(hole,schema),/Missing authored fire control volume-pressure-solver/);
 });
 // Native74383 restore-diagnostic-r2 observed these three declared additions
 // absent from an otherwise intact saved fire record (249 controls).
-function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)&&!e.key.startsWith('volume-world-smoke')).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}
+function oldSettings(){return{domControls:Object.fromEntries(schema.controls.filter(e=>!additions.includes(e.key)&&!e.key.startsWith('volume-world-smoke')&&!(e.additiveSinceControlCount>=269)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.additiveDefault??0}])),rendererControls:Object.fromEntries(schema.rendererControls.filter(e=>!['volume-ray-start-noise','volume-tone-mapping'].includes(e.key)).map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:e.key.endsWith('radius')?.03:e.key.endsWith('coherence')?2:0}])),presentationControls:Object.fromEntries(schema.presentationControls.map(e=>[e.key,{id:e.key,param:e.param,tagName:e.tagName,type:e.type,value:'on'}]))};}
 test('older fire records receive only declared schema additions before application',async()=>{
  const saved=oldSettings(),before=structuredClone(saved);saved.domControls['volume-immersed-fuel'].value=.789012345;before.domControls['volume-immersed-fuel'].value=.789012345;let written;const sceneLoadRequests=createSceneLoadRequests(),loadRequestId=sceneLoadRequests.begin();
  const context=vm.createContext({sceneLoadRequests,loadRequestId,restorePlan:{fireSettings:saved},flameEmitterPose:{position:[1,2,3]},activeVolumeSettingsPresetReceipt:null,projectFireSettingsToSchema:fire.projectFireSettingsToSchema,fetch:async()=>({ok:true,json:async()=>schema}),writeFlameSettingsState:state=>written=state});
