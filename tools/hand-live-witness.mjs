@@ -44,6 +44,15 @@ try {
   if(report.live.fingerJuice.enabled){
     report.phase='water_controls';save();
     const session=report.live.sessionId;
+    const capacity=page.getByRole('spinbutton',{name:'Particle capacity',exact:true});
+    await capacity.focus();await capacity.press('ArrowUp');
+    assert.equal(await capacity.inputValue(),'4800','capacity spinner did not advance by 2400');
+    await capacity.press('Tab');
+    await page.waitForFunction(()=>document.querySelector('[data-hand-water-load]')?.textContent.includes('4,800 allocated'));
+    await capacity.focus();await capacity.press('ArrowDown');
+    assert.equal(await capacity.inputValue(),'2400','capacity spinner did not return to baseline');
+    await capacity.press('Tab');
+    await page.waitForFunction(()=>document.querySelector('[data-hand-water-load]')?.textContent.includes('2,400 allocated'));
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).fill('3000');
     await page.getByRole('spinbutton',{name:'Emission / second',exact:true}).press('Tab');
     await page.waitForFunction(()=>document.querySelector('[data-hand-water-load]')?.textContent.includes('pool limited'));

@@ -232,7 +232,7 @@ export default {
         status=document.createElement('div');status.dataset.handLiveStatus='';status.setAttribute('role','status');status.style.overflowWrap='anywhere';
         root.append(preview,select,button,frameButton);
         if(fingerJuice){
-          for(const [labelText,value,min,step,operation] of [['Particle capacity',particleCount,1,2400,'setParticleCount'],['Emission / second',sourceFlux,0,60,'setSourceFlux']]){
+          for(const [labelText,value,min,step,operation] of [['Particle capacity',particleCount,0,2400,'setParticleCount'],['Emission / second',sourceFlux,0,60,'setSourceFlux']]){
             const label=document.createElement('label');label.textContent=labelText;label.style.display='block';
             const input=document.createElement('input');input.type='number';input.min=min;input.step=step;input.value=value;
             input.style.cssText='width:100%;box-sizing:border-box';input.setAttribute('aria-label',labelText);
