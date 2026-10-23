@@ -39,13 +39,11 @@ export function createDistributedSmokeBindings(device) {
     {binding:0,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
     {binding:1,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
     {binding:18,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
-    {binding:19,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
     {binding:20,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'uniform'}},
     {binding:21,visibility:GPUShaderStage.FRAGMENT,texture:{sampleType:'unfilterable-float',viewDimension:'3d'}},
-    {binding:22,visibility:GPUShaderStage.FRAGMENT,buffer:{type:'read-only-storage'}},
   ]});
-  const coverage=device.createBuffer({label:'exterior smoke lookup coverage',size:64,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
-  let last=null,group=null;
+  const coverage=device.createBuffer({label:'exterior smoke lookup coverage',size:80,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  let last=null,group=null,packedMasks=null,maskSources=[],maskPreparations=[],maskOffsets=[];
   return {layout, update(frame) {
     const r=frame.smokeReconstruction;
     if(!frame.texture || r?.identity!=='prepared-geometry-visible-v1' || !r.texture || !r.masks || !Number.isInteger(r.staticPreparations) || r.staticPreparations<1 || !Number.isInteger(r.updates) || r.updates<1) throw new Error('distributed smoke requires current prepared reconstruction resources');
@@ -56,17 +54,35 @@ export function createDistributedSmokeBindings(device) {
     }
     const data=[...(e?[...e.localMin,2/r.coarseDimensions[0],...e.localMax,1]:Array(8).fill(0)),
       ...(m?[...m.localMin,(m.localMax[0]-m.localMin[0])/m.coarseDimensions[0],...m.localMax,1]:Array(8).fill(0))];
+    // The ordinary fluid layout already consumes eight fragment storage slots.
+    // Preserve all three geometry masks in one buffer, copying only when their
+    // resources or geometry preparation changes, never for a radiance update.
+    const resources=[r,e??r,m??r],sources=resources.map(v=>v.masks);
+    const sizes=sources.map(v=>v.size);
+    if(!sizes.every(n=>Number.isSafeInteger(n)&&n>0&&n%4===0))throw Error('prepared smoke mask byte sizes required');
+    const offsets=[0,sizes[0],sizes[0]+sizes[1]],total=sizes.reduce((a,b)=>a+b,0);
+    if(total>Math.min(device.limits.maxBufferSize,device.limits.maxStorageBufferBindingSize))throw Error('composed smoke masks exceed device capacity');
+    if(!packedMasks||packedMasks.size!==total){
+      packedMasks?.destroy();packedMasks=device.createBuffer({label:'composed smoke region masks',size:total,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});
+      maskSources=[];
+    }
+    const changed=resources.map((v,i)=>sources[i]!==maskSources[i]||v.staticPreparations!==maskPreparations[i]||offsets[i]!==maskOffsets[i]);
+    if(changed.some(Boolean)){
+      const encoder=device.createCommandEncoder({label:'copy changed smoke geometry masks'});
+      changed.forEach((change,i)=>{if(change)encoder.copyBufferToBuffer(sources[i],0,packedMasks,offsets[i],sizes[i]);});
+      device.queue.submit([encoder.finish()]);maskSources=sources;maskPreparations=resources.map(v=>v.staticPreparations);maskOffsets=offsets;
+    }
     device.queue.writeBuffer(coverage,0,new Float32Array(data));
-    const handles=[r.texture,r.masks,e?.texture??r.texture,e?.masks??r.masks,m?.texture??r.texture,m?.masks??r.masks];
+    device.queue.writeBuffer(coverage,64,new Uint32Array([...offsets.map(n=>n/4),0]));
+    const handles=[r.texture,packedMasks,e?.texture??r.texture,m?.texture??r.texture];
     if(!last || handles.some((h,i)=>h!==last[i])) {
       group=device.createBindGroup({layout,entries:[{binding:0,resource:r.texture.createView()},
-        {binding:1,resource:{buffer:r.masks}},{binding:18,resource:handles[2].createView()},
-        {binding:19,resource:{buffer:handles[3]}},{binding:20,resource:{buffer:coverage}},
-        {binding:21,resource:handles[4].createView()},{binding:22,resource:{buffer:handles[5]}}]});
+        {binding:1,resource:{buffer:packedMasks}},{binding:18,resource:handles[2].createView()},
+        {binding:20,resource:{buffer:coverage}},{binding:21,resource:handles[3].createView()}]});
       last=handles;
     }
     return group;
-  },destroy(){coverage.destroy();last=null;group=null;}};
+  },destroy(){coverage.destroy();packedMasks?.destroy();last=null;group=null;}};
 }
 
 export const DISTRIBUTED_SMOKE_WGSL=`
@@ -108,10 +124,14 @@ const middleLookup=exteriorLookup.replaceAll('@binding(18)','@binding(21)').repl
  .replaceAll('exteriorIncident','middleIncident').replaceAll('exteriorBoundaryMasks','middleBoundaryMasks')
  .replaceAll('exteriorLastMaskFlags','middleLastMaskFlags').replaceAll('exteriorMeanIncident','middleMeanIncident')
  .replaceAll('exteriorCoverage.loBlend','exteriorCoverage.middleLoBlend').replaceAll('exteriorCoverage.hiEnabled','exteriorCoverage.middleHiEnabled');
-export const COMPOSED_SMOKE_WGSL=DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')+`
-struct ExteriorCoverage {loBlend:vec4<f32>,hiEnabled:vec4<f32>,middleLoBlend:vec4<f32>,middleHiEnabled:vec4<f32>}
+export const COMPOSED_SMOKE_WGSL=DISTRIBUTED_SMOKE_WGSL.replace('fn distributedMeanIncident(','fn fineMeanIncident(')
+ .replaceAll('smokeBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.x+')+`
+struct ExteriorCoverage {loBlend:vec4<f32>,hiEnabled:vec4<f32>,middleLoBlend:vec4<f32>,middleHiEnabled:vec4<f32>,maskOffsets:vec4<u32>}
 @group(2) @binding(20) var<uniform> exteriorCoverage:ExteriorCoverage;
-`+exteriorLookup+middleLookup+`
+`+exteriorLookup.replace('@group(2) @binding(19) var<storage,read> exteriorBoundaryMasks:array<u32>;','')
+ .replaceAll('exteriorBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.y+')
+ +middleLookup.replace('@group(2) @binding(22) var<storage,read> middleBoundaryMasks:array<u32>;','')
+ .replaceAll('middleBoundaryMasks[','smokeBoundaryMasks[exteriorCoverage.maskOffsets.z+')+`
 fn regionalMeanIncident(p:vec3<f32>)->vec3<f32>{
   let far=exteriorMeanIncident(p);
   if(exteriorCoverage.middleHiEnabled.w<0.5){return far;}
