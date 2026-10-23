@@ -169,6 +169,7 @@ async function play(entry) {
   if (!entry.clip) entry.clip = decodeClip(await (await fetch(`clips/${entry.meta.file}`)).json());
   current = entry;
   demo.showClip(entry.clip);
+  $('refinement-status').textContent='Retained histories';$('refinement-info').textContent='Gallery clip in scene · choose a stage to inspect';
   state.clip = entry.clip.id;
   for (const e of clips) e.chip.setAttribute('aria-pressed', String(e === entry));
   $('now').hidden = false;
@@ -339,7 +340,7 @@ async function generate() {
     state.result = { textEncoder: result.textEncoder, encodeMs: result.encodeMs, prompt: result.prompt, noise: result.noise, wallMs: result.wallMs, evaluations: result.evaluations,
       steps: result.steps.length, accepted: result.steps.filter(s => s.accepted).length, dutyCount: result.dutyCount,
       longestDutyMs: result.longestDutyMs, frameStats: f, referenceMaxJointDeviation: result.referenceMaxJointDeviation ?? null };
-    refinement.finish('completed');$('refinement-status').textContent='Completed refinement';followRefinement=false;
+    refinement.finish('completed');$('refinement-run').value=String(refinement.runs.length-1);$('refinement-stage').max=String(Math.max(0,refinement.runs.at(-1).samples.length-1));$('refinement-stage').value=$('refinement-stage').max;$('refinement-status').textContent='Completed refinement';$('refinement-info').textContent='Final motion in scene · choose a stage to inspect';followRefinement=false;
     state.phase = 'done';
     setStatus(`Done in ${(result.wallMs / 1000).toFixed(1)} s · playing`);
     $('stats').textContent = [

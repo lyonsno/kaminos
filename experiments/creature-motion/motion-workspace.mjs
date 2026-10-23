@@ -58,6 +58,7 @@ export function mountMotionWorkspace({document,reference,spec,options,onPreview,
  close.onclick=()=>{root.hidden=true;stopFrames?.();stopFrames=null;};restore.onclick=()=>run(async()=>{const result=await onRestore();if(result?.status==='superseded')return;preview=null;status.textContent='Showing the assigned motion. All alternatives remain in the collection.';render();});save.onclick=()=>download(sessionMotions.export(),'skeleton-motions.json');file.onchange=()=>run(async()=>{if(file.files?.[0])await sessionMotions.import(JSON.parse(await file.files[0].text()));file.value='';});
  async function generate(input){
   if(pending)throw Error('Motion generation is already running');if(!spec)throw Error('This skeleton has no generation bundle attached');
+  input={...input,prompt:input.prompt?.trim()};
   const q=Number(input.quality??quality.value),rtol=input.rtol??(rtolInput.value?Number(rtolInput.value):1e-3*10**(-q)),atol=input.atol??(atolInput.value?Number(atolInput.value):1e-6*10**(-q)),cfgScale=Number(input.cfgScale??guidance.value);
   if(![rtol,atol].every(v=>Number.isFinite(v)&&v>0)||!Number.isFinite(cfgScale))throw Error('Quality and guidance must be finite');
   const id=crypto.randomUUID();sessionMotions.beginGeneration({id,status:'running',skeletonKey:key,prompt:input.prompt,seed:input.seed,solver:{rtol,atol,cfgScale},samples:[]});

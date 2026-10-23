@@ -1,0 +1,20 @@
+// kaminos-test: node
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {createRefinementHistory} from '../models/unimate/unimate-refinement.js';
+const html=fs.readFileSync(new URL('../models/unimate/index.html',import.meta.url),'utf8');
+const section=(start,end)=>html.slice(html.indexOf(start),html.indexOf(end,html.indexOf(start)));
+const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{value:'0',textContent:'',hidden:false,append(){},setAttribute(){}});return elements.get(id);};
+$('prompt').value='walk';$('seed').value='2';$('noise').value='seed';$('guidance').value='3';
+const refinement=createRefinementHistory();refinement.begin({prompt:'old',seed:1});refinement.append({t:.2,evaluations:8,motion:{old:true}});refinement.finish('completed');
+let finish;const demo={bundle:{prompts:[{text:'walk'}],skeleton:{fps:30,frames:1,joints:1,name:'rig',parents:[-1],jointNames:['root']}},arrays:{restPositions:new Float32Array(3)},generate:()=>new Promise(r=>{finish=r;}),showPartial:s=>{demo.visible=s.motion;},showClip:c=>{demo.visible=c;}};
+const context=vm.createContext({$,demo,refinement,followRefinement:true,state:{},clips:[],current:null,own:0,ownRig:null,performance,Option:function(){},skeletonLabel:()=> 'rig',setStatus(){},describe:()=>'',addChip:(_meta,clip)=>({clip,chip:{setAttribute(){}}})});
+vm.runInContext(section('function showRefinement(){',"$('refinement-stage').oninput")+section('async function play(entry) {','window.__unimatePlayClip')+section('async function generate() {',"$('generate').addEventListener"),context);
+const pending=vm.runInContext('generate()',context);
+$('refinement-run').value='0';$('refinement-stage').value='0';vm.runInContext('followRefinement=false;showRefinement()',context);
+assert.match($('refinement-info').textContent,/20%/);
+const motion={frames:1,positions:new Float32Array(3)};demo.visible=motion;
+finish({motion,steps:[],evaluations:2,dutyCount:1,longestDutyMs:1,wallMs:1,textEncoder:'browser T5',noise:'seed2'});await pending;
+assert.equal($('refinement-run').value,'1','completion selects the result now in the scene');
+assert.match($('refinement-info').textContent,/Final motion/,'old partial label must not describe new result');
+await vm.runInContext('play({clip:{id:"gallery",frames:1},chip:{setAttribute(){}}})',context);
+assert.match($('refinement-info').textContent,/Gallery clip/,'gallery playback must deselect refinement presentation');
+console.log('example completion and gallery playback keep visible motion identity truthful');

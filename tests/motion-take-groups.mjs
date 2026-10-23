@@ -16,3 +16,6 @@ const mismatch={...history,samples:[{...motion,positions:[9,2],refinement:{t:1}}
 assert.equal(groupMotionTakes(rows,[mismatch])[0].takes.length,3,'same settings cannot prove matching output');
 assert.equal(groupMotionTakes(rows,[{...history,prompt:'different'}]).length,3);
 console.log('prompt groups preserve variants, match exact legacy output, and separate live generation');
+const padded={...history,prompt:'  squat  '};
+assert.equal(groupMotionTakes(rows,[padded])[0].takes.length,2,'trimmed generator prompt must associate legacy history');
+assert.equal(groupMotionTakes(rows,[padded]).length,2,'padding must not create a second prompt group');
