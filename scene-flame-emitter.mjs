@@ -13,8 +13,8 @@ export function defaultFlameEmitterPose() {
 export function normalizeFlameEmitterPose(value = defaultFlameEmitterPose()) {
   const pose = checkedPose(value);
   const scale = pose.scale[0];
-  if (!(scale > 0) || pose.scale.some(v => Math.abs(v - scale) > 1e-10 * scale)) {
-    throw new Error('Flame source requires positive uniform scale; use S without an axis');
+  if (scale < 0 || pose.scale.some(v => Math.abs(v - scale) > 1e-10 * Math.max(1,scale))) {
+    throw new Error('Flame source requires nonnegative uniform scale; use S without an axis');
   }
   return pose;
 }
@@ -96,8 +96,8 @@ export function flameEmitterFrame(value) {
 }
 
 export function immersedRadiusBounds(value) {
-  const scale = flameEmitterFrame(value).scale;
-  return { min: 0.02 / scale, max: null };
+  flameEmitterFrame(value);
+  return { min: 0, max: null };
 }
 
 // Doctor's engine uses a disc centre and yaw/pitch in domain coordinates.
@@ -108,7 +108,7 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
   if (sourceEnabled && !flamePoseInDomain(frame.pose, [0, 0, 0],1,domainControls)) {
     throw new Error('Immersed source centre is outside the current domain');
   }
-  const radius = Number(controls.immersedRadius ?? 0.2) * frame.scale;
+  const radius = Math.max(0,Number(controls.immersedRadius ?? 0.2) * frame.scale);
   // An out-of-range radius is clamped below (immersedRadiusClamp reports it);
   // only a radius that is not a number is refused.
   if (!Number.isFinite(radius)) throw new Error('Scaled immersed source radius is not a number');
@@ -118,13 +118,13 @@ export function immersedControlsForFlamePose(controls, value, sourceEnabled = tr
   return { ...controls, immersedCentreX: frame.origin[0], immersedCentreY: frame.origin[1],
     immersedCentreZ: frame.origin[2], immersedYaw: yaw,
     immersedPitch: Math.asin(Math.max(-1, Math.min(1, y))) * 180 / Math.PI,
-    immersedRadius: Math.max(0.02, radius), immersedSourceEnabled: sourceEnabled };
+    immersedRadius: radius === 0 ? 0 : Math.max(0.02, radius), immersedSourceEnabled: sourceEnabled && radius > 0 };
 }
 
 // Only the positive numerical floor is adjusted; the aperture has no upper cap.
 export function immersedRadiusClamp(controls, value) {
   const radius = Number(controls.immersedRadius ?? 0.2) * flameEmitterFrame(value).scale;
-  if (!Number.isFinite(radius) || radius >= 0.02 - 1e-12) return null;
+  if (!Number.isFinite(radius) || radius === 0 || radius >= 0.02 - 1e-12) return null;
   return { requested: radius, applied: Math.max(0.02, radius) };
 }
 
