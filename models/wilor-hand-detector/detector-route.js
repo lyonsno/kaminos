@@ -6,25 +6,19 @@ import { defineWebGpuModelResourceManifest } from '../../webgpu-inference-kit/sr
 import { createHandDetectorNetwork } from './detector-network.js';
 import { createDetectorLetterbox } from './detector-letterbox.js';
 import { decodeDetections } from './detections.js';
+import { readModelPackage } from '../mobrecon/model-package-source.js';
 
 export const HAND_DETECTOR_ROUTE_ID = 'wilor.hand-detector.webgpu-local.v0';
 export const HAND_DETECTOR_PACKAGE_SCHEMA = 'wilor-hand-detector.browser-weight-package.v0';
 
-export async function loadHandDetector({ route, packageUrl, signal, onProgress } = {}) {
+export async function loadHandDetector({ route, packageUrl, packageSource, signal, onProgress } = {}) {
   if (!route?.runtime?.device || typeof route.loadModelResourcesFromSource !== 'function') {
     throw new Error('hand detector requires a registered kit session route');
   }
-  const base = new URL(packageUrl.endsWith('/') ? packageUrl : `${packageUrl}/`, globalThis.location?.href);
-  const response = await fetch(new URL('package.json', base), { cache: 'no-store', signal });
-  if (!response.ok) throw new Error(`hand detector package: HTTP ${response.status}`);
-  const weightPackage = await response.json();
-  if (weightPackage.schema !== HAND_DETECTOR_PACKAGE_SCHEMA || weightPackage.status !== 'succeeded') {
-    throw new Error(`hand detector package must be a succeeded ${HAND_DETECTOR_PACKAGE_SCHEMA}`);
-  }
-  const [row] = weightPackage.resources;
+  const { metadata: weightPackage, source, row } = await readModelPackage({ packageUrl, packageSource, schema: HAND_DETECTOR_PACKAGE_SCHEMA, signal });
   const started = performance.now();
   const lease = await route.loadModelResourcesFromSource({
-    manifest: defineWebGpuModelResourceManifest(row.manifest), source: new URL(row.file, base), signal,
+    manifest: defineWebGpuModelResourceManifest(row.manifest), source, signal,
     onProgress: event => onProgress?.({ phase: 'weights', loadedBytes: event.loadedBytes, totalBytes: event.totalBytes }),
   });
   try {

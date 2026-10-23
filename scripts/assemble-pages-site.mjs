@@ -24,6 +24,19 @@ export function assemblePagesSite(out, { supermatWeightsUrl = null } = {}) {
   fs.mkdirSync(path.join(out, "inference-kit"), { recursive: true });
   fs.copyFileSync(path.join(repoRoot, "docs", "inference-kit", "index.html"), path.join(out, "inference-kit", "index.html"));
 
+  const hand = path.join(out, 'inference-kit', 'hand-mesh');
+  fs.mkdirSync(hand, { recursive: true });
+  for (const file of ['index.html', 'style.css', 'main.js', 'model-files.js']) {
+    fs.copyFileSync(path.join(repoRoot, 'demos', 'hand-mesh', file), path.join(hand, file));
+  }
+  for (const model of ['mobrecon', 'wilor-hand-detector']) {
+    const target = path.join(out, 'models', model);
+    fs.mkdirSync(target, { recursive: true });
+    for (const file of fs.readdirSync(path.join(repoRoot, 'models', model))) {
+      if (file.endsWith('.js') && !/witness|parity/.test(file)) fs.copyFileSync(path.join(repoRoot, 'models', model, file), path.join(target, file));
+    }
+  }
+
   const klein = path.join(repoRoot, "models", "flux2-klein");
   const demo = path.join(out, "inference-kit", "klein");
   fs.mkdirSync(demo, { recursive: true });

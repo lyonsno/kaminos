@@ -33,7 +33,7 @@ async function read(device, buffer, offset, bytes, Type = Float32Array) {
 }
 
 // session: a kit inference session (for example the page's app GPU host session).
-export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, detectorPackageUrl, signal, onProgress } = {}) {
+export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, detectorPackageUrl, mobreconPackageSource, detectorPackageSource, signal, onProgress } = {}) {
   const registered = [];
   let mobrecon, detector, crop;
   // Leases first, then the routes, so the shared session can host this route again.
@@ -51,9 +51,9 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
     registered.push(HAND_DETECTOR_ROUTE_ID);
     device = mobreconRoute.runtime.device;
     if (detectorRoute.runtime.device !== device) throw new Error('detector and MobRecon routes must share one device');
-    mobrecon = await loadMobRecon({ route: mobreconRoute, packageUrl: mobreconPackageUrl, signal,
+    mobrecon = await loadMobRecon({ route: mobreconRoute, packageUrl: mobreconPackageUrl, packageSource: mobreconPackageSource, signal,
       onProgress: event => onProgress?.({ model: 'mobrecon', ...event }) });
-    detector = await loadHandDetector({ route: detectorRoute, packageUrl: detectorPackageUrl, signal,
+    detector = await loadHandDetector({ route: detectorRoute, packageUrl: detectorPackageUrl, packageSource: detectorPackageSource, signal,
       onProgress: event => onProgress?.({ model: 'hand-detector', ...event }) });
     crop = createMobReconCrop({ device, input: mobrecon.network.input });
   } catch (error) {
@@ -87,8 +87,9 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
       if (released) throw new Error('browser hand mesh route released');
       if (busy) throw new Error('browser hand mesh route already has an inference in flight');
       if (!['left', 'right'].includes(handedness)) throw new Error('handedness must be left or right');
-      const { mode, padding = 1.4, threshold = 0.18, manualBox } = acquisition ?? {};
+      const { mode, padding = 1.4, threshold = 0.18, manualBox, onMiss = 'manual' } = acquisition ?? {};
       if (!['detector', 'manual'].includes(mode)) throw new Error('acquisition mode must be detector or manual');
+      if (!['skip', 'manual'].includes(onMiss)) throw new Error('detector miss policy must be skip or manual');
       busy = true;
       try {
         const t0 = performance.now();
@@ -105,6 +106,12 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
             result.acquisition.source = 'wilor_yolo_detector_bbox_only';
             box = squareCrop(detections[0].bbox, padding);
           } else {
+            if (onMiss === 'skip') {
+              result.acquisition.source = 'no_detection';
+              result.hasHand = false;
+              result.timings = { ...result.timings, mobreconMs: 0, totalMs: performance.now() - t0 };
+              return result;
+            }
             result.acquisition.fallback = true;
             result.acquisition.source = 'manual_crop_fallback_no_detection';
           }
@@ -120,6 +127,7 @@ export async function createBrowserHandMeshRoute({ session, mobreconPackageUrl, 
         const [vertices, landmarks] = await Promise.all([read(device, mesh.buffer, mesh.offset * 4, 778 * 12), read(device, uv.buffer, uv.offset * 4, 21 * 8)]);
         if (!vertices.every(Number.isFinite) || !landmarks.every(Number.isFinite)) throw new Error('non-finite MobRecon output');
         Object.assign(result, prediction(vertices, landmarks, handedness));
+        result.hasHand = true;
         result.timings = { ...result.timings, mobreconMs: performance.now() - t1, totalMs: performance.now() - t0 };
         return result;
       } finally {

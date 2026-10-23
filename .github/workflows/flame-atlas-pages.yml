@@ -7,6 +7,9 @@ on:
     paths:
       - docs/flame-atlas/**
       - docs/inference-kit/**
+      - demos/hand-mesh/**
+      - models/mobrecon/*.js
+      - models/wilor-hand-detector/*.js
       - demos/material-photo/**
       - models/supermat/*.js
       - assets/hdr/**
