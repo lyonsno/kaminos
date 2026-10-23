@@ -21,3 +21,6 @@ console.log('example completion and gallery playback keep visible motion identit
 let restClick;elements.set('rest',{addEventListener:(_type,fn)=>{restClick=fn;}});demo.showGenerationSkeleton=()=>{demo.visible='generation skeleton';};demo.showRest=()=>{demo.visible='rest';};
 vm.runInContext(section("$('rest').addEventListener",'window.__unimateGenerate'),context);
 restClick();assert.equal(demo.visible,'rest');assert.match($('refinement-info').textContent,/Rest pose/,'rest must deselect previous motion identity');
+let changeSkeleton;elements.set('skeleton',{value:'other',querySelector:()=>null,addEventListener:(_type,fn)=>{changeSkeleton=fn;}});Object.assign(context,{skeletons:[{key:'other',label:'Other'}],skeletonKey:'original',skeletonBase:()=>'/other/',showSkeletonPrompts(){}});demo.useSkeleton=async()=>{};
+vm.runInContext(section("$('skeleton').addEventListener",'// Bring your own rig'),context);await changeSkeleton();assert.match($('refinement-info').textContent,/Rest pose of/);assert.equal(demo.visible,'generation skeleton');
+$('refinement-run').value='0';$('refinement-stage').value='0';vm.runInContext('showRefinement()',context);assert.equal(demo.visible.old,true,'history remains addressable after changing skeleton');assert.match($('refinement-info').textContent,/20%/);
