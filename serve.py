@@ -2569,12 +2569,69 @@ PIPELINE_WITNESS_PATH = ROOT / "pipeline-witness.mjs"
 
 
 def flux3_weights_mounted():
-    if not FLUX3_WEIGHTS_ROOT or not all((FLUX3_WEIGHTS_ROOT / part / 'manifest.json').is_file() for part in ('te', 'dit', 'vae')):
+    """Availability is metadata-only: the loader's manifests and payloads must exist.
+
+    The browser checks payload hashes while loading. Do not rehash gigabytes for
+    runtime-config requests, but reject absent/truncated files before model teardown.
+    """
+    if not FLUX3_WEIGHTS_ROOT:
         return False
+    root = FLUX3_WEIGHTS_ROOT.resolve()
+
+    def component(part, schema):
+        manifest = json.loads((root / part / 'manifest.json').read_text())
+        if not isinstance(manifest, dict) or manifest.get('schema') != schema:
+            raise ValueError('wrong component schema')
+        if not isinstance(manifest.get('config'), dict) or not manifest['config']:
+            raise ValueError('missing component configuration')
+        return manifest
+
+    def payload(part, entry, expected_bytes=None):
+        if not isinstance(entry, dict) or not isinstance(entry.get('file'), str) or not entry['file']:
+            raise ValueError('missing payload descriptor')
+        target = (root / part / entry['file']).resolve()
+        if not target.is_relative_to(root / part) or not target.is_file():
+            raise ValueError('missing or inaccessible payload')
+        size = target.stat().st_size
+        required = entry.get('bytes', expected_bytes)
+        if size <= 0 or (required is not None and (type(required) is not int or required <= 0 or size != required)):
+            raise ValueError('empty or truncated payload')
+
+    def bundles(part, manifest, required_names):
+        entries = manifest.get('bundles')
+        if not isinstance(entries, dict) or not entries or not set(required_names).issubset(entries):
+            raise ValueError('missing required weight bundles')
+        for entry in entries.values():
+            if not isinstance(entry, dict) or not isinstance(entry.get('tensors'), list) or not entry['tensors']:
+                raise ValueError('missing tensor descriptions')
+            payload(part, entry)
+
     try:
-        manifest = json.loads((FLUX3_WEIGHTS_ROOT / 'dit' / 'manifest.json').read_text())
-        return isinstance(manifest, dict) and manifest.get('schema') == 'kaminos.flux3-klein.transformer-weights.v1'
-    except (OSError, ValueError):
+        te = component('te', 'kaminos.flux3-klein.text-encoder-weights.v1')
+        dit = component('dit', 'kaminos.flux3-klein.transformer-weights.v1')
+        vae = component('vae', 'kaminos.flux2-klein.vae-decoder-weights.v0')
+        layers = te.get('layers')
+        if type(layers) is not int or layers <= 0 or not isinstance(te.get('taps'), list) or not te['taps']:
+            return False
+        bundles('te', te, (f'layer{i:02d}' for i in range(layers)))
+        embedding = te.get('embedding', {})
+        shape, row_bytes = embedding.get('shape'), embedding.get('row_bytes')
+        if not isinstance(shape, list) or len(shape) != 2 or not all(type(n) is int and n > 0 for n in shape) or type(row_bytes) is not int or row_bytes <= 0:
+            return False
+        payload('te', embedding, shape[0] * row_bytes)
+        payload('te', te.get('tokenizer'))
+        cfg = dit['config']
+        counts = [cfg.get('num_layers'), cfg.get('num_single_layers')]
+        if not all(type(n) is int and n >= 0 for n in counts) or not any(counts):
+            return False
+        names = ['globals'] + [f'{prefix}{i:02d}' for prefix, count in [('txt', counts[0]), ('img', counts[0]), ('single', counts[1])] for i in range(count)]
+        bundles('dit', dit, names)
+        bundle = vae.get('bundle')
+        if not isinstance(bundle, dict) or not isinstance(bundle.get('tensors'), list) or not bundle['tensors']:
+            return False
+        payload('vae', bundle)
+        return True
+    except (OSError, ValueError, TypeError, AttributeError):
         return False
 
 
