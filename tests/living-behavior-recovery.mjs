@@ -50,3 +50,21 @@ test('valid flesh with an unsupported starting pose cannot destroy the current r
   await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad,loadSources}),/Pose reference inverted element/);assert.deepEqual(await entry.read(),before);assert.equal(f.scene.children.length,2);
  }finally{await entry?.close();globalThis.fetch=priorFetch;globalThis.Option=priorOption;delete globalThis.__poseReviewCreate;}
 });
+test('even flesh cross-section is refused before replacing the current room',async()=>{
+ const f=fixture(),matrix=z=>[[1,0,0,0],[0,1,0,0],[0,0,1,z],[0,0,0,1]],names=['pelvis','spine-lumbar','spine-chest'];
+ const bones=names.map((name,i)=>({name,parent:i?names[i-1]:null,restMatrix:matrix(i/2),tail:[0,0,i/2+.2]})),rest=[],weights=[];
+ for(let k=0;k<7;k++)for(let a=0;a<16;a++){rest.push(Math.cos(a*Math.PI/8),Math.sin(a*Math.PI/8),k/6);weights.push(0,0,1,0);}
+ const data={manifest:{bones,channels:['fixed',...names],vertices:112,triangles:1},rest:Float32Array.from(rest),weights:Float32Array.from(weights),triangles:new Uint32Array([0,1,2]),frame:{canonicalWorldToSourceNormalized:matrix(0),bones},source:f.data.source,
+ motion:{frames:3,joints:3,skeleton:{fps:30,jointNames:names,parents:[-1,0,1]},positions:[0,1,2].flatMap(i=>[0,0,i*.1,0,0,.5+i*.1,0,0,1+i*.1]),localRotations:Array.from({length:9},()=>[1,0,0,0]).flat()}};
+ const prepared=prepareTorso(data),c=4,id=(i,j,k)=>(k*c+j)*c+i,perms=[[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]];
+ prepared.source.caseSha256=data.source.caseSha256;prepared.construction.crossSection=c;prepared.positions=[];prepared.pinned=[];prepared.tetrahedra=[];
+ for(let k=0;k<7;k++)for(let j=0;j<c;j++)for(let i=0;i<c;i++){prepared.positions.push([i/3*2-1,j/3*2-1,k/6]);prepared.pinned.push(k===0||k===6);}
+ for(let k=0;k<6;k++)for(let j=0;j<c-1;j++)for(let i=0;i<c-1;i++)for(const perm of perms){const q=[i,j,k],t=[id(...q)];for(const a of perm){q[a]++;t.push(id(...q));}prepared.tetrahedra.push(t);}
+ prepared.bindings=Array(112*4).fill(0);prepared.bindingWeights=Array(112*4).fill(0);prepared.nodeWeights=Array(112*4).fill(0);
+ const bytes=new TextEncoder().encode(JSON.stringify(prepared)),priorFetch=globalThis.fetch,priorOption=globalThis.Option,loadSources=async input=>input.flesh?data:f.data;
+ globalThis.fetch=async()=>new Response(bytes);globalThis.Option=class{};globalThis.__evenReviewCreate=async args=>{const room=await api.createLivingScene(args,{loadSources});return {...room,mount(){}};};
+ const module='data:text/javascript,'+encodeURIComponent('export default {id:"mushfinger/living-scene",title:"Fixture",create:args=>globalThis.__evenReviewCreate(args)}');let entry;
+ try{entry=await installOwnerExperimentEntry({document:f.document,root:new Element(),host:f.host,discover:async()=>[module]});await entry.open('mushfinger/living-scene',f.setup);const before=await entry.read(),bad=structuredClone(f.setup);bad.running=true;bad.encounters={avoidance:true};bad.actors[0].creature.deformation='gpu';bad.actors[0].creature.flesh={preparations:[{case_sha256:data.source.caseSha256,url:'/even-preparation',sha256:createHash('sha256').update(bytes).digest('hex')}]};
+  await assert.rejects(()=>api.openLivingSetup({entry,inputs:bad,loadSources}),/odd.*section lattice/i);assert.deepEqual(await entry.read(),before);assert.equal(f.scene.children.length,2);
+ }finally{await entry?.close();globalThis.fetch=priorFetch;globalThis.Option=priorOption;delete globalThis.__evenReviewCreate;}
+});

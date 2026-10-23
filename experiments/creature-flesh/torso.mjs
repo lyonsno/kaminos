@@ -9,7 +9,7 @@ export function torsoNodeWeights(prepared,channels){
  const ids=['pelvis','spine-lumbar','spine-chest'].map(n=>channels.indexOf(n));
  if(ids.some(i=>i<0))throw Error('Complete torso channel family required');
  const {sections,crossSection}=prepared.construction;
- if(!Number.isSafeInteger(sections)||sections<3||!Number.isSafeInteger(crossSection)||crossSection<3||prepared.positions.length!==sections*crossSection**2)throw Error('Matching section lattice required');
+ if(!Number.isSafeInteger(sections)||sections<3||!Number.isSafeInteger(crossSection)||crossSection<3||crossSection%2!==1||prepared.positions.length!==sections*crossSection**2)throw Error('Matching odd cross-section lattice required');
  const out=new Float32Array(prepared.positions.length*channels.length);
  for(let i=0;i<prepared.positions.length;i++){
   const t=Math.floor(i/crossSection**2)/(sections-1)*2,segment=Math.min(1,Math.floor(t)),f=t-segment;
