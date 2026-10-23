@@ -6,17 +6,13 @@
 // ?weights=<base url> (default /scratch/supermat-weights/f16/; f32 at .../f32/),
 // ?cooperative=0 for the blocking A/B, ?autopause=<ms after start> with
 // ?pausefor=<ms> for an unattended pause/resume check.
-import {
-  createWebGpuForegroundService, createWebGpuInferenceControl, createWebGpuInferenceSession,
-  requestBrowserWebGpuDevice,
-} from '../../webgpu-inference-kit/src/core.js';
-import { createSuperMatAdapter, SUPERMAT_ROUTE_ID, superMatDeviceOptions } from './supermat-route.js';
+import { createSuperMatApp, requestBrowserWebGpuDevice, superMatDeviceOptions, SUPERMAT_HOSTED_WEIGHTS_URL } from './index.js';
 import { frameStats } from './frame-stats.js';
 import { decodeImageRgba } from './supermat-image.js';
 import { compositeOnGray, resizeRgbaBilinear } from './supermat-preprocess.js';
 
 const params = new URLSearchParams(location.search);
-const weightsUrl = params.get('weights') ?? '/scratch/supermat-weights/f16/';
+const weightsUrl = params.get('weights') ?? SUPERMAT_HOSTED_WEIGHTS_URL;
 const imageUrl = params.get('image_root') && params.get('image_path')
   ? `/api/read?${new URLSearchParams({ root: params.get('image_root'), path: params.get('image_path') })}`
   : params.get('image');
@@ -38,7 +34,7 @@ if (dutyMs > 0) {
   $('chunk').value = String(dutyMs);
 }
 const attention = params.get('attention') ?? 'streaming';
-let adapter, device, session, foreground, current = null, lastResult = null, active = null;
+let app, adapter, device, foreground, current = null, lastResult = null, active = null;
 
 function setStatus(text, isError = false) {
   $('status').textContent = text;
@@ -205,56 +201,43 @@ async function infer({ final = true } = {}) {
   frames.times = [];
   const size = Number($('size').value);
   const record = { runId, cooperative, size, attention, pauses: [] };
-  active = { abort, control: null, record };
+  const thisRun = active = { abort, record };
+  const timers = [];
   setRunControls(true);
   state.status = 'running';
   setStatus(`Inferring materials (${cooperative ? 'cooperative' : 'blocking'})…`);
   const started = performance.now();
   runStartedAt = started;
   showProgress({ phase: 'preprocess', phaseIndex: 0, phaseCount: 6, duties: 0, completedFlops: 0, totalFlops: null });
-  let frameRun = null, route = null;
   try {
-    frameRun = await foreground.beginRun(runId);
-    route = await session.registerRoute({ routeId: SUPERMAT_ROUTE_ID, runtimeOptions: {
-      runtimeLabel: 'supermat-demo', kernel: { profile: 'supermat-f32-v0' },
-      foregroundOpportunities: frameRun.foregroundOpportunities } });
-    const control = cooperative ? createWebGpuInferenceControl({ queue: device.queue, signal: abort.signal,
-      withForeground: frameRun.withForeground }) : null;
-    active.control = control;
-    if (autopauseMs !== null && control) {
-      setTimeout(async () => {
-        if (!active?.control) return;
+    if (autopauseMs !== null && cooperative) {
+      timers.push(setTimeout(async () => {
+        if (active !== thisRun || !app.snapshot().control) return;
         const requested = performance.now();
         await togglePause();
         const paused = performance.now();
         const framesAtPause = frames.completed;
-        setTimeout(async () => {
+        timers.push(setTimeout(async () => {
+          if (active !== thisRun) return;
           const framesDuringPause = frames.completed - framesAtPause;
           await togglePause();
           record.pauses.push({ requestedAtMs: requested - started, pauseSettledMs: paused - requested,
             heldMs: performance.now() - paused, framesDuringPause });
-        }, pauseForMs);
-      }, autopauseMs);
+        }, pauseForMs));
+      }, autopauseMs));
     }
-    if (autostopMs !== null) setTimeout(() => {
+    if (autostopMs !== null) timers.push(setTimeout(() => {
+      if (active !== thisRun) return;
       record.stopRequestedAtMs = performance.now() - started;
-      active?.abort.abort(new Error('stopped by autostop'));
-    }, autostopMs);
-    const job = route.enqueue({ jobId: runId, execute: invocation => adapter.run({ image: current, size, onRunProgress: showProgress,
-      schedule: cooperative ? { runtime: route.runtime, invocation, control, signal: abort.signal,
-        targetDutyMs: Number($('chunk').value), withForeground: frameRun.withForeground } : null }) });
-    const completion = await job.completion;
-    if (completion.status !== 'succeeded') {
-      const failure = completion.failure;
-      const error = new Error(failure?.message ?? completion.status);
-      error.name = failure?.name ?? 'Error';
-      throw error;
-    }
-    lastResult = completion.output;
+      abort.abort(new Error('stopped by autostop'));
+    }, autostopMs));
+    lastResult = await app.infer({ image: current, size, onRunProgress: showProgress,
+      cooperative, signal: abort.signal, scheduling: { targetDutyMs: Number($('chunk').value) } });
     const wallMs = performance.now() - started;
     record.wallMs = wallMs;
     record.timings = lastResult.timings;
     record.dutyCount = lastResult.dutyCount;
+    record.cpuWorker = lastResult.cpuWorker;
     record.targetDutyMs = lastResult.schedule?.targetDutyMs ?? null;
     record.longestDutyQueueMs = Math.max(0, ...lastResult.duties.map(duty => duty.queueMs ?? 0));
     // Per-duty timeline (ms since run start) for scheduling diagnosis.
@@ -273,9 +256,7 @@ async function infer({ final = true } = {}) {
     record.error = `${error?.name ?? 'Error'}: ${error?.message ?? String(error)}`;
     if (record.status === 'stopped') setStatus('Stopped.'); else fail(error);
   } finally {
-    try { await active.control?.close(); } catch (error) { record.controlCloseError = String(error?.message ?? error); }
-    if (route) { await route.drain(); session.unregisterRoute(route.routeId); }
-    if (frameRun) await frameRun.finish();
+    for (const timer of timers) clearTimeout(timer);
     record.frames = frameStats(frames.gaps);
     // Every completed scene frame during the run (ms since run start, gap to the previous frame).
     record.frameTimeline = frames.times.map((time, index) => ({ at: time - started, gapMs: frames.gaps[index] }));
@@ -308,18 +289,18 @@ function showRun(record) {
 }
 
 async function togglePause() {
-  const control = active?.control;
+  const control = app?.snapshot().control;
   if (!control) return;
   const button = $('pause');
   button.disabled = true;
   try {
-    if (control.snapshot().status === 'paused' || control.snapshot().pauseRequested) {
-      await control.resume();
+    if (control.status === 'paused' || control.pauseRequested) {
+      await app.resume();
       button.textContent = 'Pause';
       setStatus('Resumed.');
     } else {
       setStatus('Pausing at the next duty boundary…');
-      await control.pause();
+      await app.pause();
       button.textContent = 'Resume';
       setStatus('Paused. The scene keeps running; model memory stays resident.');
     }
@@ -352,28 +333,26 @@ try {
   if (!navigator.gpu) throw new Error('WebGPU is not available in this browser');
   const context = await requestBrowserWebGpuDevice(navigator.gpu, await superMatDeviceOptions(navigator.gpu, { adapterName: 'supermat-demo' }));
   device = context.device;
-  foreground = createWebGpuForegroundService({ routeId: SUPERMAT_ROUTE_ID, device });
-  session = await createWebGpuInferenceSession({ sessionId: crypto.randomUUID(), device, adapter: context.adapter,
-    backendIdentity: context.backendIdentity });
-  startScene();
-  state.scene.gaps = [];
-  const weightsRoute = await session.registerRoute({ routeId: `${SUPERMAT_ROUTE_ID}.resident-weights` });
   // Product profile where the device has shader-f16: F16 activation storage,
   // fused GroupNorm+SiLU and F16 GEMM operand tiles with F32 accumulation
   // (albedo relL2 ~2-4e-4 vs the F32 reference); F32 otherwise.
   // ?activations=f32&fuseNorm=0&precision=f32 selects the reference-faithful path;
   // ?attentionKernel=scalar selects the model-owned attention kernel (default: the kit's tiled kernel).
   const f16Capable = device.features.has('shader-f16');
-  adapter = await createSuperMatAdapter({ route: weightsRoute, weightsUrl, attention,
+  app = await createSuperMatApp({ device, weightsUrl, load: false, adapterOptions: { attention,
     weightLoading: params.get('weightLoading') ?? 'auto', gemmPrecision: params.get('precision') ?? (f16Capable ? 'f16-tiles' : 'f32'),
     activations: params.get('activations') ?? (f16Capable ? 'f16' : 'f32'), fuseNorm: params.get('fuseNorm') !== '0',
-    ...(params.has('attentionKernel') ? { attentionKernel: params.get('attentionKernel') } : {}), onProgress(event) {
+    ...(params.has('attentionKernel') ? { attentionKernel: params.get('attentionKernel') } : {}) }, onProgress(event) {
     if (event.phase === 'weights') {
       const mb = value => (value / 1e6).toFixed(0);
       setStatus(`Loading weights ${event.resourceIndex + 1}/${event.resourceCount} (${event.resourceId}`
         + `${event.totalBytes ? `, ${mb(event.loadedBytes)}/${mb(event.totalBytes)} MB` : ''})…`);
     }
   } });
+  foreground = app.foreground;
+  window.__supermatApp = app;
+  startScene(); state.scene.gaps = [];
+  await app.load(); adapter = app.adapter;
   state.identity = adapter.identity;
   state.weightLoadMs = adapter.weightLoadMs;
   state.loadFrames = frameStats(state.scene.gaps);
