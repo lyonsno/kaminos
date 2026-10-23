@@ -177,7 +177,6 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const range=source.noticeRadius??o.noticeRadius;
     const gazeNow=gazeLocal?.clone().transformDirection(group.matrixWorld),towardNow=new THREE.Vector3(...source.point).sub(headAt);
     const perceivedNow=active&&!source.transient&&(sight(source.point,range).visible||Boolean(gazeNow&&towardNow.length()<range&&gazeNow.angleTo(towardNow)<o.fieldOfView*.5));
-    if(perceivedNow)perceived.push({id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1});
     // Learn only a source state that can actually be observed. A failed read
     // or a source outside view is a gap, not an observed disappearance.
     if(source.restless!==undefined||source.active!==undefined){
@@ -270,6 +269,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
     const withinReach=s.angle<=o.reach||m.alerted||focus?.id===source.id;
     // Hysteresis: catching the eye takes the full threshold, keeping it less.
     const near=Math.max(0,1-s.distance/range),score=s.visible&&withinReach?Math.max(0,drive*(attended?1:s.view*(.5+.5*near))-o.threshold*(attended?o.keepFraction:1)):0;
+    if(perceivedNow)perceived.push({id:source.id,point:[...source.point],approach:source.approach!==false,standOff:source.standOff??1,eventAt:m.eventAt??null});
     candidates.push({visual:visualEvent,id:source.id,label:source.label??source.id,cause:m.cause,familiarity:m.familiarity,impulse:m.impulse,distance:s.distance,angle:s.angle,score});
     const resting=!focus&&time<restUntil;
     const canRedirect=interruption&&time-interruption.since>=o.stillSeconds&&(m.eventAt??-Infinity)>interruption.since;
