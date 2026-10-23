@@ -181,6 +181,34 @@ try{
    }
   }finally{await motivated?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
  }
+ // V-1: an ordinary retained-motion edit must preserve travel versus facing,
+ // including a Wander temporarily held while the source clip is previewed.
+ for(const held of [false,true]){
+  let editing,poll;const saved={set:globalThis.setInterval,clear:globalThis.clearInterval};
+  globalThis.setInterval=fn=>{poll=fn;return {};};globalThis.clearInterval=()=>{};
+  try{
+   emitter.position.set(.8,.4,-2.5);scene.updateMatrixWorld(true);fire={active:false,paused:false};
+   window.kaminosFireLightProbe={sample:async points=>({status:'effective',source:{power:700},values:points.map(()=>({luminance:.2}))})};
+   const motions=[{id:'one',label:'One',motion:'one',motion_sha256:'a'.repeat(64)},{id:'two',label:'Two',motion:'two',motion_sha256:'d'.repeat(64)}];
+   const loadSources=async request=>({...data,source:{...data.source,motionSha256:request.motion_sha256}});
+   editing=await createWalkingCreature({host,inputs:{...inputs,motion:'one',motion_sha256:'a'.repeat(64),motions,choices:[],actor_root:'live',attention:{engage:true,interests:[],flame:{interest:1}}}},{...dependencies,loadSources});await Promise.resolve();
+   await editing.operations.action({kind:'wander'});
+   const tick=()=>{scene.updateMatrixWorld(true);callback?.({deltaSeconds:1/60});};
+   for(let i=0;i<6;i++)tick();fire.active=true;notify();for(let i=0;i<6;i++)tick();await poll();for(let i=0;i<110;i++)tick();
+   editing.operations.pause();assert.equal(editing.read().action.motion.reverse,true,'replacement fixture is backing away');
+   const facing=()=>{const b=editing.pose({bones:['pelvis','spine-chest']}).bones;return new THREE.Vector3().fromArray(b[1].matrix,12).sub(new THREE.Vector3().fromArray(b[0].matrix,12)).normalize();};
+   const before=facing(),position=editing.read().action.motion.path.position;
+   if(held)await editing.operations.action({kind:'preview'});
+   await editing.operations.motion({id:'two'});
+   assert.equal(held?editing.read().recipe.held_wander.reverse:editing.read().action.motion.reverse,true,`V-1: ${held?'held':'active'} replacement keeps backward transport`);
+   if(held)await editing.operations.action({kind:'wander'});
+   assert.deepEqual(editing.read().action.motion.path.position,position,'replacement preserves the path position');
+   assert.ok(before.dot(facing())>.999999,'equivalent retained motion preserves actual body facing');
+   editing.operations.play();let seen=0;
+   for(let i=0;i<60;i++){tick();if(editing.read().attention.perceived.some(p=>p.id==='flame-emitter'))seen++;}
+   assert.ok(seen>54,'continued withdrawal retains actual source perception after editing motion');
+  }finally{await editing?.dispose();globalThis.setInterval=saved.set;globalThis.clearInterval=saved.clear;delete window.kaminosFireLightProbe;}
+ }
  // A cessation observed while looking supplies a remembered approach even
  // after the source is moved while off; no hidden transform enters the path.
  {

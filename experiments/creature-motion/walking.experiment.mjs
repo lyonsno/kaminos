@@ -339,8 +339,8 @@ export async function createWalkingCreature({host,inputs={},record=()=>{}},{load
     try{
      unsubscribe();player.dispose();adapter=nextAdapter;walking=nextWalking;cycle=0;
      replaceSource({...loaded.source,prompt:loaded.motion.prompt??null,seed:loaded.motion.seed??null,groundReference:prior.source.groundReference,presentation:{mode,cycle,...walking.identity}});
-     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path});
-     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path});
+     if(wander)wander=makeWander({pathSnapshot:prior.wander.snapshot().path,pathReverse:prior.wander.read().reverse});
+     if(heldWander)heldWander=makeWander({pathSnapshot:prior.heldWander.snapshot().path,pathReverse:prior.heldWander.read().reverse});
      player=makePlayer();chosen=next;chosenInputs=request;refreshGuide();if(prior.status==='playing'){player.play();startClock();}host.scene.refreshPresentation?.(asset);if(assigned&&!input.preview)assigned=next;return read();
     }
     catch(error){
