@@ -277,7 +277,7 @@ export function createCreatureAttention({THREE,rigFrame,profile,interests,option
    }
    // A newly sensed light change supplies its own bearing even after prior
    // visual contact. Only this event position enters memory while out of view.
-   for(const event of eventBearings)if(!interruption&&!observations.some(x=>x.id===event.id))observations.push(event);
+   for(const event of eventBearings)if((!interruption||time-interruption.since>=o.stillSeconds&&time>interruption.since)&&!observations.some(x=>x.id===event.id))observations.push(event);
    // Idle looking around: a brief look at a spot beside the path ahead.
    if(o.idleScan&&!interruption){
     if(nextScan===null)nextScan=time+o.scanEvery[0]+random()*(o.scanEvery[1]-o.scanEvery[0]);
